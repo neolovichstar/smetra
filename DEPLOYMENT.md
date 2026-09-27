@@ -1,6 +1,6 @@
 # Развёртывание Сметры
 
-Рабочий сайт: `https://smetra.vercel.app`; исходный код: `https://github.com/neolovichstar/smetra`. Vercel исполняет Python API из `api/index.py` и отдаёт статические файлы из `apps/web`. Данные хранятся в приватной схеме `smetra` предоставленного Supabase Postgres. Схема `smetra_qa_20260928` изолирована для проверок; не подключайте её к рабочему сайту. Миграции лежат в `supabase/migrations`.
+Рабочий сайт: `https://smetra.vercel.app`. Исходный код подготовлен в локальном Git-коммите; предоставленный GitHub-токен пока не даёт запись в целевой репозиторий. Vercel исполняет Python API из `api/index.py` и отдаёт статические файлы из `apps/web`. Данные хранятся в приватной схеме `smetra` предоставленного Supabase Postgres. Схема `smetra_qa_20260928` изолирована для проверок; не подключайте её к рабочему сайту. Миграции лежат в `supabase/migrations`.
 
 Для повторного развёртывания настройте в Vercel зашифрованные переменные `DATABASE_URL`, `OPENROUTER_API_KEY`, `PUBLIC_ORIGIN=https://smetra.vercel.app`, `SMETRA_DB_SCHEMA=smetra`, `OPENROUTER_MODEL=openrouter/free`. Временная регистрация по почте без проверки разрешена флагом `ALLOW_UNVERIFIED_SIGNUP=1` до подключения SMTP. После настройки SMTP уберите этот флаг; переменные перечислены в `.env.example`. Храните секреты только в Vercel, не в Git.
 

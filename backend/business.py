@@ -321,7 +321,7 @@ class Service:
     def emit(self, kind, entity, action, detail="", notify=False):
         actor = self.user["id"] if self.user else None
         self.con.execute(
-            "INSERT INTO activity VALUES(?,?,?,?,?,?,?,?)",
+            "INSERT INTO activity(id,workspace_id,actor_id,entity_type,entity_id,action,detail,created_at) VALUES(?,?,?,?,?,?,?,?)",
             (identity(), self.wid, actor, kind, entity, action, detail[:1000], stamp()),
         )
         if notify:
