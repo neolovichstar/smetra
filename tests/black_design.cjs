@@ -1,0 +1,24 @@
+/* Run against the isolated scripts/android_ui_fixture.py and owned headless Chrome :9224. */
+const fs=require('node:fs'),assert=require('node:assert/strict');
+(async()=>{
+ const tabs=await(await fetch('http://127.0.0.1:9224/json')).json();const ws=new WebSocket(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let seq=0;const pending=new Map(),errors=[];
+ ws.addEventListener('message',event=>{const message=JSON.parse(event.data);if(message.id){const task=pending.get(message.id);pending.delete(message.id);message.error?task.reject(message.error):task.resolve(message.result)}else if(message.method==='Runtime.exceptionThrown')errors.push(message.params.exceptionDetails.text)});
+ const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))});
+ const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture:true});if(result.exceptionDetails)throw Error(result.exceptionDetails.exception?.description||result.exceptionDetails.text);return result.result.value};
+ const wait=ms=>new Promise(r=>setTimeout(r,ms));const until=async expression=>{for(let i=0;i<100;i++){if(await evaluate(expression))return;await wait(100)}throw Error('Timeout '+expression)};
+ const screenshot=async name=>{fs.mkdirSync('data/qa/black',{recursive:true});fs.writeFileSync('data/qa/black/'+name+'.png',Buffer.from((await send('Page.captureScreenshot',{captureBeyondViewport:false})).data,'base64'))};
+ await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
+ await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+ await send('Page.navigate',{url:'http://localhost:8084/'});await until("document.querySelector('#preview-total')");await evaluate('document.fonts.ready');await evaluate("[...document.images].forEach(i=>i.loading='eager')");await until("[...document.images].every(i=>i.complete&&i.naturalWidth>0)");await wait(500);
+ assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor"),'rgb(0, 0, 0)');assert.equal(await evaluate("[...document.images].every(i=>i.complete&&i.naturalWidth>0)"),true);
+ await screenshot('landing-desktop');await evaluate("document.querySelector('[data-price]').value=45000;document.querySelector('[data-price]').dispatchEvent(new Event('input'))");assert.match(await evaluate("document.querySelector('#preview-total').textContent"),/108/);
+ for(let i=1;i<4;i++)await evaluate(`document.querySelector('[data-step="${i}"]').click()`);
+ await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await evaluate('scrollTo(0,0)');await wait(350);assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);await screenshot('landing-mobile');
+ await send('Page.navigate',{url:'http://localhost:8084/app'});await until("document.querySelector('#provider-buttons button')");await evaluate('document.fonts.ready');await screenshot('registration-mobile');assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
+ await evaluate("api('/auth/login',{method:'POST',body:JSON.stringify({email:'android-design@test.invalid',password:'android design test only'})}).then(r=>{user=r.user;return showApp()})");await until("document.querySelector('[data-work=quote-new]')");await screenshot('workspace-mobile');
+ await evaluate("tab='assistant';render()");await until("document.querySelector('#assistant-input')");await screenshot('assistant-mobile');
+ await evaluate("tab='billing';render()");await until("document.querySelector('[data-plan]')");await screenshot('billing-mobile');
+ await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await evaluate("tab='quotes';render()");await until("document.querySelector('[data-work=quote-new]')");await screenshot('workspace-desktop');
+ await evaluate("api('/auth/logout',{method:'POST'}).then(()=>showAuth())");await screenshot('registration-desktop');
+ assert.deepEqual(errors,[]);console.log('PASS: true black, assets, interactive estimate, four stages, mobile overflow, auth, workspace, assistant, billing; no JS errors');ws.close();
+})().catch(error=>{console.error(error);process.exit(1)});

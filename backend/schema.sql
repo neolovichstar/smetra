@@ -3,13 +3,19 @@ CREATE TABLE IF NOT EXISTS users (
  name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user','admin')),
  blocked INTEGER NOT NULL DEFAULT 0 CHECK(blocked IN (0,1)),
  plan TEXT NOT NULL DEFAULT 'free', entitlement_until INTEGER NOT NULL DEFAULT 0,
- created_at INTEGER NOT NULL
+ created_at INTEGER NOT NULL, deleted_at INTEGER, email_verified_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS sessions (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE TABLE IF NOT EXISTS email_tokens (
+ id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ token_hash TEXT NOT NULL UNIQUE,purpose TEXT NOT NULL CHECK(purpose IN ('verify','reset')),
+ expires_at INTEGER NOT NULL,consumed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id,purpose);
 CREATE TABLE IF NOT EXISTS quotes (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  title TEXT NOT NULL, client TEXT NOT NULL, description TEXT NOT NULL,
@@ -23,9 +29,15 @@ CREATE TABLE IF NOT EXISTS payments (
  provider_id TEXT NOT NULL UNIQUE, plan TEXT NOT NULL,
  amount_kopecks INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','succeeded','canceled')),
  idempotency_key TEXT NOT NULL, confirmation_url TEXT NOT NULL, created_at INTEGER NOT NULL,
+ activated_at INTEGER,
  UNIQUE(user_id,idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS refunds (
+ id TEXT PRIMARY KEY, payment_id TEXT NOT NULL REFERENCES payments(id),
+ provider_id TEXT NOT NULL UNIQUE, amount_kopecks INTEGER NOT NULL,
+ status TEXT NOT NULL, created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS events (
  id TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
  name TEXT NOT NULL,created_at INTEGER NOT NULL

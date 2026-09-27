@@ -1,16 +1,18 @@
 plugins { id 'com.android.application' }
 
-def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://example.invalid').get()
-if (!apiBase.startsWith('https://')) throw new GradleException('apiBaseUrl must use HTTPS')
+def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://smetra.vercel.app').get()
+def localDebugApi = apiBase ==~ /http:\/\/(127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/
+if (!apiBase.startsWith('https://') && !localDebugApi) throw new GradleException('apiBaseUrl must use HTTPS (loopback is allowed for debug tests)')
 android {
-    namespace 'ru.smetra.app'
+    namespace 'ru.smetra.mobile'
     compileSdk 35
     defaultConfig {
-        applicationId 'ru.smetra.app'
+        applicationId 'ru.smetra.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '1.0.0'
+        versionCode 3
+        versionName '1.2.0'
+        testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
         buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('"', '') + '"'
     }
     buildFeatures { buildConfig true }
@@ -26,12 +28,19 @@ android {
         }
     }
     buildTypes {
-        debug { applicationIdSuffix '.debug' }
+        debug { }
         release {
-            if (!System.getenv('SIGNING_STORE_FILE')) throw new GradleException('Release signing credentials required')
-            signingConfig signingConfigs.release
+            if (System.getenv('SIGNING_STORE_FILE')) signingConfig signingConfigs.release
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
+        if (!apiBase.startsWith('https://')) throw new GradleException('Release requires an HTTPS API')
+        if (!System.getenv('SIGNING_STORE_FILE')) throw new GradleException('Release signing credentials required. Debug build remains available.')
+        if (apiBase.contains('example.invalid')) throw new GradleException('Set the real HTTPS production apiBaseUrl for a release.')
     }
 }

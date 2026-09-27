@@ -10,8 +10,8 @@ Before live payments:
 
 - Confirm merchant account, self-employed receipt configuration and exact receipt payload with YooKassa's test/shop setup.
 - Run real sandbox checkout, success, cancellation, timeout and duplicate webhook cases.
-- Implement **refund notification and entitlement reversal**; current code does not support it. Until then, do not accept real payments.
-- Decide lawful records retention and deletion; current account deletion cascades payment records, unsuitable for accounting/audit obligations.
+- Verify full-refund webhook and entitlement reversal with the real sandbox. Full refunds are implemented and idempotent locally; **partial refunds still need an operational process and code support**.
+- Decide lawful records retention and deletion; account deletion now pseudonymizes the account and retains the payment record, but the retention period and legal text require review.
 - Document support and refund handling with operator details in the terms.
 
 Payment sandbox was not run: no merchant credentials were provided. Tests use an isolated deterministic provider double solely to test local idempotency and access logic.

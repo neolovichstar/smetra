@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "python scripts/build_web.py",
+  "outputDirectory": "dist/web",
+  "framework": null,
+  "regions": ["fra1"],
+  "functions": {"api/index.py": {"maxDuration": 120, "includeFiles": "{backend/**,apps/web/assets/fonts/**}"}},
+  "rewrites": [
+    {"source": "/api/:path*", "destination": "/api/index"},
+    {"source": "/health", "destination": "/api/index"},
+    {"source": "/app", "destination": "/app.html"},
+    {"source": "/admin", "destination": "/admin.html"},
+    {"source": "/privacy", "destination": "/privacy.html"},
+    {"source": "/terms", "destination": "/terms.html"}
+  ],
+  "headers": [{"source": "/(.*)", "headers": [
+    {"key": "X-Content-Type-Options", "value": "nosniff"},
+    {"key": "Referrer-Policy", "value": "no-referrer"},
+    {"key": "X-Frame-Options", "value": "DENY"}
+  ]}]
+}

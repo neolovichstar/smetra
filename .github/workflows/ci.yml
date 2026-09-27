@@ -1,0 +1,51 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  web-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: python -m compileall -q backend
+      - run: pip install -r requirements-dev.txt
+      - run: python -m ruff check backend tests scripts
+      - run: python -m unittest discover -s tests -v
+      - run: python scripts/build_web.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: dist/web
+      - name: Browser integration
+        env:
+          PORT: '8082'
+          PUBLIC_ORIGIN: http://localhost:8082
+          DB_PATH: /tmp/smetra-ci.sqlite3
+        run: |
+          mkdir -p data
+          python backend/launcher.py > data/server.log 2>&1 &
+          google-chrome --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9223 --user-data-dir=/tmp/smetra-chrome about:blank > data/chrome.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8082/health && curl -sf http://localhost:9223/json && break; sleep 1; done
+          node tests/browser_flows.cjs
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: bash apps/mobile/gradlew -p apps/mobile assembleDebug lintDebug -PapiBaseUrl=https://example.invalid
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: apps/mobile/app/build/outputs/apk/debug/app-debug.apk

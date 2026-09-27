@@ -1,1 +1,1 @@
--keep class ru.smetra.app.MainActivity { *; }
+-keep class ru.smetra.mobile.MainActivity { *; }

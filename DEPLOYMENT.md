@@ -1,14 +1,11 @@
-# Deployment runbook
+# Развёртывание Сметры
 
-This build is designed for a single persistent Linux VPS, not a serverless runtime. Use a host and storage arrangement appropriate for Russian personal data after professional review. No deployment was performed in this task.
+Рабочий сайт: `https://smetra.vercel.app`; исходный код: `https://github.com/neolovichstar/smetra`. Vercel исполняет Python API из `api/index.py` и отдаёт статические файлы из `apps/web`. Данные хранятся в приватной схеме `smetra` предоставленного Supabase Postgres. Схема `smetra_qa_20260928` изолирована для проверок; не подключайте её к рабочему сайту. Миграции лежат в `supabase/migrations`.
 
-1. Provision a host, Python 3.11+, a domain and TLS reverse proxy (for example Caddy or nginx). Limit inbound traffic to 80/443 and SSH for administrators.
-2. Extract the ZIP to `/srv/smetra`; use a dedicated OS user. Copy `.env.example` to `.env`, set `PUBLIC_ORIGIN=https://your-domain`, `DB_PATH=/srv/smetra/data/smetra.sqlite3`, `PORT=8080`. Set `chmod 600 .env`.
-3. Run `python3 backend/launcher.py` locally once to initialize the schema. Register your admin and run `python3 backend/admin.py admin@example.com`.
-4. Create a systemd service with `WorkingDirectory=/srv/smetra`, `ExecStart=/usr/bin/python3 /srv/smetra/backend/launcher.py`, `User=smetra`, `Restart=on-failure`, `EnvironmentFile=/srv/smetra/.env`. Note: the launcher also reads `.env`.
-5. Reverse proxy the HTTPS domain to `127.0.0.1:8080`. The Python server binds on all interfaces, so restrict port 8080 at firewall level.
-6. Verify `/health`, the complete quote flow and the real provider sandbox. Configure webhook URL `https://your-domain/api/webhooks/yookassa` in the provider account.
-7. Set a daily encrypted SQLite backup using the online `.backup` command, retain copies off host and run a restore drill. For upgrades, snapshot DB and code first. Roll back both code and DB together after schema changes.
-8. Replace `YOUR_DOMAIN` in `apps/web/sitemap.xml`, set real operator details in policies, support address and store listing. Run mobile build with that same HTTPS origin.
+Для повторного развёртывания настройте в Vercel зашифрованные переменные `DATABASE_URL`, `OPENROUTER_API_KEY`, `PUBLIC_ORIGIN=https://smetra.vercel.app`, `SMETRA_DB_SCHEMA=smetra`, `OPENROUTER_MODEL=openrouter/free`. Временная регистрация по почте без проверки разрешена флагом `ALLOW_UNVERIFIED_SIGNUP=1` до подключения SMTP. После настройки SMTP уберите этот флаг; переменные перечислены в `.env.example`. Храните секреты только в Vercel, не в Git.
 
-Staging must use a separate database, domain and provider test credentials. Do not copy real customers into staging. Structured HTTP/error logs go to the service journal. Connect external uptime/error monitoring after consent and retention review; no monitoring service is provisioned.
+`vercel deploy --prod` публикует текущую версию. Проверки после публикации: `/health`, `/api/auth/providers`, открытие `/`, `/app`, создание тестовой сметы, клиентской ссылки и просмотр на телефоне. Административный доступ назначается отдельно через `backend/admin.py`; его нельзя получать регистрацией.
+
+Веб и Android имеют одинаковую базу и профили. Если у пользователя уже есть аккаунт по почте, он сначала входит на сайте и привязывает Яндекс/VK/Mail в настройках. Вход через российский сервис с тем же адресом почты сам по себе не объединяет аккаунты.
+
+Настройку OAuth, адресов обратного вызова, ссылки RuStore, SMTP и оплат описывает [docs/CONNECT_SERVICES.md](docs/CONNECT_SERVICES.md). Политики `/privacy` и `/terms` перед коммерческим запуском должны содержать реквизиты владельца и проверенные условия. Для персональных данных и платежей проведите отдельную юридическую проверку.

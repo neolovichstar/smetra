@@ -1,15 +1,18 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-where python >nul 2>nul || (echo Python is missing & exit /b 1)
-python -m compileall -q backend || exit /b 1
-python -m unittest discover -s tests -v || exit /b 1
-where node >nul 2>nul || (echo Node is missing & exit /b 1)
-node --check apps\web\app.js || exit /b 1
-where gradle >nul 2>nul || (echo Gradle is missing; Android build was NOT VERIFIED & exit /b 2)
-pushd apps\mobile
-gradle assembleDebug || (popd & exit /b 1)
-if "%SIGNING_STORE_FILE%"=="" (echo Signing credentials missing; release APK/AAB NOT VERIFIED & popd & exit /b 2)
-gradle assembleRelease bundleRelease || (popd & exit /b 1)
-popd
-echo Checks and Android builds completed.
+set "SMETRA_NO_PAUSE=1"
+call TEST.bat
+if errorlevel 1 goto :failed
+if not defined ANDROID_HOME (echo ANDROID_HOME is missing. & goto :failed)
+if not defined SMETRA_API_BASE_URL (echo SMETRA_API_BASE_URL is missing. Set the real HTTPS API origin. & goto :failed)
+if not defined SIGNING_STORE_FILE (echo Release signing credentials are missing. & goto :failed)
+call apps\mobile\gradlew.bat -p apps\mobile assembleRelease bundleRelease "-PapiBaseUrl=%SMETRA_API_BASE_URL%"
+if errorlevel 1 goto :failed
+echo Release APK and AAB built. Server deployment is a separate operation.
+pause
+exit /b 0
+:failed
+echo Production build did not complete. Review the error above.
+pause
+exit /b 1
