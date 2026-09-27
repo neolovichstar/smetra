@@ -14,7 +14,7 @@ Python 3.11+, Node.js only for JavaScript syntax check, Android Studio / SDK 35 
 4. Other systems: `python3 backend/launcher.py`.
 5. Open `/app`, register, create a quote, click **Отправить**, copy its link and approve it in a separate browser session.
 
-No dependency installation is needed for the web/backend. The server creates the SQLite schema from `backend/schema.sql` on boot. Existing v1 databases receive additive columns on boot; back up first. This is not a general versioned migration system for future schema changes.
+No dependency installation is needed for the web/backend. The server creates the SQLite schema from `backend/schema.sql` on boot. This schema is idempotent for a fresh database, but is not a versioned migration system for future schema changes.
 
 ## Environment variables
 
@@ -24,9 +24,8 @@ No dependency installation is needed for the web/backend. The server creates the
 | `PUBLIC_ORIGIN` | Absolute origin for links, cookies and CSRF check |
 | `DB_PATH` | Persistent SQLite DB path; use an absolute path on VPS |
 | `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` | Enables real web checkout; no test credentials included |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | STARTTLS SMTP for verification and recovery; required on public origin |
 
-Registration on a public HTTPS origin requires SMTP; verification links expire after one day. Password reset links expire after 30 minutes and revoke existing sessions. Local `http://localhost` without SMTP marks test accounts verified. Real SMTP delivery is NOT VERIFIED. **Do not accept payments until the provider sandbox and legal documents are completed.**
+The current product has no email verification or password reset. **Do not accept payments or onboard strangers until these and the legal documents are completed.**
 
 ## Web build and API
 
@@ -35,7 +34,6 @@ Static HTML/CSS/JS is served directly by Python. There is no bundler. `node --ch
 | Endpoint | Method | Function |
 |---|---|---|
 | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | POST | Create account, log in, revoke session |
-| `/api/auth/verify`, `/api/auth/verify/resend`, `/api/auth/reset/request`, `/api/auth/reset/confirm` | POST | Email verification and password recovery |
 | `/api/me` | GET, DELETE | Profile and deletion |
 | `/api/quotes`, `/api/quotes/{id}` | GET/POST, PATCH/DELETE | Search/list/create and status/remove |
 | `/api/public/quote`, `/api/public/accept` | GET, POST | Open and approve by secret URL token |
@@ -49,7 +47,7 @@ Cookie sessions use HttpOnly and SameSite=Lax. Android uses Bearer tokens. Sessi
 
 Fresh install: `python3 backend/admin.py <registered-email>` after registering an administrator. This command grants the admin role and records an audit entry. Back up SQLite with `sqlite3 /path/database.sqlite3 '.backup /secure/backup.sqlite3'`, test restore periodically, encrypt and restrict backups. Run a single server instance against one local persistent disk; do not put SQLite on shared network storage.
 
-Tables: users, sessions, email_tokens, quotes, payments, refunds, events, support, audit. Foreign keys and indexes are in `backend/schema.sql`. Money is stored in integer kopecks; timestamps are UTC Unix seconds.
+Tables: users, sessions, quotes, payments, events, support, audit. Foreign keys and indexes are in `backend/schema.sql`. Money is stored in integer kopecks; timestamps are UTC Unix seconds.
 
 ## Testing and production build
 
@@ -79,4 +77,4 @@ Read `DEPLOYMENT.md` and `PAYMENTS.md`. A real domain, TLS, SMTP email flows, le
 
 ## Known limitations
 
-No verified production payment, partial-refund handling, real email delivery, mobile secure token storage, push, full event analytics dashboard, versioned migrations, automated cleanup or deployment. The product and name have not been validated with paying customers or trademark search. The **entire** release should be reviewed for Russian personal-data and consumer-law requirements by a qualified specialist. Full-refund accounting still requires a real provider sandbox test; partial refunds need a supported workflow before taking money. See `SECURITY.md`.
+No verified production payment, refunds, real email delivery, password recovery, mobile secure token storage, push, full event analytics dashboard, versioned migrations, automated cleanup or deployment. The product and name have not been validated with paying customers or trademark search. The **entire** release should be reviewed for Russian personal-data and consumer-law requirements by a qualified specialist. Refunds must be handled operationally and reflected in access before taking money. See `SECURITY.md`.

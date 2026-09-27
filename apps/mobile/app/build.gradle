@@ -1,0 +1,37 @@
+plugins { id 'com.android.application' }
+
+def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://example.invalid').get()
+if (!apiBase.startsWith('https://')) throw new GradleException('apiBaseUrl must use HTTPS')
+android {
+    namespace 'ru.smetra.app'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'ru.smetra.app'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+        buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('"', '') + '"'
+    }
+    buildFeatures { buildConfig true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    signingConfigs {
+        release {
+            if (System.getenv('SIGNING_STORE_FILE')) {
+                storeFile file(System.getenv('SIGNING_STORE_FILE'))
+                storePassword System.getenv('SIGNING_STORE_PASSWORD')
+                keyAlias System.getenv('SIGNING_KEY_ALIAS')
+                keyPassword System.getenv('SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug { applicationIdSuffix '.debug' }
+        release {
+            if (!System.getenv('SIGNING_STORE_FILE')) throw new GradleException('Release signing credentials required')
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
