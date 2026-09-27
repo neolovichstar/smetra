@@ -218,9 +218,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         if cookie:
             self.send_header("Set-Cookie", cookie)
@@ -239,13 +240,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
         if size > maximum or size < 0:
             raise ApiError(413, "Слишком большой запрос")
+        if size and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+            raise ApiError(415, "Отправьте данные в формате JSON")
         try:
 
             def reject_constant(value):
                 raise ValueError("Non-finite JSON number")
 
+            def unique_keys(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("Duplicate JSON key")
+                    result[key] = value
+                return result
+
             data = json.loads(
-                self.rfile.read(size) or b"{}", parse_constant=reject_constant
+                self.rfile.read(size) or b"{}", parse_constant=reject_constant,
+                object_pairs_hook=unique_keys,
             )
             if not isinstance(data, dict):
                 raise ValueError("Expected object")
@@ -306,8 +318,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         if origin and origin != ORIGIN:
             raise ApiError(403, "Неверный источник запроса")
-        if self.headers.get("Sec-Fetch-Site") == "cross-site":
+        fetch_site = self.headers.get("Sec-Fetch-Site")
+        if fetch_site in ("cross-site", "same-site"):
             raise ApiError(403, "Запрос отклонён")
+        has_session_cookie = any(
+            part.strip().startswith("session=")
+            for part in self.headers.get("Cookie", "").split(";")
+        )
+        if (
+            has_session_cookie
+            and not self.headers.get("Authorization", "").startswith("Bearer ")
+            and not origin
+            and fetch_site != "same-origin"
+        ):
+            raise ApiError(403, "Укажите источник запроса")
 
     def do_GET(self):
         self.dispatch("GET")
@@ -425,10 +449,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         self.end_headers()
         self.wfile.write(data)
@@ -921,11 +947,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ),
         )
         row = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-        return self.send_json(
-            200,
-            {"user": user_view(row, con), "token": token},
-            self.cookie(token, 30 * 86400),
-        )
+        payload = {"user": user_view(row, con)}
+        # Browsers use the HttpOnly cookie; only native/API clients need a
+        # bearer token in JSON. Browser JavaScript cannot override Origin.
+        if self.headers.get("Origin") != ORIGIN and self.headers.get("Sec-Fetch-Site") != "same-origin":
+            payload["token"] = token
+        return self.send_json(200, payload, self.cookie(token, 30 * 86400))
 
     def provider_call(self, path, method="GET", payload=None, key=None):
         credentials = base64.b64encode(

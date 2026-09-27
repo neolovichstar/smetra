@@ -3,12 +3,11 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp
 const rub = (kopecks) => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(kopecks / 100);
 const date = (seconds) => new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'}).format(new Date(seconds * 1000));
 let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer;
-const token = () => sessionStorage.getItem('mobile_token');
+try{sessionStorage.removeItem('mobile_token')}catch{}
 async function api(path, options = {}) {
   const headers = {'Content-Type':'application/json',...options.headers};
   const workspaceId=sessionStorage.getItem('workspace_id');
   if(workspaceId)headers['X-Workspace-Id']=workspaceId;
-  if (token()) headers.Authorization = `Bearer ${token()}`;
   const response = await fetch('/api' + path,{credentials:'same-origin',...options,headers});
   let result;
   try { result = await response.json(); } catch { throw Error('Сервер вернул некорректный ответ'); }
@@ -23,8 +22,8 @@ document.body.classList.toggle('dark',document.body.classList.contains('landing-
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
 function view(html) { const content=$('#content');content.innerHTML=html;content.classList.remove('app-view-enter');void content.offsetWidth;content.classList.add('app-view-enter'); }
-function showAuth() { $('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
-async function showApp() { $('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');await render();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
+function showAuth() { document.body.classList.add('auth-mode');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
+async function showApp() { document.body.classList.remove('auth-mode');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');await render();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><span class="eyebrow">Рабочее пространство</span><h1>${title}</h1><p class="muted">${subtitle}</p></div>${action}</div>${user && !user.email_verified ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
 function quoteCard(q) {

@@ -152,9 +152,20 @@ public class MainActivity extends Activity {
     }
     private void login(boolean ignored){
         publicView=false;page("Вход","login",false);content.addView(ui.art("unfold",190));ui.space(content,16);content.addView(ui.label("Ваша работа.\nВсё в порядке.",34,INK,true));text("Сметы, клиенты и согласования.\nОдин аккаунт на всех устройствах.");ui.space(content,22);
-        LinearLayout providers=ui.column();content.addView(providers);
-        call("/auth/providers","GET",null,result->{JSONArray list=result.optJSONArray("providers");int enabled=0;if(list!=null)for(int i=0;i<list.length();i++){JSONObject provider=list.optJSONObject(i);if(provider==null)continue;boolean ready=provider.optBoolean("enabled");Button button=addButton(providers,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id")));button.setEnabled(ready);button.setAlpha(ready?1:.45f);if(ready)enabled++;}if(enabled==0){ui.space(providers,12);providers.addView(ui.label("Вход через российские сервисы скоро появится. Пока можно войти по почте.",11,MUTED,false));}});
-        button("Войти по почте",false,v->emailLogin(false));ui.space(content,18);TextView legal=ui.label("Продолжая, вы принимаете условия использования и политику конфиденциальности.",11,MUTED,false);content.addView(legal);button("Условия и конфиденциальность",false,v->openUrl(BuildConfig.API_BASE_URL+"/privacy"));
+        LinearLayout methods=ui.column();content.addView(methods);
+        addButton(methods,"Войти по почте",true,v->emailLogin(false));
+        call("/auth/providers","GET",null,result->{
+            JSONArray list=result.optJSONArray("providers");methods.removeAllViews();int enabled=0;
+            if(list!=null)for(int i=0;i<list.length();i++){
+                JSONObject provider=list.optJSONObject(i);
+                if(provider==null||!provider.optBoolean("enabled"))continue;
+                addButton(methods,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id")));
+                enabled++;
+            }
+            addButton(methods,"Войти по почте",enabled==0,v->emailLogin(false));
+            if(enabled==0){ui.space(methods,14);methods.addView(ui.label("Яндекс ID, VK ID и Mail ID появятся после подключения.",11,MUTED,false));}
+        });
+        ui.space(content,18);TextView legal=ui.label("Продолжая, вы принимаете условия использования и политику конфиденциальности.",11,MUTED,false);content.addView(legal);button("Условия и конфиденциальность",false,v->openUrl(BuildConfig.API_BASE_URL+"/privacy"));
     }
     private void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception error){message("Не удалось открыть браузер");}}
     private void startIdentity(String provider){try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();openUrl(BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}

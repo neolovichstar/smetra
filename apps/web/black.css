@@ -13,3 +13,51 @@ html{background:#000;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.hero-art img{transform:none}}
 
 .public-quote{width:min(1400px,calc(100% - 44px));margin:70px auto;min-height:65vh}.public-quote .workspace-columns{display:grid;grid-template-columns:1.3fr .7fr;gap:64px}.public-quote .panel{border-top:1px solid #27272c;margin-top:25px}.public-quote .portal-heading h1{font-size:clamp(32px,4vw,62px);letter-spacing:-.05em;font-weight:500}.public-quote .quote-summary{display:flex;justify-content:space-between;border-top:1px solid #29292e;padding:25px 0}.public-quote .quote-summary strong{font-size:27px}.public-quote form .btn{margin-top:12px}.public-quote .record-line{display:flex;justify-content:space-between;gap:15px}@media(max-width:700px){.public-quote .workspace-columns{grid-template-columns:1fr;gap:0}}
+
+/* Product surfaces share the same true-black language as the landing. */
+.workspace-page,.workspace-page.dark{--bg:#000;--panel:transparent;--text:#f5f5f7;--muted:#aaaab3;--line:#27272d;background:#000;color:var(--text)}
+.workspace-page .main{background:#000}
+.workspace-page .panel{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:24px 0;margin-bottom:18px}
+.workspace-page .business-stats{gap:24px}
+.workspace-page .business-stats .stat{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;padding:18px 0;gap:8px}
+.workspace-page .btn{min-height:44px;border-radius:10px;border-color:#33333a;color:var(--text)}
+.workspace-page .btn.primary{background:#82b1ff;border-color:#a8c9ff;color:#05070a;box-shadow:0 0 20px #82b1ff20}
+.workspace-page .btn.primary:hover{background:#a2c5ff;border-color:#c4dcff}
+.workspace-page .sidebar button.active{background:transparent;color:#9ec3ff;box-shadow:inset 2px 0 #82b1ff}
+.workspace-page .sidebar button:hover{background:#111115;color:#fff}
+.workspace-page input,.workspace-page textarea,.workspace-page select,.workspace-dialog input,.workspace-dialog textarea,.workspace-dialog select{background:#080809;border-color:#303037;color:#f5f5f7;border-radius:9px;min-height:44px}
+.workspace-page input:focus,.workspace-page textarea:focus,.workspace-page select:focus,.workspace-dialog input:focus,.workspace-dialog textarea:focus,.workspace-dialog select:focus{border-color:#82b1ff;box-shadow:0 0 0 3px #82b1ff17}
+.workspace-page .pill{background:transparent;border:0;padding:0}
+.workspace-page .kanban-column{background:transparent;border:0;border-left:1px solid var(--line);border-radius:0}
+.workspace-page .kanban-card{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;padding:18px 4px}
+.workspace-page .workspace-dialog{--bg:#080809;--panel:#080809;--text:#f5f5f7;--muted:#aaaab3;--line:#303037;background:#080809;border-color:#303037}
+.workspace-page .workspace-dialog .btn.primary{color:#05070a}
+.workspace-page .auth-wrap{width:calc(100% - 100px);max-width:1300px;min-height:calc(100dvh - 100px);margin:0 auto;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:100px;padding:55px 0}
+.workspace-page .auth-wrap h1{font-size:clamp(34px,3vw,48px);letter-spacing:-1.6px;line-height:1.12;margin:14px 0}
+.workspace-page .auth-wrap form{margin-top:16px}
+.workspace-page .sidebar button{font-size:13px}
+.workspace-page .record-line small,.workspace-page .quote small{font-size:12px}
+.workspace-page .field label,.workspace-dialog .field label{font-size:12px}
+.workspace-page .business-stats .stat span{font-size:12px}
+.workspace-page .auth-wrap .email-disclosure summary{display:none}
+.workspace-page .auth-wrap .email-disclosure[open]{border-top:1px solid #29292f;padding-top:18px}
+.auth-mode #command-open,.auth-mode #header-user{display:none}
+.auth-mode .nav-inner{justify-content:flex-start}
+.auth-provider-pending{color:#8c8c98;font-size:12px;line-height:1.6}
+.app-view-enter{animation:workspace-rise .26s cubic-bezier(.2,.8,.2,1) both}
+@keyframes workspace-rise{from{transform:translateY(7px)}to{transform:translateY(0)}}
+.black-hero{min-height:690px;padding:52px 0 45px}
+.hero-art{max-width:560px}
+@media(max-width:1000px){.black-hero{min-height:620px}.workspace-page .auth-wrap{gap:55px;width:calc(100% - 64px)}}
+@media(max-width:700px){
+ .black-hero{min-height:auto;padding:34px 0 30px}
+ .hero-art{width:68%;max-width:260px;margin:0 auto -10px}
+ .workspace-page .auth-wrap{width:calc(100% - 44px);min-height:auto;display:flex;flex-direction:column;gap:0;padding:20px 0 46px;margin:0 auto}
+ .workspace-page .auth-wrap h1{font-size:32px}
+ .workspace-page .panel{padding:21px 0}
+ .workspace-page .business-stats{gap:16px}
+ .workspace-page .business-stats .stat{padding:16px 0}
+ .workspace-page .btn.primary{box-shadow:0 0 14px #82b1ff1a}
+ .workspace-page .sidebar button{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){.app-view-enter{animation:none}}

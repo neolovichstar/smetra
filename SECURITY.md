@@ -1,7 +1,19 @@
-# Security review
+# Security notes
 
-Implemented: parameterized SQL, scrypt password hashes, random session and quote tokens, scoped ownership checks, admin role checks, immutable role from DB, HttpOnly SameSite cookie, origin/fetch-site checks for browser writes, response CSP/nosniff/frame denial, 64 KiB JSON limit, event/audit tables, per-process rate limiting, server-side provider GET verification and amount comparison.
+This is an implementation status, not a security certification.
 
-Known release blockers: email verification and reset have no real SMTP delivery test; in-memory rate limits do not work across multiple processes/restarts; no webhook IP allowlist (provider status check is the effective guard); no partial-refund flow or real payment sandbox verification; session token remains in Android private preferences rather than Keystore; no automated dependency/SAST/DAST or penetration test; account deletion retains pseudonymous payment history pending retention review; no trusted backup restore test. The built-in threaded HTTP server and single-file SQLite setup need load and failure testing before paid use. Frontend escapes user strings inserted into HTML. The `/admin` page redirects using HTML refresh.
+## In place
 
-Threats considered: SQL injection via bound parameters; XSS via escaping and CSP; CSRF via SameSite and origin checks; IDOR via user ID filters; admin escalation via server role; spoofed webhook via authenticated provider GET; replay by payment status transaction; brute force via local rate limit. There are no file uploads. Security checks are partial, not a certificate of safety.
+- PostgreSQL stores production data in a private `smetra` schema with row-level security; application queries use bound parameters and ownership checks. Administrator permissions come from the database role.
+- Passwords use salted scrypt hashes. Sessions and public estimate links use random tokens. Browser sessions use `HttpOnly`, `Secure`, `SameSite=Lax` cookies; browser login responses omit the bearer token. Android stores its bearer token encrypted with an Android Keystore AES-GCM key.
+- State-changing cookie requests check `Origin` or same-origin Fetch Metadata, and reject cross-site/same-site requests. JSON endpoints accept only `application/json` bodies, reject duplicate keys, and cap request size at 64 KiB. Authentication and sensitive actions have rate limits shared through PostgreSQL in production.
+- Production pages and API responses send CSP, frame denial, MIME-sniffing protection, restrictive referrer and browser permissions policies. Vercel serves production over HTTPS with HSTS. User-provided strings are escaped before insertion into HTML.
+- Uploads are limited by size and permitted type. Payment callbacks verify status and amount with the provider before changing local state; database transactions and idempotency protect payment processing.
+- External identity providers use one-time state and PKCE. Provider accounts are not merged solely because email addresses match.
+
+## Before a paid release
+
+- Configure and test SMTP delivery, email verification, and password reset. Until then, `ALLOW_UNVERIFIED_SIGNUP=1` allows unverified email accounts so onboarding works; this is a deliberate temporary limitation.
+- Configure and test the selected Russian identity providers and payment provider in their real sandboxes. The UI only offers identity providers with server-side credentials.
+- Exercise backup restore, dependency and penetration testing, and load/failure behavior. Review payment-history retention and any required deletion policy.
+- Rotate all secrets previously shared in chat, including database, Vercel, GitHub, OpenRouter, and bot credentials. Keep credentials only in server environment variables or ignored local secret files.
