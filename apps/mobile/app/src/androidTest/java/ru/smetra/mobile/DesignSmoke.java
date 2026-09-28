@@ -28,11 +28,12 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            click("Интерьер студии");waitText("Состав сметы");waitText("Концепция и дизайн");waitText("Создать заказ из сметы");shot("02-quote");clickDescription("Назад");
             click("Согласования");waitText("Решения клиентов");waitText("Согласована");shot("02-approvals");
             click("Платежи");waitText("Деньги под контролем.");waitPrefix("65");shot("02-payments");click("Сметы");waitPrefix("Все · ");
             click("Черновики");require(find("Сайт для студии Север")==null,"Draft filter must exclude sent quotes");clickPrefix("Все · ");
-            click("Создать");waitText("Новая смета");fill("Дизайн мобильного приложения","Студия Север","98000","Аналитика, прототип и дизайн ключевых экранов.");
-            top();shot("03-editor");click("Сохранить на устройстве");click("Сметы");waitPrefix("Все · ");click("Создать");
+            click("Создать смету");waitText("Новая смета");fill("Дизайн мобильного приложения","Студия Север","98000","Аналитика, прототип и дизайн ключевых экранов.");
+            top();shot("03-editor");click("Сметы");waitPrefix("Все · ");click("Создать смету");
             require(editors().get(0).getText().toString().equals("Дизайн мобильного приложения"),"Local draft restored");click("Создать смету");waitPrefix("Все · ");
             click("Клиенты");waitText("Студия Север");shot("04-clients");
             click("Добавить клиента");fill("Михаил Орлов","mikhail@example.org","+79000000001");click("Добавить клиента");waitText("Михаил Орлов");

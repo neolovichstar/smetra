@@ -82,6 +82,7 @@ def main():
                     "client": clients[index % 2]["name"],
                     "client_id": clients[index % 2]["id"],
                     "amount": amount,
+                    **({"items": [{"name": "Концепция и дизайн", "quantity": "1", "unit_price": amount}]} if index == 0 else {}),
                     "description": "Концепция, дизайн и подготовка финальных материалов. Два этапа согласования.",
                 },
                 token,

@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
         worker.execute(()->{
             try{
                 JSONObject data=request(path,method,body);
-                if(method.equals("GET")&&(path.equals("/quotes")||path.equals("/clients")||path.equals("/projects")))getPreferences(MODE_PRIVATE).edit().putString("cache:"+path,data.toString()).apply();
+                if(method.equals("GET")&&(path.equals("/dashboard")||path.equals("/quotes")||path.equals("/clients")||path.equals("/projects")))getPreferences(MODE_PRIVATE).edit().putString("cache:"+path,data.toString()).apply();
                 runOnUiThread(()->{if(version==pageVersion&&!isFinishing()){restore(submit);done.onResult(data);}});
             }catch(Exception error){runOnUiThread(()->{
                 if(version!=pageVersion||isFinishing())return;restore(submit);clearLoading(content);
@@ -184,32 +184,63 @@ public class MainActivity extends Activity {
     private void refresh(){call("/me","GET",null,result->{me=result.optJSONObject("user");home();});}
     private void home(){
         publicView=false;page("Сметы","home",false);
-        String name=me==null?"":me.optString("name").trim().split(" ")[0];content.addView(ui.label(name.isEmpty()?"ВАШЕ ПРОСТРАНСТВО":"ВАШЕ ПРОСТРАНСТВО, "+name.toUpperCase(new Locale("ru")),10,MUTED,true));ui.space(content,8);
-        content.addView(ui.label("Сметы",36,INK,true));
-        text("Получили запрос? Начните с сообщения клиента.");button("Разобрать запрос",true,v->capture());ui.space(content,18);
-        LinearLayout summary=ui.card(content);summary.setBackground(ui.gradient(26));TextView totalCaption=ui.label("В последних сметах",13,BLUE,false);summary.addView(totalCaption);ui.space(summary,12);
-        TextView total=ui.label("—",38,INK,true);total.setLetterSpacing(-.05f);total.setAutoSizeTextTypeUniformWithConfiguration(22,38,1,android.util.TypedValue.COMPLEX_UNIT_SP);summary.addView(total,new LinearLayout.LayoutParams(-1,dp(55)));ui.space(summary,16);
-        TextView waiting=ui.label("Загружаем статусы…",12,MUTED,false);summary.addView(waiting);
-        ui.space(content,16);LinearLayout actions=ui.row();action(actions,"plus","Создать",this::create);action(actions,"clients","Клиенты",()->records("clients"));action(actions,"projects","Заказы",()->records("projects"));action(actions,"spark","Ассистент",this::assistant);content.addView(actions);
-        ui.section(content,"Сметы",null);LinearLayout filters=ui.row();filters.setPadding(0,dp(12),0,dp(6));HorizontalScrollView scroller=new HorizontalScrollView(this);scroller.setHorizontalScrollBarEnabled(false);scroller.addView(filters);content.addView(scroller);
-        LinearLayout host=ui.column();content.addView(host);loading(host);
-        call("/quotes","GET",null,result->{JSONArray list=result.optJSONArray("quotes");if(list==null)list=new JSONArray();long amount=0;int sent=0,accepted=0;String sumCurrency=list.length()>0?list.optJSONObject(0).optString("currency","RUB"):"RUB";boolean mixed=false;for(int i=0;i<list.length();i++){JSONObject q=list.optJSONObject(i);if(q!=null){if(sumCurrency.equals(q.optString("currency","RUB")))amount+=q.optLong("amount_kopecks");else mixed=true;if(q.optString("status").equals("sent"))sent++;if(q.optString("status").equals("accepted"))accepted++;}}
-            totalCaption.setText("В последних сметах");total.setText(exactMoney(amount,sumCurrency));waiting.setText(String.format(new Locale("ru"),"%d на согласовании   ·   %d согласовано",sent,accepted));if(mixed){ui.space(summary,8);summary.addView(ui.label("В итог не включены сметы в других валютах",11,MUTED,false));}
-            final JSONArray data=list;filters.removeAllViews();String[] names={"Все · "+list.length(),"Черновики","Отправлены","Согласованы"},values={"","draft","sent","accepted"};
-            for(int i=0;i<names.length;i++){final int index=i;TextView chip=ui.label(names[i],12,i==0?BG:MUTED,true);chip.setGravity(Gravity.CENTER);chip.setMinimumHeight(dp(48));chip.setPadding(dp(14),dp(14),dp(14),dp(14));ui.ripple(chip,i==0?BLUE:SURFACE,14,0);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-2,-2);cp.rightMargin=dp(7);filters.addView(chip,cp);ui.tap(chip,()->{for(int j=0;j<filters.getChildCount();j++){TextView item=(TextView)filters.getChildAt(j);item.setTextColor(j==index?BG:MUTED);ui.ripple(item,j==index?BLUE:SURFACE,14,0);item.setSelected(j==index);}renderQuotes(host,data,values[index]);});}
-            renderQuotes(host,data,"");
+        content.addView(ui.label("ОБЗОР",10,MUTED,true));ui.space(content,8);
+        content.addView(ui.label("Сметры",36,INK,true));ui.space(content,14);
+        button("Создать смету",true,v->create());button("Разобрать запрос",false,v->capture());
+
+        LinearLayout summary=ui.card(content),metrics=ui.row();summary.addView(metrics);
+        TextView total=homeMetric(metrics,"Всего"),waiting=homeMetric(metrics,"Ждут ответа"),approved=homeMetric(metrics,"Согласовано");
+        ui.section(content,"Ваши сметы",null);
+        LinearLayout filters=ui.row();filters.setPadding(0,dp(12),0,dp(6));HorizontalScrollView scroller=new HorizontalScrollView(this);scroller.setHorizontalScrollBarEnabled(false);scroller.addView(filters);content.addView(scroller);
+        LinearLayout host=ui.column(),more=ui.column();content.addView(host);content.addView(more);loading(host);
+        final JSONArray[] data={new JSONArray()};final int[] totalCount={0};final String[] selected={""};
+        call("/dashboard","GET",null,result->{
+            JSONObject overview=result.optJSONObject("overview"),quoteCounts=overview==null?null:overview.optJSONObject("quotes");
+            if(quoteCounts!=null){totalCount[0]=quoteCounts.optInt("total");total.setText(String.valueOf(totalCount[0]));waiting.setText(String.valueOf(quoteCounts.optInt("waiting")));approved.setText(String.valueOf(quoteCounts.optInt("approved")));}
+            JSONArray recent=result.optJSONArray("quotes");if(recent!=null&&recent.length()>0){data[0]=recent;homeFilters(filters,host,data[0],totalCount[0],selected);renderQuotes(host,data[0],selected[0]);}
+        });
+        call("/quotes","GET",null,result->{
+            JSONArray list=result.optJSONArray("quotes");data[0]=list==null?new JSONArray():list;
+            homeFilters(filters,host,data[0],Math.max(totalCount[0],data[0].length()),selected);
+            renderQuotes(host,data[0],selected[0]);homeMore(host,more,filters,data[0],totalCount,selected);
         });
     }
+    private TextView homeMetric(LinearLayout parent,String title){
+        LinearLayout cell=ui.column();cell.setPadding(0,dp(5),dp(7),dp(5));parent.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
+        TextView number=ui.label("—",29,INK,true);cell.addView(number);ui.space(cell,8);cell.addView(ui.label(title,11,MUTED,false));return number;
+    }
+    private void homeFilters(LinearLayout filters,LinearLayout host,JSONArray list,int total,String[] selected){
+        filters.removeAllViews();String[] names={"Все · "+total,"Черновики","На согласовании","Согласованы"},values={"","draft","sent","approved"};
+        for(int i=0;i<names.length;i++){
+            String value=values[i];boolean active=value.equals(selected[0]);TextView chip=ui.label(names[i],12,active?BG:MUTED,true);chip.setGravity(Gravity.CENTER);chip.setMinimumHeight(dp(48));chip.setPadding(dp(14),dp(14),dp(14),dp(14));ui.ripple(chip,active?BLUE:SURFACE,14,0);chip.setSelected(active);
+            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-2,-2);cp.rightMargin=dp(7);filters.addView(chip,cp);
+            ui.tap(chip,()->{selected[0]=value;homeFilters(filters,host,list,total,selected);renderQuotes(host,list,value);});
+        }
+    }
+    private void homeMore(LinearLayout host,LinearLayout more,LinearLayout filters,JSONArray list,int[] total,String[] selected){
+        more.removeAllViews();if(list.length()<30||total[0]>0&&list.length()>=total[0])return;
+        addButton(more,"Показать ещё",false,v->call("/quotes?offset="+list.length(),"GET",null,result->{
+            JSONArray next=result.optJSONArray("quotes");if(next!=null)for(int i=0;i<next.length();i++)list.put(next.opt(i));
+            homeFilters(filters,host,list,Math.max(total[0],list.length()),selected);renderQuotes(host,list,selected[0]);
+            if(next==null||next.length()<30)more.removeAllViews();else homeMore(host,more,filters,list,total,selected);
+        }));
+    }
     private void action(LinearLayout parent,String icon,String title,Runnable click){LinearLayout item=ui.column();item.setGravity(Gravity.CENTER);item.setPadding(dp(4),dp(8),dp(4),dp(8));FrameLayout tile=new FrameLayout(this);tile.setBackground(ui.shape(BG,12,LINE));tile.addView(ui.new Icon(icon,BLUE),new FrameLayout.LayoutParams(dp(23),dp(23),Gravity.CENTER));item.addView(tile,new LinearLayout.LayoutParams(dp(54),dp(54)));ui.space(item,9);TextView caption=ui.label(title,11,INK,false);caption.setGravity(Gravity.CENTER);item.addView(caption);ui.tap(item,click);item.setContentDescription(title);parent.addView(item,new LinearLayout.LayoutParams(0,-2,1));}
-    private void renderQuotes(LinearLayout host,JSONArray list,String filter){host.removeAllViews();int shown=0;for(int i=0;i<list.length();i++){JSONObject q=list.optJSONObject(i);if(q==null||!filter.isEmpty()&&!filter.equals(q.optString("status")))continue;shown++;LinearLayout row=ui.card(host);LinearLayout top=ui.row();TextView title=ui.label(q.optString("title"),16,INK,true);title.setMaxLines(2);top.addView(title,new LinearLayout.LayoutParams(0,-2,1));ui.gap(top,12);TextView amount=ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),15,INK,false);top.addView(amount);row.addView(top);ui.space(row,7);row.addView(ui.label(q.optString("client","Без клиента"),12,MUTED,false));ui.space(row,9);row.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.tap(row,()->quote(q));}
+    private void renderQuotes(LinearLayout host,JSONArray list,String filter){host.removeAllViews();int shown=0;for(int i=0;i<list.length();i++){JSONObject q=list.optJSONObject(i);if(q==null)continue;String state=q.optString("approval_state",q.optString("status"));boolean matches=filter.isEmpty()||filter.equals(state)||filter.equals("sent")&&(state.equals("viewed")||state.equals("changes_requested"))||filter.equals("approved")&&state.equals("accepted");if(!matches)continue;shown++;LinearLayout row=ui.card(host);LinearLayout top=ui.row();TextView title=ui.label(q.optString("title"),16,INK,true);title.setMaxLines(2);top.addView(title,new LinearLayout.LayoutParams(0,-2,1));ui.gap(top,12);TextView amount=ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),15,INK,false);top.addView(amount);row.addView(top);ui.space(row,7);row.addView(ui.label(q.optString("client","Без клиента"),12,MUTED,false));ui.space(row,9);row.addView(ui.badge(status(state),statusColor(state)));ui.tap(row,()->openQuote(q));}
         if(shown==0){ui.empty(host,"document",filter.isEmpty()?"Всё начинается с первой сметы":"Пока пусто",filter.isEmpty()?"Соберите работы и стоимость.\nОтправьте клиенту одну ссылку.":"Сметы с этим статусом появятся здесь.");if(filter.isEmpty())addButton(host,"Создать первую смету",true,v->create());}ui.enter(host);
     }
-    private void quote(JSONObject q){parentPage="home";page("Смета","quote",true);content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,18);content.addView(ui.label(q.optString("title"),28,INK,true));text(q.optString("client"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость работ",12,BLUE,false));ui.space(price,12);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));
-        if(!q.optString("description").isEmpty()){ui.section(content,"Состав работ",null);text(q.optString("description"));}
-        String state=q.optString("status"),id=q.optString("id");ui.space(content,20);
+    private void openQuote(JSONObject q){
+        if(q.has("items")){quote(q);return;}
+        String id=q.optString("id");page("Смета","quote",true);loading(content);
+        call("/quotes/"+id,"GET",null,result->{JSONObject full=result.optJSONObject("quote");if(full!=null)quote(full);});
+    }
+    private void quote(JSONObject q){parentPage="home";page("Смета","quote",true);String state=q.optString("approval_state",q.optString("status")),currency=q.optString("currency","RUB");content.addView(ui.badge(status(state),statusColor(state)));ui.space(content,18);content.addView(ui.label(q.optString("title"),28,INK,true));text(q.optString("client"));LinearLayout price=ui.card(content);price.addView(ui.label("Стоимость работ",12,BLUE,false));ui.space(price,12);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),currency),32,INK,true));
+        if(!q.optString("description").isEmpty()){ui.section(content,"О проекте",null);text(q.optString("description"));}
+        JSONArray items=q.optJSONArray("items");if(items!=null&&items.length()>0){ui.section(content,"Состав сметы",null);for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(content),top=ui.row();TextView name=ui.label(item.optString("name"),15,INK,true);name.setMaxLines(3);top.addView(name,new LinearLayout.LayoutParams(0,-2,1));ui.gap(top,10);top.addView(ui.label(exactMoney(item.optLong("subtotal"),currency),14,INK,false));row.addView(top);ui.space(row,7);row.addView(ui.label(item.optString("quantity","1")+" "+item.optString("unit","шт.")+(item.optBoolean("optional")&&!item.optBoolean("included",true)?" · Опционально":""),12,MUTED,false));}}
+        String id=q.optString("id");ui.space(content,20);
         if(state.equals("draft"))button("Отправить на согласование",true,v->ui.sheet("Всё готово к отправке?","Сохраним текущую версию сметы. Клиент сможет открыть её по ссылке и согласовать условия.","Опубликовать смету",false,()->{try{call("/quotes/"+id+"/status","POST",new JSONObject().put("status","sent").put("revision",q.optInt("revision")),r->{String url=r.optJSONObject("quote")!=null?r.optJSONObject("quote").optString("public_url"):"";home();share(url);});}catch(Exception error){message(error.getMessage());}}));
-        if(state.equals("sent")||state.equals("accepted"))button("Поделиться ссылкой",true,v->share(q.optString("public_url")));
-        if(state.equals("accepted"))button("Создать заказ из сметы",false,v->{try{call("/quotes/"+id+"/project","POST",new JSONObject(),r->records("projects"));}catch(Exception error){message(error.getMessage());}});
+        if(state.equals("sent")||state.equals("viewed")||state.equals("changes_requested")||state.equals("approved")||state.equals("accepted"))button("Поделиться ссылкой",true,v->share(q.optString("public_url")));
+        if(state.equals("approved")||state.equals("accepted"))button("Создать заказ из сметы",false,v->{try{call("/quotes/"+id+"/project","POST",new JSONObject(),r->records("projects"));}catch(Exception error){message(error.getMessage());}});
     }
     private void share(String url){if(url.isEmpty()){message("Ссылка ещё не готова. Обновите смету.");return;}Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,"Предложение по работе: "+url);startActivity(Intent.createChooser(intent,"Отправить предложение"));}
     private void capture(){
@@ -252,11 +283,13 @@ public class MainActivity extends Activity {
         button("Сохранить черновик",true,v->{if(title.length()==0){title.setError("Укажите название");return;}if(client.length()==0){client.setError("Укажите клиента");return;}try{JSONArray items=new JSONArray();long priced=0;for(EditText[] row:rows){if(row[0].length()==0){row[0].setError("Укажите работу");return;}long value=row[3].length()==0?0:cents(row[3]);if(value<0)throw new IllegalArgumentException();priced=Math.addExact(priced,value);items.put(new JSONObject().put("name",row[0].getText().toString()).put("quantity",row[1].getText().toString()).put("unit",row[2].getText().toString()).put("unit_price",value));}if(priced==0){message("Укажите цену хотя бы одной позиции");return;}JSONObject body=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("description",description.getText().toString()).put("terms",terms.getText().toString()).put("items",items);call("/quotes","POST",body,result->{pendingCaptureText=null;pendingCaptureFile=null;getPreferences(MODE_PRIVATE).edit().remove("capture_text").remove("capture_draft").apply();home();message("Смета сохранена. Теперь можно отправить её клиенту.");});}catch(Exception error){message("Проверьте позиции и цены");}});
     }
     private void create(){
-        parentPage="home";page("Новая смета","create",true);content.addView(ui.label("Придайте идее\nточную стоимость.",28,INK,true));text("Сначала основное. Отправить смету клиенту можно после сохранения.");
+        parentPage="home";page("Новая смета","create",true);content.addView(ui.label("Новая смета",28,INK,true));text("Название, клиент и стоимость. Детали можно уточнить позже.");
         EditText title=field("Название работы",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES),client=field("Имя клиента или компания",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS),amount=field("Стоимость, ₽",8194),description=field("Что входит в работу",1);amount.setHint("0,00");description.setHint("Объём работ, результат, сроки…");
         String saved=getPreferences(MODE_PRIVATE).getString("draft",null);if(saved!=null)try{JSONObject d=new JSONObject(saved);title.setText(d.optString("title"));client.setText(d.optString("client"));amount.setText(d.optString("amount"));description.setText(d.optString("description"));}catch(Exception ignored){}
-        ui.space(content,14);button("Создать смету",true,v->{if(title.length()==0){title.setError("Добавьте название");return;}try{long value=cents(amount);if(value<=0)throw new IllegalArgumentException();JSONObject body=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("description",description.getText().toString()).put("amount",value);call("/quotes","POST",body,result->{getPreferences(MODE_PRIVATE).edit().remove("draft").apply();home();message("Смета создана");});}catch(Exception error){amount.setError("Укажите сумму больше нуля");}});
-        button("Сохранить на устройстве",false,v->{try{JSONObject d=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("amount",amount.getText().toString()).put("description",description.getText().toString());getPreferences(MODE_PRIVATE).edit().putString("draft",d.toString()).apply();message("Черновик сохранён на этом устройстве");}catch(Exception error){message("Не удалось сохранить черновик");}});
+        TextWatcher autosave=new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){}public void afterTextChanged(Editable value){try{JSONObject draft=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("amount",amount.getText().toString()).put("description",description.getText().toString());getPreferences(MODE_PRIVATE).edit().putString("draft",draft.toString()).apply();}catch(Exception ignored){}}};
+        title.addTextChangedListener(autosave);client.addTextChangedListener(autosave);amount.addTextChangedListener(autosave);description.addTextChangedListener(autosave);
+        ui.space(content,14);button("Создать смету",true,v->{if(title.length()==0){title.setError("Добавьте название");return;}if(client.length()==0){client.setError("Укажите клиента");return;}try{long value=cents(amount);if(value<=0)throw new IllegalArgumentException();JSONObject body=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("description",description.getText().toString()).put("amount",value);call("/quotes","POST",body,result->{getPreferences(MODE_PRIVATE).edit().remove("draft").apply();home();message("Смета создана");});}catch(Exception error){amount.setError("Укажите сумму больше нуля");}});
+        ui.space(content,12);content.addView(ui.label("Черновик сохраняется на устройстве автоматически.",11,MUTED,false));
     }
     private long cents(EditText field){return new java.math.BigDecimal(field.getText().toString().replace(" ","").replace(',','.')).movePointRight(2).setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();}
     private void approvals(){
