@@ -421,6 +421,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             public["/" + font] = (font, "font/ttf")
         for name, mime in (
             ("black.css", "text/css"),
+            ("cabinet.css", "text/css"),
             ("black.js", "text/javascript"),
             ("landing.js", "text/javascript"),
             ("assets/black/unfold.png", "image/png"),

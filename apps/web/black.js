@@ -18,14 +18,13 @@
    host.append(button);
   }
   if(!enabled.length){
-   host.classList.add('hidden');
-   note.textContent='Яндекс ID, VK ID, Mail и Одноклассники появятся после подключения.';
+   host.closest('.auth-provider-block')?.classList.add('hidden');
   }else{
    note.textContent='Один профиль для сайта и приложения.';
   }
  }catch{
-  host.classList.add('hidden');
-  note.textContent='Способы входа временно не загрузились. Войдите по почте.';
+  host.closest('.auth-provider-block')?.classList.add('hidden');
+  document.querySelector('#auth-status').textContent='Способы входа временно не загрузились. Войдите по почте.';
  }
 })();
 const proposalLabels={title:'Название',name:'Название',client:'Клиент',client_id:'Клиент',description:'Описание',amount:'Стоимость',amount_kopecks:'Сумма',price:'Цена',cost_price:'Себестоимость',currency:'Валюта',quantity:'Количество',unit_price:'Цена',items:'Работы',due_date:'Срок',status:'Статус',email:'Почта',phone:'Телефон',terms:'Условия',project_id:'Заказ',note:'Примечание'};

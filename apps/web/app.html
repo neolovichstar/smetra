@@ -1,1 +1,87 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Кабинет · Сметра</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/black.css"><meta name="theme-color" content="#000000"></head><body class="workspace-page"><header class="nav"><div class="container nav-inner"><a class="brand" href="/">сметра<span class="brand-mark">.</span></a><div class="row"><span id="header-user" class="muted"></span><button class="btn small" id="command-open">Поиск <kbd>Ctrl K</kbd></button><button class="btn small" id="theme">Тема</button></div></div></header><main id="auth" class="auth-wrap hidden"><section class="auth-story"><img class="black-art auth-art" src="/assets/black/unfold.png" width="1254" height="1254" alt=""><h2>Ваша работа.<br>Всё в порядке.</h2><p>От первого расчёта до завершённого проекта.</p></section><section class="auth-flow"><span class="overline">Ваше пространство</span><h1>Добро пожаловать<br>в Сметру.</h1><p>Один аккаунт для сайта и приложения.</p><div id="provider-buttons" class="provider-buttons" aria-label="Способ входа"></div><p id="auth-status" class="auth-status" role="status"></p><p id="provider-note" class="auth-provider-pending"></p><details class="email-disclosure" id="email-disclosure"><summary>Войти или зарегистрироваться по почте</summary><h2 id="auth-title">Вход</h2><form id="auth-form"><div class="field hidden" id="name-field"><label for="name">Ваше имя</label><input id="name" autocomplete="name" maxlength="80"></div><div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" required></div><div class="field"><label for="password">Пароль</label><input type="password" id="password" autocomplete="current-password" minlength="12" required></div><button class="btn primary full-width" id="auth-submit">Войти</button></form><p class="note"><button class="btn small" id="auth-switch" type="button">Создать аккаунт</button> <button class="btn small ghost" id="forgot" type="button">Забыли пароль?</button></p></details><p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p></section></main><div id="shell" class="app-shell hidden"><aside class="sidebar" aria-label="Рабочие разделы"><div class="workspace-label"><span class="eyebrow">Пространство</span><strong id="workspace-name">Сметра</strong></div><button data-tab="dashboard" class="active">Обзор</button><button data-tab="assistant">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="clients">Клиенты</button><button data-tab="leads">Лиды</button><button data-tab="projects">Заказы</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><div class="sidebar-divider"></div><button data-tab="catalog">Каталог</button><button data-tab="documents">Документы</button><button data-tab="finance">Финансы</button><button data-tab="notifications">Уведомления</button><button data-tab="team">Пространство и команда</button><div class="sidebar-divider"></div><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button><button id="logout" class="bottom">Выйти</button></aside><main class="main" id="content"></main></div><div id="toast" class="toast hidden" role="status"></div><script src="/app.js" defer></script><script src="/workspace.js" defer></script><script src="/black.js" defer></script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Кабинет · Сметра</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/black.css">
+  <link rel="stylesheet" href="/cabinet.css">
+</head>
+<body class="workspace-page">
+  <a class="skip-link" href="#content">К содержимому</a>
+  <header class="nav app-nav">
+    <div class="app-nav-inner">
+      <div class="app-nav-brand">
+        <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Открыть разделы" aria-controls="sidebar" aria-expanded="false"><span></span><span></span></button>
+        <a class="brand" href="/">сметра<span class="brand-mark">.</span></a>
+        <span class="app-nav-caption">рабочее пространство</span>
+      </div>
+      <div class="app-nav-actions">
+        <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
+        <span id="header-user" class="nav-user"></span>
+        <button class="btn small" id="theme" type="button">Тема</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="auth" class="auth-wrap hidden">
+    <section class="auth-story" aria-label="О продукте">
+      <div class="auth-story-top"><span class="overline">ПРОСТРАНСТВО ДЛЯ РАБОТЫ</span><span class="auth-story-index">01 / 04</span></div>
+      <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
+      <h2>От идеи<br>до оплаты<span>.</span></h2>
+      <p>Смета, клиент и каждый следующий шаг — в одном рабочем пространстве.</p>
+      <div class="auth-proof" aria-hidden="true">
+        <div class="auth-proof-head"><span>ПРЕДЛОЖЕНИЕ / 024</span><span>СОГЛАСОВАНО</span></div>
+        <div class="auth-proof-title">Сайт для студии Север</div>
+        <div class="auth-proof-line"><span>Исследование</span><span>35 000 ₽</span></div>
+        <div class="auth-proof-line"><span>Дизайн и разработка</span><span>63 000 ₽</span></div>
+        <div class="auth-proof-total"><span>Итого</span><strong>98 000 ₽</strong></div>
+      </div>
+    </section>
+
+    <section class="auth-flow" aria-labelledby="auth-title">
+      <div class="auth-flow-top"><span class="overline">СМЕТРА / АККАУНТ</span><span class="auth-flow-step">ДЛЯ САЙТА И ANDROID</span></div>
+      <h1 id="auth-title">С возвращением.</h1>
+      <p id="auth-copy" class="auth-intro">Продолжите работу с того места, где остановились.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Действие с аккаунтом">
+        <button id="auth-login-tab" type="button" role="tab" aria-selected="true">Войти</button>
+        <button id="auth-register-tab" type="button" role="tab" aria-selected="false">Создать аккаунт</button>
+      </div>
+      <details class="email-disclosure" id="email-disclosure" open>
+        <summary>Продолжить по почте</summary>
+        <form id="auth-form">
+          <div class="field hidden" id="name-field"><label for="name">Как к вам обращаться</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
+          <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
+          <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
+          <p id="auth-form-error" class="auth-form-error" role="alert"></p>
+          <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
+        </form>
+      </details>
+      <div class="auth-provider-block"><div class="auth-provider-divider"><span>или используйте российский сервис</span></div><div id="provider-buttons" class="provider-buttons" aria-label="Способ входа"></div><p id="provider-note" class="auth-provider-pending"></p></div>
+      <p id="auth-status" class="auth-status" role="status"></p>
+      <p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
+    </section>
+  </main>
+
+  <div id="nav-backdrop" class="nav-backdrop hidden"></div>
+  <div id="shell" class="app-shell hidden">
+    <aside id="sidebar" class="sidebar" aria-label="Рабочие разделы">
+      <div class="workspace-label"><span class="eyebrow">ВАШЕ ПРОСТРАНСТВО</span><strong id="workspace-name">Сметра</strong><span class="workspace-label-mark" aria-hidden="true">↗</span></div>
+      <div class="sidebar-scroll">
+        <div class="sidebar-group"><span class="sidebar-heading">ОСНОВНОЕ</span><button data-tab="dashboard" class="active">Обзор</button><button data-tab="quotes">Сметы</button><button data-tab="clients">Клиенты</button><button data-tab="projects">Заказы</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">ПРОЦЕСС</span><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="assistant">Ассистент <span class="sidebar-accent" aria-hidden="true"></span></button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">РЕСУРСЫ</span><button data-tab="finance">Финансы</button><button data-tab="catalog">Каталог</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button></div>
+        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">АККАУНТ</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
+      </div>
+      <div class="sidebar-foot"><span>СМЕТРА / РАБОТА ЯСНЕЕ</span><button id="logout" type="button">Выйти <span aria-hidden="true">↗</span></button></div>
+    </aside>
+    <main class="main" id="content" tabindex="-1"></main>
+  </div>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/app.js" defer></script>
+  <script src="/workspace.js" defer></script>
+  <script src="/black.js" defer></script>
+</body>
+</html>
