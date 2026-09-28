@@ -33,9 +33,9 @@
 .workspace-page .sidebar-foot button:hover{color:#fff}
 .workspace-page .main{width:100%;max-width:1600px;margin:0 auto;padding:42px clamp(28px,4.4vw,78px) 100px;background:#000}
 .workspace-page .topline{align-items:end;margin-bottom:32px;gap:30px}
+.workspace-page .topline-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;flex:none;margin-bottom:4px}
 .workspace-page .topline h1{font-size:clamp(32px,3.2vw,48px);font-weight:500;line-height:1.08;letter-spacing:-.055em;margin:16px 0 10px}
 .workspace-page .topline p{font-size:13px;color:#a3a6b0;margin:0}
-.workspace-page .topline>.btn{margin-bottom:4px}
 .workspace-page .main .eyebrow{font-size:10px;letter-spacing:.08em;color:#969ba7}
 .workspace-page .main .eyebrow:before{width:26px;background:#8dbaff}
 .workspace-page .panel{border-top:1px solid var(--cabinet-line);padding:23px 0 25px;margin-bottom:10px}
@@ -185,7 +185,7 @@
  .dashboard-aside{border-left:0;border-top:1px solid #24262d;padding:18px 0 0}
  .dashboard-aside .panel{border:0}
  .workspace-page .topline{display:block}
- .workspace-page .topline>.btn{margin-top:20px}
+ .workspace-page .topline-actions{justify-content:flex-start;margin:20px 0 0}
  .workspace-page .topline h1{font-size:36px}
  .workspace-page .record-line{align-items:start}
  .workspace-page .record-meta{gap:8px}
