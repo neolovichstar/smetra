@@ -12,8 +12,9 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
-from backend.business import DomainError, calculate
+from backend.business import DomainError, Service, calculate
 
 
 class CalculationTests(unittest.TestCase):
@@ -160,6 +161,49 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(code, 200, result)
         return result["quote"]
+
+    def test_dashboard_returns_five_lightweight_quotes_in_own_workspace(self):
+        token, _ = self.account("dashboard-owner")
+        other_token, _ = self.account("dashboard-other")
+        for number in range(6):
+            self.quote(token, title=f"Estimate {number}")
+        self.quote(other_token, title="Private estimate")
+
+        code, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(code, 200)
+        self.assertEqual(dashboard["workspace"]["role"], "owner")
+        self.assertEqual(dashboard["overview"]["quotes"]["total"], 6)
+        self.assertEqual(len(dashboard["quotes"]), 5)
+        self.assertTrue(all(quote["title"].startswith("Estimate ") for quote in dashboard["quotes"]))
+        self.assertTrue(all("items" not in quote for quote in dashboard["quotes"]))
+        self.assertTrue(all("public_token" not in quote for quote in dashboard["quotes"]))
+        self.assertNotIn("Private estimate", [q["title"] for q in dashboard["quotes"]])
+        self.assertIn("ai_drafting", dashboard["capabilities"])
+        code, full_list = self.call("/quotes", token=token)
+        self.assertEqual(code, 200)
+        self.assertEqual(len(full_list["quotes"]), 6)
+        self.assertTrue(all(len(quote["items"]) == 1 for quote in full_list["quotes"]))
+        self.assertEqual(self.call("/dashboard")[0], 401)
+
+        with self.mod.db() as con:
+            user_id = dashboard["workspace"]["owner_id"]
+            handler = SimpleNamespace(
+                headers={},
+                auth=lambda connection: connection.execute(
+                    "SELECT * FROM users WHERE id=?", (user_id,)
+                ).fetchone(),
+            )
+            statements = []
+            con.set_trace_callback(statements.append)
+            Service(handler, con, self.base).handle("GET", "/api/quotes", {})
+            item_reads = [
+                sql for sql in statements if sql.lstrip().upper().startswith("SELECT")
+                and "quote_items" in sql
+            ]
+            self.assertEqual(len(item_reads), 1)
+            statements.clear()
+            Service(handler, con, self.base).handle("GET", "/api/dashboard", {})
+            self.assertFalse(any("quote_items" in sql for sql in statements))
 
     def test_full_client_quote_project_partial_payments_expense_document(self):
         token, _ = self.account("lifecycle")

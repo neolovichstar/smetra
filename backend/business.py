@@ -396,7 +396,7 @@ class Service:
             result[key] = val
         return packed(result)
 
-    def quote_view(self, row, public=False):
+    def quote_view(self, row, public=False, prefetched_items=None):
         if public:
             version = self.con.execute(
                 "SELECT snapshot FROM quote_versions WHERE quote_id=? AND version=?",
@@ -435,13 +435,17 @@ class Service:
             )
             result = {k: row[k] for k in keys}
             result["custom_fields"] = json.loads(row["custom_fields"])
-            result["items"] = [
-                json.loads(r["data"])
-                for r in self.con.execute(
-                    "SELECT data FROM quote_items WHERE quote_id=? ORDER BY position",
-                    (row["id"],),
-                )
-            ]
+            result["items"] = (
+                prefetched_items
+                if prefetched_items is not None
+                else [
+                    json.loads(r["data"])
+                    for r in self.con.execute(
+                        "SELECT data FROM quote_items WHERE quote_id=? ORDER BY position",
+                        (row["id"],),
+                    )
+                ]
+            )
             result["public_url"] = self.origin + "/?quote=" + row["public_token"]
             result["profit"] = row["amount_kopecks"] - row["internal_cost"]
         state = row["approval_state"]
@@ -821,7 +825,20 @@ class Service:
                 "SELECT * FROM quotes WHERE workspace_id=? AND (title LIKE ? ESCAPE '\\' OR client LIKE ? ESCAPE '\\') ORDER BY updated_at DESC,id LIMIT 30 OFFSET ?",
                 (self.wid, search, search, self.page(query)),
             ).fetchall()
-            return 200, {"quotes": [self.quote_view(r) for r in rows]}
+            items_by_quote = {row["id"]: [] for row in rows}
+            if rows:
+                placeholders = ",".join("?" for _ in rows)
+                for item in self.con.execute(
+                    f"SELECT quote_id,data FROM quote_items WHERE quote_id IN ({placeholders}) ORDER BY quote_id,position",
+                    tuple(items_by_quote),
+                ):
+                    items_by_quote[item["quote_id"]].append(json.loads(item["data"]))
+            return 200, {
+                "quotes": [
+                    self.quote_view(row, prefetched_items=items_by_quote[row["id"]])
+                    for row in rows
+                ]
+            }
         row = self.get("quotes", parts[0])
         action = parts[1] if len(parts) > 1 else ""
         if method == "GET":
@@ -1237,21 +1254,33 @@ class Service:
         )
         return 201, {"item": values}
 
-    def overview(self):
-        currencies = []
-        for row in self.con.execute(
+    def overview(self, limit=30):
+        project_totals = self.con.execute(
             "SELECT currency,sum(amount_kopecks) AS revenue,sum(internal_cost) AS planned_cost,count(*) AS projects FROM projects WHERE workspace_id=? AND status!=? GROUP BY currency",
             (self.wid, "cancelled"),
-        ):
+        ).fetchall()
+        paid_by_currency = {}
+        costs_by_currency = {}
+        if project_totals:
+            paid_by_currency = {
+                row["currency"]: row["amount"]
+                for row in self.con.execute(
+                    "SELECT p.currency,coalesce(sum(x.amount_kopecks),0) AS amount FROM project_payments x JOIN projects p ON x.project_id=p.id WHERE x.workspace_id=? AND p.workspace_id=? GROUP BY p.currency",
+                    (self.wid, self.wid),
+                )
+            }
+            costs_by_currency = {
+                row["currency"]: row["amount"]
+                for row in self.con.execute(
+                    "SELECT p.currency,coalesce(sum(x.amount_kopecks),0) AS amount FROM expenses x JOIN projects p ON x.project_id=p.id WHERE x.workspace_id=? AND p.workspace_id=? GROUP BY p.currency",
+                    (self.wid, self.wid),
+                )
+            }
+        currencies = []
+        for row in project_totals:
             currency = row["currency"]
-            paid = self.con.execute(
-                "SELECT coalesce(sum(x.amount_kopecks),0) FROM project_payments x JOIN projects p ON x.project_id=p.id WHERE x.workspace_id=? AND p.currency=?",
-                (self.wid, currency),
-            ).fetchone()[0]
-            costs = self.con.execute(
-                "SELECT coalesce(sum(x.amount_kopecks),0) FROM expenses x JOIN projects p ON x.project_id=p.id WHERE x.workspace_id=? AND p.currency=?",
-                (self.wid, currency),
-            ).fetchone()[0]
+            paid = paid_by_currency.get(currency, 0)
+            costs = costs_by_currency.get(currency, 0)
             currencies.append(
                 dict(
                     row,
@@ -1271,8 +1300,8 @@ class Service:
         deadlines = [
             dict(r)
             for r in self.con.execute(
-                "SELECT id,name,due_date,status,'project' AS kind FROM projects WHERE workspace_id=? AND due_date!='' AND status NOT IN ('completed','cancelled') UNION ALL SELECT id,name,due_date,status,'task' FROM tasks WHERE workspace_id=? AND due_date!='' AND status!='done' ORDER BY due_date LIMIT 30",
-                (self.wid, self.wid),
+                "SELECT id,name,due_date,status,'project' AS kind FROM projects WHERE workspace_id=? AND due_date!='' AND status NOT IN ('completed','cancelled') UNION ALL SELECT id,name,due_date,status,'task' FROM tasks WHERE workspace_id=? AND due_date!='' AND status!='done' ORDER BY due_date LIMIT ?",
+                (self.wid, self.wid, limit),
             )
         ]
         return 200, dict(
@@ -1282,8 +1311,8 @@ class Service:
             activity=[
                 dict(r)
                 for r in self.con.execute(
-                    "SELECT a.*,u.name AS actor FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.workspace_id=? ORDER BY a.created_at DESC,a.rowid DESC LIMIT 30",
-                    (self.wid,),
+                    "SELECT a.*,u.name AS actor FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.workspace_id=? ORDER BY a.created_at DESC,a.rowid DESC LIMIT ?",
+                    (self.wid, limit),
                 )
             ],
         )
@@ -1440,6 +1469,21 @@ class Service:
         return self.route(method, kind, rest, query, data)
 
     def route(self, method, kind, parts, query, data):
+        if kind == "dashboard" and method == "GET":
+            _, context = self.workspace("GET", [], {})
+            _, overview = self.overview(limit=4)
+            _, capabilities = self.route("GET", "capabilities", [], {}, {})
+            rows = self.con.execute(
+                "SELECT id,title,client,amount_kopecks,currency,approval_state,published_version,expires_at FROM quotes WHERE workspace_id=? ORDER BY updated_at DESC,id LIMIT 5",
+                (self.wid,),
+            ).fetchall()
+            recent = []
+            for row in rows:
+                quote = dict(row)
+                if quote["expires_at"] and quote["expires_at"] < stamp() and quote["approval_state"] in ("sent", "viewed", "changes_requested"):
+                    quote["approval_state"] = "expired"
+                recent.append(quote)
+            return 200, {**context, "overview": overview, "capabilities": capabilities, "quotes": recent}
         if kind == "assistant":
             from backend.assistant import route
 
@@ -1627,6 +1671,7 @@ class Service:
 
 
 ROUTES = set(ENTITIES) | {
+    "dashboard",
     "assistant",
     "workspace",
     "quotes",
