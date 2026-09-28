@@ -32,9 +32,25 @@ class IdentityAssistantTests(unittest.TestCase):
             status, data = self.call("/auth/providers")
             self.assertEqual(status, 200)
             self.assertEqual(
-                [p["id"] for p in data["providers"]], ["yandex", "vk", "mail"]
+                [p["id"] for p in data["providers"]], ["yandex", "vk", "mail", "ok"]
             )
             self.assertNotIn("never-expose", json.dumps(data))
+
+    def test_vk_family_uses_server_callback_and_pkce(self):
+        with patch.dict(os.environ, VK_CLIENT_ID="54792875"):
+            for provider, expected in (("vk", "vkid"), ("mail", "mail_ru"), ("ok", "ok_ru")):
+                with self.subTest(provider=provider):
+                    code, headers, _ = self.get_redirect(f"/api/auth/oauth/{provider}/start")
+                    self.assertEqual(code, 303)
+                    target = urlsplit(headers["Location"])
+                    params = parse_qs(target.query)
+                    self.assertEqual(target.netloc, "id.vk.com")
+                    self.assertEqual(params["client_id"], ["54792875"])
+                    self.assertEqual(params["provider"], [expected])
+                    self.assertEqual(params["redirect_uri"], [f"{self.mod.ORIGIN}/api/auth/oauth/{provider}/callback"])
+                    self.assertEqual(params["code_challenge_method"], ["s256"])
+                    self.assertEqual(len(params["code_challenge"][0]), 43)
+                    self.assertIn("HttpOnly", headers["Set-Cookie"])
 
     def test_oauth_browser_binding_and_native_pkce_one_use(self):
         verifier = "a" * 64

@@ -28,7 +28,7 @@ def challenge(value):
 def config(provider):
     if provider == "yandex":
         return os.getenv("YANDEX_CLIENT_ID"), os.getenv("YANDEX_CLIENT_SECRET")
-    if provider in ("vk", "mail"):
+    if provider in ("vk", "mail", "ok"):
         return os.getenv("VK_CLIENT_ID"), ""
     raise DomainError(404, "Способ входа не найден")
 
@@ -36,7 +36,7 @@ def config(provider):
 def providers():
     return [
         {"id": key, "name": name, "enabled": bool(config(key)[0])}
-        for key, name in (("yandex", "Яндекс ID"), ("vk", "VK ID"), ("mail", "Mail ID"))
+        for key, name in (("yandex", "Яндекс ID"), ("vk", "VK ID"), ("mail", "Mail ID"), ("ok", "Одноклассники"))
     ]
 
 
@@ -178,7 +178,7 @@ def route(h, con, method, path, query, origin):
             params["scope"] = "login:info login:email"
         else:
             url = "https://id.vk.com/authorize"
-            params.update(scope="vkid.personal_info email", code_challenge_method='s256', provider="mail_ru" if provider == "mail" else "vkid")
+            params.update(scope="vkid.personal_info email", code_challenge_method='s256', provider={"mail": "mail_ru", "ok": "ok_ru"}.get(provider, "vkid"))
         secure = "; Secure" if origin.startswith("https://") else ""
         return redirect(
             h,
@@ -219,8 +219,8 @@ def route(h, con, method, path, query, origin):
         )
     except Exception:
         return redirect(h, origin + "/app?auth_error=provider")
-    # VK ID and Mail ID share one VK application identity namespace.
-    namespace = "vk" if provider == "mail" else provider
+    # All VK ID methods use the same VK application identity namespace.
+    namespace = "vk" if provider in ("mail", "ok") else provider
     with transaction(con):
         account = con.execute(
             "SELECT u.* FROM external_identities i JOIN users u ON u.id=i.user_id WHERE i.provider=? AND i.subject=?",

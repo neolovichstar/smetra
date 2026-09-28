@@ -233,11 +233,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = (
-            7_000_000
-            if urllib.parse.urlsplit(self.path).path == "/api/files"
-            else 65536
-        )
+        request_path = urllib.parse.urlsplit(self.path).path
+        maximum = 7_000_000 if request_path == "/api/files" else 3_000_000 if request_path == "/api/ai/draft" else 65536
         if size > maximum or size < 0:
             raise ApiError(413, "Слишком большой запрос")
         if size and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":

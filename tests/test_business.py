@@ -283,6 +283,8 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(code, 200)
         old = self.call("/public/quote?token=" + link)[1]["quote"]
         self.assertEqual((old["title"], old["amount_kopecks"]), ("Project", 30000))
+        for private_key in ("id", "client_id", "internal_cost", "revision", "custom_fields", "view_count"):
+            self.assertNotIn(private_key, old)
         self.assertEqual(
             self.call("/public/accept", "POST", {"token": link, "version": 1})[0], 409
         )
@@ -423,7 +425,7 @@ class BusinessFlows(unittest.TestCase):
 
     def test_ai_disabled_is_explicit_and_does_not_create_quotes(self):
         token, _ = self.account("ai-disabled")
-        saved_key = os.environ.pop("OPENAI_API_KEY", None)
+        saved_key = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
             self.assertFalse(self.call("/capabilities", token=token)[1]["ai_drafting"])
             self.assertEqual(
@@ -433,7 +435,7 @@ class BusinessFlows(unittest.TestCase):
             self.assertEqual(self.call("/quotes", token=token)[1]["quotes"], [])
         finally:
             if saved_key is not None:
-                os.environ["OPENAI_API_KEY"] = saved_key
+                os.environ["OPENROUTER_API_KEY"] = saved_key
 
     def test_custom_field_validation_and_cross_workspace_references(self):
         one, _ = self.account("custom-owner")

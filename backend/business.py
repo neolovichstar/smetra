@@ -405,8 +405,8 @@ class Service:
             if not version:
                 raise DomainError(404, "Предложение ещё не отправлено")
             result = json.loads(version["snapshot"])
-            result.pop("internal_cost", None)
-            result.pop("custom_fields", None)
+            for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by"):
+                result.pop(key, None)
             for item in result.get("items", []):
                 for key in ("cost_price", "internal_cost", "markup"):
                     item.pop(key, None)
@@ -689,7 +689,7 @@ class Service:
                 result = dict(
                     quote=public_quote,
                     author=row["author"],
-                    project=dict(project) if project else None,
+                    project={key: project[key] for key in ("name", "status", "amount_kopecks", "currency", "due_date")} if project else None,
                 )
                 result["comments"] = [
                     dict(r)
@@ -726,7 +726,7 @@ class Service:
                 ]
                 if project:
                     result["stages"] = [
-                        dict(r)
+                        {key: r[key] for key in ("name", "description", "due_date", "amount_kopecks", "status")}
                         for r in self.con.execute(
                             "SELECT id,name,description,due_date,amount_kopecks,status FROM project_stages WHERE project_id=? ORDER BY created_at",
                             (project["id"],),

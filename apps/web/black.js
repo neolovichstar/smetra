@@ -19,7 +19,7 @@
   }
   if(!enabled.length){
    host.classList.add('hidden');
-   note.textContent='Яндекс ID, VK ID и Mail ID появятся после подключения.';
+   note.textContent='Яндекс ID, VK ID, Mail и Одноклассники появятся после подключения.';
   }else{
    note.textContent='Один профиль для сайта и приложения.';
   }

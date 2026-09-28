@@ -1,14 +1,13 @@
-# Test status (2026-09-27)
+# Состояние проверок — 28 сентября 2026
 
-- Python compile: PASS
-- JavaScript syntax: PASS
-- Unit/integration API tests: PASS (5 tests; local isolated DB; provider double in tests; full refund, IDOR, email verification and password reset covered with local doubles)
-- Web visual browser E2E: NOT VERIFIED (cloud browser cannot access localhost; no local Chromium installed)
-- Web production build: static source, no build stage; HTTP page delivery to verify separately
-- Android debug/release APK/AAB: NOT VERIFIED; Android SDK and Gradle unavailable in workspace
-- Actual YooKassa sandbox: NOT VERIFIED; credentials absent
-- Production deployment: NOT VERIFIED; no host or domain
-- SQLite initial schema and idempotent startup: PASS
-- GitHub Actions: written, not run remotely
+Это журнал выполненных проверок, а не утверждение о готовности к коммерческому запуску.
 
-Never interpret the local provider double as a payment sandbox test.
+| Проверка | Результат |
+| --- | --- |
+| Python API и бизнес-логика | 57 тестов прошли локально (`python -m unittest discover -s tests`). Сюда входят границы рабочих пространств, публичные ссылки, OAuth state/PKCE, платежные двойники, Capture и отсутствие автоматической записи AI-черновика. |
+| Python lint | `ruff check backend tests scripts` прошёл. |
+| Веб | `scripts/build_web.py` собрал 41 файл; `tests/black_design.cjs` и `tests/browser_flows.cjs` прошли на изолированном сервере. Мобильный экран Capture проверен снимком Chrome. |
+| Android | `assembleDebug`, `lintDebug` и `assembleDebugAndroidTest` прошли с Android SDK 35 / JDK 17. Инструментальный `DesignSmoke` запущен вручную через `adb shell am instrument` на эмуляторе: вход, пять разделов, сохранение и восстановление черновика, клиент, заказ, поступление, системный Share Intent, экраны и диалоги прошли. |
+| Продакшен | Публичный сайт доступен на `https://smetra.vercel.app`; smoke текущей версии проводится после развертывания и отдельно указывается в отчёте о выпуске. |
+
+Не проверены реальный OAuth у Яндекса/VK/Mail/OK до разрешения callback-адресов у провайдеров, доставка писем до подключения SMTP, платежи YooKassa в песочнице без учетных данных магазина, подписанный релиз для RuStore без ключа подписи, резервное восстановление и нагрузочное тестирование. `connectedDebugAndroidTest` в Gradle не находит стандартные JUnit-тесты из-за собственного `Instrumentation` runner; тот же `DesignSmoke` успешно запущен напрямую через ADB. Эти ограничения нельзя считать пройденными проверками.

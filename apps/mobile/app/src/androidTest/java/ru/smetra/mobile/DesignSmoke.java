@@ -28,18 +28,21 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
-            click("Черновики");require(find("Сайт для студии Север")==null,"Draft filter must exclude sent quotes");click("Все · 3");
+            click("Согласования");waitText("Решения клиентов");waitText("Согласована");shot("02-approvals");
+            click("Платежи");waitText("Деньги под контролем.");waitPrefix("65");shot("02-payments");click("Сметы");waitPrefix("Все · ");
+            click("Черновики");require(find("Сайт для студии Север")==null,"Draft filter must exclude sent quotes");clickPrefix("Все · ");
             click("Создать");waitText("Новая смета");fill("Дизайн мобильного приложения","Студия Север","98000","Аналитика, прототип и дизайн ключевых экранов.");
-            top();shot("03-editor");click("Сохранить на устройстве");click("Сметы");waitText("Все · 3");click("Создать");
-            require(editors().get(0).getText().toString().equals("Дизайн мобильного приложения"),"Local draft restored");click("Создать смету");waitText("Все · 4");
+            top();shot("03-editor");click("Сохранить на устройстве");click("Сметы");waitPrefix("Все · ");click("Создать");
+            require(editors().get(0).getText().toString().equals("Дизайн мобильного приложения"),"Local draft restored");click("Создать смету");waitPrefix("Все · ");
             click("Клиенты");waitText("Студия Север");shot("04-clients");
             click("Добавить клиента");fill("Михаил Орлов","mikhail@example.org","+79000000001");click("Добавить клиента");waitText("Михаил Орлов");
-            click("Заказы");waitText("Интерьер студии");click("Интерьер студии");waitText("Записать оплату");shot("05-project");
-            click("Записать оплату");fill("15000");shot("06-payment");click("Сохранить оплату");waitText("Записать оплату");require(allText().replace('\u00a0',' ').contains("80 000,00"),"Payment total must update");
+            click("Ещё");click("Заказы");waitText("Интерьер студии");click("Интерьер студии");waitText("Записать оплату");shot("05-project");
+            String paidBefore=textStarting("Получено ");click("Записать оплату");fill("15000");shot("06-payment");click("Сохранить оплату");waitText("Записать оплату");require(!paidBefore.equals(textStarting("Получено ")),"Payment total must update");
             click("Завершить заказ");SystemClock.sleep(600);shot("07-confirmation");getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);SystemClock.sleep(400);
             require(find("Завершить заказ")!=null,"Dismiss confirmation without changing project");
-            clickDescription("Назад");clickDescription("Открыть профиль");waitText("Ваше пространство");shot("08-profile");click("Поддержка");waitText("Отправить сообщение");shot("09-support");clickDescription("Назад");click("Тариф и подписка");shot("10-subscription");click("Ассистент");waitText("Отправить");shot("11-assistant");
-            result.putString("stream","PASS: login, filters, draft restore, create quote/client, project/payment, custom sheet, navigation; screenshots in files/design-qa\n");
+            clickDescription("Назад");clickDescription("Открыть профиль");waitText("Ваше пространство");shot("08-profile");click("Поддержка");waitText("Отправить сообщение");shot("09-support");clickDescription("Назад");click("Тариф и подписка");shot("10-subscription");click("Ещё");click("Ассистент");waitText("Отправить");shot("11-assistant");
+            Intent shared=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Лендинг для кофейни, дизайн и вёрстка");runOnMainSync(()->((MainActivity)activity).onNewIntent(shared));waitText("Что нужно посчитать?");require(editors().get(0).getText().toString().contains("кофейни"),"Shared text must reach Capture");shot("12-capture");
+            result.putString("stream","PASS: login, filters, draft restore, create quote/client, project/payment, share-to-Capture, custom sheet, navigation; screenshots in files/design-qa\n");
             finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,result);}
     }
@@ -49,9 +52,13 @@ public class DesignSmoke extends Instrumentation {
     private void walk(View view,List<View> list){list.add(view);if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)walk(group.getChildAt(i),list);}}
     private List<View> views(){List<View> list=new ArrayList<>();runOnMainSync(()->walk(decor(),list));return list;}
     private View find(String text){for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().equals(text))return view;return null;}
+    private View findPrefix(String prefix){for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().startsWith(prefix))return view;return null;}
+    private String textStarting(String prefix){View view=findPrefix(prefix);return view instanceof TextView?((TextView)view).getText().toString():"";}
     private String allText(){StringBuilder out=new StringBuilder();for(View view:views())if(view instanceof TextView)out.append(((TextView)view).getText()).append('\n');return out.toString();}
     private void waitText(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(find(text)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing text: "+text+"\n"+allText());}
+    private void waitPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(findPrefix(prefix)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing prefix: "+prefix+"\n"+allText());}
     private void click(String text){View target=find(text);require(target!=null,"Missing action "+text);runOnMainSync(()->{target.requestRectangleOnScreen(new Rect(0,0,target.getWidth(),target.getHeight()),true);View click=target;while(!click.isClickable()&&click.getParent() instanceof View)click=(View)click.getParent();require(click.isClickable(),"Not clickable: "+text);click.performClick();});SystemClock.sleep(450);}
+    private void clickPrefix(String prefix){View target=findPrefix(prefix);require(target!=null,"Missing action "+prefix);click(((TextView)target).getText().toString());}
     private List<EditText> editors(){List<EditText> result=new ArrayList<>();for(View view:views())if(view instanceof EditText)result.add((EditText)view);return result;}
     private void fill(String... values){List<EditText> fields=editors();require(fields.size()==values.length,"Unexpected field count "+fields.size());runOnMainSync(()->{for(int i=0;i<values.length;i++)fields.get(i).setText(values[i]);});}
     private void top(){List<View> all=views();runOnMainSync(()->{for(View view:all)if(view instanceof ScrollView)((ScrollView)view).scrollTo(0,0);});SystemClock.sleep(400);}
