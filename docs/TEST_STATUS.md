@@ -21,6 +21,6 @@
 
 ## Обновление кабинета и регистрации
 
-- Обновление опубликовано на `https://smetra.vercel.app` (deployment `dpl_FpZokbzkSg66WWYTo3AvLutPsiST`). Новая таблица стилей `/cabinet.css` и страница `/app?register=1` ответили HTTP 200.
+- Обновление опубликовано на `https://smetra.vercel.app` (deployment `dpl_E8RVkTsud3F4SxaQUdEEyjS5zjn3`). Новая таблица стилей `/cabinet.css` и страница `/app?register=1` ответили HTTP 200.
 - `scripts/build_web.py` собрал 42 файла. Браузерные `tests/black_design.cjs` и `tests/browser_flows.cjs` прошли; проверены размеры 360, 390 и 768 px, мобильное меню, переключение входа и регистрации и основной сценарий от регистрации до PDF.
 - На опубликованной мобильной странице регистрация отобразилась без ошибок JavaScript; кнопка Яндекс ID доступна и занимает всю ширину формы. Реальный OAuth-вход в Яндекс не проверялся.
