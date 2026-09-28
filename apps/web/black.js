@@ -10,6 +10,7 @@
  try{
   const data=await api('/auth/providers');
   const enabled=data.providers.filter(provider=>provider.enabled);
+  host.classList.toggle('single',enabled.length===1);
   for(const provider of enabled){
    const button=document.createElement('button');
    button.type='button';button.className='btn'+(provider.id==='yandex'?' primary':'');

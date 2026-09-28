@@ -130,6 +130,7 @@
 .auth-provider-divider:before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:#292b31}
 .auth-provider-divider span{position:relative;background:#000;padding:0 12px}
 .workspace-page .provider-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.workspace-page .provider-buttons.single{grid-template-columns:1fr}
 .workspace-page .provider-buttons .btn{min-height:42px;justify-content:center;padding:8px 10px;font-size:11px;border-color:#30333a;background:#0b0c0f;white-space:normal}
 .workspace-page .provider-buttons .btn.primary{background:#0b0c0f;color:#dbe9ff;border-color:#617da5;box-shadow:none}
 .workspace-page .provider-buttons .btn:hover{background:#151a23;border-color:#7196c8}
