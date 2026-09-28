@@ -35,6 +35,20 @@ RATE = {}
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
 
 
+def yookassa_mode(user=None):
+    """Keep checkout closed until a store and its environment are explicit."""
+    mode = os.getenv("YOOKASSA_MODE", "off").lower()
+    if mode not in ("test", "live") or not all(
+        os.getenv(key) for key in ("YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY")
+    ) or os.getenv("YOOKASSA_MERCHANT_TYPE") != "self_employed":
+        return "off"
+    if mode == "test" and user is not None:
+        tester = os.getenv("YOOKASSA_TEST_EMAIL", "").strip().lower()
+        if not tester or user["email"].lower() != tester:
+            return "off"
+    return mode
+
+
 @contextmanager
 def db():
     if os.getenv("DATABASE_URL"):
@@ -626,6 +640,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise
             return self.send_json(200, {"ok": True})
         if path == "/api/webhooks/yookassa" and method == "POST":
+            if yookassa_mode() == "off":
+                raise ApiError(503, "Прием платежей пока не настроен")
             self.throttle("webhook:" + self.client_address[0], 120, 60)
             data = self.body()
             obj = data.get("object")
@@ -755,6 +771,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 {
                     "payments": [dict(r) for r in payments],
                     "plans": {k: v[0] for k, v in PLANS.items()},
+                    "checkout_mode": yookassa_mode(user),
+                    "email_verified": user["email_verified_at"] is not None,
                 },
             )
         if path == "/api/billing/checkout" and method == "POST":
@@ -765,6 +783,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             key = self.headers.get("Idempotency-Key", "")
             if plan not in PLANS or not 16 <= len(key) <= 100:
                 raise ApiError(400, "Неверный тариф или ключ запроса")
+            mode = yookassa_mode(user)
+            if mode == "off":
+                raise ApiError(503, "Оплата пока недоступна")
             previous = con.execute(
                 "SELECT * FROM payments WHERE user_id=? AND idempotency_key=?",
                 (user["id"], key),
@@ -776,10 +797,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     200,
                     {"url": previous["confirmation_url"], "status": previous["status"]},
                 )
-            if not os.getenv("YOOKASSA_SHOP_ID") or not os.getenv(
-                "YOOKASSA_SECRET_KEY"
-            ):
-                raise ApiError(503, "Оплата пока недоступна")
             amount = PLANS[plan][0]
             request = {
                 "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
@@ -788,26 +805,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "type": "redirect",
                     "return_url": ORIGIN + "/app?payment=return",
                 },
-                "description": "Сметра: " + plan,
+                "description": "Доступ Сметра Про на " + ("31 день" if plan == "pro_month" else "366 дней"),
                 "metadata": {"user_id": user["id"], "plan": plan},
-                "receipt": {
-                    "customer": {"email": user["email"]},
-                    "items": [
-                        {
-                            "description": "Доступ к сервису Сметра: " + plan,
-                            "quantity": "1.00",
-                            "amount": {
-                                "value": f"{amount / 100:.2f}",
-                                "currency": "RUB",
-                            },
-                            "vat_code": 1,
-                            "payment_mode": "full_payment",
-                            "payment_subject": "service",
-                        }
-                    ],
-                },
             }
             result = self.provider_call("/payments", "POST", request, key)
+            self.verify_yookassa_shop(result)
             if not result.get("id") or not result.get("confirmation", {}).get(
                 "confirmation_url", ""
             ).startswith("https://"):
@@ -840,6 +842,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "SELECT * FROM payments WHERE user_id=? AND status='pending' ORDER BY created_at DESC LIMIT 3",
                 (user["id"],),
             ).fetchall()
+            if rows and yookassa_mode() == "off":
+                raise ApiError(503, "Сверка с платёжным сервисом временно недоступна")
             for row in rows:
                 self.apply_payment(con, row, self.provider_payment(row["provider_id"]))
             current = con.execute(
@@ -874,8 +878,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "SELECT actor_id,action,target,created_at FROM audit ORDER BY created_at DESC LIMIT 100"
                 )
             ]
+            payment_rows = [
+                dict(r)
+                for r in con.execute(
+                    """SELECT p.id,p.plan,p.amount_kopecks,p.created_at,u.email,
+                    CASE WHEN EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
+                    THEN 'refunded' ELSE p.status END AS status
+                    FROM payments p JOIN users u ON u.id=p.user_id
+                    ORDER BY p.created_at DESC LIMIT 50"""
+                )
+            ]
             return self.send_json(
-                200, {"stats": stats, "users": users, "tickets": tickets, "audit": logs}
+                200, {"stats": stats, "users": users, "tickets": tickets, "audit": logs, "payments": payment_rows}
             )
         if path.startswith("/api/admin/users/") and method == "PATCH":
             target = path.removeprefix("/api/admin/users/")
@@ -981,7 +995,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/payments/" + urllib.parse.quote(payment_id, safe="")
         )
 
+    def verify_yookassa_shop(self, payment):
+        mode = yookassa_mode()
+        if (
+            mode == "off"
+            or not isinstance(payment, dict)
+            or payment.get("test") is not (mode == "test")
+            or not isinstance(payment.get("recipient"), dict)
+            or str(payment["recipient"].get("account_id"))
+            != os.environ["YOOKASSA_SHOP_ID"]
+        ):
+            raise ApiError(409, "Платёж получен не от выбранного магазина")
+
     def apply_payment(self, con, local, remote):
+        self.verify_yookassa_shop(remote)
         if (
             remote.get("id") != local["provider_id"]
             or remote.get("amount", {}).get("currency") != "RUB"
@@ -994,6 +1021,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         status = remote.get("status")
         if status not in ("pending", "succeeded", "canceled"):
             return
+        if status == "succeeded" and remote.get("paid") is not True:
+            raise ApiError(409, "Платёж не подтверждён как оплаченный")
         with _LOCK:
             con.execute("BEGIN IMMEDIATE")
             try:

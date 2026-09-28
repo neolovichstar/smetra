@@ -24,8 +24,8 @@ Android открывает страницу провайдера в систем
 
 ## RuStore
 
-После подготовки подписанного релиза `ru.smetra.mobile` опубликуйте приложение в [кабинете RuStore](https://www.rustore.ru/help/developers/publishing-and-verifying-apps/app-publication). Вставьте конечную ссылку карточки приложения в переменную `RUSTORE_URL` в Vercel и разверните сайт заново. Лендинг тогда сам заменит «Скоро в RuStore» на активную кнопку установки. До появления карточки оставьте переменную пустой.
+Карточка [«сметра.» в RuStore](https://www.rustore.ru/catalog/app/ru.smetra.mobile) доступна; владелец сообщил об одобрении приложения. На момент проверки заголовок страницы магазина содержит «предзаказ», поэтому кнопка сайта ведёт на карточку с нейтральным текстом «Открыть в RuStore» и не обещает доступную установку. `RUSTORE_URL` задаётся на сервере.
 
 ## Платежи и ассистент
 
-YooKassa требует `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` и рабочий webhook `https://smetra.vercel.app/api/webhooks/yookassa`; включайте только после тестового платежа. Ассистент работает с серверным `OPENROUTER_API_KEY` и `OPENROUTER_MODEL=openrouter/free`. Запросы к модели расходуют бесплатную квоту OpenRouter; предложения об изменении данных требуют подтверждения в интерфейсе.
+Владелец оформляет ЮKassa на самозанятого; тестовый магазин пока не создан. Пошаговые настройки `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, `YOOKASSA_MODE`, webhook `https://smetra.vercel.app/api/webhooks/yookassa` и ручных чеков «Мой налог» находятся в [PAYMENTS.md](../PAYMENTS.md). Оплата тарифа оформляется только на сайте, Android использует тот же доступ. Ассистент работает с серверным `OPENROUTER_API_KEY` и `OPENROUTER_MODEL=openrouter/free`. Запросы к модели расходуют бесплатную квоту OpenRouter; предложения об изменении данных требуют подтверждения в интерфейсе.

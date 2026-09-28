@@ -7,6 +7,7 @@ import unittest
 import urllib.error
 import urllib.request
 import urllib.parse
+from unittest.mock import patch
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 
@@ -14,6 +15,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class FlowTests(unittest.TestCase):
+    def test_yookassa_store_gate_rejects_wrong_environment_and_shop(self):
+        env = {
+            "YOOKASSA_SHOP_ID": "test_shop",
+            "YOOKASSA_SECRET_KEY": "test_key",
+            "YOOKASSA_MODE": "test",
+            "YOOKASSA_MERCHANT_TYPE": "self_employed",
+            "YOOKASSA_TEST_EMAIL": "owner@example.test",
+        }
+        with patch.dict(os.environ, env):
+            self.assertEqual(self.mod.yookassa_mode({"email": "stranger@example.test"}), "off")
+            self.assertEqual(self.mod.yookassa_mode({"email": "owner@example.test"}), "test")
+            valid = {"test": True, "recipient": {"account_id": "test_shop"}}
+            self.mod.Handler.verify_yookassa_shop(None, valid)
+            with self.assertRaises(self.mod.ApiError):
+                self.mod.Handler.verify_yookassa_shop(None, {**valid, "test": False})
+            with self.assertRaises(self.mod.ApiError):
+                self.mod.Handler.verify_yookassa_shop(None, {**valid, "recipient": {"account_id": "other_shop"}})
+        with patch.dict(os.environ, env | {"YOOKASSA_MODE": "live"}):
+            self.assertEqual(self.mod.yookassa_mode({"email": "stranger@example.test"}), "live")
+            with self.assertRaises(self.mod.ApiError):
+                self.mod.Handler.verify_yookassa_shop(None, valid)
+
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
@@ -106,12 +129,18 @@ class FlowTests(unittest.TestCase):
     def test_checkout_idempotency_and_verified_entitlement(self):
         os.environ["YOOKASSA_SHOP_ID"] = "test_shop"
         os.environ["YOOKASSA_SECRET_KEY"] = "test_key"
+        os.environ["YOOKASSA_MODE"] = "test"
+        os.environ["YOOKASSA_TEST_EMAIL"] = "billing@sample.test"
+        os.environ["YOOKASSA_MERCHANT_TYPE"] = "self_employed"
         original = self.mod.Handler.provider_call
 
         def provider(handler, path, method="GET", payload=None, key=None):
             if method == "POST":
+                self.assertNotIn("receipt", payload)
                 return {
                     "id": "provider-test-1",
+                    "test": True,
+                    "recipient": {"account_id": "test_shop"},
                     "confirmation": {
                         "confirmation_url": "https://pay.example.test/checkout"
                     },
@@ -125,7 +154,10 @@ class FlowTests(unittest.TestCase):
                 }
             return {
                 "id": "provider-test-1",
+                "test": True,
+                "recipient": {"account_id": "test_shop"},
                 "status": "succeeded",
+                "paid": True,
                 "amount": {"value": "490.00", "currency": "RUB"},
                 "metadata": {"user_id": self.payment_user, "plan": "pro_month"},
             }
@@ -190,6 +222,12 @@ class FlowTests(unittest.TestCase):
                     ).fetchone()[0],
                     1,
                 )
+                con.execute("UPDATE users SET role='admin' WHERE id=?", (self.payment_user,))
+            status, overview = self.request("/api/admin/overview", token=token)
+            self.assertEqual(status, 200)
+            self.assertTrue(any(p["email"] == "billing@sample.test" and p["status"] == "succeeded" for p in overview["payments"]))
+            with self.mod.db() as con:
+                con.execute("UPDATE users SET role='user' WHERE id=?", (self.payment_user,))
             status, _ = self.request(
                 "/api/webhooks/yookassa",
                 "POST",
@@ -212,6 +250,20 @@ class FlowTests(unittest.TestCase):
                     ).fetchone()[0],
                     1,
                 )
+            os.environ["YOOKASSA_MODE"] = "off"
+            blocked = urllib.request.Request(
+                self.base + "/api/billing/checkout",
+                json.dumps(payload).encode(),
+                {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": key,
+                },
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as failure:
+                urllib.request.urlopen(blocked)
+            self.assertEqual(failure.exception.code, 503)
             status, _ = self.request("/api/me", "DELETE", {}, token)
             self.assertEqual(status, 200)
             with self.mod.db() as con:
@@ -226,6 +278,9 @@ class FlowTests(unittest.TestCase):
             self.mod.Handler.provider_call = original
             os.environ.pop("YOOKASSA_SHOP_ID", None)
             os.environ.pop("YOOKASSA_SECRET_KEY", None)
+            os.environ.pop("YOOKASSA_MODE", None)
+            os.environ.pop("YOOKASSA_TEST_EMAIL", None)
+            os.environ.pop("YOOKASSA_MERCHANT_TYPE", None)
 
     def test_password_hash_and_migration(self):
         self.assertTrue(

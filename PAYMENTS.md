@@ -1,17 +1,17 @@
-# Payments and eligibility
+# Оплата «Про» через ЮKassa
 
-Current design: web checkout only. Android reads server-side access but contains no purchase action. Do not infer that an external checkout inside the RuStore app is allowed. If store review requires a different model, implement the approved store payment SDK and entitlement validation before release. RuStore documents embedded sales for legal entities and individual entrepreneurs: https://www.rustore.ru/help/developers/monetization/enable-monetization. The store's publication and monetization terms must be reviewed separately.
+Покупка доступна **только на сайте**. Android показывает тариф и полученный доступ, но не открывает внешнюю оплату. Сайт и приложение используют один серверный профиль. Оплата разовая: 490 ₽ за 31 день или 4 900 ₽ за 366 дней, без автосписания. Тестовый магазин пока не создан, реальные платежи не включены.
 
-YooKassa states that a registered self-employed person may connect regardless of age: https://yookassa.ru/questions/q250/. It also describes account registration, agreement and tax ID: https://yookassa.ru/platezhi-dlya-samozanyatyh. This does not mean this particular account is approved. The Federal Tax Service FAQ includes age/status nuance: https://npd.nalog.ru/faq/. Check your actual account, agreement, receipt setup and legal capacity with the parties involved.
+Владелец указал статус самозанятого. По [инструкции ЮKassa о чеках](https://yookassa.ru/developers/payment-acceptance/receipts/basics) самозанятый регистрирует доход в «Мой налог» и передаёт чек покупателю; ЮKassa не делает это за него. Поэтому Сметра **не отправляет `receipt` по схеме 54-ФЗ** в запросе платежа. В административной панели видны последние платежи и адреса покупателей для ручной сверки. Отметок об отправке чеков в системе пока нет: владелец сверяет платежи в кабинетах ЮKassa и «Мой налог» и вручную обрабатывает возвраты по налоговому учёту.
 
-Server flow: authenticated checkout with idempotency key → provider REST create → redirect URL → provider webhook or user sync → server-side GET of payment ID with Basic auth → compare provider ID, amount, currency, user and plan metadata → atomic one-time entitlement update. Webhook body alone never unlocks access. YooKassa explicitly recommends checking current object status for webhook authenticity: https://yookassa.ru/developers/using-api/webhooks. Amounts are stored as integer kopecks, and the provider API uses decimal strings. Access has a fixed expiry and no automatic renewal.
+Сервер принимает checkout только при `YOOKASSA_MODE=test` или `live`, наличии `YOOKASSA_SHOP_ID` и `YOOKASSA_SECRET_KEY` и явном `YOOKASSA_MERCHANT_TYPE=self_employed`. В тестовом режиме доступ к checkout имеет только подтверждённый аккаунт `YOOKASSA_TEST_EMAIL`; остальные пользователи видят отключённую покупку. При создании и подтверждении платежа сервер проверяет магазин (`recipient.account_id`), признак `test`, сумму, валюту, пользователя, тариф и `paid=true` для успеха. После webhook сервер сам запрашивает объект у ЮKassa; тело уведомления не выдаёт доступ. Повторные уведомления не продлевают тариф. Полный возврат отзывает соответствующий доступ. Подход к проверке уведомлений соответствует [документации ЮKassa](https://yookassa.ru/developers/using-api/webhooks).
 
-Before live payments:
+Для первого подключения:
 
-- Confirm merchant account, self-employed receipt configuration and exact receipt payload with YooKassa's test/shop setup.
-- Run real sandbox checkout, success, cancellation, timeout and duplicate webhook cases.
-- Verify full-refund webhook and entitlement reversal with the real sandbox. Full refunds are implemented and idempotent locally; **partial refunds still need an operational process and code support**.
-- Decide lawful records retention and deletion; account deletion now pseudonymizes the account and retains the payment record, but the retention period and legal text require review.
-- Document support and refund handling with operator details in the terms.
+1. Создайте **тестовый магазин** ЮKassa, получите его `shopId` и секретный ключ. [Тестовый режим](https://yookassa.ru/developers/payment-acceptance/testing-and-going-live/testing) не переводит реальные деньги.
+2. Добавьте в Vercel Production: `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, `YOOKASSA_MODE=test`, `YOOKASSA_MERCHANT_TYPE=self_employed`, `YOOKASSA_TEST_EMAIL` (почта одного подтверждённого тестового аккаунта). Секрет не записывайте в Git, APK или чат.
+3. В кабинете тестового магазина укажите webhook `https://smetra.vercel.app/api/webhooks/yookassa` для `payment.succeeded`, `payment.canceled`, `refund.succeeded`; заново разверните сайт.
+4. Проведите тестовые оплату, отмену, повторное уведомление, возврат и сверку статуса в личном кабинете. Сверьте сумму, тариф и выдачу/отзыв доступа на сайте и Android.
+5. После создания и проверки **боевого магазина** замените shopId/ключ на боевые, поставьте `YOOKASSA_MODE=live` и разверните сайт. Сервер отклонит объект тестового магазина в боевом режиме. Проведите контрольный платёж и оформите чек в «Мой налог».
 
-Payment sandbox was not run: no merchant credentials were provided. Tests use an isolated deterministic provider double solely to test local idempotency and access logic.
+У аккаунта должен быть подтверждённый адрес почты. Сейчас на сервере нет SMTP, поэтому оплата через обычную регистрацию по почте недоступна до подключения писем. Это отдельный блокер запуска; проверенный вход через OAuth может дать подтверждённый адрес. Реальная песочница, живой webhook и чек ещё не проверены, поскольку магазина пока нет. Тесты используют локальный двойник ЮKassa и не заменяют эти проверки. Частичный возврат требует ручного разбора.
