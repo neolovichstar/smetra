@@ -13,6 +13,7 @@ build/
 local.properties
 *.jks
 *.keystore
+*.p12
 .venv*/
 .ruff_cache/
 dist/

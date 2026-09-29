@@ -407,6 +407,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
+            "/contacts": ("contacts.html", "text/html"),
             "/style.css": ("style.css", "text/css"),
             "/app.js": ("app.js", "text/javascript"),
             "/experience.js": ("experience.js", "text/javascript"),

@@ -6,6 +6,21 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$localSigning = Join-Path $env:USERPROFILE '.smetra\android'
+$localManifest = Join-Path $localSigning 'signing.json'
+if (-not $env:SIGNING_STORE_FILE -and (Test-Path -LiteralPath $localManifest -PathType Leaf)) {
+    $saved = Get-Content -LiteralPath $localManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+    $protectedPassword = Get-Content -LiteralPath (Join-Path $localSigning 'password.dpapi') -Raw | ConvertTo-SecureString
+    $handle = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($protectedPassword)
+    try { $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($handle) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($handle) }
+    $env:SIGNING_STORE_FILE = $saved.storeFile
+    $env:SIGNING_KEY_ALIAS = $saved.alias
+    $env:SIGNING_STORE_PASSWORD = $password
+    $env:SIGNING_KEY_PASSWORD = $password
+    $env:RUSTORE_CERT_SHA256 = $saved.certificateSha256
+    $password = $null
+}
 $required = @('SIGNING_STORE_FILE', 'SIGNING_STORE_PASSWORD', 'SIGNING_KEY_ALIAS', 'SIGNING_KEY_PASSWORD', 'RUSTORE_CERT_SHA256')
 foreach ($name in $required) {
     if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {

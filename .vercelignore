@@ -15,5 +15,8 @@ supabase
 *.zip
 *.apk
 *.aab
+*.jks
+*.keystore
+*.p12
 **/__pycache__
 **/.gradle

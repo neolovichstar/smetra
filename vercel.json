@@ -11,7 +11,8 @@
     {"source": "/app", "destination": "/app.html"},
     {"source": "/admin", "destination": "/admin.html"},
     {"source": "/privacy", "destination": "/privacy.html"},
-    {"source": "/terms", "destination": "/terms.html"}
+    {"source": "/terms", "destination": "/terms.html"},
+    {"source": "/contacts", "destination": "/contacts.html"}
   ],
   "headers": [{"source": "/(.*)", "headers": [
     {"key": "X-Content-Type-Options", "value": "nosniff"},
