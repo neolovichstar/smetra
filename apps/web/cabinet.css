@@ -189,3 +189,42 @@
  .workspace-page .provider-buttons{grid-template-columns:1fr 1fr}
 }
 @media(prefers-reduced-motion:reduce){.workspace-page .sidebar,.workspace-page .nav-search{transition:none}}
+
+/* Quiet, consistent motion across the workspace and authentication flow. */
+.workspace-page .app-view-enter{animation:workspace-content-enter .42s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .app-view-enter>.topline,.workspace-page .app-view-enter>.dashboard-intro,.workspace-page .app-view-enter>.billing-hero{animation:workspace-item-enter .45s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .app-view-enter>.panel,.workspace-page .app-view-enter>.dashboard-metrics,.workspace-page .app-view-enter>.dashboard-work,.workspace-page .app-view-enter>.capture-panel,.workspace-page .app-view-enter>.workspace-columns,.workspace-page .app-view-enter>.billing-plans{animation:workspace-item-enter .48s cubic-bezier(.2,.8,.2,1) both;animation-delay:70ms}
+.workspace-page .app-view-enter .record-line{animation:workspace-item-enter .42s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .app-view-enter .record-line:nth-child(2){animation-delay:35ms}
+.workspace-page .app-view-enter .record-line:nth-child(3){animation-delay:70ms}
+.workspace-page .app-view-enter .record-line:nth-child(4){animation-delay:105ms}
+.workspace-page .app-view-enter .record-line:nth-child(n+5){animation-delay:140ms}
+.workspace-page .record-line,.workspace-page .editor-item,.workspace-page .activity-item{transition:background-color .3s ease,border-color .3s ease,transform .3s cubic-bezier(.2,.8,.2,1)}
+.workspace-page .record-line:hover{background:#a5c9ff06;border-color:#455770}
+.workspace-page .editor-item:focus-within{border-color:#648cbd}
+.workspace-page .sidebar-group button{transition:background-color .3s ease,color .3s ease,box-shadow .3s ease,transform .3s cubic-bezier(.2,.8,.2,1)}
+.workspace-page .sidebar-group button:hover{transform:translateX(2px)}
+.workspace-page .auth-flow{animation:auth-form-enter .5s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .auth-story .auth-art{animation:auth-art-enter .65s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .auth-proof{animation:auth-form-enter .55s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .auth-tabs button{transition:color .32s ease,border-color .32s ease}
+.workspace-page .auth-wrap .field{transition:opacity .35s ease,transform .35s cubic-bezier(.2,.8,.2,1)}
+.workspace-page .auth-wrap .field:not(.hidden){animation:auth-form-enter .35s cubic-bezier(.2,.8,.2,1) both}
+.workspace-page .nav-search,.workspace-page .provider-buttons .btn{transition:border-color .3s ease,background-color .3s ease,color .3s ease,transform .3s cubic-bezier(.2,.8,.2,1)}
+.workspace-page .nav-backdrop:not(.hidden){animation:backdrop-enter .26s ease both}
+.workspace-page .toast:not(.hidden){animation:toast-enter .38s cubic-bezier(.2,.8,.2,1) both}
+@keyframes workspace-content-enter{from{opacity:.45;transform:translate3d(0,10px,0)}to{opacity:1;transform:none}}
+@keyframes workspace-item-enter{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:none}}
+@keyframes auth-form-enter{from{opacity:.72;transform:translate3d(0,7px,0)}to{opacity:1;transform:none}}
+@keyframes auth-art-enter{from{opacity:.5;transform:translate3d(0,12px,0) scale(.98)}to{opacity:1;transform:none}}
+
+/* Compact hierarchy without shrinking controls or interactive targets. */
+.workspace-page .topline h1{font-size:clamp(29px,2.7vw,40px)}
+.dashboard-intro h1{font-size:clamp(30px,2.8vw,42px)}
+.dashboard-metric strong{font-size:clamp(22px,2vw,31px)}
+.workspace-page .capture-heading h2{font-size:clamp(22px,2vw,29px)}
+.workspace-page .auth-flow h1{font-size:clamp(34px,3.1vw,46px)}
+.auth-story h2{font-size:clamp(38px,3.7vw,57px)}
+.auth-proof-title{font-size:15px}
+@media(max-width:650px){.dashboard-intro h1{font-size:32px}.workspace-page .topline h1{font-size:31px}.workspace-page .auth-flow h1{font-size:34px}.workspace-page .capture-heading h2{font-size:25px}}
+@media(prefers-reduced-motion:reduce){.workspace-page .app-view-enter,.workspace-page .app-view-enter>*,.workspace-page .app-view-enter .record-line,.workspace-page .auth-flow,.workspace-page .auth-story .auth-art,.workspace-page .auth-proof,.workspace-page .auth-wrap .field:not(.hidden),.workspace-page .nav-backdrop:not(.hidden),.workspace-page .toast:not(.hidden){animation:none!important}.workspace-page .record-line,.workspace-page .editor-item,.workspace-page .activity-item{transition:none}}

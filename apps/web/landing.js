@@ -23,7 +23,15 @@ steps.forEach((button,index)=>{
  };
 });renderPreview(0);
 document.querySelector('#use-preview').onclick=()=>{const draft={title:'Сайт для студии Север',client:'Студия Север',items:names.map((name,i)=>({name,quantity:'1',unit:'усл.',unit_price:Math.round(prices[i]*100)}))};sessionStorage.setItem('smetra.previewDraft',JSON.stringify(draft));location.href='/app?register=1'};
-const planButtons=[...document.querySelectorAll('[data-price-plan]')];
-function selectPlan(button){planButtons.forEach(b=>{b.setAttribute('aria-selected',String(b===button));b.tabIndex=b===button?0:-1});const year=button.dataset.pricePlan==='year';document.querySelector('#plan-amount').textContent=year?'4 900 ₽':'490 ₽';document.querySelector('#plan-period').textContent=year?' / 366 дней':' / 31 день'}
+ const planButtons=[...document.querySelectorAll('[data-price-plan]')];
+ function selectPlan(button){planButtons.forEach(b=>{b.setAttribute('aria-selected',String(b===button));b.tabIndex=b===button?0:-1});const year=button.dataset.pricePlan==='year';const amount=document.querySelector('#plan-amount');amount.textContent=year?'4 900 ₽':'490 ₽';amount.classList.remove('number-enter');void amount.offsetWidth;amount.classList.add('number-enter');document.querySelector('#plan-period').textContent=year?' / 366 дней':' / 31 день'}
 planButtons.forEach((button,index)=>{button.onclick=()=>selectPlan(button);button.onkeydown=event=>{const next=event.key==='Home'?0:event.key==='End'?planButtons.length-1:event.key==='ArrowRight'?(index+1)%planButtons.length:event.key==='ArrowLeft'?(index+planButtons.length-1)%planButtons.length:-1;if(next<0)return;event.preventDefault();selectPlan(planButtons[next]);planButtons[next].focus()}});selectPlan(planButtons[0]);
 fetch('/api/auth/providers').then(r=>r.json()).then(data=>{if(data.rustore_url&&/^https:\/\/(www\.)?rustore\.ru\//.test(data.rustore_url)){const button=document.querySelector('#rustore');button.href=data.rustore_url;button.textContent='Открыть в RuStore';button.removeAttribute('aria-disabled');document.querySelector('#mobile-note').textContent='Карточка приложения в RuStore. Доступность установки проверьте на странице магазина.'}}).catch(()=>{});
+ const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ if(!reducedMotion&&'IntersectionObserver' in window){
+  const targets=document.querySelectorAll('.landing-section,.feature-list article,.mobile-cta');
+  targets.forEach((element,index)=>{element.classList.add('scroll-reveal');element.style.setProperty('--reveal-delay',`${Math.min(index%3,2)*75}ms`)});
+  document.body.classList.add('motion-ready');
+  const observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){entry.target.classList.add('in-view');observer.unobserve(entry.target)}}},{threshold:.08,rootMargin:'0px 0px -24px 0px'});
+  targets.forEach(element=>observer.observe(element));
+ }

@@ -77,3 +77,40 @@ html{background:#000;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-
  .workspace-page .capture-actions{gap:10px}
 }
 @media(prefers-reduced-motion:reduce){.app-view-enter{animation:none}}
+
+/* Motion follows the product flow: entrances, selection and confirmation. */
+.black-landing .btn,.workspace-page .btn{transition:background-color .32s cubic-bezier(.2,.8,.2,1),border-color .32s cubic-bezier(.2,.8,.2,1),box-shadow .32s cubic-bezier(.2,.8,.2,1),color .32s ease,transform .32s cubic-bezier(.2,.8,.2,1)}
+.black-landing .btn:hover,.workspace-page .btn:hover{transform:translateY(-2px)}
+.black-landing .btn:active,.workspace-page .btn:active{transform:translateY(0) scale(.985)}
+.black-landing .nav .links a{position:relative;transition:color .3s ease}
+.black-landing .nav .links a:after{content:'';position:absolute;left:0;right:100%;bottom:-7px;height:1px;background:#9fc4ff;transition:right .35s cubic-bezier(.2,.8,.2,1)}
+.black-landing .nav .links a:hover:after,.black-landing .nav .links a:focus-visible:after{right:0}
+.motion-ready .scroll-reveal{opacity:0;transform:translate3d(0,25px,0);transition:opacity .8s cubic-bezier(.2,.8,.2,1),transform .8s cubic-bezier(.2,.8,.2,1);transition-delay:var(--reveal-delay,0ms)}
+.motion-ready .scroll-reveal.in-view{opacity:1;transform:none}
+.black-landing .preview-steps button{transition:color .32s ease,border-color .32s ease,background-color .32s ease,padding-left .32s cubic-bezier(.2,.8,.2,1)}
+.black-landing .preview-steps button:hover{color:#e9efff;padding-left:27px;background:#ffffff06}
+.black-landing .preview-steps button[aria-selected=true]{padding-left:27px}
+.black-landing .demo-enter{animation:preview-enter .44s cubic-bezier(.2,.8,.2,1) both}
+.black-landing .plan-switch button{transition:color .3s ease,border-color .36s ease}
+.black-landing .number-enter{animation:number-enter .42s cubic-bezier(.2,.8,.2,1) both}
+.black-landing .feature-list article{transition:border-color .35s ease}
+.black-landing .feature-list article:hover{border-color:#7197ca}
+.black-landing .feature-number{display:inline-block;transition:color .35s ease,transform .35s cubic-bezier(.2,.8,.2,1)}
+.black-landing .feature-list article:hover .feature-number{color:#a7caff;transform:translateX(5px)}
+@keyframes preview-enter{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:none}}
+@keyframes number-enter{from{opacity:.45;transform:translate3d(0,8px,0)}to{opacity:1;transform:none}}
+@media(max-width:700px){.motion-ready .scroll-reveal{transform:translate3d(0,12px,0);transition-duration:.5s}}
+@media(prefers-reduced-motion:reduce){.motion-ready .scroll-reveal{opacity:1;transform:none;transition:none}.black-landing .number-enter,.black-landing .demo-enter{animation:none}}
+
+/* Smaller display type keeps the product content in the foreground. */
+.black-hero h1{font-size:clamp(48px,5vw,82px);line-height:1.08}
+.black-hero p{font-size:16px;line-height:1.65}
+.section-heading h2{font-size:clamp(32px,3.5vw,54px)}
+.section-heading p,.assistant-intro p{font-size:14px;line-height:1.7}
+.assistant-intro h2{font-size:clamp(34px,3.5vw,54px)}
+.pricing-copy h2{font-size:clamp(36px,3.4vw,46px)}
+.mobile-cta h2{font-size:clamp(36px,4.4vw,64px)}
+.auth-story h2{font-size:clamp(36px,3.5vw,52px)}
+.auth-flow h1{font-size:clamp(30px,3vw,36px)}
+@media(max-width:1000px){.black-hero h1{font-size:clamp(48px,6vw,64px)}}
+@media(max-width:700px){.black-hero h1{font-size:clamp(41px,10vw,58px)}.black-hero p{font-size:14px}.section-heading h2{font-size:clamp(30px,8vw,43px)}}
