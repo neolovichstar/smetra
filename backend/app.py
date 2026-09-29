@@ -504,6 +504,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
             or path == "/api/auth/native/exchange"
+            or path == "/api/auth/native/web-session"
         ):
             from backend.identity import route
 

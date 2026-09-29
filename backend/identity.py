@@ -110,6 +110,15 @@ def route(h, con, method, path, query, origin):
         return h.send_json(
             200, {"providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", "")}
         )
+    if path == "/api/auth/native/web-session" and method == "POST":
+        # A native bearer token can be moved into the WebView's HttpOnly cookie
+        # jar without exposing it to JavaScript or accepting cookie-only calls.
+        token = h.headers.get("Authorization", "")
+        if not token.startswith("Bearer ") or not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token[7:]):
+            raise DomainError(401, "Войдите в аккаунт")
+        h.throttle("native-web-session:" + h.client_address[0], 30, 300)
+        h.auth(con)
+        return h.send_json(200, {"ok": True}, h.cookie(token[7:], 30 * 86400))
     if path == "/api/auth/native/exchange" and method == "POST":
         h.throttle("native-exchange:" + h.client_address[0], 30, 300)
         data = h.body()

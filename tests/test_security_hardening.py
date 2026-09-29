@@ -96,6 +96,32 @@ class SecurityHardeningTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
 
+    def test_native_session_can_be_moved_to_web_cookie_without_exposing_token(self):
+        body = json.dumps({
+            "name": "Native", "email": "native-web@test.invalid",
+            "password": "secure twelve password",
+        }).encode()
+        status, _, result = self.request(
+            "POST", "/api/auth/register", body,
+            {"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200, result)
+        token = result["token"]
+        status, _, _ = self.request("POST", "/api/auth/native/web-session")
+        self.assertEqual(status, 401)
+        status, headers, migrated = self.request(
+            "POST", "/api/auth/native/web-session",
+            headers={"Authorization": "Bearer " + token},
+        )
+        self.assertEqual(status, 200, migrated)
+        self.assertNotIn(token, json.dumps(migrated))
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
+        status, _, profile = self.request(
+            "GET", "/api/me", headers={"Cookie": headers["Set-Cookie"].split(";", 1)[0]}
+        )
+        self.assertEqual(status, 200, profile)
+        self.assertEqual(profile["user"]["email"], "native-web@test.invalid")
+
     def test_vercel_client_ip_uses_platform_forwarded_header(self):
         request = handler.__new__(handler)
         request.client_address = ("127.0.0.1", 0)
