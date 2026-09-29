@@ -166,7 +166,7 @@ public final class WebActivity extends Activity {
     private void migrateAndLoad() {
         loadFailed = false;
         String token = new TokenVault(this).read();
-        if (token == null) { web.loadUrl(ORIGIN + "/app"); return; }
+        if (token == null) { web.loadUrl(ORIGIN + route()); return; }
         worker.execute(() -> {
             String cookie = null;
             HttpURLConnection connection = null;
@@ -186,11 +186,16 @@ public final class WebActivity extends Activity {
                 if (result != null && result.startsWith("session=")) {
                     CookieManager.getInstance().setCookie(ORIGIN, result, done -> {
                         CookieManager.getInstance().flush();
-                        web.loadUrl(ORIGIN + "/app");
+                        web.loadUrl(ORIGIN + route());
                     });
-                } else web.loadUrl(ORIGIN + "/app");
+                } else web.loadUrl(ORIGIN + route());
             });
         });
+    }
+
+    private String route() {
+        String value = getIntent().getStringExtra("web_route");
+        return value != null && value.matches("/\\?quote=[A-Za-z0-9_-]{20,128}") ? value : "/app";
     }
 
     private void showMessage(String text, String action) {
