@@ -423,7 +423,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for name, mime in (
             ("black.css", "text/css"),
             ("cabinet.css", "text/css"),
+            ("assistant.css", "text/css"),
             ("black.js", "text/javascript"),
+            ("assistant-chat.js", "text/javascript"),
             ("landing.js", "text/javascript"),
             ("assets/black/unfold.png", "image/png"),
             ("assets/black/flight.png", "image/png"),
@@ -485,6 +487,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status, payload = business.Service(self, con, ORIGIN).handle(
                 method, path, query
             )
+            if path == "/api/assistant/stream":
+                return payload.write(self)
             if hasattr(payload, "mime"):
                 self.send_response(status)
                 self.send_header("Content-Type", payload.mime)

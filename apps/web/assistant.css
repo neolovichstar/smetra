@@ -1,0 +1,55 @@
+.assistant-page{width:min(100%,860px);max-width:860px;min-height:calc(100dvh - 190px);display:flex;flex-direction:column;margin:0 auto}
+.assistant-header{display:flex;align-items:end;justify-content:space-between;gap:20px;border-bottom:1px solid #22252b;padding:7px 0 23px}
+.assistant-page .assistant-header h1{font-size:clamp(29px,2.5vw,38px);line-height:1.1;letter-spacing:-.055em;margin:12px 0 0}
+.assistant-quota{color:#aeb5c2;font-size:11px;white-space:nowrap;padding-bottom:5px}
+.assistant-thread{flex:1;padding:28px 0 90px}
+.assistant-message{border:0;max-width:100%;padding:19px 0 23px;animation:chat-enter .38s cubic-bezier(.2,.8,.2,1) both}
+.assistant-message+.assistant-message{border-top:1px solid #1b1d21}
+.assistant-message small{display:block;margin:0 0 11px;color:#808895;font-size:10px;font-weight:700;letter-spacing:.13em}
+.assistant-message.user{display:flex;flex-direction:column;align-items:flex-end}
+.assistant-message.user small{width:min(100%,650px);text-align:right}
+.assistant-message.user .assistant-markdown{width:fit-content;max-width:min(100%,650px);padding:13px 17px;background:#111418;border:1px solid #222832;border-radius:16px 16px 4px 16px;color:#dce1e9}
+.assistant-message.assistant .assistant-markdown{max-width:760px;color:#dfe3eb}
+.assistant-markdown{font-size:14px;line-height:1.76;overflow-wrap:anywhere}
+.assistant-markdown>:first-child{margin-top:0}.assistant-markdown>:last-child{margin-bottom:0}
+.assistant-markdown p{font-size:inherit;line-height:inherit;white-space:normal;margin:0 0 14px;color:inherit}
+.assistant-markdown h3,.assistant-markdown h4{font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.025em;color:#f2f5fa;margin:25px 0 9px}
+.assistant-markdown h4{font-size:15px}
+.assistant-markdown strong{font-weight:700;color:#f5f8ff}
+.assistant-markdown em{color:#c7d9f4}
+.assistant-markdown a{color:#9bc2ff;text-decoration:underline;text-decoration-color:#4a6c9d;text-underline-offset:3px}
+.assistant-markdown ul,.assistant-markdown ol{margin:0 0 16px;padding-left:23px}
+.assistant-markdown li{padding-left:4px;margin:5px 0}
+.assistant-markdown li::marker{color:#88b7fc}
+.assistant-markdown blockquote{margin:15px 0;padding:4px 0 4px 17px;border-left:2px solid #719de1;color:#aeb9ca}
+.assistant-markdown hr{border:0;border-top:1px solid #2b3038;margin:20px 0}
+.assistant-markdown code{font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;background:#151a21;color:#bed7fa;padding:2px 5px;border-radius:4px}
+.assistant-markdown pre{position:relative;overflow:auto;margin:15px 0 20px;padding:37px 17px 17px;background:#0b0e13;border:1px solid #252c37;border-radius:12px;scrollbar-width:thin}
+.assistant-markdown pre code{display:block;padding:0;background:none;color:#dbe6f5;font-size:12px;white-space:pre}
+.assistant-markdown .code-language{position:absolute;top:10px;left:17px;color:#8797ac;font:10px ui-monospace,SFMono-Regular,Consolas,monospace;text-transform:uppercase;letter-spacing:.08em}
+.assistant-copy{border:0;background:none;color:#8894a6;font-size:11px;padding:7px 0;margin-top:7px;transition:color .2s ease}
+.assistant-copy:hover{color:#b7d1fa}
+.assistant-message.streaming .assistant-markdown:after{content:'';display:inline-block;width:7px;height:15px;background:#9fc4ff;vertical-align:-2px;margin-left:4px;animation:chat-caret .9s ease-in-out infinite}
+.assistant-welcome{padding:clamp(40px,8vh,90px) 0 30px;animation:chat-enter .55s cubic-bezier(.2,.8,.2,1) both}
+.assistant-welcome-line{display:block;width:34px;height:2px;background:#91bdff;box-shadow:0 0 16px #6faaff77;margin-bottom:22px}
+.assistant-welcome h2{font-size:clamp(30px,3.1vw,42px);line-height:1.14;letter-spacing:-.05em;margin:0 0 13px}
+.assistant-welcome p{font-size:14px;line-height:1.65;max-width:540px;color:#9da5b1}
+.assistant-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin:31px 0}
+.assistant-suggestions button{min-height:38px;padding:8px 13px;border:1px solid #303640;border-radius:8px;background:#090b0e;color:#b7c1d1;font-size:11px;transition:border-color .25s,background .25s,transform .25s}
+.assistant-suggestions button:hover{border-color:#779acb;background:#111924;transform:translateY(-2px)}
+.assistant-page .assistant-proposal{border-top:1px solid #34506d;padding:22px 0 27px;animation:chat-enter .38s cubic-bezier(.2,.8,.2,1) both}
+.assistant-page .assistant-proposal h3{font-size:16px}
+.assistant-composer{position:sticky;bottom:0;z-index:4;padding:16px 0 22px;background:linear-gradient(180deg,#0000 0%,#000 14%,#000 100%);backdrop-filter:none}
+.assistant-composer form{display:flex;align-items:end;gap:8px;padding:7px;border:1px solid #35404e;border-radius:16px;background:#0c0f13;box-shadow:0 0 0 1px #7aaefa0b,0 -22px 45px #0007;transition:border-color .3s,box-shadow .3s}
+.assistant-composer form:focus-within{border-color:#7da9e6;box-shadow:0 0 0 3px #82b1ff12,0 -22px 45px #0007}
+.assistant-composer textarea{flex:1;resize:none;min-height:40px;max-height:180px;width:100%;padding:10px 11px;border:0!important;border-radius:10px;background:transparent!important;box-shadow:none!important;line-height:1.5;font-size:13px;color:#f2f5fa}
+.assistant-composer textarea::placeholder{color:#7f8997}
+.assistant-composer #assistant-send{width:40px;height:40px;min-height:40px;padding:0;border-radius:10px;font-size:20px;line-height:1}
+.assistant-composer-foot{display:flex;justify-content:space-between;gap:12px;margin:10px 4px 0;color:#697482;font-size:10px}
+.assistant-composer-foot #assistant-status:not(:empty){color:#a7c8fa}
+.assistant-upgrade{display:inline-block;color:#a9cbff;font-size:12px;margin:12px 4px 0;text-decoration:underline;text-underline-offset:3px}
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@keyframes chat-enter{from{opacity:.8;transform:translateY(9px)}to{opacity:1;transform:none}}
+@keyframes chat-caret{50%{opacity:.2}}
+@media(max-width:700px){.assistant-page{min-height:calc(100dvh - 140px)}.assistant-header{align-items:start;flex-direction:column;gap:8px}.assistant-page .assistant-header h1{font-size:30px}.assistant-quota{font-size:10px}.assistant-thread{padding:14px 0 70px}.assistant-message{padding:17px 0}.assistant-markdown{font-size:13px}.assistant-composer{padding-bottom:max(12px,env(safe-area-inset-bottom))}.assistant-composer-foot>span:last-child{display:none}.assistant-suggestions button{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.assistant-message,.assistant-welcome,.assistant-page .assistant-proposal,.assistant-message.streaming .assistant-markdown:after{animation:none}}

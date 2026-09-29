@@ -213,7 +213,7 @@
 .workspace-page .nav-search,.workspace-page .provider-buttons .btn{transition:border-color .3s ease,background-color .3s ease,color .3s ease,transform .3s cubic-bezier(.2,.8,.2,1)}
 .workspace-page .nav-backdrop:not(.hidden){animation:backdrop-enter .26s ease both}
 .workspace-page .toast:not(.hidden){animation:toast-enter .38s cubic-bezier(.2,.8,.2,1) both}
-@keyframes workspace-content-enter{from{opacity:.45;transform:translate3d(0,10px,0)}to{opacity:1;transform:none}}
+@keyframes workspace-content-enter{from{opacity:.72;transform:translate3d(0,10px,0)}to{opacity:1;transform:none}}
 @keyframes workspace-item-enter{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:none}}
 @keyframes auth-form-enter{from{opacity:.72;transform:translate3d(0,7px,0)}to{opacity:1;transform:none}}
 @keyframes auth-art-enter{from{opacity:.5;transform:translate3d(0,12px,0) scale(.98)}to{opacity:1;transform:none}}

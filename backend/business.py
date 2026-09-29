@@ -159,6 +159,9 @@ def ensure_workspace(con, user):
 
 
 def migrate(con):
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,started INTEGER NOT NULL)"
+    )
     con.executescript(
         (Path(__file__).parent / "migrations" / "004_identity_assistant.sql").read_text(
             encoding="utf-8"

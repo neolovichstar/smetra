@@ -172,10 +172,162 @@ public class MainActivity extends Activity {
     private void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception error){message("Не удалось открыть браузер");}}
     private void startIdentity(String provider){try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();openUrl(BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
     private void billing(){parentPage="settings";page("Ваш тариф","billing",true);content.addView(ui.art("flight",160));ui.space(content,8);content.addView(ui.label("Больше возможностей.\nТа же ясность.",29,INK,true));text("Один доступ на сайте и в приложении.\nБез автоматических списаний.");ui.space(content,26);content.addView(ui.label("ПРО",11,BLUE,true));ui.space(content,10);content.addView(ui.label("490 ₽",44,INK,true));text("31 день доступа");ui.space(content,20);for(String benefit:new String[]{"До 10 000 смет","Клиенты, заказы и согласования","Учёт поступлений и расходов","Синхронизация на всех устройствах"}){LinearLayout row=ui.row();row.setPadding(0,dp(10),0,dp(10));row.addView(ui.new Icon("check",BLUE),new LinearLayout.LayoutParams(dp(18),dp(18)));ui.gap(row,12);row.addView(ui.label(benefit,14,INK,false));content.addView(row);}ui.space(content,20);text("Оформление Про доступно на сайте. После оплаты доступ появится здесь автоматически.");text("Старт — бесплатно. Первые 10 смет для знакомства с Сметрой.");button("Обновить статус подписки",false,v->call("/billing/sync","POST",new JSONObject(),r->{me=r.optJSONObject("user");message("Статус обновлён");}));}
-    private void assistant(){parentPage="home";page("Ассистент","assistant",false);content.addView(ui.label("Ассистент",34,INK,true));text("Освободим время для самой работы.");LinearLayout messages=ui.column();content.addView(messages);loading(messages);call("/assistant","GET",null,result->{messages.removeAllViews();JSONArray history=result.optJSONArray("messages");if(history!=null&&history.length()>0){for(int i=0;i<history.length();i++){JSONObject item=history.optJSONObject(i);assistantMessage(messages,item.optString("role"),item.optString("content"));}}else{ui.space(messages,30);messages.addView(ui.label("Что нужно\nсделать сегодня?",28,INK,true));ui.space(messages,12);messages.addView(ui.label("Найду клиента, подготовлю смету, добавлю задачу или помогу разобраться в оплатах.",14,MUTED,false));}JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));if(!result.optBoolean("available"))message("Ассистент пока подключается.");});
-        EditText prompt=field("Ваше сообщение",1);prompt.setHint("Например: помоги составить смету на сайт");ui.space(content,8);button("Отправить",true,v->{String value=prompt.getText().toString().trim();if(value.isEmpty()){prompt.setError("Напишите задачу");return;}try{message("Разбираюсь в задаче…");call("/assistant/chat","POST",new JSONObject().put("text",value),result->{assistantMessage(messages,"user",value);assistantMessage(messages,"assistant",result.optString("answer"));JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));prompt.setText("");});}catch(Exception error){message(error.getMessage());}});text("Сообщение и нужные данные пространства обрабатывает OpenRouter. Изменения применяются после вашего подтверждения.").setTextSize(10);
+    private void assistant(){
+        parentPage="home";
+        page("Ассистент","assistant",false);
+        content.addView(ui.label("Ассистент",30,INK,true));
+        ui.space(content,7);
+        TextView allowance=ui.label("Загружаю лимит…",11,MUTED,false);
+        content.addView(allowance);
+        ui.space(content,20);
+        ui.divider(content);
+        LinearLayout messages=ui.column();
+        content.addView(messages);
+        loading(messages);
+        EditText prompt=field("Ваше сообщение",1);
+        prompt.setHint("Спросите или поручите задачу…");
+        prompt.setMaxLines(5);
+        prompt.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});
+        ui.space(content,8);
+        Button send=button("Отправить ↗",true,v->{
+            String value=prompt.getText().toString().trim();
+            if(value.isEmpty()){prompt.setError("Напишите задачу");return;}
+            streamAssistant(value,messages,prompt,allowance,(Button)v);
+        });
+        ui.space(content,8);
+        TextView status=ui.label("Сообщения обрабатывает OpenRouter. Изменения применяются только после вашего подтверждения.",10,MUTED,false);
+        content.addView(status);
+        call("/assistant","GET",null,result->{
+            messages.removeAllViews();
+            JSONArray history=result.optJSONArray("messages");
+            if(history!=null&&history.length()>0){
+                for(int i=0;i<history.length();i++){
+                    JSONObject item=history.optJSONObject(i);
+                    if(item!=null)assistantMessage(messages,item.optString("role"),item.optString("content"));
+                }
+            }else{
+                ui.space(messages,34);
+                messages.addView(ui.label("Что сделаем сегодня?",26,INK,true));
+                ui.space(messages,12);
+                messages.addView(ui.label("Спросите о сметах и заказах или поручите подготовить изменение.",14,MUTED,false));
+                ui.space(messages,30);
+            }
+            JSONArray actions=result.optJSONArray("actions");
+            if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));
+            applyAssistantQuota(result.optJSONObject("quota"),allowance,send);
+            if(!result.optBoolean("available")){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}
+        });
     }
-    private void assistantMessage(LinearLayout host,String role,String value){LinearLayout row=ui.card(host);row.addView(ui.label(role.equals("user")?"ВЫ":"АССИСТЕНТ",10,role.equals("user")?MUTED:BLUE,true));ui.space(row,10);TextView copy=ui.label(value,15,role.equals("user")?MUTED:INK,false);copy.setTextIsSelectable(true);row.addView(copy);}
+    private void applyAssistantQuota(JSONObject quota,TextView label,Button send){
+        if(quota==null)return;
+        int remaining=quota.optInt("remaining"),limit=quota.optInt("limit");
+        label.setText(remaining+" из "+limit+" сообщений · "+(quota.optString("plan").equals("pro")?"Про":"Старт"));
+        send.setEnabled(remaining>0);
+        if(remaining==0)send.setText("Лимит на месяц исчерпан");
+        else send.setText("Отправить ↗");
+    }
+    private void streamAssistant(String value,LinearLayout messages,EditText prompt,TextView allowance,Button send){
+        final int version=pageVersion;
+        send.setEnabled(false);
+        TextView userText=assistantMessage(messages,"user",value);
+        TextView answerText=assistantMessage(messages,"assistant","");
+        answerText.setText("Думаю…");
+        worker.execute(()->{
+            HttpURLConnection connection=null;
+            StringBuilder answer=new StringBuilder();
+            JSONObject[] currentQuota={null};
+            boolean completed=false;
+            try{
+                connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api/assistant/stream").openConnection();
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(110000);
+                connection.setRequestMethod("POST");
+                connection.setRequestProperty("Accept","text/event-stream");
+                connection.setRequestProperty("Authorization","Bearer "+token);
+                connection.setRequestProperty("Content-Type","application/json");
+                connection.setDoOutput(true);
+                try(OutputStream output=connection.getOutputStream()){
+                    output.write(new JSONObject().put("text",value).toString().getBytes(StandardCharsets.UTF_8));
+                }
+                int code=connection.getResponseCode();
+                if(code>=400){
+                    try(InputStream error=connection.getErrorStream()){
+                        JSONObject details=new JSONObject(new String(readLimited(error,65536),StandardCharsets.UTF_8));
+                        throw new ApiException(code,details.optString("error","Ошибка сервера: "+code));
+                    }
+                }
+                try(BufferedReader reader=new BufferedReader(new InputStreamReader(connection.getInputStream(),StandardCharsets.UTF_8))){
+                    String line,kind="",payload="";
+                    long lastPaint=0;
+                    while((line=reader.readLine())!=null){
+                        if(line.isEmpty()){
+                            if(!kind.isEmpty()&&!payload.isEmpty()){
+                                JSONObject event=new JSONObject(payload);
+                                if(kind.equals("ready"))currentQuota[0]=event.optJSONObject("quota");
+                                else if(kind.equals("delta")){
+                                    answer.append(event.optString("text"));
+                                    long now=android.os.SystemClock.uptimeMillis();
+                                    if(now-lastPaint>55){
+                                        lastPaint=now;
+                                        String snapshot=answer.toString();
+                                        runOnUiThread(()->{if(version==pageVersion)answerText.setText(snapshot);});
+                                    }
+                                }else if(kind.equals("done")){
+                                    completed=true;
+                                    JSONObject quota=event.optJSONObject("quota");
+                                    String finalAnswer=event.optString("answer");
+                                    JSONArray actions=event.optJSONArray("actions");
+                                    runOnUiThread(()->{if(version!=pageVersion)return;
+                                        answerText.setText(formatAssistantMarkdown(finalAnswer));
+                                        prompt.setText("");
+                                        applyAssistantQuota(quota,allowance,send);
+                                        if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));
+                                    });
+                                }else if(kind.equals("error")){
+                                    currentQuota[0]=event.optJSONObject("quota");
+                                    throw new ApiException(502,event.optString("error","Ответ прервался"));
+                                }
+                            }
+                            kind="";payload="";
+                        }else if(line.startsWith("event:"))kind=line.substring(6).trim();
+                        else if(line.startsWith("data:"))payload+=line.substring(5).trim();
+                    }
+                }
+                if(!completed)throw new IOException("Поток ответа оборвался");
+            }catch(Exception error){
+                runOnUiThread(()->{if(version!=pageVersion)return;
+                    messages.removeView(userText.getParent() instanceof View?(View)userText.getParent():userText);
+                    messages.removeView(answerText.getParent() instanceof View?(View)answerText.getParent():answerText);
+                    applyAssistantQuota(currentQuota[0],allowance,send);
+                    if(currentQuota[0]==null)send.setEnabled(true);
+                    message(error instanceof ApiException?error.getMessage():"Не удалось получить ответ. Попробуйте ещё раз.");
+                });
+            }finally{if(connection!=null)connection.disconnect();}
+        });
+    }
+    private CharSequence formatAssistantMarkdown(String value){
+        String safe=android.text.TextUtils.htmlEncode(value);
+        safe=safe.replaceAll("(?m)^#{1,3} +(.+)$","<big><b>$1</b></big>");
+        safe=safe.replaceAll("\\*\\*([^*\\n]+)\\*\\*","<b>$1</b>");
+        safe=safe.replaceAll("(?m)^[-*] +","• ");
+        safe=safe.replace("\n","<br>");
+        return android.text.Html.fromHtml(safe,android.text.Html.FROM_HTML_MODE_COMPACT);
+    }
+    private TextView assistantMessage(LinearLayout host,String role,String value){
+        LinearLayout row=ui.column();
+        row.setPadding(0,dp(19),0,dp(20));
+        host.addView(row,ui.match());
+        TextView who=ui.label(role.equals("user")?"ВЫ":"СМЕТРА",10,role.equals("user")?MUTED:BLUE,true);
+        row.addView(who);
+        ui.space(row,9);
+        TextView body=ui.label("",14,role.equals("user")?MUTED:INK,false);
+        body.setText(role.equals("user")?value:formatAssistantMarkdown(value));
+        body.setTextIsSelectable(true);
+        row.addView(body);
+        ui.divider(host);
+        ui.enter(row);
+        return body;
+    }
     private String fieldLabel(String key){switch(key){case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
     private void assistantAction(LinearLayout host,JSONObject action){if(action==null)return;LinearLayout proposal=ui.card(host);proposal.addView(ui.label("ПРЕДЛОЖЕНИЕ · ЕЩЁ НЕ СОХРАНЕНО",10,BLUE,true));ui.space(proposal,12);proposal.addView(ui.label(action.optString("summary"),18,INK,true));JSONObject fields=action.optJSONObject("arguments");if(fields!=null){java.util.Iterator<String> keys=fields.keys();while(keys.hasNext()){String key=keys.next();if(key.equals("id")||key.equals("revision"))continue;String value=fields.optString(key);if(key.equals("amount")||key.equals("amount_kopecks")||key.equals("price"))value=exactMoney(fields.optLong(key),fields.optString("currency","RUB"));if(key.equals("items")){JSONArray items=fields.optJSONArray(key);StringBuilder list=new StringBuilder();if(items!=null)for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);list.append(item.optString("name")).append(" · ").append(item.optString("quantity")).append(" × ").append(exactMoney(item.optLong("unit_price"),fields.optString("currency","RUB"))).append('\n');}value=list.toString();}ui.space(proposal,10);proposal.addView(ui.label(fieldLabel(key),11,MUTED,false));ui.space(proposal,3);proposal.addView(ui.label(value,14,INK,false));}}
         addButton(proposal,"Применить",true,v->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));});}catch(Exception error){message(error.getMessage());}});addButton(proposal,"Не сейчас",false,v->{try{call("/assistant/dismiss","POST",new JSONObject().put("id",action.optString("id")),r->host.removeView(proposal));}catch(Exception error){message(error.getMessage());}});
