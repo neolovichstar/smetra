@@ -1,6 +1,7 @@
 plugins { id 'com.android.application' }
 
 def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://smetra.vercel.app').get()
+def verifyUnsignedRelease = providers.gradleProperty('verifyUnsignedRelease').map { it == 'true' }.orElse(false).get()
 def localDebugApi = apiBase ==~ /http:\/\/(127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/
 if (!apiBase.startsWith('https://') && !localDebugApi) throw new GradleException('apiBaseUrl must use HTTPS (loopback is allowed for debug tests)')
 android {
@@ -40,7 +41,14 @@ android {
 gradle.taskGraph.whenReady { graph ->
     if (graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
         if (!apiBase.startsWith('https://')) throw new GradleException('Release requires an HTTPS API')
-        if (!System.getenv('SIGNING_STORE_FILE')) throw new GradleException('Release signing credentials required. Debug build remains available.')
         if (apiBase.contains('example.invalid')) throw new GradleException('Set the real HTTPS production apiBaseUrl for a release.')
+        if (!verifyUnsignedRelease) {
+            ['SIGNING_STORE_FILE', 'SIGNING_STORE_PASSWORD', 'SIGNING_KEY_ALIAS', 'SIGNING_KEY_PASSWORD'].each { name ->
+                if (!System.getenv(name)) throw new GradleException("Release signing credential ${name} is required.")
+            }
+            if (!file(System.getenv('SIGNING_STORE_FILE')).isFile()) throw new GradleException('Release signing keystore does not exist.')
+        } else if (System.getenv('SIGNING_STORE_FILE')) {
+            throw new GradleException('verifyUnsignedRelease is only for unsigned CI verification.')
+        }
     }
 }
