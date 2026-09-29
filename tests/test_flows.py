@@ -1,6 +1,8 @@
 import importlib.util
+import hashlib
 import json
 import os
+import secrets
 import tempfile
 import threading
 import unittest
@@ -15,6 +17,36 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class FlowTests(unittest.TestCase):
+    def test_sync_cannot_activate_pending_payment(self):
+        token, user_id = secrets.token_urlsafe(32), self.mod.uid()
+        with self.mod.db() as con:
+            con.execute(
+                "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                (user_id, "sync-pending@sample.test", self.mod.hash_password("a secure password"), "Проверка", self.mod.now(), self.mod.now()),
+            )
+            con.execute(
+                "INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)",
+                (self.mod.uid(), user_id, hashlib.sha256(token.encode()).hexdigest(), self.mod.now()+3600),
+            )
+            con.execute(
+                "INSERT INTO payments(id,user_id,provider_id,plan,amount_kopecks,status,idempotency_key,confirmation_url,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                ("pending-sync", user_id, "provider-pending", "pro_month", 49000, "pending", "pending-sync-key", "https://pay.example.test/pending", self.mod.now()),
+            )
+        remote = {
+            "id": "provider-pending", "test": True,
+            "recipient": {"account_id": "test_shop"}, "status": "pending", "paid": False,
+            "amount": {"value": "490.00", "currency": "RUB"},
+            "metadata": {"user_id": user_id, "plan": "pro_month"},
+        }
+        env = {"YOOKASSA_SHOP_ID": "test_shop", "YOOKASSA_SECRET_KEY": "test_key", "YOOKASSA_MODE": "test", "YOOKASSA_MERCHANT_TYPE": "self_employed"}
+        with patch.dict(os.environ, env), patch.object(self.mod.Handler, "provider_call", return_value=remote):
+            status, result = self.request("/api/billing/sync", "POST", {}, token)
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result["user"]["plan"], "free")
+        with self.mod.db() as con:
+            self.assertEqual(con.execute("SELECT status FROM payments WHERE id='pending-sync'").fetchone()[0], "pending")
+            self.assertEqual(con.execute("SELECT entitlement_until FROM users WHERE id=?", (user_id,)).fetchone()[0] or 0, 0)
+
     def test_yookassa_store_gate_rejects_wrong_environment_and_shop(self):
         env = {
             "YOOKASSA_SHOP_ID": "test_shop",

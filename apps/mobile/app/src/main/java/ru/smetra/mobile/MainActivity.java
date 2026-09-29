@@ -183,7 +183,36 @@ public class MainActivity extends Activity {
     }
     private void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception error){message("Не удалось открыть браузер");}}
     private void startIdentity(String provider){try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();openUrl(BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
-    private void billing(){parentPage="settings";page("Ваш тариф","billing",true);content.addView(ui.art("flight",160));ui.space(content,8);content.addView(ui.label("Больше возможностей.\nТа же ясность.",29,INK,true));text("Один доступ на сайте и в приложении.\nБез автоматических списаний.");ui.space(content,26);content.addView(ui.label("ПРО",11,BLUE,true));ui.space(content,10);content.addView(ui.label("490 ₽",44,INK,true));text("31 день доступа");ui.space(content,20);for(String benefit:new String[]{"До 10 000 смет","Клиенты, заказы и согласования","Учёт поступлений и расходов","Синхронизация на всех устройствах"}){LinearLayout row=ui.row();row.setPadding(0,dp(10),0,dp(10));row.addView(ui.new Icon("check",BLUE),new LinearLayout.LayoutParams(dp(18),dp(18)));ui.gap(row,12);row.addView(ui.label(benefit,14,INK,false));content.addView(row);}ui.space(content,20);text("Оформление Про доступно на сайте. После оплаты доступ появится здесь автоматически.");text("Старт — бесплатно. Первые 10 смет для знакомства с Сметрой.");button("Обновить статус подписки",false,v->call("/billing/sync","POST",new JSONObject(),r->{me=r.optJSONObject("user");message("Статус обновлён");}));}
+    private boolean proActive(JSONObject account){return account!=null&&"pro".equals(account.optString("plan"))&&account.optLong("entitlement_until")>System.currentTimeMillis()/1000;}
+    private String subscriptionDate(JSONObject account){
+        return java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG,new Locale("ru","RU"))
+            .format(new java.util.Date(account.optLong("entitlement_until")*1000));
+    }
+    private void billing(){
+        parentPage="settings";page("Ваш тариф","billing",true);
+        boolean active=proActive(me);
+        content.addView(ui.art("flight",160));ui.space(content,8);
+        content.addView(ui.label(active?"Ваш тариф · Про":"Ваш тариф · Старт",29,INK,true));
+        text(active?"Про действует до "+subscriptionDate(me)+". Доступ общий для сайта и приложения.":"Первые 10 смет бесплатно. Оплата не требуется.");
+        ui.space(content,26);ui.divider(content);ui.space(content,22);
+        content.addView(ui.label("ПРО · 490 ₽",18,BLUE,true));
+        text("31 день доступа · без автоматических списаний");
+        ui.space(content,16);
+        for(String benefit:new String[]{"До 10 000 смет","Клиенты, заказы и согласования","Учёт поступлений и расходов","Синхронизация на всех устройствах"}){
+            LinearLayout row=ui.row();row.setPadding(0,dp(10),0,dp(10));
+            row.addView(ui.new Icon("check",BLUE),new LinearLayout.LayoutParams(dp(18),dp(18)));
+            ui.gap(row,12);row.addView(ui.label(benefit,14,INK,false));content.addView(row);
+        }
+        ui.space(content,16);
+        text("Оплата оформляется на сайте в браузере. После оплаты доступ появится и в приложении.");
+        button(active?"Продлить Про на сайте":"Оформить Про на сайте",true,v->openUrl(BuildConfig.API_BASE_URL+"/app#billing"));
+        button("Проверить статус оплаты",false,v->call("/billing/sync","POST",new JSONObject(),result->{
+            JSONObject updated=result.optJSONObject("user");
+            if(updated==null){message("Не удалось проверить статус оплаты");return;}
+            me=updated;billing();
+            message(proActive(updated)?"На сервере активен Про до "+subscriptionDate(updated):"Тариф Старт. Подтверждённой оплаты Про нет.");
+        }));
+    }
     private void assistant(){
         parentPage="home";
         page("Ассистент","assistant",false);
