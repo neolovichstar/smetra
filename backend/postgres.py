@@ -18,6 +18,7 @@ TABLES = frozenset(
 TABLES = TABLES | frozenset(
     "external_identities oauth_states oauth_tickets assistant_messages assistant_actions".split()
 )
+TABLES = TABLES | frozenset("intake_forms client_requests".split())
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 
 

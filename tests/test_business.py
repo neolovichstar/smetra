@@ -1,6 +1,7 @@
 import concurrent.futures
 import base64
 import contextlib
+import datetime as dt
 import importlib.util
 import io
 import json
@@ -205,6 +206,89 @@ class BusinessFlows(unittest.TestCase):
             Service(handler, con, self.base).handle("GET", "/api/dashboard", {})
             self.assertFalse(any("quote_items" in sql for sql in statements))
 
+    def test_today_lists_real_followups_without_other_workspace_data(self):
+        token, _ = self.account("today-owner")
+        other_token, _ = self.account("today-other")
+        quote = self.publish(token, self.quote(token, title="Approved work"))
+        public_token = quote["public_url"].split("quote=")[1]
+        self.assertEqual(self.call("/public/accept", "POST", {
+            "token": public_token, "version": 1, "name": "Client"
+        })[0], 200)
+        self.quote(other_token, title="Private work")
+        yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+        task_status, task = self.call("/tasks", "POST", {
+            "name": "Call the client", "due_date": yesterday
+        }, token)
+        self.assertEqual(task_status, 201, task)
+
+        code, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(code, 200, dashboard)
+        actions = dashboard["actions"]
+        self.assertEqual(actions["summary"]["approved_this_month"], 1)
+        self.assertEqual(actions["summary"]["active_projects"], 0)
+        self.assertIn(quote["id"], [a["entity_id"] for a in actions["items"]])
+        self.assertIn(task["item"]["id"], [a["entity_id"] for a in actions["items"]])
+        self.assertNotIn("Private work", json.dumps(actions))
+
+        code, project = self.call("/quotes/" + quote["id"] + "/project", "POST", {}, token)
+        self.assertEqual(code, 201, project)
+        _, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(dashboard["actions"]["summary"]["active_projects"], 1)
+        self.assertEqual(dashboard["actions"]["summary"]["waiting_payments"], 1)
+        self.assertNotIn(quote["id"], [a["entity_id"] for a in dashboard["actions"]["items"]])
+
+    def test_public_intake_creates_private_client_lead_request_and_attachment(self):
+        owner, _ = self.account("intake-owner")
+        outsider, _ = self.account("intake-outsider")
+        code, result = self.call("/intake", "POST", {}, owner)
+        self.assertEqual(code, 200, result)
+        form = result["form"]
+        token = form["public_url"].split("intake=")[1]
+        self.assertEqual(self.call("/public/intake?token=" + token)[0], 200)
+        payload = {
+            "token": token, "name": "Ирина", "email": "irina@example.ru",
+            "details": "Нужен фирменный сайт", "budget_kopecks": 7500000,
+            "due_date": "2026-12-15", "comment": "Напишите после обеда",
+            "file": {"name": "brief.txt", "content": base64.b64encode(b"Project brief").decode()},
+        }
+        self.assertEqual(self.call("/public/intake", "POST", {**payload, "email": ""})[0], 400)
+        self.assertEqual(self.call("/public/intake", "POST", {**payload, "file": {
+            "name": "active.html", "content": base64.b64encode(b"<script></script>").decode()
+        }})[0], 400)
+        self.assertEqual(self.call("/leads", token=owner)[1]["items"], [])
+        code, submitted = self.call("/public/intake", "POST", payload)
+        self.assertEqual(code, 201, submitted)
+        self.assertEqual(submitted, {"ok": True})
+        _, leads = self.call("/leads", token=owner)
+        self.assertEqual(len(leads["items"]), 1)
+        lead_id = leads["items"][0]["id"]
+        _, today = self.call("/dashboard", token=owner)
+        self.assertIn(lead_id, [action["entity_id"] for action in today["actions"]["items"]])
+        _, detail = self.call("/leads/" + lead_id, token=owner)
+        self.assertEqual(detail["item"]["request"]["details"], payload["details"])
+        self.assertEqual(detail["item"]["request"]["budget_kopecks"], 7500000)
+        client_id = detail["item"]["request"]["client_id"]
+        _, client = self.call("/clients/" + client_id, token=owner)
+        self.assertEqual(len(client["item"]["requests"]), 1)
+        self.assertTrue(any(event["action"] == "Новая заявка" for event in client["item"]["timeline"]))
+        _, files = self.call("/files?client_id=" + client_id, token=owner)
+        self.assertEqual([file["name"] for file in files["items"]], ["brief.txt"])
+        self.assertEqual(self.call("/leads/" + lead_id, token=outsider)[0], 404)
+        self.assertEqual(self.call("/files?client_id=" + client_id, token=outsider)[0], 404)
+        self.assertEqual(self.call("/intake", "PATCH", {"enabled": 0}, owner)[0], 200)
+        self.assertEqual(self.call("/public/intake?token=" + token)[0], 404)
+
+    def test_unknown_intake_tokens_are_rate_limited(self):
+        for index in range(60):
+            self.assertEqual(
+                self.call("/public/intake", "POST", {"token": f"missing-{index}"})[0],
+                404,
+            )
+        self.assertEqual(
+            self.call("/public/intake", "POST", {"token": "missing-last"})[0],
+            429,
+        )
+
     def test_full_client_quote_project_partial_payments_expense_document(self):
         token, _ = self.account("lifecycle")
         code, c = self.call(
@@ -373,6 +457,14 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(
             self.call("/clients", "POST", {"name": "Denied"}, viewer, wid)[0], 403
         )
+        self.assertEqual(self.call("/intake", "POST", {}, viewer, wid)[0], 403)
+        self.assertEqual(self.call("/intake", "PATCH", {"enabled": 0}, viewer, wid)[0], 403)
+        attachment = {"quote_id": q["id"], "name": "scope.txt", "content": base64.b64encode(b"Private scope").decode()}
+        file_status, file_result = self.call("/files", "POST", attachment, owner)
+        self.assertEqual(file_status, 201, file_result)
+        file_id = file_result["file"]["id"]
+        self.assertEqual(self.call("/files/" + file_id, "DELETE", token=viewer, workspace=wid)[0], 403)
+        self.assertEqual(self.call("/files/" + file_id, token=viewer, workspace=wid, raw=True)[0], 200)
         self.assertEqual(
             self.call(
                 "/workspace/members",

@@ -104,6 +104,23 @@ final class SmetraUi {
         if(window!=null){window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(8),dp(8),dp(8));}
         if(motion()){sheet.setTranslationY(dp(80));sheet.setAlpha(0);sheet.animate().translationY(0).alpha(1).setDuration(320).setInterpolator(EASE).start();}
     }
+    void choiceSheet(String title,String[] labels,Runnable[] actions){
+        if(labels.length!=actions.length)throw new IllegalArgumentException("Choices and actions differ");
+        Dialog dialog=new Dialog(activity);
+        LinearLayout sheet=column();sheet.setPadding(dp(24),dp(18),dp(24),dp(24));sheet.setBackground(shape(SURFACE,30,LINE));
+        View handle=new View(activity);handle.setBackground(shape(0xff576171,2,0));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(36),dp(4));hp.gravity=Gravity.CENTER;sheet.addView(handle,hp);
+        space(sheet,24);sheet.addView(label(title,25,INK,true));space(sheet,12);
+        for(int i=0;i<labels.length;i++){
+            final int index=i;
+            Button option=button(labels[i],i==0,()->{dialog.dismiss();actions[index].run();});
+            sheet.addView(option);space(sheet,8);
+        }
+        dialog.setContentView(sheet);Window window=dialog.getWindow();
+        if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.72f);window.setGravity(Gravity.BOTTOM);window.setNavigationBarColor(BG);}
+        dialog.show();
+        if(window!=null){window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(8),dp(8),dp(8));}
+        if(motion()){sheet.setTranslationY(dp(80));sheet.setAlpha(0);sheet.animate().translationY(0).alpha(1).setDuration(320).setInterpolator(EASE).start();}
+    }
     final class Icon extends View {
         final Paint paint=new Paint(3);final String kind;final int tint;
         Icon(String kind,int tint){super(activity);this.kind=kind;this.tint=tint;setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}

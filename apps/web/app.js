@@ -105,4 +105,4 @@ if($('#auth')){
     verificationTask.finally(()=>api('/me').then(r=>{user=r.user;showApp();if(params.has('payment')){sessionStorage.removeItem('smetra.checkout.pro_month');sessionStorage.removeItem('smetra.checkout.pro_year');api('/billing/sync',{method:'POST'}).then(r=>{user=r.user;tab='billing';render()}).catch(e=>notify(e.message))}}).catch(()=>showAuth()));
   }
 }
-document.addEventListener('DOMContentLoaded',()=>{const id=new URLSearchParams(location.search).get('quote');if(id && document.querySelector('#public-quote'))window.Workspace.publicPage(id)});
+document.addEventListener('DOMContentLoaded',()=>{const params=new URLSearchParams(location.search),intake=params.get('intake'),quote=params.get('quote');if(intake&&document.querySelector('#public-quote'))window.Workspace.intakePage(intake);else if(quote&&document.querySelector('#public-quote'))window.Workspace.publicPage(quote)});

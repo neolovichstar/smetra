@@ -129,13 +129,14 @@ public class MainActivity extends Activity {
     }
     private void navigation(LinearLayout shell){
         LinearLayout nav=ui.row();nav.setPadding(dp(10),dp(10),dp(10),dp(10));nav.setBackgroundColor(BG);
-        String[] labels={"Сметы","Клиенты","Согласования","Платежи","Ещё"},pages={"home","clients","approvals","payments","more"},icons={"document","clients","check","wallet","grid"};
-        String selected=currentPage.equals("create")||currentPage.equals("quote")||currentPage.equals("capture")||currentPage.equals("draft-preview")?"home":currentPage.equals("receipt")?"payments":currentPage.equals("client")?"clients":currentPage.equals("project")||currentPage.equals("projects")||currentPage.equals("assistant")||currentPage.equals("settings")||currentPage.equals("tasks")||currentPage.equals("support")||currentPage.equals("billing")?"more":currentPage;
+        String[] labels={"Сегодня","Клиенты","Создать","Проекты","Ещё"},pages={"home","clients","create","projects","more"},icons={"clock","clients","plus","projects","grid"};
+        String selected=currentPage.equals("create")||currentPage.equals("quote")||currentPage.equals("capture")||currentPage.equals("draft-preview")?"home":currentPage.equals("client")?"clients":currentPage.equals("project")?"projects":currentPage.equals("assistant")||currentPage.equals("settings")||currentPage.equals("tasks")||currentPage.equals("support")||currentPage.equals("billing")||currentPage.equals("payments")||currentPage.equals("receipt")||currentPage.equals("approvals")?"more":currentPage;
         for(int i=0;i<5;i++){final int index=i;boolean active=pages[i].equals(selected);LinearLayout item=ui.column();item.setGravity(Gravity.CENTER);item.setPadding(0,dp(8),0,dp(8));ui.ripple(item,BG,18,0);item.setSelected(active);item.setContentDescription(labels[i]+(active?", выбрано":""));
             item.addView(ui.new Icon(icons[i],active?BLUE:MUTED),new LinearLayout.LayoutParams(dp(21),dp(21)));ui.space(item,5);TextView caption=ui.label(labels[i],10,active?BLUE:MUTED,active);caption.setGravity(Gravity.CENTER);item.addView(caption);
-            ui.tap(item,()->{publicView=false;if(index==0)home();else if(index==1)records("clients");else if(index==2)approvals();else if(index==3)payments();else more();});LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);params.setMargins(dp(1),0,dp(1),0);nav.addView(item,params);
+            ui.tap(item,()->{publicView=false;if(index==0)home();else if(index==1)records("clients");else if(index==2)quickCreate();else if(index==3)records("projects");else more();});LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);params.setMargins(dp(1),0,dp(1),0);nav.addView(item,params);
         }shell.addView(nav);
     }
+    private void quickCreate(){ui.choiceSheet("Создать в Сметре",new String[]{"Новая смета","Из сообщения клиента","Новый клиент"},new Runnable[]{this::create,this::capture,this::newClient});}
     private TextView text(String value){TextView view=ui.label(value,14,MUTED,false);ui.space(content,10);content.addView(view);return view;}
     private Button addButton(LinearLayout parent,String title,boolean primary,View.OnClickListener action){final Button[] holder=new Button[1];Button button=ui.button(title,primary,()->{clickedButton=holder[0];action.onClick(holder[0]);clickedButton=null;});holder[0]=button;parent.addView(button);return button;}
     private Button button(String title,boolean primary,View.OnClickListener action){return addButton(content,title,primary,action);}
@@ -376,20 +377,25 @@ public class MainActivity extends Activity {
 
     private void refresh(){call("/me","GET",null,result->{me=result.optJSONObject("user");home();});}
     private void home(){
-        publicView=false;page("Сметы","home",false);
+        publicView=false;page("Сегодня","home",false);
         content.addView(ui.label(presentation.homeEyebrow,10,MUTED,true));ui.space(content,8);
         content.addView(ui.label(presentation.homeTitle,36,INK,true));ui.space(content,14);
         button(presentation.createLabel,true,v->create());button(presentation.captureLabel,false,v->capture());
 
         LinearLayout summary=ui.card(content),metrics=ui.row();summary.addView(metrics);
-        TextView total=homeMetric(metrics,"Всего"),waiting=homeMetric(metrics,"Ждут ответа"),approved=homeMetric(metrics,"Согласовано");
+        TextView total=homeMetric(metrics,"Проекты"),waiting=homeMetric(metrics,"Ждут оплаты"),approved=homeMetric(metrics,"Согласовано за месяц");
+        ui.space(summary,12);TextView received=ui.label("Получено за месяц · —",13,MUTED,false);summary.addView(received);
+        ui.section(content,"Требует внимания",null);LinearLayout actionHost=ui.column();content.addView(actionHost);loading(actionHost);
         ui.section(content,"Ваши сметы",null);
         LinearLayout filters=ui.row();filters.setPadding(0,dp(12),0,dp(6));HorizontalScrollView scroller=new HorizontalScrollView(this);scroller.setHorizontalScrollBarEnabled(false);scroller.addView(filters);content.addView(scroller);
         LinearLayout host=ui.column(),more=ui.column();content.addView(host);content.addView(more);loading(host);
         final JSONArray[] data={new JSONArray()};final int[] totalCount={0};final String[] selected={""};
         call("/dashboard","GET",null,result->{
             JSONObject overview=result.optJSONObject("overview"),quoteCounts=overview==null?null:overview.optJSONObject("quotes");
-            if(quoteCounts!=null){totalCount[0]=quoteCounts.optInt("total");total.setText(String.valueOf(totalCount[0]));waiting.setText(String.valueOf(quoteCounts.optInt("waiting")));approved.setText(String.valueOf(quoteCounts.optInt("approved")));}
+            if(quoteCounts!=null)totalCount[0]=quoteCounts.optInt("total");
+            JSONObject actions=result.optJSONObject("actions"),overviewSummary=actions==null?null:actions.optJSONObject("summary");
+            if(overviewSummary!=null){total.setText(String.valueOf(overviewSummary.optInt("active_projects")));waiting.setText(String.valueOf(overviewSummary.optInt("waiting_payments")));approved.setText(String.valueOf(overviewSummary.optInt("approved_this_month")));JSONObject earned=overviewSummary.optJSONObject("received_this_month");received.setText("Получено за месяц · "+exactMoney(earned==null?0:earned.optLong("RUB"),"RUB"));}
+            renderTodayActions(actionHost,actions==null?null:actions.optJSONArray("items"));
             JSONArray recent=result.optJSONArray("quotes");if(recent!=null&&recent.length()>0){data[0]=recent;homeFilters(filters,host,data[0],totalCount[0],selected);renderQuotes(host,data[0],selected[0]);}
         });
         call("/quotes","GET",null,result->{
@@ -397,6 +403,18 @@ public class MainActivity extends Activity {
             homeFilters(filters,host,data[0],Math.max(totalCount[0],data[0].length()),selected);
             renderQuotes(host,data[0],selected[0]);homeMore(host,more,filters,data[0],totalCount,selected);
         });
+    }
+    private void renderTodayActions(LinearLayout host,JSONArray actions){
+        host.removeAllViews();
+        if(actions==null||actions.length()==0){host.addView(ui.label("Срочных действий нет. Можно подготовить следующий запрос клиента.",13,MUTED,false));return;}
+        for(int i=0;i<actions.length();i++){
+            JSONObject action=actions.optJSONObject(i);if(action==null)continue;
+            LinearLayout row=ui.column();row.setPadding(0,dp(13),0,dp(13));
+            row.addView(ui.label(action.optString("title"),15,INK,true));ui.space(row,5);
+            String detail=action.optString("detail");if(action.optLong("amount_kopecks")>0)detail+=" · "+exactMoney(action.optLong("amount_kopecks"),action.optString("currency","RUB"));
+            row.addView(ui.label(detail,12,MUTED,false));host.addView(row);ui.divider(host);
+            ui.tap(row,()->{String kind=action.optString("kind"),id=action.optString("entity_id");if(kind.equals("project"))project(id);else if(kind.equals("task"))records("tasks");else if(kind.equals("lead"))call("/leads/"+id,"GET",null,result->{JSONObject lead=result.optJSONObject("item");if(lead!=null&&!lead.optString("client_id").isEmpty())client(lead.optString("client_id"));});else if(kind.equals("quote")){try{openQuote(new JSONObject().put("id",id));}catch(Exception error){message(error.getMessage());}}});
+        }
     }
     private TextView homeMetric(LinearLayout parent,String title){
         LinearLayout cell=ui.column();cell.setPadding(0,dp(5),dp(7),dp(5));parent.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
@@ -497,7 +515,7 @@ public class MainActivity extends Activity {
         ui.section(content,"Недавние поступления",null);LinearLayout entries=ui.column();content.addView(entries);
         call("/receipts","GET",null,result->{JSONArray list=result.optJSONArray("items");if(list==null||list.length()==0){entries.addView(ui.label("Записей пока нет.",13,MUTED,false));return;}for(int i=0;i<Math.min(20,list.length());i++){JSONObject item=list.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(entries);row.addView(ui.label(exactMoney(item.optLong("amount_kopecks"),item.optString("currency","RUB")),17,INK,true));ui.space(row,5);row.addView(ui.label(item.optString("payment_date"),12,MUTED,false));}});
     }
-    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",30,INK,true));text("Остальные разделы в одном месте.");menu("projects","Заказы","Этапы и сроки работы",()->records("projects"));menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
+    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",30,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
     private void records(String kind){
         page("",kind,false);content.addView(ui.label(kind.equals("clients")?"Ваши клиенты":kind.equals("projects")?"Всё движется\nпо плану.":"Задачи",30,INK,true));text(kind.equals("clients")?"Люди, с которыми вы создаёте больше.":kind.equals("projects")?"Работа, договорённости и оплата.":"Следующий шаг для каждого проекта.");
         if(kind.equals("clients"))button("Добавить клиента",true,v->newClient());
@@ -511,7 +529,20 @@ public class MainActivity extends Activity {
         }if(shown==0)ui.empty(host,kind.equals("clients")?"clients":"projects",query.isEmpty()?"Здесь начинается работа":"Ничего не найдено",query.isEmpty()?(kind.equals("clients")?"Добавьте первого клиента,\nчтобы держать контакты под рукой.":"Новые записи появятся здесь.\nЗаказ можно создать из согласованной сметы."):"Попробуйте другое имя или название.");
     }
     private void newClient(){parentPage="clients";page("Новый клиент","client",true);text("Все контакты — в одном месте.");EditText name=field("Имя или компания",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS),email=field("Электронная почта",33),phone=field("Телефон",3);ui.space(content,16);button("Добавить клиента",true,v->{if(name.length()==0){name.setError("Укажите имя");return;}try{call("/clients","POST",new JSONObject().put("name",name.getText().toString()).put("email",email.getText().toString()).put("phone",phone.getText().toString()),r->{records("clients");message("Клиент добавлен");});}catch(Exception error){message(error.getMessage());}});}
-    private void client(String id){parentPage="clients";page("Клиент","client",true);loading(content);call("/clients/"+id,"GET",null,r->{clearLoading(content);JSONObject c=r.optJSONObject("item");if(c==null)return;content.addView(ui.label(c.optString("name"),30,INK,true));LinearLayout contacts=ui.card(content);contacts.addView(ui.label("КОНТАКТЫ",10,MUTED,true));ui.space(contacts,14);TextView email=ui.label(c.optString("email","Почта не указана"),16,INK,false);email.setTextIsSelectable(true);contacts.addView(email);ui.space(contacts,10);TextView phone=ui.label(c.optString("phone","Телефон не указан"),16,INK,false);phone.setTextIsSelectable(true);contacts.addView(phone);ui.section(content,"Сметы клиента",null);JSONArray list=c.optJSONArray("quotes");LinearLayout host=ui.column();content.addView(host);renderQuotes(host,list==null?new JSONArray():list,"");});}
+    private void client(String id){
+        parentPage="clients";page("Клиент","client",true);loading(content);
+        call("/clients/"+id,"GET",null,r->{
+            clearLoading(content);JSONObject c=r.optJSONObject("item");if(c==null)return;
+            content.addView(ui.label(c.optString("name"),30,INK,true));
+            LinearLayout contacts=ui.card(content);contacts.addView(ui.label("КОНТАКТЫ",10,MUTED,true));ui.space(contacts,14);
+            TextView email=ui.label(c.optString("email","Почта не указана"),16,INK,false);email.setTextIsSelectable(true);contacts.addView(email);ui.space(contacts,10);
+            TextView phone=ui.label(c.optString("phone","Телефон не указан"),16,INK,false);phone.setTextIsSelectable(true);contacts.addView(phone);
+            JSONArray requests=c.optJSONArray("requests");if(requests!=null&&requests.length()>0){ui.section(content,"Заявки",null);for(int i=0;i<requests.length();i++){JSONObject request=requests.optJSONObject(i);if(request==null)continue;LinearLayout row=ui.card(content);row.addView(ui.label(request.optString("details"),14,INK,false));if(!request.optString("due_date").isEmpty()){ui.space(row,7);row.addView(ui.label("Срок · "+request.optString("due_date"),12,MUTED,false));}}}
+            ui.section(content,"Сметы клиента",null);JSONArray list=c.optJSONArray("quotes");LinearLayout host=ui.column();content.addView(host);renderQuotes(host,list==null?new JSONArray():list,"");
+            JSONArray projects=c.optJSONArray("projects");if(projects!=null&&projects.length()>0){ui.section(content,"Проекты",null);for(int i=0;i<projects.length();i++){JSONObject item=projects.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(content);row.addView(ui.label(item.optString("name"),15,INK,true));ui.space(row,6);row.addView(ui.label(exactMoney(item.optLong("amount_kopecks"),item.optString("currency","RUB")),13,MUTED,false));ui.tap(row,()->project(item.optString("id")));}}
+            JSONArray history=c.optJSONArray("timeline");if(history!=null&&history.length()>0){ui.section(content,"История",null);for(int i=0;i<Math.min(history.length(),10);i++){JSONObject event=history.optJSONObject(i);if(event==null)continue;content.addView(ui.label(event.optString("action"),13,INK,false));ui.space(content,6);}}
+        });
+    }
     private void project(String id){
         parentPage="projects";page("Заказ","project",true);loading(content);call("/projects/"+id,"GET",null,r->{clearLoading(content);JSONObject p=r.optJSONObject("item");if(p==null)return;content.addView(ui.badge(status(p.optString("status")),statusColor(p.optString("status"))));ui.space(content,18);content.addView(ui.label(p.optString("name"),28,INK,true));
             String currency=p.optString("currency","RUB");long cost=p.optLong("amount_kopecks"),paid=p.optLong("paid");LinearLayout card=ui.card(content);card.setBackground(ui.gradient(24));card.addView(ui.label("Стоимость заказа",12,BLUE,false));ui.space(card,12);card.addView(ui.label(exactMoney(cost,currency),32,INK,true));ui.space(card,18);

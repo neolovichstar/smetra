@@ -177,6 +177,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "005_intake.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -256,6 +261,7 @@ def migrate(con):
         )
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(2,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(3,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(6,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -625,6 +631,8 @@ class Service:
         self.emit("quote", row["id"], "Смета отправлена", f"v{version}")
 
     def public(self, method, path, query):
+        if path == "/api/public/intake":
+            return self.public_intake(method, query)
         self.h.throttle("public:" + self.h.client_address[0], 180, 60)
         if method == "GET" and path in ("/api/public/file", "/api/public/document"):
             self.h.throttle("public-download:" + self.h.client_address[0], 30, 60)
@@ -813,6 +821,99 @@ class Service:
                 )
                 self.emit("quote", row["id"], "Комментарий клиента", message, True)
             return 200, {"ok": True}
+
+    def public_intake(self, method, query):
+        if method not in ("GET", "POST"):
+            raise DomainError(405, "Метод не поддерживается")
+        if method == "GET":
+            self.h.throttle("intake-view:" + self.h.client_address[0], 120, 60)
+        else:
+            # Unknown tokens must not bypass abuse limits and hammer the DB.
+            self.h.throttle("intake-submit:" + self.h.client_address[0], 60, 60)
+        data = self.h.body() if method == "POST" else {}
+        token = string(data.get("token", query.get("token", [""])[0]), "Ссылка", 100, True)
+        form = self.con.execute(
+            "SELECT f.*,w.name AS workspace_name,w.settings FROM intake_forms f "
+            "JOIN workspaces w ON w.id=f.workspace_id JOIN users u ON u.id=w.owner_id "
+            "WHERE f.token=? AND f.enabled=1 AND u.blocked=0 AND u.deleted_at IS NULL",
+            (token,),
+        ).fetchone()
+        if not form:
+            raise DomainError(404, "Форма заявки не найдена")
+        if method == "GET":
+            return 200, {"title": form["title"], "business": form["workspace_name"], "max_upload_bytes": 1_000_000}
+        self.h.throttle("intake:" + token + ":" + self.h.client_address[0], 5, 3600)
+        self.h.throttle("intake-form:" + token, 100, 86400)
+        name = string(data.get("name", ""), "Имя", 120, True)
+        details = string(data.get("details", ""), "Что нужно сделать", 3000, True)
+        email = string(data.get("email", ""), "Почта", 254)
+        phone = string(data.get("phone", ""), "Телефон", 50)
+        if not email and not phone:
+            raise DomainError(400, "Укажите почту или телефон для ответа")
+        if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            raise DomainError(400, "Проверьте адрес почты")
+        budget = integer(data.get("budget_kopecks", 0), "Бюджет")
+        due_date = date_value(data.get("due_date", ""), "Желаемый срок")
+        comment = string(data.get("comment", ""), "Комментарий", 3000)
+        attachment = data.get("file")
+        if attachment is not None:
+            if not isinstance(attachment, dict) or not isinstance(attachment.get("content"), str) or len(attachment["content"]) > 1_400_000:
+                raise DomainError(413, "Файл должен быть не больше 1 МБ")
+        self.wid = form["workspace_id"]
+        now = stamp()
+        client_id, lead_id, request_id = identity(), identity(), identity()
+        settings = json.loads(form["settings"])
+        pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
+        status = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
+        with transaction(self.con):
+            self.insert("clients", dict(
+                id=client_id, workspace_id=self.wid, name=name, type="person", company="",
+                email=email, phone=phone, telegram="", notes="", tags="[]",
+                custom_fields="{}", created_at=now, updated_at=now, revision=1,
+            ))
+            self.insert("leads", dict(
+                id=lead_id, workspace_id=self.wid, client_id=client_id,
+                name=name + " · " + details.splitlines()[0][: max(0, 197 - len(name))],
+                description=details, status=status, amount_kopecks=budget,
+                revision=1, created_at=now, updated_at=now,
+            ))
+            self.insert("client_requests", dict(
+                id=request_id, workspace_id=self.wid, form_id=form["id"],
+                client_id=client_id, lead_id=lead_id, details=details,
+                budget_kopecks=budget, due_date=due_date, comment=comment, created_at=now,
+            ))
+            if attachment is not None:
+                try:
+                    from backend.attachments import route as files_route
+                except ModuleNotFoundError:
+                    from attachments import route as files_route
+                files_route(self, "POST", [], {}, {
+                    "client_id": client_id, "name": attachment.get("name"),
+                    "content": attachment["content"], "public": 0,
+                })
+            self.emit("lead", lead_id, "Новая заявка", name, True)
+        return 201, {"ok": True}
+
+    def intake(self, method, data):
+        row = self.con.execute(
+            "SELECT * FROM intake_forms WHERE workspace_id=?", (self.wid,)
+        ).fetchone()
+        if method == "GET":
+            return 200, {"form": dict(row, public_url=self.origin + "/?intake=" + row["token"]) if row else None}
+        self.write_access(True)
+        if method == "POST":
+            if not row:
+                self.insert("intake_forms", dict(
+                    id=identity(), workspace_id=self.wid, token=secrets.token_urlsafe(32),
+                    title="Оставить заявку", enabled=1, created_at=stamp(), updated_at=stamp(),
+                ))
+            return self.intake("GET", {})
+        if method == "PATCH" and row:
+            title = string(data.get("title", row["title"]), "Название формы", 120, True)
+            enabled = integer(data.get("enabled", row["enabled"]), "Доступность", 0, 1)
+            self.update("intake_forms", row["id"], dict(title=title, enabled=enabled, updated_at=stamp()))
+            return self.intake("GET", {})
+        raise DomainError(405, "Метод не поддерживается")
 
     def quotes(self, method, parts, query, data):
         if not parts:
@@ -1011,6 +1112,44 @@ class Service:
                             (parts[0], self.wid),
                         )
                     ]
+                    result["requests"] = [
+                        dict(r)
+                        for r in self.con.execute(
+                            "SELECT id,lead_id,details,budget_kopecks,due_date,comment,created_at "
+                            "FROM client_requests WHERE client_id=? AND workspace_id=? "
+                            "ORDER BY created_at DESC LIMIT 30",
+                            (parts[0], self.wid),
+                        )
+                    ]
+                    result["payments"] = [
+                        dict(r)
+                        for r in self.con.execute(
+                            "SELECT x.amount_kopecks,x.payment_date,p.name,p.currency "
+                            "FROM project_payments x JOIN projects p ON p.id=x.project_id "
+                            "WHERE p.client_id=? AND p.workspace_id=? AND x.workspace_id=? "
+                            "ORDER BY x.created_at DESC LIMIT 50",
+                            (parts[0], self.wid, self.wid),
+                        )
+                    ]
+                    result["timeline"] = [
+                        dict(r)
+                        for r in self.con.execute(
+                            "SELECT action,detail,created_at,entity_type,entity_id FROM activity "
+                            "WHERE workspace_id=? AND (entity_id=? OR "
+                            "entity_id IN (SELECT id FROM quotes WHERE client_id=? AND workspace_id=?) OR "
+                            "entity_id IN (SELECT id FROM projects WHERE client_id=? AND workspace_id=?) OR "
+                            "entity_id IN (SELECT id FROM leads WHERE client_id=? AND workspace_id=?)) "
+                            "ORDER BY created_at DESC LIMIT 30",
+                            (self.wid, parts[0], parts[0], self.wid, parts[0], self.wid, parts[0], self.wid),
+                        )
+                    ]
+                if kind == "leads":
+                    request = self.con.execute(
+                        "SELECT details,budget_kopecks,due_date,comment,created_at,client_id "
+                        "FROM client_requests WHERE lead_id=? AND workspace_id=?",
+                        (parts[0], self.wid),
+                    ).fetchone()
+                    result["request"] = dict(request) if request else None
                 return 200, {"item": result}
             conditions, params = ["workspace_id=?"], [self.wid]
             if query.get("q"):
@@ -1259,6 +1398,116 @@ class Service:
         )
         return 201, {"item": values}
 
+    def action_center(self):
+        """Small, workspace-scoped list of work that needs a human decision."""
+        today = dt.date.today().isoformat()
+        month = today[:7] + "-01"
+        items = []
+        settings = json.loads(self.con.execute(
+            "SELECT settings FROM workspaces WHERE id=?", (self.wid,)
+        ).fetchone()[0])
+        pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
+        first_stage = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
+
+        def add(kind, row, title, action, detail="", due_date="", amount=0):
+            items.append(
+                dict(
+                    kind=kind,
+                    entity_id=row["id"],
+                    title=title,
+                    detail=detail,
+                    action=action,
+                    due_date=due_date,
+                    amount_kopecks=amount,
+                    currency=row["currency"] if "currency" in row.keys() else "RUB",
+                )
+            )
+
+        for row in self.con.execute(
+            "SELECT id,name FROM leads WHERE workspace_id=? AND status=? "
+            "ORDER BY created_at DESC LIMIT 5",
+            (self.wid, first_stage),
+        ):
+            add("lead", row, "Новая заявка", "Открыть заявку", row["name"])
+        for row in self.con.execute(
+            "SELECT q.id,q.title,q.currency FROM quotes q LEFT JOIN projects p ON p.quote_id=q.id "
+            "WHERE q.workspace_id=? AND q.approval_state='approved' AND p.id IS NULL "
+            "ORDER BY q.approved_at DESC LIMIT 5",
+            (self.wid,),
+        ):
+            add("quote", row, "Смета согласована", "Создать проект", row["title"])
+        for row in self.con.execute(
+            "SELECT id,title,currency FROM quotes WHERE workspace_id=? AND approval_state='changes_requested' "
+            "ORDER BY updated_at DESC LIMIT 5",
+            (self.wid,),
+        ):
+            add("quote", row, "Клиент запросил изменения", "Открыть смету", row["title"])
+        for row in self.con.execute(
+            "SELECT id,name,due_date FROM tasks WHERE workspace_id=? AND status!='done' "
+            "AND due_date!='' AND due_date<=? ORDER BY due_date LIMIT 5",
+            (self.wid, today),
+        ):
+            add("task", row, "Срок задачи сегодня" if row["due_date"] == today else "Задача просрочена", "Открыть задачу", row["name"], row["due_date"])
+        for row in self.con.execute(
+            "SELECT p.id,p.name,p.currency,p.due_date,p.amount_kopecks-"
+            "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
+            "WHERE x.project_id=p.id AND x.workspace_id=?),0) AS remaining "
+            "FROM projects p WHERE p.workspace_id=? AND p.status NOT IN ('completed','cancelled') "
+            "AND p.due_date!='' AND p.due_date<? AND p.amount_kopecks>"
+            "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
+            "WHERE x.project_id=p.id AND x.workspace_id=?),0) "
+            "ORDER BY p.due_date LIMIT 5",
+            (self.wid, self.wid, today, self.wid),
+        ):
+            add("project", row, "Ожидается оплата", "Открыть проект", row["name"], row["due_date"], row["remaining"])
+        for row in self.con.execute(
+            "SELECT id,name,due_date,currency FROM projects WHERE workspace_id=? "
+            "AND status NOT IN ('completed','cancelled') AND due_date=? "
+            "ORDER BY updated_at DESC LIMIT 5",
+            (self.wid, today),
+        ):
+            add("project", row, "Срок проекта сегодня", "Открыть проект", row["name"], today)
+        for row in self.con.execute(
+            "SELECT id,title,currency,view_count FROM quotes WHERE workspace_id=? "
+            "AND approval_state='viewed' AND view_count>=2 "
+            "ORDER BY first_viewed_at DESC LIMIT 5",
+            (self.wid,),
+        ):
+            add("quote", row, "Клиент вернулся к смете", "Открыть смету", row["title"])
+
+        active = self.con.execute(
+            "SELECT count(*) FROM projects WHERE workspace_id=? AND status NOT IN ('completed','cancelled')",
+            (self.wid,),
+        ).fetchone()[0]
+        waiting = self.con.execute(
+            "SELECT count(*) FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' "
+            "AND p.amount_kopecks>coalesce((SELECT sum(x.amount_kopecks) "
+            "FROM project_payments x WHERE x.project_id=p.id AND x.workspace_id=?),0)",
+            (self.wid, self.wid),
+        ).fetchone()[0]
+        approved = self.con.execute(
+            "SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?",
+            (self.wid, int(dt.datetime.fromisoformat(month).replace(tzinfo=dt.timezone.utc).timestamp())),
+        ).fetchone()[0]
+        received = {
+            row["currency"]: row["amount"]
+            for row in self.con.execute(
+                "SELECT p.currency,sum(x.amount_kopecks) AS amount FROM project_payments x "
+                "JOIN projects p ON p.id=x.project_id WHERE x.workspace_id=? AND p.workspace_id=? "
+                "AND x.payment_date>=? GROUP BY p.currency",
+                (self.wid, self.wid, month),
+            )
+        }
+        return dict(
+            items=items[:8],
+            summary=dict(
+                active_projects=active,
+                waiting_payments=waiting,
+                approved_this_month=approved,
+                received_this_month=received,
+            ),
+        )
+
     def overview(self, limit=30):
         project_totals = self.con.execute(
             "SELECT currency,sum(amount_kopecks) AS revenue,sum(internal_cost) AS planned_cost,count(*) AS projects FROM projects WHERE workspace_id=? AND status!=? GROUP BY currency",
@@ -1494,7 +1743,7 @@ class Service:
                 if quote["expires_at"] and quote["expires_at"] < stamp() and quote["approval_state"] in ("sent", "viewed", "changes_requested"):
                     quote["approval_state"] = "expired"
                 recent.append(quote)
-            return 200, {**context, "overview": overview, "capabilities": capabilities, "quotes": recent}
+            return 200, {**context, "overview": overview, "actions": self.action_center(), "capabilities": capabilities, "quotes": recent}
         if kind == "assistant":
             from backend.assistant import route
 
@@ -1524,6 +1773,8 @@ class Service:
             return fn(self, method, parts, query, data)
         if kind == "workspace":
             return self.workspace(method, parts, data)
+        if kind == "intake":
+            return self.intake(method, data)
         if kind == "quotes":
             return self.quotes(method, parts, query, data)
         if kind in ENTITIES:
@@ -1683,6 +1934,7 @@ class Service:
 
 ROUTES = set(ENTITIES) | {
     "dashboard",
+    "intake",
     "assistant",
     "workspace",
     "quotes",

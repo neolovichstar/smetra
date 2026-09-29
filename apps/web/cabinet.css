@@ -52,11 +52,20 @@
 .workspace-page .empty h3{font-size:18px}
 .dashboard-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 0 25px}
 .dashboard-intro h1{font-size:clamp(34px,3.2vw,48px);line-height:1.07;letter-spacing:-.055em;font-weight:500;margin:0}
-.dashboard-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #2c2e35;border-bottom:1px solid #2c2e35;margin-bottom:25px}
+.dashboard-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #2c2e35;border-bottom:1px solid #2c2e35;margin-bottom:25px}
 .dashboard-metric{padding:17px 25px 19px 0;min-width:0}
 .dashboard-metric+.dashboard-metric{border-left:1px solid #24262d;padding-left:25px}
 .dashboard-metric span{display:block;font-size:11px;color:#8d929d;margin-bottom:9px}
 .dashboard-metric strong{display:block;font-size:clamp(24px,2.25vw,35px);font-weight:500;letter-spacing:-.05em;line-height:1.2;white-space:nowrap}
+.today-actions{margin:0 0 34px;border-bottom:1px solid #292d35}
+.today-actions .section-top{margin-bottom:8px}
+.today-actions .section-top h2{margin:7px 0 0;font-size:clamp(20px,2vw,26px);font-weight:500;letter-spacing:-.035em}
+.today-action{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 0;border-top:1px solid #252932}
+.today-action strong,.today-action small{display:block}
+.today-action strong{font-size:14px;font-weight:600;color:#e9edf3}
+.today-action small{font-size:12px;color:#9fa7b4;margin-top:4px}
+.today-action .btn{flex:none}
+.today-clear{margin:0;padding:16px 0 22px;border-top:1px solid #252932}
 .workspace-page .capture-panel{grid-template-columns:minmax(220px,.78fr) minmax(340px,1.22fr);gap:36px;padding:17px 0 25px;margin-bottom:25px;border-top:0;border-bottom:1px solid #2b2d32}
 .workspace-page .capture-heading h2{font-size:clamp(24px,2.2vw,32px);margin-top:2px}
 .workspace-page .capture-panel textarea{min-height:94px;padding:13px 16px;background:#0b0c0f;border-color:#30343d}
@@ -169,8 +178,11 @@
  .dashboard-metrics{grid-template-columns:1fr 1fr}
  .dashboard-metric{padding:16px 14px 16px 0}
  .dashboard-metric+.dashboard-metric{padding-left:14px}
- .dashboard-metric:last-child{grid-column:1/-1;border-left:0;border-top:1px solid #24262d;padding-left:0}
+ .dashboard-metric:nth-child(3){border-left:0;border-top:1px solid #24262d;padding-left:0}
+ .dashboard-metric:nth-child(4){border-top:1px solid #24262d}
  .dashboard-metric strong{font-size:25px}
+ .today-action{align-items:flex-start;flex-direction:column;gap:10px}
+ .today-action .btn{min-height:38px}
  .workspace-page .capture-panel{display:block;padding:20px 0 29px;margin-bottom:20px}
  .workspace-page .capture-heading h2{font-size:30px}
  .workspace-page .capture-heading p{max-width:none}
@@ -193,7 +205,7 @@
 /* Quiet, consistent motion across the workspace and authentication flow. */
 .workspace-page .app-view-enter{animation:workspace-content-enter .42s cubic-bezier(.2,.8,.2,1) both}
 .workspace-page .app-view-enter>.topline,.workspace-page .app-view-enter>.dashboard-intro,.workspace-page .app-view-enter>.billing-hero{animation:workspace-item-enter .45s cubic-bezier(.2,.8,.2,1) both}
-.workspace-page .app-view-enter>.panel,.workspace-page .app-view-enter>.dashboard-metrics,.workspace-page .app-view-enter>.dashboard-work,.workspace-page .app-view-enter>.capture-panel,.workspace-page .app-view-enter>.workspace-columns,.workspace-page .app-view-enter>.billing-plans{animation:workspace-item-enter .48s cubic-bezier(.2,.8,.2,1) both;animation-delay:70ms}
+.workspace-page .app-view-enter>.panel,.workspace-page .app-view-enter>.dashboard-metrics,.workspace-page .app-view-enter>.today-actions,.workspace-page .app-view-enter>.dashboard-work,.workspace-page .app-view-enter>.capture-panel,.workspace-page .app-view-enter>.workspace-columns,.workspace-page .app-view-enter>.billing-plans{animation:workspace-item-enter .48s cubic-bezier(.2,.8,.2,1) both;animation-delay:70ms}
 .workspace-page .app-view-enter .record-line{animation:workspace-item-enter .42s cubic-bezier(.2,.8,.2,1) both}
 .workspace-page .app-view-enter .record-line:nth-child(2){animation-delay:35ms}
 .workspace-page .app-view-enter .record-line:nth-child(3){animation-delay:70ms}

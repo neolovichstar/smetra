@@ -81,7 +81,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=5"
+                "SELECT version FROM schema_migrations WHERE version=6"
             ).fetchone()
             if not version:
                 raise RuntimeError(
@@ -281,7 +281,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 3_000_000 if path == "/api/ai/draft" else 65536
+        maximum = 7_000_000 if path == "/api/files" else 3_000_000 if path == "/api/ai/draft" else 1_500_000 if path == "/api/public/intake" else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":

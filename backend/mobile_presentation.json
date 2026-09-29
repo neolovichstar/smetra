@@ -3,8 +3,8 @@
   "version": 1,
   "accent": "#82B1FF",
   "home": {
-    "eyebrow": "ОБЗОР",
-    "title": "Сметры",
+    "eyebrow": "ВАШ ДЕНЬ",
+    "title": "Что важно\nсегодня.",
     "create": "Создать смету",
     "capture": "Разобрать запрос"
   },

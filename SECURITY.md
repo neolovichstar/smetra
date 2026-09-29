@@ -2,6 +2,8 @@
 
 This is an implementation status, not a security certification.
 
+Current threat model, unresolved risks and verification status: `docs/THREAT_MODEL.md`, `docs/SECURITY_TEST_STATUS.md`. Incident and credential rotation procedure: `docs/INCIDENT_RESPONSE.md`.
+
 ## In place
 
 - PostgreSQL stores production data in a private `smetra` schema with row-level security; application queries use bound parameters and ownership checks. Administrator permissions come from the database role.
@@ -14,6 +16,8 @@ This is an implementation status, not a security certification.
 - API request size, encoding and URL length are checked before opening PostgreSQL. Unknown API sections are rejected without a database connection. Duplicate payment notifications avoid unnecessary calls to YooKassa; refund notifications are matched to an existing local payment before querying the provider.
 - File and PDF exports have narrower per-account limits, and public-link downloads have a separate per-IP limit, reducing bandwidth and PDF rendering abuse without restricting ordinary API reads.
 - The pinned Python dependencies were audited after updating `pypdf` to 6.19.0, which includes fixes for resource-exhaustion issues in malformed PDFs. The audit reported no known vulnerabilities in `requirements.txt` at the time of this check.
+- The development requirements no longer override `pypdf` with an older version. Local `pip-audit` checks of both requirement sets found no known advisories on 30 September 2026; CI now runs the audit and emits a CycloneDX Python SBOM. This is a dependency check, not a complete SAST or security review.
+- Public intake submission attempts are rate-limited per IP before the token lookup, including requests with invalid tokens.
 
 ## Before a paid release
 

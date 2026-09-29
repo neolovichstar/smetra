@@ -14,6 +14,12 @@ html{background:#000;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.hero-art img{transform:none}}
 
 .public-quote{width:min(1400px,calc(100% - 44px));margin:70px auto;min-height:65vh}.public-quote .workspace-columns{display:grid;grid-template-columns:1.3fr .7fr;gap:64px}.public-quote .panel{border-top:1px solid #27272c;margin-top:25px}.public-quote .portal-heading h1{font-size:clamp(32px,4vw,62px);letter-spacing:-.05em;font-weight:500}.public-quote .quote-summary{display:flex;justify-content:space-between;border-top:1px solid #29292e;padding:25px 0}.public-quote .quote-summary strong{font-size:27px}.public-quote form .btn{margin-top:12px}.public-quote .record-line{display:flex;justify-content:space-between;gap:15px}@media(max-width:700px){.public-quote .workspace-columns{grid-template-columns:1fr;gap:0}}
+.intake-page-form{max-width:760px;border-top:1px solid #30323a;padding:32px 0 70px}
+.intake-page-form .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+.intake-page-form .field input,.intake-page-form .field textarea{background:#08090b!important;border:1px solid #363942!important;color:#f3f5f8!important}
+.intake-page-form .field input:focus,.intake-page-form .field textarea:focus{border-color:#83aee8!important;outline:none}
+.intake-page-form .btn.primary{background:#adcfff!important;color:#05070a!important;border-color:#adcfff!important}
+@media(max-width:700px){.intake-page-form .form-grid{grid-template-columns:1fr}}
 
 /* Product surfaces share the same true-black language as the landing. */
 .workspace-page,.workspace-page.dark{--bg:#000;--panel:transparent;--text:#f5f5f7;--muted:#aaaab3;--line:#27272d;background:#000;color:var(--text)}
