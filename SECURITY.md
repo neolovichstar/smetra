@@ -12,6 +12,7 @@ This is an implementation status, not a security certification.
 - External identity providers use one-time state and PKCE. Provider accounts are not merged solely because email addresses match.
 - Vercel's automatic DDoS mitigation protects the public deployment. An additional per-IP firewall rule covers `/api/` and `/health` at 300 requests per minute and returns 429 above that threshold. The rule was first published in logging mode before enforcement. Server-side limits remain in place for account actions, public links, webhooks and AI.
 - API request size, encoding and URL length are checked before opening PostgreSQL. Unknown API sections are rejected without a database connection. Duplicate payment notifications avoid unnecessary calls to YooKassa; refund notifications are matched to an existing local payment before querying the provider.
+- File and PDF exports have narrower per-account limits, and public-link downloads have a separate per-IP limit, reducing bandwidth and PDF rendering abuse without restricting ordinary API reads.
 - The pinned Python dependencies were audited after updating `pypdf` to 6.19.0, which includes fixes for resource-exhaustion issues in malformed PDFs. The audit reported no known vulnerabilities in `requirements.txt` at the time of this check.
 
 ## Before a paid release

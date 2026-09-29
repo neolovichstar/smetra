@@ -626,6 +626,8 @@ class Service:
 
     def public(self, method, path, query):
         self.h.throttle("public:" + self.h.client_address[0], 180, 60)
+        if method == "GET" and path in ("/api/public/file", "/api/public/document"):
+            self.h.throttle("public-download:" + self.h.client_address[0], 30, 60)
         data = self.h.body() if method == "POST" else {}
         token = data.get("token", query.get("token", [""])[0])
         token = string(token, "Ссылка", 100, True)
@@ -1454,6 +1456,12 @@ class Service:
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}
+        if method == "GET" and (
+            kind == "files" and rest
+            or kind == "documents" and len(rest) == 2 and rest[1] == "pdf"
+            or kind == "transfer" and rest
+        ):
+            self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
             self.write_access()
             if kind == "assistant":
