@@ -231,13 +231,13 @@ class FlowTests(unittest.TestCase):
             status, _ = self.request(
                 "/api/webhooks/yookassa",
                 "POST",
-                {"event": "refund.succeeded", "object": {"id": "refund-test-1"}},
+                {"event": "refund.succeeded", "object": {"id": "refund-test-1", "payment_id": "provider-test-1"}},
             )
             self.assertEqual(status, 200)
             status, _ = self.request(
                 "/api/webhooks/yookassa",
                 "POST",
-                {"event": "refund.succeeded", "object": {"id": "refund-test-1"}},
+                {"event": "refund.succeeded", "object": {"id": "refund-test-1", "payment_id": "provider-test-1"}},
             )
             self.assertEqual(status, 200)
             _, me = self.request("/api/me", token=token)

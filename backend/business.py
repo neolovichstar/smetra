@@ -625,10 +625,10 @@ class Service:
         self.emit("quote", row["id"], "Смета отправлена", f"v{version}")
 
     def public(self, method, path, query):
+        self.h.throttle("public:" + self.h.client_address[0], 180, 60)
         data = self.h.body() if method == "POST" else {}
         token = data.get("token", query.get("token", [""])[0])
         token = string(token, "Ссылка", 100, True)
-        self.h.throttle("public:" + self.h.client_address[0], 180, 60)
         with transaction(self.con):
             row = self.con.execute(
                 "SELECT q.*,u.name AS author FROM quotes q JOIN users u ON u.id=q.user_id WHERE q.public_token=? AND u.blocked=0 AND u.deleted_at IS NULL",

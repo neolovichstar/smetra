@@ -111,6 +111,7 @@ def route(h, con, method, path, query, origin):
             200, {"providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", "")}
         )
     if path == "/api/auth/native/exchange" and method == "POST":
+        h.throttle("native-exchange:" + h.client_address[0], 30, 300)
         data = h.body()
         verifier = str(data.get("verifier", ""))
         if not re.fullmatch(r"[A-Za-z0-9_-]{43,128}", verifier):
@@ -190,6 +191,7 @@ def route(h, con, method, path, query, origin):
         )
     if action != "callback":
         raise DomainError(404, "Страница входа не найдена")
+    h.throttle("oauth-callback:" + h.client_address[0], 30, 300)
     state = query.get("state", [""])[0]
     cookies = SimpleCookie()
     cookies.load(h.headers.get("Cookie", ""))

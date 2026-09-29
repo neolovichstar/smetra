@@ -228,6 +228,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if status == 429:
+            self.send_header("Retry-After", "60")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
@@ -243,14 +245,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def body(self):
-        try:
-            size = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            raise ApiError(400, "Некорректная длина запроса") from None
-        request_path = urllib.parse.urlsplit(self.path).path
-        maximum = 7_000_000 if request_path == "/api/files" else 3_000_000 if request_path == "/api/ai/draft" else 65536
-        if size > maximum or size < 0:
-            raise ApiError(413, "Слишком большой запрос")
+        size = getattr(self, "_body_length", None)
+        if size is None:
+            size = self.validate_body_length(urllib.parse.urlsplit(self.path).path)
         if size and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise ApiError(415, "Отправьте данные в формате JSON")
         try:
@@ -275,6 +272,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return data
         except (ValueError, UnicodeDecodeError):
             raise ApiError(400, "Некорректный JSON")
+
+    def validate_body_length(self, path):
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) > 1 or self.headers.get("Transfer-Encoding"):
+            raise ApiError(400, "Некорректная длина запроса")
+        try:
+            size = int(lengths[0]) if lengths else 0
+        except ValueError:
+            raise ApiError(400, "Некорректная длина запроса") from None
+        maximum = 7_000_000 if path == "/api/files" else 3_000_000 if path == "/api/ai/draft" else 65536
+        if size < 0 or size > maximum:
+            raise ApiError(413, "Слишком большой запрос")
+        if self.headers.get("Content-Encoding", "identity").lower() != "identity":
+            raise ApiError(415, "Сжатые запросы не поддерживаются")
+        return size
 
     def route(self):
         parsed = urllib.parse.urlsplit(self.path)
@@ -360,10 +372,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.request_id = uuid.uuid4().hex
         self.started = time.monotonic()
         try:
+            if len(self.path) > 4096:
+                raise ApiError(414, "Слишком длинный адрес запроса")
             path, query = self.route()
+            if path.startswith("/api/"):
+                self._body_length = self.validate_body_length(path)
+                root = path.split("/", 3)[2]
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "support"}:
+                    raise ApiError(404, "Не найдено")
+                if root == "webhooks" and path != "/api/webhooks/yookassa":
+                    raise ApiError(404, "Не найдено")
             if method != "GET" and path != "/api/webhooks/yookassa":
                 self.require_origin()
-            if path.startswith("/api/"):
+            if method == "GET" and path == "/api/auth/providers":
+                from backend.identity import route as identity_route
+
+                identity_route(self, None, method, path, query, ORIGIN)
+            elif path.startswith("/api/"):
                 with db() as con:
                     self.api(method, path, query, con)
             elif method == "GET":
@@ -658,6 +683,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ):
                 raise ApiError(400, "Некорректное уведомление")
             if data.get("event") == "refund.succeeded":
+                payment_id = obj.get("payment_id")
+                if not isinstance(payment_id, str) or not con.execute(
+                    "SELECT 1 FROM payments WHERE provider_id=?", (payment_id,)
+                ).fetchone():
+                    raise ApiError(404, "Платеж не найден")
+                if con.execute(
+                    "SELECT 1 FROM refunds WHERE provider_id=?", (obj["id"],)
+                ).fetchone():
+                    return self.send_json(200, {"ok": True})
                 verified = self.provider_call(
                     "/refunds/" + urllib.parse.quote(obj["id"], safe="")
                 )
@@ -668,6 +702,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ).fetchone()
                 if not payment:
                     raise ApiError(404, "Платеж не найден")
+                if payment["status"] == data["event"].split(".", 1)[1]:
+                    return self.send_json(200, {"ok": True})
                 self.apply_payment(con, payment, self.provider_payment(obj["id"]))
             else:
                 raise ApiError(400, "Неизвестное событие")

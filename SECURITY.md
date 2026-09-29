@@ -10,11 +10,15 @@ This is an implementation status, not a security certification.
 - Production pages and API responses send CSP, frame denial, MIME-sniffing protection, restrictive referrer and browser permissions policies. Vercel serves production over HTTPS with HSTS. User-provided strings are escaped before insertion into HTML.
 - Uploads are limited by size and permitted type. Capture checks MIME, extension and content, limits archive expansion, and parses its source in memory without storing it. Payment callbacks verify status and amount with the provider before changing local state; database transactions and idempotency protect payment processing.
 - External identity providers use one-time state and PKCE. Provider accounts are not merged solely because email addresses match.
+- Vercel's automatic DDoS mitigation protects the public deployment. An additional per-IP firewall rule covers `/api/` and `/health` at 300 requests per minute. The rule was first published in logging mode to check for false positives before enforcement. Server-side limits remain in place for account actions, public links, webhooks and AI.
+- API request size, encoding and URL length are checked before opening PostgreSQL. Unknown API sections are rejected without a database connection. Duplicate payment notifications avoid unnecessary calls to YooKassa; refund notifications are matched to an existing local payment before querying the provider.
+- The pinned Python dependencies were audited after updating `pypdf` to 6.19.0, which includes fixes for resource-exhaustion issues in malformed PDFs. The audit reported no known vulnerabilities in `requirements.txt` at the time of this check.
 
 ## Before a paid release
 
 - Configure and test SMTP delivery, email verification, and password reset. Until then, `ALLOW_UNVERIFIED_SIGNUP=1` allows unverified email accounts so onboarding works; this is a deliberate temporary limitation.
 - Configure and test the selected Russian identity providers and payment provider in their real sandboxes. The UI only offers identity providers with server-side credentials.
 - Exercise backup restore, dependency and penetration testing, and load/failure behavior. Review payment-history retention and any required deletion policy.
+- Review the Vercel Firewall traffic graph after each limit change. During an active attack, use the Vercel dashboard's temporary Attack Challenge Mode; it may challenge legitimate visitors, so do not leave it on indefinitely. Recheck dependency advisories regularly.
 - Rotate all secrets previously shared in chat, including database, Vercel, GitHub, OpenRouter, and bot credentials. Keep credentials only in server environment variables or ignored local secret files.
 - The private PostgreSQL schema has RLS enabled and public/client roles revoked, but the server uses a privileged connection. Tenant isolation therefore also depends on application `workspace_id` checks; commission an independent database/API isolation review before scale-up.
