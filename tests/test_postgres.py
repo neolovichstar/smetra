@@ -23,6 +23,16 @@ class PostgresQueryTests(unittest.TestCase):
             "INSERT INTO smetra.files(id) VALUES(%s) ON CONFLICT DO NOTHING",
         )
 
+    def test_monthly_quota_upsert_targets_existing_counter(self):
+        sql = (
+            "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
+            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1 RETURNING count"
+        )
+        self.assertIn(
+            "SET count=smetra.rate_limits.count+1",
+            translate(sql, "smetra", True),
+        )
+
     def test_only_smetra_schemas_allowed(self):
         for name in ("public", "smetra; DROP SCHEMA public", "smetra.other"):
             with (

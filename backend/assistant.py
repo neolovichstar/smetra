@@ -93,7 +93,7 @@ def reserve(service):
     with transaction(service.con):
         row = service.con.execute(
             "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
-            "ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count",
+            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1 RETURNING count",
             (current["key"], stamp()),
         ).fetchone()
         if row["count"] > current["limit"]:
