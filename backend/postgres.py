@@ -8,6 +8,7 @@ import hashlib
 import os
 import re
 import sqlite3
+import urllib.parse
 from decimal import Decimal
 
 import psycopg
@@ -85,11 +86,17 @@ def translate(sql, schema, parameters=False):
 class Connection:
     is_postgres = True
 
-    def __init__(self):
+    def __init__(self, runtime=False):
         self.schema = schema_name()
+        self.runtime = runtime
+        self.scoped = False
+        self.nested = False
+        database_url = os.environ["RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"]
+        loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
+        local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
         self.raw = psycopg.connect(
-            os.environ["DATABASE_URL"],
-            sslmode="require",
+            database_url,
+            sslmode="disable" if local_test else "require",
             connect_timeout=15,
             prepare_threshold=None,
             autocommit=True,
@@ -99,16 +106,60 @@ class Connection:
             hashlib.sha256(self.schema.encode()).digest()[:8], "big", signed=True
         )
 
+    def scope(self, session_hash, workspace_id):
+        """Keep untrusted request context transaction-local for the RLS policies."""
+        if not self.runtime or self.scoped or not session_hash or not workspace_id:
+            raise ValueError("Invalid runtime database scope")
+        self.raw.execute("BEGIN")
+        try:
+            self.raw.execute(
+                "SELECT set_config('smetra.session_hash',%s,true), "
+                "set_config('smetra.workspace_id',%s,true)",
+                (session_hash, workspace_id),
+            )
+            self.scoped = True
+        except Exception:
+            self.raw.execute("ROLLBACK")
+            raise
+
+    def finish(self, success):
+        if self.scoped:
+            if self.nested:
+                self.raw.execute("ROLLBACK")
+                self.scoped = self.nested = False
+                self.raw.close()
+                raise RuntimeError("Unfinished runtime write transaction")
+            self.raw.execute("COMMIT" if success else "ROLLBACK")
+            self.scoped = False
+            self.nested = False
+        self.raw.close()
+
     def execute(self, sql, parameters=None):
         command = sql.strip().upper()
         try:
+            if self.runtime and not self.scoped:
+                raise RuntimeError("Runtime query without verified session scope")
             if command == "BEGIN IMMEDIATE":
-                self.raw.execute("BEGIN")
+                if self.runtime:
+                    if self.nested:
+                        raise RuntimeError("Nested runtime write transaction")
+                    self.raw.execute("SAVEPOINT smetra_write")
+                    self.nested = True
+                else:
+                    self.raw.execute("BEGIN")
                 # Preserve SQLite's atomic read/check/write semantics across instances.
                 self.raw.execute("SET LOCAL lock_timeout='15s'")
                 return self.raw.execute(
                     "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
                 )
+            if self.runtime and command in ("COMMIT", "ROLLBACK"):
+                if not self.nested:
+                    raise RuntimeError("Runtime transaction boundary is managed by the request")
+                if command == "ROLLBACK":
+                    self.raw.execute("ROLLBACK TO SAVEPOINT smetra_write")
+                result = self.raw.execute("RELEASE SAVEPOINT smetra_write")
+                self.nested = False
+                return result
             pragma = re.fullmatch(r"PRAGMA table_info\((\w+)\)", sql.strip(), re.I)
             if pragma:
                 return self.raw.execute(
@@ -136,6 +187,9 @@ class Connection:
             self.raw.commit()
 
     def close(self):
+        if self.scoped:
+            self.raw.execute("ROLLBACK")
+            self.scoped = False
         self.raw.close()
 
 

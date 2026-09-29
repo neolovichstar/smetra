@@ -2,6 +2,7 @@
 
 import datetime as dt
 import json
+import os
 import re
 import secrets
 import time
@@ -323,6 +324,8 @@ PROJECT_STATUSES = ["planned", "in_progress", "waiting", "completed", "cancelled
 class Service:
     def __init__(self, handler, con, origin):
         self.h, self.con, self.origin = handler, con, origin
+        self.global_con = con
+        self.runtime_connection = None
         self.user = None
         self.wid = None
         self.role = None
@@ -557,7 +560,7 @@ class Service:
 
     def create_quote(self, data):
         owner = self.con.execute(
-            "SELECT u.* FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
+            "SELECT u.id,u.entitlement_until FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
             (self.wid,),
         ).fetchone()
         count = self.con.execute(
@@ -1589,7 +1592,7 @@ class Service:
                 )
             if method == "POST":
                 email = string(data.get("email", ""), "Почта", 254, True).lower()
-                member = self.con.execute(
+                member = self.global_con.execute(
                     "SELECT id FROM users WHERE email=? AND deleted_at IS NULL AND blocked=0",
                     (email,),
                 ).fetchone()
@@ -1702,6 +1705,35 @@ class Service:
         if not member:
             raise DomainError(404, "Рабочее пространство не найдено")
         self.role = member["role"]
+        if getattr(self.con, "is_postgres", False):
+            if not os.getenv("RUNTIME_DATABASE_URL"):
+                if os.getenv("VERCEL"):
+                    raise DomainError(503, "Безопасное подключение к рабочему пространству не настроено")
+            else:
+                try:
+                    from backend.postgres import Connection
+                except ModuleNotFoundError:
+                    from postgres import Connection
+                runtime = Connection(runtime=True)
+                try:
+                    runtime.scope(self.h.session_token_hash, self.wid)
+                except Exception:
+                    runtime.close()
+                    raise
+                self.con = self.runtime_connection = runtime
+        try:
+            result = self.private(method, path, query)
+        except Exception:
+            if self.runtime_connection:
+                self.runtime_connection.finish(False)
+            raise
+        if self.runtime_connection and path == "/api/assistant/stream":
+            return result  # ChatStream owns this connection until the stream ends.
+        if self.runtime_connection:
+            self.runtime_connection.finish(True)
+        return result
+
+    def private(self, method, path, query):
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}

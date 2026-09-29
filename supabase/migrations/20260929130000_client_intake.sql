@@ -1,4 +1,6 @@
 BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
 CREATE TABLE IF NOT EXISTS smetra.intake_forms (
  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL UNIQUE REFERENCES smetra.workspaces(id) ON DELETE CASCADE,
  token TEXT NOT NULL UNIQUE, title TEXT NOT NULL DEFAULT 'Оставить заявку',

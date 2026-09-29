@@ -1,8 +1,10 @@
-/* Requires an isolated Chrome with --remote-debugging-port=9223 and a disposable server on 8082. */
+/* Requires an isolated Chrome and a disposable server; ports are configurable for PostgreSQL QA. */
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 (async () => {
-  const tabs = await (await fetch('http://127.0.0.1:9223/json')).json();
+  const site = 'http://localhost:' + (process.env.SMETRA_TEST_PORT || '8082');
+  const debuggerUrl = 'http://127.0.0.1:' + (process.env.SMETRA_CDP_PORT || '9223') + '/json';
+  const tabs = await (await fetch(debuggerUrl)).json();
   const ws = new WebSocket(tabs.find(t => t.type === 'page').webSocketDebuggerUrl);
   await new Promise(resolve => ws.addEventListener('open', resolve, {once:true}));
   let seq=0;const pending=new Map(), errors=[];
@@ -15,10 +17,10 @@ const assert = require('node:assert/strict');
   const fill=(selector,value)=>evaluate(`{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}`);
   const shot=async name=>{fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/'+name+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'))};
   await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
-  await send('Network.deleteCookies',{name:'session',url:'http://localhost:8082'});
+  await send('Network.deleteCookies',{name:'session',url:site});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
   await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
-  await send('Page.navigate',{url:'http://localhost:8082/app?register=1'});
+  await send('Page.navigate',{url:site+'/app?register=1'});
   await until("document.querySelector('#auth')&&!document.querySelector('#auth').classList.contains('hidden')");
   await fill('#name','Проверка продукта');await fill('#email','browser-'+Date.now()+'@test.invalid');await fill('#password','long secure password');await click('#auth-submit');
   await until("document.querySelector('[data-work=quote-new]')");
@@ -32,9 +34,9 @@ const assert = require('node:assert/strict');
   await shot('estimate-editor');await click('#estimate-editor [type=submit]');await until("document.querySelector('#quote-controls')");
   await click('#quote-controls [data-work=publish]');await until("document.querySelector('#workspace-dialog')?.open");await click('#workspace-dialog [type=submit]');await until("!document.querySelector('#workspace-dialog')?.open && document.querySelector('#quote-controls [data-work=link]')");
   const quote=await evaluate("api('/quotes').then(r=>r.quotes[0])");
-  await send('Page.navigate',{url:quote.public_url.replace('localhost:8082','localhost:8082')});await until("document.querySelector('#client-response')");
+  await send('Page.navigate',{url:quote.public_url});await until("document.querySelector('#client-response')");
   await wait(400);await shot('client-portal');await fill('#client-response [name=name]','Тестовый клиент');await click('#client-response [type=submit]');await until("document.querySelector('#public-quote').textContent.includes('Условия согласованы')");
-  await send('Page.navigate',{url:'http://localhost:8082/app#quotes'});await until("document.querySelector('[data-work=quote]')");await click('[data-work=quote]');await until("document.querySelector('#quote-controls [data-work=project]')");await click('#quote-controls [data-work=project]');await until("document.querySelector('#project-receipt')");
+  await send('Page.navigate',{url:site+'/app#quotes'});await until("document.querySelector('[data-work=quote]')");await click('[data-work=quote]');await until("document.querySelector('#quote-controls [data-work=project]')");await click('#quote-controls [data-work=project]');await until("document.querySelector('#project-receipt')");
   await click('#project-receipt');await until("document.querySelector('#workspace-dialog')?.open");await fill('#f-amount_kopecks','1000');await click('#workspace-dialog [type=submit]');await until("!document.querySelector('#workspace-dialog')?.open");
   assert.match(await evaluate("document.querySelector('#content').textContent"),/1.?000/);
   await shot('project-payment');
@@ -48,6 +50,6 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
   await fill('#f-name','Заявка с сайта');await fill('#f-email','request@example.ru');await fill('#f-details','Нужен сайт для мастерской');await fill('#f-budget','25000');await click('#client-intake [type=submit]');
   await until("document.querySelector('#public-quote').textContent.includes('ЗАЯВКА ОТПРАВЛЕНА')");await shot('client-intake-mobile');
-  await send('Page.navigate',{url:'http://localhost:8082/app#leads'});await until("document.querySelector('#records')?.textContent.includes('Заявка с сайта')");
+  await send('Page.navigate',{url:site+'/app#leads'});await until("document.querySelector('#records')?.textContent.includes('Заявка с сайта')");
   assert.deepEqual(errors,[]);console.log('PASS: registration → client → quote → approval → project → payment → PDF; public intake → lead; desktop/mobile layout; no browser exceptions');ws.close();
 })().catch(err=>{console.error(err);process.exit(1)});

@@ -8,8 +8,8 @@
 | ASVS L2 | NOT VERIFIED | Формальная проверка требований по пунктам не проведена |
 | Authentication | PARTIAL | Unit/API тесты сессий и cookie; реальные OAuth/SMTP/MFA не проверены |
 | Authorization | PARTIAL | RBAC и workspace-тесты; полной матрицы endpoint × role × tenant нет |
-| RLS | NOT VERIFIED | RLS enabled и grants/revokes проверены схемой; серверная роль bypasses RLS |
-| Cross-tenant isolation | PARTIAL | API-тесты для смет, файлов, intake и viewer; все ресурсы не покрыты |
+| RLS | PARTIAL | Рабочие запросы используют отдельную роль без BYPASSRLS; локальный тест PostgreSQL проверил пустую область без сессии и запрет чужих строк. Продакшен-подключение роли и API smoke прошли; полная матрица таблиц не проверена |
+| Cross-tenant isolation | PARTIAL | API-тесты и локальный PostgreSQL-тест для чужих клиентов и пользователей прошли; все ресурсы и сценарии приглашений не покрыты |
 | Public links | PARTIAL | Тесты публикации, private file, отключения intake; полный аудит отзывов ссылок не выполнен |
 | CSRF | PASS (cookie writes) | `test_browser_cookie_session_requires_same_origin_for_writes` |
 | XSS | PARTIAL | Экранирование UI и CSP есть; DAST и покрытие всех DOM sink не выполнены |
@@ -21,8 +21,8 @@
 | AI security | PARTIAL | Лимиты и серверная авторизация инструментов; полный adversarial тест не проведён |
 | Rate limits | PARTIAL | Локальные тесты, PostgreSQL atomic counter; staging load test не проведён |
 | Secret rotation | NOT VERIFIED | Ключи из чата должны быть перевыпущены владельцем |
-| Backups/restore | NOT VERIFIED | Восстановление не репетировалось |
+| Backups/restore | PARTIAL | Перед миграциями 6–7 сделан зашифрованный локальный снимок production БД; восстановление в отдельную временную PostgreSQL БД проверено. Регулярное резервирование и восстановление в боевой среде не проверены |
 | SCA/SBOM | PARTIAL | Локально `pip-audit 2.10.1` не нашёл известных уязвимостей в `requirements-dev.txt`; CycloneDX JSON создан (12 компонентов). CI workflow добавлен, но удалённый run ещё не проверен |
 | SAST | NOT VERIFIED | Ruff проверяет качество кода, но не заменяет security SAST |
 
-Production security gate остаётся открытым. Локальная сборка и E2E не заменяют тест реальных платёжных/OAuth интеграций или независимую проверку изоляции арендаторов.
+Миграции 6–7 применены, production deployment `dpl_96wgPh43MjnMSjztYSNcCTniuTsx` опубликован. Одноразовый аккаунт прошёл регистрацию, чтение кабинета через ограниченную роль и удаление. Production security gate остаётся открытым: раскрытые ранее ключи ещё требуют ротации, а реальная платёжная/OAuth интеграция, нагрузка и независимая проверка безопасности не подтверждены.

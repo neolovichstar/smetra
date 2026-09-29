@@ -81,7 +81,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=6"
+                "SELECT version FROM schema_migrations WHERE version=7"
             ).fetchone()
             if not version:
                 raise RuntimeError(
@@ -302,9 +302,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     token = part.strip()[8:]
         if not token:
             raise ApiError(401, "Войдите в аккаунт")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
         row = con.execute(
             "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.deleted_at IS NULL",
-            (hashlib.sha256(token.encode()).hexdigest(), now()),
+            (token_hash, now()),
         ).fetchone()
         if not row:
             raise ApiError(401, "Сессия истекла")
@@ -312,6 +313,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise ApiError(403, "Аккаунт заблокирован")
         if admin and row["role"] != "admin":
             raise ApiError(403, "Недостаточно прав")
+        self.session_token_hash = token_hash
         return row
 
     def throttle(self, key, limit=15, window=60):

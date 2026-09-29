@@ -552,6 +552,9 @@ class ChatStream:
                 send("error", {"error": "Ассистент временно недоступен. Попробуйте ещё раз.", "quota": public_quota(self.service)})
             except (BrokenPipeError, ConnectionResetError):
                 pass
+        finally:
+            if self.service.runtime_connection:
+                self.service.runtime_connection.finish(True)
 
 
 def route(service, method, parts, data):
