@@ -28,6 +28,8 @@ public class MainActivity extends Activity {
     private String token,uploadProject,pendingCaptureText;
     private android.net.Uri pendingCaptureFile;
     private JSONObject me;
+    private MobilePresentation presentation;
+    private long lastPresentationCheck;
     private int pageVersion=0;
     private String currentPage="login",parentPage="home";
     private boolean publicView=false;
@@ -39,17 +41,27 @@ public class MainActivity extends Activity {
         ApiException(int status,String message){super(message);this.status=status;}
     }
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);ui=new SmetraUi(this);
+        super.onCreate(state);presentation=MobilePresentation.cached(this);presentation.apply(this);ui=new SmetraUi(this);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         vault=new TokenVault(this);token=vault.read();
         String legacy=getPreferences(MODE_PRIVATE).getString("token",null);
         if(token==null&&legacy!=null){try{vault.save(legacy);token=legacy;}catch(Exception ignored){token=null;}}
         getPreferences(MODE_PRIVATE).edit().remove("token").apply();
         if(!openLink(getIntent())){if(token==null)login(false);else{page("С возвращением","home",false);loading(content);refresh();}}
+        refreshPresentation();
+    }
+    @Override protected void onResume(){super.onResume();if(presentation!=null)refreshPresentation();}
+    private void refreshPresentation(){
+        long moment=System.currentTimeMillis();if(moment-lastPresentationCheck<300000)return;lastPresentationCheck=moment;
+        worker.execute(()->{try{MobilePresentation next=MobilePresentation.fetch(BuildConfig.API_BASE_URL);runOnUiThread(()->{
+            if(isFinishing()||next.version<presentation.version||next.raw.equals(presentation.raw))return;
+            presentation=next;next.apply(this);
+            if(currentPage.equals("login"))login(false);else if(currentPage.equals("home"))home();
+        });}catch(Exception ignored){/* Keep the last native presentation while offline. */}});
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
-    private boolean openLink(Intent intent){if(intent==null)return false;if(Intent.ACTION_SEND.equals(intent.getAction())){CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){String quoteToken=link.getQueryParameter("token");startActivity(new Intent(this,WebActivity.class).putExtra("web_route","/?quote="+android.net.Uri.encode(quoteToken)).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));finish();return true;}return false;}
-    private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else{startActivity(new Intent(this,WebActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));finish();}}
+    private boolean openLink(Intent intent){if(intent==null)return false;if(Intent.ACTION_SEND.equals(intent.getAction())){CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
+    private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
     @Override public void onDestroy(){worker.shutdownNow();super.onDestroy();}
     private JSONObject request(String path,String method,JSONObject body)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api"+path).openConnection();
@@ -153,7 +165,7 @@ public class MainActivity extends Activity {
         ui.space(content,18);TextView note=ui.label("От первого расчёта до завершённого проекта",11,MUTED,false);note.setGravity(Gravity.CENTER);content.addView(note);
     }
     private void login(boolean ignored){
-        publicView=false;page("Вход","login",false);content.addView(ui.art("unfold",190));ui.space(content,16);content.addView(ui.label("Ваша работа.\nВсё в порядке.",34,INK,true));text("Сметы, клиенты и согласования.\nОдин аккаунт на всех устройствах.");ui.space(content,22);
+        publicView=false;page("Вход","login",false);content.addView(ui.art("unfold",190));ui.space(content,16);content.addView(ui.label(presentation.loginTitle,34,INK,true));text(presentation.loginSubtitle);ui.space(content,22);
         LinearLayout methods=ui.column();content.addView(methods);
         addButton(methods,"Войти по почте",true,v->emailLogin(false));
         call("/auth/providers","GET",null,result->{
@@ -336,9 +348,9 @@ public class MainActivity extends Activity {
     private void refresh(){call("/me","GET",null,result->{me=result.optJSONObject("user");home();});}
     private void home(){
         publicView=false;page("Сметы","home",false);
-        content.addView(ui.label("ОБЗОР",10,MUTED,true));ui.space(content,8);
-        content.addView(ui.label("Сметры",36,INK,true));ui.space(content,14);
-        button("Создать смету",true,v->create());button("Разобрать запрос",false,v->capture());
+        content.addView(ui.label(presentation.homeEyebrow,10,MUTED,true));ui.space(content,8);
+        content.addView(ui.label(presentation.homeTitle,36,INK,true));ui.space(content,14);
+        button(presentation.createLabel,true,v->create());button(presentation.captureLabel,false,v->capture());
 
         LinearLayout summary=ui.card(content),metrics=ui.row();summary.addView(metrics);
         TextView total=homeMetric(metrics,"Всего"),waiting=homeMetric(metrics,"Ждут ответа"),approved=homeMetric(metrics,"Согласовано");

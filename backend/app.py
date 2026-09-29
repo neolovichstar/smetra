@@ -378,9 +378,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "support"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "support", "mobile"}:
                     raise ApiError(404, "Не найдено")
                 if root == "webhooks" and path != "/api/webhooks/yookassa":
+                    raise ApiError(404, "Не найдено")
+                if root == "mobile" and path != "/api/mobile/presentation":
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path != "/api/webhooks/yookassa":
                 self.require_origin()
@@ -388,6 +390,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 from backend.identity import route as identity_route
 
                 identity_route(self, None, method, path, query, ORIGIN)
+            elif method == "GET" and path == "/api/mobile/presentation":
+                presentation = json.loads((ROOT / "backend" / "mobile_presentation.json").read_text(encoding="utf-8"))
+                self.send_json(200, presentation)
             elif path.startswith("/api/"):
                 with db() as con:
                     self.api(method, path, query, con)
@@ -504,7 +509,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
             or path == "/api/auth/native/exchange"
-            or path == "/api/auth/native/web-session"
         ):
             from backend.identity import route
 

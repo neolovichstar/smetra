@@ -34,7 +34,6 @@ function proposalFields(args){return Object.entries(args).filter(([key])=>!['id'
 window.SmetraIdentityLink=async function(){
  const host=document.querySelector('#identity-link');
  if(!host)return;
- if(navigator.userAgent.includes('SmetraAndroid/')){host.innerHTML='<a class="btn small" href="/app?external=1#settings">Привязать способ входа на сайте</a>';return}
  try{
   const data=await api('/auth/providers');
   for(const provider of data.providers){

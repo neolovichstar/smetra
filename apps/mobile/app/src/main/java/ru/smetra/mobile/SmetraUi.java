@@ -15,7 +15,8 @@ import android.widget.*;
 final class SmetraUi {
     static final int BG=Color.BLACK, SURFACE=Color.rgb(8,8,9), RAISED=Color.rgb(17,17,20);
     static final int LINE=Color.rgb(37,37,42), INK=Color.rgb(247,247,248), MUTED=Color.rgb(163,163,173);
-    static final int BLUE=Color.rgb(130,177,255), GREEN=Color.rgb(137,224,191), AMBER=Color.rgb(241,203,140), RED=Color.rgb(255,158,167);
+    static int BLUE=Color.rgb(130,177,255);
+    static final int GREEN=Color.rgb(137,224,191), AMBER=Color.rgb(241,203,140), RED=Color.rgb(255,158,167);
     static final PathInterpolator EASE=new PathInterpolator(.2f,.8f,.2f,1f);
     final Activity activity;
     final Typeface regular, medium, bold;
