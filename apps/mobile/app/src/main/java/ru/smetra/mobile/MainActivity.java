@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private SmetraUi ui;
     private TokenVault vault;
-    private String token,uploadProject,uploadConstruction,uploadDefect,pendingCaptureText;
+    private String token,uploadProject,uploadConstruction,uploadDefect,uploadLog,pendingCaptureText;
     private android.net.Uri pendingCaptureFile;
     private JSONObject me;
     private MobilePresentation presentation;
@@ -601,7 +601,19 @@ public class MainActivity extends Activity {
                 content.addView(row);ui.tap(row,()->constructionDefectDetail(id,defect));
             }
             addButton(content,"Зафиксировать дефект",false,v->constructionDefectNew(id,zones));
-            addButton(content,"Прикрепить фото или файл",false,v->{uploadConstruction=id;uploadProject=null;uploadDefect=null;Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf","text/plain"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
+            ui.section(content,"Журнал работ",null);
+            JSONArray logs=result.optJSONArray("daily_logs");
+            if(logs!=null)for(int i=0;i<logs.length();i++){
+                JSONObject log=logs.optJSONObject(i);if(log==null)continue;
+                LinearLayout row=ui.row();row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(0,dp(12),0,dp(12));
+                LinearLayout labels=ui.column();labels.addView(ui.label(log.optString("work_description"),14,INK,true));ui.space(labels,5);
+                String meta=log.optString("work_date")+(log.optInt("worker_count")>0?" · "+log.optInt("worker_count")+" чел.":"");
+                labels.addView(ui.label(meta,11,MUTED,false));row.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+                row.addView(ui.new Icon("chevron",BLUE),new LinearLayout.LayoutParams(dp(18),dp(18)));
+                content.addView(row);ui.tap(row,()->constructionLogDetail(id,log));
+            }
+            addButton(content,"Записать выполненную работу",false,v->constructionLogNew(id,zones,quantities));
+            addButton(content,"Прикрепить фото или файл",false,v->{uploadConstruction=id;uploadProject=null;uploadDefect=null;uploadLog=null;Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf","text/plain"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
             ui.space(content,16);
             if(object.optString("quote_id").isEmpty()&&quantities!=null&&quantities.length()>0){
                 button("Создать смету",true,v->ui.sheet("Создать смету?","Ведомость станет черновиком сметы. Проверьте объёмы и цены.","Создать",false,()->call("/construction/objects/"+id+"/quote","POST",new JSONObject(),answer->openQuote(answer.optJSONObject("quote")))));
@@ -718,6 +730,60 @@ public class MainActivity extends Activity {
             catch(Exception error){message("Проверьте норму, единицу и цену");}
         });
     }
+    private void constructionLogNew(String id,JSONArray zones,JSONArray quantities){constructionLogForm(id,zones,quantities,null);}
+    private void constructionLogForm(String id,JSONArray zones,JSONArray quantities,JSONObject previous){
+        boolean editing=previous!=null;
+        page(editing?"Запись журнала":"Журнал работ",editing?"construction-log-edit":"construction-log-new",true);
+        content.addView(ui.label(editing?"Исправить запись":"Что сделано за день?",25,INK,true));
+        EditText date=field("Дата · ГГГГ-ММ-ДД",android.text.InputType.TYPE_CLASS_DATETIME|android.text.InputType.TYPE_DATETIME_VARIATION_DATE);
+        date.setText(editing?previous.optString("work_date"):new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new java.util.Date()));
+        EditText description=field("Выполненная работа",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        if(editing)description.setText(previous.optString("work_description"));
+        EditText workers=field("Исполнители или бригада",android.text.InputType.TYPE_CLASS_TEXT);
+        if(editing)workers.setText(previous.optString("workers"));
+        EditText workerCount=field("Количество человек",android.text.InputType.TYPE_CLASS_NUMBER);
+        workerCount.setText(editing?previous.optString("worker_count"):"0");
+        ui.section(content,"Помещение",null);
+        java.util.ArrayList<String> rooms=new java.util.ArrayList<>();rooms.add("Весь объект");
+        int roomSelection=0;if(zones!=null)for(int i=0;i<zones.length();i++){JSONObject zone=zones.optJSONObject(i);if(zone==null)continue;rooms.add(zone.optString("name"));if(editing&&zone.optString("id").equals(previous.optString("zone_id")))roomSelection=rooms.size()-1;}
+        Spinner room=new Spinner(this);room.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,rooms));room.setSelection(roomSelection);content.addView(room);
+        ui.section(content,"Позиция ведомости",null);
+        java.util.ArrayList<String> names=new java.util.ArrayList<>();java.util.ArrayList<JSONObject> works=new java.util.ArrayList<>();names.add("Без привязки");
+        int workSelection=0;if(quantities!=null)for(int i=0;i<quantities.length();i++){JSONObject item=quantities.optJSONObject(i);if(item==null||!"work".equals(item.optString("kind")))continue;works.add(item);names.add(item.optString("title")+" · "+item.optString("unit"));if(editing&&item.optString("id").equals(previous.optString("quantity_id")))workSelection=works.size();}
+        Spinner work=new Spinner(this);work.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));work.setSelection(workSelection);content.addView(work);
+        EditText volume=field("Выполненный объём за день",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        volume.setText(editing?previous.optString("completed_quantity"):"0");
+        String[] units={"Без объёма","м²","м³","м","м.п.","шт.","компл.","кг","т","л","ч","чел.-ч","маш.-ч"};
+        Spinner unit=new Spinner(this);unit.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,units));
+        if(editing)for(int i=1;i<units.length;i++)if(units[i].equals(previous.optString("unit")))unit.setSelection(i);
+        content.addView(unit);
+        EditText comment=field("Комментарий для следующей смены",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        if(editing)comment.setText(previous.optString("comment"));
+        button(editing?"Сохранить запись":"Записать день",true,v->{
+            if(description.getText().toString().trim().isEmpty()){description.setError("Опишите выполненную работу");return;}
+            try{JSONObject body=new JSONObject().put("work_date",date.getText().toString().trim()).put("work_description",description.getText().toString().trim())
+                    .put("workers",workers.getText().toString().trim()).put("worker_count",workerCount.getText().toString().trim())
+                    .put("completed_quantity",volume.getText().toString().trim()).put("unit",unit.getSelectedItemPosition()==0?"":units[unit.getSelectedItemPosition()])
+                    .put("comment",comment.getText().toString().trim()).put("zone_id",room.getSelectedItemPosition()==0?"":zones.optJSONObject(room.getSelectedItemPosition()-1).optString("id"))
+                    .put("quantity_id",work.getSelectedItemPosition()==0?"":works.get(work.getSelectedItemPosition()-1).optString("id"));
+                call("/construction/objects/"+id+"/logs"+(editing?"/"+previous.optString("id"):""),editing?"PATCH":"POST",body,result->constructionDetail(id));
+            }catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private void constructionLogDetail(String id,JSONObject log){
+        if(log==null){constructionDetail(id);return;}
+        page("Журнал работ","construction-log-detail",true);
+        content.addView(ui.label(log.optString("work_description"),25,INK,true));
+        text(log.optString("work_date"));
+        if(!log.optString("workers").isEmpty()||log.optInt("worker_count")>0)text("Исполнители · "+log.optString("workers")+(log.optInt("worker_count")>0?" · "+log.optInt("worker_count")+" чел.":""));
+        if(log.optDouble("completed_quantity")>0)text("Выполнено · "+log.optString("completed_quantity")+" "+log.optString("unit"));
+        if(!log.optString("comment").isEmpty())text(log.optString("comment"));
+        JSONArray photos=log.optJSONArray("photo_file_ids");
+        if(photos!=null&&photos.length()>0){ui.section(content,"Фотографии",null);for(int i=0;i<photos.length();i++)constructionDefectPhoto(photos.optString(i));}
+        addButton(content,"Прикрепить фото",false,v->{uploadConstruction=id;uploadProject=null;uploadDefect=null;uploadLog=log.optString("id");Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("image/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
+        addButton(content,"Изменить запись",false,v->call("/construction/objects/"+id,"GET",null,result->constructionLogForm(id,result.optJSONArray("zones"),result.optJSONArray("quantities"),log)));
+        addButton(content,"Удалить запись",false,v->ui.sheet("Удалить запись?","Связанный фактический объём тоже будет удалён.","Удалить",false,()->call("/construction/objects/"+id+"/logs/"+log.optString("id"),"DELETE",null,result->constructionDetail(id))));
+    }
     private void constructionDefectNew(String id,JSONArray zones){
         page("Новый дефект","construction-defect-new",true);
         content.addView(ui.label("Что обнаружено?",25,INK,true));
@@ -749,7 +815,7 @@ public class MainActivity extends Activity {
         if(!"resolved".equals(status))addButton(content,"Отметить устранённым",false,v->constructionDefectStatus(id,defect,"resolved"));
         if("resolved".equals(status))addButton(content,"Открыть снова",false,v->constructionDefectStatus(id,defect,"open"));
         if(defect.optString("photo_file_id").isEmpty())addButton(content,"Прикрепить фото",false,v->{
-            uploadConstruction=id;uploadProject=null;uploadDefect=defect.optString("id");
+            uploadConstruction=id;uploadProject=null;uploadDefect=defect.optString("id");uploadLog=null;
             Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("image/*");
             picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg"});
             picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);
@@ -813,7 +879,7 @@ public class MainActivity extends Activity {
         parentPage="projects";page("Заказ","project",true);loading(content);call("/projects/"+id,"GET",null,r->{clearLoading(content);JSONObject p=r.optJSONObject("item");if(p==null)return;content.addView(ui.badge(status(p.optString("status")),statusColor(p.optString("status"))));ui.space(content,18);content.addView(ui.label(p.optString("name"),28,INK,true));
             String currency=p.optString("currency","RUB");long cost=p.optLong("amount_kopecks"),paid=p.optLong("paid");LinearLayout card=ui.card(content);card.setBackground(ui.gradient(24));card.addView(ui.label("Стоимость заказа",12,BLUE,false));ui.space(card,12);card.addView(ui.label(exactMoney(cost,currency),32,INK,true));ui.space(card,18);
             FrameLayout track=new FrameLayout(this);track.setBackground(ui.shape(0xff364254,4,0));View fill=new View(this);fill.setBackground(ui.shape(GREEN,4,0));track.addView(fill,new FrameLayout.LayoutParams(0,-1));card.addView(track,new LinearLayout.LayoutParams(-1,dp(5)));track.post(()->{fill.getLayoutParams().width=(int)(track.getWidth()*Math.min(1,Math.max(0,cost>0?(double)paid/cost:0)));fill.requestLayout();});ui.space(card,12);card.addView(ui.label("Получено "+exactMoney(paid,currency),13,GREEN,true));ui.space(card,5);card.addView(ui.label("Осталось "+exactMoney(Math.max(0,cost-paid),currency),12,MUTED,false));
-            button("Записать оплату",true,v->receipt(id,currency));button("Прикрепить файл",false,v->{uploadProject=id;uploadConstruction=null;uploadDefect=null;Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf","text/plain"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
+            button("Записать оплату",true,v->receipt(id,currency));button("Прикрепить файл",false,v->{uploadProject=id;uploadConstruction=null;uploadDefect=null;uploadLog=null;Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf","text/plain"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
             ui.section(content,"Этапы работы",null);JSONArray stages=p.optJSONArray("stages");if(stages==null||stages.length()==0)text("Этапы ещё не добавлены.");else for(int i=0;i<stages.length();i++){JSONObject stage=stages.optJSONObject(i);if(stage==null)continue;LinearLayout line=ui.card(content);line.addView(ui.label(String.format(Locale.ROOT,"%02d",i+1)+"   "+stage.optString("name"),16,INK,true));ui.space(line,8);line.addView(ui.badge(status(stage.optString("status")),statusColor(stage.optString("status"))));}
             if(!p.optString("status").equals("completed")){ui.space(content,18);button("Завершить заказ",false,v->ui.sheet("Работа завершена?","Заказ получит статус «Завершён». Его смета и история оплат сохранятся.","Завершить заказ",false,()->{try{call("/projects/"+id,"PATCH",new JSONObject().put("revision",p.optInt("revision")).put("status","completed"),res->project(id));}catch(Exception error){message(error.getMessage());}}));}
         });
@@ -830,8 +896,8 @@ public class MainActivity extends Activity {
     }
     private void menu(String icon,String title,String subtitle,Runnable click){LinearLayout card=ui.card(content),row=ui.row();row.addView(ui.new Icon(icon,BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));ui.gap(row,16);LinearLayout copy=ui.column();copy.addView(ui.label(title,15,INK,true));ui.space(copy,5);copy.addView(ui.label(subtitle,11,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));row.addView(ui.new Icon("chevron",MUTED),new LinearLayout.LayoutParams(dp(18),dp(18)));card.addView(row);ui.tap(card,click);}
     private void support(){parentPage="settings";page("Мы на связи","support",true);content.addView(ui.label("Чем можем\nпомочь?",32,INK,true));text("Опишите, что произошло или чего не хватает. Ваше сообщение попадёт в поддержку Сметры.");EditText input=field("Ваше сообщение",1);ui.space(content,16);button("Отправить сообщение",true,v->{if(input.getText().toString().trim().isEmpty()){input.setError("Напишите сообщение");return;}try{call("/support","POST",new JSONObject().put("message",input.getText().toString()),r->{settings();message("Сообщение отправлено");});}catch(Exception error){message(error.getMessage());}});}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect;uploadProject=null;uploadConstruction=null;uploadDefect=null;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect,logId=uploadLog;uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(logId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/logs/"+logId+"/photos","POST",new JSONObject().put("file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
     private void publicQuote(String publicToken){publicView=true;page("Предложение","public",false);loading(content);call("/public/quote?token="+android.net.Uri.encode(publicToken),"GET",null,r->{clearLoading(content);JSONObject q=r.optJSONObject("quote");if(q==null)return;content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,20);content.addView(ui.label(q.optString("title"),30,INK,true));text(q.optString("description"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость предложения",13,BLUE,false));ui.space(price,14);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));ui.space(content,16);if(q.optString("status").equals("sent"))button("Согласовать предложение",true,v->ui.sheet("Согласовать условия?","Вы принимаете состав работ и стоимость этой версии предложения.","Да, согласовать",false,()->{try{call("/public/accept","POST",new JSONObject().put("token",publicToken).put("version",q.optInt("published_version")),result->{publicQuote(publicToken);message("Предложение согласовано");});}catch(Exception error){message(error.getMessage());}}));});}
-    private void goBack(){if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
+    private void goBack(){if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-log-new")||currentPage.equals("construction-log-edit")||currentPage.equals("construction-log-detail")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
     @Override public void onBackPressed(){if(currentPage.equals("home")||currentPage.equals("login"))super.onBackPressed();else goBack();}
 }

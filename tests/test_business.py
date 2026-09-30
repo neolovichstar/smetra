@@ -78,6 +78,59 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_daily_log_tracks_work_photo_and_fact_atomically(self):
+        owner, _ = self.account('log-owner')
+        outsider, _ = self.account('log-outsider')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Ремонт'}, owner)
+        obj = created['object']['id']
+        _, room = self.call(f'/construction/objects/{obj}/zones', 'POST', {
+            'name': 'Зал', 'length': '5', 'width': '4',
+        }, owner)
+        zone_id = room['zone']['id']
+        _, work = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone_id, 'title': 'Штукатурка', 'formula': 'area',
+            'unit': 'м²', 'unit_price': 5000,
+        }, owner)
+        quantity_id = work['quantity']['id']
+        from PIL import Image
+
+        image = io.BytesIO()
+        Image.new('RGB', (4, 4), (30, 40, 50)).save(image, format='PNG')
+        _, uploaded = self.call('/files', 'POST', {
+            'construction_id': obj, 'name': 'работа.png',
+            'content': base64.b64encode(image.getvalue()).decode(),
+        }, owner)
+        photo_id = uploaded['file']['id']
+        payload = {
+            'work_date': '2026-09-30', 'zone_id': zone_id, 'quantity_id': quantity_id,
+            'workers': 'Иван и Анна', 'worker_count': 2,
+            'work_description': 'Штукатурка стены', 'completed_quantity': '8',
+            'comment': 'Первый слой', 'photo_file_ids': [photo_id],
+        }
+        status, created_log = self.call(f'/construction/objects/{obj}/logs', 'POST', payload, owner)
+        self.assertEqual(status, 201, created_log)
+        log_id = created_log['daily_log']['id']
+        fact_id = created_log['daily_log']['fact_id']
+        self.assertEqual(created_log['daily_log']['photo_file_ids'], [photo_id])
+        detail = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(detail['quantities'][0]['actual_quantity'], '8')
+        self.assertEqual(detail['daily_logs'][0]['photo_file_ids'], [photo_id])
+        self.assertEqual(self.call(f'/construction/objects/{obj}/facts/{fact_id}', 'DELETE', token=owner)[0], 409)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/logs', 'POST',
+                                   dict(payload, photo_file_ids=[photo_id, photo_id]), owner)[0], 400)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/logs/{log_id}', 'PATCH', {
+            'completed_quantity': '10', 'comment': 'Уточнённый объём',
+        }, owner)[0], 200)
+        detail = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(detail['quantities'][0]['actual_quantity'], '10')
+        self.assertEqual(self.call(f'/construction/objects/{obj}/logs/{log_id}', 'PATCH', {
+            'completed_quantity': '12',
+        }, outsider)[0], 404)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/logs/{log_id}', 'DELETE', token=owner)[0], 200)
+        detail = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(detail['quantities'][0]['actual_quantity'], '0')
+        self.assertEqual(detail['daily_logs'], [])
+
     def test_chat_upload_is_private_searchable_and_limited_to_readable_files(self):
         owner, _ = self.account('chat-file-owner')
         other, _ = self.account('chat-file-other')

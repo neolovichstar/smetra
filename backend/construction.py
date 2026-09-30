@@ -7,7 +7,7 @@ import re
 import zipfile
 from decimal import Decimal, ROUND_HALF_UP
 
-from backend.business import DomainError, choice, identity, integer, stamp, string
+from backend.business import DomainError, choice, date_value, identity, integer, stamp, string
 from backend.construction_math import KINDS, UNITS, decimal_value, evaluate, length_in_metres, money, priced, zone_values
 from backend.documents import Download
 
@@ -123,9 +123,23 @@ def detail(service, obj):
         "ORDER BY created_at DESC,id DESC LIMIT 100",
         (obj["id"], service.wid),
     )]
+    logs = [dict(row) for row in service.con.execute(
+        "SELECT * FROM construction_daily_logs WHERE object_id=? AND workspace_id=? "
+        "ORDER BY work_date DESC,created_at DESC,id DESC LIMIT 100",
+        (obj["id"], service.wid),
+    )]
+    photos = {}
+    for item in service.con.execute(
+        "SELECT log_id,file_id FROM construction_log_photos WHERE object_id=? AND workspace_id=? "
+        "ORDER BY created_at,file_id",
+        (obj["id"], service.wid),
+    ):
+        photos.setdefault(item["log_id"], []).append(item["file_id"])
+    for item in logs:
+        item["photo_file_ids"] = photos.get(item["id"], [])
     return {
         "object": dict(obj), "zones": zones, "measurements": measurements,
-        "quantities": quantities, "defects": defects,
+        "quantities": quantities, "defects": defects, "daily_logs": logs,
         "totals": {
             "planned_kopecks": sum(item["planned_total_kopecks"] for item in quantities),
             "actual_kopecks": sum(item["actual_total_kopecks"] for item in quantities),
@@ -274,6 +288,81 @@ def defect_fields(service, obj, data, previous=None):
         status=choice(data.get("status", previous["status"] if previous else "open"), ("open", "in_progress", "resolved"), "Статус дефекта"),
         updated_at=stamp(),
     )
+
+
+def log_fields(service, obj, data, previous=None):
+    work_date = date_value(data.get("work_date", previous["work_date"] if previous else ""), "Дата работ")
+    if not work_date:
+        raise DomainError(400, "Укажите дату работ")
+    zone_id = data.get("zone_id", previous["zone_id"] if previous else None) or None
+    if zone_id:
+        row_in_object(service, "construction_zones", zone_id, obj["id"])
+    quantity_id = data.get("quantity_id", previous["quantity_id"] if previous else None) or None
+    quantity_row = row_in_object(service, "construction_quantities", quantity_id, obj["id"]) if quantity_id else None
+    if quantity_row and not zone_id:
+        zone_id = quantity_row["zone_id"]
+    if quantity_row and zone_id and quantity_row["zone_id"] and quantity_row["zone_id"] != zone_id:
+        raise DomainError(400, "Работа относится к другому помещению")
+    completed = decimal_value(data.get("completed_quantity", previous["completed_quantity"] if previous else 0),
+                              "Выполненный объём", maximum=Decimal("1000000"))
+    unit = quantity_row["unit"] if quantity_row else choice(
+        data.get("unit", previous["unit"] if previous else ""), UNITS | {""}, "Единица объёма",
+    )
+    if completed > 0 and not unit:
+        raise DomainError(400, "Укажите единицу выполненного объёма")
+    return dict(
+        zone_id=zone_id, quantity_id=quantity_id, work_date=work_date,
+        workers=string(data.get("workers", previous["workers"] if previous else ""), "Исполнители", 500),
+        worker_count=integer(data.get("worker_count", previous["worker_count"] if previous else 0), "Количество людей", 0, 100),
+        work_description=string(data.get("work_description", previous["work_description"] if previous else ""), "Выполненная работа", 2000, True),
+        completed_quantity=str(completed), unit=unit,
+        comment=string(data.get("comment", previous["comment"] if previous else ""), "Комментарий", 2000),
+        updated_at=stamp(),
+    )
+
+
+def validate_log_photo(service, obj, file_id):
+    photo = service.get("files", string(file_id, "Фото", 80, True))
+    if photo["construction_id"] != obj["id"] or photo["mime"] not in ("image/png", "image/jpeg"):
+        raise DomainError(400, "Фото должно принадлежать этому объекту")
+    return photo["id"]
+
+
+def add_log_fact(service, obj, fields):
+    if not fields["quantity_id"] or decimal_value(fields["completed_quantity"], "Объём") == 0:
+        return None
+    _, result = add_fact(service, obj, {
+        "quantity_id": fields["quantity_id"], "quantity": fields["completed_quantity"],
+        "note": "Журнал работ: " + fields["work_date"],
+    })
+    return result["fact"]["id"]
+
+
+def create_daily_log(service, obj, data):
+    count = service.con.execute(
+        "SELECT count(*) FROM construction_daily_logs WHERE object_id=? AND workspace_id=?",
+        (obj["id"], service.wid),
+    ).fetchone()[0]
+    if count >= 5000:
+        raise DomainError(409, "На объекте может быть не больше 5000 записей журнала")
+    photos = data.get("photo_file_ids", [])
+    if (not isinstance(photos, list) or len(photos) > 4
+            or not all(isinstance(item, str) for item in photos)
+            or len(set(photos)) != len(photos)):
+        raise DomainError(400, "Укажите не больше четырёх разных фото")
+    photos = [validate_log_photo(service, obj, file_id) for file_id in photos]
+    fields = log_fields(service, obj, data)
+    values = dict(id=identity(), workspace_id=service.wid, object_id=obj["id"],
+                  fact_id=add_log_fact(service, obj, fields),
+                  created_by=service.user["id"], created_at=stamp(), **fields)
+    service.insert("construction_daily_logs", values)
+    for file_id in photos:
+        service.con.execute(
+            "INSERT INTO construction_log_photos(workspace_id,object_id,log_id,file_id,created_at) VALUES(?,?,?,?,?)",
+            (service.wid, obj["id"], values["id"], file_id, stamp()),
+        )
+    service.emit("construction_daily_log", values["id"], "Запись журнала добавлена", values["work_description"][:120])
+    return 201, {"daily_log": dict(values, photo_file_ids=photos)}
 
 
 def as_xlsx(service, obj):
@@ -529,8 +618,67 @@ def route(service, method, parts, query, data):
         service.update("construction_defects", defect["id"], values)
         service.emit("construction_defect", defect["id"], "Дефект обновлён", values["status"])
         return 200, {"defect": dict(defect, **values)}
+    if rest == ["logs"] and method == "POST":
+        return create_daily_log(service, obj, data)
+    if len(rest) >= 2 and rest[0] == "logs":
+        log = row_in_object(service, "construction_daily_logs", rest[1], obj["id"])
+        if len(rest) == 2 and method == "PATCH":
+            fields = log_fields(service, obj, data, log)
+            if log["fact_id"]:
+                service.con.execute(
+                    "DELETE FROM construction_facts WHERE id=? AND workspace_id=?",
+                    (log["fact_id"], service.wid),
+                )
+            fields["fact_id"] = add_log_fact(service, obj, fields)
+            service.update("construction_daily_logs", log["id"], fields)
+            service.emit("construction_daily_log", log["id"], "Запись журнала изменена")
+            return 200, {"daily_log": dict(log, **fields)}
+        if len(rest) == 2 and method == "DELETE":
+            service.con.execute(
+                "DELETE FROM construction_daily_logs WHERE id=? AND workspace_id=?",
+                (log["id"], service.wid),
+            )
+            if log["fact_id"]:
+                service.con.execute(
+                    "DELETE FROM construction_facts WHERE id=? AND workspace_id=?",
+                    (log["fact_id"], service.wid),
+                )
+            service.emit("construction_daily_log", log["id"], "Ошибочная запись журнала удалена")
+            return 200, {"ok": True}
+        if len(rest) == 3 and rest[2] == "photos" and method == "POST":
+            file_id = validate_log_photo(service, obj, data.get("file_id"))
+            found = service.con.execute(
+                "SELECT 1 FROM construction_log_photos WHERE log_id=? AND file_id=? AND workspace_id=?",
+                (log["id"], file_id, service.wid),
+            ).fetchone()
+            if found:
+                return 200, {"ok": True}
+            count = service.con.execute(
+                "SELECT count(*) FROM construction_log_photos WHERE log_id=? AND workspace_id=?",
+                (log["id"], service.wid),
+            ).fetchone()[0]
+            if count >= 4:
+                raise DomainError(409, "К записи можно прикрепить не больше четырёх фото")
+            service.con.execute(
+                "INSERT INTO construction_log_photos(workspace_id,object_id,log_id,file_id,created_at) VALUES(?,?,?,?,?)",
+                (service.wid, obj["id"], log["id"], file_id, stamp()),
+            )
+            service.emit("construction_daily_log", log["id"], "Фото добавлено к записи журнала")
+            return 201, {"ok": True}
+        if len(rest) == 4 and rest[2] == "photos" and method == "DELETE":
+            service.con.execute(
+                "DELETE FROM construction_log_photos WHERE log_id=? AND file_id=? AND workspace_id=?",
+                (log["id"], rest[3], service.wid),
+            )
+            service.emit("construction_daily_log", log["id"], "Фото удалено из записи журнала")
+            return 200, {"ok": True}
     if len(rest) == 2 and rest[0] == "facts" and method == "DELETE":
         fact = row_in_object(service, "construction_facts", rest[1], obj["id"])
+        if service.con.execute(
+            "SELECT 1 FROM construction_daily_logs WHERE fact_id=? AND workspace_id=?",
+            (fact["id"], service.wid),
+        ).fetchone():
+            raise DomainError(409, "Этот факт записан через журнал. Исправьте или удалите запись журнала")
         service.con.execute("DELETE FROM construction_facts WHERE id=? AND workspace_id=?", (fact["id"], service.wid))
         service.emit("construction_fact", fact["id"], "Ошибочная запись факта удалена")
         return 200, {"ok": True}
