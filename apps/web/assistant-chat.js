@@ -59,9 +59,14 @@ function assistantMarkdown(source) {
   return html.join('');
 }
 
+window.SmetraAssistantContext=function(value){
+  if(!value||!['clients','quotes','projects'].includes(value.entity)||typeof value.id!=='string')return;
+  sessionStorage.setItem('smetra.assistant.context',JSON.stringify({entity:value.entity,id:value.id,label:String(value.label||'').slice(0,120),workspace_id:value.workspace_id||''}));
+};
+
 window.SmetraAssistant=async function(){
   const data=await api('/assistant');
-  view(`<section class="assistant-page"><header class="assistant-header"><div><span class="overline"><span class="assistant-mark"></span>Сметра рядом</span><h1>Ассистент</h1></div><span id="assistant-quota" class="assistant-quota"></span></header><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div><div class="assistant-composer"><form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Спросите или поручите задачу…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button></form><div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span>Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a></div></section>`);
+  view(`<section class="assistant-page"><header class="assistant-header"><div><span class="overline"><span class="assistant-mark"></span>Сметра рядом</span><h1>Ассистент</h1></div><span id="assistant-quota" class="assistant-quota"></span></header><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div><div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div><form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Спросите или поручите задачу…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button></form><div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span>Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a></div></section>`);
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
@@ -69,6 +74,18 @@ window.SmetraAssistant=async function(){
   const status=document.querySelector('#assistant-status');
   const quotaLabel=document.querySelector('#assistant-quota');
   const upgrade=document.querySelector('#assistant-upgrade');
+  let context=null;
+  try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
+  const currentWorkspace=window.Workspace?.currentWorkspaceId?.();
+  if(context&&(!['clients','quotes','projects'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
+  const contextBar=document.querySelector('#assistant-context');
+  const renderContext=()=>{
+    contextBar.classList.toggle('hidden',!context);
+    if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ'})[context.entity]+': '+(context.label||context.id);
+    else sessionStorage.removeItem('smetra.assistant.context');
+  };
+  renderContext();
+  document.querySelector('#assistant-context-remove').onclick=()=>{context=null;renderContext();input.focus()};
   let quota=data.quota,working=false;
   const renderQuota=value=>{
     quota=value;
@@ -121,7 +138,7 @@ window.SmetraAssistant=async function(){
     const paint=()=>{paintPending=false;assistantMessage.body.innerHTML=assistantMarkdown(generated);scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;requestAnimationFrame(paint)}};
     try{
-      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt})});
+      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(context?{context:{entity:context.entity,id:context.id}}:{})})});
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
       if(!response.body)throw Error('Браузер не поддерживает потоковый ответ');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';

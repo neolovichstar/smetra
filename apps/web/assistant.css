@@ -40,6 +40,11 @@
 .assistant-page .assistant-proposal{border-top:1px solid #34506d;padding:22px 0 27px;animation:chat-enter .38s cubic-bezier(.2,.8,.2,1) both}
 .assistant-page .assistant-proposal h3{font-size:16px}
 .assistant-composer{position:sticky;bottom:0;z-index:4;padding:16px 0 22px;background:linear-gradient(180deg,#0000 0%,#000 14%,#000 100%);backdrop-filter:none}
+.assistant-context{display:flex;align-items:center;gap:10px;width:fit-content;max-width:100%;min-height:32px;margin:0 0 8px;padding:4px 5px 4px 11px;border:1px solid #354b69;border-radius:8px;background:#101a29;color:#c6ddfb;font-size:11px}
+.assistant-context>span{flex:none;color:#8394a9;font-size:10px}
+.assistant-context strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.assistant-context button{display:grid;place-items:center;width:22px;height:22px;flex:none;border:0;border-radius:5px;background:#1b2b42;color:#dceaff;font-size:17px;line-height:1}
+.assistant-context button:hover{background:#294362}
 .assistant-composer form{display:flex;align-items:end;gap:8px;padding:7px;border:1px solid #35404e;border-radius:16px;background:#0c0f13;box-shadow:0 0 0 1px #7aaefa0b,0 -22px 45px #0007;transition:border-color .3s,box-shadow .3s}
 .assistant-composer form:focus-within{border-color:#7da9e6;box-shadow:0 0 0 3px #82b1ff12,0 -22px 45px #0007}
 .assistant-composer textarea{flex:1;resize:none;min-height:40px;max-height:180px;width:100%;padding:10px 11px;border:0!important;border-radius:10px;background:transparent!important;box-shadow:none!important;line-height:1.5;font-size:13px;color:#f2f5fa}
@@ -52,4 +57,5 @@
 @keyframes chat-enter{from{opacity:.8;transform:translateY(9px)}to{opacity:1;transform:none}}
 @keyframes chat-caret{50%{opacity:.2}}
 @media(max-width:700px){.assistant-page{min-height:calc(100dvh - 140px)}.assistant-header{align-items:start;flex-direction:column;gap:8px}.assistant-page .assistant-header h1{font-size:30px}.assistant-quota{font-size:10px}.assistant-thread{padding:14px 0 70px}.assistant-message{padding:17px 0}.assistant-markdown{font-size:13px}.assistant-composer{padding-bottom:max(12px,env(safe-area-inset-bottom))}.assistant-composer-foot>span:last-child{display:none}.assistant-suggestions button{font-size:11px}}
+@media(max-width:700px){.assistant-context{width:100%;font-size:11px}.assistant-context strong{flex:1}.assistant-page .assistant-welcome{padding:24px 0 15px}.assistant-suggestions{margin:20px 0;gap:7px}.assistant-composer{padding-top:9px}.assistant-composer form{border-radius:13px}}
 @media(prefers-reduced-motion:reduce){.assistant-message,.assistant-welcome,.assistant-page .assistant-proposal,.assistant-message.streaming .assistant-markdown:after{animation:none}}

@@ -20,6 +20,26 @@ class IdentityAssistantTests(unittest.TestCase):
     call = BusinessFlows.call
     account = BusinessFlows.account
 
+    def test_explicit_ai_context_is_scoped_and_minimal(self):
+        owner, _ = self.account("context-owner")
+        stranger, _ = self.account("context-stranger")
+        status, result = self.call(
+            "/clients", "POST", {"name": "Студия Север", "notes": "Личные заметки клиента"}, owner
+        )
+        self.assertEqual(status, 201, result)
+        client_id = result["item"]["id"]
+        context = {"entity": "clients", "id": client_id}
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"):
+            status, _ = self.call("/assistant/chat", "POST", {"text": "Что дальше?", "context": context}, stranger)
+            self.assertEqual(status, 404)
+            self.assertEqual(self.call("/assistant", token=stranger)[1]["quota"]["remaining"], 3)
+            with patch("backend.assistant.query_model", return_value={"content": "Проверю клиента."}) as provider:
+                status, _ = self.call("/assistant/chat", "POST", {"text": "Что дальше?", "context": context}, owner)
+        self.assertEqual(status, 200)
+        prompt = provider.call_args.args[0][0]["content"]
+        self.assertIn(client_id, prompt)
+        self.assertNotIn("Личные заметки клиента", prompt)
+
     def get_redirect(self, path, cookie=""):
         connection = http.client.HTTPConnection(
             "127.0.0.1", self.server.server_address[1]
