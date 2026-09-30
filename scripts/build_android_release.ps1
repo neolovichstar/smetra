@@ -34,6 +34,9 @@ $env:SIGNING_STORE_FILE = $keystore
 if ($ApiBaseUrl -ne 'https://smetra.vercel.app') {
     throw 'Production APK must use https://smetra.vercel.app.'
 }
+if ([string]::IsNullOrWhiteSpace($env:MYTRACKER_SDK_KEY)) {
+    Write-Warning 'MYTRACKER_SDK_KEY is not set. The APK will work, but MyTracker attribution/events will be disabled.'
+}
 $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
 if (-not (Test-Path -LiteralPath $sdk -PathType Container)) { throw 'Android SDK not found. Set ANDROID_HOME.' }
 $env:ANDROID_HOME = (Resolve-Path -LiteralPath $sdk).Path
@@ -54,7 +57,7 @@ try {
     $badging = & $aapt dump badging $apk
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read APK manifest.' }
     $package = $badging | Where-Object { $_ -like 'package:*' } | Select-Object -First 1
-    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='10'" -or $package -notmatch "versionName='1\.6\.0'") {
+    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='11'" -or $package -notmatch "versionName='1\.6\.1'") {
         throw "Unexpected APK identity: $package"
     }
     $signature = & $apksigner verify --verbose --print-certs $apk 2>&1
@@ -66,7 +69,7 @@ try {
     if ($expected.Length -ne 64) { throw 'RUSTORE_CERT_SHA256 must contain a 64-digit SHA-256 fingerprint.' }
     if ($expected -ne $fingerprint) { throw 'Signing certificate differs from RUSTORE_CERT_SHA256. Do not publish this APK.' }
 
-    $destination = Join-Path $repo 'dist\smetra-mobile-1.6.0-release.apk'
+    $destination = Join-Path $repo 'dist\smetra-mobile-1.6.1-release.apk'
     New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
     Copy-Item -LiteralPath $apk -Destination $destination -Force
     Write-Output "APK: $destination"

@@ -11,3 +11,6 @@
 В RuStore Консоли откройте приложение из предзаказа и загрузите первую версию как APK. Убедитесь, что package name предзаказа — `ru.smetra.mobile`. По [правилам RuStore](https://www.rustore.ru/help/developers/publishing-and-verifying-apps/app-publication/preorder) первая версия после предзаказа публикуется вручную или по расписанию после модерации. Сверьте иконку, скриншоты, описание, контакты разработчика и политику данных перед отправкой. После принятия первой версии следующие APK должны иметь больший `versionCode` и ту же подпись.
 
 Сайт и Android используют `https://smetra.vercel.app`; кнопка RuStore указывает на https://www.rustore.ru/catalog/app/ru.smetra.mobile. Платёж за тариф «Про» проводится только на сайте после подключения магазина ЮKassa, не внутри Android-приложения.
+## Следующая сборка 1.6.1
+
+Исходники Android обновлены до `versionCode 11` / `versionName 1.6.1` и содержат интеграцию MyTracker для VK Рекламы. Эта сборка в текущем окружении **не собиралась**, поэтому APK 1.6.1 и его SHA-256 здесь не заявлены как проверенные. Перед локальной release-сборкой задайте `MYTRACKER_SDK_KEY` по инструкции [docs/MYTRACKER_VK_ADS.md](docs/MYTRACKER_VK_ADS.md), затем запустите `scripts/build_android_release.ps1`. Скрипт теперь ожидает именно 1.6.1/11.

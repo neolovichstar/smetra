@@ -1,7 +1,16 @@
 plugins { id 'com.android.application' }
 
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib')) {
+            details.useVersion '1.8.22'
+        }
+    }
+}
+
 def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://smetra.vercel.app').get()
 def verifyUnsignedRelease = providers.gradleProperty('verifyUnsignedRelease').map { it == 'true' }.orElse(false).get()
+def myTrackerSdkKey = providers.gradleProperty('myTrackerSdkKey').orElse(providers.environmentVariable('MYTRACKER_SDK_KEY')).orElse('').get()
 def localDebugApi = apiBase ==~ /http:\/\/(127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/
 if (!apiBase.startsWith('https://') && !localDebugApi) throw new GradleException('apiBaseUrl must use HTTPS (loopback is allowed for debug tests)')
 android {
@@ -11,10 +20,11 @@ android {
         applicationId 'ru.smetra.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 10
-        versionName '1.6.0'
+        versionCode 11
+        versionName '1.6.1'
         testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
-        buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('"', '') + '"'
+        buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('\"', '') + '"'
+        buildConfigField 'String', 'MYTRACKER_SDK_KEY', '"' + myTrackerSdkKey.replace('\"', '') + '"'
     }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -51,4 +61,9 @@ gradle.taskGraph.whenReady { graph ->
             throw new GradleException('verifyUnsignedRelease is only for unsigned CI verification.')
         }
     }
+}
+
+
+dependencies {
+    implementation 'com.my.tracker:mytracker-sdk:3.6.0'
 }

@@ -20,9 +20,10 @@ from pathlib import Path
 from email.message import EmailMessage
 
 try:
-    from backend import business
+    from backend import business, mytracker
 except ModuleNotFoundError:
     import business
+    import mytracker
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
@@ -1150,6 +1151,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if status == "succeeded" and remote.get("paid") is not True:
             raise ApiError(409, "Платёж не подтверждён как оплаченный")
+        newly_succeeded = False
         with _LOCK:
             con.execute("BEGIN IMMEDIATE")
             try:
@@ -1171,12 +1173,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 local["user_id"],
                             ),
                         )
+                        newly_succeeded = True
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
                 con.execute("COMMIT")
             except Exception:
                 con.execute("ROLLBACK")
                 raise
+        # Advertising attribution must never participate in the payment DB transaction.
+        # This fires only for the first pending -> succeeded transition, so duplicate
+        # YooKassa webhooks do not duplicate the conversion.
+        if newly_succeeded:
+            mytracker.track_custom_event(
+                local["user_id"],
+                "pro_subscription_started",
+                {"source": "yookassa", "plan": local["plan"]},
+            )
 
     def apply_refund(self, con, remote):
         refund_id = remote.get("id")
