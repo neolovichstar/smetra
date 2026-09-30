@@ -20,6 +20,16 @@ from backend.business import DomainError, Service, calculate
 
 
 class CalculationTests(unittest.TestCase):
+    def test_moscow_month_boundary_uses_local_business_date(self):
+        from backend.business import business_date, business_month_start
+
+        moment = int(dt.datetime(2026, 9, 30, 23, 30, tzinfo=dt.timezone.utc).timestamp())
+        self.assertEqual(business_date(moment), dt.date(2026, 10, 1))
+        self.assertEqual(
+            business_month_start(moment),
+            int(dt.datetime(2026, 9, 30, 21, 0, tzinfo=dt.timezone.utc).timestamp()),
+        )
+
     def test_construction_formula_is_bounded_and_safe(self):
         from backend.construction_math import evaluate, zone_values
 

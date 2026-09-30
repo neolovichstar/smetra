@@ -10,6 +10,14 @@ import uuid
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+
+try:
+    BUSINESS_TIMEZONE = ZoneInfo("Europe/Moscow")
+except ZoneInfoNotFoundError:
+    # Windows Python may ship without IANA tzdata; Moscow currently uses UTC+03.
+    BUSINESS_TIMEZONE = dt.timezone(dt.timedelta(hours=3))
 
 
 class DomainError(Exception):
@@ -20,6 +28,15 @@ class DomainError(Exception):
 
 def stamp():
     return int(time.time())
+
+
+def business_date(moment=None):
+    return dt.datetime.fromtimestamp(stamp() if moment is None else moment, BUSINESS_TIMEZONE).date()
+
+
+def business_month_start(moment=None):
+    day = business_date(moment)
+    return int(dt.datetime(day.year, day.month, 1, tzinfo=BUSINESS_TIMEZONE).timestamp())
 
 
 def identity():
@@ -1484,7 +1501,7 @@ class Service:
 
     def action_center(self):
         """Small, workspace-scoped list of work that needs a human decision."""
-        today = dt.date.today().isoformat()
+        today = business_date().isoformat()
         month = today[:7] + "-01"
         items = []
         settings = json.loads(self.con.execute(
@@ -1571,7 +1588,7 @@ class Service:
         ).fetchone()[0]
         approved = self.con.execute(
             "SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?",
-            (self.wid, int(dt.datetime.fromisoformat(month).replace(tzinfo=dt.timezone.utc).timestamp())),
+            (self.wid, business_month_start()),
         ).fetchone()[0]
         received = {
             row["currency"]: row["amount"]
