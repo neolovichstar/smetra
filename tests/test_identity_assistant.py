@@ -3,6 +3,7 @@ import json
 import os
 import concurrent.futures
 import contextlib
+import base64
 import hashlib
 import sqlite3
 import time
@@ -39,6 +40,71 @@ class IdentityAssistantTests(unittest.TestCase):
         prompt = provider.call_args.args[0][0]["content"]
         self.assertIn(client_id, prompt)
         self.assertNotIn("Личные заметки клиента", prompt)
+
+    def test_assistant_reads_only_selected_workspace_file_with_page_source(self):
+        owner, _ = self.account("file-ai-owner")
+        stranger, _ = self.account("file-ai-stranger")
+        quote = BusinessFlows.quote(self, owner, title="Файл для AI")
+        file_result = self.call(
+            "/files", "POST",
+            {"quote_id": quote["id"], "name": "brief.txt",
+             "content": base64.b64encode("Гарантия 12 месяцев API_KEY=abcdefghijklmnop".encode()).decode()},
+            owner,
+        )[1]
+        file_id = file_result["file"]["id"]
+        context = {"entity": "files", "id": file_id}
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"):
+            self.assertEqual(
+                self.call("/assistant/chat", "POST", {"text": "Срок гарантии?", "context": context}, stranger)[0],
+                404,
+            )
+            calls = []
+
+            def provider(messages):
+                calls.append(messages)
+                if len(calls) == 1:
+                    return {"tool_calls": [{"id": "read-1", "type": "function", "function": {
+                        "name": "read_file", "arguments": json.dumps({"id": file_id, "query": "Гарантия"})
+                    }}]}
+                return {"content": "В brief.txt, стр. 1: гарантия 12 месяцев."}
+
+            with patch("backend.assistant.query_model", side_effect=provider):
+                status, result = self.call(
+                    "/assistant/chat", "POST", {"text": "Срок гарантии?", "context": context}, owner
+                )
+        self.assertEqual(status, 200, result)
+        self.assertIn(file_id, calls[0][0]["content"])
+        self.assertNotIn("Гарантия 12 месяцев", calls[0][0]["content"])
+        source = json.loads(calls[1][-1]["content"])
+        self.assertEqual(source["file_id"], file_id)
+        self.assertEqual(source["excerpts"][0]["page"], 1)
+        self.assertIn("Гарантия 12 месяцев", source["excerpts"][0]["text"])
+        self.assertNotIn("abcdefghijklmnop", source["excerpts"][0]["text"])
+        self.assertIn("[секрет скрыт]", source["excerpts"][0]["text"])
+        self.assertEqual(result["actions"], [])
+
+    def test_file_search_tool_stays_in_workspace(self):
+        owner, owner_id = self.account("file-search-owner")
+        stranger, stranger_id = self.account("file-search-stranger")
+        self.call("/dashboard", token=stranger)
+        quote = BusinessFlows.quote(self, owner)
+        self.call(
+            "/files", "POST",
+            {"quote_id": quote["id"], "name": "private-brief.txt",
+             "content": base64.b64encode(b"private content").decode()},
+            owner,
+        )
+        from backend.assistant_files import list_files
+        from types import SimpleNamespace
+
+        with self.mod.db() as con:
+            wid = con.execute("SELECT id FROM workspaces WHERE owner_id=?", (stranger_id,)).fetchone()
+            service = SimpleNamespace(con=con, wid=wid["id"])
+            self.assertEqual(list_files(service, "brief"), {"files": []})
+            owner_wid = con.execute("SELECT id FROM workspaces WHERE owner_id=?", (owner_id,)).fetchone()
+            service.wid = owner_wid["id"]
+            self.assertEqual([item["name"] for item in list_files(service, "brief")["files"]],
+                             ["private-brief.txt"])
 
     def get_redirect(self, path, cookie=""):
         connection = http.client.HTTPConnection(

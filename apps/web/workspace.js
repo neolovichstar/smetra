@@ -218,12 +218,18 @@ window.Workspace = (() => {
     const maximum=data.max_upload_bytes||3000000;
     const section=document.createElement('section');
     section.className='panel';
-    section.innerHTML=`<div class="section-top"><h3>Файлы</h3>${roleCanWrite()?'<button type="button" class="btn small" id="upload-attachment">+ Прикрепить</button>':''}</div><p class="muted">PNG, JPEG, PDF или TXT · до ${maximum/1000000} МБ</p><div class="attachment-list">${data.items.map(f=>`<div class="record-line attachment-row"><div><strong title="${e(f.name)}">${e(f.name)}</strong><small>${Math.ceil(f.size/1024)} КБ · ${f.public?'Доступен клиенту':'Только команда'}</small></div><div class="attachment-actions"><button class="btn small file-preview-open" type="button" data-id="${e(f.id)}">Открыть</button><button class="btn small file-download" type="button" data-id="${e(f.id)}">Скачать</button></div></div>`).join('')||'<p class="muted">Вложений пока нет.</p>'}</div>`;
+    section.innerHTML=`<div class="section-top"><h3>Файлы</h3>${roleCanWrite()?'<button type="button" class="btn small" id="upload-attachment">+ Прикрепить</button>':''}</div><p class="muted">PNG, JPEG, PDF или TXT · до ${maximum/1000000} МБ</p><div class="attachment-list">${data.items.map(f=>`<div class="record-line attachment-row"><div><strong title="${e(f.name)}">${e(f.name)}</strong><small>${Math.ceil(f.size/1024)} КБ · ${f.public?'Доступен клиенту':'Только команда'}</small></div><div class="attachment-actions"><button class="btn small file-preview-open" type="button" data-id="${e(f.id)}">Открыть</button>${['text/plain','application/pdf'].includes(f.mime)&&f.size<=2000000?`<button class="btn small file-ask-ai" type="button" data-id="${e(f.id)}">Спросить AI</button>`:''}<button class="btn small file-download" type="button" data-id="${e(f.id)}">Скачать</button></div></div>`).join('')||'<p class="muted">Вложений пока нет.</p>'}</div>`;
     document.querySelector('#content').append(section);
     section.querySelectorAll('.file-preview-open').forEach(button=>{
       button.onclick=()=>{
         const file=data.items.find(item=>item.id===button.dataset.id);
         if(file)window.SmetraFilePreview.open(file,workspace?.id);
+      };
+    });
+    section.querySelectorAll('.file-ask-ai').forEach(button=>{
+      button.onclick=()=>{
+        const file=data.items.find(item=>item.id===button.dataset.id);
+        if(file)askAbout('files',file.id,file.name);
       };
     });
     section.querySelectorAll('.file-download').forEach(button=>{

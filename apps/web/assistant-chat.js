@@ -60,7 +60,7 @@ function assistantMarkdown(source) {
 }
 
 window.SmetraAssistantContext=function(value){
-  if(!value||!['clients','quotes','projects'].includes(value.entity)||typeof value.id!=='string')return;
+  if(!value||!['clients','quotes','projects','files'].includes(value.entity)||typeof value.id!=='string')return;
   sessionStorage.setItem('smetra.assistant.context',JSON.stringify({entity:value.entity,id:value.id,label:String(value.label||'').slice(0,120),workspace_id:value.workspace_id||''}));
 };
 
@@ -77,11 +77,11 @@ window.SmetraAssistant=async function(){
   let context=null;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.();
-  if(context&&(!['clients','quotes','projects'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
+  if(context&&(!['clients','quotes','projects','files'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
   const contextBar=document.querySelector('#assistant-context');
   const renderContext=()=>{
     contextBar.classList.toggle('hidden',!context);
-    if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ'})[context.entity]+': '+(context.label||context.id);
+    if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ',files:'Файл'})[context.entity]+': '+(context.label||context.id);
     else sessionStorage.removeItem('smetra.assistant.context');
   };
   renderContext();
