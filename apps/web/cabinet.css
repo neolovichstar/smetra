@@ -256,4 +256,16 @@
  .workspace-page .empty p{font-size:11px;margin:0;line-height:1.5}
  .workspace-page .client-contact-lines p{font-size:12px;margin:5px 0}
  .workspace-page .client-history{gap:0}
+ .workspace-page .billing-hero{grid-template-columns:minmax(0,1fr) 78px;gap:8px;align-items:start}
+ .workspace-page .billing-hero img{grid-row:1;grid-column:2;width:78px;margin:4px 0 0}
+ .workspace-page .billing-hero h1{font-size:25px;line-height:1.12;margin:9px 0}
+ .workspace-page .billing-hero p{font-size:11px;line-height:1.5;margin:8px 0}
+ .workspace-page .billing-plans{margin:15px 0;gap:8px}
+ .workspace-page .billing-plans>section{padding:14px 0}
+ .workspace-page .billing-plans>section:nth-child(2){order:-1}
+ .workspace-page .billing-plans h3{font-size:18px;margin:6px 0}
+ .workspace-page .billing-plans .open-price{font-size:34px}
+ .workspace-page .billing-plans .open-price small{font-size:11px}
+ .workspace-page .billing-plans .open-benefits{font-size:11px;margin:12px 0 16px}
+ .workspace-page .billing-plans .open-benefits li{margin:7px 0}
 }
