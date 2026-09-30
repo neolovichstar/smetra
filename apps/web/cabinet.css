@@ -240,3 +240,20 @@
 .auth-proof-title{font-size:15px}
 @media(max-width:650px){.dashboard-intro h1{font-size:32px}.workspace-page .topline h1{font-size:31px}.workspace-page .auth-flow h1{font-size:34px}.workspace-page .capture-heading h2{font-size:25px}}
 @media(prefers-reduced-motion:reduce){.workspace-page .app-view-enter,.workspace-page .app-view-enter>*,.workspace-page .app-view-enter .record-line,.workspace-page .auth-flow,.workspace-page .auth-story .auth-art,.workspace-page .auth-proof,.workspace-page .auth-wrap .field:not(.hidden),.workspace-page .nav-backdrop:not(.hidden),.workspace-page .toast:not(.hidden){animation:none!important}.workspace-page .record-line,.workspace-page .editor-item,.workspace-page .activity-item{transition:none}}
+
+.workspace-page .panel>p.preserve-lines:empty{display:none}
+.workspace-page .client-contact-lines p{margin:7px 0;color:#c9d0db;overflow-wrap:anywhere}
+.workspace-page .client-contact-lines p.muted{color:#8f98a6}
+@media(max-width:650px){
+ .workspace-page .main{padding-top:20px}
+ .workspace-page .topline{margin-bottom:18px}
+ .workspace-page .topline h1{font-size:29px;margin:7px 0 5px}
+ .workspace-page .topline-actions{margin-top:11px;gap:7px}
+ .workspace-page .panel{padding:15px 0;margin-bottom:0}
+ .workspace-page .empty{padding:12px 0 10px}
+ .workspace-page .empty .eyebrow{display:none}
+ .workspace-page .empty h3{font-size:15px;margin:0 0 4px}
+ .workspace-page .empty p{font-size:11px;margin:0;line-height:1.5}
+ .workspace-page .client-contact-lines p{font-size:12px;margin:5px 0}
+ .workspace-page .client-history{gap:0}
+}
