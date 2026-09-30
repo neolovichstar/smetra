@@ -21,6 +21,9 @@ TABLES = TABLES | frozenset(
 )
 TABLES = TABLES | frozenset("intake_forms client_requests".split())
 TABLES = TABLES | frozenset("assistant_conversations workspace_knowledge file_text_chunks".split())
+TABLES = TABLES | frozenset(
+    "construction_objects construction_zones construction_measurements construction_quantities construction_facts".split()
+)
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 
 

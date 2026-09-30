@@ -1,0 +1,301 @@
+"""Optional construction workflow beside the existing simple estimate flow."""
+
+import io
+import re
+from decimal import Decimal
+
+from backend.business import DomainError, choice, identity, integer, stamp, string
+from backend.construction_math import KINDS, UNITS, decimal_value, evaluate, length_in_metres, money, zone_values
+from backend.documents import Download
+
+
+ZONE_KINDS = ("building", "floor", "room", "zone", "outdoor")
+MEASURE_KINDS = ("length", "width", "height", "area", "volume", "count", "custom")
+SOURCES = ("manual", "camera", "ar", "import", "ai", "calculated")
+BUILTIN = frozenset(("length", "width", "height", "area", "perimeter", "volume", "openings"))
+
+
+def row_in_object(service, table, item_id, object_id):
+    row = service.con.execute(
+        f"SELECT * FROM {table} WHERE id=? AND object_id=? AND workspace_id=?",
+        (item_id, object_id, service.wid),
+    ).fetchone()
+    if not row:
+        raise DomainError(404, "Запись объекта не найдена")
+    return row
+
+
+def variables(service, obj_id, zone=None):
+    values = zone_values(
+        zone["length_m"] if zone else 0,
+        zone["width_m"] if zone else 0,
+        zone["height_m"] if zone else 0,
+        zone["openings_m2"] if zone else 0,
+    )
+    for row in service.con.execute(
+        "SELECT symbol,value,unit,zone_id FROM construction_measurements "
+        "WHERE object_id=? AND workspace_id=?",
+        (obj_id, service.wid),
+    ):
+        if row["zone_id"] and (not zone or row["zone_id"] != zone["id"]):
+            continue
+        value = decimal_value(row["value"], row["symbol"])
+        if row["unit"] in ("мм", "см", "м", "м.п."):
+            value = length_in_metres(value, row["unit"])
+        values[row["symbol"]] = value
+    return values
+
+
+def quantity_view(row, actual="0"):
+    result = dict(row)
+    result["planned_total_kopecks"] = money(row["quantity"], row["unit_price"])
+    result["planned_cost_kopecks"] = money(row["quantity"], row["cost_price"])
+    result["actual_quantity"] = str(actual)
+    result["actual_total_kopecks"] = money(actual, row["unit_price"])
+    return result
+
+
+def detail(service, obj):
+    zones = [dict(row) for row in service.con.execute(
+        "SELECT * FROM construction_zones WHERE object_id=? AND workspace_id=? ORDER BY created_at,id",
+        (obj["id"], service.wid),
+    )]
+    measurements = [dict(row) for row in service.con.execute(
+        "SELECT * FROM construction_measurements WHERE object_id=? AND workspace_id=? ORDER BY created_at,id",
+        (obj["id"], service.wid),
+    )]
+    rows = service.con.execute(
+        "SELECT * FROM construction_quantities WHERE object_id=? AND workspace_id=? ORDER BY created_at,id",
+        (obj["id"], service.wid),
+    ).fetchall()
+    facts = service.con.execute(
+        "SELECT quantity_id,quantity FROM construction_facts WHERE object_id=? AND workspace_id=?",
+        (obj["id"], service.wid),
+    ).fetchall()
+    actual = {}
+    for fact in facts:
+        actual[fact["quantity_id"]] = actual.get(fact["quantity_id"], Decimal(0)) + decimal_value(fact["quantity"], "Факт")
+    quantities = [quantity_view(row, actual.get(row["id"], Decimal(0))) for row in rows]
+    return {
+        "object": dict(obj), "zones": zones, "measurements": measurements,
+        "quantities": quantities,
+        "totals": {
+            "planned_kopecks": sum(item["planned_total_kopecks"] for item in quantities),
+            "actual_kopecks": sum(item["actual_total_kopecks"] for item in quantities),
+            "cost_kopecks": sum(item["planned_cost_kopecks"] for item in quantities),
+        },
+    }
+
+
+def add_zone(service, obj, data):
+    parent = data.get("parent_id") or None
+    if parent:
+        row_in_object(service, "construction_zones", parent, obj["id"])
+    unit = choice(data.get("dimension_unit", "м"), ("мм", "см", "м"), "Единица размера")
+    dimensions = {
+        key: str(length_in_metres(data.get(key, 0), unit))
+        for key in ("length", "width", "height")
+    }
+    openings = str(decimal_value(data.get("openings_m2", 0), "Площадь проёмов"))
+    values = dict(
+        id=identity(), workspace_id=service.wid, object_id=obj["id"], parent_id=parent,
+        name=string(data.get("name", ""), "Помещение", 120, True),
+        kind=choice(data.get("kind", "room"), ZONE_KINDS, "Тип зоны"),
+        length_m=dimensions["length"], width_m=dimensions["width"],
+        height_m=dimensions["height"], openings_m2=openings,
+        notes=string(data.get("notes", ""), "Заметки", 2000),
+        created_at=stamp(), updated_at=stamp(),
+    )
+    service.insert("construction_zones", values)
+    service.emit("construction_zone", values["id"], "Помещение добавлено", values["name"])
+    return 201, {"zone": values, "calculated": {key: str(value) for key, value in zone_values(
+        values["length_m"], values["width_m"], values["height_m"], openings,
+    ).items()}}
+
+
+def add_measurement(service, obj, data):
+    zone_id = data.get("zone_id") or None
+    if zone_id:
+        row_in_object(service, "construction_zones", zone_id, obj["id"])
+    symbol = string(data.get("symbol", ""), "Переменная", 32, True)
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,31}", symbol) or symbol in BUILTIN:
+        raise DomainError(400, "Переменная: латинские буквы, цифры и _, без системных имён")
+    if service.con.execute(
+        "SELECT 1 FROM construction_measurements WHERE object_id=? AND symbol=?",
+        (obj["id"], symbol),
+    ).fetchone():
+        raise DomainError(409, "Такая переменная уже есть на объекте")
+    unit = choice(data.get("unit", "м"), UNITS, "Единица")
+    value = str(decimal_value(data.get("value"), "Замер"))
+    values = dict(
+        id=identity(), workspace_id=service.wid, object_id=obj["id"], zone_id=zone_id,
+        kind=choice(data.get("kind", "custom"), MEASURE_KINDS, "Вид замера"),
+        symbol=symbol, value=value, unit=unit,
+        source=choice(data.get("source", "manual"), SOURCES, "Источник"),
+        notes=string(data.get("notes", ""), "Заметки", 2000),
+        created_by=service.user["id"], created_at=stamp(),
+    )
+    service.insert("construction_measurements", values)
+    service.emit("construction_measurement", values["id"], "Замер добавлен", symbol)
+    return 201, {"measurement": values}
+
+
+def add_quantity(service, obj, data):
+    zone_id = data.get("zone_id") or None
+    zone = row_in_object(service, "construction_zones", zone_id, obj["id"]) if zone_id else None
+    catalog_id = data.get("catalog_id") or None
+    catalog = service.get("catalog_items", catalog_id) if catalog_id else None
+    kind = choice(data.get("kind", catalog["item_type"] if catalog else "work"), KINDS, "Тип позиции")
+    title = string(data.get("title", catalog["name"] if catalog else ""), "Работа или материал", 200, True)
+    unit = choice(data.get("unit", catalog["unit"] if catalog else "м²"), UNITS, "Единица")
+    parent_id = data.get("parent_work_id") or None
+    parent = row_in_object(service, "construction_quantities", parent_id, obj["id"]) if parent_id else None
+    if parent and (kind != "material" or parent["kind"] != "work"):
+        raise DomainError(400, "Расход материала привязывается к работе")
+    rate = decimal_value(data.get("consumption_rate", catalog["consumption_rate"] if catalog else 0), "Норма расхода")
+    waste = decimal_value(data.get("waste_percent", 0), "Запас материала", maximum=Decimal(100))
+    coefficient = decimal_value(data.get("coefficient", 1), "Коэффициент", minimum=Decimal("0.001"), maximum=Decimal(100))
+    formula = string(data.get("formula", "work_qty * rate * (1 + waste / 100)" if parent else "area"), "Формула", 160, True)
+    symbols = variables(service, obj["id"], zone)
+    symbols.update(rate=rate, waste=waste, coefficient=coefficient)
+    if parent:
+        symbols["work_qty"] = decimal_value(parent["quantity"], "Объём работы")
+    qty = evaluate(formula, symbols) * coefficient
+    if qty <= 0:
+        raise DomainError(400, "Объём должен быть больше нуля")
+    qty = qty.quantize(Decimal("0.0001"))
+    price = integer(data.get("unit_price", catalog["price"] if catalog else 0), "Расценка", 0, 100_000_000_000)
+    cost = integer(data.get("cost_price", catalog["cost_price"] if catalog else 0), "Себестоимость", 0, 100_000_000_000)
+    money(qty, price)
+    values = dict(
+        id=identity(), workspace_id=service.wid, object_id=obj["id"], zone_id=zone_id,
+        parent_work_id=parent_id, catalog_id=catalog_id, kind=kind, title=title,
+        formula=formula, quantity=str(qty), unit=unit, unit_price=price,
+        cost_price=cost, consumption_rate=str(rate), waste_percent=str(waste),
+        coefficient=str(coefficient), notes=string(data.get("notes", ""), "Заметки", 2000),
+        created_at=stamp(), updated_at=stamp(),
+    )
+    service.insert("construction_quantities", values)
+    service.emit("construction_quantity", values["id"], "Объём рассчитан", title)
+    return 201, {"quantity": quantity_view(values)}
+
+
+def add_fact(service, obj, data):
+    row = row_in_object(
+        service, "construction_quantities",
+        string(data.get("quantity_id", ""), "Позиция", 80, True), obj["id"],
+    )
+    quantity = str(decimal_value(data.get("quantity"), "Факт", minimum=Decimal("0.0001")))
+    values = dict(
+        id=identity(), workspace_id=service.wid, object_id=obj["id"], quantity_id=row["id"],
+        quantity=quantity, note=string(data.get("note", ""), "Примечание", 1000),
+        created_by=service.user["id"], created_at=stamp(),
+    )
+    service.insert("construction_facts", values)
+    service.emit("construction_fact", values["id"], "Факт зафиксирован", row["title"])
+    return 201, {"fact": values}
+
+
+def as_xlsx(service, obj):
+    from openpyxl import Workbook
+
+    snapshot = detail(service, obj)
+    book = Workbook()
+    sheet = book.active
+    sheet.title = "Ведомость"
+    sheet.append(["Вид", "Работа / материал", "Помещение", "Формула", "Объём", "Ед.", "Расценка, ₽", "План, ₽", "Факт"])
+    zone_names = {zone["id"]: zone["name"] for zone in snapshot["zones"]}
+    for item in snapshot["quantities"]:
+        sheet.append([
+            item["kind"], item["title"], zone_names.get(item["zone_id"], ""), item["formula"],
+            float(item["quantity"]), item["unit"], item["unit_price"] / 100,
+            item["planned_total_kopecks"] / 100, float(item["actual_quantity"]),
+        ])
+    sheet.freeze_panes = "A2"
+    for column, width in {"A": 16, "B": 38, "C": 24, "D": 34, "E": 16, "F": 10, "G": 18, "H": 18, "I": 14}.items():
+        sheet.column_dimensions[column].width = width
+    output = io.BytesIO()
+    book.save(output)
+    return 200, Download(output.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "smetra-vedomost.xlsx")
+
+
+def to_quote(service, obj):
+    if obj["quote_id"]:
+        return 200, {"quote": service.quote_view(service.get("quotes", obj["quote_id"]))}
+    snapshot = detail(service, obj)
+    if not snapshot["quantities"]:
+        raise DomainError(409, "Добавьте работы или материалы в ведомость")
+    if len(snapshot["quantities"]) > 200:
+        raise DomainError(409, "Для одной сметы выберите не более 200 позиций")
+    client = service.get("clients", obj["client_id"]) if obj["client_id"] else None
+    items = [{
+        "name": item["title"], "quantity": item["quantity"], "unit": item["unit"],
+        "unit_price": item["unit_price"], "cost_price": item["cost_price"],
+        "category": item["kind"], "description": item["notes"],
+    } for item in snapshot["quantities"]]
+    quote = service.create_quote({
+        "title": obj["name"][:120], "client": client["name"] if client else "Клиент не указан",
+        "client_id": obj["client_id"], "description": obj["description"], "items": items,
+    })
+    service.con.execute(
+        "UPDATE construction_objects SET quote_id=?,updated_at=? WHERE id=? AND workspace_id=?",
+        (quote["id"], stamp(), obj["id"], service.wid),
+    )
+    service.emit("construction_object", obj["id"], "Смета создана из ведомости", quote["id"])
+    return 201, {"quote": quote}
+
+
+def route(service, method, parts, query, data):
+    if parts == ["units"] and method == "GET":
+        return 200, {"units": sorted(UNITS), "kinds": KINDS}
+    if parts == ["calculate"] and method == "POST":
+        symbols = zone_values(data.get("length", 0), data.get("width", 0), data.get("height", 0), data.get("openings", 0))
+        return 200, {"quantity": str(evaluate(data.get("formula", "area"), symbols)),
+                     "variables": {key: str(value) for key, value in symbols.items()}}
+    if not parts or parts[0] != "objects":
+        raise DomainError(404, "Объект не найден")
+    if len(parts) == 1:
+        if method == "GET":
+            return 200, {"items": [dict(row) for row in service.con.execute(
+                "SELECT id,name,description,status,client_id,quote_id,project_id,created_at,updated_at "
+                "FROM construction_objects WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 50 OFFSET ?",
+                (service.wid, service.page(query)),
+            )]}
+        if method == "POST":
+            client_id = data.get("client_id") or None
+            if client_id:
+                service.get("clients", client_id)
+            values = dict(
+                id=identity(), workspace_id=service.wid, client_id=client_id, quote_id=None,
+                project_id=None, name=string(data.get("name", ""), "Объект", 200, True),
+                description=string(data.get("description", ""), "Описание", 5000),
+                status="survey", created_at=stamp(), updated_at=stamp(),
+            )
+            service.insert("construction_objects", values)
+            service.emit("construction_object", values["id"], "Объект создан", values["name"])
+            return 201, {"object": values}
+        raise DomainError(405, "Метод не поддерживается")
+    obj = service.get("construction_objects", parts[1])
+    rest = parts[2:]
+    if not rest:
+        if method == "GET":
+            return 200, detail(service, obj)
+        if method == "PATCH":
+            name = string(data.get("name", obj["name"]), "Объект", 200, True)
+            description = string(data.get("description", obj["description"]), "Описание", 5000)
+            service.update("construction_objects", obj["id"], dict(name=name,description=description,updated_at=stamp()))
+            return 200, {"object": dict(obj, name=name, description=description)}
+        raise DomainError(405, "Метод не поддерживается")
+    if rest == ["zones"] and method == "POST":
+        return add_zone(service, obj, data)
+    if rest == ["measurements"] and method == "POST":
+        return add_measurement(service, obj, data)
+    if rest == ["quantities"] and method == "POST":
+        return add_quantity(service, obj, data)
+    if rest == ["facts"] and method == "POST":
+        return add_fact(service, obj, data)
+    if rest == ["quote"] and method == "POST":
+        return to_quote(service, obj)
+    if rest == ["xlsx"] and method == "GET":
+        return as_xlsx(service, obj)
+    raise DomainError(404, "Действие не найдено")

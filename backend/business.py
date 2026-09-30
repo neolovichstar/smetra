@@ -188,10 +188,29 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "007_construction_core.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
     con.execute("CREATE INDEX IF NOT EXISTS idx_assistant_messages_conversation ON assistant_messages(conversation_id,created_at)")
+    for table, columns in (
+        ("files", {"construction_id": "TEXT REFERENCES construction_objects(id) ON DELETE CASCADE"}),
+        ("catalog_items", {
+            "item_type": "TEXT NOT NULL DEFAULT 'service'",
+            "supplier": "TEXT NOT NULL DEFAULT ''",
+            "article": "TEXT NOT NULL DEFAULT ''",
+            "consumption_rate": "TEXT NOT NULL DEFAULT '0'",
+            "notes": "TEXT NOT NULL DEFAULT ''",
+        }),
+    ):
+        present = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+        for column, definition in columns.items():
+            if column not in present:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -273,6 +292,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(3,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(6,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(8,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(9,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -290,7 +310,9 @@ ENTITIES = {
     },
     "catalog": {
         "table": "catalog_items",
-        "strings": {"name": 200, "description": 3000, "unit": 30, "category": 100},
+        "strings": {"name": 200, "description": 3000, "unit": 30, "category": 100,
+                    "supplier": 200, "article": 100, "notes": 2000},
+        "choices": {"item_type": ("work", "material", "equipment", "service", "other")},
         "money": ("price", "cost_price"),
         "refs": {},
     },
@@ -1288,6 +1310,10 @@ class Service:
                 raise DomainError(400, "Некорректные теги")
             values["tags"] = packed([string(v, "Тег", 50, True) for v in tags])
         if kind == "catalog":
+            values["consumption_rate"] = str(decimal(
+                data.get("consumption_rate", old["consumption_rate"] if old else "0"),
+                "Норма расхода", "0", "1000000",
+            ))
             values["tax"] = str(
                 decimal(data.get("tax", old["tax"] if old else "0"), "Налог")
             )
@@ -1810,6 +1836,10 @@ class Service:
             except ModuleNotFoundError:
                 from attachments import route
             return route(self, method, parts, query, data)
+        if kind == "construction":
+            from backend.construction import route
+
+            return route(self, method, parts, query, data)
         if kind in ("documents", "transfer"):
             try:
                 from backend import documents
@@ -2003,6 +2033,7 @@ ROUTES = set(ENTITIES) | {
     "documents",
     "transfer",
     "files",
+    "construction",
     "ai",
     "capabilities",
 }

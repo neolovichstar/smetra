@@ -181,6 +181,23 @@ def tools():
             {"query": text},
             ("query",),
         ),
+        function(
+            "list_construction_objects",
+            "Список строительных объектов пользователя. Замеры и цены нельзя выдумывать.",
+            {},
+        ),
+        function(
+            "get_construction_object",
+            "Прочитать реальные помещения, замеры, расчётные позиции и план/факт объекта.",
+            {"id": text},
+            ("id",),
+        ),
+        function(
+            "calculate_construction",
+            "Проверить формулу объёма по указанным размерам без записи данных.",
+            {"length": text, "width": text, "height": text, "openings": text, "formula": text},
+            ("length", "width", "height", "formula"),
+        ),
     ]
     for kind in ENTITIES:
         properties = {field: {"type": "string"} for field in EDIT_FIELDS[kind]}
@@ -364,6 +381,15 @@ def query_model_stream(messages, on_delta):
 
 
 def execute_read(service, name, args):
+    if name == "list_construction_objects":
+        return service.route("GET", "construction", ["objects"], {}, {})[1]
+    if name == "get_construction_object":
+        object_id = string(args.get("id", ""), "ID", 80, True)
+        return service.route("GET", "construction", ["objects", object_id], {}, {})[1]
+    if name == "calculate_construction":
+        fields = {key: args.get(key, 0) for key in ("length", "width", "height", "openings")}
+        fields["formula"] = args.get("formula", "area")
+        return service.route("POST", "construction", ["calculate"], {}, fields)[1]
     if name == "overview":
         return service.overview()[1]
     if name == "list_files":
@@ -408,6 +434,9 @@ def prepare(service, name, args):
         "list_files",
         "search_knowledge",
         "search_file_content",
+        "list_construction_objects",
+        "get_construction_object",
+        "calculate_construction",
     }
     if name not in allowed:
         raise DomainError(400, "Неизвестное действие")
@@ -585,7 +614,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 args = json.loads(call["function"]["arguments"])
                 if not isinstance(args, dict):
                     raise ValueError("arguments")
-                if name in ("list_records", "get_record", "overview", "read_file", "list_files", "search_knowledge", "search_file_content"):
+                if name in ("list_records", "get_record", "overview", "read_file", "list_files", "search_knowledge", "search_file_content", "list_construction_objects", "get_construction_object", "calculate_construction"):
                     result = execute_read(service, name, args)
                 else:
                     action = prepare(service, name, args)

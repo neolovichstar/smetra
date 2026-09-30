@@ -48,12 +48,13 @@ def route(service, method, parts, query, data):
     if method == "GET":
         if parts:
             return 200, download(service.get("files", parts[0]), service.con)
-        for key in ("quote_id", "project_id", "client_id"):
+        for key in ("quote_id", "project_id", "client_id", "construction_id"):
             if query.get(key):
                 table = {
                     "quote_id": "quotes",
                     "project_id": "projects",
                     "client_id": "clients",
+                    "construction_id": "construction_objects",
                 }[key]
                 service.get(table, query[key][0])
                 return 200, {
@@ -69,7 +70,7 @@ def route(service, method, parts, query, data):
         phrase = string(query.get("q", [""])[0], "Поиск", 100)
         return 200, {
             "items": [dict(row) for row in service.con.execute(
-                "SELECT id,name,mime,size,public,created_at,quote_id,project_id,client_id "
+                "SELECT id,name,mime,size,public,created_at,quote_id,project_id,client_id,construction_id "
                 "FROM files WHERE workspace_id=? AND instr(lower(name),lower(?))>0 "
                 "ORDER BY created_at DESC LIMIT 50 OFFSET ?",
                 (service.wid, phrase, service.page(query)),
@@ -86,7 +87,7 @@ def route(service, method, parts, query, data):
     if method != "POST":
         raise DomainError(405, "Метод не поддерживается")
     references = {
-        key: data.get(key) or None for key in ("quote_id", "project_id", "client_id")
+        key: data.get(key) or None for key in ("quote_id", "project_id", "client_id", "construction_id")
     }
     if sum(bool(v) for v in references.values()) != 1:
         raise DomainError(400, "Привяжите файл к одной записи")
@@ -94,6 +95,7 @@ def route(service, method, parts, query, data):
         ("quote_id", "quotes"),
         ("project_id", "projects"),
         ("client_id", "clients"),
+        ("construction_id", "construction_objects"),
     ):
         if references[key]:
             service.get(table, references[key])

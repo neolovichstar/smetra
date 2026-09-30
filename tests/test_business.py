@@ -19,6 +19,15 @@ from backend.business import DomainError, Service, calculate
 
 
 class CalculationTests(unittest.TestCase):
+    def test_construction_formula_is_bounded_and_safe(self):
+        from backend.construction_math import evaluate, zone_values
+
+        values = zone_values(5, 4, 3, 2)
+        self.assertEqual(str(evaluate('area - openings', values)), '18.0000')
+        for expression in ('__import__("os")', '2 ** 1000', '1 / 0', '-1', 'missing'):
+            with self.subTest(expression=expression), self.assertRaises(DomainError):
+                evaluate(expression, values)
+
     def test_decimal_rounding_discount_markup_tax_and_optional(self):
         items, total, cost = calculate(
             [
@@ -58,6 +67,57 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_construction_measure_to_quote_and_workspace_isolation(self):
+        token, _ = self.account('builder-' + os.urandom(4).hex())
+        other, _ = self.account('other-builder-' + os.urandom(4).hex())
+        status, result = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, token)
+        self.assertEqual(status, 201, result)
+        obj = result['object']['id']
+        status, result = self.call(f'/construction/objects/{obj}/zones', 'POST', {
+            'name': 'Кухня', 'length': '5', 'width': '4', 'height': '2.8',
+        }, token)
+        self.assertEqual(status, 201, result)
+        zone = result['zone']['id']
+        self.assertEqual(result['calculated']['area'], '20')
+        status, result = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone, 'title': 'Покраска', 'formula': 'area', 'unit_price': 15000,
+        }, token)
+        self.assertEqual(status, 201, result)
+        work = result['quantity']
+        self.assertEqual(work['planned_total_kopecks'], 300000)
+        status, result = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'parent_work_id': work['id'], 'kind': 'material', 'title': 'Краска',
+            'unit': 'л', 'consumption_rate': '0.2', 'waste_percent': 10,
+            'unit_price': 80000,
+        }, token)
+        self.assertEqual(status, 201, result)
+        self.assertEqual(result['quantity']['quantity'], '4.4000')
+        status, result = self.call(f'/construction/objects/{obj}/facts', 'POST', {
+            'quantity_id': work['id'], 'quantity': '8',
+        }, token)
+        self.assertEqual(status, 201, result)
+        status, result = self.call(f'/construction/objects/{obj}', token=token)
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result['totals']['actual_kopecks'], 120000)
+        status, result = self.call(f'/construction/objects/{obj}/quote', 'POST', {}, token)
+        self.assertEqual(status, 201, result)
+        self.assertEqual(result['quote']['amount_kopecks'], 652000)
+        status, sheet = self.call(f'/construction/objects/{obj}/xlsx', token=token, raw=True)
+        self.assertEqual(status, 200)
+        self.assertTrue(sheet.startswith(b'PK'))
+        status, result = self.call('/files', 'POST', {
+            'construction_id': obj, 'name': 'замер.txt',
+            'content': base64.b64encode('Кухня 5 × 4 м'.encode()).decode(),
+        }, token)
+        self.assertEqual(status, 201, result)
+        status, result = self.call('/files?construction_id=' + obj, token=token)
+        self.assertEqual(status, 200, result)
+        self.assertEqual(len(result['items']), 1)
+        status, _ = self.call(f'/construction/objects/{obj}', token=other)
+        self.assertEqual(status, 404)
+        status, _ = self.call('/files?construction_id=' + obj, token=other)
+        self.assertEqual(status, 404)
+
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()

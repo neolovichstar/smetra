@@ -37,6 +37,7 @@ async function render() {
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   try {
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant();return;}
+    if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
     if(window.Workspace && await window.Workspace.render(tab))return;
     if(tab==='dashboard'||tab==='quotes') {
       await loadQuotes();
