@@ -183,6 +183,15 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "006_ai_workspace.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
+    if "conversation_id" not in assistant_columns:
+        con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_assistant_messages_conversation ON assistant_messages(conversation_id,created_at)")
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -263,6 +272,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(2,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(3,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(6,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(8,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -1837,6 +1847,12 @@ class Service:
                             (self.wid, term),
                         )
                     )
+                from backend.assistant_files import search_content
+
+                results.extend(
+                    dict(item, id=item["file_id"], kind="file")
+                    for item in search_content(self, term)["items"]
+                )
             return 200, {"items": results}
         if kind == "activity" and method == "GET":
             return 200, {

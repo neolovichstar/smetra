@@ -106,6 +106,51 @@ class IdentityAssistantTests(unittest.TestCase):
             self.assertEqual([item["name"] for item in list_files(service, "brief")["files"]],
                              ["private-brief.txt"])
 
+    def test_knowledge_rules_and_conversations_are_scoped(self):
+        owner, _ = self.account("knowledge-owner")
+        outsider, _ = self.account("knowledge-outsider")
+        code, created = self.call(
+            "/assistant/knowledge", "POST",
+            {"title": "Правило расчёта", "content": "Не добавлять НДС без просьбы", "kind": "rule"}, owner,
+        )
+        self.assertEqual(code, 201, created)
+        knowledge_id = created["item"]["id"]
+        self.assertEqual(self.call("/assistant/knowledge/" + knowledge_id, token=outsider)[0], 404)
+        self.assertEqual(self.call("/assistant/knowledge", token=outsider)[1]["items"], [])
+        code, created = self.call(
+            "/assistant/conversations", "POST", {"title": "Заказы сегодня"}, owner,
+        )
+        self.assertEqual(code, 201, created)
+        conversation_id = created["conversation"]["id"]
+        self.assertEqual(self.call("/assistant/conversations/" + conversation_id, token=outsider)[0], 404)
+        with (patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"),
+              patch("backend.assistant.query_model", return_value={"content": "Проверю заказы."}) as provider):
+            code, _ = self.call(
+                "/assistant/chat", "POST", {"text": "Что с заказами?", "conversation_id": conversation_id}, owner,
+            )
+        self.assertEqual(code, 200)
+        self.assertIn("Не добавлять НДС", provider.call_args.args[0][1]["content"])
+        messages = self.call("/assistant/conversations/" + conversation_id, token=owner)[1]["messages"]
+        self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
+        self.assertEqual(self.call("/assistant", token=owner)[1]["messages"], [])
+        self.assertEqual(self.call("/assistant/conversations/" + conversation_id, "PATCH",
+                                   {"title": "Важные заказы", "pinned": 1}, owner)[0], 200)
+        self.assertEqual(self.call("/assistant/conversations/" + conversation_id, "DELETE", token=owner)[0], 200)
+        self.assertEqual(self.call("/assistant/conversations/" + conversation_id, token=owner)[0], 404)
+
+    def test_uploaded_text_is_searchable_with_workspace_and_page(self):
+        owner, _ = self.account("indexed-file-owner")
+        outsider, _ = self.account("indexed-file-outsider")
+        quote = BusinessFlows.quote(self, owner)
+        code, uploaded = self.call(
+            "/files", "POST", {"quote_id": quote["id"], "name": "scope.txt",
+            "content": base64.b64encode("Срок гарантии 24 месяца".encode()).decode()}, owner,
+        )
+        self.assertEqual(code, 201, uploaded)
+        found = self.call("/search?q=24", token=owner)[1]["items"]
+        self.assertTrue(any(item.get("kind") == "file" and item.get("page") == 1 for item in found))
+        self.assertFalse(self.call("/search?q=24", token=outsider)[1]["items"])
+
     def get_redirect(self, path, cookie=""):
         connection = http.client.HTTPConnection(
             "127.0.0.1", self.server.server_address[1]

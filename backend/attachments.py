@@ -66,7 +66,15 @@ def route(service, method, parts, query, data):
                         )
                     ],
                 }
-        raise DomainError(400, "Выберите смету, заказ или клиента")
+        phrase = string(query.get("q", [""])[0], "Поиск", 100)
+        return 200, {
+            "items": [dict(row) for row in service.con.execute(
+                "SELECT id,name,mime,size,public,created_at,quote_id,project_id,client_id "
+                "FROM files WHERE workspace_id=? AND instr(lower(name),lower(?))>0 "
+                "ORDER BY created_at DESC LIMIT 50 OFFSET ?",
+                (service.wid, phrase, service.page(query)),
+            )],
+        }
     if method == "DELETE" and parts:
         row = service.get("files", parts[0])
         service.con.execute(
@@ -229,6 +237,9 @@ def route(service, method, parts, query, data):
         service.con.execute(
             "INSERT INTO file_payloads(file_id,content) VALUES(?,?)", (fid, raw)
         )
+        from backend.assistant_files import index_file
+
+        index_file(service, values, raw)
         service.emit("file", fid, "Файл прикреплён", name)
     else:
         root = directory()
@@ -237,6 +248,9 @@ def route(service, method, parts, query, data):
         path.write_bytes(raw)
         try:
             service.insert("files", values)
+            from backend.assistant_files import index_file
+
+            index_file(service, values, raw)
             service.emit("file", fid, "Файл прикреплён", name)
         except Exception:
             path.unlink(missing_ok=True)

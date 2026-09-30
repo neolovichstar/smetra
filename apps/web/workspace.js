@@ -1,7 +1,7 @@
 /* Workspace UI. All persistent business actions go through the authenticated API. */
 window.Workspace = (() => {
   const labels = {draft:'Черновик',sent:'Отправлена',viewed:'Просмотрена',changes_requested:'Нужны изменения',approved:'Согласована',rejected:'Отклонена',expired:'Истекла',planned:'Запланирован',in_progress:'В работе',waiting:'Ожидание',completed:'Завершён',cancelled:'Отменён',todo:'К выполнению',done:'Готово',person:'Физлицо',company:'Компания',low:'Низкий',normal:'Обычный',high:'Высокий',bank_transfer:'Перевод',cash:'Наличные',external:'Внешняя оплата',owner:'Владелец',admin:'Администратор',manager:'Менеджер',member:'Участник',viewer:'Наблюдатель'};
-  const names = {clients:'Клиенты',catalog:'Каталог',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
+  const names = {clients:'Клиенты',catalog:'Каталог',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
   const e = escapeHtml;
   const money = (n,c='RUB') => new Intl.NumberFormat('ru-RU',{style:'currency',currency:c,maximumFractionDigits:2}).format((n||0)/100);
   const status = value => `<span class="pill status-${e(value)}">${e(labels[value]||value)}</span>`;
@@ -38,6 +38,7 @@ window.Workspace = (() => {
     const mine=++generation;current=section;
     if(!workspace && section!=='dashboard')await init();
     let html='';
+    let fileCenterData;
     const add=roleCanWrite()?button('+ Добавить','new',section,'primary'):'';
     if(section==='dashboard'){
       const response=await api('/dashboard');if(mine!==generation)return;
@@ -72,14 +73,27 @@ window.Workspace = (() => {
       const result=await api('/workspace/members');if(mine!==generation)return;
       html=mainTitle('Рабочее пространство','Роли определяют доступ к данным и действиям.',button('Добавить участника','member','','primary'))+
         `<section class="panel"><div class="form-grid">${select('workspace','Пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}<div class="field"><label>Ваша роль</label><p>${e(labels[workspace.role])}</p></div></div><h3>Команда</h3>${result.items.map(m=>`<div class="record-line"><div><strong>${e(m.name)}</strong><small>${e(m.email)}</small></div>${status(m.role)}${m.role!=='owner'?button('Убрать','remove-member',m.user_id):''}</div>`).join('')}</section><section class="panel"><h3>Настройки бизнеса</h3><form id="workspace-settings"><div class="form-grid">${field('name','Название',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>${field('company_details','Реквизиты',workspace.settings.company_details||'','textarea')}${field('pipeline','Этапы лидов — по одному в строке',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea')}<p class="form-error" role="alert"></p><button class="btn primary" type="submit">Сохранить</button></form></section>`;
+    }else if(section==='files'){
+      fileCenterData=await api('/files');if(mine!==generation)return;
+      html=mainTitle('Файлы','Вложения смет, клиентов и заказов. Текстовые файлы доступны для поиска и ассистента.')+
+        `<section class="panel file-center"><div class="toolbar"><input id="file-center-search" type="search" aria-label="Поиск файлов" placeholder="Найти файл по названию"></div><div id="file-center-list"></div></section>`;
     }else if(section==='documents'){
       const result=await api('/documents');if(mine!==generation)return;
       html=mainTitle('Документы','Зафиксированные условия в аккуратном документе.',button('Создать документ','document','','primary'))+`<section class="panel">${result.items.length?result.items.map(d=>`<div class="record-line"><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div>${button('Скачать PDF','download-document',d.id)}</div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
     }else return false;
     if(mine!==generation)return true;
     view(html);bind(section);
+    if(section==='files')bindFileCenter(fileCenterData);
     if(section==='team')await customFieldSettings();
     return true;
+  }
+  function bindFileCenter(initial){
+    const list=document.querySelector('#file-center-list'),search=document.querySelector('#file-center-search');
+    let files=initial.items,timer;
+    const paint=()=>{list.innerHTML=files.length?files.map(file=>`<div class="record-line file-center-row"><div><strong>${e(file.name)}</strong><small>${Math.ceil(file.size/1024)} КБ · ${e(file.mime)} · ${date(file.created_at)}</small></div><div class="attachment-actions"><button class="btn small" data-file-open="${e(file.id)}">Открыть</button>${['text/plain','application/pdf'].includes(file.mime)&&file.size<=2000000?`<button class="btn small" data-file-ask="${e(file.id)}">Спросить AI</button>`:''}</div></div>`).join(''):empty('Файлы не найдены','Прикрепите файл к смете, клиенту или заказу.')};
+    paint();
+    search.oninput=()=>{clearTimeout(timer);timer=setTimeout(async()=>{try{files=(await api('/files?q='+encodeURIComponent(search.value.trim()))).items;paint()}catch(error){notify(error.message)}},200)};
+    list.onclick=event=>{const button=event.target.closest('[data-file-open],[data-file-ask]');if(!button)return;const id=button.dataset.fileOpen||button.dataset.fileAsk,file=files.find(item=>item.id===id);if(!file)return;if(button.dataset.fileAsk)askAbout('files',file.id,file.name);else window.SmetraFilePreview?.open(file,workspace?.id)};
   }
   function activityList(items){return items.length?`<div class="activity-list">${items.map(a=>`<div class="activity-item"><span class="activity-dot"></span><div><strong>${e(a.action)}</strong><small>${e(a.actor||'Сметра')} · ${date(a.created_at)}</small>${a.detail?`<p>${e(a.detail)}</p>`:''}</div></div>`).join('')}</div>`:empty('История начинается здесь','События появятся после первого действия.')}
   function quoteRows(items){return items.length?items.map(q=>`<div class="record-line"><button class="record-title" data-work="quote" data-id="${q.id}"><strong>${e(q.title)}</strong><small>${e(q.client)} · ${q.published_version?'v'+q.published_version:'Новая смета'}</small></button><div class="record-meta">${status(q.approval_state)}<b>${money(q.amount_kopecks,q.currency)}</b>${button('Открыть ↗','quote',q.id)}</div></div>`).join(''):empty('Первый расчёт — начало работы','Создайте смету, добавьте позиции и отправьте ссылку клиенту.')}
