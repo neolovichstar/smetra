@@ -74,6 +74,10 @@ window.SmetraAssistant=async function(){
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
+  const composer=document.querySelector('.assistant-composer');
+  const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach">+ Файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md" hidden><span>PDF, TXT или Markdown · до 5 МБ</span>';
+  composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const quotaLabel=document.querySelector('#assistant-quota');
@@ -100,6 +104,27 @@ window.SmetraAssistant=async function(){
   };
   renderContext();
   document.querySelector('#assistant-context-remove').onclick=()=>{context=null;renderContext();input.focus()};
+  const fileInput=document.querySelector('#assistant-attach-input');
+  const attachButton=document.querySelector('#assistant-attach');
+  attachButton.onclick=()=>fileInput.click();
+  const uploadAttachment=async file=>{
+    if(!file)return;
+    const extension=file.name.toLowerCase().split('.').pop();
+    if(!['pdf','txt','md'].includes(extension)||file.size<1||file.size>5000000){status.textContent='Выберите PDF, TXT или MD до 5 МБ';return}
+    attachButton.disabled=true;status.textContent='Прикрепляю файл…';
+    try{
+      const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
+      for(let index=0;index<bytes.length;index+=32768)binary+=String.fromCharCode(...bytes.subarray(index,index+32768));
+      const result=await api('/files',{method:'POST',body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
+      context={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
+      sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();
+      status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
+    }catch(error){status.textContent=error.message}
+    finally{attachButton.disabled=false;fileInput.value=''}
+  };
+  fileInput.onchange=()=>uploadAttachment(fileInput.files[0]);
+  composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
+  composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();uploadAttachment(event.dataTransfer.files[0])}});
   let quota=data.quota,working=false,requestController=null;
   const stop=document.querySelector('#assistant-stop');
   stop.onclick=()=>requestController?.abort();

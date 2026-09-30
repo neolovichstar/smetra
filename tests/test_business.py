@@ -78,6 +78,20 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_chat_upload_is_private_searchable_and_limited_to_readable_files(self):
+        owner, _ = self.account('chat-file-owner')
+        other, _ = self.account('chat-file-other')
+        payload = {'assistant_upload': True, 'name': 'inspection.md',
+                   'content': base64.b64encode(b'# Inspection\nPaint sample').decode()}
+        status, uploaded = self.call('/files', 'POST', payload, owner)
+        self.assertEqual(status, 201, uploaded)
+        file_id = uploaded['file']['id']
+        self.assertEqual(self.call('/files/' + file_id, token=owner, raw=True)[1], b'# Inspection\nPaint sample')
+        self.assertEqual(self.call('/files/' + file_id, token=other)[0], 404)
+        self.assertEqual(self.call('/search?q=Paint%20sample', token=owner)[1]['items'][0]['file_id'], file_id)
+        self.assertEqual(self.call('/files', 'POST', dict(payload, public=1), owner)[0], 400)
+        self.assertEqual(self.call('/files', 'POST', dict(payload, name='inspection.png'), owner)[0], 400)
+
     def test_measurement_change_recalculates_work_without_rewriting_quote(self):
         token, _ = self.account('measure-owner')
         other, _ = self.account('measure-other')

@@ -40,6 +40,7 @@
 .assistant-page .assistant-proposal{border-top:1px solid #34506d;padding:22px 0 27px;animation:chat-enter .38s cubic-bezier(.2,.8,.2,1) both}
 .assistant-page .assistant-proposal h3{font-size:16px}
 .assistant-composer{position:sticky;bottom:0;z-index:4;padding:16px 0 22px;background:linear-gradient(180deg,#0000 0%,#000 14%,#000 100%);backdrop-filter:none}
+.assistant-attachment-bar{display:flex;align-items:center;gap:10px;min-height:28px;margin:0 3px 8px;color:#788595;font-size:10px}.assistant-attachment-bar button{border:0;background:none;color:#aacdff;padding:4px 2px;font:11px inherit;cursor:pointer}.assistant-attachment-bar button:hover{text-decoration:underline;text-underline-offset:3px}.assistant-attachment-bar button:disabled{opacity:.5;cursor:wait}
 .assistant-context{display:flex;align-items:center;gap:10px;width:fit-content;max-width:100%;min-height:32px;margin:0 0 8px;padding:4px 5px 4px 11px;border:1px solid #354b69;border-radius:8px;background:#101a29;color:#c6ddfb;font-size:11px}
 .assistant-context>span{flex:none;color:#8394a9;font-size:10px}
 .assistant-context strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
@@ -70,5 +71,6 @@
 @keyframes chat-caret{50%{opacity:.2}}
 @media(max-width:700px){.assistant-page{min-height:calc(100dvh - 140px)}.assistant-header{align-items:start;flex-direction:column;gap:8px}.assistant-page .assistant-header h1{font-size:30px}.assistant-quota{font-size:10px}.assistant-thread{padding:14px 0 70px}.assistant-message{padding:17px 0}.assistant-markdown{font-size:13px}.assistant-composer{padding-bottom:max(12px,env(safe-area-inset-bottom))}.assistant-composer-foot>span:last-child{display:none}.assistant-suggestions button{font-size:11px}}
 @media(max-width:700px){.assistant-context{width:100%;font-size:11px}.assistant-context strong{flex:1}.assistant-page .assistant-welcome{padding:24px 0 15px}.assistant-suggestions{margin:20px 0;gap:7px}.assistant-composer{padding-top:9px}.assistant-composer form{border-radius:13px}}
+@media(max-width:390px){.assistant-attachment-bar span{display:none}}
 @media(max-width:700px){.assistant-workbar select{max-width:none;width:100%;flex-basis:100%}.assistant-workbar .btn{flex:1}.knowledge-list{grid-template-columns:1fr}.assistant-knowledge h2{font-size:20px}}
 @media(prefers-reduced-motion:reduce){.assistant-message,.assistant-welcome,.assistant-page .assistant-proposal,.assistant-message.streaming .assistant-markdown:after{animation:none}}

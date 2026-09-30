@@ -129,7 +129,8 @@ def route(service, method, parts, query, data):
     references = {
         key: data.get(key) or None for key in ("quote_id", "project_id", "client_id", "construction_id")
     }
-    if sum(bool(v) for v in references.values()) != 1:
+    assistant_upload = data.get("assistant_upload") is True
+    if sum(bool(v) for v in references.values()) != (0 if assistant_upload else 1):
         raise DomainError(400, "Привяжите файл к одной записи")
     for key, table in (
         ("quote_id", "quotes"),
@@ -143,6 +144,8 @@ def route(service, method, parts, query, data):
     extension = Path(name).suffix.lower()
     if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md"):
         raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT и MD")
+    if assistant_upload and extension not in (".pdf", ".txt", ".md"):
+        raise DomainError(400, "Ассистент читает PDF, TXT и MD")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
