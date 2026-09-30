@@ -195,6 +195,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "008_construction_defects.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -302,6 +307,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(8,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(9,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(10,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(11,?)", (stamp(),))
 
 
 ENTITIES = {

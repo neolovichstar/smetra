@@ -118,9 +118,14 @@ def detail(service, obj):
     for fact in facts:
         actual[fact["quantity_id"]] = actual.get(fact["quantity_id"], Decimal(0)) + decimal_value(fact["quantity"], "Факт")
     quantities = [quantity_view(row, actual.get(row["id"], Decimal(0))) for row in rows]
+    defects = [dict(row) for row in service.con.execute(
+        "SELECT * FROM construction_defects WHERE object_id=? AND workspace_id=? "
+        "ORDER BY created_at DESC,id DESC LIMIT 100",
+        (obj["id"], service.wid),
+    )]
     return {
         "object": dict(obj), "zones": zones, "measurements": measurements,
-        "quantities": quantities,
+        "quantities": quantities, "defects": defects,
         "totals": {
             "planned_kopecks": sum(item["planned_total_kopecks"] for item in quantities),
             "actual_kopecks": sum(item["actual_total_kopecks"] for item in quantities),
@@ -249,6 +254,26 @@ def add_fact(service, obj, data):
     service.insert("construction_facts", values)
     service.emit("construction_fact", values["id"], "Факт зафиксирован", row["title"])
     return 201, {"fact": values}
+
+
+def defect_fields(service, obj, data, previous=None):
+    zone_id = data.get("zone_id", previous["zone_id"] if previous else None) or None
+    if zone_id:
+        row_in_object(service, "construction_zones", zone_id, obj["id"])
+    photo_id = data.get("photo_file_id", previous["photo_file_id"] if previous else None) or None
+    if photo_id:
+        photo = service.get("files", photo_id)
+        if photo["construction_id"] != obj["id"] or photo["mime"] not in ("image/png", "image/jpeg"):
+            raise DomainError(400, "Нужно фото именно этого объекта")
+    return dict(
+        zone_id=zone_id, photo_file_id=photo_id,
+        description=string(data.get("description", previous["description"] if previous else ""), "Описание дефекта", 2000, True),
+        severity=choice(data.get("severity", previous["severity"] if previous else "normal"), ("low", "normal", "high"), "Важность"),
+        measurement_note=string(data.get("measurement_note", previous["measurement_note"] if previous else ""), "Замер дефекта", 500),
+        suggested_work=string(data.get("suggested_work", previous["suggested_work"] if previous else ""), "Предлагаемая работа", 500),
+        status=choice(data.get("status", previous["status"] if previous else "open"), ("open", "in_progress", "resolved"), "Статус дефекта"),
+        updated_at=stamp(),
+    )
 
 
 def as_xlsx(service, obj):
@@ -485,6 +510,25 @@ def route(service, method, parts, query, data):
         return 200, detail(service, service.get("construction_objects", obj["id"]))
     if rest == ["facts"] and method == "POST":
         return add_fact(service, obj, data)
+    if rest == ["defects"] and method == "POST":
+        count = service.con.execute(
+            "SELECT count(*) FROM construction_defects WHERE object_id=? AND workspace_id=?",
+            (obj["id"], service.wid),
+        ).fetchone()[0]
+        if count >= 100:
+            raise DomainError(409, "На объекте может быть не больше 100 дефектов")
+        values = dict(id=identity(), workspace_id=service.wid, object_id=obj["id"],
+                      created_by=service.user["id"], created_at=stamp(),
+                      **defect_fields(service, obj, data))
+        service.insert("construction_defects", values)
+        service.emit("construction_defect", values["id"], "Дефект добавлен", values["description"][:120])
+        return 201, {"defect": values}
+    if len(rest) == 2 and rest[0] == "defects" and method == "PATCH":
+        defect = row_in_object(service, "construction_defects", rest[1], obj["id"])
+        values = defect_fields(service, obj, data, defect)
+        service.update("construction_defects", defect["id"], values)
+        service.emit("construction_defect", defect["id"], "Дефект обновлён", values["status"])
+        return 200, {"defect": dict(defect, **values)}
     if len(rest) == 2 and rest[0] == "facts" and method == "DELETE":
         fact = row_in_object(service, "construction_facts", rest[1], obj["id"])
         service.con.execute("DELETE FROM construction_facts WHERE id=? AND workspace_id=?", (fact["id"], service.wid))

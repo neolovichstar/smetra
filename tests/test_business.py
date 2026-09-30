@@ -209,6 +209,22 @@ class BusinessFlows(unittest.TestCase):
         status, result = self.call('/files?construction_id=' + obj, token=token)
         self.assertEqual(status, 200, result)
         self.assertEqual(len(result['items']), 1)
+        status, defect = self.call(f'/construction/objects/{obj}/defects', 'POST', {
+            'zone_id': zone, 'description': 'Трещина в углу',
+            'measurement_note': '1,2 м', 'suggested_work': 'Заделка', 'severity': 'high',
+        }, token)
+        self.assertEqual(status, 201, defect)
+        defect_id = defect['defect']['id']
+        self.assertEqual(self.call(f'/construction/objects/{obj}/defects/{defect_id}', 'PATCH', {
+            'status': 'resolved',
+        }, token)[1]['defect']['status'], 'resolved')
+        self.assertEqual(self.call(f'/construction/objects/{obj}', token=token)[1]['defects'][0]['id'], defect_id)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/defects', 'POST', {
+            'description': 'Неверное фото', 'photo_file_id': result['items'][0]['id'],
+        }, token)[0], 400)
+        self.assertEqual(self.call(f'/construction/objects/{imported_object}/defects/{defect_id}', 'PATCH', {
+            'status': 'open',
+        }, token)[0], 404)
         status, _ = self.call(f'/construction/objects/{obj}', token=other)
         self.assertEqual(status, 404)
         status, _ = self.call('/files?construction_id=' + obj, token=other)
