@@ -859,6 +859,10 @@ def route(service, method, parts, query, data):
         return to_quote(service, obj)
     if rest == ["act"] and method == "POST":
         return create_fact_act(service, obj)
+    if rest == ["receipt-ocr"] and method == "POST":
+        from backend.receipt_ocr import recognize
+
+        return 200, recognize(service, obj, data)
     if rest == ["report.pdf"] and method == "GET":
         from backend.construction_report import report
         return 200, report(service, obj, detail(service, obj))

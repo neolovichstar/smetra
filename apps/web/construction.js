@@ -90,7 +90,23 @@
       try{await api(`/construction/objects/${selected}/logs/${button.dataset.logDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}
     });
     const supplierForm=document.querySelector('#construction-supplier');supplierForm.onsubmit=event=>{event.preventDefault();request('/construction/suppliers',{name:val(supplierForm,'name'),phone:val(supplierForm,'phone'),email:val(supplierForm,'email')},detail)};
-    const purchaseForm=document.querySelector('#construction-purchase');purchaseForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;
+    const purchaseForm=document.querySelector('#construction-purchase');
+    purchaseForm.insertAdjacentHTML('beforeend','<button class="construction-edit" id="construction-receipt-ocr" type="button">Заполнить по фото чека</button><p class="construction-hint" id="construction-ocr-note">Проверьте сумму и дату перед сохранением. 3 распознавания в месяц бесплатно.</p>');
+    document.querySelector('#construction-receipt-ocr').onclick=async event=>{
+      const fileId=val(purchaseForm,'receipt_file_id');
+      if(!fileId){notify('Выберите прикреплённое фото чека');return}
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        const result=await api(`/construction/objects/${selected}/receipt-ocr`,{method:'POST',body:JSON.stringify({file_id:fileId})});
+        const draft=result.draft;
+        if(draft.date)purchaseForm.elements.purchased_on.value=draft.date;
+        const quantity=number(val(purchaseForm,'quantity'));
+        if(draft.amount_kopecks&&quantity>0)purchaseForm.elements.unit_price.value=(draft.amount_kopecks/100/quantity).toFixed(2);
+        if(draft.merchant)purchaseForm.elements.notes.value=draft.merchant;
+        document.querySelector('#construction-ocr-note').textContent='Распознано: '+(draft.merchant||'магазин не найден')+' · '+(draft.amount_kopecks?money(draft.amount_kopecks):'сумма не найдена')+'. Проверьте все поля и нажмите «Записать закупку».';
+      }catch(error){notify(error.message)}finally{button.disabled=false}
+    };
+    purchaseForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;
       const payload={material_id:val(form,'material_id'),supplier_id:val(form,'supplier_id'),purchased_on:val(form,'purchased_on'),quantity:val(form,'quantity'),unit_price_kopecks:Math.round(number(val(form,'unit_price'))*100),status:val(form,'status'),receipt_file_id:val(form,'receipt_file_id'),notes:val(form,'notes')};
       request(`/construction/objects/${selected}/purchases${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST');
     };

@@ -11,6 +11,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -78,6 +79,36 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_receipt_ocr_is_scoped_quota_bounded_and_only_prefills_a_draft(self):
+        from PIL import Image
+
+        owner, _ = self.account('ocr-owner')
+        outsider, _ = self.account('ocr-outsider')
+        obj = self.call('/construction/objects', 'POST', {'name': 'OCR object'}, owner)[1]['object']['id']
+        other_obj = self.call('/construction/objects', 'POST', {'name': 'Other object'}, owner)[1]['object']['id']
+        image = io.BytesIO()
+        Image.new('RGB', (20, 20), (230, 230, 230)).save(image, format='PNG')
+        file_id = self.call('/files', 'POST', {
+            'construction_id': obj, 'name': 'receipt.png',
+            'content': base64.b64encode(image.getvalue()).decode(),
+        }, owner)[1]['file']['id']
+        endpoint = f'/construction/objects/{obj}/receipt-ocr'
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-only'), patch(
+            'backend.receipt_ocr._request',
+            return_value={'merchant': 'Test store', 'amount_kopecks': 12500, 'date': '2026-09-30'},
+        ) as model:
+            self.assertEqual(self.call(endpoint, 'POST', {'file_id': file_id}, outsider)[0], 404)
+            self.assertEqual(self.call(f'/construction/objects/{other_obj}/receipt-ocr', 'POST',
+                                       {'file_id': file_id}, owner)[0], 400)
+            for _ in range(3):
+                code, result = self.call(endpoint, 'POST', {'file_id': file_id}, owner)
+                self.assertEqual(code, 200, result)
+                self.assertEqual(result['draft']['amount_kopecks'], 12500)
+                self.assertTrue(result['needs_confirmation'])
+            self.assertEqual(self.call(endpoint, 'POST', {'file_id': file_id}, owner)[0], 429)
+            self.assertEqual(model.call_count, 3)
+        self.assertEqual(self.call(f'/construction/objects/{obj}', token=owner)[1]['purchases'], [])
+
     def test_construction_report_includes_photo_and_excludes_supplier_prices(self):
         owner, _ = self.account('report-owner')
         outsider, _ = self.account('report-outsider')

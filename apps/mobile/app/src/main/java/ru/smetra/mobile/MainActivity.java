@@ -879,6 +879,18 @@ public class MainActivity extends Activity {
         text("received".equals(purchase.optString("status"))?"Получено":"Заказано");
         if(!purchase.optString("notes").isEmpty())text(purchase.optString("notes"));
         addButton(content,"Прикрепить чек или накладную",false,v->{uploadConstruction=id;uploadProject=null;uploadDefect=null;uploadLog=null;uploadPurchase=purchase.optString("id");Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
+        if(!purchase.optString("receipt_file_id").isEmpty())addButton(content,"Распознать фото чека",false,v->{try{
+            call("/construction/objects/"+id+"/receipt-ocr","POST",new JSONObject().put("file_id",purchase.optString("receipt_file_id")),answer->{
+                JSONObject draft=answer.optJSONObject("draft");if(draft==null)return;
+                String merchant=draft.optString("merchant"),date=draft.optString("date");long total=draft.optLong("amount_kopecks");
+                ui.sheet("Проверьте данные чека",(merchant.isEmpty()?"Магазин не найден":merchant)+" · "+exactMoney(total,"RUB")+(date.isEmpty()?"":" · "+date)+". Изменения сохранятся только после проверки формы и нажатия «Сохранить закупку».","Проверить в форме",false,()->{
+                    try{JSONObject proposed=new JSONObject(purchase.toString());if(!date.isEmpty())proposed.put("purchased_on",date);if(!merchant.isEmpty())proposed.put("notes",merchant);
+                        if(total>0){java.math.BigDecimal quantity=new java.math.BigDecimal(purchase.optString("quantity","1"));if(quantity.signum()>0)proposed.put("unit_price_kopecks",new java.math.BigDecimal(total).divide(quantity,0,java.math.RoundingMode.HALF_UP).longValueExact());}
+                        call("/construction/objects/"+id,"GET",null,detail->constructionPurchaseForm(id,detail.optJSONArray("quantities"),proposed));
+                    }catch(Exception error){message("Проверьте сумму и количество вручную");}
+                });
+            });
+        }catch(Exception error){message("Не удалось открыть чек");}});
         addButton(content,"Изменить",false,v->call("/construction/objects/"+id,"GET",null,result->constructionPurchaseForm(id,result.optJSONArray("quantities"),purchase)));
         addButton(content,"Удалить",false,v->ui.sheet("Удалить закупку?","Список закупки пересчитается.","Удалить",false,()->call("/construction/objects/"+id+"/purchases/"+purchase.optString("id"),"DELETE",null,result->constructionDetail(id))));
     }

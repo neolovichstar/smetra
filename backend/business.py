@@ -326,6 +326,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(12,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(13,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(14,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(15,?)", (stamp(),))
 
 
 ENTITIES = {

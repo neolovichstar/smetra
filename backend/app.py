@@ -81,7 +81,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=14"
+                "SELECT version FROM schema_migrations WHERE version=15"
             ).fetchone()
             if not version:
                 raise RuntimeError(
