@@ -17,6 +17,55 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class FlowTests(unittest.TestCase):
+    def test_admin_console_search_triage_and_audit(self):
+        def register(name, email):
+            token, user_id = secrets.token_urlsafe(32), self.mod.uid()
+            with self.mod.db() as con:
+                con.execute(
+                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                    (user_id, email, self.mod.hash_password("secure twelve password"), name, self.mod.now(), self.mod.now()),
+                )
+                con.execute(
+                    "INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)",
+                    (self.mod.uid(), user_id, hashlib.sha256(token.encode()).hexdigest(), self.mod.now()+3600),
+                )
+            return token, user_id
+
+        admin_token, admin_id = register("Оператор", "operator-console@sample.test")
+        member_token, member_id = register("Клиент", "member-console@sample.test")
+        with self.mod.db() as con:
+            con.execute("UPDATE users SET role='admin' WHERE id=?", (admin_id,))
+        status, _ = self.request("/api/admin/users?q=member-console", token=member_token)
+        self.assertEqual(status, 403)
+        status, found = self.request("/api/admin/users?q=member-console&status=all", token=admin_token)
+        self.assertEqual(status, 200)
+        self.assertEqual(found["total"], 1)
+        self.assertEqual(found["users"][0]["id"], member_id)
+        status, _ = self.request("/api/admin/users?status=invalid", token=admin_token)
+        self.assertEqual(status, 400)
+        status, _ = self.request("/api/support", "POST", {"message": "Нужна помощь с тарифом"}, member_token)
+        self.assertEqual(status, 201)
+        status, overview = self.request("/api/admin/overview", token=admin_token)
+        self.assertEqual(status, 200)
+        ticket = next(t for t in overview["tickets"] if t["user_id"] == member_id)
+        self.assertEqual(ticket["email"], "member-console@sample.test")
+        status, _ = self.request("/api/admin/support/" + ticket["id"], "PATCH", {"status": "closed"}, member_token)
+        self.assertEqual(status, 403)
+        status, _ = self.request("/api/admin/support/" + ticket["id"], "PATCH", {"status": "closed"}, admin_token)
+        self.assertEqual(status, 200)
+        status, _ = self.request(
+            "/api/admin/users/" + member_id, "PATCH",
+            {"action": "block", "reason": "Тестовая проверка доступа"}, admin_token,
+        )
+        self.assertEqual(status, 200)
+        status, found = self.request("/api/admin/users?status=blocked&q=member-console", token=admin_token)
+        self.assertEqual(status, 200)
+        self.assertEqual(found["total"], 1)
+        status, overview = self.request("/api/admin/overview", token=admin_token)
+        self.assertEqual(status, 200)
+        self.assertEqual(next(t for t in overview["tickets"] if t["id"] == ticket["id"])["status"], "closed")
+        self.assertTrue(any(a["action"] == "admin.block" and a["detail"] == "Тестовая проверка доступа" for a in overview["audit"]))
+
     def test_sync_cannot_activate_pending_payment(self):
         token, user_id = secrets.token_urlsafe(32), self.mod.uid()
         with self.mod.db() as con:

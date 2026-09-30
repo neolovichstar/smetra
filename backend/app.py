@@ -464,6 +464,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             public["/" + name] = (name, mime)
         public["/workspace.js"] = ("workspace.js", "text/javascript")
+        public["/admin.js"] = ("admin.js", "text/javascript")
+        public["/admin.css"] = ("admin.css", "text/css")
         for name in (
             "reference-hero",
             "reference-sphere",
@@ -918,13 +920,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             tickets = [
                 dict(r)
                 for r in con.execute(
-                    "SELECT id,user_id,message,status,created_at FROM support ORDER BY created_at DESC LIMIT 100"
+                    "SELECT s.id,s.user_id,u.email,s.message,s.status,s.created_at FROM support s JOIN users u ON u.id=s.user_id ORDER BY s.created_at DESC LIMIT 100"
                 )
             ]
             logs = [
                 dict(r)
                 for r in con.execute(
-                    "SELECT actor_id,action,target,created_at FROM audit ORDER BY created_at DESC LIMIT 100"
+                    "SELECT a.actor_id,u.email AS actor_email,a.action,a.target,a.detail,a.created_at "
+                    "FROM audit a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 100"
                 )
             ]
             payment_rows = [
@@ -940,10 +943,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(
                 200, {"stats": stats, "users": users, "tickets": tickets, "audit": logs, "payments": payment_rows}
             )
+        if path == "/api/admin/users" and method == "GET":
+            search = query.get("q", [""])[0].strip()
+            status = query.get("status", ["all"])[0]
+            try:
+                offset = int(query.get("offset", ["0"])[0])
+            except ValueError:
+                raise ApiError(400, "Некорректная страница") from None
+            if len(search) > 100 or status not in ("all", "active", "blocked", "pro") or not 0 <= offset <= 100000:
+                raise ApiError(400, "Некорректный фильтр")
+            conditions = ["deleted_at IS NULL"]
+            params = []
+            if search:
+                conditions.append("(lower(email) LIKE ? OR lower(name) LIKE ?)")
+                params.extend(["%" + search.lower() + "%"] * 2)
+            if status == "active":
+                conditions.append("blocked=0")
+            elif status == "blocked":
+                conditions.append("blocked=1")
+            elif status == "pro":
+                conditions.append("entitlement_until>?")
+                params.append(now())
+            where = " AND ".join(conditions)
+            count = con.execute("SELECT count(*) FROM users WHERE " + where, params).fetchone()[0]
+            rows = [dict(r) for r in con.execute(
+                "SELECT id,email,name,role,blocked,plan,entitlement_until,created_at "
+                "FROM users WHERE " + where + " ORDER BY created_at DESC,id DESC LIMIT 25 OFFSET ?",
+                (*params, offset),
+            )]
+            return self.send_json(200, {"users": rows, "total": count, "offset": offset})
+        if path.startswith("/api/admin/support/") and method == "PATCH":
+            target = path.removeprefix("/api/admin/support/")
+            if len(target) > 100:
+                raise ApiError(400, "Некорректное обращение")
+            status = self.body().get("status")
+            if status not in ("open", "closed"):
+                raise ApiError(400, "Некорректный статус")
+            row = con.execute("SELECT status FROM support WHERE id=?", (target,)).fetchone()
+            if not row:
+                raise ApiError(404, "Обращение не найдено")
+            if row["status"] != status:
+                con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
+                audit(con, user["id"], "admin.support." + status, target)
+            return self.send_json(200, {"ok": True})
         if path.startswith("/api/admin/users/") and method == "PATCH":
             target = path.removeprefix("/api/admin/users/")
             data = self.body()
             action = data.get("action")
+            reason = data.get("reason", "")
+            if not isinstance(reason, str) or len(reason.strip()) > 200:
+                raise ApiError(400, "Некорректная причина")
             if target == user["id"] and action == "block":
                 raise ApiError(409, "Нельзя заблокировать себя")
             if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
@@ -967,7 +1016,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
             else:
                 raise ApiError(400, "Неизвестное действие")
-            audit(con, user["id"], "admin." + action, target)
+            audit(con, user["id"], "admin." + action, target, reason.strip())
             return self.send_json(200, {"ok": True})
         raise ApiError(404, "Маршрут не найден")
 
