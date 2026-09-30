@@ -78,6 +78,56 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_procurement_tracks_received_material_and_scopes_supplier_and_receipt(self):
+        owner, _ = self.account('purchase-owner')
+        outsider, _ = self.account('purchase-outsider')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Ремонт'}, owner)
+        obj = created['object']['id']
+        _, room = self.call(f'/construction/objects/{obj}/zones', 'POST', {
+            'name': 'Кухня', 'length': '5', 'width': '4',
+        }, owner)
+        zone = room['zone']['id']
+        _, work = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone, 'kind': 'work', 'title': 'Покраска', 'formula': 'area', 'unit_price': 1000,
+        }, owner)
+        _, material = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone, 'kind': 'material', 'title': 'Краска', 'unit': 'л',
+            'parent_work_id': work['quantity']['id'], 'consumption_rate': '0.5', 'unit_price': 2000,
+        }, owner)
+        material_id = material['quantity']['id']
+        _, supplier = self.call('/construction/suppliers', 'POST', {'name': 'Склад', 'phone': '+70000000000'}, owner)
+        supplier_id = supplier['supplier']['id']
+        from PIL import Image
+        image = io.BytesIO()
+        Image.new('RGB', (4, 4), (20, 30, 40)).save(image, format='PNG')
+        _, uploaded = self.call('/files', 'POST', {
+            'construction_id': obj, 'name': 'чек.png',
+            'content': base64.b64encode(image.getvalue()).decode(),
+        }, owner)
+        receipt_id = uploaded['file']['id']
+        payload = dict(material_id=material_id, supplier_id=supplier_id, receipt_file_id=receipt_id,
+                       purchased_on='2026-09-30', quantity='6', unit_price_kopecks=10000, status='received')
+        status, purchase = self.call(f'/construction/objects/{obj}/purchases', 'POST', payload, owner)
+        self.assertEqual(status, 201, purchase)
+        purchase_id = purchase['purchase']['id']
+        detail = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(detail['procurement'][0]['required_quantity'], '10.0000')
+        self.assertEqual(detail['procurement'][0]['received_quantity'], '6')
+        self.assertEqual(detail['procurement'][0]['to_buy_quantity'], '4.0000')
+        self.assertEqual(self.call(f'/construction/objects/{obj}/purchases/{purchase_id}', 'PATCH',
+                                   {'status': 'ordered'}, outsider)[0], 404)
+        self.assertEqual(self.call('/construction/suppliers/' + supplier_id, 'PATCH',
+                                   {'name': 'Чужой'}, outsider)[0], 404)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/purchases', 'POST',
+                                   dict(payload, quantity='-1'), owner)[0], 400)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/purchases/{purchase_id}', 'PATCH',
+                                   {'quantity': '12'}, owner)[0], 200)
+        detail = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(detail['procurement'][0]['to_buy_quantity'], '0')
+        self.assertEqual(self.call(f'/construction/objects/{obj}/purchases/{purchase_id}', 'DELETE',
+                                   token=owner)[0], 200)
+        self.assertEqual(self.call(f'/construction/objects/{obj}', token=owner)[1]['procurement'][0]['received_quantity'], '0')
+
     def test_daily_log_tracks_work_photo_and_fact_atomically(self):
         owner, _ = self.account('log-owner')
         outsider, _ = self.account('log-outsider')

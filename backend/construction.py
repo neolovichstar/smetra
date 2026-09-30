@@ -137,9 +137,38 @@ def detail(service, obj):
         photos.setdefault(item["log_id"], []).append(item["file_id"])
     for item in logs:
         item["photo_file_ids"] = photos.get(item["id"], [])
+    purchases = [dict(row) for row in service.con.execute(
+        "SELECT * FROM construction_purchases WHERE object_id=? AND workspace_id=? "
+        "ORDER BY purchased_on DESC,created_at DESC,id DESC LIMIT 200",
+        (obj["id"], service.wid),
+    )]
+    purchased = {}
+    ordered = {}
+    for row in service.con.execute(
+        "SELECT material_id,quantity,status FROM construction_purchases WHERE object_id=? AND workspace_id=?",
+        (obj["id"], service.wid),
+    ):
+        bucket = purchased if row["status"] == "received" else ordered
+        bucket[row["material_id"]] = bucket.get(row["material_id"], Decimal(0)) + Decimal(row["quantity"])
+    procurement = []
+    for item in quantities:
+        if item["kind"] != "material":
+            continue
+        received = purchased.get(item["id"], Decimal(0))
+        in_transit = ordered.get(item["id"], Decimal(0))
+        planned = Decimal(item["quantity"])
+        consumed = Decimal(item["actual_quantity"])
+        procurement.append({
+            "material_id": item["id"], "title": item["title"], "unit": item["unit"],
+            "required_quantity": str(planned), "received_quantity": str(received),
+            "ordered_quantity": str(in_transit), "to_buy_quantity": str(max(Decimal(0), planned - received - in_transit)),
+            "shortage_quantity": str(max(Decimal(0), consumed - received)),
+            "status": "received" if received >= planned else "ordered" if in_transit > 0 else "needed",
+        })
     return {
         "object": dict(obj), "zones": zones, "measurements": measurements,
         "quantities": quantities, "defects": defects, "daily_logs": logs,
+        "purchases": purchases, "procurement": procurement,
         "totals": {
             "planned_kopecks": sum(item["planned_total_kopecks"] for item in quantities),
             "actual_kopecks": sum(item["actual_total_kopecks"] for item in quantities),
@@ -365,6 +394,47 @@ def create_daily_log(service, obj, data):
     return 201, {"daily_log": dict(values, photo_file_ids=photos)}
 
 
+def supplier_fields(data, previous=None):
+    return dict(
+        name=string(data.get("name", previous["name"] if previous else ""), "Поставщик", 200, True),
+        phone=string(data.get("phone", previous["phone"] if previous else ""), "Телефон", 50),
+        email=string(data.get("email", previous["email"] if previous else ""), "Email", 200),
+        website=string(data.get("website", previous["website"] if previous else ""), "Сайт", 300),
+        notes=string(data.get("notes", previous["notes"] if previous else ""), "Заметки", 2000),
+        updated_at=stamp(),
+    )
+
+
+def purchase_fields(service, obj, data, previous=None):
+    material_id = data.get("material_id", previous["material_id"] if previous else None)
+    material = row_in_object(service, "construction_quantities", material_id, obj["id"])
+    if material["kind"] != "material":
+        raise DomainError(400, "Выберите материал из ведомости объекта")
+    supplier_id = data.get("supplier_id", previous["supplier_id"] if previous else None) or None
+    if supplier_id:
+        service.get("construction_suppliers", supplier_id)
+    receipt_file_id = data.get("receipt_file_id", previous["receipt_file_id"] if previous else None) or None
+    if receipt_file_id:
+        receipt = service.get("files", receipt_file_id)
+        if receipt["construction_id"] != obj["id"] or receipt["mime"] not in ("image/png", "image/jpeg", "application/pdf"):
+            raise DomainError(400, "Чек должен принадлежать этому объекту и быть фото или PDF")
+    quantity = decimal_value(data.get("quantity", previous["quantity"] if previous else None),
+                             "Количество закупки", minimum=Decimal("0.0001"), maximum=Decimal("1000000"))
+    purchased_on = date_value(data.get("purchased_on", previous["purchased_on"] if previous else ""), "Дата закупки")
+    if not purchased_on:
+        raise DomainError(400, "Укажите дату закупки")
+    return dict(
+        material_id=material["id"], supplier_id=supplier_id, receipt_file_id=receipt_file_id,
+        purchased_on=purchased_on, quantity=str(quantity),
+        unit_price_kopecks=integer(data.get("unit_price_kopecks", previous["unit_price_kopecks"] if previous else 0),
+                                   "Цена закупки", 0, 100_000_000_000),
+        status=choice(data.get("status", previous["status"] if previous else "ordered"),
+                      ("ordered", "received"), "Статус закупки"),
+        notes=string(data.get("notes", previous["notes"] if previous else ""), "Заметки", 2000),
+        updated_at=stamp(),
+    )
+
+
 def as_xlsx(service, obj):
     from openpyxl import Workbook
 
@@ -505,6 +575,29 @@ def route(service, method, parts, query, data):
         symbols = zone_values(data.get("length", 0), data.get("width", 0), data.get("height", 0), data.get("openings", 0))
         return 200, {"quantity": str(evaluate(data.get("formula", "area"), symbols)),
                      "variables": {key: str(value) for key, value in symbols.items()}}
+    if parts == ["suppliers"]:
+        if method == "GET":
+            return 200, {"items": [dict(row) for row in service.con.execute(
+                "SELECT * FROM construction_suppliers WHERE workspace_id=? ORDER BY name,id LIMIT 1000",
+                (service.wid,),
+            )]}
+        if method == "POST":
+            count = service.con.execute("SELECT count(*) FROM construction_suppliers WHERE workspace_id=?", (service.wid,)).fetchone()[0]
+            if count >= 1000:
+                raise DomainError(409, "Слишком много поставщиков")
+            values = dict(id=identity(), workspace_id=service.wid, created_at=stamp(), **supplier_fields(data))
+            service.insert("construction_suppliers", values)
+            service.emit("construction_supplier", values["id"], "Поставщик добавлен", values["name"])
+            return 201, {"supplier": values}
+    if len(parts) == 2 and parts[0] == "suppliers":
+        supplier = service.get("construction_suppliers", parts[1])
+        if method == "PATCH":
+            values = supplier_fields(data, supplier)
+            service.update("construction_suppliers", supplier["id"], values)
+            return 200, {"supplier": dict(supplier, **values)}
+        if method == "DELETE":
+            service.con.execute("DELETE FROM construction_suppliers WHERE id=? AND workspace_id=?", (supplier["id"], service.wid))
+            return 200, {"ok": True}
     if not parts or parts[0] != "objects":
         raise DomainError(404, "Объект не найден")
     if len(parts) == 1:
@@ -620,6 +713,27 @@ def route(service, method, parts, query, data):
         return 200, {"defect": dict(defect, **values)}
     if rest == ["logs"] and method == "POST":
         return create_daily_log(service, obj, data)
+    if rest == ["purchases"] and method == "POST":
+        count = service.con.execute("SELECT count(*) FROM construction_purchases WHERE object_id=? AND workspace_id=?",
+                                    (obj["id"], service.wid)).fetchone()[0]
+        if count >= 5000:
+            raise DomainError(409, "На объекте слишком много закупок")
+        values = dict(id=identity(), workspace_id=service.wid, object_id=obj["id"], created_at=stamp(),
+                      **purchase_fields(service, obj, data))
+        service.insert("construction_purchases", values)
+        service.emit("construction_purchase", values["id"], "Закупка добавлена")
+        return 201, {"purchase": values}
+    if len(rest) == 2 and rest[0] == "purchases":
+        purchase = row_in_object(service, "construction_purchases", rest[1], obj["id"])
+        if method == "PATCH":
+            values = purchase_fields(service, obj, data, purchase)
+            service.update("construction_purchases", purchase["id"], values)
+            service.emit("construction_purchase", purchase["id"], "Закупка изменена")
+            return 200, {"purchase": dict(purchase, **values)}
+        if method == "DELETE":
+            service.con.execute("DELETE FROM construction_purchases WHERE id=? AND workspace_id=?", (purchase["id"], service.wid))
+            service.emit("construction_purchase", purchase["id"], "Закупка удалена")
+            return 200, {"ok": True}
     if len(rest) >= 2 and rest[0] == "logs":
         log = row_in_object(service, "construction_daily_logs", rest[1], obj["id"])
         if len(rest) == 2 and method == "PATCH":
