@@ -7,9 +7,10 @@ import re
 import zipfile
 from decimal import Decimal, ROUND_HALF_UP
 
-from backend.business import DomainError, choice, date_value, identity, integer, stamp, string
+from backend.business import DomainError, choice, date_value, identity, integer, packed, stamp, string
 from backend.construction_math import KINDS, UNITS, decimal_value, evaluate, length_in_metres, money, priced, zone_values
-from backend.documents import Download
+from backend.documents import Download, pdf
+from backend import construction_changes
 
 
 ZONE_KINDS = ("building", "floor", "room", "zone", "outdoor")
@@ -165,10 +166,25 @@ def detail(service, obj):
             "shortage_quantity": str(max(Decimal(0), consumed - received)),
             "status": "received" if received >= planned else "ordered" if in_transit > 0 else "needed",
         })
+    changes = construction_changes.list_changes(service, obj)
+    base_quote = service.con.execute(
+        "SELECT amount_kopecks FROM quotes WHERE id=? AND workspace_id=?",
+        (obj["quote_id"], service.wid),
+    ).fetchone() if obj["quote_id"] else None
+    if not base_quote and obj["project_id"]:
+        base_quote = service.con.execute(
+            "SELECT amount_kopecks FROM projects WHERE id=? AND workspace_id=?",
+            (obj["project_id"], service.wid),
+        ).fetchone()
+    approved_changes = sum(item["amount_kopecks"] for item in changes if item["status"] == "approved")
     return {
         "object": dict(obj), "zones": zones, "measurements": measurements,
         "quantities": quantities, "defects": defects, "daily_logs": logs,
         "purchases": purchases, "procurement": procurement,
+        "changes": changes,
+        "scope": {"base_quote_kopecks": base_quote["amount_kopecks"] if base_quote else None,
+                  "approved_changes_kopecks": approved_changes,
+                  "current_total_kopecks": base_quote["amount_kopecks"] + approved_changes if base_quote else None},
         "totals": {
             "planned_kopecks": sum(item["planned_total_kopecks"] for item in quantities),
             "actual_kopecks": sum(item["actual_total_kopecks"] for item in quantities),
@@ -392,6 +408,49 @@ def create_daily_log(service, obj, data):
         )
     service.emit("construction_daily_log", values["id"], "Запись журнала добавлена", values["work_description"][:120])
     return 201, {"daily_log": dict(values, photo_file_ids=photos)}
+
+
+def create_fact_act(service, obj):
+    """Freeze an informational act from recorded facts, never from planned quantities."""
+    snapshot = detail(service, obj)
+    performed = [item for item in snapshot["quantities"]
+                 if item["kind"] in ("work", "service", "material", "equipment")
+                 and Decimal(item["actual_quantity"]) > 0]
+    if not performed:
+        raise DomainError(409, "Сначала запишите фактический объём выполненных работ")
+    workspace = service.con.execute("SELECT name,settings FROM workspaces WHERE id=?", (service.wid,)).fetchone()
+    import json
+    settings = json.loads(workspace["settings"])
+    client = service.get("clients", obj["client_id"]) if obj["client_id"] else None
+    items = []
+    for item in performed:
+        quantity = Decimal(item["actual_quantity"])
+        subtotal = item["actual_total_kopecks"]
+        unit_price = int((Decimal(subtotal) / quantity).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+        items.append({"name": item["title"], "description": "", "quantity": str(quantity),
+                      "unit": item["unit"], "unit_price": unit_price, "subtotal": subtotal,
+                      "included": True})
+    act_snapshot = {
+        "company": workspace["name"], "company_details": settings.get("company_details", ""),
+        "document_footer": settings.get("document_footer", ""), "title": obj["name"],
+        "client": client["name"] if client else "Заказчик не указан",
+        "description": "Фактические работы по объекту на дату формирования.",
+        "currency": "RUB", "items": items,
+        "amount_kopecks": sum(item["subtotal"] for item in items),
+        "due_date": "", "terms": "Черновик по учтённому факту. Требует проверки и подписей сторон.",
+    }
+    number = service.con.execute(
+        "SELECT coalesce(max(number),0)+1 FROM documents WHERE workspace_id=?", (service.wid,),
+    ).fetchone()[0]
+    document = dict(id=identity(), workspace_id=service.wid, quote_id=obj["quote_id"],
+                    project_id=obj["project_id"], name="Черновик акта выполненных работ",
+                    kind="act", template="Minimal", snapshot=packed(act_snapshot),
+                    number=number, created_at=stamp())
+    pdf(document)
+    service.insert("documents", document)
+    service.emit("document", document["id"], "Черновик акта по факту сформирован", obj["name"])
+    return 201, {"document": {k: v for k, v in document.items() if k != "snapshot"},
+                 "amount_kopecks": act_snapshot["amount_kopecks"]}
 
 
 def supplier_fields(data, previous=None):
@@ -798,6 +857,13 @@ def route(service, method, parts, query, data):
         return 200, {"ok": True}
     if rest == ["quote"] and method == "POST":
         return to_quote(service, obj)
+    if rest == ["act"] and method == "POST":
+        return create_fact_act(service, obj)
+    if rest == ["report.pdf"] and method == "GET":
+        from backend.construction_report import report
+        return 200, report(service, obj, detail(service, obj))
+    if rest and rest[0] == "changes":
+        return construction_changes.route(service, obj, method, rest, data)
     if rest == ["xlsx"] and method == "GET":
         return as_xlsx(service, obj)
     if rest == ["import"] and method == "POST":

@@ -78,6 +78,140 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_construction_report_includes_photo_and_excludes_supplier_prices(self):
+        owner, _ = self.account('report-owner')
+        outsider, _ = self.account('report-outsider')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Гостиная'}, owner)
+        obj = created['object']['id']
+        _, room = self.call(f'/construction/objects/{obj}/zones', 'POST',
+                            {'name': 'Зал', 'length': '5', 'width': '4'}, owner)
+        zone = room['zone']['id']
+        _, work = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone, 'kind': 'work', 'title': 'Покраска', 'formula': 'area',
+            'unit_price': 10000, 'cost_price': 77777,
+        }, owner)
+        work_id = work['quantity']['id']
+        self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
+                                   {'quantity_id': work_id, 'quantity': '4'}, owner)[0], 201)
+        _, material = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone, 'kind': 'material', 'title': 'Краска', 'parent_work_id': work_id,
+            'consumption_rate': '0.5', 'unit': 'л', 'unit_price': 2000,
+        }, owner)
+        _, supplier = self.call('/construction/suppliers', 'POST', {'name': 'Секретный поставщик'}, owner)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/purchases', 'POST', {
+            'material_id': material['quantity']['id'], 'supplier_id': supplier['supplier']['id'],
+            'purchased_on': '2026-09-30', 'quantity': '6', 'unit_price_kopecks': 1234567,
+            'status': 'received',
+        }, owner)[0], 201)
+        from PIL import Image
+        image = io.BytesIO()
+        Image.new('RGB', (16, 12), (20, 70, 120)).save(image, format='PNG')
+        _, photo = self.call('/files', 'POST', {
+            'construction_id': obj, 'name': 'работа.png',
+            'content': base64.b64encode(image.getvalue()).decode(),
+        }, owner)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/logs', 'POST', {
+            'work_date': '2026-09-30', 'work_description': 'Окрашена стена',
+            'photo_file_ids': [photo['file']['id']],
+        }, owner)[0], 201)
+        status, payload = self.call(f'/construction/objects/{obj}/report.pdf', token=owner, raw=True)
+        self.assertEqual(status, 200)
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(payload))
+        report = '\n'.join(page.extract_text() for page in reader.pages)
+        self.assertIn('Покраска', report)
+        self.assertIn('Окрашена стена', report)
+        self.assertNotIn('Секретный поставщик', report)
+        self.assertNotIn('12 345,67', report)
+        self.assertTrue(any(page.images for page in reader.pages))
+        self.assertEqual(self.call(f'/construction/objects/{obj}/report.pdf', token=outsider)[0], 404)
+
+    def test_additional_work_requires_separate_client_approval_and_preserves_versions(self):
+        owner, _ = self.account('change-owner')
+        outsider, _ = self.account('change-outsider')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, owner)
+        obj = created['object']['id']
+        prefix = f'/construction/objects/{obj}/changes'
+        payload = {'title': 'Дополнительные розетки', 'description': 'Три точки',
+                   'items': [{'name': 'Розетка', 'quantity': '3', 'unit': 'шт.',
+                              'unit_price': 150000, 'cost_price': 50000}], 'deadline_days': 2}
+        status, created_change = self.call(prefix, 'POST', payload, owner)
+        self.assertEqual(status, 201, created_change)
+        change_id = created_change['change']['id']
+        self.assertEqual(created_change['change']['amount_kopecks'], 450000)
+        self.assertNotIn('cost_price', created_change['change']['items'][0])
+        self.assertEqual(self.call(prefix + '/' + change_id + '/send', 'POST', {}, outsider)[0], 404)
+        status, sent = self.call(prefix + '/' + change_id + '/send', 'POST', {}, owner)
+        self.assertEqual(status, 200, sent)
+        token = sent['change']['public_token']
+        self.assertEqual(self.call(prefix + '/' + change_id, 'PATCH', {'title': 'Тихая правка'}, owner)[0], 409)
+        public = self.call('/public/change?token=' + token)[1]['change']
+        self.assertEqual(public['amount_kopecks'], 450000)
+        self.assertNotIn('public_token', public)
+        self.assertNotIn('cost_price', public['items'][0])
+        self.assertEqual(self.call('/public/change/respond', 'POST',
+                                   {'token': token, 'action': 'changes_requested', 'name': 'Клиент',
+                                    'comment': 'Нужна другая розетка'})[0], 200)
+        self.assertEqual(self.call('/public/change/respond', 'POST',
+                                   {'token': token, 'action': 'approved', 'name': 'Клиент'})[0], 409)
+        status, revised = self.call(prefix + '/' + change_id + '/revise', 'POST',
+                                    {'items': [{'name': 'Розетка другая', 'quantity': '3',
+                                                'unit': 'шт.', 'unit_price': 170000}]}, owner)
+        self.assertEqual(status, 201, revised)
+        self.assertEqual(revised['change']['version'], 2)
+        self.assertEqual(revised['change']['amount_kopecks'], 510000)
+        self.assertEqual(self.call(prefix + '/' + change_id + '/revise', 'POST', {}, owner)[0], 409)
+        newer = revised['change']['id']
+        token2 = self.call(prefix + '/' + newer + '/send', 'POST', {}, owner)[1]['change']['public_token']
+        self.assertEqual(self.call('/public/change/respond', 'POST',
+                                   {'token': token2, 'action': 'approved', 'name': 'Клиент'})[0], 200)
+        detail = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        changes = detail['changes']
+        self.assertEqual([row['status'] for row in changes], ['approved', 'changes_requested'])
+        self.assertEqual(detail['scope']['approved_changes_kopecks'], 510000)
+        status, extra = self.call(prefix, 'POST', payload, owner)
+        self.assertEqual(status, 201, extra)
+        extra_id = extra['change']['id']
+        self.assertEqual(self.call(prefix + '/' + extra_id, 'DELETE', token=owner)[0], 200)
+        status, extra = self.call(prefix, 'POST', payload, owner)
+        self.assertEqual(status, 201, extra)
+        extra_id = extra['change']['id']
+        revoked_token = self.call(prefix + '/' + extra_id + '/send', 'POST', {}, owner)[1]['change']['public_token']
+        self.assertEqual(self.call(prefix + '/' + extra_id + '/revoke', 'POST', {}, owner)[0], 200)
+        self.assertEqual(self.call('/public/change?token=' + revoked_token)[0], 404)
+        self.assertEqual(self.call(f'/construction/objects/{obj}', token=outsider)[0], 404)
+
+    def test_construction_act_freezes_recorded_fact_instead_of_plan(self):
+        owner, _ = self.account('act-owner')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, owner)
+        obj = created['object']['id']
+        _, room = self.call(f'/construction/objects/{obj}/zones', 'POST',
+                            {'name': 'Кухня', 'length': '5', 'width': '4'}, owner)
+        _, work = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': room['zone']['id'], 'kind': 'work', 'title': 'Покраска',
+            'formula': 'area', 'unit_price': 10000,
+        }, owner)
+        quantity = work['quantity']['id']
+        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)[0], 409)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
+                                   {'quantity_id': quantity, 'quantity': '3'}, owner)[0], 201)
+        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)
+        self.assertEqual(status, 201, created_act)
+        self.assertEqual(created_act['amount_kopecks'], 30000)
+        document_id = created_act['document']['id']
+        status, content = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        self.assertEqual(status, 200)
+        from pypdf import PdfReader
+        first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
+        self.assertIn('Покраска', first)
+        self.assertIn('3 м²', first)
+        self.assertNotIn('20 м²', first)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
+                                   {'quantity_id': quantity, 'quantity': '4'}, owner)[0], 201)
+        status, unchanged = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        self.assertEqual(status, 200)
+        self.assertEqual(first, PdfReader(io.BytesIO(unchanged)).pages[0].extract_text())
+
     def test_procurement_tracks_received_material_and_scopes_supplier_and_receipt(self):
         owner, _ = self.account('purchase-owner')
         outsider, _ = self.account('purchase-outsider')

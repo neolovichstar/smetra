@@ -210,6 +210,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "011_construction_changes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -320,6 +325,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(11,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(12,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(13,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(14,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -695,6 +701,9 @@ class Service:
     def public(self, method, path, query):
         if path == "/api/public/intake":
             return self.public_intake(method, query)
+        if path in ("/api/public/change", "/api/public/change/respond"):
+            from backend.construction_changes import public as public_change
+            return public_change(self, method, path, query)
         self.h.throttle("public:" + self.h.client_address[0], 180, 60)
         if method == "GET" and path in ("/api/public/file", "/api/public/document"):
             self.h.throttle("public-download:" + self.h.client_address[0], 30, 60)

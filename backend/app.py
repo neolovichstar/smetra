@@ -81,7 +81,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=13"
+                "SELECT version FROM schema_migrations WHERE version=14"
             ).fetchone()
             if not version:
                 raise RuntimeError(
@@ -462,6 +462,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/privacy": ("privacy.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
             "/contacts": ("contacts.html", "text/html"),
+            "/change.html": ("change.html", "text/html"),
+            "/change.css": ("change.css", "text/css"),
+            "/change.js": ("change.js", "text/javascript"),
             "/style.css": ("style.css", "text/css"),
             "/app.js": ("app.js", "text/javascript"),
             "/experience.js": ("experience.js", "text/javascript"),
