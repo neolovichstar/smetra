@@ -31,7 +31,7 @@ public class MainActivity extends Activity {
     private MobilePresentation presentation;
     private long lastPresentationCheck;
     private int pageVersion=0;
-    private String currentPage="login",parentPage="home";
+    private String currentPage="login",parentPage="home",constructionParentId=null;
     private boolean publicView=false;
     private Button clickedButton;
     private TextView feedback;
@@ -515,7 +515,141 @@ public class MainActivity extends Activity {
         ui.section(content,"Недавние поступления",null);LinearLayout entries=ui.column();content.addView(entries);
         call("/receipts","GET",null,result->{JSONArray list=result.optJSONArray("items");if(list==null||list.length()==0){entries.addView(ui.label("Записей пока нет.",13,MUTED,false));return;}for(int i=0;i<Math.min(20,list.length());i++){JSONObject item=list.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(entries);row.addView(ui.label(exactMoney(item.optLong("amount_kopecks"),item.optString("currency","RUB")),17,INK,true));ui.space(row,5);row.addView(ui.label(item.optString("payment_date"),12,MUTED,false));}});
     }
-    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",30,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
+    // CONSTRUCTION START
+    private void constructionList(){
+        publicView=false;page("Объекты","construction",true);
+        content.addView(ui.label("Объекты и замеры",28,INK,true));
+        text("Размеры помещений → объёмы → смета.");
+        button("Новый объект",true,v->constructionNew());
+        ui.section(content,"В работе",null);
+        LinearLayout host=ui.column();content.addView(host);loading(host);
+        call("/construction/objects","GET",null,result->{
+            clearLoading(host);JSONArray items=result.optJSONArray("items");
+            if(items==null||items.length()==0){ui.empty(host,"projects","Пока нет объектов","Создайте объект и запишите размеры первого помещения.");return;}
+            for(int i=0;i<items.length();i++){
+                JSONObject item=items.optJSONObject(i);if(item==null)continue;
+                LinearLayout row=ui.row();row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(0,dp(18),0,dp(18));
+                LinearLayout labels=ui.column();labels.addView(ui.label(item.optString("name"),15,INK,true));ui.space(labels,5);
+                labels.addView(ui.label(item.optString("quote_id").isEmpty()?"Замеры и ведомость":"Сметра создана",11,MUTED,false));
+                row.addView(labels,new LinearLayout.LayoutParams(0,-2,1));row.addView(ui.new Icon("chevron",BLUE),new LinearLayout.LayoutParams(dp(18),dp(18)));
+                host.addView(row);ui.tap(row,()->constructionDetail(item.optString("id")));
+                View line=new View(this);line.setBackgroundColor(LINE);host.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
+            }
+        });
+    }
+    private void constructionNew(){
+        page("Новый объект","construction-new",true);
+        content.addView(ui.label("Сначала объект.",27,INK,true));text("Название поможет найти замеры и смету позже.");
+        EditText name=field("Название объекта",android.text.InputType.TYPE_CLASS_TEXT);
+        button("Создать объект",true,v->{if(name.length()==0){name.setError("Укажите название");return;}
+            try{call("/construction/objects","POST",new JSONObject().put("name",name.getText().toString()),result->constructionDetail(result.optJSONObject("object").optString("id")));}
+            catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private void constructionDetail(String id){
+        constructionParentId=id;
+        page("Объект","construction-detail",true);loading(content);
+        call("/construction/objects/"+id,"GET",null,result->{
+            clearLoading(content);JSONObject object=result.optJSONObject("object"),totals=result.optJSONObject("totals");
+            if(object==null)return;
+            content.addView(ui.label(object.optString("name"),27,INK,true));
+            ui.space(content,12);
+            LinearLayout summary=ui.row();summary.addView(ui.label("План",12,MUTED,false),new LinearLayout.LayoutParams(0,-2,1));
+            summary.addView(ui.label(exactMoney(totals==null?0:totals.optLong("planned_kopecks"),"RUB"),17,INK,true));content.addView(summary);
+            ui.section(content,"Помещения",null);
+            JSONArray zones=result.optJSONArray("zones");
+            if(zones!=null)for(int i=0;i<zones.length();i++){
+                JSONObject zone=zones.optJSONObject(i);if(zone==null)continue;
+                LinearLayout row=ui.row();row.setPadding(0,dp(9),0,dp(9));
+                row.addView(ui.label(zone.optString("name"),14,INK,false),new LinearLayout.LayoutParams(0,-2,1));
+                double area=zone.optDouble("length_m")*zone.optDouble("width_m");
+                row.addView(ui.label(String.format(Locale.US,"%.2f м²",area),12,BLUE,true));content.addView(row);
+            }
+            addButton(content,"Добавить помещение",false,v->constructionZone(id));
+            ui.section(content,"Ведомость",null);
+            JSONArray quantities=result.optJSONArray("quantities");
+            if(quantities!=null)for(int i=0;i<quantities.length();i++){
+                JSONObject quantity=quantities.optJSONObject(i);if(quantity==null)continue;
+                LinearLayout row=ui.row();row.setPadding(0,dp(11),0,dp(11));
+                LinearLayout labels=ui.column();labels.addView(ui.label(quantity.optString("title"),14,INK,true));ui.space(labels,4);
+                labels.addView(ui.label(quantity.optString("quantity")+" "+quantity.optString("unit")+" · факт "+quantity.optString("actual_quantity"),11,MUTED,false));
+                row.addView(labels,new LinearLayout.LayoutParams(0,-2,1));row.addView(ui.label(exactMoney(quantity.optLong("planned_total_kopecks"),"RUB"),12,INK,false));
+                content.addView(row);ui.tap(row,()->constructionFact(id,quantity));
+            }
+            addButton(content,"Добавить работу",false,v->constructionWork(id,zones));
+            if(quantities!=null&&quantities.length()>0)addButton(content,"Материал по норме расхода",false,v->constructionMaterial(id,quantities));
+            ui.space(content,16);
+            if(object.optString("quote_id").isEmpty()&&quantities!=null&&quantities.length()>0){
+                button("Создать смету",true,v->ui.sheet("Создать смету?","Ведомость станет черновиком сметы. Проверьте объёмы и цены.","Создать",false,()->call("/construction/objects/"+id+"/quote","POST",new JSONObject(),answer->openQuote(answer.optJSONObject("quote")))));
+            }
+            if(!object.optString("quote_id").isEmpty())button("Открыть смету",true,v->call("/quotes/"+object.optString("quote_id"),"GET",null,answer->openQuote(answer.optJSONObject("quote"))));
+        });
+    }
+    private void constructionZone(String id){
+        page("Помещение","construction-zone",true);
+        content.addView(ui.label("Размеры помещения",25,INK,true));text("Укажите реальные размеры в метрах. Их можно использовать в формуле объёма.");
+        EditText name=field("Название",android.text.InputType.TYPE_CLASS_TEXT);
+        EditText length=field("Длина, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText width=field("Ширина, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText height=field("Высота, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        button("Сохранить помещение",true,v->{if(name.length()==0||length.length()==0||width.length()==0){message("Заполните название, длину и ширину");return;}
+            try{JSONObject body=new JSONObject().put("name",name.getText().toString()).put("length",length.getText().toString()).put("width",width.getText().toString()).put("height",height.length()==0?"0":height.getText().toString());
+                call("/construction/objects/"+id+"/zones","POST",body,result->constructionDetail(id));}
+            catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private void constructionWork(String id,JSONArray zones){
+        if(zones==null||zones.length()==0){message("Сначала добавьте помещение");return;}
+        String[] labels=new String[zones.length()];for(int i=0;i<zones.length();i++)labels[i]=zones.optJSONObject(i).optString("name");
+        page("Работа","construction-work",true);
+        content.addView(ui.label("Объём из замеров",25,INK,true));text("Выберите помещение и работу. Формула area — площадь пола.");
+        Spinner room=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels);room.setAdapter(adapter);content.addView(room);
+        EditText title=field("Работа",android.text.InputType.TYPE_CLASS_TEXT);
+        EditText formula=field("Формула: area, perimeter * height, volume",android.text.InputType.TYPE_CLASS_TEXT);formula.setText("area");
+        EditText price=field("Цена за единицу, ₽",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        button("Добавить в ведомость",true,v->{if(title.length()==0){title.setError("Укажите работу");return;}
+            try{String zoneId=zones.optJSONObject(room.getSelectedItemPosition()).optString("id");
+                JSONObject body=new JSONObject().put("zone_id",zoneId).put("kind","work").put("title",title.getText().toString()).put("formula",formula.getText().toString()).put("unit","м²").put("unit_price",price.length()==0?0:cents(price));
+                call("/construction/objects/"+id+"/quantities","POST",body,result->constructionDetail(id));}
+            catch(Exception error){message("Проверьте формулу и цену");}
+        });
+    }
+    private void constructionFact(String id,JSONObject quantity){
+        page("Факт","construction-fact",true);
+        content.addView(ui.label(quantity.optString("title"),25,INK,true));
+        text("План: "+quantity.optString("quantity")+" "+quantity.optString("unit")+". Фактический объём добавится к уже записанному.");
+        EditText amount=field("Выполнено, "+quantity.optString("unit"),android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        button("Записать факт",true,v->{if(amount.length()==0){amount.setError("Укажите объём");return;}
+            try{JSONObject body=new JSONObject().put("quantity_id",quantity.optString("id")).put("quantity",amount.getText().toString());
+                call("/construction/objects/"+id+"/facts","POST",body,result->constructionDetail(id));}
+            catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private void constructionMaterial(String id,JSONArray quantities){
+        java.util.ArrayList<JSONObject> works=new java.util.ArrayList<>();
+        for(int i=0;i<quantities.length();i++){JSONObject item=quantities.optJSONObject(i);if(item!=null&&"work".equals(item.optString("kind")))works.add(item);}
+        if(works.isEmpty()){message("Сначала добавьте работу");return;}
+        page("Материал","construction-material",true);
+        content.addView(ui.label("Расход от объёма работы",25,INK,true));
+        text("Укажите норму расхода на одну единицу работы и запас.");
+        String[] names=new String[works.size()];for(int i=0;i<works.size();i++)names[i]=works.get(i).optString("title");
+        Spinner parent=new Spinner(this);parent.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));content.addView(parent);
+        EditText title=field("Материал",android.text.InputType.TYPE_CLASS_TEXT);
+        EditText rate=field("Расход на единицу работы",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText waste=field("Запас, %",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText unit=field("Единица материала, например л",android.text.InputType.TYPE_CLASS_TEXT);unit.setText("л");
+        EditText price=field("Цена за единицу, ₽",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        button("Добавить материал",true,v->{if(title.length()==0||rate.length()==0){message("Укажите материал и норму расхода");return;}
+            try{JSONObject body=new JSONObject().put("parent_work_id",works.get(parent.getSelectedItemPosition()).optString("id"))
+                    .put("kind","material").put("title",title.getText().toString()).put("unit",unit.getText().toString())
+                    .put("consumption_rate",rate.getText().toString()).put("waste_percent",waste.length()==0?"0":waste.getText().toString())
+                    .put("unit_price",price.length()==0?0:cents(price));
+                call("/construction/objects/"+id+"/quantities","POST",body,result->constructionDetail(id));}
+            catch(Exception error){message("Проверьте норму, единицу и цену");}
+        });
+    }
+    // CONSTRUCTION END
+    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",30,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("projects","Объекты и замеры","Помещения, объёмы и контроль работ",this::constructionList);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
     private void records(String kind){
         page("",kind,false);content.addView(ui.label(kind.equals("clients")?"Ваши клиенты":kind.equals("projects")?"Всё движется\nпо плану.":"Задачи",30,INK,true));text(kind.equals("clients")?"Люди, с которыми вы создаёте больше.":kind.equals("projects")?"Работа, договорённости и оплата.":"Следующий шаг для каждого проекта.");
         if(kind.equals("clients"))button("Добавить клиента",true,v->newClient());
@@ -566,6 +700,6 @@ public class MainActivity extends Activity {
     private void support(){parentPage="settings";page("Мы на связи","support",true);content.addView(ui.label("Чем можем\nпомочь?",32,INK,true));text("Опишите, что произошло или чего не хватает. Ваше сообщение попадёт в поддержку Сметры.");EditText input=field("Ваше сообщение",1);ui.space(content,16);button("Отправить сообщение",true,v->{if(input.getText().toString().trim().isEmpty()){input.setError("Напишите сообщение");return;}try{call("/support","POST",new JSONObject().put("message",input.getText().toString()),r->{settings();message("Сообщение отправлено");});}catch(Exception error){message(error.getMessage());}});}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(resultCode!=RESULT_OK||data==null)return;if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put("project_id",projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));request("/files","POST",payload);runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
     private void publicQuote(String publicToken){publicView=true;page("Предложение","public",false);loading(content);call("/public/quote?token="+android.net.Uri.encode(publicToken),"GET",null,r->{clearLoading(content);JSONObject q=r.optJSONObject("quote");if(q==null)return;content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,20);content.addView(ui.label(q.optString("title"),30,INK,true));text(q.optString("description"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость предложения",13,BLUE,false));ui.space(price,14);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));ui.space(content,16);if(q.optString("status").equals("sent"))button("Согласовать предложение",true,v->ui.sheet("Согласовать условия?","Вы принимаете состав работ и стоимость этой версии предложения.","Да, согласовать",false,()->{try{call("/public/accept","POST",new JSONObject().put("token",publicToken).put("version",q.optInt("published_version")),result->{publicQuote(publicToken);message("Предложение согласовано");});}catch(Exception error){message(error.getMessage());}}));});}
-    private void goBack(){if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
+    private void goBack(){if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
     @Override public void onBackPressed(){if(currentPage.equals("home")||currentPage.equals("login"))super.onBackPressed();else goBack();}
 }
