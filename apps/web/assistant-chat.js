@@ -137,7 +137,7 @@ window.SmetraAssistant=async function(){
     input.disabled=!data.available||value.remaining<1;
   };
   const scrollBottom=()=>{if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-260)window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'})};
-  const addMessage=(role,text)=>{
+  const addMessage=(role,text,messageId)=>{
     const item=document.createElement('article');item.className='assistant-message '+role;
     const label=document.createElement('small');label.textContent=role==='user'?'ВЫ':'СМЕТРА';
     const body=document.createElement('div');body.className='assistant-markdown';
@@ -146,6 +146,15 @@ window.SmetraAssistant=async function(){
     if(role==='assistant'){
       const copy=document.createElement('button');copy.type='button';copy.className='assistant-copy';copy.textContent='Копировать';copy.onclick=async()=>{await navigator.clipboard.writeText(body.innerText);copy.textContent='Скопировано';setTimeout(()=>copy.textContent='Копировать',1800)};
       item.append(copy);
+    }
+    if(activeConversation&&messageId){
+      const fork=document.createElement('button');fork.type='button';fork.className='assistant-fork';fork.textContent='Новая ветка';
+      fork.title='Продолжить диалог с этого сообщения отдельно';
+      fork.onclick=async()=>{fork.disabled=true;try{
+        const result=await api('/assistant/conversations/'+encodeURIComponent(activeConversation)+'/fork',{method:'POST',body:JSON.stringify({message_id:messageId})});
+        sessionStorage.setItem('smetra.assistant.conversation',result.conversation.id);window.SmetraAssistant();
+      }catch(error){fork.disabled=false;notify(error.message)}};
+      item.append(fork);
     }
     messages.append(item);return {item,body};
   };
@@ -161,7 +170,7 @@ window.SmetraAssistant=async function(){
     messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line"></span><h2>Что сделаем сегодня?</h2><p>Спросите о сметах и заказах или поручите подготовить изменение. Сохранение всегда остаётся за вами.</p><div class="assistant-suggestions"><button type="button" data-prompt="Какие сметы ожидают согласования?">Что ждёт согласования?</button><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали.">Составить смету</button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">Разобраться в оплатах</button></div></div>';
     messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;input.focus();resize()});
   }
-  thread.messages.forEach(message=>addMessage(message.role,message.content));
+  thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит сообщений на этот месяц исчерпан.';

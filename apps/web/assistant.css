@@ -41,6 +41,7 @@
 .assistant-page .assistant-proposal h3{font-size:16px}
 .assistant-composer{position:sticky;bottom:0;z-index:4;padding:16px 0 22px;background:linear-gradient(180deg,#0000 0%,#000 14%,#000 100%);backdrop-filter:none}
 .assistant-attachment-bar{display:flex;align-items:center;gap:10px;min-height:28px;margin:0 3px 8px;color:#788595;font-size:10px}.assistant-attachment-bar button{border:0;background:none;color:#aacdff;padding:4px 2px;font:11px inherit;cursor:pointer}.assistant-attachment-bar button:hover{text-decoration:underline;text-underline-offset:3px}.assistant-attachment-bar button:disabled{opacity:.5;cursor:wait}
+.assistant-fork{margin:9px 0 0 10px;border:0;background:none;color:#87a9d4;font-size:10px;cursor:pointer}.assistant-fork:hover{color:#c3ddff;text-decoration:underline;text-underline-offset:3px}.assistant-fork:disabled{opacity:.4;cursor:wait}
 .assistant-context{display:flex;align-items:center;gap:10px;width:fit-content;max-width:100%;min-height:32px;margin:0 0 8px;padding:4px 5px 4px 11px;border:1px solid #354b69;border-radius:8px;background:#101a29;color:#c6ddfb;font-size:11px}
 .assistant-context>span{flex:none;color:#8394a9;font-size:10px}
 .assistant-context strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}

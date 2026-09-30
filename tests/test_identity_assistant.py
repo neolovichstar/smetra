@@ -154,11 +154,23 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertIn("Не добавлять НДС", provider.call_args.args[0][1]["content"])
         messages = self.call("/assistant/conversations/" + conversation_id, token=owner)[1]["messages"]
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
+        self.assertEqual(self.call("/assistant/conversations/" + conversation_id + "/fork", "POST",
+                                   {"message_id": messages[0]["id"]}, outsider)[0], 404)
+        self.assertEqual(self.call("/assistant/conversations/" + conversation_id + "/fork", "POST",
+                                   {"message_id": "missing"}, owner)[0], 404)
+        code, forked = self.call("/assistant/conversations/" + conversation_id + "/fork", "POST",
+                                 {"message_id": messages[0]["id"]}, owner)
+        self.assertEqual(code, 201, forked)
+        self.assertEqual(forked["copied_messages"], 1)
+        branch_id = forked["conversation"]["id"]
+        branch_messages = self.call("/assistant/conversations/" + branch_id, token=owner)[1]["messages"]
+        self.assertEqual([item["content"] for item in branch_messages], [messages[0]["content"]])
         self.assertEqual(self.call("/assistant", token=owner)[1]["messages"], [])
         self.assertEqual(self.call("/assistant/conversations/" + conversation_id, "PATCH",
                                    {"title": "Важные заказы", "pinned": 1}, owner)[0], 200)
         self.assertEqual(self.call("/assistant/conversations/" + conversation_id, "DELETE", token=owner)[0], 200)
         self.assertEqual(self.call("/assistant/conversations/" + conversation_id, token=owner)[0], 404)
+        self.assertEqual(self.call("/assistant/conversations/" + branch_id, token=owner)[0], 200)
 
     def test_uploaded_text_is_searchable_with_workspace_and_page(self):
         owner, _ = self.account("indexed-file-owner")

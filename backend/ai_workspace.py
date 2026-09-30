@@ -40,12 +40,47 @@ def conversations(service, method, parts, data):
             "VALUES(?,?,?,?,?,?,?,?,?)", tuple(row.values()),
         )
         return 201, {"conversation": row}
+    if method == "POST" and len(parts) == 2 and parts[1] == "fork":
+        source = conversation(service, string(parts[0], "Диалог", 80, True))
+        message_id = string(data.get("message_id", ""), "Сообщение", 80, True)
+        recent = list(reversed(service.con.execute(
+            "SELECT id,role,content,created_at FROM assistant_messages "
+            "WHERE conversation_id=? AND workspace_id=? AND user_id=? "
+            "ORDER BY created_at DESC,id DESC LIMIT 50",
+            (source["id"], service.wid, service.user["id"]),
+        ).fetchall()))
+        selected = next((index for index, item in enumerate(recent) if item["id"] == message_id), None)
+        if selected is None:
+            raise DomainError(404, "Сообщение для новой ветки не найдено")
+        count = service.con.execute(
+            "SELECT count(*) FROM assistant_conversations WHERE workspace_id=? AND user_id=?",
+            (service.wid, service.user["id"]),
+        ).fetchone()[0]
+        if count >= 50:
+            raise DomainError(409, "Максимум 50 диалогов. Удалите ненужный диалог")
+        title = string(data.get("title", "Ветка · " + source["title"][:100]), "Название", 120, True)
+        fork = dict(id=identity(), workspace_id=service.wid, user_id=service.user["id"],
+                    title=title, context_entity=source["context_entity"],
+                    context_id=source["context_id"], pinned=0,
+                    created_at=stamp(), updated_at=stamp())
+        service.con.execute(
+            "INSERT INTO assistant_conversations(id,workspace_id,user_id,title,context_entity,context_id,pinned,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)", tuple(fork.values()),
+        )
+        for item in recent[:selected + 1]:
+            service.con.execute(
+                "INSERT INTO assistant_messages(id,workspace_id,user_id,role,content,created_at,conversation_id) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (identity(), service.wid, service.user["id"], item["role"], item["content"],
+                 item["created_at"], fork["id"]),
+            )
+        return 201, {"conversation": fork, "copied_messages": selected + 1}
     if len(parts) != 1:
         raise DomainError(404, "Диалог не найден")
     row = conversation(service, string(parts[0], "Диалог", 80, True))
     if method == "GET":
         messages = service.con.execute(
-            "SELECT role,content,created_at FROM assistant_messages "
+            "SELECT id,role,content,created_at FROM assistant_messages "
             "WHERE conversation_id=? AND workspace_id=? AND user_id=? "
             "ORDER BY created_at DESC,id DESC LIMIT 50",
             (row["id"], service.wid, service.user["id"]),
