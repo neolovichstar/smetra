@@ -102,6 +102,19 @@ class BusinessFlows(unittest.TestCase):
         status, result = self.call(f'/construction/objects/{obj}/quote', 'POST', {}, token)
         self.assertEqual(status, 201, result)
         self.assertEqual(result['quote']['amount_kopecks'], 652000)
+        status, recalculated = self.call(f'/construction/objects/{obj}/zones/{zone}', 'PATCH', {
+            'width': '480', 'dimension_unit': 'см',
+        }, token)
+        self.assertEqual(status, 200, recalculated)
+        self.assertIsNone(recalculated['object']['quote_id'])
+        amounts = {row['id']: row['quantity'] for row in recalculated['quantities']}
+        self.assertEqual(amounts[work['id']], '24.0000')
+        self.assertIn('5.2800', amounts.values())
+        status, updated = self.call(f'/construction/objects/{obj}/quantities/{work["id"]}', 'PATCH', {
+            'unit_price': 16000,
+        }, token)
+        self.assertEqual(status, 200, updated)
+        self.assertEqual(next(row for row in updated['quantities'] if row['id'] == work['id'])['planned_total_kopecks'], 384000)
         status, sheet = self.call(f'/construction/objects/{obj}/xlsx', token=token, raw=True)
         self.assertEqual(status, 200)
         self.assertTrue(sheet.startswith(b'PK'))

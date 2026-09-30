@@ -2,7 +2,7 @@
 
 import io
 import re
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from backend.business import DomainError, choice, identity, integer, stamp, string
 from backend.construction_math import KINDS, UNITS, decimal_value, evaluate, length_in_metres, money, zone_values
@@ -53,6 +53,45 @@ def quantity_view(row, actual="0"):
     result["actual_quantity"] = str(actual)
     result["actual_total_kopecks"] = money(actual, row["unit_price"])
     return result
+
+
+def calculate_row(service, obj, row):
+    zone = row_in_object(service, "construction_zones", row["zone_id"], obj["id"]) if row["zone_id"] else None
+    symbols = variables(service, obj["id"], zone)
+    symbols.update(
+        rate=decimal_value(row["consumption_rate"], "Норма расхода"),
+        waste=decimal_value(row["waste_percent"], "Запас"),
+        coefficient=decimal_value(row["coefficient"], "Коэффициент"),
+    )
+    if row["parent_work_id"]:
+        parent = row_in_object(service, "construction_quantities", row["parent_work_id"], obj["id"])
+        symbols["work_qty"] = decimal_value(parent["quantity"], "Объём работы")
+    quantity = (evaluate(row["formula"], symbols) * symbols["coefficient"]).quantize(
+        Decimal("0.0001"), rounding=ROUND_HALF_UP,
+    )
+    if quantity <= 0:
+        raise DomainError(400, "Расчётный объём должен быть больше нуля")
+    money(quantity, row["unit_price"])
+    return str(quantity)
+
+
+def recalculate(service, obj):
+    rows = service.con.execute(
+        "SELECT * FROM construction_quantities WHERE object_id=? AND workspace_id=? ORDER BY created_at,id",
+        (obj["id"], service.wid),
+    ).fetchall()
+    for row in sorted(rows, key=lambda item: bool(item["parent_work_id"])):
+        quantity = calculate_row(service, obj, row)
+        service.update("construction_quantities", row["id"], {
+            "quantity": quantity, "updated_at": stamp(),
+        })
+
+
+def invalidate_quote(service, obj):
+    if obj["quote_id"]:
+        service.update("construction_objects", obj["id"], {
+            "quote_id": None, "updated_at": stamp(),
+        })
 
 
 def detail(service, obj):
@@ -141,6 +180,12 @@ def add_measurement(service, obj, data):
 
 
 def add_quantity(service, obj, data):
+    count = service.con.execute(
+        "SELECT count(*) FROM construction_quantities WHERE object_id=? AND workspace_id=?",
+        (obj["id"], service.wid),
+    ).fetchone()[0]
+    if count >= 200:
+        raise DomainError(409, "В одном объекте может быть не больше 200 позиций сметы")
     zone_id = data.get("zone_id") or None
     zone = row_in_object(service, "construction_zones", zone_id, obj["id"]) if zone_id else None
     catalog_id = data.get("catalog_id") or None
@@ -163,7 +208,7 @@ def add_quantity(service, obj, data):
     qty = evaluate(formula, symbols) * coefficient
     if qty <= 0:
         raise DomainError(400, "Объём должен быть больше нуля")
-    qty = qty.quantize(Decimal("0.0001"))
+    qty = qty.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
     price = integer(data.get("unit_price", catalog["price"] if catalog else 0), "Расценка", 0, 100_000_000_000)
     cost = integer(data.get("cost_price", catalog["cost_price"] if catalog else 0), "Себестоимость", 0, 100_000_000_000)
     money(qty, price)
@@ -176,6 +221,7 @@ def add_quantity(service, obj, data):
         created_at=stamp(), updated_at=stamp(),
     )
     service.insert("construction_quantities", values)
+    invalidate_quote(service, obj)
     service.emit("construction_quantity", values["id"], "Объём рассчитан", title)
     return 201, {"quantity": quantity_view(values)}
 
@@ -288,12 +334,65 @@ def route(service, method, parts, query, data):
         raise DomainError(405, "Метод не поддерживается")
     if rest == ["zones"] and method == "POST":
         return add_zone(service, obj, data)
+    if len(rest) == 2 and rest[0] == "zones" and method == "PATCH":
+        zone = row_in_object(service, "construction_zones", rest[1], obj["id"])
+        unit = choice(data.get("dimension_unit", "м"), ("мм", "см", "м"), "Единица размера")
+        values = {
+            "name": string(data.get("name", zone["name"]), "Помещение", 120, True),
+            "length_m": str(length_in_metres(data["length"], unit)) if "length" in data else zone["length_m"],
+            "width_m": str(length_in_metres(data["width"], unit)) if "width" in data else zone["width_m"],
+            "height_m": str(length_in_metres(data["height"], unit)) if "height" in data else zone["height_m"],
+            "openings_m2": str(decimal_value(data.get("openings_m2", zone["openings_m2"]), "Площадь проёмов")),
+            "notes": string(data.get("notes", zone["notes"]), "Заметки", 2000),
+            "updated_at": stamp(),
+        }
+        service.update("construction_zones", zone["id"], values)
+        recalculate(service, obj)
+        invalidate_quote(service, obj)
+        service.emit("construction_zone", zone["id"], "Размеры помещения уточнены")
+        return 200, detail(service, service.get("construction_objects", obj["id"]))
     if rest == ["measurements"] and method == "POST":
         return add_measurement(service, obj, data)
+    if len(rest) == 2 and rest[0] == "measurements" and method == "PATCH":
+        measure = row_in_object(service, "construction_measurements", rest[1], obj["id"])
+        values = {
+            "value": str(decimal_value(data.get("value", measure["value"]), "Замер")),
+            "unit": choice(data.get("unit", measure["unit"]), UNITS, "Единица"),
+            "notes": string(data.get("notes", measure["notes"]), "Заметки", 2000),
+        }
+        service.update("construction_measurements", measure["id"], values)
+        recalculate(service, obj)
+        invalidate_quote(service, obj)
+        service.emit("construction_measurement", measure["id"], "Замер уточнён")
+        return 200, detail(service, service.get("construction_objects", obj["id"]))
     if rest == ["quantities"] and method == "POST":
         return add_quantity(service, obj, data)
+    if len(rest) == 2 and rest[0] == "quantities" and method == "PATCH":
+        row = row_in_object(service, "construction_quantities", rest[1], obj["id"])
+        values = {
+            "title": string(data.get("title", row["title"]), "Позиция", 200, True),
+            "formula": string(data.get("formula", row["formula"]), "Формула", 160, True),
+            "unit": choice(data.get("unit", row["unit"]), UNITS, "Единица"),
+            "unit_price": integer(data.get("unit_price", row["unit_price"]), "Цена", 0, 100_000_000_000),
+            "cost_price": integer(data.get("cost_price", row["cost_price"]), "Себестоимость", 0, 100_000_000_000),
+            "consumption_rate": str(decimal_value(data.get("consumption_rate", row["consumption_rate"]), "Норма расхода")),
+            "waste_percent": str(decimal_value(data.get("waste_percent", row["waste_percent"]), "Запас", maximum=Decimal(100))),
+            "coefficient": str(decimal_value(data.get("coefficient", row["coefficient"]), "Коэффициент", minimum=Decimal("0.001"), maximum=Decimal(100))),
+            "notes": string(data.get("notes", row["notes"]), "Заметки", 2000),
+            "updated_at": stamp(),
+        }
+        service.update("construction_quantities", row["id"], values)
+        recalculate(service, obj)
+        invalidate_quote(service, obj)
+        service.emit("construction_quantity", row["id"], "Позиция пересчитана")
+        return 200, detail(service, service.get("construction_objects", obj["id"]))
     if rest == ["facts"] and method == "POST":
         return add_fact(service, obj, data)
+    if len(rest) == 2 and rest[0] == "facts" and method == "DELETE":
+        fact = row_in_object(service, "construction_facts", rest[1], obj["id"])
+        service.con.execute("DELETE FROM construction_facts WHERE id=? AND workspace_id=?", (fact["id"], service.wid))
+        service.emit("construction_fact", fact["id"], "Ошибочная запись факта удалена")
+        return 200, {"ok": True}
     if rest == ["quote"] and method == "POST":
         return to_quote(service, obj)
     if rest == ["xlsx"] and method == "GET":
