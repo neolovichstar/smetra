@@ -222,6 +222,24 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(self.call(f'/construction/objects/{obj}/defects', 'POST', {
             'description': 'Неверное фото', 'photo_file_id': result['items'][0]['id'],
         }, token)[0], 400)
+        from PIL import Image
+
+        photo = io.BytesIO()
+        Image.new('RGB', (4, 4), (30, 80, 140)).save(photo, format='PNG')
+        status, uploaded = self.call('/files', 'POST', {
+            'construction_id': obj, 'name': 'дефект.png',
+            'content': base64.b64encode(photo.getvalue()).decode(),
+        }, token)
+        self.assertEqual(status, 201, uploaded)
+        photo_id = uploaded['file']['id']
+        status, linked = self.call(f'/construction/objects/{obj}/defects/{defect_id}', 'PATCH', {
+            'photo_file_id': photo_id,
+        }, token)
+        self.assertEqual(status, 200, linked)
+        self.assertEqual(linked['defect']['photo_file_id'], photo_id)
+        self.assertEqual(self.call(f'/construction/objects/{imported_object}/defects', 'POST', {
+            'description': 'Чужое фото', 'photo_file_id': photo_id,
+        }, token)[0], 400)
         self.assertEqual(self.call(f'/construction/objects/{imported_object}/defects/{defect_id}', 'PATCH', {
             'status': 'open',
         }, token)[0], 404)
