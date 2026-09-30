@@ -1737,6 +1737,10 @@ class Service:
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}
+        if method == "POST" and kind in ("files", "documents", "transfer"):
+            self.h.throttle(f"{kind}:{self.wid}:{self.user['id']}", 12 if kind == "files" else 20, 60)
+        if method == "GET" and kind == "search":
+            self.h.throttle(f"search:{self.wid}:{self.user['id']}", 90, 60)
         if method == "GET" and (
             kind == "files" and rest
             or kind == "documents" and len(rest) == 2 and rest[1] == "pdf"

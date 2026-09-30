@@ -229,7 +229,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         if status == 429:
-            self.send_header("Retry-After", "60")
+            self.send_header("Retry-After", str(getattr(self, "retry_after", 60)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
@@ -317,12 +317,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return row
 
     def throttle(self, key, limit=15, window=60):
+        try:
+            from backend.redis_infra import RedisUnavailable, rate_limit
+        except ModuleNotFoundError:
+            from redis_infra import RedisUnavailable, rate_limit
+        try:
+            result = rate_limit(key, limit, window)
+        except RedisUnavailable:
+            # Cost-bearing AI requests must not bypass their fast guard during an outage.
+            if key.startswith(("assistant:", "ai:")):
+                raise ApiError(503, "Ассистент временно недоступен") from None
+            result = None  # PostgreSQL remains the distributed fallback.
+        if result is not None:
+            if not result.allowed:
+                self.retry_after = max(1, result.retry_after)
+                raise ApiError(429, "Слишком много запросов. Попробуйте позже")
+            return
         if os.getenv("DATABASE_URL"):
             try:
                 from backend.postgres import throttle
             except ModuleNotFoundError:
                 from postgres import throttle
             if not throttle(key, limit, window, now()):
+                self.retry_after = window
                 raise ApiError(429, "Слишком много запросов. Попробуйте позже")
             return
         with _LOCK:
@@ -336,6 +353,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if moment - start >= window:
                 count, start = 0, moment
             if count >= limit:
+                self.retry_after = window
                 raise ApiError(429, "Слишком много запросов. Попробуйте позже")
             RATE[key] = (count + 1, start)
 
@@ -373,6 +391,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def dispatch(self, method):
         self.request_id = uuid.uuid4().hex
         self.started = time.monotonic()
+        self.retry_after = 60
         try:
             if len(self.path) > 4096:
                 raise ApiError(414, "Слишком длинный адрес запроса")
@@ -403,7 +422,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 raise ApiError(404, "Не найдено")
         except (ApiError, business.DomainError) as err:
-            self.send_json(err.status, {"error": err.message})
+            payload = {"error": err.message}
+            if err.status == 429:
+                payload.update(code="rate_limited", retryAfter=getattr(self, "retry_after", 60))
+            self.send_json(err.status, payload)
         except sqlite3.IntegrityError:
             self.send_json(
                 409,
@@ -594,9 +616,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/login" and method == "POST":
             self.throttle("login:" + self.client_address[0], 10, 300)
             data = self.body()
+            email = str(data.get("email", "")).lower().strip()
+            self.throttle("login-account:" + hashlib.sha256(email[:254].encode()).hexdigest(), 20, 300)
             user = con.execute(
                 "SELECT * FROM users WHERE email=?",
-                (str(data.get("email", "")).lower().strip(),),
+                (email,),
             ).fetchone()
             if not user or not verify_password(
                 str(data.get("password", "")), user["password_hash"]

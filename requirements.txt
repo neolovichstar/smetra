@@ -2,3 +2,4 @@ reportlab==4.4.10
 openpyxl==3.1.5
 pypdf==6.19.0
 psycopg[binary]==3.3.3
+upstash-redis==1.8.0

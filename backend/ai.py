@@ -113,6 +113,24 @@ def capture_file(value):
 
 
 def draft(service, data):
+    try:
+        from backend.redis_infra import RedisUnavailable, acquire_lock
+    except ModuleNotFoundError:
+        from redis_infra import RedisUnavailable, acquire_lock
+    try:
+        lease = acquire_lock("ai-draft", service.user["id"], ttl=90)
+    except RedisUnavailable:
+        raise DomainError(503, "AI временно недоступен") from None
+    if lease is None:
+        service.h.retry_after = 5
+        raise DomainError(429, "Дождитесь завершения предыдущего черновика")
+    try:
+        return _draft(service, data)
+    finally:
+        lease.release()
+
+
+def _draft(service, data):
     if not available():
         raise DomainError(
             503,

@@ -421,6 +421,23 @@ def prepare(service, name, args):
 
 
 def confirm(service, action_id):
+    try:
+        from backend.redis_infra import Lease, RedisUnavailable, acquire_lock
+    except ModuleNotFoundError:
+        from redis_infra import Lease, RedisUnavailable, acquire_lock
+    try:
+        lease = acquire_lock("ai-action", service.wid, action_id, ttl=30)
+    except RedisUnavailable:
+        lease = Lease(None, "", "")  # The DB action row and transaction still prevent reapplication.
+    if lease is None:
+        raise DomainError(409, "Действие уже применяется. Подождите и обновите результат.")
+    try:
+        return _confirm(service, action_id)
+    finally:
+        lease.release()
+
+
+def _confirm(service, action_id):
     service.write_access()
     with transaction(service.con):
         row = service.con.execute(
@@ -528,8 +545,8 @@ def answer_chat(service, prompt, on_delta=None, context=None):
 
 
 class ChatStream:
-    def __init__(self, service, prompt, quota_key, context=None):
-        self.service, self.prompt, self.quota_key, self.context = service, prompt, quota_key, context
+    def __init__(self, service, prompt, quota_key, context=None, lease=None):
+        self.service, self.prompt, self.quota_key, self.context, self.lease = service, prompt, quota_key, context, lease
 
     def write(self, handler):
         handler.send_response(200)
@@ -572,6 +589,8 @@ class ChatStream:
             except (BrokenPipeError, ConnectionResetError):
                 pass
         finally:
+            if self.lease:
+                self.lease.release()
             if self.service.runtime_connection:
                 self.service.runtime_connection.finish(True)
 
@@ -619,11 +638,28 @@ def route(service, method, parts, data):
     prompt = string(data.get("text", ""), "Сообщение", 3000, True)
     context = verified_context(service, data.get("context"))
     service.h.throttle("assistant:" + service.user["id"], 12, 60)
-    quota_key = reserve(service)
+    try:
+        from backend.redis_infra import RedisUnavailable, acquire_lock
+    except ModuleNotFoundError:
+        from redis_infra import RedisUnavailable, acquire_lock
+    try:
+        lease = acquire_lock("assistant", service.user["id"], ttl=120)
+    except RedisUnavailable:
+        raise DomainError(503, "Ассистент временно недоступен") from None
+    if lease is None:
+        service.h.retry_after = 5
+        raise DomainError(429, "Дождитесь ответа на предыдущее сообщение")
+    try:
+        quota_key = reserve(service)
+    except Exception:
+        lease.release()
+        raise
     if parts == ["stream"]:
-        return 200, ChatStream(service, prompt, quota_key, context)
+        return 200, ChatStream(service, prompt, quota_key, context, lease)
     try:
         return 200, answer_chat(service, prompt, context=context)
     except Exception:
         release(service, quota_key)
         raise
+    finally:
+        lease.release()
