@@ -58,9 +58,12 @@ window.SmetraFilePreview = (() => {
           bytes.type !== file.mime) throw new Error('Формат файла не поддерживается');
       body.replaceChildren();
       if (file.mime === 'text/plain') {
-        const content = document.createElement('pre');
-        content.className = 'file-preview-text';
-        content.textContent = await bytes.text();
+        const markdown = file.name.toLowerCase().endsWith('.md');
+        const content = document.createElement(markdown ? 'div' : 'pre');
+        content.className = markdown ? 'assistant-markdown file-preview-markdown' : 'file-preview-text';
+        const text = await bytes.text();
+        if (markdown && typeof window.assistantMarkdown === 'function' && text.length <= 200000) content.innerHTML = window.assistantMarkdown(text);
+        else content.textContent = text;
         if (request !== controller || !view.open) return;
         body.append(content);
       } else {

@@ -34,3 +34,4 @@
   .file-preview-close{width:34px;height:34px}
 }
 @media(prefers-reduced-motion:no-preference){.file-preview-dialog[open]{animation:file-preview-enter .24s cubic-bezier(.2,.8,.2,1)}@keyframes file-preview-enter{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}}
+.file-preview-markdown{max-width:72ch;margin:0 auto;padding:20px 8px;color:#e8ecf3;font-size:13px;line-height:1.65}

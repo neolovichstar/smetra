@@ -41,10 +41,50 @@ def download(row, con=None):
         "application/pdf": ".pdf",
         "text/plain": ".txt",
     }[row["mime"]]
+    if row["mime"] == "text/plain" and Path(row["name"]).suffix.lower() == ".md":
+        suffix = ".md"
     return Download(content, row["mime"], "smetra-" + row["id"] + suffix)
 
 
 def route(service, method, parts, query, data):
+    if method == "PATCH" and len(parts) == 1:
+        row = service.get("files", parts[0])
+        if row["mime"] != "text/plain" or Path(row["name"]).suffix.lower() != ".md":
+            raise DomainError(400, "Редактировать здесь можно только Markdown-файлы")
+        if data.get("sha256") != row["sha256"]:
+            raise DomainError(409, "Файл изменился. Обновите страницу перед сохранением")
+        try:
+            raw = base64.b64decode(data.get("content", ""), validate=True)
+            body = raw.decode("utf-8-sig")
+            if not 1 <= len(raw) <= 1_000_000 or "\0" in body:
+                raise ValueError("markdown bounds")
+        except (ValueError, TypeError, UnicodeError):
+            raise DomainError(400, "Markdown должен содержать текст UTF-8 до 1 МБ") from None
+        used = service.con.execute(
+            "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
+        ).fetchone()[0]
+        if used - row["size"] + len(raw) > 100_000_000:
+            raise DomainError(413, "Лимит хранилища пространства — 100 МБ")
+        digest = hashlib.sha256(raw).hexdigest()
+        updated = service.con.execute(
+            "UPDATE files SET size=?,sha256=? WHERE id=? AND workspace_id=? AND sha256=? RETURNING id",
+            (len(raw), digest, row["id"], service.wid, row["sha256"]),
+        ).fetchone()
+        if not updated:
+            raise DomainError(409, "Файл изменился. Обновите страницу перед сохранением")
+        if getattr(service.con, "is_postgres", False):
+            service.con.execute("UPDATE file_payloads SET content=? WHERE file_id=?", (raw, row["id"]))
+        else:
+            path = (directory() / row["storage_name"]).resolve()
+            if path.parent != directory() or not path.is_file():
+                raise DomainError(404, "Файл не найден")
+            path.write_bytes(raw)
+        from backend.assistant_files import index_file
+
+        service.con.execute("DELETE FROM file_text_chunks WHERE file_id=? AND workspace_id=?", (row["id"], service.wid))
+        index_file(service, {**dict(row), "sha256": digest}, raw)
+        service.emit("file", row["id"], "Markdown-документ изменён", row["name"])
+        return 200, {"file": {"id": row["id"], "name": row["name"], "size": len(raw), "sha256": digest}}
     if method == "GET":
         if parts:
             return 200, download(service.get("files", parts[0]), service.con)
@@ -62,7 +102,7 @@ def route(service, method, parts, query, data):
                     "items": [
                         dict(r)
                         for r in service.con.execute(
-                            f"SELECT id,name,mime,size,public,created_at FROM files WHERE workspace_id=? AND {key}=? ORDER BY created_at DESC LIMIT 100",
+                            f"SELECT id,name,mime,size,sha256,public,created_at FROM files WHERE workspace_id=? AND {key}=? ORDER BY created_at DESC LIMIT 100",
                             (service.wid, query[key][0]),
                         )
                     ],
@@ -70,7 +110,7 @@ def route(service, method, parts, query, data):
         phrase = string(query.get("q", [""])[0], "Поиск", 100)
         return 200, {
             "items": [dict(row) for row in service.con.execute(
-                "SELECT id,name,mime,size,public,created_at,quote_id,project_id,client_id,construction_id "
+                "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,client_id,construction_id "
                 "FROM files WHERE workspace_id=? AND instr(lower(name),lower(?))>0 "
                 "ORDER BY created_at DESC LIMIT 50 OFFSET ?",
                 (service.wid, phrase, service.page(query)),
@@ -101,8 +141,8 @@ def route(service, method, parts, query, data):
             service.get(table, references[key])
     name = string(data.get("name", ""), "Имя файла", 180, True)
     extension = Path(name).suffix.lower()
-    if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt"):
-        raise DomainError(400, "Разрешены PNG, JPEG, PDF и TXT")
+    if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md"):
+        raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT и MD")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
@@ -258,5 +298,5 @@ def route(service, method, parts, query, data):
             path.unlink(missing_ok=True)
             raise
     return 201, {
-        "file": {key: values[key] for key in ("id", "name", "mime", "size", "public")}
+        "file": {key: values[key] for key in ("id", "name", "mime", "size", "sha256", "public")}
     }

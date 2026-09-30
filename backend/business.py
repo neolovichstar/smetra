@@ -1043,6 +1043,10 @@ class Service:
                 "SELECT * FROM projects WHERE quote_id=?", (row["id"],)
             ).fetchone()
             if previous:
+                self.con.execute(
+                    "UPDATE construction_objects SET project_id=?,status='in_progress',updated_at=? WHERE workspace_id=? AND quote_id=? AND project_id IS NULL",
+                    (previous["id"], stamp(), self.wid, row["id"]),
+                )
                 return 200, {"project": dict(previous)}
             pid = identity()
             self.insert(
@@ -1064,6 +1068,10 @@ class Service:
                 ),
             )
             self.emit("project", pid, "Заказ создан из сметы", row["id"])
+            self.con.execute(
+                "UPDATE construction_objects SET project_id=?,status='in_progress',updated_at=? WHERE workspace_id=? AND quote_id=?",
+                (pid, stamp(), self.wid, row["id"]),
+            )
             return 201, {"project": dict(self.get("projects", pid))}
         if method not in ("POST", "PATCH"):
             raise DomainError(405, "Метод не поддерживается")

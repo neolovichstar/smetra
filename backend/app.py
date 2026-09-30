@@ -281,7 +281,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 3_000_000 if path == "/api/ai/draft" else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 3_000_000 if path == "/api/ai/draft" else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":

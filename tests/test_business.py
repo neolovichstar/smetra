@@ -78,6 +78,35 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_markdown_file_edit_is_versioned_scoped_and_reindexed(self):
+        owner, _ = self.account('markdown-owner')
+        other, _ = self.account('markdown-other')
+        _, client = self.call('/clients', 'POST', {'name': 'Контакт'}, owner)
+        status, result = self.call('/files', 'POST', {
+            'client_id': client['item']['id'], 'name': 'замеры.md',
+            'content': base64.b64encode(b'# Plan\nOld term').decode(),
+        }, owner)
+        self.assertEqual(status, 201, result)
+        file = result['file']
+        path = '/files/' + file['id']
+        status, _ = self.call(path, 'PATCH', {
+            'sha256': file['sha256'],
+            'content': base64.b64encode(b'# Plan\nNew term').decode(),
+        }, other)
+        self.assertEqual(status, 404)
+        status, changed = self.call(path, 'PATCH', {
+            'sha256': file['sha256'],
+            'content': base64.b64encode(b'# Plan\nNew term').decode(),
+        }, owner)
+        self.assertEqual(status, 200, changed)
+        self.assertNotEqual(changed['file']['sha256'], file['sha256'])
+        self.assertEqual(self.call(path, token=owner, raw=True)[1], b'# Plan\nNew term')
+        self.assertEqual(self.call(path, 'PATCH', {
+            'sha256': file['sha256'],
+            'content': base64.b64encode(b'# Plan\nAnother term').decode(),
+        }, owner)[0], 409)
+        self.assertEqual(len(self.call('/search?q=New%20term', token=owner)[1]['items']), 1)
+
     def test_construction_measure_to_quote_and_workspace_isolation(self):
         token, _ = self.account('builder-' + os.urandom(4).hex())
         other, _ = self.account('other-builder-' + os.urandom(4).hex())
@@ -135,6 +164,14 @@ class BusinessFlows(unittest.TestCase):
         status, fresh_quote = self.call(f'/construction/objects/{obj}/quote', 'POST', {}, token)
         self.assertEqual(status, 201, fresh_quote)
         self.assertEqual(fresh_quote['quote']['amount_kopecks'], priced_plan['totals']['planned_kopecks'])
+        published = self.publish(token, fresh_quote['quote'])
+        public_token = published['public_url'].split('quote=')[1]
+        self.assertEqual(self.call('/public/accept', 'POST', {
+            'token': public_token, 'version': 1, 'name': 'Клиент',
+        })[0], 200)
+        status, project = self.call('/quotes/' + published['id'] + '/project', 'POST', {}, token)
+        self.assertEqual(status, 201, project)
+        self.assertEqual(self.call(f'/construction/objects/{obj}', token=token)[1]['object']['project_id'], project['project']['id'])
         status, sheet = self.call(f'/construction/objects/{obj}/xlsx', token=token, raw=True)
         self.assertEqual(status, 200)
         self.assertTrue(sheet.startswith(b'PK'))
