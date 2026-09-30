@@ -237,7 +237,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         if cookie:
             self.send_header("Set-Cookie", cookie)
@@ -456,6 +456,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("black.css", "text/css"),
             ("cabinet.css", "text/css"),
             ("assistant.css", "text/css"),
+            ("file-preview.css", "text/css"),
+            ("file-preview.js", "text/javascript"),
             ("black.js", "text/javascript"),
             ("assistant-chat.js", "text/javascript"),
             ("landing.js", "text/javascript"),
@@ -503,7 +505,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         self.end_headers()
         self.wfile.write(data)

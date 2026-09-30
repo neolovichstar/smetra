@@ -214,12 +214,47 @@ window.Workspace = (() => {
   }
   async function aiDraft(){const root=openModal('Из описания — в черновик','Текст будет отправлен AI-провайдеру. Проверьте позиции и цены перед сохранением.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}<p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor(r.draft)})}
   async function attachments(key,id){
-    const data=await api('/files?'+key+'='+encodeURIComponent(id));const maximum=data.max_upload_bytes||3000000;const section=document.createElement('section');section.className='panel';section.innerHTML=`<div class="section-top"><h3>Файлы</h3><button type="button" class="btn small" id="upload-attachment">+ Прикрепить</button></div><p class="muted">PNG, JPEG, PDF или TXT · до ${maximum/1000000} МБ</p><div id="attachment-list">${data.items.map(f=>`<div class="record-line"><div><strong>${e(f.name)}</strong><small>${Math.ceil(f.size/1024)} КБ · ${f.public?'Доступен клиенту':'Только команда'}</small></div><button class="btn small file-download" data-id="${f.id}">Скачать</button></div>`).join('')||'<p class="muted">Вложений пока нет.</p>'}</div>`;document.querySelector('#content').append(section);section.querySelectorAll('.file-download').forEach(b=>b.onclick=()=>download('/files/'+b.dataset.id,'attachment-'+b.dataset.id).catch(err=>notify(err.message)));section.querySelector('#upload-attachment').onclick=()=>{const root=openModal('Прикрепить файл','Файл сохранится в выбранной записи.',`<form><div class="field"><label for="attachment-file">Выберите файл</label><input id="attachment-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt" required></div>${key==='quote_id'?'<label class="check-label"><input name="public" type="checkbox"> Показать по клиентской ссылке</label>':''}${formEnd('Загрузить')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const file=root.querySelector('[type=file]').files[0];if(file.size>maximum)throw Error(`Файл должен быть не больше ${maximum/1000000} МБ`);const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file)});await api('/files',{method:'POST',body:JSON.stringify({[key]:id,name:file.name,content,public:d.public?1:0})});closeModal();section.remove();await attachments(key,id)})};
+    const data=await api('/files?'+key+'='+encodeURIComponent(id));
+    const maximum=data.max_upload_bytes||3000000;
+    const section=document.createElement('section');
+    section.className='panel';
+    section.innerHTML=`<div class="section-top"><h3>Файлы</h3>${roleCanWrite()?'<button type="button" class="btn small" id="upload-attachment">+ Прикрепить</button>':''}</div><p class="muted">PNG, JPEG, PDF или TXT · до ${maximum/1000000} МБ</p><div class="attachment-list">${data.items.map(f=>`<div class="record-line attachment-row"><div><strong title="${e(f.name)}">${e(f.name)}</strong><small>${Math.ceil(f.size/1024)} КБ · ${f.public?'Доступен клиенту':'Только команда'}</small></div><div class="attachment-actions"><button class="btn small file-preview-open" type="button" data-id="${e(f.id)}">Открыть</button><button class="btn small file-download" type="button" data-id="${e(f.id)}">Скачать</button></div></div>`).join('')||'<p class="muted">Вложений пока нет.</p>'}</div>`;
+    document.querySelector('#content').append(section);
+    section.querySelectorAll('.file-preview-open').forEach(button=>{
+      button.onclick=()=>{
+        const file=data.items.find(item=>item.id===button.dataset.id);
+        if(file)window.SmetraFilePreview.open(file,workspace?.id);
+      };
+    });
+    section.querySelectorAll('.file-download').forEach(button=>{
+      button.onclick=()=>{
+        const file=data.items.find(item=>item.id===button.dataset.id);
+        if(file)download('/files/'+file.id,file.name).catch(err=>notify(err.message));
+      };
+    });
+    section.querySelector('#upload-attachment')?.addEventListener('click',()=>{
+      const root=openModal('Прикрепить файл','Файл сохранится в выбранной записи.',`<form><div class="field"><label for="attachment-file">Выберите файл</label><input id="attachment-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt" required></div>${key==='quote_id'?'<label class="check-label"><input name="public" type="checkbox"> Показать по клиентской ссылке</label>':''}${formEnd('Загрузить')}`);
+      bindCancel(root);
+      submitForm(root.querySelector('form'),async d=>{
+        const file=root.querySelector('[type=file]').files[0];
+        if(file.size>maximum)throw Error(`Файл должен быть не больше ${maximum/1000000} МБ`);
+        const content=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();
+          reader.onload=()=>resolve(String(reader.result).split(',')[1]);
+          reader.onerror=reject;
+          reader.readAsDataURL(file);
+        });
+        await api('/files',{method:'POST',body:JSON.stringify({[key]:id,name:file.name,content,public:d.public?1:0})});
+        closeModal();
+        section.remove();
+        await attachments(key,id);
+      });
+    });
   }
   async function documentForm(quoteId=''){
     const result=await api('/quotes');const root=openModal('Создать документ','Документ сохранит условия выбранной версии.',`<form>${select('quote_id','Смета',result.quotes.map(q=>[q.id,q.title]),quoteId)}<div class="form-grid">${select('kind','Вид',[['estimate','Смета'],['proposal','Предложение'],['invoice','Счёт'],['act','Акт'],['contract','Договор-шаблон'],['reference','Справка об оплате']],'estimate')}${select('template','Оформление',['Minimal','Classic','Business','Modern'],'Minimal')}</div>${formEnd('Сформировать PDF')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/documents',{method:'POST',body:JSON.stringify(d)});closeModal();await download('/documents/'+r.document.id+'/pdf','smetra-'+r.document.number+'.pdf');tab='documents';location.hash=tab;await window.render()});
   }
-  async function download(path,filename){const headers={};if(sessionStorage.getItem('workspace_id'))headers['X-Workspace-Id']=sessionStorage.getItem('workspace_id');const response=await fetch('/api'+path,{credentials:'same-origin',headers});if(!response.ok){const r=await response.json();throw Error(r.error||'Не удалось скачать файл')}const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+  async function download(path,filename){const headers={};if(sessionStorage.getItem('workspace_id'))headers['X-Workspace-Id']=sessionStorage.getItem('workspace_id');const response=await fetch('/api'+path,{credentials:'same-origin',headers});if(!response.ok){const r=await response.json();throw Error(r.error||'Не удалось скачать файл')}const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
   async function importForm(kind){
     const root=openModal('Импорт CSV',kind==='clients'?'Колонки: name, company, email, phone, notes.':'Колонки: name, price, cost_price, unit, category. Цены — в копейках.',`<form>${field('csv','Содержимое CSV','','textarea','required maxlength="50000"')}<p class="muted">До 200 строк за один импорт. Ошибки отменяют весь импорт.</p>${formEnd('Проверить и импортировать')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/transfer/'+kind,{method:'POST',body:JSON.stringify(d)});closeModal();await render(kind);notify('Импортировано: '+r.count)})
   }
