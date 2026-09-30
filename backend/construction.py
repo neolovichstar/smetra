@@ -1,7 +1,10 @@
 """Optional construction workflow beside the existing simple estimate flow."""
 
+import base64
+import binascii
 import io
 import re
+import zipfile
 from decimal import Decimal, ROUND_HALF_UP
 
 from backend.business import DomainError, choice, identity, integer, stamp, string
@@ -249,13 +252,19 @@ def as_xlsx(service, obj):
     book = Workbook()
     sheet = book.active
     sheet.title = "Ведомость"
-    sheet.append(["Вид", "Работа / материал", "Помещение", "Формула", "Объём", "Ед.", "Расценка, ₽", "План, ₽", "Факт"])
+    sheet.append(["Вид", "Работа / материал", "Помещение", "Формула", "Объём", "Ед.", "Расценка, ₽", "План, ₽", "Факт", "Работа-основание", "Норма", "Запас, %", "Коэффициент"])
     zone_names = {zone["id"]: zone["name"] for zone in snapshot["zones"]}
+    quantity_names = {item["id"]: item["title"] for item in snapshot["quantities"]}
+    def safe_cell(value):
+        value = str(value or "")
+        return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
     for item in snapshot["quantities"]:
         sheet.append([
-            item["kind"], item["title"], zone_names.get(item["zone_id"], ""), item["formula"],
+            item["kind"], safe_cell(item["title"]), safe_cell(zone_names.get(item["zone_id"], "")), safe_cell(item["formula"]),
             float(item["quantity"]), item["unit"], item["unit_price"] / 100,
             item["planned_total_kopecks"] / 100, float(item["actual_quantity"]),
+            safe_cell(quantity_names.get(item["parent_work_id"], "")),
+            float(item["consumption_rate"]), float(item["waste_percent"]), float(item["coefficient"]),
         ])
     sheet.freeze_panes = "A2"
     for column, width in {"A": 16, "B": 38, "C": 24, "D": 34, "E": 16, "F": 10, "G": 18, "H": 18, "I": 14}.items():
@@ -263,6 +272,79 @@ def as_xlsx(service, obj):
     output = io.BytesIO()
     book.save(output)
     return 200, Download(output.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "smetra-vedomost.xlsx")
+
+
+def import_xlsx(service, obj, data):
+    from openpyxl import load_workbook
+
+    encoded = data.get("content", "")
+    if not isinstance(encoded, str) or len(encoded) > 2_000_000:
+        raise DomainError(413, "XLSX слишком большой")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+        if not 1 <= len(raw) <= 1_500_000:
+            raise ValueError("size")
+        archive = zipfile.ZipFile(io.BytesIO(raw))
+        members = archive.infolist()
+        if len(members) > 100 or sum(item.file_size for item in members) > 5_000_000:
+            raise ValueError("expanded size")
+        if any(item.filename.startswith("/") or ".." in item.filename.split("/") for item in members):
+            raise ValueError("path")
+        book = load_workbook(io.BytesIO(raw), read_only=True, data_only=False, keep_links=False)
+        sheet = book.active
+        if sheet.max_row > 201 or sheet.max_column > 20:
+            raise ValueError("shape")
+        rows = list(sheet.iter_rows(min_row=2, max_row=201, max_col=13, values_only=True))
+        if any(isinstance(value, str) and value.startswith("=") for row in rows for value in row):
+            raise ValueError("formulas")
+    except (ValueError, TypeError, binascii.Error, zipfile.BadZipFile, KeyError, OSError, AttributeError):
+        raise DomainError(400, "Некорректная ведомость XLSX") from None
+    finally:
+        if "book" in locals():
+            book.close()
+    zones = {row["name"]: row["id"] for row in service.con.execute(
+        "SELECT id,name FROM construction_zones WHERE object_id=? AND workspace_id=?",
+        (obj["id"], service.wid),
+    )}
+    rows = [row for row in rows if any(value is not None for value in row)]
+    if not rows or len(rows) > 200:
+        raise DomainError(400, "В ведомости должно быть от 1 до 200 позиций")
+    existing = service.con.execute(
+        "SELECT count(*) FROM construction_quantities WHERE object_id=? AND workspace_id=?",
+        (obj["id"], service.wid),
+    ).fetchone()[0]
+    if existing + len(rows) > 200:
+        raise DomainError(409, "В объекте может быть не больше 200 позиций")
+    def restore_cell(value):
+        text = str(value or "")
+        return text[1:] if text.startswith("'") and text[1:].lstrip().startswith(("=", "+", "-", "@")) else text
+
+    imported = {}
+    for row in sorted(rows, key=lambda item: item[0] == "material"):
+        kind, title, zone_name, formula, _, unit, price, _, _, parent_name, rate, waste, coefficient = row
+        title, zone_name, formula, parent_name = map(restore_cell, (title, zone_name, formula, parent_name))
+        if zone_name and zone_name not in zones:
+            raise DomainError(400, "Помещение из XLSX не найдено в объекте")
+        if parent_name and parent_name not in imported:
+            raise DomainError(400, "Работа-основание из XLSX не найдена")
+        price_value = decimal_value(price if price is not None else 0, "Цена")
+        cents = price_value * 100
+        if cents != cents.to_integral_value():
+            raise DomainError(400, "Цена XLSX должна быть указана с точностью до копейки")
+        payload = {
+            "kind": kind, "title": title, "zone_id": zones.get(zone_name),
+            "parent_work_id": imported.get(parent_name),
+            "formula": formula, "unit": unit,
+            "unit_price": int(cents), "consumption_rate": str(rate or 0),
+            "waste_percent": str(waste or 0), "coefficient": str(coefficient or 1),
+        }
+        _, result = add_quantity(service, obj, payload)
+        if kind == "work":
+            if title in imported:
+                raise DomainError(400, "Названия работ-оснований должны быть уникальными")
+            imported[title] = result["quantity"]["id"]
+    service.emit("construction_object", obj["id"], "Ведомость XLSX импортирована", str(len(rows)))
+    return 201, {"imported": len(rows)}
 
 
 def to_quote(service, obj):
@@ -397,4 +479,6 @@ def route(service, method, parts, query, data):
         return to_quote(service, obj)
     if rest == ["xlsx"] and method == "GET":
         return as_xlsx(service, obj)
+    if rest == ["import"] and method == "POST":
+        return import_xlsx(service, obj, data)
     raise DomainError(404, "Действие не найдено")

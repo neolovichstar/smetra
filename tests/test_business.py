@@ -118,6 +118,32 @@ class BusinessFlows(unittest.TestCase):
         status, sheet = self.call(f'/construction/objects/{obj}/xlsx', token=token, raw=True)
         self.assertEqual(status, 200)
         self.assertTrue(sheet.startswith(b'PK'))
+        status, result = self.call('/construction/objects', 'POST', {'name': 'Импорт'}, token)
+        self.assertEqual(status, 201, result)
+        imported_object = result['object']['id']
+        status, result = self.call(f'/construction/objects/{imported_object}/zones', 'POST', {
+            'name': 'Кухня', 'length': '5', 'width': '4.8',
+        }, token)
+        self.assertEqual(status, 201, result)
+        status, result = self.call(f'/construction/objects/{imported_object}/import', 'POST', {
+            'content': base64.b64encode(sheet).decode(),
+        }, token)
+        self.assertEqual(status, 201, result)
+        self.assertEqual(result['imported'], 2)
+        status, imported = self.call(f'/construction/objects/{imported_object}', token=token)
+        self.assertEqual(status, 200, imported)
+        self.assertEqual(len(imported['quantities']), 2)
+        from openpyxl import load_workbook
+
+        malicious = load_workbook(io.BytesIO(sheet))
+        malicious.active.cell(row=2, column=2).value = '=2+2'
+        output = io.BytesIO()
+        malicious.save(output)
+        status, _ = self.call(f'/construction/objects/{imported_object}/import', 'POST', {
+            'content': base64.b64encode(output.getvalue()).decode(),
+        }, token)
+        self.assertEqual(status, 400)
+        self.assertEqual(len(self.call(f'/construction/objects/{imported_object}', token=token)[1]['quantities']), 2)
         status, result = self.call('/files', 'POST', {
             'construction_id': obj, 'name': 'замер.txt',
             'content': base64.b64encode('Кухня 5 × 4 м'.encode()).decode(),

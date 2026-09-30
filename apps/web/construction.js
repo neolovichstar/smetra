@@ -25,7 +25,7 @@
     const data = await api('/construction/objects/' + encodeURIComponent(selected));
     const obj=data.object, zones=data.zones, rows=data.quantities;
     view(`<div class="construction-back"><button id="construction-back" type="button">← Все объекты</button><span>ОБЪЕКТ / ${esc(obj.status.toUpperCase())}</span></div>
-      <div class="topline construction-heading"><div><h1>${esc(obj.name)}</h1><p class="muted">${esc(obj.description || 'Добавьте размеры помещений, затем работы и материалы.')}</p></div><div class="topline-actions"><button id="construction-export" class="btn small">Скачать XLSX</button>${obj.quote_id?`<button id="construction-quote-open" class="btn primary">Открыть смету ↗</button>`:`<button id="construction-quote" class="btn primary" ${rows.length?'':'disabled'}>Создать смету ↗</button>`}</div></div>
+      <div class="topline construction-heading"><div><h1>${esc(obj.name)}</h1><p class="muted">${esc(obj.description || 'Добавьте размеры помещений, затем работы и материалы.')}</p></div><div class="topline-actions"><label class="btn small construction-import">Импорт XLSX<input id="construction-import" type="file" accept=".xlsx" hidden></label><button id="construction-export" class="btn small">Скачать XLSX</button>${obj.quote_id?`<button id="construction-quote-open" class="btn primary">Открыть смету ↗</button>`:`<button id="construction-quote" class="btn primary" ${rows.length?'':'disabled'}>Создать смету ↗</button>`}</div></div>
       <div class="construction-metrics"><div><span>План</span><strong>${money(data.totals.planned_kopecks)}</strong></div><div><span>Факт по позициям</span><strong>${money(data.totals.actual_kopecks)}</strong></div><div><span>Себестоимость</span><strong>${money(data.totals.cost_kopecks)}</strong></div></div>
       <section class="construction-section"><div class="construction-section-title"><h2>01 / Помещения</h2><span>${zones.length}</span></div><form id="construction-zone" class="construction-inline">${field('name','Название','text','required placeholder="Кухня" maxlength="120"')}${field('length','Длина, м','number','required min="0.001" step="any" placeholder="5"')}${field('width','Ширина, м','number','required min="0.001" step="any" placeholder="4"')}${field('height','Высота, м','number','min="0" step="any" placeholder="2.8"')}<button class="btn">Добавить помещение</button></form>
       ${zones.length?zones.map(zone=>`<div class="construction-row"><strong>${esc(zone.name)}</strong><span>${esc(zone.length_m)} × ${esc(zone.width_m)} м</span><b>${(number(zone.length_m)*number(zone.width_m)).toLocaleString('ru-RU')} м²</b><button type="button" class="construction-edit" data-zone-edit="${esc(zone.id)}">Изменить</button></div>`).join(''):'<p class="construction-empty">Помещений пока нет. Их размеры станут переменными для расчёта.</p>'}
@@ -47,6 +47,7 @@
     document.querySelectorAll('[data-material-edit]').forEach(button=>button.onclick=()=>{const item=rows.find(row=>row.id===button.dataset.materialEdit);materialForm.dataset.edit=item.id;for(const [key,value] of Object.entries({parent_work_id:item.parent_work_id,title:item.title,consumption_rate:item.consumption_rate,waste_percent:item.waste_percent,unit_price:item.unit_price/100}))materialForm.elements[key].value=value;materialForm.querySelector('button').textContent='Пересчитать материал';materialForm.scrollIntoView({behavior:'smooth',block:'center'})});
     const factForm=document.querySelector('#construction-fact');if(factForm)factForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;request(`/construction/objects/${selected}/facts`,{quantity_id:val(form,'quantity_id'),quantity:val(form,'quantity')},detail)};
     document.querySelector('#construction-export').onclick=downloadSheet;
+    document.querySelector('#construction-import').onchange=importSheet;
     document.querySelector('#construction-quote')?.addEventListener('click',()=>request(`/construction/objects/${selected}/quote`,{},detail));
     document.querySelector('#construction-quote-open')?.addEventListener('click',()=>{location.hash='quotes';tab='quotes';window.render()});
     document.querySelector('#construction-file').onchange=upload;
@@ -62,6 +63,11 @@
   async function upload(event){
     const file=event.target.files[0];if(!file)return;if(file.size>5000000){notify('Максимум 5 МБ');return}
     try{const bytes=new Uint8Array(await file.arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));await send('/files',{construction_id:selected,name:file.name,content:btoa(text)});await loadFiles();notify('Файл прикреплён')}
+    catch(error){notify(error.message)}finally{event.target.value=''}
+  }
+  async function importSheet(event){
+    const file=event.target.files[0];if(!file)return;if(file.size>1500000){notify('Ведомость XLSX должна быть меньше 1,5 МБ');return}
+    try{const bytes=new Uint8Array(await file.arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));const result=await send(`/construction/objects/${selected}/import`,{content:btoa(text)});notify('Импортировано позиций: '+result.imported);await detail()}
     catch(error){notify(error.message)}finally{event.target.value=''}
   }
   async function downloadSheet(){

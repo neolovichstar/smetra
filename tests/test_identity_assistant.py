@@ -15,6 +15,28 @@ from backend.identity import challenge
 
 
 class IdentityAssistantTests(unittest.TestCase):
+    def test_assistant_construction_action_needs_confirmation_and_stays_scoped(self):
+        token, _ = self.account('construction-ai-owner')
+        stranger, _ = self.account('construction-ai-stranger')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, token)
+        object_id = created['object']['id']
+        tool_call = {'content': None, 'tool_calls': [{
+            'id': 'construction-tool', 'type': 'function', 'function': {
+                'name': 'create_construction_zone',
+                'arguments': json.dumps({'object_id': object_id, 'name': 'Кухня', 'length': '5', 'width': '4'}),
+            },
+        }]}
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-not-real'), patch('backend.assistant.query_model', return_value=tool_call):
+            status, result = self.call('/assistant/chat', 'POST', {'text': 'Добавь кухню 5 на 4'}, token)
+        self.assertEqual(status, 200, result)
+        action_id = result['actions'][0]['id']
+        self.assertEqual(self.call('/construction/objects/' + object_id, token=token)[1]['zones'], [])
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action_id}, stranger)[0], 404)
+        first = self.call('/assistant/confirm', 'POST', {'id': action_id}, token)
+        second = self.call('/assistant/confirm', 'POST', {'id': action_id}, token)
+        self.assertEqual(first, second)
+        self.assertEqual(len(self.call('/construction/objects/' + object_id, token=token)[1]['zones']), 1)
+
     setUpClass = classmethod(BusinessFlows.setUpClass.__func__)
     tearDownClass = classmethod(BusinessFlows.tearDownClass.__func__)
     setUp = BusinessFlows.setUp
