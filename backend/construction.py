@@ -8,7 +8,7 @@ import zipfile
 from decimal import Decimal, ROUND_HALF_UP
 
 from backend.business import DomainError, choice, identity, integer, stamp, string
-from backend.construction_math import KINDS, UNITS, decimal_value, evaluate, length_in_metres, money, zone_values
+from backend.construction_math import KINDS, UNITS, decimal_value, evaluate, length_in_metres, money, priced, zone_values
 from backend.documents import Download
 
 
@@ -51,10 +51,10 @@ def variables(service, obj_id, zone=None):
 
 def quantity_view(row, actual="0"):
     result = dict(row)
-    result["planned_total_kopecks"] = money(row["quantity"], row["unit_price"])
+    result["planned_total_kopecks"] = priced(row["quantity"], row["unit_price"], row["price_coefficient"], row["markup_percent"], row["discount_percent"])
     result["planned_cost_kopecks"] = money(row["quantity"], row["cost_price"])
     result["actual_quantity"] = str(actual)
-    result["actual_total_kopecks"] = money(actual, row["unit_price"])
+    result["actual_total_kopecks"] = priced(actual, row["unit_price"], row["price_coefficient"], row["markup_percent"], row["discount_percent"])
     return result
 
 
@@ -74,7 +74,7 @@ def calculate_row(service, obj, row):
     )
     if quantity <= 0:
         raise DomainError(400, "Расчётный объём должен быть больше нуля")
-    money(quantity, row["unit_price"])
+    priced(quantity, row["unit_price"], row["price_coefficient"], row["markup_percent"], row["discount_percent"])
     return str(quantity)
 
 
@@ -214,13 +214,19 @@ def add_quantity(service, obj, data):
     qty = qty.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
     price = integer(data.get("unit_price", catalog["price"] if catalog else 0), "Расценка", 0, 100_000_000_000)
     cost = integer(data.get("cost_price", catalog["cost_price"] if catalog else 0), "Себестоимость", 0, 100_000_000_000)
-    money(qty, price)
+    price_coefficient = decimal_value(data.get("price_coefficient", 1), "Коэффициент цены", minimum=Decimal("0.001"), maximum=Decimal(100))
+    markup = decimal_value(data.get("markup_percent", 0), "Наценка", maximum=Decimal(1000))
+    discount = decimal_value(data.get("discount_percent", 0), "Скидка", maximum=Decimal(100))
+    priced(qty, price, price_coefficient, markup, discount)
     values = dict(
         id=identity(), workspace_id=service.wid, object_id=obj["id"], zone_id=zone_id,
         parent_work_id=parent_id, catalog_id=catalog_id, kind=kind, title=title,
         formula=formula, quantity=str(qty), unit=unit, unit_price=price,
         cost_price=cost, consumption_rate=str(rate), waste_percent=str(waste),
         coefficient=str(coefficient), notes=string(data.get("notes", ""), "Заметки", 2000),
+        price_coefficient=str(price_coefficient), markup_percent=str(markup),
+        discount_percent=str(discount),
+        coefficient_reason=string(data.get("coefficient_reason", ""), "Причина коэффициента", 500),
         created_at=stamp(), updated_at=stamp(),
     )
     service.insert("construction_quantities", values)
@@ -252,7 +258,7 @@ def as_xlsx(service, obj):
     book = Workbook()
     sheet = book.active
     sheet.title = "Ведомость"
-    sheet.append(["Вид", "Работа / материал", "Помещение", "Формула", "Объём", "Ед.", "Расценка, ₽", "План, ₽", "Факт", "Работа-основание", "Норма", "Запас, %", "Коэффициент"])
+    sheet.append(["Вид", "Работа / материал", "Помещение", "Формула", "Объём", "Ед.", "Расценка, ₽", "План, ₽", "Факт", "Работа-основание", "Норма", "Запас, %", "Коэффициент объёма", "Коэффициент цены", "Наценка, %", "Скидка, %"])
     zone_names = {zone["id"]: zone["name"] for zone in snapshot["zones"]}
     quantity_names = {item["id"]: item["title"] for item in snapshot["quantities"]}
     def safe_cell(value):
@@ -265,9 +271,10 @@ def as_xlsx(service, obj):
             item["planned_total_kopecks"] / 100, float(item["actual_quantity"]),
             safe_cell(quantity_names.get(item["parent_work_id"], "")),
             float(item["consumption_rate"]), float(item["waste_percent"]), float(item["coefficient"]),
+            float(item["price_coefficient"]), float(item["markup_percent"]), float(item["discount_percent"]),
         ])
     sheet.freeze_panes = "A2"
-    for column, width in {"A": 16, "B": 38, "C": 24, "D": 34, "E": 16, "F": 10, "G": 18, "H": 18, "I": 14}.items():
+    for column, width in {"A": 16, "B": 38, "C": 24, "D": 34, "E": 16, "F": 10, "G": 18, "H": 18, "I": 14, "J": 30, "K": 14, "L": 14, "M": 18, "N": 18, "O": 14, "P": 14}.items():
         sheet.column_dimensions[column].width = width
     output = io.BytesIO()
     book.save(output)
@@ -294,7 +301,7 @@ def import_xlsx(service, obj, data):
         sheet = book.active
         if sheet.max_row > 201 or sheet.max_column > 20:
             raise ValueError("shape")
-        rows = list(sheet.iter_rows(min_row=2, max_row=201, max_col=13, values_only=True))
+        rows = list(sheet.iter_rows(min_row=2, max_row=201, max_col=16, values_only=True))
         if any(isinstance(value, str) and value.startswith("=") for row in rows for value in row):
             raise ValueError("formulas")
     except (ValueError, TypeError, binascii.Error, zipfile.BadZipFile, KeyError, OSError, AttributeError):
@@ -321,7 +328,7 @@ def import_xlsx(service, obj, data):
 
     imported = {}
     for row in sorted(rows, key=lambda item: item[0] == "material"):
-        kind, title, zone_name, formula, _, unit, price, _, _, parent_name, rate, waste, coefficient = row
+        kind, title, zone_name, formula, _, unit, price, _, _, parent_name, rate, waste, coefficient, price_coefficient, markup, discount = row
         title, zone_name, formula, parent_name = map(restore_cell, (title, zone_name, formula, parent_name))
         if zone_name and zone_name not in zones:
             raise DomainError(400, "Помещение из XLSX не найдено в объекте")
@@ -337,6 +344,8 @@ def import_xlsx(service, obj, data):
             "formula": formula, "unit": unit,
             "unit_price": int(cents), "consumption_rate": str(rate or 0),
             "waste_percent": str(waste or 0), "coefficient": str(coefficient or 1),
+            "price_coefficient": str(price_coefficient or 1),
+            "markup_percent": str(markup or 0), "discount_percent": str(discount or 0),
         }
         _, result = add_quantity(service, obj, payload)
         if kind == "work":
@@ -359,6 +368,8 @@ def to_quote(service, obj):
     items = [{
         "name": item["title"], "quantity": item["quantity"], "unit": item["unit"],
         "unit_price": item["unit_price"], "cost_price": item["cost_price"],
+        "coefficient": item["price_coefficient"], "markup": item["markup_percent"],
+        "discount": item["discount_percent"],
         "category": item["kind"], "description": item["notes"],
     } for item in snapshot["quantities"]]
     quote = service.create_quote({
@@ -460,6 +471,10 @@ def route(service, method, parts, query, data):
             "consumption_rate": str(decimal_value(data.get("consumption_rate", row["consumption_rate"]), "Норма расхода")),
             "waste_percent": str(decimal_value(data.get("waste_percent", row["waste_percent"]), "Запас", maximum=Decimal(100))),
             "coefficient": str(decimal_value(data.get("coefficient", row["coefficient"]), "Коэффициент", minimum=Decimal("0.001"), maximum=Decimal(100))),
+            "price_coefficient": str(decimal_value(data.get("price_coefficient", row["price_coefficient"]), "Коэффициент цены", minimum=Decimal("0.001"), maximum=Decimal(100))),
+            "markup_percent": str(decimal_value(data.get("markup_percent", row["markup_percent"]), "Наценка", maximum=Decimal(1000))),
+            "discount_percent": str(decimal_value(data.get("discount_percent", row["discount_percent"]), "Скидка", maximum=Decimal(100))),
+            "coefficient_reason": string(data.get("coefficient_reason", row["coefficient_reason"]), "Причина коэффициента", 500),
             "notes": string(data.get("notes", row["notes"]), "Заметки", 2000),
             "updated_at": stamp(),
         }

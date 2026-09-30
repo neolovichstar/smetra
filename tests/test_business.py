@@ -28,6 +28,17 @@ class CalculationTests(unittest.TestCase):
             with self.subTest(expression=expression), self.assertRaises(DomainError):
                 evaluate(expression, values)
 
+    def test_construction_pricing_matches_quote_order(self):
+        from backend.construction_math import priced
+
+        self.assertEqual(priced('20', 15000, '1.2', '15', '10'), 372600)
+        items, total, _ = calculate([{
+            'name': 'Painting', 'quantity': '20', 'unit_price': 15000,
+            'coefficient': '1.2', 'markup': '15', 'discount': '10',
+        }])
+        self.assertEqual(total, 372600)
+        self.assertEqual(items[0]['coefficient'], '1.2')
+
     def test_decimal_rounding_discount_markup_tax_and_optional(self):
         items, total, cost = calculate(
             [
@@ -115,6 +126,15 @@ class BusinessFlows(unittest.TestCase):
         }, token)
         self.assertEqual(status, 200, updated)
         self.assertEqual(next(row for row in updated['quantities'] if row['id'] == work['id'])['planned_total_kopecks'], 384000)
+        status, priced_plan = self.call(f'/construction/objects/{obj}/quantities/{work["id"]}', 'PATCH', {
+            'price_coefficient': '1.2', 'markup_percent': '15', 'discount_percent': '10',
+            'coefficient_reason': 'Сложная поверхность',
+        }, token)
+        self.assertEqual(status, 200, priced_plan)
+        self.assertEqual(next(row for row in priced_plan['quantities'] if row['id'] == work['id'])['planned_total_kopecks'], 476928)
+        status, fresh_quote = self.call(f'/construction/objects/{obj}/quote', 'POST', {}, token)
+        self.assertEqual(status, 201, fresh_quote)
+        self.assertEqual(fresh_quote['quote']['amount_kopecks'], priced_plan['totals']['planned_kopecks'])
         status, sheet = self.call(f'/construction/objects/{obj}/xlsx', token=token, raw=True)
         self.assertEqual(status, 200)
         self.assertTrue(sheet.startswith(b'PK'))

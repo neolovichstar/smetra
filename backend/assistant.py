@@ -60,7 +60,7 @@ CONSTRUCTION_WRITES = {
     "create_construction_object": ("name", "description", "client_id"),
     "create_construction_zone": ("object_id", "name", "kind", "length", "width", "height", "dimension_unit", "openings_m2", "notes"),
     "create_construction_measurement": ("object_id", "zone_id", "symbol", "value", "unit", "kind", "source", "notes"),
-    "create_construction_quantity": ("object_id", "zone_id", "parent_work_id", "catalog_id", "kind", "title", "formula", "unit", "unit_price", "cost_price", "consumption_rate", "waste_percent", "coefficient", "notes"),
+    "create_construction_quantity": ("object_id", "zone_id", "parent_work_id", "catalog_id", "kind", "title", "formula", "unit", "unit_price", "cost_price", "consumption_rate", "waste_percent", "coefficient", "price_coefficient", "markup_percent", "discount_percent", "coefficient_reason", "notes"),
     "record_construction_fact": ("object_id", "quantity_id", "quantity", "note"),
 }
 

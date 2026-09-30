@@ -104,6 +104,7 @@ def calculate(items):
         internal = integer(item.get("cost_price", 0), "Себестоимость")
         markup = decimal(item.get("markup", "0"), "Наценка", high="10000")
         discount = decimal(item.get("discount", "0"), "Скидка")
+        coefficient = decimal(item.get("coefficient", "1"), "Коэффициент цены", "0.001", "100")
         tax = decimal(item.get("tax", "0"), "Налог")
         optional = item.get("optional", False)
         included = item.get("included", True)
@@ -111,7 +112,7 @@ def calculate(items):
             raise DomainError(400, "Некорректный выбор позиции")
         if not optional:
             included = True
-        base = (quantity * price * (1 + markup / 100) * (1 - discount / 100)).quantize(
+        base = (quantity * price * coefficient * (1 + markup / 100) * (1 - discount / 100)).quantize(
             Decimal("1"), rounding=ROUND_HALF_UP
         )
         tax_amount = (base * tax / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
@@ -129,6 +130,7 @@ def calculate(items):
             unit_price=price,
             cost_price=internal,
             markup=str(markup),
+            coefficient=str(coefficient),
             discount=str(discount),
             tax=str(tax),
             optional=optional,
@@ -205,6 +207,12 @@ def migrate(con):
             "article": "TEXT NOT NULL DEFAULT ''",
             "consumption_rate": "TEXT NOT NULL DEFAULT '0'",
             "notes": "TEXT NOT NULL DEFAULT ''",
+        }),
+        ("construction_quantities", {
+            "price_coefficient": "TEXT NOT NULL DEFAULT '1'",
+            "markup_percent": "TEXT NOT NULL DEFAULT '0'",
+            "discount_percent": "TEXT NOT NULL DEFAULT '0'",
+            "coefficient_reason": "TEXT NOT NULL DEFAULT ''",
         }),
     ):
         present = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
@@ -293,6 +301,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(6,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(8,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(9,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(10,?)", (stamp(),))
 
 
 ENTITIES = {

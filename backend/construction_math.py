@@ -91,3 +91,15 @@ def money(quantity, price_kopecks):
     if amount > 100_000_000_000:
         raise DomainError(400, "Стоимость слишком велика")
     return int(amount)
+
+
+def priced(quantity, price_kopecks, coefficient="1", markup="0", discount="0"):
+    money(quantity, price_kopecks)
+    factor = decimal_value(coefficient, "Коэффициент цены", minimum=Decimal("0.001"), maximum=Decimal(100))
+    markup = decimal_value(markup, "Наценка", maximum=Decimal(1000))
+    discount = decimal_value(discount, "Скидка", maximum=Decimal(100))
+    result = (decimal_value(quantity, "Объём") * price_kopecks * factor
+              * (1 + markup / 100) * (1 - discount / 100)).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    if result > 100_000_000_000:
+        raise DomainError(400, "Стоимость слишком велика")
+    return int(result)
