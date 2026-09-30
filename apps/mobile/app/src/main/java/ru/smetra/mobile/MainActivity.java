@@ -564,8 +564,19 @@ public class MainActivity extends Activity {
                 row.addView(ui.label(zone.optString("name"),14,INK,false),new LinearLayout.LayoutParams(0,-2,1));
                 double area=zone.optDouble("length_m")*zone.optDouble("width_m");
                 row.addView(ui.label(String.format(Locale.US,"%.2f м²",area),12,BLUE,true));content.addView(row);
+                ui.tap(row,()->constructionZoneEdit(id,zone));
             }
             addButton(content,"Добавить помещение",false,v->constructionZone(id));
+            ui.section(content,"Ручные замеры",null);
+            JSONArray measurements=result.optJSONArray("measurements");
+            if(measurements!=null)for(int i=0;i<measurements.length();i++){
+                JSONObject measure=measurements.optJSONObject(i);if(measure==null)continue;
+                LinearLayout row=ui.row();row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(0,dp(11),0,dp(11));
+                row.addView(ui.label(measure.optString("symbol"),14,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+                row.addView(ui.label(measure.optString("value")+" "+measure.optString("unit"),12,BLUE,true));
+                content.addView(row);ui.tap(row,()->constructionMeasurementEdit(id,measure));
+            }
+            addButton(content,"Записать замер",false,v->constructionMeasurementNew(id,zones));
             ui.section(content,"Ведомость",null);
             JSONArray quantities=result.optJSONArray("quantities");
             if(quantities!=null)for(int i=0;i<quantities.length();i++){
@@ -606,11 +617,57 @@ public class MainActivity extends Activity {
         EditText width=field("Ширина, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText height=field("Высота, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         button("Сохранить помещение",true,v->{if(name.length()==0||length.length()==0||width.length()==0){message("Заполните название, длину и ширину");return;}
-            try{JSONObject body=new JSONObject().put("name",name.getText().toString()).put("length",length.getText().toString()).put("width",width.getText().toString()).put("height",height.length()==0?"0":height.getText().toString());
+            try{JSONObject body=new JSONObject().put("name",name.getText().toString()).put("length",measurementText(length)).put("width",measurementText(width)).put("height",height.length()==0?"0":measurementText(height));
                 call("/construction/objects/"+id+"/zones","POST",body,result->constructionDetail(id));}
             catch(Exception error){message(error.getMessage());}
         });
     }
+    private void constructionZoneEdit(String id,JSONObject zone){
+        page("Помещение","construction-zone-edit",true);
+        content.addView(ui.label(zone.optString("name"),25,INK,true));
+        text("Изменение размеров пересчитает связанные объёмы. Ранее отправленная смета сохранится, а для новых размеров потребуется свежий черновик.");
+        EditText name=field("Название",android.text.InputType.TYPE_CLASS_TEXT);name.setText(zone.optString("name"));
+        EditText length=field("Длина, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);length.setText(zone.optString("length_m"));
+        EditText width=field("Ширина, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);width.setText(zone.optString("width_m"));
+        EditText height=field("Высота, м",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);height.setText(zone.optString("height_m"));
+        button("Сохранить размеры",true,v->{if(name.length()==0||length.length()==0||width.length()==0){message("Заполните название, длину и ширину");return;}
+            try{JSONObject body=new JSONObject().put("name",name.getText().toString()).put("length",measurementText(length)).put("width",measurementText(width)).put("height",measurementText(height));
+                call("/construction/objects/"+id+"/zones/"+zone.optString("id"),"PATCH",body,result->constructionDetail(id));}
+            catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private void constructionMeasurementNew(String id,JSONArray zones){
+        page("Новый замер","construction-measure-new",true);
+        content.addView(ui.label("Точный замер",25,INK,true));text("Укажите переменную латинскими буквами, затем используйте её в формуле объёма.");
+        java.util.ArrayList<JSONObject> rooms=new java.util.ArrayList<>();rooms.add(null);
+        if(zones!=null)for(int i=0;i<zones.length();i++)if(zones.optJSONObject(i)!=null)rooms.add(zones.optJSONObject(i));
+        String[] names=new String[rooms.size()];names[0]="Весь объект";
+        for(int i=1;i<rooms.size();i++)names[i]=rooms.get(i).optString("name");
+        Spinner room=new Spinner(this);room.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));content.addView(room);
+        EditText symbol=field("Переменная, например window_area",android.text.InputType.TYPE_CLASS_TEXT);
+        EditText value=field("Размер",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        String[] units={"м","см","м²","шт."};Spinner unit=new Spinner(this);unit.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,units));content.addView(unit);
+        button("Записать замер",true,v->{String code=symbol.getText().toString().trim();if(!code.matches("[a-z][a-z0-9_]{1,31}")){symbol.setError("Латинские буквы и цифры");return;}if(value.length()==0){value.setError("Укажите размер");return;}
+            try{JSONObject body=new JSONObject().put("symbol",code).put("value",measurementText(value)).put("unit",units[unit.getSelectedItemPosition()]).put("source","manual");
+                if(room.getSelectedItemPosition()>0)body.put("zone_id",rooms.get(room.getSelectedItemPosition()).optString("id"));
+                call("/construction/objects/"+id+"/measurements","POST",body,result->constructionDetail(id));}
+            catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private void constructionMeasurementEdit(String id,JSONObject measure){
+        page("Замер","construction-measure-edit",true);
+        content.addView(ui.label(measure.optString("symbol"),25,INK,true));text("Изменение замера пересчитает связанные позиции ведомости.");
+        EditText value=field("Размер",android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);value.setText(measure.optString("value"));
+        String[] units={"м","см","м²","шт."};Spinner unit=new Spinner(this);unit.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,units));
+        for(int i=0;i<units.length;i++)if(units[i].equals(measure.optString("unit")))unit.setSelection(i);
+        content.addView(unit);
+        button("Сохранить замер",true,v->{if(value.length()==0){value.setError("Укажите размер");return;}
+            try{JSONObject body=new JSONObject().put("value",measurementText(value)).put("unit",units[unit.getSelectedItemPosition()]);
+                call("/construction/objects/"+id+"/measurements/"+measure.optString("id"),"PATCH",body,result->constructionDetail(id));}
+            catch(Exception error){message(error.getMessage());}
+        });
+    }
+    private String measurementText(EditText input){return input.getText().toString().trim().replace(',','.');}
     private void constructionWork(String id,JSONArray zones){
         if(zones==null||zones.length()==0){message("Сначала добавьте помещение");return;}
         String[] labels=new String[zones.length()];for(int i=0;i<zones.length();i++)labels[i]=zones.optJSONObject(i).optString("name");
@@ -775,6 +832,6 @@ public class MainActivity extends Activity {
     private void support(){parentPage="settings";page("Мы на связи","support",true);content.addView(ui.label("Чем можем\nпомочь?",32,INK,true));text("Опишите, что произошло или чего не хватает. Ваше сообщение попадёт в поддержку Сметры.");EditText input=field("Ваше сообщение",1);ui.space(content,16);button("Отправить сообщение",true,v->{if(input.getText().toString().trim().isEmpty()){input.setError("Напишите сообщение");return;}try{call("/support","POST",new JSONObject().put("message",input.getText().toString()),r->{settings();message("Сообщение отправлено");});}catch(Exception error){message(error.getMessage());}});}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect;uploadProject=null;uploadConstruction=null;uploadDefect=null;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
     private void publicQuote(String publicToken){publicView=true;page("Предложение","public",false);loading(content);call("/public/quote?token="+android.net.Uri.encode(publicToken),"GET",null,r->{clearLoading(content);JSONObject q=r.optJSONObject("quote");if(q==null)return;content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,20);content.addView(ui.label(q.optString("title"),30,INK,true));text(q.optString("description"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость предложения",13,BLUE,false));ui.space(price,14);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));ui.space(content,16);if(q.optString("status").equals("sent"))button("Согласовать предложение",true,v->ui.sheet("Согласовать условия?","Вы принимаете состав работ и стоимость этой версии предложения.","Да, согласовать",false,()->{try{call("/public/accept","POST",new JSONObject().put("token",publicToken).put("version",q.optInt("published_version")),result->{publicQuote(publicToken);message("Предложение согласовано");});}catch(Exception error){message(error.getMessage());}}));});}
-    private void goBack(){if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
+    private void goBack(){if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
     @Override public void onBackPressed(){if(currentPage.equals("home")||currentPage.equals("login"))super.onBackPressed();else goBack();}
 }

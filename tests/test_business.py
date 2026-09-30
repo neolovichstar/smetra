@@ -78,6 +78,36 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_measurement_change_recalculates_work_without_rewriting_quote(self):
+        token, _ = self.account('measure-owner')
+        other, _ = self.account('measure-other')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Замеры'}, token)
+        obj = created['object']['id']
+        _, zone_result = self.call(f'/construction/objects/{obj}/zones', 'POST', {
+            'name': 'Кухня', 'length': '4', 'width': '3',
+        }, token)
+        _, measure_result = self.call(f'/construction/objects/{obj}/measurements', 'POST', {
+            'zone_id': zone_result['zone']['id'], 'symbol': 'beam_length',
+            'value': '200', 'unit': 'см',
+        }, token)
+        measure_id = measure_result['measurement']['id']
+        _, quantity_result = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+            'zone_id': zone_result['zone']['id'], 'title': 'Балка',
+            'formula': 'beam_length * 2', 'unit': 'м', 'unit_price': 5000,
+        }, token)
+        self.assertEqual(quantity_result['quantity']['quantity'], '4.0000')
+        _, old = self.call(f'/construction/objects/{obj}/quote', 'POST', {}, token)
+        status, changed = self.call(f'/construction/objects/{obj}/measurements/{measure_id}', 'PATCH', {
+            'value': '3', 'unit': 'м',
+        }, token)
+        self.assertEqual(status, 200, changed)
+        self.assertEqual(changed['quantities'][0]['quantity'], '6.0000')
+        self.assertIsNone(changed['object']['quote_id'])
+        self.assertEqual(self.call('/quotes/' + old['quote']['id'], token=token)[1]['quote']['amount_kopecks'], 20000)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/measurements/{measure_id}', 'PATCH', {
+            'value': '5',
+        }, other)[0], 404)
+
     def test_markdown_file_edit_is_versioned_scoped_and_reindexed(self):
         owner, _ = self.account('markdown-owner')
         other, _ = self.account('markdown-other')
