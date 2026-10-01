@@ -56,6 +56,33 @@ def main():
             },
         )
         token = account["token"]
+        first_price = call(
+            "/catalog",
+            {
+                "name": "Покраска стен",
+                "price": 125000,
+                "cost_price": 70000,
+                "unit": "м²",
+                "category": "Отделка",
+                "article": "FIN-001",
+                "item_type": "work",
+                "description": "Подготовка и окраска в два слоя",
+            },
+            token,
+        )["item"]
+        call("/catalog/" + first_price["id"] + "/use", {}, token)
+        call(
+            "/catalog",
+            {
+                "name": "Краска интерьерная",
+                "price": 25000,
+                "cost_price": 18000,
+                "unit": "л",
+                "category": "Материалы",
+                "item_type": "material",
+            },
+            token,
+        )
         clients = []
         for name, email in [
             ("Студия Север", "hello@sever.example"),

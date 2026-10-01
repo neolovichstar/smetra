@@ -32,6 +32,11 @@ public class MainActivity extends Activity {
     private long lastPresentationCheck;
     private int pageVersion=0;
     private String currentPage="login",parentPage="home",constructionParentId=null;
+    private String catalogSearch="",catalogParentId=null,catalogCategory="",catalogCurrency="RUB";
+    private boolean catalogFavorites=false,catalogRecent=false;
+    private int catalogLoadSeq=0;
+    private boolean catalogHasMore=false;
+    private JSONArray catalogItems=new JSONArray();
     private boolean publicView=false;
     private Button clickedButton;
     private TextView feedback;
@@ -100,7 +105,7 @@ public class MainActivity extends Activity {
         });
     }
     private void restore(Button button){if(button!=null){button.setEnabled(true);button.setAlpha(1);}}
-    private void clearSession(){token=null;me=null;Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
+    private void clearSession(){token=null;me=null;catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
     private static byte[] readLimited(InputStream input,int maximum)throws IOException{if(input==null)throw new IOException("Пустой ответ сервера");ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1){if(output.size()+count>maximum)throw new IOException("Файл слишком большой");output.write(buffer,0,count);}return output.toByteArray();}
     private int dp(float value){return ui.dp(value);}
     private void message(String message){
@@ -130,7 +135,7 @@ public class MainActivity extends Activity {
     private void navigation(LinearLayout shell){
         LinearLayout nav=ui.row();nav.setPadding(dp(10),dp(10),dp(10),dp(10));nav.setBackgroundColor(BG);
         String[] labels={"Сегодня","Клиенты","Создать","Проекты","Ещё"},pages={"home","clients","create","projects","more"},icons={"clock","clients","plus","projects","grid"};
-        String selected=currentPage.equals("create")||currentPage.equals("quote")||currentPage.equals("capture")||currentPage.equals("draft-preview")?"home":currentPage.equals("client")?"clients":currentPage.equals("project")?"projects":currentPage.equals("assistant")||currentPage.equals("settings")||currentPage.equals("tasks")||currentPage.equals("support")||currentPage.equals("billing")||currentPage.equals("payments")||currentPage.equals("receipt")||currentPage.equals("approvals")?"more":currentPage;
+        String selected=currentPage.equals("create")||currentPage.equals("quote")||currentPage.equals("capture")||currentPage.equals("draft-preview")?"home":currentPage.equals("client")?"clients":currentPage.equals("project")?"projects":currentPage.equals("assistant")||currentPage.equals("settings")||currentPage.equals("tasks")||currentPage.equals("support")||currentPage.equals("billing")||currentPage.equals("payments")||currentPage.equals("receipt")||currentPage.equals("approvals")||currentPage.startsWith("catalog")?"more":currentPage;
         for(int i=0;i<5;i++){final int index=i;boolean active=pages[i].equals(selected);LinearLayout item=ui.column();item.setGravity(Gravity.CENTER);item.setPadding(0,dp(8),0,dp(8));ui.ripple(item,BG,18,0);item.setSelected(active);item.setContentDescription(labels[i]+(active?", выбрано":""));
             item.addView(ui.new Icon(icons[i],active?BLUE:MUTED),new LinearLayout.LayoutParams(dp(21),dp(21)));ui.space(item,5);TextView caption=ui.label(labels[i],10,active?BLUE:MUTED,active);caption.setGravity(Gravity.CENTER);item.addView(caption);
             ui.tap(item,()->{publicView=false;if(index==0)home();else if(index==1)records("clients");else if(index==2)quickCreate();else if(index==3)records("projects");else more();});LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);params.setMargins(dp(1),0,dp(1),0);nav.addView(item,params);
@@ -1012,7 +1017,187 @@ public class MainActivity extends Activity {
         catch(Exception error){message(error.getMessage());}
     }
     // CONSTRUCTION END
-    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",30,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("projects","Объекты и замеры","Помещения, объёмы и контроль работ",this::constructionList);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
+    private void catalogList(){
+        publicView=false;page("Расценки","catalog",false);
+        content.addView(ui.label("Расценки",30,INK,true));
+        text("Цены для новых смет. История изменений всегда под рукой.");
+        button("+ Добавить расценку",true,v->catalogForm(null));
+        EditText search=field("Поиск",android.text.InputType.TYPE_CLASS_TEXT);
+        search.setSingleLine(true);search.setHint("Название, категория или артикул");search.setText(catalogSearch);
+        LinearLayout filters=ui.row();ui.space(content,14);
+        TextView favorite=catalogFilter("Избранное",catalogFavorites),recent=catalogFilter("Недавние",catalogRecent);
+        filters.addView(favorite);ui.gap(filters,10);filters.addView(recent);content.addView(filters);
+        ui.space(content,8);HorizontalScrollView categoryScroll=new HorizontalScrollView(this);
+        categoryScroll.setHorizontalScrollBarEnabled(false);LinearLayout categories=ui.row();categoryScroll.addView(categories);
+        content.addView(categoryScroll);ui.space(content,14);LinearLayout host=ui.column();content.addView(host);
+        ui.tap(favorite,()->{catalogFavorites=!catalogFavorites;favorite.setTextColor(catalogFavorites?BLUE:MUTED);catalogLoad(host,categories,0);});
+        ui.tap(recent,()->{catalogRecent=!catalogRecent;recent.setTextColor(catalogRecent?BLUE:MUTED);catalogLoad(host,categories,0);});
+        final Runnable[] pending={null};
+        search.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){
+                catalogSearch=s.toString();if(pending[0]!=null)search.removeCallbacks(pending[0]);
+                pending[0]=()->{if(currentPage.equals("catalog"))catalogLoad(host,categories,0);};
+                search.postDelayed(pending[0],250);
+            }
+            public void afterTextChanged(Editable value){}
+        });
+        call("/workspace","GET",null,result->{
+            JSONObject workspace=result.optJSONObject("workspace");
+            if(workspace!=null)catalogCurrency=workspace.optString("currency","RUB");
+            if(catalogItems.length()>0)catalogRows(host,catalogItems,catalogHasMore,categories);
+        });
+        catalogLoad(host,categories,0);
+    }
+    private TextView catalogFilter(String title,boolean selected){
+        TextView chip=ui.label(title,12,selected?BLUE:MUTED,selected);
+        chip.setGravity(Gravity.CENTER);chip.setMinHeight(dp(40));chip.setPadding(dp(14),dp(8),dp(14),dp(8));
+        ui.ripple(chip,BG,12,LINE);return chip;
+    }
+    private void catalogLoad(LinearLayout host,LinearLayout categories,int offset){
+        final int sequence=++catalogLoadSeq;
+        if(offset==0){catalogItems=new JSONArray();host.removeAllViews();loading(host);}
+        String path="/catalog?q="+android.net.Uri.encode(catalogSearch.trim())
+            +(catalogFavorites?"&favorite=1":"")+(catalogRecent?"&recent=1":"")
+            +(catalogCategory.isEmpty()?"":"&category="+android.net.Uri.encode(catalogCategory))+"&offset="+offset;
+        call(path,"GET",null,result->{
+            if(sequence!=catalogLoadSeq)return;
+            clearLoading(host);JSONArray next=result.optJSONArray("items");if(next==null)next=new JSONArray();
+            if(categories!=null&&offset==0)catalogCategories(categories,host,result.optJSONArray("categories"));
+            for(int i=0;i<next.length();i++)catalogItems.put(next.opt(i));
+            catalogHasMore=next.length()==50;
+            catalogRows(host,catalogItems,catalogHasMore,categories);
+        });
+    }
+    private void catalogCategories(LinearLayout row,LinearLayout host,JSONArray options){
+        row.removeAllViews();TextView all=catalogFilter("Все",catalogCategory.isEmpty());row.addView(all);
+        ui.tap(all,()->{catalogCategory="";catalogLoad(host,row,0);});
+        if(options==null)return;
+        for(int i=0;i<options.length();i++){
+            String category=options.optString(i);if(category.isBlank())continue;
+            ui.gap(row,8);TextView chip=catalogFilter(category,category.equals(catalogCategory));row.addView(chip);
+            ui.tap(chip,()->{catalogCategory=category;catalogLoad(host,row,0);});
+        }
+    }
+    private void catalogRows(LinearLayout host,JSONArray items,boolean hasMore){catalogRows(host,items,hasMore,null);}
+    private void catalogRows(LinearLayout host,JSONArray items,boolean hasMore,LinearLayout categories){
+        host.removeAllViews();
+        if(items.length()==0){ui.empty(host,"document",catalogSearch.isBlank()?"Расценок пока нет":"Ничего не найдено",catalogSearch.isBlank()?"Добавьте первую цену для будущей сметы.":"Попробуйте другой запрос или снимите фильтр.");return;}
+        for(int i=0;i<items.length();i++){
+            JSONObject item=items.optJSONObject(i);if(item==null)continue;
+            LinearLayout line=ui.card(host),heading=ui.row();
+            LinearLayout description=ui.column();TextView title=ui.label(item.optString("name"),15,INK,true);title.setMaxLines(2);description.addView(title);
+            ui.space(description,5);description.addView(ui.label(item.optString("category","Без категории")+" · "+item.optString("unit","шт."),11,MUTED,false));
+            heading.addView(description,new LinearLayout.LayoutParams(0,-2,1));
+            TextView star=ui.label(item.optInt("favorite")==1?"★":"☆",24,item.optInt("favorite")==1?BLUE:MUTED,false);
+            star.setGravity(Gravity.CENTER);star.setContentDescription(item.optInt("favorite")==1?"Убрать из избранного":"Добавить в избранное");
+            heading.addView(star,new LinearLayout.LayoutParams(dp(48),dp(48)));line.addView(heading);
+            ui.space(line,9);line.addView(ui.label(exactMoney(item.optLong("price"),catalogCurrency)+" / "+item.optString("unit","шт."),17,INK,false));
+            ui.tap(star,()->catalogFavorite(item,host));
+            ui.tap(line,()->catalogDetail(item.optString("id")));
+        }
+        if(hasMore)addButton(host,"Показать ещё",false,v->catalogLoad(host,categories,items.length()));
+    }
+    private void catalogFavorite(JSONObject item,LinearLayout listHost){
+        String id=item.optString("id");
+        try{JSONObject payload=new JSONObject().put("revision",item.optInt("revision"))
+            .put("favorite",item.optInt("favorite")==1?0:1);
+            call("/catalog/"+id,"PATCH",payload,result->{
+                if(listHost!=null)catalogList();else catalogDetail(id);
+            });
+        }catch(Exception error){message("Не удалось обновить избранное");}
+    }
+    private String catalogType(String value){
+        switch(value){case "work":return "Работа";case "material":return "Материал";case "equipment":return "Оборудование";case "other":return "Прочее";default:return "Услуга";}
+    }
+    private void catalogDetail(String id){
+        parentPage="catalog";page("Расценка","catalog-detail",true);loading(content);
+        call("/catalog/"+id,"GET",null,result->{
+            clearLoading(content);JSONObject item=result.optJSONObject("item");if(item==null)return;
+            content.addView(ui.label(item.optString("name"),29,INK,true));ui.space(content,24);ui.divider(content);ui.space(content,20);
+            content.addView(ui.label("ТЕКУЩАЯ ЦЕНА",10,BLUE,true));ui.space(content,8);
+            content.addView(ui.label(exactMoney(item.optLong("price"),catalogCurrency),38,INK,true));
+            ui.space(content,5);content.addView(ui.label("за "+item.optString("unit","шт."),12,MUTED,false));
+            ui.space(content,25);ui.divider(content);
+            catalogMeta("Категория",item.optString("category").isEmpty()?"Без категории":item.optString("category"));
+            catalogMeta("Тип",catalogType(item.optString("item_type")));
+            if(!item.optString("article").isEmpty())catalogMeta("Артикул",item.optString("article"));
+            catalogMeta("Себестоимость",exactMoney(item.optLong("cost_price"),catalogCurrency));
+            if(!item.optString("description").isEmpty()){
+                ui.section(content,"Описание",null);content.addView(ui.label(item.optString("description"),13,MUTED,false));
+            }
+            button("Редактировать",true,v->catalogForm(item));
+            button(item.optInt("favorite")==1?"Убрать из избранного":"Добавить в избранное",false,v->catalogFavorite(item,null));
+            ui.section(content,"История цены",null);JSONArray history=item.optJSONArray("price_history");
+            if(history==null||history.length()==0){text("История начнётся со следующего изменения цены.");return;}
+            for(int i=0;i<history.length();i++){
+                JSONObject entry=history.optJSONObject(i);if(entry==null)continue;
+                LinearLayout row=ui.card(content),top=ui.row();
+                top.addView(ui.label(exactMoney(entry.optLong("price"),catalogCurrency),15,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+                String day=java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM,new Locale("ru","RU"))
+                    .format(new java.util.Date(entry.optLong("created_at")*1000));
+                top.addView(ui.label(day,11,MUTED,false));row.addView(top);
+                if(i==history.length()-1){ui.space(row,5);row.addView(ui.label("Начальная цена",11,MUTED,false));}
+            }
+        });
+    }
+    private void catalogMeta(String title,String value){
+        LinearLayout row=ui.card(content);row.addView(ui.label(title,11,MUTED,false));
+        ui.space(row,6);row.addView(ui.label(value,14,INK,false));
+    }
+    private void catalogForm(JSONObject old){
+        catalogParentId=old==null?null:old.optString("id");
+        page(old==null?"Новая расценка":"Редактирование","catalog-form",true);
+        text("Цена применяется к новым сметам. Уже согласованные условия сохраняются.");
+        EditText name=field("Название",android.text.InputType.TYPE_CLASS_TEXT),price=field("Цена, "+currencySymbol(catalogCurrency),8194),
+            cost=field("Себестоимость, "+currencySymbol(catalogCurrency),8194),unit=field("Единица",android.text.InputType.TYPE_CLASS_TEXT),
+            category=field("Категория",android.text.InputType.TYPE_CLASS_TEXT),article=field("Артикул",android.text.InputType.TYPE_CLASS_TEXT),description=field("Описание",1);
+        final String[] type={old==null?"service":old.optString("item_type","service")};
+        TextView typeChoice=ui.label("Тип · "+catalogType(type[0]),13,BLUE,false);
+        typeChoice.setPadding(0,dp(16),0,dp(16));content.addView(typeChoice);
+        ui.tap(typeChoice,()->ui.choiceSheet("Тип позиции",
+            new String[]{"Работа","Материал","Оборудование","Услуга","Прочее"},
+            new Runnable[]{()->catalogSelectType(type,typeChoice,"work"),()->catalogSelectType(type,typeChoice,"material"),
+                ()->catalogSelectType(type,typeChoice,"equipment"),()->catalogSelectType(type,typeChoice,"service"),
+                ()->catalogSelectType(type,typeChoice,"other")}));
+        if(old!=null){name.setText(old.optString("name"));price.setText(java.math.BigDecimal.valueOf(old.optLong("price"),2).toPlainString());
+            cost.setText(java.math.BigDecimal.valueOf(old.optLong("cost_price"),2).toPlainString());
+            unit.setText(old.optString("unit"));category.setText(old.optString("category"));article.setText(old.optString("article"));description.setText(old.optString("description"));}
+        else{cost.setText("0");unit.setText("шт.");}
+        button("Сохранить расценку",true,v->{
+            if(name.getText().toString().trim().isEmpty()){name.setError("Укажите название");return;}
+            if(unit.getText().toString().trim().isEmpty()){unit.setError("Укажите единицу");return;}
+            long value,costValue;
+            try{value=cents(price);costValue=cents(cost);if(value<0||costValue<0)throw new IllegalArgumentException();}
+            catch(Exception error){price.setError("Проверьте цену и себестоимость");return;}
+            try{JSONObject payload=new JSONObject().put("name",name.getText().toString().trim())
+                .put("price",value).put("cost_price",costValue).put("unit",unit.getText().toString().trim())
+                .put("category",category.getText().toString().trim()).put("article",article.getText().toString().trim())
+                .put("description",description.getText().toString().trim())
+                .put("item_type",type[0]);
+                if(old!=null){payload.put("revision",old.optLong("revision"));catalogSave(old.optString("id"),payload);return;}
+                String query=android.net.Uri.encode(name.getText().toString().trim());
+                call("/catalog?q="+query,"GET",null,result->{
+                    JSONArray items=result.optJSONArray("items");boolean duplicate=false;
+                    if(items!=null)for(int i=0;i<items.length();i++){
+                        JSONObject match=items.optJSONObject(i);
+                        if(match!=null&&match.optString("name").trim().equalsIgnoreCase(name.getText().toString().trim())
+                            &&match.optString("unit").trim().equalsIgnoreCase(unit.getText().toString().trim())){duplicate=true;break;}
+                    }
+                    if(duplicate)ui.sheet("Похожая расценка уже есть","Название и единица совпадают. Проверьте список, прежде чем создавать ещё одну позицию.","Создать отдельно",false,()->catalogSave(null,payload));
+                    else catalogSave(null,payload);
+                });
+            }catch(Exception error){message("Не удалось подготовить расценку");}
+        });
+    }
+    private void catalogSelectType(String[] current,TextView label,String value){current[0]=value;label.setText("Тип · "+catalogType(value));}
+    private void catalogSave(String id,JSONObject payload){
+        call(id==null?"/catalog":"/catalog/"+id,id==null?"POST":"PATCH",payload,result->{
+            JSONObject item=result.optJSONObject("item");if(item==null){catalogList();return;}
+            catalogDetail(item.optString("id"));message("Расценка сохранена");
+        });
+    }
+    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",30,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("projects","Объекты и замеры","Помещения, объёмы и контроль работ",this::constructionList);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("document","Расценки","Цены, история и избранное",this::catalogList);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
     private void records(String kind){
         page("",kind,false);content.addView(ui.label(kind.equals("clients")?"Ваши клиенты":kind.equals("projects")?"Всё движется\nпо плану.":"Задачи",30,INK,true));text(kind.equals("clients")?"Люди, с которыми вы создаёте больше.":kind.equals("projects")?"Работа, договорённости и оплата.":"Следующий шаг для каждого проекта.");
         if(kind.equals("clients"))button("Добавить клиента",true,v->newClient());
@@ -1063,6 +1248,6 @@ public class MainActivity extends Activity {
     private void support(){parentPage="settings";page("Мы на связи","support",true);content.addView(ui.label("Чем можем\nпомочь?",32,INK,true));text("Опишите, что произошло или чего не хватает. Ваше сообщение попадёт в поддержку Сметры.");EditText input=field("Ваше сообщение",1);ui.space(content,16);button("Отправить сообщение",true,v->{if(input.getText().toString().trim().isEmpty()){input.setError("Напишите сообщение");return;}try{call("/support","POST",new JSONObject().put("message",input.getText().toString()),r->{settings();message("Сообщение отправлено");});}catch(Exception error){message(error.getMessage());}});}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==304){saveActPdf(resultCode,data);return;}if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect,logId=uploadLog,purchaseId=uploadPurchase;uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(logId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/logs/"+logId+"/photos","POST",new JSONObject().put("file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(purchaseId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/purchases/"+purchaseId,"PATCH",new JSONObject().put("receipt_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
     private void publicQuote(String publicToken){publicView=true;page("Предложение","public",false);loading(content);call("/public/quote?token="+android.net.Uri.encode(publicToken),"GET",null,r->{clearLoading(content);JSONObject q=r.optJSONObject("quote");if(q==null)return;content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,20);content.addView(ui.label(q.optString("title"),30,INK,true));text(q.optString("description"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость предложения",13,BLUE,false));ui.space(price,14);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));ui.space(content,16);if(q.optString("status").equals("sent"))button("Согласовать предложение",true,v->ui.sheet("Согласовать условия?","Вы принимаете состав работ и стоимость этой версии предложения.","Да, согласовать",false,()->{try{call("/public/accept","POST",new JSONObject().put("token",publicToken).put("version",q.optInt("published_version")),result->{publicQuote(publicToken);message("Предложение согласовано");});}catch(Exception error){message(error.getMessage());}}));});}
-    private void goBack(){if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-log-new")||currentPage.equals("construction-log-edit")||currentPage.equals("construction-log-detail")||currentPage.equals("construction-purchase-new")||currentPage.equals("construction-purchase-edit")||currentPage.equals("construction-purchase-detail")||currentPage.equals("construction-change-new")||currentPage.equals("construction-change-edit")||currentPage.equals("construction-change-detail")||currentPage.equals("construction-supplier-new")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
+    private void goBack(){if(currentPage.equals("catalog-form")){if(catalogParentId!=null)catalogDetail(catalogParentId);else catalogList();return;}if(currentPage.equals("catalog-detail")){catalogList();return;}if(currentPage.equals("catalog")){more();return;}if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-log-new")||currentPage.equals("construction-log-edit")||currentPage.equals("construction-log-detail")||currentPage.equals("construction-purchase-new")||currentPage.equals("construction-purchase-edit")||currentPage.equals("construction-purchase-detail")||currentPage.equals("construction-change-new")||currentPage.equals("construction-change-edit")||currentPage.equals("construction-change-detail")||currentPage.equals("construction-supplier-new")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
     @Override public void onBackPressed(){if(currentPage.equals("home")||currentPage.equals("login"))super.onBackPressed();else goBack();}
 }
