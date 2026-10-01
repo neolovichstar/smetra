@@ -394,6 +394,7 @@ def transfer(service, method, parts, query, data):
         rows = list(csv.DictReader(io.StringIO(text)))
     if not 1 <= len(rows) <= 200:
         raise DomainError(400, "Импортируйте от 1 до 200 строк")
+    seen_catalog = set()
     for index, record in enumerate(rows, start=2):
         payload = {
             k: (record[k] if record[k] is not None else "")
@@ -410,6 +411,16 @@ def transfer(service, method, parts, query, data):
                     raise DomainError(
                         400, f"Строка {index}: цена должна быть целым числом копеек"
                     ) from None
+        if kind == "catalog" and data.get("allow_duplicates") is not True:
+            pair = (str(payload["name"]).strip().casefold(), str(payload.get("unit") or "шт.").strip().casefold())
+            exists = service.con.execute(
+                "SELECT 1 FROM catalog_items WHERE workspace_id=? AND lower(trim(name))=lower(trim(?)) "
+                "AND lower(trim(unit))=lower(trim(?)) LIMIT 1",
+                (service.wid, payload["name"], payload.get("unit") or "шт."),
+            ).fetchone()
+            if pair in seen_catalog or exists:
+                raise DomainError(409, f"Строка {index}: похожая расценка уже есть. Разрешите дубликаты явно")
+            seen_catalog.add(pair)
         try:
             service.entity(kind, "POST", [], {}, payload)
         except DomainError as err:

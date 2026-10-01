@@ -260,6 +260,8 @@ def migrate(con):
             "consumption_rate": "TEXT NOT NULL DEFAULT '0'",
             "notes": "TEXT NOT NULL DEFAULT ''",
             "favorite": "INTEGER NOT NULL DEFAULT 0 CHECK(favorite IN (0,1))",
+            "last_used_at": "INTEGER NOT NULL DEFAULT 0",
+            "usage_count": "INTEGER NOT NULL DEFAULT 0 CHECK(usage_count >= 0)",
         }),
         ("construction_quantities", {
             "price_coefficient": "TEXT NOT NULL DEFAULT '1'",
@@ -272,6 +274,11 @@ def migrate(con):
         for column, definition in columns.items():
             if column not in present:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "015_catalog_usage.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -363,6 +370,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(16,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(17,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(18,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(19,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -1182,6 +1190,16 @@ class Service:
     def entity(self, kind, method, parts, query, data):
         config = ENTITIES[kind]
         table = config.get("table", kind)
+        if kind == "catalog" and len(parts) > 1:
+            if len(parts) != 2 or parts[1] != "use" or method != "POST":
+                raise DomainError(404, "Действие не найдено")
+            self.write_access()
+            self.get(table, parts[0])
+            self.con.execute(
+                "UPDATE catalog_items SET last_used_at=?,usage_count=usage_count+1 WHERE id=? AND workspace_id=?",
+                (stamp(), parts[0], self.wid),
+            )
+            return 200, {"ok": True}
         if method == "GET":
             if parts:
                 result = dict(self.get(table, parts[0]))
@@ -1289,6 +1307,8 @@ class Service:
                     params.append(query["category"][0][:100])
                 if query.get("favorite") and query["favorite"][0] == "1":
                     conditions.append("favorite=1")
+                if query.get("recent") and query["recent"][0] == "1":
+                    conditions.append("last_used_at>0")
             for key in ("project_id", "client_id", "status"):
                 if query.get(key) and (
                     key in config.get("refs", {})
@@ -1297,8 +1317,9 @@ class Service:
                 ):
                     conditions.append(key + "=?")
                     params.append(query[key][0])
+            ordering = "last_used_at DESC,id" if kind == "catalog" and query.get("recent", [""])[0] == "1" else "updated_at DESC,id"
             rows = self.con.execute(
-                f"SELECT * FROM {table} WHERE {' AND '.join(conditions)} ORDER BY updated_at DESC,id LIMIT 50 OFFSET ?",
+                f"SELECT * FROM {table} WHERE {' AND '.join(conditions)} ORDER BY {ordering} LIMIT 50 OFFSET ?",
                 (*params, self.page(query)),
             )
             response = {"items": [dict(r) for r in rows]}

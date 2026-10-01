@@ -820,6 +820,19 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual([row["price"] for row in detail["price_history"]], [15000, 12000])
         self.assertEqual(self.call("/catalog?category=" + urllib.parse.quote("Другое"), token=owner)[1]["items"], [])
         self.assertEqual(self.call("/catalog?category=" + category, token=outsider)[1]["items"], [])
+        self.assertEqual(self.call("/catalog/" + item_id + "/use", "POST", {}, outsider)[0], 404)
+        self.assertEqual(self.call("/catalog?recent=1", token=owner)[1]["items"], [])
+        self.assertEqual(self.call("/catalog/" + item_id + "/use", "POST", {}, owner)[0], 200)
+        recent = self.call("/catalog?recent=1", token=owner)[1]["items"]
+        self.assertEqual(recent[0]["id"], item_id)
+        self.assertEqual(recent[0]["usage_count"], 1)
+        self.assertEqual(len(self.call("/catalog/" + item_id, token=owner)[1]["item"]["price_history"]), 2)
+        duplicate_csv = "name,price,unit\nПокраска стен,16000,м²"
+        self.assertEqual(self.call("/transfer/catalog", "POST", {"csv": duplicate_csv}, owner)[0], 409)
+        self.assertEqual(len(self.call("/catalog", token=owner)[1]["items"]), 1)
+        self.assertEqual(self.call("/transfer/catalog", "POST", {
+            "csv": duplicate_csv, "allow_duplicates": True,
+        }, owner)[0], 201)
         self.assertEqual(self.call("/catalog/" + item_id, "DELETE", token=owner)[0], 200)
         with self.mod.db() as con:
             self.assertEqual(con.execute(
