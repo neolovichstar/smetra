@@ -42,6 +42,7 @@ jobs:
           google-chrome --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9223 --user-data-dir=/tmp/smetra-chrome about:blank > data/chrome.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8082/health && curl -sf http://localhost:9223/json && break; sleep 1; done
           node tests/browser_flows.cjs
+          node tests/browser_construction_prices.cjs
   android:
     runs-on: ubuntu-latest
     steps:
