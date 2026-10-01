@@ -20,6 +20,31 @@ from backend.business import DomainError, Service, calculate
 
 
 class CalculationTests(unittest.TestCase):
+    def test_receipt_ocr_asks_for_final_total_without_spending_tokens_on_reasoning(self):
+        from backend.receipt_ocr import _request
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, _size):
+                return json.dumps({"choices": [{"message": {"content": (
+                    '```json\n{"merchant":"Магазин","amount_kopecks":174800,'
+                    '"date":"2026-10-01"}\n```'
+                )}}]}).encode()
+
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-only"), patch(
+            "backend.receipt_ocr.urllib.request.urlopen", return_value=Response()
+        ) as opener:
+            result = _request("openrouter/free", "data:image/png;base64,abc")
+        payload = json.loads(opener.call_args.args[0].data)
+        self.assertEqual(result["amount_kopecks"], 174800)
+        self.assertEqual(payload["reasoning"], {"effort": "none"})
+        self.assertIn("grand total", payload["messages"][0]["content"])
+
     def test_moscow_month_boundary_uses_local_business_date(self):
         from backend.business import business_date, business_month_start
 
@@ -104,6 +129,10 @@ class BusinessFlows(unittest.TestCase):
         }, owner)[1]['file']['id']
         endpoint = f'/construction/objects/{obj}/receipt-ocr'
         with patch.dict(os.environ, OPENROUTER_API_KEY='test-only'), patch(
+            'backend.receipt_ocr._request', side_effect=DomainError(429, 'provider busy')
+        ):
+            self.assertEqual(self.call(endpoint, 'POST', {'file_id': file_id}, owner)[0], 429)
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-only', OPENROUTER_MODEL='paid-text-only'), patch(
             'backend.receipt_ocr._request',
             return_value={'merchant': 'Test store', 'amount_kopecks': 12500, 'date': '2026-09-30'},
         ) as model:
@@ -117,6 +146,7 @@ class BusinessFlows(unittest.TestCase):
                 self.assertTrue(result['needs_confirmation'])
             self.assertEqual(self.call(endpoint, 'POST', {'file_id': file_id}, owner)[0], 429)
             self.assertEqual(model.call_count, 3)
+            self.assertTrue(all(call.args[0] == 'openrouter/free' for call in model.call_args_list))
         self.assertEqual(self.call(f'/construction/objects/{obj}', token=owner)[1]['purchases'], [])
 
     def test_construction_report_includes_photo_and_excludes_supplier_prices(self):
