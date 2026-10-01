@@ -94,7 +94,7 @@ window.SmetraAssistant=async function(){
   document.querySelector('#assistant-delete').onclick=async()=>{if(!confirm('Удалить этот диалог и его сообщения?'))return;try{await api(threadPath,{method:'DELETE'});sessionStorage.removeItem('smetra.assistant.conversation');window.SmetraAssistant()}catch(error){notify(error.message)}};
   let context=null;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
-  const currentWorkspace=window.Workspace?.currentWorkspaceId?.();
+  const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
   if(context&&(!['clients','quotes','projects','files'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
   const contextBar=document.querySelector('#assistant-context');
   const renderContext=()=>{
@@ -103,6 +103,7 @@ window.SmetraAssistant=async function(){
     else sessionStorage.removeItem('smetra.assistant.context');
   };
   renderContext();
+  try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
   document.querySelector('#assistant-context-remove').onclick=()=>{context=null;renderContext();input.focus()};
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
@@ -160,7 +161,9 @@ window.SmetraAssistant=async function(){
   };
   const addAction=action=>{
     const item=document.createElement('section');item.className='assistant-proposal';
-    item.innerHTML=`<span class="overline">Предложение · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${proposalFields(action.arguments)}</div><div class="row"><button class="btn primary" data-confirm>Применить</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
+    const markdownEdit=action.tool==='replace_markdown_text';
+    const detail=markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
+    item.innerHTML=`<span class="overline">Предложение · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
     actions.append(item);
     item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.replaceChildren();const result=document.createElement('p');result.textContent='Сохранено · '+action.summary;item.append(result);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};

@@ -320,6 +320,67 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertEqual(len(self.call("/clients", token=token)[1]["items"]), 1)
         self.assertEqual(self.call("/assistant", token=stranger)[1]["messages"], [])
 
+    def test_assistant_markdown_edit_is_reviewed_and_revision_checked(self):
+        owner, _ = self.account("assistant-markdown-owner")
+        stranger, _ = self.account("assistant-markdown-stranger")
+        client = self.call('/clients', 'POST', {'name': 'Документ'}, owner)[1]['item']
+        original = '# Проект\nСрок 30 дней.\n'
+        file = self.call('/files', 'POST', {
+            'client_id': client['id'], 'name': 'project.md',
+            'content': base64.b64encode(original.encode()).decode(),
+        }, owner)[1]['file']
+        path = '/files/' + file['id']
+
+        def tool(name, arguments):
+            return {'content': None, 'tool_calls': [{
+                'id': 'markdown-tool', 'type': 'function',
+                'function': {'name': name, 'arguments': json.dumps(arguments)},
+            }]}
+
+        responses = [
+            tool('read_markdown', {'id': file['id']}),
+            tool('replace_markdown_text', {
+                'id': file['id'], 'old_text': 'Срок 30 дней.',
+                'new_text': 'Срок выполнения — 30 календарных дней.',
+            }),
+        ]
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-not-real'), patch(
+            'backend.assistant.query_model', side_effect=responses
+        ) as model:
+            status, result = self.call('/assistant/chat', 'POST', {
+                'text': 'Сделай формулировку срока официальнее',
+                'context': {'entity': 'files', 'id': file['id']},
+            }, owner)
+        self.assertEqual(status, 200, result)
+        self.assertIn('Срок 30 дней.', model.call_args.args[0][-1]['content'])
+        action = result['actions'][0]
+        self.assertEqual(action['tool'], 'replace_markdown_text')
+        self.assertEqual(self.call(path, token=owner, raw=True)[1], original.encode())
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action['id']}, stranger)[0], 404)
+        applied = self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner)
+        self.assertEqual(applied[0], 200, applied)
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner), applied)
+        self.assertIn('30 календарных дней.', self.call(path, token=owner, raw=True)[1].decode())
+        self.assertEqual(len(self.call(path + '/versions', token=owner)[1]['items']), 1)
+
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-not-real'), patch(
+            'backend.assistant.query_model', return_value=tool('replace_markdown_text', {
+                'id': file['id'], 'old_text': 'Срок выполнения — 30 календарных дней.',
+                'new_text': 'Срок выполнения — 31 календарный день.',
+            })
+        ):
+            newer = self.call('/assistant/chat', 'POST', {'text': 'Измени срок',
+                'context': {'entity': 'files', 'id': file['id']}}, owner)
+        self.assertEqual(newer[0], 200, newer)
+        current = applied[1]['result']['file']['sha256']
+        self.assertEqual(self.call(path, 'PATCH', {
+            'sha256': current,
+            'content': base64.b64encode(b'# Another revision').decode(),
+        }, owner)[0], 200)
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {
+            'id': newer[1]['actions'][0]['id'],
+        }, owner)[0], 409)
+
     def test_assistant_free_only_configuration(self):
         from backend.assistant import query_model
         from backend.business import DomainError
