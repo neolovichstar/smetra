@@ -27,6 +27,7 @@ const assert = require('node:assert/strict');
   await shot('workspace-dashboard');
   await click('[data-tab=clients]');await until("document.querySelector('[data-work=new]')");await click('[data-work=new]');await until("document.querySelector('#f-company')");await fill('#f-name','Тестовый клиент');await fill('#f-company','Тестовая компания');await click('#entity-form [type=submit]');
   await until("!document.querySelector('#workspace-dialog')?.open && document.querySelector('#records')?.textContent.includes('Тестовый клиент')");
+  await click('[data-work=import]');await until("document.querySelector('#workspace-dialog')?.open && document.querySelector('.dialog-heading h2')?.textContent==='Импорт клиентов'");await click('#workspace-dialog [data-cancel]');await until("!document.querySelector('#workspace-dialog')?.open");
   await click('[data-tab=catalog]');await until("document.querySelector('#catalog-category')");await click('[data-work=new]');await until("document.querySelector('#f-price')");
   await fill('#f-name','Покраска стен');await fill('#f-price','1200');await fill('#f-category','Отделка');await click('#entity-form [type=submit]');
   await until("!document.querySelector('#workspace-dialog')?.open && document.querySelector('#records')?.textContent.includes('Покраска стен')");
