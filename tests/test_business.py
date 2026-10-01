@@ -114,6 +114,65 @@ class CalculationTests(unittest.TestCase):
 
 
 class BusinessFlows(unittest.TestCase):
+    def test_construction_bulk_price_preview_apply_undo_and_conflict(self):
+        owner, _ = self.account('bulk-owner')
+        outsider, _ = self.account('bulk-outsider')
+        _, created = self.call('/construction/objects', 'POST', {'name': 'Bulk prices'}, owner)
+        obj = created['object']['id']
+        _, zone = self.call(f'/construction/objects/{obj}/zones', 'POST', {
+            'name': 'Room', 'length': '5', 'width': '4',
+        }, owner)
+        zone_id = zone['zone']['id']
+        ids = []
+        for title, price in [('Painting', 10000), ('Plaster', 20000)]:
+            code, result = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
+                'zone_id': zone_id, 'kind': 'work', 'title': title,
+                'formula': 'area', 'unit_price': price,
+            }, owner)
+            self.assertEqual(code, 201, result)
+            ids.append(result['quantity']['id'])
+        code, old_quote = self.call(f'/construction/objects/{obj}/quote', 'POST', {}, owner)
+        self.assertEqual(code, 201, old_quote)
+        endpoint = f'/construction/objects/{obj}/prices'
+        payload = {'ids': ids, 'percent': '8'}
+        self.assertEqual(self.call(endpoint + '/preview', 'POST', payload, outsider)[0], 404)
+        code, preview = self.call(endpoint + '/preview', 'POST', payload, owner)
+        self.assertEqual(code, 200, preview)
+        self.assertEqual(sorted(item['new_unit_price'] for item in preview['changes']), [10800, 21600])
+        before = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(sorted(item['unit_price'] for item in before['quantities']), [10000, 20000])
+        code, applied = self.call(endpoint + '/apply', 'POST', {
+            **payload, 'expected_hash': preview['expected_hash'],
+        }, owner)
+        self.assertEqual(code, 200, applied)
+        self.assertTrue(applied['quote_recreation_required'])
+        self.assertEqual(self.call(endpoint + '/apply', 'POST', {
+            **payload, 'expected_hash': preview['expected_hash'],
+        }, owner)[0], 409)
+        changed = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(sorted(item['unit_price'] for item in changed['quantities']), [10800, 21600])
+        self.assertIsNone(changed['object']['quote_id'])
+        self.assertEqual(self.call('/quotes/' + old_quote['quote']['id'], token=owner)[0], 200)
+        batch_id = applied['batch_id']
+        self.assertEqual(changed['latest_price_batch']['id'], batch_id)
+        self.assertEqual(self.call(endpoint + '/batches/' + batch_id, 'POST', {}, outsider)[0], 404)
+        self.assertEqual(self.call(endpoint + '/batches/' + batch_id, 'POST', {}, owner)[0], 200)
+        self.assertEqual(self.call(endpoint + '/batches/' + batch_id, 'POST', {}, owner)[0], 409)
+        restored = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertEqual(sorted(item['unit_price'] for item in restored['quantities']), [10000, 20000])
+        code, preview = self.call(endpoint + '/preview', 'POST', payload, owner)
+        self.assertEqual(code, 200, preview)
+        code, applied = self.call(endpoint + '/apply', 'POST', {
+            **payload, 'expected_hash': preview['expected_hash'],
+        }, owner)
+        self.assertEqual(code, 200, applied)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/quantities/{ids[0]}', 'PATCH', {
+            'unit_price': 14000,
+        }, owner)[0], 200)
+        self.assertEqual(self.call(endpoint + '/batches/' + applied['batch_id'], 'POST', {}, owner)[0], 409)
+        current = self.call(f'/construction/objects/{obj}', token=owner)[1]
+        self.assertIn(14000, [item['unit_price'] for item in current['quantities']])
+
     def test_receipt_ocr_is_scoped_quota_bounded_and_only_prefills_a_draft(self):
         from PIL import Image
 

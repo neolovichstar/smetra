@@ -177,11 +177,17 @@ def detail(service, obj):
             (obj["project_id"], service.wid),
         ).fetchone()
     approved_changes = sum(item["amount_kopecks"] for item in changes if item["status"] == "approved")
+    latest_price_batch = service.con.execute(
+        "SELECT id,created_at,undone_at FROM construction_price_batches "
+        "WHERE object_id=? AND workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 1",
+        (obj["id"], service.wid),
+    ).fetchone()
     return {
         "object": dict(obj), "zones": zones, "measurements": measurements,
         "quantities": quantities, "defects": defects, "daily_logs": logs,
         "purchases": purchases, "procurement": procurement,
         "changes": changes,
+        "latest_price_batch": dict(latest_price_batch) if latest_price_batch else None,
         "scope": {"base_quote_kopecks": base_quote["amount_kopecks"] if base_quote else None,
                   "approved_changes_kopecks": approved_changes,
                   "current_total_kopecks": base_quote["amount_kopecks"] + approved_changes if base_quote else None},
@@ -726,6 +732,18 @@ def route(service, method, parts, query, data):
         return 200, detail(service, service.get("construction_objects", obj["id"]))
     if rest == ["quantities"] and method == "POST":
         return add_quantity(service, obj, data)
+    if rest == ["prices", "preview"] and method == "POST":
+        from backend.construction_bulk import preview
+        service.h.throttle(f"price-preview:{service.wid}:{service.user['id']}", 30, 60)
+        return preview(service, obj, data)
+    if rest == ["prices", "apply"] and method == "POST":
+        from backend.construction_bulk import apply
+        service.h.throttle(f"price-apply:{service.wid}:{service.user['id']}", 10, 3600)
+        return apply(service, obj, data)
+    if len(rest) == 3 and rest[:2] == ["prices", "batches"] and method == "POST":
+        from backend.construction_bulk import undo
+        service.h.throttle(f"price-undo:{service.wid}:{service.user['id']}", 10, 3600)
+        return undo(service, obj, rest[2])
     if len(rest) == 2 and rest[0] == "quantities" and method == "PATCH":
         row = row_in_object(service, "construction_quantities", rest[1], obj["id"])
         values = {
