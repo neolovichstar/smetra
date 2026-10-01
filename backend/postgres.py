@@ -14,7 +14,7 @@ from decimal import Decimal
 import psycopg
 
 TABLES = frozenset(
-    "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits".split()
+    "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits".split()
 )
 TABLES = TABLES | frozenset(
     "external_identities oauth_states oauth_tickets assistant_messages assistant_actions".split()

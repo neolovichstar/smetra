@@ -242,6 +242,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "014_catalog_price_history.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -254,6 +259,7 @@ def migrate(con):
             "article": "TEXT NOT NULL DEFAULT ''",
             "consumption_rate": "TEXT NOT NULL DEFAULT '0'",
             "notes": "TEXT NOT NULL DEFAULT ''",
+            "favorite": "INTEGER NOT NULL DEFAULT 0 CHECK(favorite IN (0,1))",
         }),
         ("construction_quantities", {
             "price_coefficient": "TEXT NOT NULL DEFAULT '1'",
@@ -356,6 +362,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(15,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(16,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(17,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(18,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -1259,11 +1266,29 @@ class Service:
                         (parts[0], self.wid),
                     ).fetchone()
                     result["request"] = dict(request) if request else None
+                if kind == "catalog":
+                    result["price_history"] = [
+                        dict(r) for r in self.con.execute(
+                            "SELECT id,price,cost_price,item_revision,created_at FROM catalog_price_history "
+                            "WHERE item_id=? AND workspace_id=? ORDER BY item_revision DESC LIMIT 30",
+                            (parts[0], self.wid),
+                        )
+                    ]
                 return 200, {"item": result}
             conditions, params = ["workspace_id=?"], [self.wid]
             if query.get("q"):
-                conditions.append("instr(lower(name),lower(?))>0")
-                params.append(query["q"][0][:100])
+                if kind == "catalog":
+                    conditions.append("(instr(lower(name),lower(?))>0 OR instr(lower(category),lower(?))>0 OR instr(lower(article),lower(?))>0)")
+                    params.extend([query["q"][0][:100]] * 3)
+                else:
+                    conditions.append("instr(lower(name),lower(?))>0")
+                    params.append(query["q"][0][:100])
+            if kind == "catalog":
+                if query.get("category"):
+                    conditions.append("category=?")
+                    params.append(query["category"][0][:100])
+                if query.get("favorite") and query["favorite"][0] == "1":
+                    conditions.append("favorite=1")
             for key in ("project_id", "client_id", "status"):
                 if query.get(key) and (
                     key in config.get("refs", {})
@@ -1276,7 +1301,13 @@ class Service:
                 f"SELECT * FROM {table} WHERE {' AND '.join(conditions)} ORDER BY updated_at DESC,id LIMIT 50 OFFSET ?",
                 (*params, self.page(query)),
             )
-            return 200, {"items": [dict(r) for r in rows]}
+            response = {"items": [dict(r) for r in rows]}
+            if kind == "catalog":
+                response["categories"] = [r[0] for r in self.con.execute(
+                    "SELECT DISTINCT category FROM catalog_items WHERE workspace_id=? AND category<>'' ORDER BY category LIMIT 100",
+                    (self.wid,),
+                )]
+            return 200, response
         if method == "DELETE":
             self.write_access(True)
             self.get(table, parts[0])
@@ -1394,6 +1425,9 @@ class Service:
             values["active"] = integer(
                 data.get("active", old["active"] if old else 1), "Активность", 0, 1
             )
+            values["favorite"] = integer(
+                data.get("favorite", old["favorite"] if old else 0), "Избранное", 0, 1
+            )
         values["updated_at"] = stamp()
         rid = old["id"] if old else identity()
         if old:
@@ -1402,6 +1436,12 @@ class Service:
         else:
             values.update(id=rid, workspace_id=self.wid, created_at=stamp())
             self.insert(table, values)
+        if kind == "catalog" and (not old or values["price"] != old["price"] or values["cost_price"] != old["cost_price"]):
+            self.con.execute(
+                "INSERT INTO catalog_price_history(id,workspace_id,item_id,price,cost_price,item_revision,changed_by,created_at) "
+                "VALUES(?,?,?,?,?,?,?,?)",
+                (identity(), self.wid, rid, values["price"], values["cost_price"], values.get("revision", 1), self.user["id"], stamp()),
+            )
         self.emit(
             kind, rid, "Запись изменена" if old else "Запись создана", values["name"]
         )

@@ -10,6 +10,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
@@ -783,6 +784,47 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(code, 200, result)
         return result["quote"]
+
+    def test_catalog_price_history_filters_favorites_and_workspace_scope(self):
+        owner, _ = self.account("catalog-history-owner")
+        outsider, _ = self.account("catalog-history-outsider")
+        code, created = self.call("/catalog", "POST", {
+            "name": "Покраска стен", "category": "Отделка", "article": "PT-1",
+            "unit": "м²", "price": 12000, "cost_price": 7000,
+        }, owner)
+        self.assertEqual(code, 201, created)
+        item = created["item"]
+        item_id = item["id"]
+        self.assertEqual(self.call("/catalog/" + item_id, token=outsider)[0], 404)
+        self.assertEqual(self.call("/catalog?favorite=1", token=owner)[1]["items"], [])
+        self.assertEqual(self.call("/catalog?q=PT-1", token=owner)[1]["items"][0]["id"], item_id)
+        category = urllib.parse.quote("Отделка")
+        self.assertEqual(self.call("/catalog?category=" + category, token=owner)[1]["categories"], ["Отделка"])
+
+        code, saved = self.call("/catalog/" + item_id, "PATCH", {
+            "revision": item["revision"], "favorite": 1,
+        }, owner)
+        self.assertEqual(code, 200, saved)
+        self.assertEqual(self.call("/catalog?favorite=1", token=owner)[1]["items"][0]["id"], item_id)
+        detail = self.call("/catalog/" + item_id, token=owner)[1]["item"]
+        self.assertEqual([row["price"] for row in detail["price_history"]], [12000])
+
+        self.assertEqual(self.call("/catalog/" + item_id, "PATCH", {
+            "revision": item["revision"], "price": 15000,
+        }, owner)[0], 409)
+        code, saved = self.call("/catalog/" + item_id, "PATCH", {
+            "revision": detail["revision"], "price": 15000,
+        }, owner)
+        self.assertEqual(code, 200, saved)
+        detail = self.call("/catalog/" + item_id, token=owner)[1]["item"]
+        self.assertEqual([row["price"] for row in detail["price_history"]], [15000, 12000])
+        self.assertEqual(self.call("/catalog?category=" + urllib.parse.quote("Другое"), token=owner)[1]["items"], [])
+        self.assertEqual(self.call("/catalog?category=" + category, token=outsider)[1]["items"], [])
+        self.assertEqual(self.call("/catalog/" + item_id, "DELETE", token=owner)[0], 200)
+        with self.mod.db() as con:
+            self.assertEqual(con.execute(
+                "SELECT count(*) FROM catalog_price_history WHERE item_id=?", (item_id,)
+            ).fetchone()[0], 0)
 
     def test_dashboard_returns_five_lightweight_quotes_in_own_workspace(self):
         token, _ = self.account("dashboard-owner")
