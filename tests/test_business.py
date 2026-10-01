@@ -428,6 +428,26 @@ class BusinessFlows(unittest.TestCase):
             'content': base64.b64encode(b'# Plan\nAnother term').decode(),
         }, owner)[0], 409)
         self.assertEqual(len(self.call('/search?q=New%20term', token=owner)[1]['items']), 1)
+        history = self.call(path + '/versions', token=owner)[1]['items']
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]['revision'], 1)
+        self.assertEqual(self.call(path + '/versions', token=other)[0], 404)
+        version_path = path + '/versions/' + history[0]['id']
+        self.assertEqual(
+            base64.b64decode(self.call(version_path, token=owner)[1]['content']),
+            b'# Plan\nOld term',
+        )
+        self.assertEqual(self.call(version_path, token=other)[0], 404)
+        self.assertEqual(self.call(version_path + '/restore', 'POST', {
+            'sha256': file['sha256'],
+        }, owner)[0], 409)
+        restored = self.call(version_path + '/restore', 'POST', {
+            'sha256': changed['file']['sha256'],
+        }, owner)
+        self.assertEqual(restored[0], 200, restored)
+        self.assertEqual(self.call(path, token=owner, raw=True)[1], b'# Plan\nOld term')
+        self.assertEqual(len(self.call(path + '/versions', token=owner)[1]['items']), 2)
+        self.assertEqual(len(self.call('/search?q=New%20term', token=owner)[1]['items']), 0)
 
     def test_construction_measure_to_quote_and_workspace_isolation(self):
         token, _ = self.account('builder-' + os.urandom(4).hex())

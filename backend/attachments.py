@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import os
+import zlib
 from pathlib import Path
 
 try:
@@ -47,6 +48,32 @@ def download(row, con=None):
 
 
 def route(service, method, parts, query, data):
+    if len(parts) >= 2 and parts[1] == "versions":
+        row = service.get("files", parts[0])
+        if row["mime"] != "text/plain" or Path(row["name"]).suffix.lower() != ".md":
+            raise DomainError(400, "История доступна только для Markdown-документов")
+        if method == "GET" and len(parts) == 2:
+            versions = service.con.execute(
+                "SELECT id,revision,sha256,created_at FROM file_versions "
+                "WHERE workspace_id=? AND file_id=? ORDER BY revision DESC LIMIT 10",
+                (service.wid, row["id"]),
+            ).fetchall()
+            return 200, {"current_sha256": row["sha256"], "items": [dict(v) for v in versions]}
+        if len(parts) == 3 and method == "GET":
+            version = _version(service, row, parts[2])
+            return 200, {
+                "id": version["id"], "revision": version["revision"],
+                "content": base64.b64encode(zlib.decompress(bytes(version["content"]))).decode(),
+            }
+        if len(parts) == 4 and parts[3] == "restore" and method == "POST":
+            version = _version(service, row, parts[2])
+            if data.get("sha256") != row["sha256"]:
+                raise DomainError(409, "Документ изменился. Обновите историю перед восстановлением")
+            return route(service, "PATCH", [row["id"]], query, {
+                "sha256": row["sha256"],
+                "content": base64.b64encode(zlib.decompress(bytes(version["content"]))).decode(),
+            })
+        raise DomainError(405, "Метод не поддерживается")
     if method == "PATCH" and len(parts) == 1:
         row = service.get("files", parts[0])
         if row["mime"] != "text/plain" or Path(row["name"]).suffix.lower() != ".md":
@@ -66,12 +93,27 @@ def route(service, method, parts, query, data):
         if used - row["size"] + len(raw) > 100_000_000:
             raise DomainError(413, "Лимит хранилища пространства — 100 МБ")
         digest = hashlib.sha256(raw).hexdigest()
+        if digest == row["sha256"]:
+            return 200, {"file": {"id": row["id"], "name": row["name"], "size": len(raw), "sha256": digest}}
+        old_content = download(row, service.con).data
         updated = service.con.execute(
             "UPDATE files SET size=?,sha256=? WHERE id=? AND workspace_id=? AND sha256=? RETURNING id",
             (len(raw), digest, row["id"], service.wid, row["sha256"]),
         ).fetchone()
         if not updated:
             raise DomainError(409, "Файл изменился. Обновите страницу перед сохранением")
+        revision = service.con.execute(
+            "SELECT coalesce(max(revision),0)+1 FROM file_versions WHERE file_id=? AND workspace_id=?",
+            (row["id"], service.wid),
+        ).fetchone()[0]
+        compressed = zlib.compress(old_content, level=6)
+        service.con.execute(
+            "INSERT INTO file_versions(id,workspace_id,file_id,revision,sha256,content,size,created_by,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (identity(), service.wid, row["id"], revision, row["sha256"], compressed,
+             len(compressed), service.user["id"], stamp()),
+        )
+        _prune_versions(service, row["id"])
         if getattr(service.con, "is_postgres", False):
             service.con.execute("UPDATE file_payloads SET content=? WHERE file_id=?", (raw, row["id"]))
         else:
@@ -303,3 +345,29 @@ def route(service, method, parts, query, data):
     return 201, {
         "file": {key: values[key] for key in ("id", "name", "mime", "size", "sha256", "public")}
     }
+
+
+def _version(service, file_row, version_id):
+    version_id = string(version_id, "Версия", 80, True)
+    version = service.con.execute(
+        "SELECT id,revision,content FROM file_versions WHERE id=? AND file_id=? AND workspace_id=?",
+        (version_id, file_row["id"], service.wid),
+    ).fetchone()
+    if not version:
+        raise DomainError(404, "Версия документа не найдена")
+    return version
+
+
+def _prune_versions(service, file_id):
+    for rows in (
+        service.con.execute(
+            "SELECT id FROM file_versions WHERE file_id=? AND workspace_id=? ORDER BY revision DESC",
+            (file_id, service.wid),
+        ).fetchall()[10:],
+        service.con.execute(
+            "SELECT id FROM file_versions WHERE workspace_id=? ORDER BY created_at DESC,id DESC",
+            (service.wid,),
+        ).fetchall()[100:],
+    ):
+        for row in rows:
+            service.con.execute("DELETE FROM file_versions WHERE id=? AND workspace_id=?", (row["id"], service.wid))
