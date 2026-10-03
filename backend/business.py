@@ -1,6 +1,7 @@
 """Workspace-scoped business operations. Money is stored in minor units."""
 
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -279,6 +280,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "016_quote_creation_requests.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -371,6 +377,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(17,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(18,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(19,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(20,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -667,6 +674,38 @@ class Service:
             raise DomainError(
                 409, "Запись изменена. Обновите страницу перед сохранением"
             )
+
+    def create_quote_request(self, data):
+        key = self.h.headers.get("Idempotency-Key", "")
+        if not key:
+            return 201, {"quote": self.create_quote(data)}
+        key_hash = hashlib.sha256(string(key, "Ключ операции", 100, True).encode()).hexdigest()
+        payload = {k: v for k, v in data.items() if k != "_request_key"}
+        request_hash = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+        previous = self.con.execute(
+            "SELECT request_hash,quote_id FROM quote_creation_requests "
+            "WHERE workspace_id=? AND actor_id=? AND key_hash=?",
+            (self.wid, self.user["id"], key_hash),
+        ).fetchone()
+        if previous:
+            if previous["request_hash"] != request_hash:
+                raise DomainError(409, "Этот ключ уже использован для другой сметы")
+            quote = self.con.execute(
+                "SELECT * FROM quotes WHERE id=? AND workspace_id=?",
+                (previous["quote_id"], self.wid),
+            ).fetchone()
+            if not quote:
+                raise DomainError(409, "Созданная этим запросом смета уже удалена")
+            return 200, {"quote": self.quote_view(quote), "replayed": True}
+        quote = self.create_quote(data)
+        self.con.execute(
+            "INSERT INTO quote_creation_requests(workspace_id,actor_id,key_hash,request_hash,quote_id,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (self.wid, self.user["id"], key_hash, request_hash, quote["id"], stamp()),
+        )
+        return 201, {"quote": quote}
 
     def create_quote(self, data):
         owner = self.con.execute(
@@ -1034,7 +1073,7 @@ class Service:
     def quotes(self, method, parts, query, data):
         if not parts:
             if method == "POST":
-                return 201, {"quote": self.create_quote(data)}
+                return self.create_quote_request(data)
             search = (
                 "%"
                 + query.get("q", [""])[0][:100]

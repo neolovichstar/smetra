@@ -30,7 +30,24 @@ def main():
         app = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(app)
         app.migrate()
-        server = ThreadingHTTPServer(("127.0.0.1", 8084), app.Handler)
+        class UiHandler(app.Handler):
+            lost_quote_response = False
+
+            def send_json(self, status, value, cookie=None):
+                # Commit a quote, then lose its first success response. The APK must
+                # restore the draft and retry without spending another quote slot.
+                if (
+                    self.path == "/api/quotes"
+                    and status == 201
+                    and isinstance(value, dict)
+                    and value.get("quote", {}).get("title") == "Ремонт квартиры"
+                    and not UiHandler.lost_quote_response
+                ):
+                    UiHandler.lost_quote_response = True
+                    return super().send_json(503, {"error": "Тестовая потеря ответа"}, cookie)
+                return super().send_json(status, value, cookie)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 8084), UiHandler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
         def call(path, body=None, token=None):

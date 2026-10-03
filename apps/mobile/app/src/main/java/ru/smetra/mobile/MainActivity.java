@@ -146,6 +146,11 @@ public class MainActivity extends Activity {
     private Button addButton(LinearLayout parent,String title,boolean primary,View.OnClickListener action){final Button[] holder=new Button[1];Button button=ui.button(title,primary,()->{clickedButton=holder[0];action.onClick(holder[0]);clickedButton=null;});holder[0]=button;parent.addView(button);return button;}
     private Button button(String title,boolean primary,View.OnClickListener action){return addButton(content,title,primary,action);}
     private EditText field(String label,int type){return ui.field(content,label,type);}
+    private void updateFieldLabel(EditText field,String label){
+        if(!(field.getParent() instanceof ViewGroup))return;
+        ViewGroup parent=(ViewGroup)field.getParent();
+        for(int i=0;i<parent.getChildCount();i++){View child=parent.getChildAt(i);if(child instanceof TextView&&child.getLabelFor()==field.getId()){((TextView)child).setText(label);return;}}
+    }
     private void loading(LinearLayout parent){LinearLayout box=ui.card(parent);box.setTag("loading");box.addView(ui.label("Загружаем данные…",14,MUTED,false));for(int i=0;i<3;i++){ui.space(box,12);View bar=new View(this);bar.setBackground(ui.shape(RAISED,6,0));box.addView(bar,new LinearLayout.LayoutParams(dp(i==1?150:230),dp(10)));}}
     private void clearLoading(LinearLayout parent){for(int i=parent.getChildCount()-1;i>=0;i--){View child=parent.getChildAt(i);if("loading".equals(child.getTag()))parent.removeViewAt(i);else if(child instanceof LinearLayout)clearLoading((LinearLayout)child);}}
     private String exactMoney(long cents,String currency){return String.format(new Locale("ru","RU"),"%,.2f",cents/100.0)+" "+currencySymbol(currency);}
@@ -500,13 +505,109 @@ public class MainActivity extends Activity {
         button("Сохранить черновик",true,v->{if(title.length()==0){title.setError("Укажите название");return;}if(client.length()==0){client.setError("Укажите клиента");return;}try{JSONArray items=new JSONArray();long priced=0;for(EditText[] row:rows){if(row[0].length()==0){row[0].setError("Укажите работу");return;}long value=row[3].length()==0?0:cents(row[3]);if(value<0)throw new IllegalArgumentException();priced=Math.addExact(priced,value);items.put(new JSONObject().put("name",row[0].getText().toString()).put("quantity",row[1].getText().toString()).put("unit",row[2].getText().toString()).put("unit_price",value));}if(priced==0){message("Укажите цену хотя бы одной позиции");return;}JSONObject body=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("description",description.getText().toString()).put("terms",terms.getText().toString()).put("items",items);call("/quotes","POST",body,result->{Analytics.event("estimate_created",Analytics.params("source","ai_capture"),true);pendingCaptureText=null;pendingCaptureFile=null;getPreferences(MODE_PRIVATE).edit().remove("capture_text").remove("capture_draft").apply();home();message("Смета сохранена. Теперь можно отправить её клиенту.");});}catch(Exception error){message("Проверьте позиции и цены");}});
     }
     private void create(){
-        parentPage="home";page("Новая смета","create",true);content.addView(ui.label("Новая смета",28,INK,true));text("Название, клиент и стоимость. Детали можно уточнить позже.");
+        parentPage="home";page("Новая смета","create",true);content.addView(ui.label("Новая смета",28,INK,true));text("Укажите клиента и стоимость или соберите смету из своих расценок.");
         EditText title=field("Название работы",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES),client=field("Имя клиента или компания",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS),amount=field("Стоимость, ₽",8194),description=field("Что входит в работу",1);amount.setHint("0,00");description.setHint("Объём работ, результат, сроки…");
-        String saved=getPreferences(MODE_PRIVATE).getString("draft",null);if(saved!=null)try{JSONObject d=new JSONObject(saved);title.setText(d.optString("title"));client.setText(d.optString("client"));amount.setText(d.optString("amount"));description.setText(d.optString("description"));}catch(Exception ignored){}
-        TextWatcher autosave=new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){}public void afterTextChanged(Editable value){try{JSONObject draft=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("amount",amount.getText().toString()).put("description",description.getText().toString());getPreferences(MODE_PRIVATE).edit().putString("draft",draft.toString()).apply();}catch(Exception ignored){}}};
+        java.util.ArrayList<JSONObject> selected=new java.util.ArrayList<>();
+        final String[] currency={catalogCurrency},submittedBody={""},requestKey={""};
+        final boolean[] savedCurrency={false};
+        LinearLayout selectedHost=ui.column(),pickerHost=ui.column();
+        final Runnable[] saveDraft={null},renderSelected={null};
+        saveDraft[0]=()->{try{
+            JSONArray items=new JSONArray();for(JSONObject item:selected)items.put(item);
+            JSONObject draft=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString())
+                .put("amount",amount.getText().toString()).put("description",description.getText().toString()).put("items",items)
+                .put("currency",currency[0]).put("request_body",submittedBody[0]).put("request_key",requestKey[0]);
+            getPreferences(MODE_PRIVATE).edit().putString("draft",draft.toString()).apply();
+        }catch(Exception ignored){}};
+        String saved=getPreferences(MODE_PRIVATE).getString("draft",null);
+        if(saved!=null)try{JSONObject draft=new JSONObject(saved);title.setText(draft.optString("title"));client.setText(draft.optString("client"));amount.setText(draft.optString("amount"));description.setText(draft.optString("description"));savedCurrency[0]=draft.has("currency");currency[0]=draft.optString("currency",catalogCurrency);submittedBody[0]=draft.optString("request_body");requestKey[0]=draft.optString("request_key");JSONArray items=draft.optJSONArray("items");if(items!=null)for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item!=null)selected.add(item);}}catch(Exception ignored){}
+        updateFieldLabel(amount,"Стоимость, "+currencySymbol(currency[0]));
+        TextWatcher autosave=new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){}public void afterTextChanged(Editable value){saveDraft[0].run();}};
         title.addTextChangedListener(autosave);client.addTextChangedListener(autosave);amount.addTextChangedListener(autosave);description.addTextChangedListener(autosave);
-        ui.space(content,14);button("Создать смету",true,v->{if(title.length()==0){title.setError("Добавьте название");return;}if(client.length()==0){client.setError("Укажите клиента");return;}try{long value=cents(amount);if(value<=0)throw new IllegalArgumentException();JSONObject body=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString()).put("description",description.getText().toString()).put("amount",value);call("/quotes","POST",body,result->{Analytics.event("estimate_created",Analytics.params("source","manual"),true);getPreferences(MODE_PRIVATE).edit().remove("draft").apply();home();message("Смета создана");});}catch(Exception error){amount.setError("Укажите сумму больше нуля");}});
+        content.addView(selectedHost);
+        addButton(content,"Добавить из расценок",false,v->{
+            if(!currency[0].equals(catalogCurrency)){message("Валюта расценок изменилась. Сохраните этот черновик перед созданием новой сметы.");return;}
+            if(pickerHost.getChildCount()>0)pickerHost.removeAllViews();else quoteCatalogPicker(pickerHost,currency[0],item->{
+            if(selected.size()>=200){message("В одной смете может быть до 200 позиций");return;}
+            for(JSONObject current:selected)if(current.optString("id").equals(item.optString("id"))){message("Эта позиция уже добавлена");return;}
+            try{selected.add(new JSONObject(item.toString()).put("quantity","1"));renderSelected[0].run();pickerHost.removeAllViews();}catch(Exception error){message("Не удалось добавить позицию");}
+        });});
+        content.addView(pickerHost);
+        renderSelected[0]=()->{
+            selectedHost.removeAllViews();amount.setEnabled(selected.isEmpty());amount.setAlpha(selected.isEmpty()?1:.65f);
+            if(selected.isEmpty())return;
+            ui.section(selectedHost,"Состав сметы",null);
+            for(JSONObject item:selected){
+                LinearLayout row=ui.card(selectedHost),top=ui.row();
+                top.addView(ui.label(item.optString("name"),15,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+                TextView remove=ui.label("Убрать",11,BLUE,false);remove.setPadding(dp(12),dp(8),0,dp(8));top.addView(remove);row.addView(top);
+                ui.tap(remove,()->{selected.remove(item);if(selected.isEmpty())amount.setText("");renderSelected[0].run();saveDraft[0].run();});
+                row.addView(ui.label(exactMoney(item.optLong("price"),currency[0])+" / "+item.optString("unit"),12,MUTED,false));
+                EditText quantity=ui.field(row,"Количество · "+item.optString("unit"),8194);quantity.setText(item.optString("quantity","1"));
+                quantity.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){}public void afterTextChanged(Editable value){try{item.put("quantity",value.toString());quoteCatalogTotal(selected,amount);saveDraft[0].run();}catch(Exception ignored){}}});
+            }
+            quoteCatalogTotal(selected,amount);saveDraft[0].run();
+        };
+        renderSelected[0].run();
+        call("/workspace","GET",null,result->{JSONObject workspace=result.optJSONObject("workspace");if(workspace!=null){catalogCurrency=workspace.optString("currency","RUB");if(!savedCurrency[0]){currency[0]=catalogCurrency;updateFieldLabel(amount,"Стоимость, "+currencySymbol(currency[0]));renderSelected[0].run();saveDraft[0].run();}}});
+        ui.space(content,14);button("Создать смету",true,v->{
+            if(title.length()==0){title.setError("Добавьте название");return;}if(client.length()==0){client.setError("Укажите клиента");return;}
+            try{
+                JSONObject body=new JSONObject().put("title",title.getText().toString()).put("client",client.getText().toString())
+                    .put("description",description.getText().toString()).put("currency",currency[0]);
+                if(selected.isEmpty()){
+                    long value=cents(amount);if(value<=0)throw new IllegalArgumentException();body.put("amount",value);
+                }else{
+                    JSONArray items=new JSONArray();
+                    for(JSONObject item:selected){
+                        java.math.BigDecimal quantity=new java.math.BigDecimal(item.optString("quantity","1").replace(',','.'));
+                        if(quantity.compareTo(new java.math.BigDecimal("0.0001"))<0||quantity.compareTo(new java.math.BigDecimal("1000000"))>0||quantity.scale()>4)throw new IllegalArgumentException();
+                        items.put(new JSONObject().put("name",item.optString("name")).put("description",item.optString("description"))
+                            .put("category",item.optString("category")).put("unit",item.optString("unit"))
+                            .put("quantity",quantity.toPlainString()).put("unit_price",item.optLong("price"))
+                            .put("cost_price",item.optLong("cost_price")));
+                    }
+                    body.put("items",items);
+                }
+                String currentBody=body.toString();if(!currentBody.equals(submittedBody[0])||requestKey[0].isEmpty()){submittedBody[0]=currentBody;requestKey[0]=java.util.UUID.randomUUID().toString();}
+                body.put("_request_key",requestKey[0]);saveDraft[0].run();
+                call("/quotes","POST",body,result->{
+                    for(JSONObject item:selected){try{call("/catalog/"+item.optString("id")+"/use","POST",new JSONObject().put("_request_key",java.util.UUID.randomUUID().toString()),ignored->{});}catch(Exception ignored){}}
+                    Analytics.event("estimate_created",Analytics.params("source",selected.isEmpty()?"manual":"catalog"),true);
+                    getPreferences(MODE_PRIVATE).edit().remove("draft").apply();home();message("Смета создана");
+                });
+            }catch(Exception error){if(selected.isEmpty())amount.setError("Укажите сумму больше нуля");else message("Проверьте количество и цену позиций");}
+        });
         ui.space(content,12);content.addView(ui.label("Черновик сохраняется на устройстве автоматически.",11,MUTED,false));
+    }
+    private void quoteCatalogTotal(java.util.List<JSONObject> selected,EditText amount){
+        try{long total=0;for(JSONObject item:selected){
+            java.math.BigDecimal quantity=new java.math.BigDecimal(item.optString("quantity","1").replace(',','.'));
+            long subtotal=quantity.multiply(java.math.BigDecimal.valueOf(item.optLong("price")))
+                .setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();total=Math.addExact(total,subtotal);
+        }amount.setText(java.math.BigDecimal.valueOf(total,2).toPlainString());}
+        catch(Exception error){amount.setText("");amount.setHint("Проверьте количество");}
+    }
+    private void quoteCatalogPicker(LinearLayout host,String currency,java.util.function.Consumer<JSONObject> choose){
+        host.removeAllViews();ui.section(host,"Ваши расценки",null);
+        EditText search=ui.field(host,"Найти работу или материал",android.text.InputType.TYPE_CLASS_TEXT);
+        search.setSingleLine(true);search.setMinHeight(dp(56));LinearLayout results=ui.column();host.addView(results);
+        final int[] sequence={0};final Runnable[] pending={null};
+        java.util.function.Consumer<String> lookup=query->{
+            int request=++sequence[0];results.removeAllViews();loading(results);
+            call("/catalog?q="+android.net.Uri.encode(query.trim()),"GET",null,result->{
+                if(request!=sequence[0]||host.getChildCount()==0)return;
+                results.removeAllViews();JSONArray items=result.optJSONArray("items");
+                if(items==null||items.length()==0){ui.empty(results,"document","Ничего не найдено","Добавьте расценку в разделе «Ещё».");return;}
+                for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item==null)continue;
+                    LinearLayout row=ui.card(results);row.addView(ui.label(item.optString("name"),14,INK,true));
+                    ui.space(row,5);row.addView(ui.label(exactMoney(item.optLong("price"),currency)+" / "+item.optString("unit"),12,MUTED,false));
+                    ui.tap(row,()->choose.accept(item));
+                }
+            });
+        };
+        search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){if(pending[0]!=null)search.removeCallbacks(pending[0]);pending[0]=()->lookup.accept(s.toString());search.postDelayed(pending[0],250);}public void afterTextChanged(Editable value){}});
+        lookup.accept("");
     }
     private long cents(EditText field){return new java.math.BigDecimal(field.getText().toString().replace(" ","").replace(',','.')).movePointRight(2).setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();}
     private void approvals(){
@@ -1023,7 +1124,7 @@ public class MainActivity extends Activity {
         text("Цены для новых смет. История изменений всегда под рукой.");
         button("+ Добавить расценку",true,v->catalogForm(null));
         EditText search=field("Поиск",android.text.InputType.TYPE_CLASS_TEXT);
-        search.setSingleLine(true);search.setHint("Название, категория или артикул");search.setText(catalogSearch);
+        search.setSingleLine(true);search.setMinHeight(dp(56));search.setHint("Название, категория или артикул");search.setText(catalogSearch);
         LinearLayout filters=ui.row();ui.space(content,14);
         TextView favorite=catalogFilter("Избранное",catalogFavorites),recent=catalogFilter("Недавние",catalogRecent);
         filters.addView(favorite);ui.gap(filters,10);filters.addView(recent);content.addView(filters);

@@ -35,6 +35,17 @@ public class DesignSmoke extends Instrumentation {
             click("Создать смету");waitText("Новая смета");fill("Дизайн мобильного приложения","Студия Север","98000","Аналитика, прототип и дизайн ключевых экранов.");
             top();shot("03-editor");click("Сегодня");waitPrefix("Все · ");click("Создать смету");
             require(editors().get(0).getText().toString().equals("Дизайн мобильного приложения"),"Local draft restored");click("Создать смету");waitPrefix("Все · ");
+            click("Создать смету");fill("Ремонт квартиры","Студия Север","1","Покраска и отделка стен.");
+            click("Добавить из расценок");waitText("Покраска стен");click("Покраска стен");
+            EditText quantity=editors().get(editors().size()-1);runOnMainSync(()->quantity.setText("12.5"));
+            click("Сегодня");waitPrefix("Все · ");click("Создать смету");waitText("Покраска стен");
+            require(editors().get(editors().size()-1).getText().toString().equals("12.5"),"Catalog quantity must survive draft restore");
+            click("Создать смету");waitText("Тестовая потеря ответа");
+            click("Сегодня");waitPrefix("Все · ");click("Создать смету");waitText("Покраска стен");
+            click("Создать смету");waitPrefix("Все · ");waitText("Ремонт квартиры");
+            int matchingQuotes=0;for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().equals("Ремонт квартиры"))matchingQuotes++;
+            require(matchingQuotes==1,"Retry after lost response must not duplicate quote");
+            click("Ремонт квартиры");waitText("Состав сметы");waitText("Покраска стен");shot("03-itemized-quote");clickDescription("Назад");
             click("Клиенты");waitText("Студия Север");shot("04-clients");
             click("Добавить клиента");fill("Михаил Орлов","mikhail@example.org","+79000000001");click("Добавить клиента");waitText("Михаил Орлов");
             click("Проекты");waitText("Интерьер студии");click("Интерьер студии");waitText("Записать оплату");shot("05-project");
@@ -50,7 +61,7 @@ public class DesignSmoke extends Instrumentation {
             click("Редактировать");fill("Покраска стен","1300","700","м²","Отделка","FIN-001","Подготовка и окраска в два слоя");
             click("Сохранить расценку");waitText("Начальная цена");shot("14-catalog-history");
             Intent shared=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Лендинг для кофейни, дизайн и вёрстка");runOnMainSync(()->((MainActivity)activity).onNewIntent(shared));waitText("Что нужно посчитать?");require(editors().get(0).getText().toString().contains("кофейни"),"Shared text must reach Capture");shot("15-capture");
-            result.putString("stream","PASS: login, filters, draft restore, quote/client, project/payment, catalog search/filter/edit/history, share-to-Capture, custom sheet, navigation; screenshots in files/design-qa\n");
+            result.putString("stream","PASS: login, filters, manual and itemized draft restore, quote/client, project/payment, catalog search/filter/edit/history, share-to-Capture, custom sheet, navigation; screenshots in files/design-qa\n");
             finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,result);}
     }

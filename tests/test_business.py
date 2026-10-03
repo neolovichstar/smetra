@@ -756,6 +756,51 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(code, 200, result)
         return result["token"], result["user"]["id"]
 
+    def test_quote_creation_key_replays_atomically_and_counts_once(self):
+        token, user_id = self.account("quote-replay-owner")
+        body = {"title": "Повтор при плохой сети", "client": "Клиент", "amount": 10000}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda _: self.call("/quotes", "POST", body, token, key="quote-retry"), range(2)
+            ))
+        self.assertEqual(sorted(code for code, _ in results), [200, 201], results)
+        self.assertEqual(results[0][1]["quote"]["id"], results[1][1]["quote"]["id"])
+        self.assertEqual(len(self.call("/quotes", token=token)[1]["quotes"]), 1)
+        with self.mod.db() as con:
+            count = con.execute(
+                "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'", (user_id,)
+            ).fetchone()[0]
+        self.assertEqual(count, 1)
+        status, replay = self.call("/quotes", "POST", {**body, "_request_key": "client-only"}, token, key="quote-retry")
+        self.assertEqual(status, 200, replay)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(self.call("/quotes", "POST", {**body, "amount": 20000}, token, key="quote-retry")[0], 409)
+
+    def test_quote_creation_key_is_isolated_and_does_not_recreate_deleted_quote(self):
+        owner, _ = self.account("quote-key-owner")
+        outsider, _ = self.account("quote-key-outsider")
+        body = {"title": "Смета", "client": "Клиент", "amount": 10000}
+        first = self.call("/quotes", "POST", body, owner, key="shared-client-key")[1]["quote"]
+        status, other = self.call("/quotes", "POST", body, outsider, key="shared-client-key")
+        self.assertEqual(status, 201, other)
+        self.assertNotEqual(first["id"], other["quote"]["id"])
+        self.assertEqual(self.call("/quotes/" + first["id"], "DELETE", token=owner)[0], 200)
+        self.assertEqual(self.call("/quotes", "POST", body, owner, key="shared-client-key")[0], 409)
+        self.assertEqual(self.call("/quotes", token=owner)[1]["quotes"], [])
+
+    def test_failed_quote_request_does_not_claim_key_and_replay_ignores_quota(self):
+        token, _ = self.account("quote-key-quota")
+        body = {"title": "Смета", "client": "Клиент", "amount": 10000}
+        self.assertEqual(self.call("/quotes", "POST", {**body, "title": ""}, token, key="retry-validation")[0], 400)
+        status, first = self.call("/quotes", "POST", body, token, key="retry-validation")
+        self.assertEqual(status, 201, first)
+        for _ in range(9):
+            self.assertEqual(self.call("/quotes", "POST", body, token)[0], 201)
+        self.assertEqual(self.call("/quotes", "POST", body, token)[0], 402)
+        status, replay = self.call("/quotes", "POST", body, token, key="retry-validation")
+        self.assertEqual(status, 200, replay)
+        self.assertEqual(replay["quote"]["id"], first["quote"]["id"])
+
     def quote(self, token, **extra):
         data = {
             "title": "Project",
