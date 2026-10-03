@@ -48,6 +48,25 @@ def download(row, con=None):
 
 
 def route(service, method, parts, query, data):
+    if method == "POST" and not parts and service.user:
+        from backend.creation_requests import lookup, remember
+
+        operation, record_id = lookup(service, "file", data)
+        if record_id:
+            row = service.con.execute(
+                "SELECT id,name,mime,size,sha256,public FROM files WHERE id=? AND workspace_id=?",
+                (record_id, service.wid),
+            ).fetchone()
+            if not row:
+                raise DomainError(409, "Файл этого запроса уже удалён. Выберите файл заново")
+            return 200, {"file": dict(row), "replayed": True}
+        result = _route(service, method, parts, query, data)
+        remember(service, "file", operation, result[1]["file"]["id"])
+        return result
+    return _route(service, method, parts, query, data)
+
+
+def _route(service, method, parts, query, data):
     if method == "GET" and len(parts) == 2 and parts[1] == "metadata":
         row = service.get("files", parts[0])
         return 200, {"file": {key: row[key] for key in

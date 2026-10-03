@@ -132,19 +132,25 @@ window.SmetraAssistant=async function(){
   const attachButton=document.querySelector('#assistant-attach');
   attachButton.onclick=()=>fileInput.click();
   const uploadAttachment=async file=>{
-    if(!file)return;
+    if(!file||attachButton.disabled)return;
     const extension=file.name.toLowerCase().split('.').pop();
     if(!['pdf','txt','md'].includes(extension)||file.size<1||file.size>5000000){status.textContent='Выберите PDF, TXT или MD до 5 МБ';return}
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
+    const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
       const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
+      const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');
+      const fingerprint=JSON.stringify([file.name,file.size,digest]);let pending=null;
+      try{pending=JSON.parse(sessionStorage.getItem(retrySlot)||'null')}catch{}
+      if(!pending||pending.fingerprint!==fingerprint||typeof pending.key!=='string'){pending={fingerprint,key:crypto.randomUUID()};sessionStorage.setItem(retrySlot,JSON.stringify(pending))}
       for(let index=0;index<bytes.length;index+=32768)binary+=String.fromCharCode(...bytes.subarray(index,index+32768));
-      const result=await api('/files',{method:'POST',body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
-      context={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
-      if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:context.entity,context_id:context.id})});
+      const result=await api('/files',{method:'POST',headers:{'Idempotency-Key':pending.key},body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
+      const attached={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
+      if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
+      context=attached;sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();
       status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
-    }catch(error){status.textContent=error.message}
+    }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
     finally{attachButton.disabled=false;fileInput.value=''}
   };
   fileInput.onchange=()=>uploadAttachment(fileInput.files[0]);

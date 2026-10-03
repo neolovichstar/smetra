@@ -39,8 +39,18 @@ def main():
         app.migrate()
         class UiHandler(app.Handler):
             lost_quote_response = False
+            lost_attachment_responses = set()
 
             def send_json(self, status, value, cookie=None):
+                if status == 201 and isinstance(value, dict):
+                    marker = None
+                    if self.path == "/api/files" and value.get("file", {}).get("name") in ("brief.md", "retry-web.md"):
+                        marker = "file:" + value["file"]["name"]
+                    elif self.path == "/api/assistant/conversations" and value.get("conversation", {}).get("title") == "brief.md":
+                        marker = "conversation:brief.md"
+                    if marker and marker not in UiHandler.lost_attachment_responses:
+                        UiHandler.lost_attachment_responses.add(marker)
+                        return super().send_json(503, {"error": "Тестовая потеря ответа вложения"}, cookie)
                 # Commit a quote, then lose its first success response. The APK must
                 # restore the draft and retry without spending another quote slot.
                 if (

@@ -45,7 +45,15 @@ public class DesignSmoke extends Instrumentation {
                         runOnMainSync(()->activity.recreate());Activity restored=waitForMonitorWithTimeout(recreation,15000);removeMonitor(recreation);
                         require(restored!=null,"Attachment preview recreated");activity=restored;waitText("Прикрепить к диалогу");waitText(name);
                     }
-                    click("Прикрепить к диалогу");waitText("Файл · "+name);waitEnabledPrefix("Отправить");
+                    click("Прикрепить к диалогу");
+                    if("brief.md".equals(name)){
+                        waitText("Повторить загрузку");
+                        ActivityMonitor recreation=addMonitor(MainActivity.class.getName(),null,false);
+                        runOnMainSync(()->activity.recreate());Activity restored=waitForMonitorWithTimeout(recreation,15000);removeMonitor(recreation);
+                        require(restored!=null,"Lost upload response recreated");activity=restored;waitText("Прикрепить к диалогу");click("Прикрепить к диалогу");
+                        waitText("Связать с диалогом");click("Связать с диалогом");
+                    }
+                    waitText("Файл · "+name);waitEnabledPrefix("Отправить");
                     require(editors().get(0).getText().toString().equals("Прочитай документ"),"Attachment preserves draft: "+name);
                 }
                 click("Ещё");click("Ассистент");waitText("Файл · brief.pdf");waitEnabledPrefix("Отправить");

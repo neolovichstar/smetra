@@ -16,13 +16,31 @@ def conversation(service, conversation_id):
 def conversations(service, method, parts, data):
     if method == "POST":
         with transaction(service.con):
+            operation = None
+            if not parts:
+                from backend.creation_requests import lookup
+
+                operation, record_id = lookup(service, "conversation", data)
+                if record_id:
+                    row = service.con.execute(
+                        "SELECT * FROM assistant_conversations WHERE id=? AND workspace_id=? AND user_id=?",
+                        (record_id, service.wid, service.user["id"]),
+                    ).fetchone()
+                    if not row:
+                        raise DomainError(409, "Диалог этого запроса уже удалён. Начните новый диалог")
+                    return 200, {"conversation": dict(row), "replayed": True}
             count = service.con.execute(
                 "SELECT count(*) FROM assistant_conversations WHERE workspace_id=? AND user_id=?",
                 (service.wid, service.user["id"]),
             ).fetchone()[0]
             if count >= 50:
                 raise DomainError(409, "Максимум 50 диалогов. Удалите ненужный диалог")
-            return _conversations(service, method, parts, data)
+            result = _conversations(service, method, parts, data)
+            if not parts:
+                from backend.creation_requests import remember
+
+                remember(service, "conversation", operation, result[1]["conversation"]["id"])
+            return result
     return _conversations(service, method, parts, data)
 
 

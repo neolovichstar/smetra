@@ -11,7 +11,7 @@ async function api(path, options = {}) {
   const response = await fetch('/api' + path,{credentials:'same-origin',...options,headers});
   let result;
   try { result = await response.json(); } catch { throw Error('Сервер вернул некорректный ответ'); }
-  if (!response.ok) throw Error(result.error || `Ошибка ${response.status}`);
+  if (!response.ok) {const error=Error(result.error || `Ошибка ${response.status}`);error.status=response.status;throw error;}
   return result;
 }
 function notify(message) { const el=$('#toast'); if(!el){alert(message);return;} el.textContent=message;el.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.add('hidden'),4500); }

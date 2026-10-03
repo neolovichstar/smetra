@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
     private android.net.Uri assistantAttachmentUri;
     private String assistantAttachmentThread="",assistantAttachmentAccount="";
     private JSONObject assistantUploadedAttachment;
+    private String assistantAttachmentRequestKey="";
     private int assistantAttachmentGeneration=0;
     private boolean assistantAttachmentBusy=false,assistantAttachmentPicking=false;
     private MobilePresentation presentation;
@@ -56,7 +57,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);presentation=MobilePresentation.cached(this);presentation.apply(this);ui=new SmetraUi(this);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         vault=new TokenVault(this);token=vault.read();
-        if(state!=null){assistantAttachmentPicking=state.getBoolean("assistant_attachment_picking",false);assistantAttachmentThread=state.getString("assistant_attachment_thread","");assistantAttachmentAccount=state.getString("assistant_attachment_account","");String uri=state.getString("assistant_attachment_uri");if(uri!=null)assistantAttachmentUri=android.net.Uri.parse(uri);try{String file=state.getString("assistant_attachment_uploaded");if(file!=null)assistantUploadedAttachment=new JSONObject(file);}catch(Exception ignored){}}
+        if(state!=null){assistantAttachmentRequestKey=state.getString("assistant_attachment_request_key","");assistantAttachmentPicking=state.getBoolean("assistant_attachment_picking",false);assistantAttachmentThread=state.getString("assistant_attachment_thread","");assistantAttachmentAccount=state.getString("assistant_attachment_account","");String uri=state.getString("assistant_attachment_uri");if(uri!=null)assistantAttachmentUri=android.net.Uri.parse(uri);try{String file=state.getString("assistant_attachment_uploaded");if(file!=null)assistantUploadedAttachment=new JSONObject(file);}catch(Exception ignored){}}
         String legacy=getPreferences(MODE_PRIVATE).getString("token",null);
         if(token==null&&legacy!=null){try{vault.save(legacy);token=legacy;}catch(Exception ignored){token=null;}}
         getPreferences(MODE_PRIVATE).edit().remove("token").apply();
@@ -77,6 +78,7 @@ public class MainActivity extends Activity {
     private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
     @Override public void onDestroy(){worker.shutdownNow();super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle state){
+        state.putString("assistant_attachment_request_key",assistantAttachmentRequestKey);
         super.onSaveInstanceState(state);state.putString("assistant_attachment_thread",assistantAttachmentThread);state.putString("assistant_attachment_account",assistantAttachmentAccount);
         state.putBoolean("assistant_attachment_picking",assistantAttachmentPicking);
         if(assistantAttachmentUri!=null)state.putString("assistant_attachment_uri",assistantAttachmentUri.toString());
@@ -330,6 +332,7 @@ public class MainActivity extends Activity {
     private String assistantDraftKey(String thread,String account){return "assistant_draft:"+account+":"+thread;}
     private void clearAssistantAttachment(){
         assistantAttachmentGeneration++;
+        assistantAttachmentRequestKey="";
         if(assistantAttachmentUri!=null)try{getContentResolver().releasePersistableUriPermission(assistantAttachmentUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException ignored){}
         assistantAttachmentUri=null;assistantUploadedAttachment=null;assistantAttachmentThread="";assistantAttachmentAccount="";assistantAttachmentBusy=false;assistantAttachmentPicking=false;
     }
@@ -337,6 +340,7 @@ public class MainActivity extends Activity {
         if(assistantAttachmentBusy){message("Дождитесь загрузки файла.");return;}
         if(me==null||token==null){message("Войдите в пространство.");return;}
         clearAssistantAttachment();assistantAttachmentThread=assistantConversation;assistantAttachmentAccount=me.optString("id");assistantAttachmentPicking=true;
+        assistantAttachmentRequestKey=java.util.UUID.randomUUID().toString();
         Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.addCategory(Intent.CATEGORY_OPENABLE);
         picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","text/plain","text/markdown","text/x-markdown","application/octet-stream"});
         picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -393,14 +397,16 @@ public class MainActivity extends Activity {
     }
     private void uploadAssistantAttachment(AssistantAttachmentSource source,Button submit){
         if(assistantAttachmentBusy)return;assistantAttachmentBusy=true;submit.setEnabled(false);submit.setText("Прикрепляю…");
+        if(assistantAttachmentRequestKey.isEmpty())assistantAttachmentRequestKey=java.util.UUID.randomUUID().toString();
+        final String requestKey=assistantAttachmentRequestKey;
         final int version=pageVersion,generation=assistantAttachmentGeneration;final String session=token,account=assistantAttachmentAccount,thread=assistantAttachmentThread;
         final String draft=getPreferences(MODE_PRIVATE).getString(assistantDraftKey(thread,account),"");final JSONObject uploaded=assistantUploadedAttachment;
         worker.execute(()->{try{
             JSONObject file=uploaded;
-            if(file==null){file=request("/files","POST",new JSONObject().put("assistant_upload",true).put("name",source.name).put("content",android.util.Base64.encodeToString(source.bytes,android.util.Base64.NO_WRAP)),session).optJSONObject("file");
+            if(file==null){file=request("/files","POST",new JSONObject().put("_request_key",requestKey).put("assistant_upload",true).put("name",source.name).put("content",android.util.Base64.encodeToString(source.bytes,android.util.Base64.NO_WRAP)),session).optJSONObject("file");
                 if(file==null)throw new IOException("Сервер не вернул документ.");final JSONObject saved=file;runOnUiThread(()->{if(generation==assistantAttachmentGeneration&&session.equals(token)&&me!=null&&account.equals(me.optString("id")))assistantUploadedAttachment=saved;});}
             JSONObject body=new JSONObject().put("context_entity","files").put("context_id",file.optString("id"));
-            if(thread.isEmpty())body.put("title",source.name.substring(0,Math.min(120,source.name.length())));
+            if(thread.isEmpty())body.put("title",source.name.substring(0,Math.min(120,source.name.length()))).put("_request_key",requestKey);
             JSONObject result=request(thread.isEmpty()?"/assistant/conversations":"/assistant/conversations/"+thread,thread.isEmpty()?"POST":"PATCH",body,session).optJSONObject("conversation");
             if(result==null)throw new IOException("Не удалось открыть диалог с файлом.");final JSONObject selected=result;
             runOnUiThread(()->{if(generation!=assistantAttachmentGeneration)return;assistantAttachmentBusy=false;if(!session.equals(token)||me==null||!account.equals(me.optString("id")))return;
