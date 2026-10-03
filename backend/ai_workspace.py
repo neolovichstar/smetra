@@ -14,6 +14,32 @@ def conversation(service, conversation_id):
 
 
 def conversations(service, method, parts, data):
+    if method == "POST":
+        with transaction(service.con):
+            count = service.con.execute(
+                "SELECT count(*) FROM assistant_conversations WHERE workspace_id=? AND user_id=?",
+                (service.wid, service.user["id"]),
+            ).fetchone()[0]
+            if count >= 50:
+                raise DomainError(409, "Максимум 50 диалогов. Удалите ненужный диалог")
+            return _conversations(service, method, parts, data)
+    return _conversations(service, method, parts, data)
+
+
+def context_fields(service, data, row=None):
+    entity = data.get("context_entity", row["context_entity"] if row else "")
+    record_id = data.get("context_id", row["context_id"] if row else "")
+    if not isinstance(entity, str) or not isinstance(record_id, str) or bool(entity) != bool(record_id):
+        raise DomainError(400, "Контекст должен содержать раздел и ID записи")
+    if entity:
+        from backend.assistant import verified_context
+
+        verified = verified_context(service, {"entity": entity, "id": record_id})
+        record_id = verified["id"]
+    return entity, record_id
+
+
+def _conversations(service, method, parts, data):
     if method == "GET" and not parts:
         rows = service.con.execute(
             "SELECT id,title,context_entity,context_id,pinned,created_at,updated_at "
@@ -24,12 +50,7 @@ def conversations(service, method, parts, data):
         return 200, {"items": [dict(row) for row in rows]}
     if method == "POST" and not parts:
         title = string(data.get("title", "Новый диалог"), "Название", 120, True)
-        context_entity = data.get("context_entity") or ""
-        context_id = data.get("context_id") or ""
-        if context_entity:
-            from backend.assistant import verified_context
-
-            verified_context(service, {"entity": context_entity, "id": context_id})
+        context_entity, context_id = context_fields(service, data)
         row = dict(
             id=identity(), workspace_id=service.wid, user_id=service.user["id"],
             title=title, context_entity=context_entity, context_id=context_id,
@@ -52,12 +73,6 @@ def conversations(service, method, parts, data):
         selected = next((index for index, item in enumerate(recent) if item["id"] == message_id), None)
         if selected is None:
             raise DomainError(404, "Сообщение для новой ветки не найдено")
-        count = service.con.execute(
-            "SELECT count(*) FROM assistant_conversations WHERE workspace_id=? AND user_id=?",
-            (service.wid, service.user["id"]),
-        ).fetchone()[0]
-        if count >= 50:
-            raise DomainError(409, "Максимум 50 диалогов. Удалите ненужный диалог")
         title = string(data.get("title", "Ветка · " + source["title"][:100]), "Название", 120, True)
         fork = dict(id=identity(), workspace_id=service.wid, user_id=service.user["id"],
                     title=title, context_entity=source["context_entity"],
@@ -87,15 +102,25 @@ def conversations(service, method, parts, data):
         ).fetchall()
         return 200, {"conversation": dict(row), "messages": [dict(item) for item in reversed(messages)]}
     if method == "PATCH":
-        if not isinstance(data, dict) or not set(data).issubset({"title", "pinned"}) or not data:
+        if not isinstance(data, dict) or not set(data).issubset({"title", "pinned", "context_entity", "context_id"}) or not data:
             raise DomainError(400, "Неверные поля диалога")
-        title = string(data.get("title", row["title"]), "Название", 120, True)
-        pinned = integer(data.get("pinned", row["pinned"]), "Закрепление", 0, 1)
-        service.con.execute(
-            "UPDATE assistant_conversations SET title=?,pinned=?,updated_at=? WHERE id=? AND workspace_id=? AND user_id=?",
-            (title, pinned, stamp(), row["id"], service.wid, service.user["id"]),
-        )
-        return 200, {"conversation": dict(row, title=title, pinned=pinned)}
+        fields = {}
+        if "title" in data:
+            fields["title"] = string(data["title"], "Название", 120, True)
+        if "pinned" in data:
+            fields["pinned"] = integer(data["pinned"], "Закрепление", 0, 1)
+        # A removed source must not prevent renaming or clearing a conversation.
+        if "context_entity" in data or "context_id" in data:
+            fields["context_entity"], fields["context_id"] = context_fields(service, data, row)
+        fields["updated_at"] = stamp()
+        updated = service.con.execute(
+            "UPDATE assistant_conversations SET " + ",".join(key + "=?" for key in fields)
+            + " WHERE id=? AND workspace_id=? AND user_id=? RETURNING *",
+            (*fields.values(), row["id"], service.wid, service.user["id"]),
+        ).fetchone()
+        if not updated:
+            raise DomainError(404, "Диалог не найден")
+        return 200, {"conversation": dict(updated)}
     if method == "DELETE":
         with transaction(service.con):
             service.con.execute(

@@ -23,6 +23,7 @@ def main():
             UPLOAD_DIR=str(Path(folder) / "uploads"),
             PUBLIC_ORIGIN="http://localhost:8084",
             PORT="8084",
+            OPENROUTER_API_KEY="fixture-not-a-real-key",
         )
         os.environ.pop("SMTP_HOST", None)
         spec = importlib.util.spec_from_file_location(
@@ -182,6 +183,18 @@ def main():
                     "rows": [1], "field": "unit_price", "operation": "multiply", "value": "1.1"})}}]},
         ):
             call("/assistant/chat", {"text": "Увеличь цену на 10%"}, token)
+        # Deterministic streaming exercises the real quota/history/context routes;
+        # this isolated fixture never contacts a model provider.
+        def stream_fixture(messages, on_delta):
+            selected = "Пользователь явно выбрал контекст: смета" in messages[0]["content"]
+            answer = "Контекст сметы получен." if selected else "Контекст не выбран."
+            for chunk in answer.split(" "):
+                on_delta(chunk + " ")
+            return {"content": answer}
+
+        from backend import assistant
+
+        assistant.query_model_stream = stream_fixture
         print("ANDROID_UI_FIXTURE_READY http://127.0.0.1:8084", flush=True)
         try:
             threading.Event().wait()

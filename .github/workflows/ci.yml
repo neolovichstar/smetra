@@ -43,7 +43,7 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://localhost:8082/health && curl -sf http://localhost:9223/json && break; sleep 1; done
           node tests/browser_flows.cjs
           node tests/browser_construction_prices.cjs
-      - name: Assistant preview and undo in mobile browser
+      - name: Assistant preview, undo and conversation context in mobile browser
         run: |
           python scripts/android_ui_fixture.py > data/assistant-fixture.log 2>&1 &
           for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/assistant-fixture.log && break; sleep 1; done

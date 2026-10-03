@@ -20,7 +20,8 @@ import java.util.List;
 /** Exercises native views against scripts/android_ui_fixture.py, captures actual device pixels. */
 public class DesignSmoke extends Instrumentation {
     private Activity activity;
-    @Override public void onCreate(Bundle args){super.onCreate(args);start();}
+    private boolean assistantOnly;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -28,6 +29,7 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if(assistantOnly){click("Ещё");click("Ассистент");waitPrefix("Отправить");checkAssistantThreads("Айдентика и упаковка");result.putString("stream","PASS: native conversations, rename/pin, context, streamed response, fork, clear, monthly quota and history isolation\n");finish(Activity.RESULT_OK,result);return;}
             click("Интерьер студии");waitText("Состав сметы");waitText("Концепция и дизайн");waitText("Создать заказ из сметы");shot("02-quote");clickDescription("Назад");
             click("Ещё");click("Согласования");waitText("Решения клиентов");waitText("Согласована");shot("02-approvals");
             click("Ещё");click("Платежи");waitText("Деньги под контролем.");waitPrefix("65");shot("02-payments");click("Сегодня");waitPrefix("Все · ");
@@ -53,6 +55,7 @@ public class DesignSmoke extends Instrumentation {
             click("Завершить заказ");SystemClock.sleep(600);shot("07-confirmation");getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);SystemClock.sleep(400);
             require(find("Завершить заказ")!=null,"Dismiss confirmation without changing project");
             clickDescription("Назад");clickDescription("Открыть профиль");waitText("Ваше пространство");shot("08-profile");click("Поддержка");waitText("Отправить сообщение");shot("09-support");clickDescription("Назад");click("Тариф и подписка");require(find("Выбрать Про · 490 ₽")==null,"Android must not open external subscription checkout");shot("10-subscription");click("Ещё");click("Ассистент");waitPrefix("Отправить");waitText("Итого по смете");shot("11-assistant-diff");click("Применить");waitText("Отменить изменение");shot("11-assistant-applied");click("Ещё");click("Ассистент");waitText("Отменить изменение");click("Отменить изменение");waitPrefix("Изменение отменено");shot("11-assistant-undone");
+            checkAssistantThreads("Ремонт квартиры");
             click("Ещё");click("Расценки");waitText("Покраска стен");waitText("Краска интерьерная");shot("12-catalog");
             click("Недавние");waitText("Покраска стен");require(find("Краска интерьерная")==null,"Recent catalog filter must exclude unused items");
             click("Недавние");click("Материалы");waitText("Краска интерьерная");require(find("Покраска стен")==null,"Catalog category filter must narrow list");
@@ -65,7 +68,16 @@ public class DesignSmoke extends Instrumentation {
             finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,result);}
     }
+    private void checkAssistantThreads(String quoteTitle)throws Exception{
+            click("Диалоги");waitText("Новый диалог");click("Новый диалог");waitText("Создать диалог");fill("План работ");click("Создать диалог");waitText("Настройки");waitText("План работ");click("Настройки");waitText("Сохранить название");fill("План недели");click("Сохранить название");waitText("Настройки");waitText("План недели");click("Настройки");waitText("Закрепить диалог");click("Закрепить диалог");waitText("Настройки");waitText("План недели");shot("16-assistant-thread");
+            click("Диалоги");waitText("Общий диалог");waitText("План недели");click("Общий диалог");waitText("Общий диалог");
+            click("Сегодня");waitText(""+quoteTitle+"");click(""+quoteTitle+"");waitText("Спросить ассистента");click("Спросить ассистента");waitText("Смета · "+quoteTitle+"");waitEnabledPrefix("Отправить");fill("Покажи контекст");clickPrefix("Отправить");waitText("Контекст сметы получен.");
+            click("Ещё");click("Ассистент");waitText("Смета · "+quoteTitle+"");waitText("Контекст сметы получен.");click("Продолжить в новой ветке");waitPrefix("Ветка · "+quoteTitle+"");waitText("Контекст сметы получен.");shot("17-assistant-context");
+            click("Убрать контекст");waitGone("Убрать контекст");waitEnabledPrefix("Отправить");fill("Теперь без контекста");clickPrefix("Отправить");waitText("Контекст не выбран.");waitText("Лимит на месяц исчерпан");shot("18-assistant-limit");
+            click("Настройки");waitText("Удалить диалог");click("Удалить диалог");clickSheetAction("Удалить");waitText("Общий диалог");require(find("Контекст не выбран.")==null,"Thread messages must not leak into global history");
+    }
     private void clickDescription(String text){for(View view:views())if(text.equals(String.valueOf(view.getContentDescription()))){runOnMainSync(view::performClick);SystemClock.sleep(500);return;}throw new AssertionError("Missing control "+text);}
+    private void clickSheetAction(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text)){if(text.equals(String.valueOf(node.getText()))&&node.isClickable()&&node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){SystemClock.sleep(500);return;}}SystemClock.sleep(150);}throw new AssertionError("Missing sheet action "+text);}
     private void require(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     private View decor(){return activity.getWindow().getDecorView();}
     private void walk(View view,List<View> list){list.add(view);if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)walk(group.getChildAt(i),list);}}
@@ -77,6 +89,7 @@ public class DesignSmoke extends Instrumentation {
     private void waitText(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(find(text)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing text: "+text+"\n"+allText());}
     private void waitGone(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(find(text)==null)return;SystemClock.sleep(150);}throw new AssertionError("Text still visible: "+text+"\n"+allText());}
     private void waitPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(findPrefix(prefix)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing prefix: "+prefix+"\n"+allText());}
+    private void waitEnabledPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){View view=findPrefix(prefix);if(view!=null&&view.isEnabled()){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Control not ready: "+prefix);}
     private void click(String text){View target=find(text);require(target!=null,"Missing action "+text);runOnMainSync(()->{target.requestRectangleOnScreen(new Rect(0,0,target.getWidth(),target.getHeight()),true);View click=target;while(!click.isClickable()&&click.getParent() instanceof View)click=(View)click.getParent();require(click.isClickable(),"Not clickable: "+text);click.performClick();});SystemClock.sleep(450);}
     private void clickPrefix(String prefix){View target=findPrefix(prefix);require(target!=null,"Missing action "+prefix);click(((TextView)target).getText().toString());}
     private List<EditText> editors(){List<EditText> result=new ArrayList<>();for(View view:views())if(view instanceof EditText)result.add((EditText)view);return result;}

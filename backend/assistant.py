@@ -899,7 +899,10 @@ def route(service, method, parts, data):
     if conversation_id is not None:
         from backend.ai_workspace import conversation
 
-        conversation_id = conversation(service, string(conversation_id, "Диалог", 80, True))["id"]
+        selected = conversation(service, string(conversation_id, "Диалог", 80, True))
+        conversation_id = selected["id"]
+        if "context" not in data and selected["context_entity"]:
+            context = verified_context(service, {"entity": selected["context_entity"], "id": selected["context_id"]})
     service.h.throttle("assistant:" + service.user["id"], 12, 60)
     try:
         from backend.redis_infra import RedisUnavailable, acquire_lock

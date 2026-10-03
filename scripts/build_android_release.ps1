@@ -57,7 +57,7 @@ try {
     $badging = & $aapt dump badging $apk
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read APK manifest.' }
     $package = $badging | Where-Object { $_ -like 'package:*' } | Select-Object -First 1
-    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='14'" -or $package -notmatch "versionName='1\.7\.2'") {
+    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='15'" -or $package -notmatch "versionName='1\.7\.3'") {
         throw "Unexpected APK identity: $package"
     }
     $signature = & $apksigner verify --verbose --print-certs $apk 2>&1
@@ -69,7 +69,7 @@ try {
     if ($expected.Length -ne 64) { throw 'RUSTORE_CERT_SHA256 must contain a 64-digit SHA-256 fingerprint.' }
     if ($expected -ne $fingerprint) { throw 'Signing certificate differs from RUSTORE_CERT_SHA256. Do not publish this APK.' }
 
-    $destination = Join-Path $repo 'dist\smetra-mobile-1.7.2-release.apk'
+    $destination = Join-Path $repo 'dist\smetra-mobile-1.7.3-release.apk'
     New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
     Copy-Item -LiteralPath $apk -Destination $destination -Force
     Write-Output "APK: $destination"

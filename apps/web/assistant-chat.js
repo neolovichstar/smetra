@@ -99,8 +99,8 @@ window.SmetraAssistant=async function(){
   const upgrade=document.querySelector('#assistant-upgrade');
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
   const threadPath=activeConversation?'/assistant/conversations/'+encodeURIComponent(activeConversation):'';
-  document.querySelector('#assistant-thread-select').onchange=event=>{sessionStorage.setItem('smetra.assistant.conversation',event.target.value);window.SmetraAssistant()};
-  document.querySelector('#assistant-new-thread').onclick=async()=>{try{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог'})});sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);window.SmetraAssistant()}catch(error){notify(error.message)}};
+  document.querySelector('#assistant-thread-select').onchange=event=>{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',event.target.value);window.SmetraAssistant()};
+  document.querySelector('#assistant-new-thread').onclick=async()=>{try{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);window.SmetraAssistant()}catch(error){notify(error.message)}};
   document.querySelector('#assistant-knowledge').onclick=async()=>{const panel=document.querySelector('#assistant-knowledge-panel');if(!panel.classList.contains('hidden')){panel.classList.add('hidden');return}await window.SmetraKnowledgePanel?.(panel);panel.classList.remove('hidden')};
   document.querySelector('#assistant-rename').onclick=()=>{const form=document.querySelector('#assistant-thread-edit');form.classList.remove('hidden');const name=document.querySelector('#assistant-thread-name');name.value=selectedThread.title;name.focus();name.select()};
   document.querySelector('#assistant-thread-cancel').onclick=()=>document.querySelector('#assistant-thread-edit').classList.add('hidden');
@@ -111,6 +111,10 @@ window.SmetraAssistant=async function(){
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
   if(context&&(!['clients','quotes','projects','files'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
+  if(activeConversation){
+    context=selectedThread.context_entity?{entity:selectedThread.context_entity,id:selectedThread.context_id,workspace_id:currentWorkspace}:null;
+    if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
+  }
   const contextBar=document.querySelector('#assistant-context');
   const renderContext=()=>{
     contextBar.classList.toggle('hidden',!context);
@@ -119,7 +123,7 @@ window.SmetraAssistant=async function(){
   };
   renderContext();
   try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
-  document.querySelector('#assistant-context-remove').onclick=()=>{context=null;renderContext();input.focus()};
+  document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();input.focus()}catch(error){notify(error.message)}};
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
   attachButton.onclick=()=>fileInput.click();
@@ -133,6 +137,7 @@ window.SmetraAssistant=async function(){
       for(let index=0;index<bytes.length;index+=32768)binary+=String.fromCharCode(...bytes.subarray(index,index+32768));
       const result=await api('/files',{method:'POST',body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
       context={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
+      if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:context.entity,context_id:context.id})});
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();
       status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
     }catch(error){status.textContent=error.message}
