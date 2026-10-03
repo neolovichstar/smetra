@@ -267,6 +267,8 @@ public class MainActivity extends Activity {
             }
             JSONArray actions=result.optJSONArray("actions");
             if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));
+            JSONArray recent=result.optJSONArray("recent_actions");
+            if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));
             applyAssistantQuota(result.optJSONObject("quota"),allowance,send);
             if(!result.optBoolean("available")){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}
         });
@@ -381,9 +383,45 @@ public class MainActivity extends Activity {
         ui.enter(row);
         return body;
     }
-    private String fieldLabel(String key){switch(key){case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
-    private void assistantAction(LinearLayout host,JSONObject action){if(action==null)return;LinearLayout proposal=ui.card(host);proposal.addView(ui.label("ПРЕДЛОЖЕНИЕ · ЕЩЁ НЕ СОХРАНЕНО",10,BLUE,true));ui.space(proposal,12);proposal.addView(ui.label(action.optString("summary"),18,INK,true));JSONObject fields=action.optJSONObject("arguments");if(fields!=null){java.util.Iterator<String> keys=fields.keys();while(keys.hasNext()){String key=keys.next();if(key.equals("id")||key.equals("revision"))continue;String value=fields.optString(key);if(key.equals("amount")||key.equals("amount_kopecks")||key.equals("price"))value=exactMoney(fields.optLong(key),fields.optString("currency","RUB"));if(key.equals("items")){JSONArray items=fields.optJSONArray(key);StringBuilder list=new StringBuilder();if(items!=null)for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);list.append(item.optString("name")).append(" · ").append(item.optString("quantity")).append(" × ").append(exactMoney(item.optLong("unit_price"),fields.optString("currency","RUB"))).append('\n');}value=list.toString();}ui.space(proposal,10);proposal.addView(ui.label(fieldLabel(key),11,MUTED,false));ui.space(proposal,3);proposal.addView(ui.label(value,14,INK,false));}}
-        addButton(proposal,"Применить",true,v->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));});}catch(Exception error){message(error.getMessage());}});addButton(proposal,"Не сейчас",false,v->{try{call("/assistant/dismiss","POST",new JSONObject().put("id",action.optString("id")),r->host.removeView(proposal));}catch(Exception error){message(error.getMessage());}});
+    private String fieldLabel(String key){switch(key){case "unit_price":return "Цена";case "quantity":return "Количество";case "coefficient":return "Коэффициент";case "markup":return "Наценка, %";case "discount":return "Скидка, %";case "tax":return "Налог, %";case "unit":return "Единица";case "category":return "Категория";case "notes":return "Заметки";case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
+    private String assistantEditValue(String field,Object value,String currency){
+        if(value==null||value==JSONObject.NULL||value.toString().isEmpty())return "—";
+        if(field.equals("unit_price")||field.equals("amount")||field.equals("amount_kopecks")||field.equals("price")){
+            try{return exactMoney(Long.parseLong(value.toString()),currency);}catch(NumberFormatException ignored){}
+        }
+        if(value instanceof JSONArray){JSONArray values=(JSONArray)value;StringBuilder names=new StringBuilder();for(int i=0;i<values.length();i++){if(i>0)names.append(", ");JSONObject item=values.optJSONObject(i);names.append(item==null?"Позиция":item.optString("name","Позиция"));}return names.toString();}
+        return value instanceof JSONObject?"Данные записи":value.toString();
+    }
+    private void assistantDiffRow(LinearLayout host,JSONObject row,String currency){
+        if(row==null)return;
+        String field=row.optString("field");
+        String heading=(row.has("row")?row.optInt("row")+". "+row.optString("name")+" · ":"")+fieldLabel(field);
+        ui.space(host,12);host.addView(ui.label(heading,11,MUTED,false));ui.space(host,5);
+        LinearLayout values=ui.row();host.addView(values,ui.match());
+        TextView before=ui.label(assistantEditValue(field,row.opt("before"),currency),13,MUTED,false);
+        before.setPaintFlags(before.getPaintFlags()|android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
+        values.addView(before,new LinearLayout.LayoutParams(0,-2,1));
+        values.addView(ui.label(assistantEditValue(field,row.opt("after"),currency),13,BLUE,false),new LinearLayout.LayoutParams(0,-2,1));
+    }
+    private void assistantPreview(LinearLayout host,JSONObject preview){
+        String currency=preview.optString("currency","RUB");JSONArray rows=preview.optJSONArray("rows");
+        if(rows!=null){for(int i=0;i<Math.min(5,rows.length());i++)assistantDiffRow(host,rows.optJSONObject(i),currency);
+            if(rows.length()>5){LinearLayout extra=ui.column();extra.setVisibility(View.GONE);host.addView(extra);for(int i=5;i<rows.length();i++)assistantDiffRow(extra,rows.optJSONObject(i),currency);addButton(host,"Ещё "+(rows.length()-5)+" изменений",false,v->{boolean show=extra.getVisibility()!=View.VISIBLE;extra.setVisibility(show?View.VISIBLE:View.GONE);((Button)v).setText(show?"Свернуть":"Ещё "+(rows.length()-5)+" изменений");});}
+        }
+        if(preview.optString("kind").equals("quote_items")){ui.space(host,18);host.addView(ui.label("Итого по смете",11,MUTED,false));ui.space(host,5);host.addView(ui.label(exactMoney(preview.optLong("before_total"),currency)+" → "+exactMoney(preview.optLong("after_total"),currency),17,INK,true));}
+    }
+    private void assistantUndo(LinearLayout host,JSONObject action){
+        host.removeAllViews();host.addView(ui.label("Сохранено · "+action.optString("summary"),14,INK,false));
+        addButton(host,"Отменить изменение",false,v->{v.setEnabled(false);try{call("/assistant/undo","POST",new JSONObject().put("id",action.optString("id")),r->{host.removeAllViews();host.addView(ui.label("Изменение отменено · "+action.optString("summary"),13,BLUE,false));});}catch(Exception error){message(error.getMessage());}v.setEnabled(true);});
+    }
+    private void assistantAction(LinearLayout host,JSONObject action){
+        if(action==null)return;
+        LinearLayout proposal=ui.card(host);proposal.addView(ui.label("ПРЕДЛОЖЕНИЕ · ЕЩЁ НЕ СОХРАНЕНО",10,BLUE,true));ui.space(proposal,12);proposal.addView(ui.label(action.optString("summary"),17,INK,true));
+        JSONObject preview=action.optJSONObject("preview"),fields=action.optJSONObject("arguments");
+        if(preview!=null)assistantPreview(proposal,preview);
+        else if(fields!=null){java.util.Iterator<String> keys=fields.keys();while(keys.hasNext()){String key=keys.next();if(key.equals("id")||key.equals("revision"))continue;ui.space(proposal,10);proposal.addView(ui.label(fieldLabel(key),11,MUTED,false));ui.space(proposal,3);proposal.addView(ui.label(assistantEditValue(key,fields.opt(key),fields.optString("currency","RUB")),14,INK,false));}}
+        addButton(proposal,"Применить",true,v->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{if(r.optBoolean("undoable"))assistantUndo(proposal,action);else{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));}});}catch(Exception error){message(error.getMessage());}});
+        addButton(proposal,"Не сейчас",false,v->{try{call("/assistant/dismiss","POST",new JSONObject().put("id",action.optString("id")),r->host.removeView(proposal));}catch(Exception error){message(error.getMessage());}});
     }
 
     private void refresh(){call("/me","GET",null,result->{me=result.optJSONObject("user");Analytics.identify(me);home();});}

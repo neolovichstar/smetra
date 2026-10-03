@@ -17,3 +17,12 @@ const attack=context.assistantMarkdown('<img src=x onerror=alert(1)>\n\n[наж�
 assert.doesNotMatch(attack,/<img|href="javascript:/);
 assert.match(attack,/&lt;img/);
 console.log('PASS: Markdown blocks, safe links and HTML escaping');
+const diff=context.assistantEditPreview({kind:'quote_items',currency:'RUB',before_total:10005,after_total:11006,
+  rows:[{row:1,name:'<img src=x onerror=alert(1)>',field:'unit_price',before:10005,after:11006}]});
+assert.doesNotMatch(diff,/<img/);assert.match(diff,/&lt;img/);
+assert.match(diff,/100,05/);assert.match(diff,/110,06/);assert.match(diff,/Итого по смете/);
+assert.equal(context.assistantEditValue('quantity','2.5'),'2.5');
+assert.equal(context.assistantEditValue('notes',null),'—');
+const large=context.assistantEditPreview({rows:Array.from({length:8},(_,i)=>({field:'name',before:'До',after:'После '+i}))});
+assert.match(large,/<details><summary>Ещё 3 изменений/);assert.match(large,/После 7/);
+console.log('PASS: safe before/after diff, exact kopecks, long edit disclosure');

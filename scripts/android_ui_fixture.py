@@ -9,6 +9,7 @@ import tempfile
 import threading
 import urllib.request
 import uuid
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,7 +127,7 @@ def main():
                     "client": clients[index % 2]["name"],
                     "client_id": clients[index % 2]["id"],
                     "amount": amount,
-                    **({"items": [{"name": "Концепция и дизайн", "quantity": "1", "unit_price": amount}]} if index == 0 else {}),
+                    **({"items": [{"name": "Концепция и дизайн", "quantity": "1", "unit_price": amount}]} if index in (0, 2) else {}),
                     "description": "Концепция, дизайн и подготовка финальных материалов. Два этапа согласования.",
                 },
                 token,
@@ -174,6 +175,13 @@ def main():
                     },
                     token,
                 )
+        with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-not-a-real-key"), patch(
+            "backend.assistant.query_model",
+            return_value={"content": None, "tool_calls": [{"id": "fixture-bulk", "type": "function",
+                "function": {"name": "bulk_quote_items", "arguments": json.dumps({"id": quote["id"],
+                    "rows": [1], "field": "unit_price", "operation": "multiply", "value": "1.1"})}}]},
+        ):
+            call("/assistant/chat", {"text": "Увеличь цену на 10%"}, token)
         print("ANDROID_UI_FIXTURE_READY http://127.0.0.1:8084", flush=True)
         try:
             threading.Event().wait()

@@ -4,6 +4,8 @@
 
 ## Обновление 3 октября 2026
 
+- Новая итерация: массовое редактирование строк сметы ассистентом, серверный предпросмотр и безопасная отмена правок на сайте и в APK 1.7.2 (versionCode 14). Проверки и точные границы: [журнал релиза](ASSISTANT_EDITS_RELEASE_2026-10-03.md). 182 Python-теста прошли (1 пропущен); это не означает завершения всех AI-пунктов.
+
 - PASS: нативный редактор сметы поддерживает выбор расценок, дробное количество, автоматический расчёт и восстановление выбранных позиций. Валюта сохраняется вместе с черновиком; расценки другой валюты не подмешиваются к нему. Новый запрос получает ключ операции, повтор неизменённого черновика использует прежний ключ даже после ухода с экрана.
 - PASS: сервер хранит ключи создания смет в PostgreSQL/SQLite атомарно со сметой. Одновременные повторы возвращают одну запись и расходуют один слот тарифа; другой состав с тем же ключом и повтор после удаления дают 409. Неудачная валидация не занимает ключ. PostgreSQL миграция 20 применена; новая таблица защищена FORCE RLS по workspace и пользователю, без публичных grants.
 - PASS: закрыты лишние EXECUTE-права PUBLIC/anon/authenticated на служебную `public.rls_auto_enable()`; автоматический DDL event trigger сохранён. Повторный Supabase security advisor не содержит WARN/ERROR. Информационные сообщения о таблицах без RLS-политик остаются: это закрытые служебные таблицы и QA-схема, а не разрешение публичного доступа.
@@ -53,7 +55,7 @@
 
 - Remaining construction work: verify receipt OCR against real receipts and Android UI, then decide whether to add a separately persisted expense draft. The current OCR only prefills an unsaved purchase form; live free vision returned 429/502 during verification.
 - Третья очередь: точные AR-замеры, официальные нормативы и индексы, КС-2/КС-3. Не показывать эти функции как готовые без корректных источников и проверки.
-- Remaining advanced AI work: background tasks, image search and broader assistant-led bulk edits with reviewable diff/undo. File versioning is limited to the latest 10 Markdown revisions. Current assistant write tools require user confirmation.
+- Remaining advanced AI work: background tasks, image search and broader coverage of assistant-led edits. Quote row bulk edits now have server-built diff and revision-checked undo; creates and publication do not have universal undo. File versioning is limited to the latest 10 Markdown revisions. Current assistant write tools require user confirmation.
 - Список недавно выбранных расценок синхронизируется через сервер, а CSV/Excel-импорт проверяет совпадения с существующими позициями и между строками пакета. Массовая правка сметы работает в локальном черновике и записывается на сервер только при сохранении всей сметы.
 - Нативный Android проверен инструментально на эмуляторе Android 35, включая новый справочник расценок. Нужен проход на физическом устройстве, включая выбор/отмену фото, слабую сеть и восстановление экрана.
 - Внешние реальные сценарии оплаты, OAuth-провайдеров и публикации нового APK проверяются отдельно на соответствующих аккаунтах и в RuStore. Локальная сборка и API smoke не подтверждают их.

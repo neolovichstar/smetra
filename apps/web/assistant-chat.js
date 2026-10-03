@@ -65,6 +65,21 @@ window.SmetraAssistantContext=function(value){
   sessionStorage.removeItem('smetra.assistant.conversation');
 };
 
+function assistantEditValue(field,value,currency='RUB'){
+  if(value===null||value===undefined||value==='')return '—';
+  if(['amount','amount_kopecks','unit_price','price'].includes(field)){
+    try{return new Intl.NumberFormat('ru-RU',{style:'currency',currency}).format(Number(value)/100)}catch{return String(value)}
+  }
+  if(Array.isArray(value))return value.map(item=>item.name||'Позиция').join(', ');
+  if(typeof value==='object')return 'Данные записи';
+  return String(value);
+}
+function assistantEditPreview(preview){
+  const labels={unit_price:'Цена',quantity:'Количество',coefficient:'Коэффициент',markup:'Наценка, %',discount:'Скидка, %',tax:'Налог, %',unit:'Единица',category:'Категория',name:'Название',title:'Название',notes:'Заметки',description:'Описание',amount:'Сумма',items:'Позиции',phone:'Телефон',email:'Почта'};
+  const rows=(preview.rows||[]).map(row=>`<div class="assistant-diff-row"><span>${row.row?escapeHtml(row.row)+'. '+escapeHtml(row.name)+' · ':''}${escapeHtml(labels[row.field]||row.field)}</span><div><del>${escapeHtml(assistantEditValue(row.field,row.before,preview.currency))}</del><span aria-label="станет">${escapeHtml(assistantEditValue(row.field,row.after,preview.currency))}</span></div></div>`);
+  const totals=preview.kind==='quote_items'?`<div class="assistant-diff-total"><span>Итого по смете</span><div><del>${escapeHtml(assistantEditValue('amount',preview.before_total,preview.currency))}</del><strong>${escapeHtml(assistantEditValue('amount',preview.after_total,preview.currency))}</strong></div></div>`:'';
+  return `<div class="assistant-edit-diff">${rows.slice(0,5).join('')}${rows.length>5?`<details><summary>Ещё ${rows.length-5} изменений</summary>${rows.slice(5).join('')}</details>`:''}${totals}</div>`;
+}
 window.SmetraAssistant=async function(){
   const [data,threadIndex]=await Promise.all([api('/assistant'),api('/assistant/conversations')]);
   let activeConversation=sessionStorage.getItem('smetra.assistant.conversation')||'';
@@ -162,11 +177,17 @@ window.SmetraAssistant=async function(){
   const addAction=action=>{
     const item=document.createElement('section');item.className='assistant-proposal';
     const markdownEdit=action.tool==='replace_markdown_text';
-    const detail=markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
+    const detail=action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
     item.innerHTML=`<span class="overline">Предложение · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
     actions.append(item);
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.replaceChildren();const result=document.createElement('p');result.textContent='Сохранено · '+action.summary;item.append(result);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
+  };
+  const renderSavedAction=(item,action,undoable)=>{
+    item.replaceChildren();const title=document.createElement('p');title.textContent='Сохранено · '+action.summary;item.append(title);
+    if(!undoable)return;
+    const button=document.createElement('button');button.type='button';button.className='btn ghost';button.textContent='Отменить изменение';item.append(button);
+    button.onclick=async()=>{button.disabled=true;try{await api('/assistant/undo',{method:'POST',body:JSON.stringify({id:action.id})});title.textContent='Изменение отменено · '+action.summary;button.remove();notify('Предыдущие значения восстановлены')}catch(error){button.disabled=false;notify(error.message)}};
   };
   renderQuota(quota);
   if(!thread.messages.length){
@@ -175,6 +196,7 @@ window.SmetraAssistant=async function(){
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
+  (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит сообщений на этот месяц исчерпан.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
