@@ -558,21 +558,20 @@ public class MainActivity extends Activity {
                 if(selected.isEmpty()){
                     long value=cents(amount);if(value<=0)throw new IllegalArgumentException();body.put("amount",value);
                 }else{
-                    JSONArray items=new JSONArray();
+                    JSONArray items=new JSONArray(),catalogIds=new JSONArray();
                     for(JSONObject item:selected){
                         java.math.BigDecimal quantity=new java.math.BigDecimal(item.optString("quantity","1").replace(',','.'));
                         if(quantity.compareTo(new java.math.BigDecimal("0.0001"))<0||quantity.compareTo(new java.math.BigDecimal("1000000"))>0||quantity.scale()>4)throw new IllegalArgumentException();
-                        items.put(new JSONObject().put("name",item.optString("name")).put("description",item.optString("description"))
+                        catalogIds.put(item.optString("id"));items.put(new JSONObject().put("name",item.optString("name")).put("description",item.optString("description"))
                             .put("category",item.optString("category")).put("unit",item.optString("unit"))
                             .put("quantity",quantity.toPlainString()).put("unit_price",item.optLong("price"))
                             .put("cost_price",item.optLong("cost_price")));
                     }
-                    body.put("items",items);
+                    body.put("items",items).put("catalog_ids",catalogIds);
                 }
                 String currentBody=body.toString();if(!currentBody.equals(submittedBody[0])||requestKey[0].isEmpty()){submittedBody[0]=currentBody;requestKey[0]=java.util.UUID.randomUUID().toString();}
                 body.put("_request_key",requestKey[0]);saveDraft[0].run();
                 call("/quotes","POST",body,result->{
-                    for(JSONObject item:selected){try{call("/catalog/"+item.optString("id")+"/use","POST",new JSONObject().put("_request_key",java.util.UUID.randomUUID().toString()),ignored->{});}catch(Exception ignored){}}
                     Analytics.event("estimate_created",Analytics.params("source",selected.isEmpty()?"manual":"catalog"),true);
                     getPreferences(MODE_PRIVATE).edit().remove("draft").apply();home();message("Смета создана");
                 });

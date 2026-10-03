@@ -708,6 +708,10 @@ class Service:
         return 201, {"quote": quote}
 
     def create_quote(self, data):
+        catalog_ids = data.get("catalog_ids", [])
+        if not isinstance(catalog_ids, list) or len(catalog_ids) > 200:
+            raise DomainError(400, "В одной смете может быть до 200 расценок")
+        catalog_ids = list(dict.fromkeys(string(value, "Расценка", 80, True) for value in catalog_ids))
         owner = self.con.execute(
             "SELECT u.id,u.entitlement_until FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
             (self.wid,),
@@ -730,6 +734,14 @@ class Service:
         )
         self.insert("quotes", values)
         self.save_items(qid, items)
+        if catalog_ids:
+            # Mark all surviving, workspace-owned sources once, in the quote's
+            # transaction. A draft may reference a subsequently deleted item.
+            self.con.execute(
+                "UPDATE catalog_items SET last_used_at=?,usage_count=usage_count+1 "
+                "WHERE workspace_id=? AND id IN (" + ",".join("?" for _ in catalog_ids) + ")",
+                (stamp(), self.wid, *catalog_ids),
+            )
         self.con.execute(
             "INSERT INTO events VALUES(?,?,?,?)",
             (identity(), owner["id"], "quote_created", stamp()),

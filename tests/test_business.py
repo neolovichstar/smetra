@@ -801,6 +801,36 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(status, 200, replay)
         self.assertEqual(replay["quote"]["id"], first["quote"]["id"])
 
+    def test_quote_catalog_usage_is_atomic_scoped_and_not_replayed(self):
+        owner, _ = self.account("quote-usage-owner")
+        outsider, _ = self.account("quote-usage-outsider")
+        owned = [self.call("/catalog", "POST", {"name": name, "price": 10000}, owner)[1]["item"]["id"]
+                 for name in ("Работа", "Материал")]
+        foreign = self.call("/catalog", "POST", {"name": "Чужая работа", "price": 10000}, outsider)[1]["item"]["id"]
+        body = {"title": "Смета из расценок", "client": "Клиент", "amount": 10000,
+                "catalog_ids": [*owned, owned[0], foreign, "deleted-catalog-item"]}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda _: self.call("/quotes", "POST", body, owner, key="catalog-retry"), range(2)))
+        self.assertEqual(sorted(code for code, _ in results), [200, 201], results)
+        recent = self.call("/catalog?recent=1", token=owner)[1]["items"]
+        self.assertEqual({item["id"] for item in recent}, set(owned))
+        self.assertTrue(all(item["usage_count"] == 1 and item["last_used_at"] > 0 for item in recent))
+        self.assertEqual(self.call("/catalog?recent=1", token=outsider)[1]["items"], [])
+
+    def test_quote_catalog_usage_validation_leaves_no_quote_or_usage(self):
+        owner, _ = self.account("quote-usage-validation")
+        item = self.call("/catalog", "POST", {"name": "Работа", "price": 10000}, owner)[1]["item"]
+        body = {"title": "Смета", "client": "Клиент", "amount": 10000}
+        for catalog_ids in (None, "invalid", [None], [item["id"]] * 201):
+            self.assertEqual(self.call("/quotes", "POST", {**body, "catalog_ids": catalog_ids},
+                                       owner, key="validated-usage")[0], 400)
+        self.assertEqual(self.call("/quotes", token=owner)[1]["quotes"], [])
+        self.assertEqual(self.call("/catalog?recent=1", token=owner)[1]["items"], [])
+        self.assertEqual(self.call("/quotes", "POST", {**body, "catalog_ids": [item["id"]]},
+                                   owner, key="validated-usage")[0], 201)
+        self.assertEqual(self.call("/catalog?recent=1", token=owner)[1]["items"][0]["usage_count"], 1)
+
     def quote(self, token, **extra):
         data = {
             "title": "Project",
