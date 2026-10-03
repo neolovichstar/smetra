@@ -260,6 +260,17 @@ class FileProcessingTests(unittest.TestCase):
         self.work(result={"pages": [[0, "invalid"]], "truncated": False})
         self.assertEqual(self.status(owner, file)["state"], "failed")
 
+    def test_worker_diagnostics_never_log_raw_exception_content(self):
+        owner, _ = self.account("file-safe-log")
+        self.upload(owner)
+        confidential = "do-not-log-private-document-or-credentials"
+        with patch("builtins.print") as output:
+            self.work(side_effect=RuntimeError(confidential))
+        rendered = " ".join(str(call.args) for call in output.call_args_list)
+        self.assertIn("assistant_job_failed", rendered)
+        self.assertIn("RuntimeError", rendered)
+        self.assertNotIn(confidential, rendered)
+
     def test_queue_capacity_preserves_upload_and_does_not_block_unrelated_chat(self):
         owner, _ = self.account("file-capacity")
         for _ in range(10):
@@ -347,10 +358,10 @@ class ExtractorBoundsTests(unittest.TestCase):
     def test_vercel_transport_cap_includes_base64_overhead(self):
         from backend.attachments import maximum_upload
 
-        with patch.dict(os.environ,VERCEL='1',MAX_UPLOAD_BYTES='5000000'):
-            self.assertEqual(maximum_upload(),3_000_000)
-        with patch.dict(os.environ,VERCEL='0',MAX_UPLOAD_BYTES='5000000'):
-            self.assertEqual(maximum_upload(),5_000_000)
+        with patch.dict(os.environ, VERCEL="1", MAX_UPLOAD_BYTES="5000000"):
+            self.assertEqual(maximum_upload(), 3_000_000)
+        with patch.dict(os.environ, VERCEL="0", MAX_UPLOAD_BYTES="5000000"):
+            self.assertEqual(maximum_upload(), 5_000_000)
 
     def test_text_and_pdf_bounds(self):
         from backend.file_extractor import extract

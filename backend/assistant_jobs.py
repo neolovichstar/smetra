@@ -220,6 +220,10 @@ def run_one(handler, con, origin):
             service.runtime_connection.finish(True)
             service.runtime_connection = None
     except Exception as error:
+        if not isinstance(error,DomainError):
+            # Operational diagnostics only; never log prompts, file text,
+            # session hashes, connection strings or raw database exceptions.
+            print(json.dumps({'event':'assistant_job_failed','request_id':getattr(handler,'request_id',''),'kind':job['kind'],'error_type':type(error).__name__,'sqlstate':getattr(error,'sqlstate','')}),flush=True)
         if service.runtime_connection:
             service.runtime_connection.finish(False)
             service.runtime_connection = None
