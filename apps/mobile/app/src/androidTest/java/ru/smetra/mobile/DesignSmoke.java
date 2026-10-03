@@ -24,7 +24,8 @@ public class DesignSmoke extends Instrumentation {
     private boolean jobsOnly;
     private boolean attachmentsOnly;
     private boolean receiptsOnly;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));start();}
+    private boolean scansOnly;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -32,6 +33,13 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if(scansOnly){
+                click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай скан");pickFixture("scan.pdf");waitText("Прикрепить к диалогу");click("Прикрепить к диалогу");waitText("Распознать скан");
+                require(editors().get(0).getText().toString().equals("Прочитай скан"),"Scan preparation preserves draft");require(!findPrefix("Отправить").isEnabled(),"Unread scan cannot spend chat quota");click("Распознать скан");
+                click("Сегодня");waitPrefix("Все · ");click("Ещё");click("Ассистент");waitText("Текст получен OCR. Проверьте суммы по оригиналу.");waitEnabledPrefix("Отправить");
+                require(editors().get(0).getText().toString().equals("Прочитай скан"),"OCR navigation preserves draft");waitText("OCR: 1 из 3 в месяц · первые 2 страницы");shot("23-scan-ocr-ready");clickPrefix("Отправить");waitText("Контекст файла получен.");
+                result.putString("stream","PASS: native scanned PDF attachment, blocked unread input, background OCR, navigation, preserved draft, OCR quota/provenance and streamed file context\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(receiptsOnly){
                 click("Ещё");click("Объекты и замеры");waitText("Проверка чека");click("Проверка чека");waitPrefix("2026-10-01 · ");clickPrefix("2026-10-01 · ");waitText("Распознать фото чека");click("Распознать фото чека");
                 click("Ещё");click("Объекты и замеры");waitText("Проверка чека");click("Проверка чека");waitPrefix("2026-10-01 · ");clickPrefix("2026-10-01 · ");waitText("Проверить данные чека");waitText("1 из 3 чеков в месяц");shot("21-receipt-draft");

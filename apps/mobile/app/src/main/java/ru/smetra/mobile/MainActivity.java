@@ -342,14 +342,17 @@ public class MainActivity extends Activity {
             if(version!=pageVersion)return;
             JSONObject info=result.optJSONObject("processing"),file=result.optJSONObject("file");if(info==null||file==null)return;
             String state=info.optString("state");boolean active=state.equals("queued")||state.equals("running")||state.equals("retry");
-            assistantFileBlocked=active||state.equals("failed")||state.equals("deferred")||state.equals("cancelled")||file.optLong("size")>2000000&&!state.equals("ready");
+            assistantFileBlocked=active||state.equals("failed")||state.equals("deferred")||state.equals("cancelled")||state.equals("needs_ocr")||file.optLong("size")>2000000&&!state.equals("ready");
             send.setEnabled(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked&&!assistantStreaming);host.removeAllViews();
             String label=state.equals("ready")?"Текст готов · "+info.optInt("pages")+" стр."+(info.optBoolean("truncated")?" · подготовлена часть текста":""):state.equals("needs_ocr")?"В PDF нет текста. Для скана нужен OCR.":state.equals("failed")?info.optString("error","Не удалось подготовить документ"):state.equals("cancelled")?"Подготовка отменена":active?"Подготавливаю текст документа…":"Подготовьте документ перед вопросом";
             ui.space(host,8);host.addView(ui.label(label,11,MUTED,false));
-            if(info.optBoolean("supported")&&(active&&info.optBoolean("can_cancel")||state.equals("failed")||state.equals("cancelled")||state.equals("deferred")||state.equals("legacy"))){
-                Button action=addButton(host,active?"Отменить подготовку":state.equals("failed")?"Повторить":"Подготовить документ",false,v->{
-                    try{JSONObject body=active?null:new JSONObject().put("_request_key",java.util.UUID.randomUUID().toString());call("/files/"+id+"/processing",active?"DELETE":"POST",body,r->loadFilePreparation(host,send,id,version));}catch(Exception error){message(error.getMessage());}
-                });action.setEnabled(!info.optBoolean("cancel_requested"));
+            boolean ocr=info.optBoolean("ocr_supported");JSONObject ocrQuota=info.optJSONObject("ocr_quota");
+            if(ocrQuota!=null)host.addView(ui.label("OCR: "+ocrQuota.optInt("used")+" из "+ocrQuota.optInt("limit")+" в месяц · первые 2 страницы",11,MUTED,false));
+            if(state.equals("ready")&&info.optString("method").equals("ocr"))host.addView(ui.label("Текст получен OCR. Проверьте суммы по оригиналу.",11,MUTED,false));
+            if(info.optBoolean("supported")&&(active&&info.optBoolean("can_cancel")||state.equals("failed")||state.equals("cancelled")||state.equals("deferred")||state.equals("legacy")||state.equals("needs_ocr"))){
+                Button action=addButton(host,active?"Отменить подготовку":ocr?"Распознать скан":state.equals("failed")?"Повторить":"Подготовить документ",false,v->{
+                    try{JSONObject body=active?null:new JSONObject().put("_request_key",java.util.UUID.randomUUID().toString());call("/files/"+id+(ocr?"/ocr":"/processing"),active?"DELETE":"POST",body,r->loadFilePreparation(host,send,id,version));}catch(Exception error){message(error.getMessage());}
+                });action.setEnabled(!info.optBoolean("cancel_requested")&&(active||ocrQuota==null||ocrQuota.optInt("used")<ocrQuota.optInt("limit")));
             }
             if(active)host.postDelayed(()->loadFilePreparation(host,send,id,version),hasWindowFocus()?4000:15000);
         });
@@ -458,7 +461,7 @@ public class MainActivity extends Activity {
                 ui.space(host,16);TextView title=ui.label(job.optString("prompt"),14,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);host.addView(title);ui.space(host,5);
                 host.addView(ui.label(job.optString("error").isEmpty()?job.optString("progress"):job.optString("error"),12,MUTED,false));
                 if(running){Button cancel=addButton(host,job.optBoolean("cancel_requested")?"Отменяю…":"Отменить",false,v->call("/assistant/jobs/"+id,"DELETE",null,r->loadAssistantJobs(host,refresh,version)));cancel.setEnabled(!job.optBoolean("cancel_requested"));}
-                else if(status.equals("completed"))addButton(host,job.optString("kind").equals("file_index")?"Открыть документ":"Открыть ответ",false,v->{if(job.optString("kind").equals("file_index")){askAssistant("files",job.optString("file_id"),job.optString("prompt"));return;}String thread=job.optString("conversation_id");if(thread.isEmpty()){selectAssistantThread(null);}else call("/assistant/conversations/"+thread,"GET",null,r->selectAssistantThread(r.optJSONObject("conversation")));});
+                else if(status.equals("completed"))addButton(host,(job.optString("kind").equals("file_index")||job.optString("kind").equals("file_ocr"))?"Открыть документ":"Открыть ответ",false,v->{if((job.optString("kind").equals("file_index")||job.optString("kind").equals("file_ocr"))){askAssistant("files",job.optString("file_id"),job.optString("prompt"));return;}String thread=job.optString("conversation_id");if(thread.isEmpty()){selectAssistantThread(null);}else call("/assistant/conversations/"+thread,"GET",null,r->selectAssistantThread(r.optJSONObject("conversation")));});
                 ui.space(host,12);ui.divider(host);
             }
             if(active)host.postDelayed(()->{if(version==pageVersion&&!isFinishing()&&hasWindowFocus())loadAssistantJobs(host,refresh,version);},5000);

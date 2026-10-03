@@ -292,7 +292,7 @@ def migrate(con):
         (Path(__file__).parent / "migrations" / "018_creation_requests.sql").read_text(encoding="utf-8")
     )
     for table, additions in {
-        "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0"},
+        "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'"},
         "assistant_jobs": {"kind": "TEXT NOT NULL DEFAULT 'chat'", "file_id": "TEXT REFERENCES files(id) ON DELETE CASCADE", "source_sha256": "TEXT NOT NULL DEFAULT ''"},
     }.items():
         present = {row["name"] for row in con.execute("PRAGMA table_info("+table+")")}
@@ -397,6 +397,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(23,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(24,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(25,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,?)", (stamp(),))
 
 
 ENTITIES = {

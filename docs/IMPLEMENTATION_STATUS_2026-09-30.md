@@ -79,9 +79,14 @@ Android 1.7.6 и веб-чат: повтор при потере ответа н
 
 - Receipt OCR now has persisted background drafts, cancellation/retry and explicit review in web/native Android 1.7.8; see RECEIPT_JOBS_RELEASE_2026-10-04.md. The real free vision model passed a synthetic multi-item receipt. Accuracy against real Russian receipts and physical devices still needs verification. Purchase writes remain manual after review.
 - Третья очередь: точные AR-замеры, официальные нормативы и индексы, КС-2/КС-3. Не показывать эти функции как готовые без корректных источников и проверки.
-- Remaining advanced AI work: scan-PDF OCR and background import pipelines, image search and broader coverage of assistant-led edits. Background text indexing is implemented in 1.7.7 (bounded PDF/TXT/MD preparation, status, cancel/retry); see FILE_PROCESSING_RELEASE_2026-10-03.md for verification and limits. Persisted assistant chat jobs are implemented. Quote row bulk edits have server-built diff and revision-checked undo; creates and publication do not have universal undo. File versioning is limited to the latest 10 Markdown revisions. Current assistant write tools require user confirmation.
+- Remaining advanced AI work: OCR beyond the first two pages, mixed PDF handling, background import pipelines, image search and broader coverage of assistant-led edits. Background text indexing is implemented in 1.7.7 (bounded PDF/TXT/MD preparation, status, cancel/retry); see FILE_PROCESSING_RELEASE_2026-10-03.md for verification and limits. Persisted assistant chat jobs are implemented. Quote row bulk edits have server-built diff and revision-checked undo; creates and publication do not have universal undo. File versioning is limited to the latest 10 Markdown revisions. Current assistant write tools require user confirmation.
 - Список недавно выбранных расценок синхронизируется через сервер, а CSV/Excel-импорт проверяет совпадения с существующими позициями и между строками пакета. Массовая правка сметы работает в локальном черновике и записывается на сервер только при сохранении всей сметы.
 - Нативный Android проверен инструментально на эмуляторе Android 35, включая новый справочник расценок. Нужен проход на физическом устройстве, включая выбор/отмену фото, слабую сеть и восстановление экрана.
 - Внешние реальные сценарии оплаты, OAuth-провайдеров и публикации нового APK проверяются отдельно на соответствующих аккаунтах и в RuStore. Локальная сборка и API smoke не подтверждают их.
 
 Нельзя маркировать все предыдущие ТЗ как `PASS`, пока эти пункты не закрыты и не проверены.
+
+
+## Scan OCR / Android 1.7.9 (2026-10-04)
+
+Scanned PDFs can be recognized explicitly in the background, using a bounded private index (first two pages), a separate monthly quota, cancellation/retry and OCR provenance. Web question drafts persist across navigation/reload and are isolated by account, workspace and thread/context. Native Android and the real production scheduler/render/model/index pipeline passed. See SCAN_OCR_RELEASE_2026-10-04.md for evidence and remaining limitations.

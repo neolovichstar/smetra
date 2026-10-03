@@ -129,8 +129,14 @@ window.SmetraAssistant=async function(){
     else sessionStorage.removeItem('smetra.assistant.context');
   };
   renderContext();
+  const draftUser=user.id;
+  const draftSlot=()=>`smetra.assistant.draft:${draftUser}:${currentWorkspace}:${activeConversation|| (context?context.entity+':'+context.id:'global')}`;
+  const saveDraft=()=>{try{if(input.value)sessionStorage.setItem(draftSlot(),input.value.slice(0,3000));else sessionStorage.removeItem(draftSlot())}catch{}};
+  const clearSentDraft=prompt=>{try{if((sessionStorage.getItem(draftSlot())||'').trim()===prompt)sessionStorage.removeItem(draftSlot())}catch{}};
+  try{input.value=sessionStorage.getItem(draftSlot())||''}catch{}
   try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
-  document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();refreshFile();input.focus()}catch(error){notify(error.message)}};
+  saveDraft();
+  document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
   attachButton.onclick=()=>fileInput.click();
@@ -150,7 +156,7 @@ window.SmetraAssistant=async function(){
       const result=await api('/files',{method:'POST',headers:{'Idempotency-Key':pending.key},body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
       const attached={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
-      context=attached;sessionStorage.removeItem(retrySlot);
+      context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();refreshFile();refreshJobs();
       status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
@@ -227,10 +233,10 @@ window.SmetraAssistant=async function(){
         title.textContent=job.prompt;detail.textContent=job.error||job.progress||labels[job.status];description.append(title,detail);row.append(description);
         const active=['queued','running','retry'].includes(job.status);
         if(active||job.status==='completed'){
-          const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':job.kind==='file_index'?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
+          const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':['file_index','file_ocr'].includes(job.kind)?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
           button.onclick=async()=>{button.disabled=true;try{
             if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});renderQuota(cancelled.quota);refreshJobs();refreshFile()}
-            else if(job.kind==='file_index'){window.SmetraAssistantContext({entity:'files',id:job.file_id,workspace_id:currentWorkspace,label:job.prompt.replace(/^Подготовка · /,'')});window.SmetraAssistant()}
+            else if(['file_index','file_ocr'].includes(job.kind)){window.SmetraAssistantContext({entity:'files',id:job.file_id,workspace_id:currentWorkspace,label:job.prompt.replace(/^(Подготовка|Распознавание) · /,'')});window.SmetraAssistant()}
             else{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',job.conversation_id||'');window.SmetraAssistant()}
           }catch(error){button.disabled=false;notify(error.message)}};row.append(button);
         }
@@ -244,7 +250,7 @@ window.SmetraAssistant=async function(){
     const body=JSON.stringify({text,context:context?{entity:context.entity,id:context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})});
     if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
     working=true;backgroundButton.disabled=true;renderQuota(quota);
-    try{const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});renderQuota(result.quota);input.value='';resize();jobRequest=null;status.textContent='Задача сохранена. Можно закрыть экран.';refreshJobs()}
+    try{const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});renderQuota(result.quota);input.value='';clearSentDraft(text);resize();jobRequest=null;status.textContent='Задача сохранена. Можно закрыть экран.';refreshJobs()}
     catch(error){notify(error.message)}finally{working=false;backgroundButton.disabled=false;renderQuota(quota)}
   };
   refreshJobs();
@@ -258,12 +264,13 @@ window.SmetraAssistant=async function(){
       const result=await api('/files/'+encodeURIComponent(id)+'/metadata');
       if(!fileStatus.isConnected||sequence!==filePollSeq||context?.id!==id)return;
       const info=result.processing,active=['queued','running','retry'].includes(info.state);
-      fileBlocking=active||['failed','deferred','cancelled'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
+      fileBlocking=active||['failed','deferred','cancelled','needs_ocr'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
       const labels={queued:'Документ в очереди',running:'Подготавливаю текст…',retry:'Повторю подготовку позже',ready:'Текст готов',needs_ocr:'В PDF нет текста. Для скана нужен OCR.',failed:info.error||'Не удалось подготовить документ',cancelled:'Подготовка отменена',deferred:'Подготовьте документ перед вопросом',legacy:'Документ ещё не подготовлен'};
-      const label=document.createElement('span');label.textContent=(labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':''):'');fileStatus.append(label);
-      if(info.supported&&(active&&info.can_cancel||['failed','cancelled','deferred','legacy'].includes(info.state))){
-        const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent=active?'Отменить подготовку':info.state==='failed'?'Повторить':'Подготовить документ';button.disabled=!!info.cancel_requested;
-        button.onclick=async()=>{button.disabled=true;try{await api('/files/'+encodeURIComponent(id)+'/processing',{method:active?'DELETE':'POST',...(active?{}:{headers:{'Idempotency-Key':crypto.randomUUID()}})});refreshFile();refreshJobs()}catch(error){button.disabled=false;notify(error.message)}};fileStatus.append(button);
+      const label=document.createElement('span');label.textContent=(labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
+      if(info.ocr_supported){const budget=document.createElement('span');budget.textContent=`OCR: ${info.ocr_quota.used} из ${info.ocr_quota.limit} в месяц · первые ${info.ocr_page_limit} страницы`;fileStatus.append(budget)}
+      if(info.supported&&(active&&info.can_cancel||['failed','cancelled','deferred','legacy','needs_ocr'].includes(info.state))){
+        const ocr=info.ocr_supported;const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent=active?'Отменить подготовку':ocr?'Распознать скан':info.state==='failed'?'Повторить':'Подготовить документ';button.disabled=!!info.cancel_requested||!active&&ocr&&info.ocr_quota.used>=info.ocr_quota.limit;
+        button.onclick=async()=>{button.disabled=true;try{await api('/files/'+encodeURIComponent(id)+'/'+(ocr?'ocr':'processing'),{method:active?'DELETE':'POST',...(active?{}:{headers:{'Idempotency-Key':crypto.randomUUID()}})});refreshFile();refreshJobs()}catch(error){button.disabled=false;notify(error.message)}};fileStatus.append(button);
       }
       renderQuota(quota);
       if(active)filePollTimer=setTimeout(refreshFile,document.hidden?15000:4000);
@@ -272,7 +279,7 @@ window.SmetraAssistant=async function(){
   refreshFile();
   if(!thread.messages.length){
     messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line"></span><h2>Что сделаем сегодня?</h2><p>Спросите о сметах и заказах или поручите подготовить изменение. Сохранение всегда остаётся за вами.</p><div class="assistant-suggestions"><button type="button" data-prompt="Какие сметы ожидают согласования?">Что ждёт согласования?</button><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали.">Составить смету</button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">Разобраться в оплатах</button></div></div>';
-    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;input.focus();resize()});
+    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize()});
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
@@ -280,7 +287,7 @@ window.SmetraAssistant=async function(){
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит сообщений на этот месяц исчерпан.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
-  input.addEventListener('input',resize);
+  input.addEventListener('input',()=>{resize();saveDraft()});resize();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
     event.preventDefault();const prompt=input.value.trim();if(!prompt||working||fileBlocking||quota.remaining<1)return;
@@ -310,7 +317,7 @@ window.SmetraAssistant=async function(){
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
       if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.');
-      assistantMessage.item.classList.remove('streaming');input.value='';resize();
+      assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);resize();
     }catch(error){
       if(error.name==='AbortError'){assistantMessage.item.classList.remove('streaming');if(!generated){assistantMessage.item.remove();userMessage.item.remove()}status.textContent='Ответ остановлен.'}
       else{userMessage.item.remove();assistantMessage.item.remove();status.textContent=error.message}

@@ -228,6 +228,13 @@ def main():
             return {'merchant': 'Тестовый магазин', 'amount_kopecks': 123450, 'date': '2026-10-03'}
 
         receipt_ocr._request = receipt_fixture
+        from backend import file_ocr
+
+        def scan_fixture(_image):
+            time.sleep(2)
+            return 'SMETRA SCAN TEST. PAINT WALLS 12 m2. TOTAL 1234.50 RUB.'
+
+        file_ocr.request_page = scan_fixture
 
         def background_fixture():
             # A separate HTTP invocation models the production scheduler.

@@ -15,13 +15,13 @@ def state(service, row):
     status = row["index_status"] if row["index_hash"] == row["sha256"] else "legacy"
     job = (
         service.con.execute(
-            "SELECT id,status,cancel_requested FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='file_index' AND file_id=? AND source_sha256=? ORDER BY CASE WHEN status IN ('queued','running','retry') THEN 0 WHEN status='completed' THEN 1 ELSE 2 END,created_at DESC,id DESC LIMIT 1",
+            "SELECT id,status,cancel_requested FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind IN ('file_index','file_ocr') AND file_id=? AND source_sha256=? ORDER BY CASE WHEN status IN ('queued','running','retry') THEN 0 WHEN status='completed' THEN 1 ELSE 2 END,created_at DESC,id DESC LIMIT 1",
             (service.wid, service.user["id"], row["id"], row["sha256"]),
         ).fetchone()
         if service.user
         else None
     )
-    return {
+    info = {
         "state": status,
         "error": row["index_error"] if status == "failed" else "",
         "job_id": job["id"] if job else None,
@@ -31,7 +31,14 @@ def state(service, row):
         "pages": row["index_pages"],
         "truncated": bool(row["index_truncated"]),
         "supported": row["mime"] in ("text/plain", "application/pdf"),
+        "method": row['index_method'],
+        "ocr_supported": row['mime'] == 'application/pdf' and (status == 'needs_ocr' or row['index_method'] == 'ocr'),
     }
+    if info['ocr_supported'] and service.user:
+        from backend.file_ocr import quota
+        info['ocr_quota'] = quota(service)[1]
+        info['ocr_page_limit'] = 2
+    return info
 
 
 def enqueue(service, row, key=None):
@@ -106,7 +113,7 @@ def ensure_ready(service, context):
             409, "Документ ещё готовится. Дождитесь завершения — сообщение не потрачено"
         )
     if (
-        row["index_status"] == "failed"
+        row["index_status"] in ('failed', 'needs_ocr')
         or row["size"] > 2_000_000
         and not (row["index_status"] == "ready" and row["index_hash"] == row["sha256"])
     ):
@@ -114,7 +121,7 @@ def ensure_ready(service, context):
 
 
 def terminal(con, job, status, error=""):
-    if job["kind"] == "file_index":
+    if job["kind"] in ('file_index', 'file_ocr'):
         con.execute(
             "UPDATE files SET index_status=?,index_error=? WHERE id=? AND workspace_id=? AND sha256=? AND index_status IN ('queued','running','retry') AND NOT EXISTS (SELECT 1 FROM assistant_jobs j WHERE j.file_id=files.id AND j.source_sha256=files.sha256 AND j.id<>? AND j.status IN ('queued','running','retry'))",
             (
@@ -146,7 +153,7 @@ def isolated_extract(raw, mime):
         timeout=25,
         env=environment,
     )
-    if result.returncode or len(result.stdout) > 800_000:
+    if result.returncode or len(result.stdout) > (4_100_000 if mime == 'render-pdf' else 800_000):
         raise ValueError("extractor")
     return json.loads(result.stdout)
 
@@ -220,7 +227,7 @@ def process(service, job, complete, progress, validate):
                     ),
                 )
         service.con.execute(
-            "UPDATE files SET index_status=?,index_hash=sha256,index_error='',index_truncated=?,index_pages=? WHERE id=? AND workspace_id=?",
+            "UPDATE files SET index_status=?,index_hash=sha256,index_error='',index_method='text',index_truncated=?,index_pages=? WHERE id=? AND workspace_id=?",
             (
                 "ready" if any(text.strip() for _, text in pages) else "needs_ocr",
                 int(bool(extracted["truncated"])),
@@ -233,7 +240,7 @@ def process(service, job, complete, progress, validate):
 
 def cancel(service, row):
     job = service.con.execute(
-        "SELECT * FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='file_index' AND file_id=? AND source_sha256=? AND status IN ('queued','running','retry') ORDER BY created_at DESC,id DESC LIMIT 1",
+        "SELECT * FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind IN ('file_index','file_ocr') AND file_id=? AND source_sha256=? AND status IN ('queued','running','retry') ORDER BY created_at DESC,id DESC LIMIT 1",
         (service.wid, service.user["id"], row["id"], row["sha256"]),
     ).fetchone()
     if job:
@@ -248,4 +255,6 @@ def cancel(service, row):
                 (stamp(), job["id"]),
             )
             terminal(service.con, job, "cancelled")
+            from backend.assistant_jobs import refund
+            refund(service.con, job)
     return state(service, service.get("files", row["id"]))

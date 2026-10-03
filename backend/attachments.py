@@ -74,6 +74,9 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == 'ocr':
+        from backend.file_ocr import route as ocr_route
+        return ocr_route(service, method, service.get('files', parts[0]))
     if len(parts)==2 and parts[1]=='processing':
         from backend import file_processing
 
@@ -205,7 +208,7 @@ def _route(service, method, parts, query, data):
     if method == "DELETE" and parts:
         row = service.get("files", parts[0])
         from backend.assistant_jobs import refund
-        pending = service.con.execute("SELECT * FROM assistant_jobs WHERE file_id=? AND workspace_id=? AND user_id=? AND kind='receipt_ocr' AND status IN ('queued','running','retry')", (row['id'], service.wid, service.user['id'])).fetchall()
+        pending = service.con.execute("SELECT * FROM assistant_jobs WHERE file_id=? AND workspace_id=? AND user_id=? AND kind IN ('receipt_ocr','file_ocr') AND status IN ('queued','running','retry')", (row['id'], service.wid, service.user['id'])).fetchall()
         for job in pending:
             refund(service.con, job)
         service.con.execute(

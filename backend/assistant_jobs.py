@@ -184,7 +184,7 @@ def run_one(handler, con, origin):
         from backend.redis_infra import RedisUnavailable, acquire_lock
 
         try:
-            lease = acquire_lock('receipt-ocr' if job['kind']=='receipt_ocr' else 'file-processing' if job['kind']=='file_index' else 'assistant', user['id'], ttl=120)
+            lease = acquire_lock('receipt-ocr' if job['kind']=='receipt_ocr' else 'file-processing' if job['kind'] in ('file_index','file_ocr') else 'assistant', user['id'], ttl=120)
         except RedisUnavailable:
             raise DomainError(503, 'Ассистент временно недоступен') from None
         if lease is None:
@@ -213,6 +213,9 @@ def run_one(handler, con, origin):
 
         if job['kind']=='file_index':
             file_processing.process(service,job,complete,progress,validate)
+        elif job['kind']=='file_ocr':
+            from backend.file_ocr import process
+            process(service,job,complete,progress,validate)
         elif job['kind']=='receipt_ocr':
             from backend.receipt_ocr import process
             process(service,job,complete,progress,validate)

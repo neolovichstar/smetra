@@ -3,6 +3,46 @@
 import io
 import json
 import sys
+import base64
+import math
+
+
+def render_scans(content):
+    """Render bounded page images in the credential-free subprocess."""
+    validate_pdf(content)
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(content)
+    try:
+        total = len(document)
+        if not 1 <= total <= 100:
+            raise ValueError('pages')
+        pages = []
+        for number in range(min(2, total)):
+            page = document[number]
+            try:
+                width, height = page.get_size()
+                if not all(math.isfinite(value) and 1 <= value <= 10000 for value in (width, height)):
+                    raise ValueError('dimensions')
+                bitmap = page.render(scale=1600 / max(width, height))
+                try:
+                    image = bitmap.to_pil().convert('RGB')
+                    try:
+                        output = io.BytesIO()
+                        image.save(output, format='JPEG', quality=82, optimize=True)
+                        raw = output.getvalue()
+                        if len(raw) > 1_500_000:
+                            raise ValueError('image size')
+                        pages.append([number + 1, base64.b64encode(raw).decode()])
+                    finally:
+                        image.close()
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+        return {'pages': pages, 'truncated': total > 2, 'total_pages': total}
+    finally:
+        document.close()
 
 
 def validate_pdf(content):
@@ -84,6 +124,11 @@ def main():
     except ImportError:
         pass  # Windows QA: parent still enforces input/output/time bounds.
     content = sys.stdin.buffer.read(5_000_001)
+    if sys.argv[1] == 'render-pdf':
+        if not 0 < len(content) <= 5_000_000:
+            raise ValueError('size')
+        sys.stdout.buffer.write(json.dumps(render_scans(content)).encode())
+        return
     if sys.argv[1] == "validate-pdf":
         if not 0 < len(content) <= 5_000_000:
             raise ValueError("size")
