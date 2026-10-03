@@ -25,6 +25,7 @@ def main():
             PUBLIC_ORIGIN="http://localhost:8084",
             PORT="8084",
             OPENROUTER_API_KEY="fixture-not-a-real-key",
+            ASSISTANT_WORKER_SECRET="isolated-fixture-worker-secret-0123456789",
         )
         os.environ.pop("SMTP_HOST", None)
         spec = importlib.util.spec_from_file_location(
@@ -196,6 +197,21 @@ def main():
         from backend import assistant
 
         assistant.query_model_stream = stream_fixture
+        assistant.query_model = lambda messages: {"content": "Фоновая задача завершена."}
+
+        def background_fixture():
+            # A separate HTTP invocation models the production scheduler.
+            while True:
+                threading.Event().wait(2)
+                try:
+                    request = urllib.request.Request('http://127.0.0.1:8084/api/cron/assistant',
+                        headers={'Authorization': 'Bearer ' + os.environ['ASSISTANT_WORKER_SECRET']})
+                    with urllib.request.urlopen(request, timeout=10) as response:
+                        response.read()
+                except OSError:
+                    pass
+
+        threading.Thread(target=background_fixture, daemon=True).start()
         file = call('/files', {'assistant_upload': True, 'name': 'brief.txt',
                     'content': base64.b64encode(b'file context').decode()}, token)['file']
         call('/assistant/conversations', {'title': 'Бриф проекта', 'context_entity': 'files', 'context_id': file['id']}, token)

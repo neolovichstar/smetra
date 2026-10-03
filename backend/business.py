@@ -285,6 +285,9 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "017_assistant_jobs.sql").read_text(encoding="utf-8")
+    )
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -378,6 +381,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(18,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(19,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(20,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(21,?)", (stamp(),))
 
 
 ENTITIES = {

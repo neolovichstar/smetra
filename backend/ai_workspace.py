@@ -123,6 +123,12 @@ def _conversations(service, method, parts, data):
         return 200, {"conversation": dict(updated)}
     if method == "DELETE":
         with transaction(service.con):
+            active = service.con.execute(
+                "SELECT id FROM assistant_jobs WHERE conversation_id=? AND workspace_id=? AND user_id=? AND status IN ('queued','running','retry') LIMIT 1",
+                (row["id"], service.wid, service.user["id"]),
+            ).fetchone()
+            if active:
+                raise DomainError(409, "Сначала отмените фоновую задачу этого диалога")
             service.con.execute(
                 "DELETE FROM assistant_messages WHERE conversation_id=? AND workspace_id=? AND user_id=?",
                 (row["id"], service.wid, service.user["id"]),

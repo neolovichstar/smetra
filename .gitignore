@@ -18,3 +18,4 @@ local.properties
 .ruff_cache/
 dist/
 node_modules/
+supabase/.temp/

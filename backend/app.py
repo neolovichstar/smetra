@@ -82,7 +82,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=20"
+                "SELECT version FROM schema_migrations WHERE version=21"
             ).fetchone()
             if not version:
                 raise RuntimeError(
@@ -400,8 +400,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "support", "mobile"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "support", "mobile", "cron"}:
                     raise ApiError(404, "Не найдено")
+                if root == "cron":
+                    if path != "/api/cron/assistant" or method != "GET":
+                        raise ApiError(404, "Не найдено")
+                    from backend.assistant_jobs import authenticate
+
+                    authenticate(self)
                 if root == "webhooks" and path != "/api/webhooks/yookassa":
                     raise ApiError(404, "Не найдено")
                 if root == "mobile" and path != "/api/mobile/presentation":
@@ -542,6 +548,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def api(self, method, path, query, con):
+        if path == "/api/cron/assistant" and method == "GET":
+            from backend.assistant_jobs import run_one
+
+            return self.send_json(200, run_one(self, con, ORIGIN))
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")

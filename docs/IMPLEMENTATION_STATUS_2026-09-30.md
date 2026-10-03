@@ -53,6 +53,18 @@
 - Local verification: 145 tests passed (1 skipped); web build contains 57 files. Earlier smoke covered Markdown, defects, daily logs, procurement, file access and QA account cleanup. PostgreSQL schema 15 is current.
 - Подписанный `dist/smetra-mobile-1.7.1-release.apk`: `ru.smetra.mobile`, versionCode 13. `lintRelease`, `assembleRelease`, пакет и сертификат проверены; установка поверх подписанной версии 1.7.0 прошла на эмуляторе. Новая сборка в RuStore не загружалась.
 
+## Дополнение 2026-10-03: очередь ассистента и APK 1.7.4
+
+- Web и нативный Android: фоновое выполнение, статусы, отмена, открытие ответа в
+  исходном диалоге после ухода с экрана. Общая месячная квота, атомарная
+  идемпотентность, повторная проверка доступа, до трёх попыток и защита от
+  дублирующихся результатов. Изменения по-прежнему требуют подтверждения.
+- Очередь и планировщик включены в production. Реальная цепочка Supabase cron →
+  Vercel → бесплатная модель → сохранённый ответ прошла с первой попытки.
+- Подписанный APK 1.7.4/versionCode 16 собран, обновление поверх 1.7.3 проверено.
+  В RuStore эта версия ещё не загружена. Подробности и границы реализации:
+  [ASSISTANT_JOBS_RELEASE_2026-10-03.md](ASSISTANT_JOBS_RELEASE_2026-10-03.md).
+
 ## Не считать выполненным без дальнейшей работы
 
 - Remaining construction work: verify receipt OCR against real receipts and Android UI, then decide whether to add a separately persisted expense draft. The current OCR only prefills an unsaved purchase form; live free vision returned 429/502 during verification.

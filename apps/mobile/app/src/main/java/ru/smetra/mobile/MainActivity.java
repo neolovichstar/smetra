@@ -274,6 +274,7 @@ public class MainActivity extends Activity {
         ui.space(content,12);LinearLayout toolbar=ui.row();content.addView(toolbar,ui.match());
         Button dialogs=addButton(toolbar,"Диалоги",false,v->assistantThreads());dialogs.setLayoutParams(new LinearLayout.LayoutParams(0,dp(54),1));
         if(thread!=null){ui.gap(toolbar,8);Button settings=addButton(toolbar,"Настройки",false,v->assistantThreadEdit(thread));settings.setLayoutParams(new LinearLayout.LayoutParams(0,dp(54),1));}
+        addButton(content,"Фоновые задачи",false,v->assistantJobs());
         ui.space(content,8);content.addView(ui.label(thread==null?"Общий диалог":thread.optString("title"),13,INK,true));
         if(assistantContext!=null){LinearLayout contextBar=ui.card(content);TextView contextLabel=ui.label("Контекст · "+assistantEntity(assistantContext.optString("entity")),12,BLUE,false);contextBar.addView(contextLabel);
             String entity=assistantContext.optString("entity"),id=assistantContext.optString("id");
@@ -283,6 +284,19 @@ public class MainActivity extends Activity {
         ui.space(content,12);ui.divider(content);LinearLayout messages=ui.column();content.addView(messages);loading(messages);
         EditText prompt=field("Ваше сообщение",1);prompt.setHint("Спросите или поручите задачу…");prompt.setMaxLines(5);prompt.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});
         ui.space(content,8);Button send=button("Отправить ↗",true,v->{String value=prompt.getText().toString().trim();if(value.isEmpty()){prompt.setError("Напишите задачу");return;}streamAssistant(value,messages,prompt,allowance,(Button)v);});send.setEnabled(false);
+        Button background=button("Выполнить в фоне",false,v->{
+            if(!send.isEnabled()){message("Дождитесь ответа или проверьте лимит сообщений.");return;}
+            String value=prompt.getText().toString().trim();if(value.isEmpty()){prompt.setError("Напишите задачу");return;}
+            try{JSONObject body=new JSONObject().put("text",value).put("context",assistantContext==null?JSONObject.NULL:assistantContext);
+                if(!assistantConversation.isEmpty())body.put("conversation_id",assistantConversation);
+                String submitted=body.toString(),key=getPreferences(MODE_PRIVATE).getString("assistant_job_key","");
+                if(key.isEmpty()||!submitted.equals(getPreferences(MODE_PRIVATE).getString("assistant_job_body","")))key=java.util.UUID.randomUUID().toString();
+                getPreferences(MODE_PRIVATE).edit().putString("assistant_job_key",key).putString("assistant_job_body",submitted).apply();
+                body.put("_request_key",key);
+                call("/assistant/jobs","POST",body,result->{getPreferences(MODE_PRIVATE).edit().remove("assistant_job_key").remove("assistant_job_body").apply();prompt.setText("");assistantJobs();message("Задача сохранена. Можно закрыть приложение.");});
+            }catch(Exception error){message(error.getMessage());}
+        });background.setVisibility(View.GONE);
+        call("/assistant/jobs","GET",null,result->{if(result.optBoolean("enabled"))background.setVisibility(View.VISIBLE);});
         ui.space(content,8);TextView status=ui.label("Изменения применяются после вашего подтверждения.",10,MUTED,false);content.addView(status);
         String historyPath=assistantConversation.isEmpty()?"/assistant":"/assistant/conversations/"+assistantConversation;
         call(historyPath,"GET",null,r->{messages.removeAllViews();JSONArray history=r.optJSONArray("messages");
@@ -294,6 +308,30 @@ public class MainActivity extends Activity {
         if(thread!=null)call("/assistant","GET",null,result->assistantState(messages,allowance,send,status,result));
     }
     private void assistantState(LinearLayout messages,TextView allowance,Button send,TextView status,JSONObject result){JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));JSONArray recent=result.optJSONArray("recent_actions");if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));applyAssistantQuota(result.optJSONObject("quota"),allowance,send);if(!result.optBoolean("available")){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}}
+    private void assistantJobs(){
+        parentPage="assistant";page("Фоновые задачи","assistant-jobs",true);
+        content.addView(ui.label("Задачи ассистента",25,INK,true));
+        text("Работа продолжается после закрытия приложения.");
+        Button refresh=button("Обновить",false,v->assistantJobs());
+        LinearLayout host=ui.column();content.addView(host);final int version=pageVersion;
+        loadAssistantJobs(host,refresh,version);
+    }
+    private void loadAssistantJobs(LinearLayout host,Button refresh,int version){
+        if(isFinishing()||version!=pageVersion)return;
+        call("/assistant/jobs","GET",null,result->{
+            if(version!=pageVersion)return;host.removeAllViews();JSONArray jobs=result.optJSONArray("jobs");boolean active=false;
+            if(jobs==null||jobs.length()==0){host.addView(ui.label("Пока нет фоновых задач",13,MUTED,false));return;}
+            for(int i=0;i<jobs.length();i++){JSONObject job=jobs.optJSONObject(i);if(job==null)continue;
+                String status=job.optString("status"),id=job.optString("id");boolean running=status.equals("queued")||status.equals("running")||status.equals("retry");active|=running;
+                ui.space(host,16);TextView title=ui.label(job.optString("prompt"),14,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);host.addView(title);ui.space(host,5);
+                host.addView(ui.label(job.optString("error").isEmpty()?job.optString("progress"):job.optString("error"),12,MUTED,false));
+                if(running){Button cancel=addButton(host,job.optBoolean("cancel_requested")?"Отменяю…":"Отменить",false,v->call("/assistant/jobs/"+id,"DELETE",null,r->loadAssistantJobs(host,refresh,version)));cancel.setEnabled(!job.optBoolean("cancel_requested"));}
+                else if(status.equals("completed"))addButton(host,"Открыть ответ",false,v->{String thread=job.optString("conversation_id");if(thread.isEmpty()){selectAssistantThread(null);}else call("/assistant/conversations/"+thread,"GET",null,r->selectAssistantThread(r.optJSONObject("conversation")));});
+                ui.space(host,12);ui.divider(host);
+            }
+            if(active)host.postDelayed(()->{if(version==pageVersion&&!isFinishing()&&hasWindowFocus())loadAssistantJobs(host,refresh,version);},5000);
+        });
+    }
     private void applyAssistantQuota(JSONObject quota,TextView label,Button send){
         if(quota==null)return;
         int remaining=quota.optInt("remaining"),limit=quota.optInt("limit");

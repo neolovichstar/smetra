@@ -21,7 +21,8 @@ import java.util.List;
 public class DesignSmoke extends Instrumentation {
     private Activity activity;
     private boolean assistantOnly;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));start();}
+    private boolean jobsOnly;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -29,6 +30,14 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if(jobsOnly){
+                click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");
+                click("Диалоги");click("Новый диалог");waitText("Создать диалог");fill("Фоновая проверка");click("Создать диалог");waitText("Настройки");waitEnabledPrefix("Отправить");
+                fill("Проверь рабочие данные в фоне");click("Выполнить в фоне");waitText("Задачи ассистента");
+                click("Ещё");click("Ассистент");waitText("Фоновая проверка");click("Фоновые задачи");waitText("Открыть ответ");shot("18-assistant-jobs");
+                click("Открыть ответ");waitText("Фоновая проверка");waitText("Фоновая задача завершена.");shot("19-assistant-job-result");
+                result.putString("stream","PASS: native background enqueue, leaving screen, persisted completion and opening original conversation\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(assistantOnly){click("Ещё");click("Ассистент");waitPrefix("Отправить");checkAssistantThreads("Айдентика и упаковка");result.putString("stream","PASS: native conversations, rename/pin, context, streamed response, fork, clear, monthly quota and history isolation\n");finish(Activity.RESULT_OK,result);return;}
             click("Интерьер студии");waitText("Состав сметы");waitText("Концепция и дизайн");waitText("Создать заказ из сметы");shot("02-quote");clickDescription("Назад");
             click("Ещё");click("Согласования");waitText("Решения клиентов");waitText("Согласована");shot("02-approvals");

@@ -112,15 +112,19 @@ def verified_context(service, value):
 
 
 def reserve(service):
-    current = quota(service)
     with transaction(service.con):
-        row = service.con.execute(
-            "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
-            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1 RETURNING count",
-            (current["key"], stamp()),
-        ).fetchone()
-        if row["count"] > current["limit"]:
-            raise DomainError(429, "Лимит сообщений ассистенту на этот месяц исчерпан")
+        return reserve_in_transaction(service)
+
+
+def reserve_in_transaction(service):
+    current = quota(service)
+    row = service.con.execute(
+        "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
+        "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1 RETURNING count",
+        (current["key"], stamp()),
+    ).fetchone()
+    if row["count"] > current["limit"]:
+        raise DomainError(429, "Лимит сообщений ассистенту на этот месяц исчерпан")
     return current["key"]
 
 
@@ -570,9 +574,7 @@ def prepare(service, name, args):
             + str(args.get("title") or args.get("name") or entity)[:120]
         )
     action_id = identity()
-    service.con.execute(
-        "INSERT INTO assistant_actions(id,workspace_id,user_id,tool,arguments,summary,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
-        (
+    action_values = (
             action_id,
             service.wid,
             service.user["id"],
@@ -581,8 +583,14 @@ def prepare(service, name, args):
             summary,
             stamp(),
             stamp() + 1800,
-        ),
-    )
+        )
+    if hasattr(service, "assistant_deferred_actions"):
+        service.assistant_deferred_actions.append(action_values)
+    else:
+        service.con.execute(
+            "INSERT INTO assistant_actions(id,workspace_id,user_id,tool,arguments,summary,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+            action_values,
+        )
     return {
         "id": action_id,
         "tool": name,
@@ -696,7 +704,7 @@ def _confirm(service, action_id):
         return result
 
 
-def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None):
+def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None):
     if conversation_id:
         history_sql = "SELECT role,content FROM assistant_messages WHERE workspace_id=? AND user_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 8"
         history_args = (service.wid, service.user["id"], conversation_id)
@@ -728,6 +736,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     ]
     actions, answer = [], ""
     for turn in range(2):
+        if on_commit and on_status:
+            on_status("Формулирую ответ…")
         response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
         answer = str(response.get("content") or "")[:12000]
         calls = response.get("tool_calls") or []
@@ -763,6 +773,14 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     if not answer:
         answer = "Данные проверены. Уточните, что нужно сделать дальше."
     with transaction(service.con):
+        result = {"answer": answer, "actions": actions, "quota": public_quota(service)}
+        if on_commit:
+            on_commit(result)
+        for values in getattr(service, "assistant_deferred_actions", []):
+            service.con.execute(
+                "INSERT INTO assistant_actions(id,workspace_id,user_id,tool,arguments,summary,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+                values,
+            )
         moment = time.time_ns() // 1_000_000
         for index, (role, content) in enumerate((("user", prompt), ("assistant", answer))):
             service.con.execute(
@@ -833,6 +851,10 @@ class ChatStream:
 
 
 def route(service, method, parts, data):
+    if parts and parts[0] == "jobs":
+        from backend.assistant_jobs import route as jobs_route
+
+        return jobs_route(service, method, parts[1:], data)
     if parts and parts[0] in ("conversations", "knowledge"):
         from backend.ai_workspace import conversations, knowledge
 

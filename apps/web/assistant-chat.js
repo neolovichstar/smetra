@@ -93,6 +93,10 @@ window.SmetraAssistant=async function(){
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
   attachmentBar.innerHTML='<button type="button" id="assistant-attach">+ Файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md" hidden><span>PDF, TXT или Markdown · до 5 МБ</span>';
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
+  const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
+  const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.textContent='Выполнить в фоне';backgroundButton.hidden=true;
+  const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
+  jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));actions.after(jobList);
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const quotaLabel=document.querySelector('#assistant-quota');
@@ -155,6 +159,7 @@ window.SmetraAssistant=async function(){
     quotaLabel.title=`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
     upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
     send.disabled=working||!data.available||value.remaining<1;
+    backgroundButton.disabled=working||!data.available||value.remaining<1;
     input.disabled=!data.available||value.remaining<1;
   };
   const scrollBottom=()=>{if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-260)window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'})};
@@ -195,6 +200,44 @@ window.SmetraAssistant=async function(){
     button.onclick=async()=>{button.disabled=true;try{await api('/assistant/undo',{method:'POST',body:JSON.stringify({id:action.id})});title.textContent='Изменение отменено · '+action.summary;button.remove();notify('Предыдущие значения восстановлены')}catch(error){button.disabled=false;notify(error.message)}};
   };
   renderQuota(quota);
+  let jobRequest=null,jobPollTimer=null,jobLoadSeq=0;
+  const refreshJobs=async()=>{
+    clearTimeout(jobPollTimer);const sequence=++jobLoadSeq;
+    if(!jobList.isConnected)return;
+    try{
+      if(document.hidden){jobPollTimer=setTimeout(refreshJobs,15000);return}
+      const result=await api('/assistant/jobs');
+      if(!jobList.isConnected||sequence!==jobLoadSeq)return;
+      backgroundButton.hidden=!result.enabled;
+      backgroundButton.disabled=working||quota.remaining<1||!data.available;
+      jobList.replaceChildren();
+      const labels={queued:'В очереди',running:'В работе',retry:'Повторю позже',completed:'Готово',failed:'Не удалось завершить',cancelled:'Отменено'};
+      result.jobs.filter(job=>['queued','running','retry'].includes(job.status)||Date.now()/1000-job.updated_at<86400).slice(0,5).forEach(job=>{
+        const row=document.createElement('div');row.className='assistant-job';
+        const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
+        title.textContent=job.prompt;detail.textContent=job.error||job.progress||labels[job.status];description.append(title,detail);row.append(description);
+        const active=['queued','running','retry'].includes(job.status);
+        if(active||job.status==='completed'){
+          const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':'Открыть ответ';button.disabled=!!job.cancel_requested;
+          button.onclick=async()=>{button.disabled=true;try{
+            if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});renderQuota(cancelled.quota);refreshJobs()}
+            else{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',job.conversation_id||'');window.SmetraAssistant()}
+          }catch(error){button.disabled=false;notify(error.message)}};row.append(button);
+        }
+        jobList.append(row);
+      });
+      if(result.jobs.some(job=>['queued','running','retry'].includes(job.status)))jobPollTimer=setTimeout(refreshJobs,5000);
+    }catch{if(jobList.isConnected&&sequence===jobLoadSeq)jobPollTimer=setTimeout(refreshJobs,15000)}
+  };
+  backgroundButton.onclick=async()=>{
+    const text=input.value.trim();if(!text||working||quota.remaining<1)return;
+    const body=JSON.stringify({text,context:context?{entity:context.entity,id:context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})});
+    if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
+    working=true;backgroundButton.disabled=true;renderQuota(quota);
+    try{const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});renderQuota(result.quota);input.value='';resize();jobRequest=null;status.textContent='Задача сохранена. Можно закрыть экран.';refreshJobs()}
+    catch(error){notify(error.message)}finally{working=false;backgroundButton.disabled=false;renderQuota(quota)}
+  };
+  refreshJobs();
   if(!thread.messages.length){
     messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line"></span><h2>Что сделаем сегодня?</h2><p>Спросите о сметах и заказах или поручите подготовить изменение. Сохранение всегда остаётся за вами.</p><div class="assistant-suggestions"><button type="button" data-prompt="Какие сметы ожидают согласования?">Что ждёт согласования?</button><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали.">Составить смету</button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">Разобраться в оплатах</button></div></div>';
     messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;input.focus();resize()});
