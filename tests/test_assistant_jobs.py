@@ -1,13 +1,23 @@
 import concurrent.futures
 import json
+import hashlib
+import hmac
 import os
+import time
 import unittest
+import uuid
 from unittest.mock import patch
 
 from backend.business import DomainError
 from tests import test_business
 
 SECRET = 'isolated-worker-test-secret-0123456789'
+
+
+def worker_token(moment=None, nonce=None):
+    moment, nonce = str(int(time.time()) if moment is None else moment), nonce or uuid.uuid4().hex
+    signature = hmac.new(SECRET.encode(), ('smetra-assistant-worker:v1:' + moment + ':' + nonce).encode(), hashlib.sha256).hexdigest()
+    return f'v1.{moment}.{nonce}.{signature}'
 
 
 class AssistantJobTests(unittest.TestCase):
@@ -29,7 +39,7 @@ class AssistantJobTests(unittest.TestCase):
 
     def run_job(self, response=None, side_effect=None):
         with patch('backend.assistant.query_model', return_value=response or {'content': 'Готовый ответ'}, side_effect=side_effect) as model:
-            code, result = self.call('/cron/assistant', token=SECRET)
+            code, result = self.call('/cron/assistant', token=worker_token())
         self.assertEqual(code, 200, result)
         return model
 
@@ -193,6 +203,18 @@ class AssistantJobTests(unittest.TestCase):
         self.assertEqual(self.call('/assistant/conversations/'+thread['id'],'DELETE',token=owner)[0],409)
         self.call('/assistant/jobs/'+job['id'],'DELETE',token=owner)
         self.assertEqual(self.call('/assistant/conversations/'+thread['id'],'DELETE',token=owner)[0],200)
+
+    def test_worker_signature_is_short_lived_scoped_and_one_time(self):
+        owner, _ = self.account('job-signatures')
+        job = self.enqueue(owner)
+        for token in (SECRET,worker_token(int(time.time())-121),worker_token(int(time.time())+31),worker_token()[:-1]+'x'):
+            self.assertEqual(self.call('/cron/assistant',token=token)[0],401)
+        signed = worker_token()
+        with patch('backend.assistant.query_model',return_value={'content':'Signed answer'}) as provider:
+            self.assertEqual(self.call('/cron/assistant',token=signed)[0],200)
+            self.assertEqual(self.call('/cron/assistant',token=signed)[0],429)
+        provider.assert_called_once()
+        self.assertEqual(self.call('/assistant/jobs/'+job['id'],token=owner)[1]['job']['status'],'completed')
 
 
 if __name__ == '__main__':

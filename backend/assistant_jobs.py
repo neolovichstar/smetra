@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from backend.business import DomainError, Service, identity, packed, stamp, string, transaction
 from backend import assistant
 
@@ -18,10 +19,15 @@ PUBLIC_COLUMNS = 'id,conversation_id,prompt,status,progress,error,attempts,cance
 
 def authenticate(handler):
     secret = os.getenv('ASSISTANT_WORKER_SECRET', '')
-    if len(secret) < 32 or not hmac.compare_digest(
-        handler.headers.get('Authorization', ''), 'Bearer ' + secret,
-    ):
+    raw = handler.headers.get('Authorization', '')
+    match = re.fullmatch(r'Bearer v1\.(\d{10})\.([a-f0-9]{32})\.([a-f0-9]{64})', raw)
+    if len(secret) < 32 or not match:
         raise DomainError(401, 'Нет доступа')
+    moment, nonce, signature = match.groups()
+    expected = hmac.new(secret.encode(), ('smetra-assistant-worker:v1:' + moment + ':' + nonce).encode(), hashlib.sha256).hexdigest()
+    if not -30 <= stamp() - int(moment) <= 120 or not hmac.compare_digest(signature, expected):
+        raise DomainError(401, 'Нет доступа')
+    return nonce
 
 
 def public(row):
@@ -141,7 +147,8 @@ def fail(con, job, error):
 
 
 def run_one(handler, con, origin):
-    authenticate(handler)
+    nonce = authenticate(handler)
+    handler.throttle('assistant:worker-nonce:' + nonce, 1, 180)
     job = claim(con)
     if not job:
         return {'ok': True, 'processed': 0}

@@ -10,6 +10,9 @@ import threading
 import urllib.request
 import uuid
 import base64
+import hashlib
+import hmac
+import time
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 
@@ -204,8 +207,11 @@ def main():
             while True:
                 threading.Event().wait(2)
                 try:
+                    moment, nonce = str(int(time.time())), uuid.uuid4().hex
+                    signature = hmac.new(os.environ['ASSISTANT_WORKER_SECRET'].encode(),
+                        ('smetra-assistant-worker:v1:' + moment + ':' + nonce).encode(),hashlib.sha256).hexdigest()
                     request = urllib.request.Request('http://127.0.0.1:8084/api/cron/assistant',
-                        headers={'Authorization': 'Bearer ' + os.environ['ASSISTANT_WORKER_SECRET']})
+                        headers={'Authorization': f'Bearer v1.{moment}.{nonce}.{signature}'})
                     with urllib.request.urlopen(request, timeout=10) as response:
                         response.read()
                 except OSError:
