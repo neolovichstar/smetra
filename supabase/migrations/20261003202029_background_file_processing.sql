@@ -1,0 +1,10 @@
+ALTER TABLE smetra.files ADD COLUMN IF NOT EXISTS index_status TEXT NOT NULL DEFAULT 'legacy';
+ALTER TABLE smetra.files ADD COLUMN IF NOT EXISTS index_hash TEXT NOT NULL DEFAULT '';
+ALTER TABLE smetra.files ADD COLUMN IF NOT EXISTS index_error TEXT NOT NULL DEFAULT '';
+ALTER TABLE smetra.files ADD COLUMN IF NOT EXISTS index_pages BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE smetra.files ADD COLUMN IF NOT EXISTS index_truncated BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE smetra.assistant_jobs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'chat' CHECK(kind IN ('chat','file_index'));
+ALTER TABLE smetra.assistant_jobs ADD COLUMN IF NOT EXISTS file_id TEXT REFERENCES smetra.files(id) ON DELETE CASCADE;
+ALTER TABLE smetra.assistant_jobs ADD COLUMN IF NOT EXISTS source_sha256 TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS assistant_jobs_file_source ON smetra.assistant_jobs(workspace_id,file_id,source_sha256,created_at DESC) WHERE kind='file_index';
+INSERT INTO smetra.schema_migrations(version,applied_at) VALUES(23,extract(epoch FROM now())::bigint) ON CONFLICT DO NOTHING;

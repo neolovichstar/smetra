@@ -19,6 +19,7 @@ public class AttachmentFixtureProvider extends ContentProvider {
         String name=uri.getLastPathSegment();
         if("empty.txt".equals(name))return new byte[0];
         if("binary.txt".equals(name))return new byte[]{(byte)0xff,0};
+        if("large-text.txt".equals(name)){byte[] content=new byte[2_100_000];java.util.Arrays.fill(content,(byte)'a');return content;}
         if("brief.pdf".equals(name))try(java.io.InputStream input=getContext().getAssets().open("brief.pdf")){return input.readAllBytes();}
         return "# Project brief\nPaint walls, 12 square metres.\n".getBytes(StandardCharsets.UTF_8);
     }

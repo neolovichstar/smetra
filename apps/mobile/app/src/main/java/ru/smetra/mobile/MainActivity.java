@@ -30,6 +30,9 @@ public class MainActivity extends Activity {
     private JSONObject me;
     private String assistantConversation="";
     private JSONObject assistantContext=null;
+    private boolean assistantFileBlocked=false,assistantAvailable=false,assistantStreaming=false;
+    private int assistantRemaining=0;
+    private int assistantMaxUpload=3_000_000;
     private android.net.Uri assistantAttachmentUri;
     private String assistantAttachmentThread="",assistantAttachmentAccount="";
     private JSONObject assistantUploadedAttachment;
@@ -88,11 +91,12 @@ public class MainActivity extends Activity {
         return request(path,method,body,token);
     }
     private JSONObject request(String path,String method,JSONObject body,String sessionToken)throws Exception{
+        final byte[] payload=body==null?null:body.toString().getBytes(StandardCharsets.UTF_8);
         HttpURLConnection c=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api"+path).openConnection();
         c.setConnectTimeout(10000);c.setReadTimeout(path.startsWith("/assistant")?110000:(path.equals("/ai/draft")||path.equals("/files")&&method.equals("POST"))?65000:20000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json");
         if(sessionToken!=null)c.setRequestProperty("Authorization","Bearer "+sessionToken);
         try{
-            if(body!=null){if(body.has("_request_key"))c.setRequestProperty("Idempotency-Key",body.optString("_request_key"));c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream output=c.getOutputStream()){output.write(body.toString().getBytes(StandardCharsets.UTF_8));}}
+            if(body!=null){if(body.has("_request_key"))c.setRequestProperty("Idempotency-Key",body.optString("_request_key"));c.setDoOutput(true);c.setFixedLengthStreamingMode(payload.length);c.setRequestProperty("Content-Type","application/json");try(OutputStream output=c.getOutputStream()){output.write(payload);}}
             int code=c.getResponseCode();try(InputStream input=code<400?c.getInputStream():c.getErrorStream()){
                 JSONObject result=new JSONObject(new String(readLimited(input,8_000_000),StandardCharsets.UTF_8));
                 if(code>=400)throw new ApiException(code,result.optString("error","Ошибка сервера: "+code));return result;
@@ -284,8 +288,9 @@ public class MainActivity extends Activity {
         });
     }
     private void renderAssistant(JSONObject thread){
-        content.removeAllViews();assistantContext=null;
+        content.removeAllViews();assistantContext=null;assistantFileBlocked=false;assistantAvailable=false;assistantRemaining=0;assistantStreaming=false;
         if(thread!=null&&!thread.optString("context_entity").isEmpty()){try{assistantContext=new JSONObject().put("entity",thread.optString("context_entity")).put("id",thread.optString("context_id"));}catch(Exception ignored){}}
+        assistantFileBlocked=assistantContext!=null&&assistantContext.optString("entity").equals("files");
         content.addView(ui.label("Ассистент",30,INK,true));ui.space(content,7);
         TextView allowance=ui.label("Загружаю лимит…",11,MUTED,false);content.addView(allowance);
         ui.space(content,12);LinearLayout toolbar=ui.row();content.addView(toolbar,ui.match());
@@ -298,6 +303,7 @@ public class MainActivity extends Activity {
             call("/"+entity+"/"+id+(entity.equals("files")?"/metadata":""),"GET",null,r->{JSONObject record=r.optJSONObject(entity.equals("quotes")?"quote":entity.equals("files")?"file":"item");if(record!=null)contextLabel.setText(assistantEntity(entity)+" · "+record.optString("title",record.optString("name",id)));});
             addButton(contextBar,"Убрать контекст",false,v->{try{call("/assistant/conversations/"+assistantConversation,"PATCH",new JSONObject().put("context_entity","").put("context_id",""),r->assistant());}catch(Exception error){message(error.getMessage());}});
         }
+        LinearLayout preparation=ui.column();content.addView(preparation);
         ui.space(content,12);ui.divider(content);LinearLayout messages=ui.column();content.addView(messages);loading(messages);
         EditText prompt=field("Ваше сообщение",1);prompt.setHint("Спросите или поручите задачу…");prompt.setMaxLines(5);prompt.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});
         final String draftKey=assistantDraftKey(assistantConversation,me==null?"":me.optString("id"));
@@ -327,8 +333,27 @@ public class MainActivity extends Activity {
             if(thread==null)assistantState(messages,allowance,send,status,r);
         });
         if(thread!=null)call("/assistant","GET",null,result->assistantState(messages,allowance,send,status,result));
+        if(assistantContext!=null&&assistantContext.optString("entity").equals("files"))loadFilePreparation(preparation,send,assistantContext.optString("id"),pageVersion);
     }
-    private void assistantState(LinearLayout messages,TextView allowance,Button send,TextView status,JSONObject result){JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));JSONArray recent=result.optJSONArray("recent_actions");if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));applyAssistantQuota(result.optJSONObject("quota"),allowance,send);if(!result.optBoolean("available")){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}}
+    private void assistantState(LinearLayout messages,TextView allowance,Button send,TextView status,JSONObject result){assistantAvailable=result.optBoolean("available");assistantMaxUpload=Math.max(1,Math.min(5_000_000,result.optInt("file_upload_max_bytes",3_000_000)));JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));JSONArray recent=result.optJSONArray("recent_actions");if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));applyAssistantQuota(result.optJSONObject("quota"),allowance,send);if(!assistantAvailable){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}}
+    private void loadFilePreparation(LinearLayout host,Button send,String id,int version){
+        if(version!=pageVersion||isFinishing())return;
+        call("/files/"+id+"/metadata","GET",null,result->{
+            if(version!=pageVersion)return;
+            JSONObject info=result.optJSONObject("processing"),file=result.optJSONObject("file");if(info==null||file==null)return;
+            String state=info.optString("state");boolean active=state.equals("queued")||state.equals("running")||state.equals("retry");
+            assistantFileBlocked=active||state.equals("failed")||state.equals("deferred")||state.equals("cancelled")||file.optLong("size")>2000000&&!state.equals("ready");
+            send.setEnabled(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked&&!assistantStreaming);host.removeAllViews();
+            String label=state.equals("ready")?"Текст готов · "+info.optInt("pages")+" стр."+(info.optBoolean("truncated")?" · подготовлена часть текста":""):state.equals("needs_ocr")?"В PDF нет текста. Для скана нужен OCR.":state.equals("failed")?info.optString("error","Не удалось подготовить документ"):state.equals("cancelled")?"Подготовка отменена":active?"Подготавливаю текст документа…":"Подготовьте документ перед вопросом";
+            ui.space(host,8);host.addView(ui.label(label,11,MUTED,false));
+            if(info.optBoolean("supported")&&(active&&info.optBoolean("can_cancel")||state.equals("failed")||state.equals("cancelled")||state.equals("deferred")||state.equals("legacy"))){
+                Button action=addButton(host,active?"Отменить подготовку":state.equals("failed")?"Повторить":"Подготовить документ",false,v->{
+                    try{JSONObject body=active?null:new JSONObject().put("_request_key",java.util.UUID.randomUUID().toString());call("/files/"+id+"/processing",active?"DELETE":"POST",body,r->loadFilePreparation(host,send,id,version));}catch(Exception error){message(error.getMessage());}
+                });action.setEnabled(!info.optBoolean("cancel_requested"));
+            }
+            if(active)host.postDelayed(()->loadFilePreparation(host,send,id,version),hasWindowFocus()?4000:15000);
+        });
+    }
     private String assistantDraftKey(String thread,String account){return "assistant_draft:"+account+":"+thread;}
     private void clearAssistantAttachment(){
         assistantAttachmentGeneration++;
@@ -369,8 +394,8 @@ public class MainActivity extends Activity {
         String lower=name.toLowerCase(Locale.ROOT);boolean pdf=lower.endsWith(".pdf");
         if(!pdf&&!lower.endsWith(".txt")&&!lower.endsWith(".md"))throw new IOException("Выберите PDF, TXT или Markdown.");
         if(name.length()>180)throw new IOException("Имя файла слишком длинное. Сократите его до 180 символов.");
-        if(declared>5_000_000)throw new IOException("Максимальный размер файла — 5 МБ.");
-        byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,5_000_000);}
+        if(declared>assistantMaxUpload)throw new IOException("Максимальный размер файла — "+(assistantMaxUpload/1_000_000)+" МБ.");
+        byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,assistantMaxUpload);}
         if(bytes.length==0)throw new IOException("Файл пустой. Выберите другой документ.");
         if(pdf){if(bytes.length<5||!new String(bytes,0,5,StandardCharsets.US_ASCII).equals("%PDF-"))throw new IOException("Файл не похож на PDF. Выберите другой документ.");}
         else{try{String text=StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();if(text.indexOf('\0')>=0)throw new IOException("TXT и Markdown должны содержать текст UTF-8.");}catch(java.nio.charset.CharacterCodingException error){throw new IOException("TXT и Markdown должны содержать текст UTF-8.");}}
@@ -433,7 +458,7 @@ public class MainActivity extends Activity {
                 ui.space(host,16);TextView title=ui.label(job.optString("prompt"),14,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);host.addView(title);ui.space(host,5);
                 host.addView(ui.label(job.optString("error").isEmpty()?job.optString("progress"):job.optString("error"),12,MUTED,false));
                 if(running){Button cancel=addButton(host,job.optBoolean("cancel_requested")?"Отменяю…":"Отменить",false,v->call("/assistant/jobs/"+id,"DELETE",null,r->loadAssistantJobs(host,refresh,version)));cancel.setEnabled(!job.optBoolean("cancel_requested"));}
-                else if(status.equals("completed"))addButton(host,"Открыть ответ",false,v->{String thread=job.optString("conversation_id");if(thread.isEmpty()){selectAssistantThread(null);}else call("/assistant/conversations/"+thread,"GET",null,r->selectAssistantThread(r.optJSONObject("conversation")));});
+                else if(status.equals("completed"))addButton(host,job.optString("kind").equals("file_index")?"Открыть документ":"Открыть ответ",false,v->{if(job.optString("kind").equals("file_index")){askAssistant("files",job.optString("file_id"),job.optString("prompt"));return;}String thread=job.optString("conversation_id");if(thread.isEmpty()){selectAssistantThread(null);}else call("/assistant/conversations/"+thread,"GET",null,r->selectAssistantThread(r.optJSONObject("conversation")));});
                 ui.space(host,12);ui.divider(host);
             }
             if(active)host.postDelayed(()->{if(version==pageVersion&&!isFinishing()&&hasWindowFocus())loadAssistantJobs(host,refresh,version);},5000);
@@ -443,7 +468,8 @@ public class MainActivity extends Activity {
         if(quota==null)return;
         int remaining=quota.optInt("remaining"),limit=quota.optInt("limit");
         label.setText(remaining+" из "+limit+" сообщений · "+(quota.optString("plan").equals("pro")?"Про":"Старт"));
-        send.setEnabled(remaining>0);
+        assistantRemaining=remaining;
+        send.setEnabled(remaining>0&&assistantAvailable&&!assistantFileBlocked&&!assistantStreaming);
         if(remaining==0)send.setText("Лимит на месяц исчерпан");
         else send.setText("Отправить ↗");
     }
@@ -451,7 +477,7 @@ public class MainActivity extends Activity {
         final int version=pageVersion;
         final String conversationId=assistantConversation;
         final JSONObject context=assistantContext;
-        send.setEnabled(false);
+        assistantStreaming=true;send.setEnabled(false);
         TextView userText=assistantMessage(messages,"user",value);
         TextView answerText=assistantMessage(messages,"assistant","");
         answerText.setText("Думаю…");
@@ -504,7 +530,7 @@ public class MainActivity extends Activity {
                                     JSONArray actions=event.optJSONArray("actions");
                                     runOnUiThread(()->{if(version!=pageVersion)return;
                                         answerText.setText(formatAssistantMarkdown(finalAnswer));
-                                        prompt.setText("");
+                                        assistantStreaming=false;prompt.setText("");
                                         applyAssistantQuota(quota,allowance,send);
                                         if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));
                                     });
@@ -521,11 +547,11 @@ public class MainActivity extends Activity {
                 }
                 if(!completed)throw new IOException("Поток ответа оборвался");
             }catch(Exception error){
-                runOnUiThread(()->{if(version!=pageVersion)return;
+                runOnUiThread(()->{if(version!=pageVersion)return;assistantStreaming=false;
                     messages.removeView(userText.getParent() instanceof View?(View)userText.getParent():userText);
                     messages.removeView(answerText.getParent() instanceof View?(View)answerText.getParent():answerText);
                     applyAssistantQuota(currentQuota[0],allowance,send);
-                    if(currentQuota[0]==null)send.setEnabled(true);
+                    if(currentQuota[0]==null)send.setEnabled(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked);
                     message(error instanceof ApiException?error.getMessage():"Не удалось получить ответ. Попробуйте ещё раз.");
                 });
             }finally{if(connection!=null)connection.disconnect();}

@@ -21,6 +21,13 @@ def directory():
     ).resolve()
 
 
+def maximum_upload():
+    # Base64 adds a third to the file size. Keep the complete JSON request
+    # below Vercel's 4.5 MB transport limit; local deployments retain 5 MB.
+    maximum=int(os.getenv('MAX_UPLOAD_BYTES','5000000'))
+    return min(maximum,3_000_000) if os.getenv('VERCEL')=='1' else maximum
+
+
 def download(row, con=None):
     if con is not None and getattr(con, "is_postgres", False):
         payload = con.execute(
@@ -67,10 +74,24 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts)==2 and parts[1]=='processing':
+        from backend import file_processing
+
+        row=service.get('files',parts[0])
+        if method=='GET':
+            return 200, {'processing':file_processing.state(service,row)}
+        if method=='POST':
+            result=file_processing.enqueue(service,row,service.h.headers.get('Idempotency-Key'))
+            return 202 if result['state'] in file_processing.ACTIVE else 200, {'processing':result}
+        if method=='DELETE':
+            return 200, {'processing':file_processing.cancel(service,row)}
+        raise DomainError(405,'Метод не поддерживается')
     if method == "GET" and len(parts) == 2 and parts[1] == "metadata":
+        from backend import file_processing
+
         row = service.get("files", parts[0])
         return 200, {"file": {key: row[key] for key in
-                             ("id", "name", "mime", "size", "sha256", "created_at", "public")}}
+                             ("id", "name", "mime", "size", "sha256", "created_at", "public")}, "processing":file_processing.state(service,row)}
     if len(parts) >= 2 and parts[1] == "versions":
         row = service.get("files", parts[0])
         if row["mime"] != "text/plain" or Path(row["name"]).suffix.lower() != ".md":
@@ -163,7 +184,7 @@ def _route(service, method, parts, query, data):
                 }[key]
                 service.get(table, query[key][0])
                 return 200, {
-                    "max_upload_bytes": int(os.getenv("MAX_UPLOAD_BYTES", "5000000")),
+                    "max_upload_bytes": maximum_upload(),
                     "items": [
                         dict(r)
                         for r in service.con.execute(
@@ -215,7 +236,7 @@ def _route(service, method, parts, query, data):
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
         raise DomainError(400, "Некорректное содержимое файла") from None
-    maximum = int(os.getenv("MAX_UPLOAD_BYTES", "5000000"))
+    maximum = maximum_upload()
     if not 1 <= len(raw) <= maximum:
         raise DomainError(413, f"Максимальный размер файла — {maximum // 1_000_000} МБ")
     if extension in (".png", ".jpg", ".jpeg"):
@@ -266,48 +287,13 @@ def _route(service, method, parts, query, data):
                 400,
                 "PDF содержит активные элементы. Экспортируйте плоскую копию документа",
             )
+        from backend.file_processing import isolated_extract
+        import subprocess
+
         try:
-            from pypdf import PdfReader
-            from pypdf.generic import DictionaryObject, ArrayObject, IndirectObject
-
-            reader = PdfReader(io.BytesIO(raw), strict=True)
-            if reader.is_encrypted or len(reader.pages) > 300:
-                raise ValueError("encrypted or too many pages")
-            seen = set()
-            forbidden = {
-                "/JavaScript",
-                "/JS",
-                "/Launch",
-                "/EmbeddedFiles",
-                "/EmbeddedFile",
-                "/OpenAction",
-                "/AA",
-                "/RichMedia",
-                "/XFA",
-            }
-
-            def inspect(value, depth=0):
-                if depth > 50 or len(seen) > 20000:
-                    raise ValueError("object limits")
-                if isinstance(value, IndirectObject):
-                    key = (value.idnum, value.generation)
-                    if key in seen:
-                        return
-                    seen.add(key)
-                    value = value.get_object()
-                if isinstance(value, DictionaryObject):
-                    if forbidden.intersection(value.keys()):
-                        raise ValueError("active content")
-                    for child in value.values():
-                        inspect(child, depth + 1)
-                elif isinstance(value, ArrayObject):
-                    for child in value:
-                        inspect(child, depth + 1)
-
-            inspect(reader.trailer)
-        except ImportError:
-            raise DomainError(503, "Установите pypdf для проверки PDF") from None
-        except Exception:
+            if isolated_extract(raw,'validate-pdf').get('valid') is not True:
+                raise ValueError('validation')
+        except (OSError, ValueError, subprocess.TimeoutExpired):
             raise DomainError(
                 400, "PDF не прошёл проверку структуры и активного содержимого"
             ) from None

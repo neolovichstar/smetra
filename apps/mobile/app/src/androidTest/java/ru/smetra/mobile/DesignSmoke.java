@@ -38,7 +38,7 @@ public class DesignSmoke extends Instrumentation {
                     pickFixture(name);waitText("Вернуться в диалог");click("Вернуться в диалог");waitEnabledPrefix("Отправить");
                     require(editors().get(0).getText().toString().equals("Прочитай документ"),"Rejected attachment preserves draft: "+name);
                 }
-                for(String name:new String[]{"brief.md","note.txt","brief.pdf"}){
+                for(String name:new String[]{"brief.md","note.txt","brief.pdf","large-text.txt"}){
                     pickFixture(name);waitText("Прикрепить к диалогу");waitText(name);shot("20-attachment-"+name.replace('.','-'));
                     if("note.txt".equals(name)){
                         ActivityMonitor recreation=addMonitor(MainActivity.class.getName(),null,false);
@@ -53,13 +53,14 @@ public class DesignSmoke extends Instrumentation {
                         require(restored!=null,"Lost upload response recreated");activity=restored;waitText("Прикрепить к диалогу");click("Прикрепить к диалогу");
                         waitText("Связать с диалогом");click("Связать с диалогом");
                     }
-                    waitText("Файл · "+name);waitEnabledPrefix("Отправить");
+                    waitText("Файл · "+name,"large-text.txt".equals(name)?70000:15000);waitEnabledPrefix("Отправить");
+                    if("large-text.txt".equals(name)){waitPrefix("Текст готов");waitPrefix("2 из 3");shot("20-large-document-ready");}
                     require(editors().get(0).getText().toString().equals("Прочитай документ"),"Attachment preserves draft: "+name);
                 }
-                click("Ещё");click("Ассистент");waitText("Файл · brief.pdf");waitEnabledPrefix("Отправить");
+                click("Ещё");click("Ассистент");waitText("Файл · large-text.txt");waitEnabledPrefix("Отправить");
                 require(editors().get(0).getText().toString().equals("Прочитай документ"),"Navigation preserves draft and context");
                 clickPrefix("Отправить");waitText("Контекст файла получен.");shot("21-attachment-answer");
-                result.putString("stream","PASS: picker cancellation, empty/invalid/oversize/unsupported rejection, PDF/TXT/MD upload, conversation context, preserved draft, streamed file response\n");finish(Activity.RESULT_OK,result);return;
+                result.putString("stream","PASS: picker cancellation, invalid rejection, PDF/TXT/MD upload, 2.1MB background preparation without consuming quota, preserved draft/navigation, streamed file response\n");finish(Activity.RESULT_OK,result);return;
             }
             if(jobsOnly){
                 click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");
@@ -134,7 +135,8 @@ public class DesignSmoke extends Instrumentation {
     private View findPrefix(String prefix){for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().startsWith(prefix))return view;return null;}
     private String textStarting(String prefix){View view=findPrefix(prefix);return view instanceof TextView?((TextView)view).getText().toString():"";}
     private String allText(){StringBuilder out=new StringBuilder();for(View view:views())if(view instanceof TextView)out.append(((TextView)view).getText()).append('\n');return out.toString();}
-    private void waitText(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(find(text)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing text: "+text+"\n"+allText());}
+    private void waitText(String text){waitText(text,15000);}
+    private void waitText(String text,long timeout){long until=SystemClock.uptimeMillis()+timeout;while(SystemClock.uptimeMillis()<until){if(find(text)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing text: "+text+"\n"+allText());}
     private void waitGone(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(find(text)==null)return;SystemClock.sleep(150);}throw new AssertionError("Text still visible: "+text+"\n"+allText());}
     private void waitPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(findPrefix(prefix)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing prefix: "+prefix+"\n"+allText());}
     private void waitEnabledPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){View view=findPrefix(prefix);if(view!=null&&view.isEnabled()){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Control not ready: "+prefix);}

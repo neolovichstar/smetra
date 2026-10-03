@@ -886,7 +886,10 @@ def route(service, method, parts, data):
             result = json.loads(row["result"])
             if result.get("undoable") and result.get("undo_until", 0) >= stamp():
                 recent.append({"id": row["id"], "summary": row["summary"], "undo_until": result["undo_until"]})
+        from backend.attachments import maximum_upload
+
         return 200, {
+            "file_upload_max_bytes": maximum_upload(),
             "available": available(),
             "messages": list(reversed(messages)),
             "actions": actions,
@@ -925,6 +928,9 @@ def route(service, method, parts, data):
         conversation_id = selected["id"]
         if "context" not in data and selected["context_entity"]:
             context = verified_context(service, {"entity": selected["context_entity"], "id": selected["context_id"]})
+    from backend.file_processing import ensure_ready
+
+    ensure_ready(service, context)
     service.h.throttle("assistant:" + service.user["id"], 12, 60)
     try:
         from backend.redis_infra import RedisUnavailable, acquire_lock

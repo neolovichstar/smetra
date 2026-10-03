@@ -11,10 +11,10 @@ import json
 import os
 import re
 from backend.business import DomainError, Service, identity, packed, stamp, string, transaction
-from backend import assistant
+from backend import assistant, file_processing
 
 ACTIVE = ('queued', 'running', 'retry')
-PUBLIC_COLUMNS = 'id,conversation_id,prompt,status,progress,error,attempts,cancel_requested,created_at,updated_at'
+PUBLIC_COLUMNS = 'id,conversation_id,prompt,status,progress,error,attempts,cancel_requested,created_at,updated_at,kind,file_id'
 
 
 def authenticate(handler):
@@ -35,6 +35,8 @@ def public(row):
 
 
 def refund(con, row):
+    if row['kind'] == 'file_index':
+        return
     changed = con.execute(
         'UPDATE assistant_jobs SET quota_refunded=1 WHERE id=? AND quota_refunded=0 RETURNING id',
         (row['id'],),
@@ -71,6 +73,7 @@ def route(service, method, parts, data):
                 else:
                     service.con.execute("UPDATE assistant_jobs SET status='cancelled',progress='Отменено',updated_at=? WHERE id=?", (stamp(), row['id']))
                     refund(service.con, row)
+                    file_processing.terminal(service.con, row, 'cancelled')
             row = service.con.execute('SELECT * FROM assistant_jobs WHERE id=?', (row['id'],)).fetchone()
         result = public(row)
         if row['status'] == 'completed':
@@ -91,6 +94,7 @@ def route(service, method, parts, data):
         thread_id = selected['id']
         if 'context' not in data and selected['context_entity']:
             context = assistant.verified_context(service, {'entity': selected['context_entity'], 'id': selected['context_id']})
+    file_processing.ensure_ready(service, context)
     request_hash = hashlib.sha256(packed([prompt, context, thread_id]).encode()).hexdigest()
     service.h.throttle('assistant:' + service.user['id'], 12, 60)
     with transaction(service.con):
@@ -99,7 +103,7 @@ def route(service, method, parts, data):
             if existing['request_hash'] != request_hash:
                 raise DomainError(409, 'Этот ключ уже используется для другой задачи')
             return 200, {'job': public(existing), 'quota': assistant.public_quota(service)}
-        count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND status IN ('queued','running','retry')", args).fetchone()['n']
+        count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='chat' AND status IN ('queued','running','retry')", args).fetchone()['n']
         if count >= 2:
             raise DomainError(429, 'Дождитесь завершения текущих фоновых задач')
         quota_key = assistant.reserve_in_transaction(service)
@@ -126,9 +130,11 @@ def claim(con):
             con.execute('UPDATE assistant_jobs SET status=?,progress=?,error=?,updated_at=? WHERE id=?',
                         (status, 'Отменено' if status == 'cancelled' else 'Не удалось завершить', '' if status == 'cancelled' else 'Задача не завершилась вовремя. Создайте новую.', now, row['id']))
             refund(con, row)
+            file_processing.terminal(con,row,status,'Задача не завершилась вовремя. Повторите подготовку.')
             return None
         lease = identity()
         con.execute("UPDATE assistant_jobs SET status='running',progress='Проверяю доступ…',attempts=attempts+1,lease_token=?,lease_until=?,updated_at=? WHERE id=?", (lease, now + 180, now, row['id']))
+        file_processing.terminal(con,row,'running')
         return dict(con.execute('SELECT * FROM assistant_jobs WHERE id=?', (row['id'],)).fetchone())
 
 
@@ -144,6 +150,7 @@ def fail(con, job, error):
                     (status, 'Отменено' if cancelled else 'Повторю позже' if retry else 'Не удалось завершить', '' if cancelled else error.message, stamp() + 60 * (3 ** (row['attempts'] - 1)), stamp(), row['id']))
         if not retry:
             refund(con, row)
+        file_processing.terminal(con,row,status,'' if cancelled else error.message)
 
 
 def run_one(handler, con, origin):
@@ -177,7 +184,7 @@ def run_one(handler, con, origin):
         from backend.redis_infra import RedisUnavailable, acquire_lock
 
         try:
-            lease = acquire_lock('assistant', user['id'], ttl=120)
+            lease = acquire_lock('file-processing' if job['kind']=='file_index' else 'assistant', user['id'], ttl=120)
         except RedisUnavailable:
             raise DomainError(503, 'Ассистент временно недоступен') from None
         if lease is None:
@@ -198,7 +205,17 @@ def run_one(handler, con, origin):
             if not row:
                 raise DomainError(409, 'Задача отменена или передана другой попытке')
 
-        assistant.answer_chat(service, job['prompt'], context=context, conversation_id=job['conversation_id'], on_status=progress, on_commit=complete)
+        def validate():
+            session = con.execute('SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? AND u.blocked=0 AND u.deleted_at IS NULL', (job['session_hash'],job['user_id'],stamp())).fetchone()
+            membership = con.execute('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',(job['workspace_id'],job['user_id'])).fetchone()
+            if not session or not membership or membership['role'] not in ('owner','admin','manager','member'):
+                raise DomainError(403,'Доступ изменился. Войдите и подготовьте документ заново.')
+
+        if job['kind']=='file_index':
+            file_processing.process(service,job,complete,progress,validate)
+        else:
+            file_processing.ensure_ready(service,context)
+            assistant.answer_chat(service, job['prompt'], context=context, conversation_id=job['conversation_id'], on_status=progress, on_commit=complete)
         if service.runtime_connection:
             service.runtime_connection.finish(True)
             service.runtime_connection = None
