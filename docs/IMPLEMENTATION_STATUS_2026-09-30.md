@@ -67,9 +67,14 @@
 
 ## Не считать выполненным без дальнейшей работы
 
+Нативный Android 1.7.5: PDF/TXT/MD прикрепляются прямо в чат с экраном проверки
+и сохранением черновика. Инструментальный сценарий выбора, отмены, ошибок,
+загрузки и потокового ответа прошёл на Android 35. Подробности и ограничения:
+[ANDROID_ATTACHMENTS_RELEASE_2026-10-03.md](ANDROID_ATTACHMENTS_RELEASE_2026-10-03.md).
+
 - Remaining construction work: verify receipt OCR against real receipts and Android UI, then decide whether to add a separately persisted expense draft. The current OCR only prefills an unsaved purchase form; live free vision returned 429/502 during verification.
 - Третья очередь: точные AR-замеры, официальные нормативы и индексы, КС-2/КС-3. Не показывать эти функции как готовые без корректных источников и проверки.
-- Remaining advanced AI work: background tasks, image search and broader coverage of assistant-led edits. Quote row bulk edits now have server-built diff and revision-checked undo; creates and publication do not have universal undo. File versioning is limited to the latest 10 Markdown revisions. Current assistant write tools require user confirmation.
+- Remaining advanced AI work: background OCR/indexing/import pipelines, image search and broader coverage of assistant-led edits. Persisted assistant chat jobs are implemented; these separate pipelines remain. Quote row bulk edits now have server-built diff and revision-checked undo; creates and publication do not have universal undo. File versioning is limited to the latest 10 Markdown revisions. Current assistant write tools require user confirmation.
 - Список недавно выбранных расценок синхронизируется через сервер, а CSV/Excel-импорт проверяет совпадения с существующими позициями и между строками пакета. Массовая правка сметы работает в локальном черновике и записывается на сервер только при сохранении всей сметы.
 - Нативный Android проверен инструментально на эмуляторе Android 35, включая новый справочник расценок. Нужен проход на физическом устройстве, включая выбор/отмену фото, слабую сеть и восстановление экрана.
 - Внешние реальные сценарии оплаты, OAuth-провайдеров и публикации нового APK проверяются отдельно на соответствующих аккаунтах и в RuStore. Локальная сборка и API smoke не подтверждают их.

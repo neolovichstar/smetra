@@ -30,6 +30,11 @@ public class MainActivity extends Activity {
     private JSONObject me;
     private String assistantConversation="";
     private JSONObject assistantContext=null;
+    private android.net.Uri assistantAttachmentUri;
+    private String assistantAttachmentThread="",assistantAttachmentAccount="";
+    private JSONObject assistantUploadedAttachment;
+    private int assistantAttachmentGeneration=0;
+    private boolean assistantAttachmentBusy=false,assistantAttachmentPicking=false;
     private MobilePresentation presentation;
     private long lastPresentationCheck;
     private int pageVersion=0;
@@ -51,6 +56,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);presentation=MobilePresentation.cached(this);presentation.apply(this);ui=new SmetraUi(this);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         vault=new TokenVault(this);token=vault.read();
+        if(state!=null){assistantAttachmentPicking=state.getBoolean("assistant_attachment_picking",false);assistantAttachmentThread=state.getString("assistant_attachment_thread","");assistantAttachmentAccount=state.getString("assistant_attachment_account","");String uri=state.getString("assistant_attachment_uri");if(uri!=null)assistantAttachmentUri=android.net.Uri.parse(uri);try{String file=state.getString("assistant_attachment_uploaded");if(file!=null)assistantUploadedAttachment=new JSONObject(file);}catch(Exception ignored){}}
         String legacy=getPreferences(MODE_PRIVATE).getString("token",null);
         if(token==null&&legacy!=null){try{vault.save(legacy);token=legacy;}catch(Exception ignored){token=null;}}
         getPreferences(MODE_PRIVATE).edit().remove("token").apply();
@@ -70,10 +76,19 @@ public class MainActivity extends Activity {
     private boolean openLink(Intent intent){if(intent==null)return false;if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
     private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
     @Override public void onDestroy(){worker.shutdownNow();super.onDestroy();}
+    @Override protected void onSaveInstanceState(Bundle state){
+        super.onSaveInstanceState(state);state.putString("assistant_attachment_thread",assistantAttachmentThread);state.putString("assistant_attachment_account",assistantAttachmentAccount);
+        state.putBoolean("assistant_attachment_picking",assistantAttachmentPicking);
+        if(assistantAttachmentUri!=null)state.putString("assistant_attachment_uri",assistantAttachmentUri.toString());
+        if(assistantUploadedAttachment!=null)state.putString("assistant_attachment_uploaded",assistantUploadedAttachment.toString());
+    }
     private JSONObject request(String path,String method,JSONObject body)throws Exception{
+        return request(path,method,body,token);
+    }
+    private JSONObject request(String path,String method,JSONObject body,String sessionToken)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api"+path).openConnection();
-        c.setConnectTimeout(10000);c.setReadTimeout(path.startsWith("/assistant")?110000:path.equals("/ai/draft")?65000:20000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json");
-        if(token!=null)c.setRequestProperty("Authorization","Bearer "+token);
+        c.setConnectTimeout(10000);c.setReadTimeout(path.startsWith("/assistant")?110000:(path.equals("/ai/draft")||path.equals("/files")&&method.equals("POST"))?65000:20000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json");
+        if(sessionToken!=null)c.setRequestProperty("Authorization","Bearer "+sessionToken);
         try{
             if(body!=null){if(body.has("_request_key"))c.setRequestProperty("Idempotency-Key",body.optString("_request_key"));c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");try(OutputStream output=c.getOutputStream()){output.write(body.toString().getBytes(StandardCharsets.UTF_8));}}
             int code=c.getResponseCode();try(InputStream input=code<400?c.getInputStream():c.getErrorStream()){
@@ -107,7 +122,7 @@ public class MainActivity extends Activity {
         });
     }
     private void restore(Button button){if(button!=null){button.setEnabled(true);button.setAlpha(1);}}
-    private void clearSession(){token=null;me=null;assistantConversation="";assistantContext=null;catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
+    private void clearSession(){token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
     private static byte[] readLimited(InputStream input,int maximum)throws IOException{if(input==null)throw new IOException("Пустой ответ сервера");ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1){if(output.size()+count>maximum)throw new IOException("Файл слишком большой");output.write(buffer,0,count);}return output.toByteArray();}
     private int dp(float value){return ui.dp(value);}
     private void message(String message){
@@ -283,6 +298,10 @@ public class MainActivity extends Activity {
         }
         ui.space(content,12);ui.divider(content);LinearLayout messages=ui.column();content.addView(messages);loading(messages);
         EditText prompt=field("Ваше сообщение",1);prompt.setHint("Спросите или поручите задачу…");prompt.setMaxLines(5);prompt.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});
+        final String draftKey=assistantDraftKey(assistantConversation,me==null?"":me.optString("id"));
+        prompt.setText(getPreferences(MODE_PRIVATE).getString(draftKey,""));
+        prompt.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){getPreferences(MODE_PRIVATE).edit().putString(draftKey,s.toString()).apply();}public void afterTextChanged(Editable value){}});
+        addButton(content,"Прикрепить файл · PDF, TXT, MD",false,v->pickAssistantAttachment());
         ui.space(content,8);Button send=button("Отправить ↗",true,v->{String value=prompt.getText().toString().trim();if(value.isEmpty()){prompt.setError("Напишите задачу");return;}streamAssistant(value,messages,prompt,allowance,(Button)v);});send.setEnabled(false);
         Button background=button("Выполнить в фоне",false,v->{
             if(!send.isEnabled()){message("Дождитесь ответа или проверьте лимит сообщений.");return;}
@@ -308,6 +327,88 @@ public class MainActivity extends Activity {
         if(thread!=null)call("/assistant","GET",null,result->assistantState(messages,allowance,send,status,result));
     }
     private void assistantState(LinearLayout messages,TextView allowance,Button send,TextView status,JSONObject result){JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));JSONArray recent=result.optJSONArray("recent_actions");if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));applyAssistantQuota(result.optJSONObject("quota"),allowance,send);if(!result.optBoolean("available")){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}}
+    private String assistantDraftKey(String thread,String account){return "assistant_draft:"+account+":"+thread;}
+    private void clearAssistantAttachment(){
+        assistantAttachmentGeneration++;
+        if(assistantAttachmentUri!=null)try{getContentResolver().releasePersistableUriPermission(assistantAttachmentUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException ignored){}
+        assistantAttachmentUri=null;assistantUploadedAttachment=null;assistantAttachmentThread="";assistantAttachmentAccount="";assistantAttachmentBusy=false;assistantAttachmentPicking=false;
+    }
+    private void pickAssistantAttachment(){
+        if(assistantAttachmentBusy){message("Дождитесь загрузки файла.");return;}
+        if(me==null||token==null){message("Войдите в пространство.");return;}
+        clearAssistantAttachment();assistantAttachmentThread=assistantConversation;assistantAttachmentAccount=me.optString("id");assistantAttachmentPicking=true;
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","text/plain","text/markdown","text/x-markdown","application/octet-stream"});
+        picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try{startActivityForResult(picker,305);}catch(android.content.ActivityNotFoundException error){clearAssistantAttachment();message("На устройстве нет приложения для выбора документов.");}
+    }
+    private void receiveAssistantAttachment(int resultCode,Intent data){
+        assistantAttachmentPicking=false;
+        if(resultCode!=RESULT_OK||data==null||data.getData()==null){clearAssistantAttachment();return;}
+        android.net.Uri uri=data.getData();
+        if(!"content".equals(uri.getScheme())){clearAssistantAttachment();message("Выберите документ через приложение «Файлы».");return;}
+        assistantAttachmentUri=uri;
+        if((data.getFlags()&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)!=0)try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException ignored){}
+        if(me!=null)previewAssistantAttachment();
+    }
+    private static class AssistantAttachmentSource {
+        final String name;final byte[] bytes;final boolean pdf;
+        AssistantAttachmentSource(String name,byte[] bytes,boolean pdf){this.name=name;this.bytes=bytes;this.pdf=pdf;}
+    }
+    private AssistantAttachmentSource readAssistantAttachment(android.net.Uri uri)throws Exception{
+        String name=null,mime=getContentResolver().getType(uri);long declared=-1;
+        try(android.database.Cursor cursor=getContentResolver().query(uri,new String[]{android.provider.OpenableColumns.DISPLAY_NAME,android.provider.OpenableColumns.SIZE},null,null,null)){
+            if(cursor!=null&&cursor.moveToFirst()){int nameColumn=cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME),sizeColumn=cursor.getColumnIndex(android.provider.OpenableColumns.SIZE);if(nameColumn>=0)name=cursor.getString(nameColumn);if(sizeColumn>=0&&!cursor.isNull(sizeColumn))declared=cursor.getLong(sizeColumn);}
+        }
+        if(name==null||name.isBlank())name="Документ"+("application/pdf".equals(mime)?".pdf":"text/markdown".equals(mime)?".md":".txt");
+        name=name.replace('\\','/');name=name.substring(name.lastIndexOf('/')+1).replaceAll("\\p{Cntrl}","").trim();
+        String lower=name.toLowerCase(Locale.ROOT);boolean pdf=lower.endsWith(".pdf");
+        if(!pdf&&!lower.endsWith(".txt")&&!lower.endsWith(".md"))throw new IOException("Выберите PDF, TXT или Markdown.");
+        if(name.length()>180)throw new IOException("Имя файла слишком длинное. Сократите его до 180 символов.");
+        if(declared>5_000_000)throw new IOException("Максимальный размер файла — 5 МБ.");
+        byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,5_000_000);}
+        if(bytes.length==0)throw new IOException("Файл пустой. Выберите другой документ.");
+        if(pdf){if(bytes.length<5||!new String(bytes,0,5,StandardCharsets.US_ASCII).equals("%PDF-"))throw new IOException("Файл не похож на PDF. Выберите другой документ.");}
+        else{try{String text=StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();if(text.indexOf('\0')>=0)throw new IOException("TXT и Markdown должны содержать текст UTF-8.");}catch(java.nio.charset.CharacterCodingException error){throw new IOException("TXT и Markdown должны содержать текст UTF-8.");}}
+        return new AssistantAttachmentSource(name,bytes,pdf);
+    }
+    private void returnFromAssistantAttachment(){
+        String thread=assistantAttachmentThread,account=assistantAttachmentAccount;clearAssistantAttachment();
+        if(me!=null&&account.equals(me.optString("id"))){assistantConversation=thread;getPreferences(MODE_PRIVATE).edit().putString(assistantPreference(),thread).apply();assistant();}
+    }
+    private void previewAssistantAttachment(){
+        if(me==null||token==null||!me.optString("id").equals(assistantAttachmentAccount)){clearAssistantAttachment();return;}
+        assistantConversation=assistantAttachmentThread;
+        parentPage="assistant";page("Файл для ассистента","assistant-attachment",true);content.addView(ui.label("Добавить документ",25,INK,true));loading(content);
+        final int version=pageVersion;final android.net.Uri uri=assistantAttachmentUri;
+        worker.execute(()->{try{AssistantAttachmentSource source=readAssistantAttachment(uri);runOnUiThread(()->{
+            if(version!=pageVersion||isFinishing())return;clearLoading(content);ui.space(content,18);
+            TextView name=ui.label(source.name,17,INK,true);name.setMaxLines(3);name.setEllipsize(android.text.TextUtils.TruncateAt.END);content.addView(name);ui.space(content,8);
+            text((source.pdf?"PDF":source.name.toLowerCase(Locale.ROOT).endsWith(".md")?"Markdown":"TXT")+" · "+new java.text.DecimalFormat("0.#").format(source.bytes.length/1000.0)+" КБ");
+            text(assistantAttachmentThread.isEmpty()?"Для документа будет создан отдельный диалог.":"Документ станет контекстом текущего диалога.");
+            if(source.pdf)content.addView(ui.label("Ассистент читает текст PDF. Для сканов распознавание может быть недоступно.",11,MUTED,false));
+            ui.space(content,20);button(assistantUploadedAttachment==null?"Прикрепить к диалогу":"Связать с диалогом",true,v->uploadAssistantAttachment(source,(Button)v));
+            button("Выбрать другой файл",false,v->pickAssistantAttachment());button("Отмена",false,v->returnFromAssistantAttachment());
+        });}catch(Exception error){runOnUiThread(()->{if(version!=pageVersion||isFinishing())return;clearLoading(content);text(error.getMessage()==null?"Не удалось прочитать файл.":error.getMessage());button("Выбрать другой файл",true,v->pickAssistantAttachment());button("Вернуться в диалог",false,v->returnFromAssistantAttachment());});}});
+    }
+    private void uploadAssistantAttachment(AssistantAttachmentSource source,Button submit){
+        if(assistantAttachmentBusy)return;assistantAttachmentBusy=true;submit.setEnabled(false);submit.setText("Прикрепляю…");
+        final int version=pageVersion,generation=assistantAttachmentGeneration;final String session=token,account=assistantAttachmentAccount,thread=assistantAttachmentThread;
+        final String draft=getPreferences(MODE_PRIVATE).getString(assistantDraftKey(thread,account),"");final JSONObject uploaded=assistantUploadedAttachment;
+        worker.execute(()->{try{
+            JSONObject file=uploaded;
+            if(file==null){file=request("/files","POST",new JSONObject().put("assistant_upload",true).put("name",source.name).put("content",android.util.Base64.encodeToString(source.bytes,android.util.Base64.NO_WRAP)),session).optJSONObject("file");
+                if(file==null)throw new IOException("Сервер не вернул документ.");final JSONObject saved=file;runOnUiThread(()->{if(generation==assistantAttachmentGeneration&&session.equals(token)&&me!=null&&account.equals(me.optString("id")))assistantUploadedAttachment=saved;});}
+            JSONObject body=new JSONObject().put("context_entity","files").put("context_id",file.optString("id"));
+            if(thread.isEmpty())body.put("title",source.name.substring(0,Math.min(120,source.name.length())));
+            JSONObject result=request(thread.isEmpty()?"/assistant/conversations":"/assistant/conversations/"+thread,thread.isEmpty()?"POST":"PATCH",body,session).optJSONObject("conversation");
+            if(result==null)throw new IOException("Не удалось открыть диалог с файлом.");final JSONObject selected=result;
+            runOnUiThread(()->{if(generation!=assistantAttachmentGeneration)return;assistantAttachmentBusy=false;if(!session.equals(token)||me==null||!account.equals(me.optString("id")))return;
+                if(thread.isEmpty()){getPreferences(MODE_PRIVATE).edit().putString(assistantDraftKey(selected.optString("id"),account),draft).apply();if(draft.equals(getPreferences(MODE_PRIVATE).getString(assistantDraftKey(thread,account),"")))getPreferences(MODE_PRIVATE).edit().remove(assistantDraftKey(thread,account)).apply();}
+                clearAssistantAttachment();if(version==pageVersion){selectAssistantThread(selected);message("Документ прикреплён. Теперь можно задать вопрос.");}
+            });
+        }catch(Exception error){runOnUiThread(()->{if(generation!=assistantAttachmentGeneration)return;assistantAttachmentBusy=false;if(version!=pageVersion||isFinishing()||!session.equals(token))return;submit.setEnabled(true);submit.setText(assistantUploadedAttachment==null?"Повторить загрузку":"Связать с диалогом");message(error instanceof ApiException?error.getMessage():"Не удалось прикрепить документ. Сообщение сохранено, попробуйте ещё раз.");});}});
+    }
     private void assistantJobs(){
         parentPage="assistant";page("Фоновые задачи","assistant-jobs",true);
         content.addView(ui.label("Задачи ассистента",25,INK,true));
@@ -488,7 +589,7 @@ public class MainActivity extends Activity {
         addButton(proposal,"Не сейчас",false,v->{try{call("/assistant/dismiss","POST",new JSONObject().put("id",action.optString("id")),r->host.removeView(proposal));}catch(Exception error){message(error.getMessage());}});
     }
 
-    private void refresh(){call("/me","GET",null,result->{me=result.optJSONObject("user");Analytics.identify(me);home();});}
+    private void refresh(){call("/me","GET",null,result->{me=result.optJSONObject("user");Analytics.identify(me);if(me!=null&&me.optString("id").equals(assistantAttachmentAccount)){if(assistantAttachmentUri!=null)previewAssistantAttachment();else if(assistantAttachmentPicking)assistant();else home();}else{clearAssistantAttachment();home();}});}
     private void home(){
         publicView=false;page("Сегодня","home",false);
         content.addView(ui.label(presentation.homeEyebrow,10,MUTED,true));ui.space(content,8);
@@ -1451,7 +1552,7 @@ public class MainActivity extends Activity {
     }
     private void menu(String icon,String title,String subtitle,Runnable click){LinearLayout card=ui.card(content),row=ui.row();row.addView(ui.new Icon(icon,BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));ui.gap(row,16);LinearLayout copy=ui.column();copy.addView(ui.label(title,15,INK,true));ui.space(copy,5);copy.addView(ui.label(subtitle,11,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));row.addView(ui.new Icon("chevron",MUTED),new LinearLayout.LayoutParams(dp(18),dp(18)));card.addView(row);ui.tap(card,click);}
     private void support(){parentPage="settings";page("Мы на связи","support",true);content.addView(ui.label("Чем можем\nпомочь?",32,INK,true));text("Опишите, что произошло или чего не хватает. Ваше сообщение попадёт в поддержку Сметры.");EditText input=field("Ваше сообщение",1);ui.space(content,16);button("Отправить сообщение",true,v->{if(input.getText().toString().trim().isEmpty()){input.setError("Напишите сообщение");return;}try{call("/support","POST",new JSONObject().put("message",input.getText().toString()),r->{settings();message("Сообщение отправлено");});}catch(Exception error){message(error.getMessage());}});}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==304){saveActPdf(resultCode,data);return;}if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect,logId=uploadLog,purchaseId=uploadPurchase;uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(logId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/logs/"+logId+"/photos","POST",new JSONObject().put("file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(purchaseId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/purchases/"+purchaseId,"PATCH",new JSONObject().put("receipt_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==305){receiveAssistantAttachment(resultCode,data);return;}if(requestCode==304){saveActPdf(resultCode,data);return;}if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect,logId=uploadLog,purchaseId=uploadPurchase;uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;message("Прикрепляем файл…");worker.execute(()->{try{String mime=getContentResolver().getType(uri);String suffix="image/png".equals(mime)?".png":"image/jpeg".equals(mime)?".jpg":"application/pdf".equals(mime)?".pdf":".txt";byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name","Вложение"+suffix).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(logId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/logs/"+logId+"/photos","POST",new JSONObject().put("file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}if(purchaseId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/purchases/"+purchaseId,"PATCH",new JSONObject().put("receipt_file_id",file.optString("id")));runOnUiThread(()->{if(!isFinishing())constructionDetail(constructionId);});}runOnUiThread(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){runOnUiThread(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
     private void publicQuote(String publicToken){publicView=true;page("Предложение","public",false);loading(content);call("/public/quote?token="+android.net.Uri.encode(publicToken),"GET",null,r->{clearLoading(content);JSONObject q=r.optJSONObject("quote");if(q==null)return;content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,20);content.addView(ui.label(q.optString("title"),30,INK,true));text(q.optString("description"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость предложения",13,BLUE,false));ui.space(price,14);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));ui.space(content,16);if(q.optString("status").equals("sent"))button("Согласовать предложение",true,v->ui.sheet("Согласовать условия?","Вы принимаете состав работ и стоимость этой версии предложения.","Да, согласовать",false,()->{try{call("/public/accept","POST",new JSONObject().put("token",publicToken).put("version",q.optInt("published_version")),result->{publicQuote(publicToken);message("Предложение согласовано");});}catch(Exception error){message(error.getMessage());}}));});}
     private void goBack(){if(currentPage.startsWith("assistant-")){assistant();return;}if(currentPage.equals("catalog-form")){if(catalogParentId!=null)catalogDetail(catalogParentId);else catalogList();return;}if(currentPage.equals("catalog-detail")){catalogList();return;}if(currentPage.equals("catalog")){more();return;}if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-log-new")||currentPage.equals("construction-log-edit")||currentPage.equals("construction-log-detail")||currentPage.equals("construction-purchase-new")||currentPage.equals("construction-purchase-edit")||currentPage.equals("construction-purchase-detail")||currentPage.equals("construction-change-new")||currentPage.equals("construction-change-edit")||currentPage.equals("construction-change-detail")||currentPage.equals("construction-supplier-new")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
     @Override public void onBackPressed(){if(currentPage.equals("home")||currentPage.equals("login"))super.onBackPressed();else if(currentPage.startsWith("assistant-"))assistant();else goBack();}

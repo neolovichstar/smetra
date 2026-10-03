@@ -22,7 +22,8 @@ public class DesignSmoke extends Instrumentation {
     private Activity activity;
     private boolean assistantOnly;
     private boolean jobsOnly;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));start();}
+    private boolean attachmentsOnly;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -30,6 +31,28 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if(attachmentsOnly){
+                click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай документ");
+                pickFixture(null);require(editors().get(0).getText().toString().equals("Прочитай документ"),"Cancelled picker preserves draft");
+                for(String name:new String[]{"empty.txt","binary.txt","large.pdf","wrong.exe"}){
+                    pickFixture(name);waitText("Вернуться в диалог");click("Вернуться в диалог");waitEnabledPrefix("Отправить");
+                    require(editors().get(0).getText().toString().equals("Прочитай документ"),"Rejected attachment preserves draft: "+name);
+                }
+                for(String name:new String[]{"brief.md","note.txt","brief.pdf"}){
+                    pickFixture(name);waitText("Прикрепить к диалогу");waitText(name);shot("20-attachment-"+name.replace('.','-'));
+                    if("note.txt".equals(name)){
+                        ActivityMonitor recreation=addMonitor(MainActivity.class.getName(),null,false);
+                        runOnMainSync(()->activity.recreate());Activity restored=waitForMonitorWithTimeout(recreation,15000);removeMonitor(recreation);
+                        require(restored!=null,"Attachment preview recreated");activity=restored;waitText("Прикрепить к диалогу");waitText(name);
+                    }
+                    click("Прикрепить к диалогу");waitText("Файл · "+name);waitEnabledPrefix("Отправить");
+                    require(editors().get(0).getText().toString().equals("Прочитай документ"),"Attachment preserves draft: "+name);
+                }
+                click("Ещё");click("Ассистент");waitText("Файл · brief.pdf");waitEnabledPrefix("Отправить");
+                require(editors().get(0).getText().toString().equals("Прочитай документ"),"Navigation preserves draft and context");
+                clickPrefix("Отправить");waitText("Контекст файла получен.");shot("21-attachment-answer");
+                result.putString("stream","PASS: picker cancellation, empty/invalid/oversize/unsupported rejection, PDF/TXT/MD upload, conversation context, preserved draft, streamed file response\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(jobsOnly){
                 click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");
                 click("Диалоги");click("Новый диалог");waitText("Создать диалог");fill("Фоновая проверка");click("Создать диалог");waitText("Настройки");waitEnabledPrefix("Отправить");
@@ -76,6 +99,13 @@ public class DesignSmoke extends Instrumentation {
             result.putString("stream","PASS: login, filters, manual and itemized draft restore, quote/client, project/payment, catalog search/filter/edit/history, share-to-Capture, custom sheet, navigation; screenshots in files/design-qa\n");
             finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,result);}
+    }
+    private void pickFixture(String name){
+        Intent data=name==null?null:new Intent().setData(android.net.Uri.parse("content://ru.smetra.mobile.test.documents/"+name)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        android.content.IntentFilter filter=new android.content.IntentFilter(Intent.ACTION_OPEN_DOCUMENT);
+        filter.addCategory(Intent.CATEGORY_OPENABLE);try{filter.addDataType("*/*");}catch(android.content.IntentFilter.MalformedMimeTypeException error){throw new AssertionError(error);}
+        ActivityMonitor monitor=new ActivityMonitor(filter,new ActivityResult(name==null?Activity.RESULT_CANCELED:Activity.RESULT_OK,data),true);
+        addMonitor(monitor);click("Прикрепить файл · PDF, TXT, MD");SystemClock.sleep(600);require(monitor.getHits()==1,"Document picker launched");removeMonitor(monitor);
     }
     private void checkAssistantThreads(String quoteTitle)throws Exception{
             click("Диалоги");waitText("Новый диалог");click("Новый диалог");waitText("Создать диалог");fill("План работ");click("Создать диалог");waitText("Настройки");waitText("План работ");click("Настройки");waitText("Сохранить название");fill("План недели");click("Сохранить название");waitText("Настройки");waitText("План недели");click("Настройки");waitText("Закрепить диалог");click("Закрепить диалог");waitText("Настройки");waitText("План недели");shot("16-assistant-thread");

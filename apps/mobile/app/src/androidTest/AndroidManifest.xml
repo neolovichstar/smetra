@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider android:name="ru.smetra.mobile.AttachmentFixtureProvider" android:authorities="ru.smetra.mobile.test.documents" android:exported="true" android:grantUriPermissions="true" />
+    </application>
+</manifest>

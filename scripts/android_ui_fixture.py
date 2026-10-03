@@ -192,7 +192,8 @@ def main():
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
             selected = "Пользователь явно выбрал контекст: смета" in messages[0]["content"]
-            answer = "Контекст сметы получен." if selected else "Контекст не выбран."
+            file_selected = "Пользователь явно выбрал контекст: файл" in messages[0]["content"]
+            answer = "Контекст сметы получен." if selected else "Контекст файла получен." if file_selected else "Контекст не выбран."
             for chunk in answer.split(" "):
                 on_delta(chunk + " ")
             return {"content": answer}
