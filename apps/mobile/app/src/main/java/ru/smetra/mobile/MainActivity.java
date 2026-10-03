@@ -277,7 +277,7 @@ public class MainActivity extends Activity {
         ui.space(content,8);content.addView(ui.label(thread==null?"Общий диалог":thread.optString("title"),13,INK,true));
         if(assistantContext!=null){LinearLayout contextBar=ui.card(content);TextView contextLabel=ui.label("Контекст · "+assistantEntity(assistantContext.optString("entity")),12,BLUE,false);contextBar.addView(contextLabel);
             String entity=assistantContext.optString("entity"),id=assistantContext.optString("id");
-            call("/"+entity+"/"+id,"GET",null,r->{JSONObject record=r.optJSONObject(entity.equals("quotes")?"quote":entity.equals("files")?"file":"item");if(record!=null)contextLabel.setText(assistantEntity(entity)+" · "+record.optString("title",record.optString("name",id)));});
+            call("/"+entity+"/"+id+(entity.equals("files")?"/metadata":""),"GET",null,r->{JSONObject record=r.optJSONObject(entity.equals("quotes")?"quote":entity.equals("files")?"file":"item");if(record!=null)contextLabel.setText(assistantEntity(entity)+" · "+record.optString("title",record.optString("name",id)));});
             addButton(contextBar,"Убрать контекст",false,v->{try{call("/assistant/conversations/"+assistantConversation,"PATCH",new JSONObject().put("context_entity","").put("context_id",""),r->assistant());}catch(Exception error){message(error.getMessage());}});
         }
         ui.space(content,12);ui.divider(content);LinearLayout messages=ui.column();content.addView(messages);loading(messages);

@@ -48,6 +48,10 @@ def download(row, con=None):
 
 
 def route(service, method, parts, query, data):
+    if method == "GET" and len(parts) == 2 and parts[1] == "metadata":
+        row = service.get("files", parts[0])
+        return 200, {"file": {key: row[key] for key in
+                             ("id", "name", "mime", "size", "sha256", "created_at", "public")}}
     if len(parts) >= 2 and parts[1] == "versions":
         row = service.get("files", parts[0])
         if row["mime"] != "text/plain" or Path(row["name"]).suffix.lower() != ".md":

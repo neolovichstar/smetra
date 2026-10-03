@@ -9,6 +9,7 @@ import tempfile
 import threading
 import urllib.request
 import uuid
+import base64
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 
@@ -195,6 +196,9 @@ def main():
         from backend import assistant
 
         assistant.query_model_stream = stream_fixture
+        file = call('/files', {'assistant_upload': True, 'name': 'brief.txt',
+                    'content': base64.b64encode(b'file context').decode()}, token)['file']
+        call('/assistant/conversations', {'title': 'Бриф проекта', 'context_entity': 'files', 'context_id': file['id']}, token)
         print("ANDROID_UI_FIXTURE_READY http://127.0.0.1:8084", flush=True)
         try:
             threading.Event().wait()

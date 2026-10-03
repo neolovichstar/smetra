@@ -1,4 +1,5 @@
 import concurrent.futures
+import base64
 import os
 import unittest
 from unittest.mock import patch
@@ -121,3 +122,19 @@ class AssistantThreadTests(unittest.TestCase):
             result = self.call(path,token=owner)[1]['conversation']
             self.assertEqual(result['context_id'],'')
             self.assertEqual(result['pinned'],1)
+
+    def test_file_context_uses_scoped_metadata_without_payload(self):
+        owner, _ = self.account('thread-file')
+        stranger, _ = self.account('thread-file-stranger')
+        status,result = self.call('/files','POST',{'assistant_upload':True,'name':'brief.txt',
+                    'content':base64.b64encode('Рабочий документ'.encode()).decode()},owner)
+        self.assertEqual(status,201,result)
+        file = result['file']
+        status,result = self.call('/files/'+file['id']+'/metadata',token=owner)
+        self.assertEqual(status,200,result)
+        self.assertEqual(result['file']['name'],'brief.txt')
+        self.assertEqual(set(result['file']),{'id','name','mime','size','sha256','created_at','public'})
+        self.assertNotIn('Рабочий документ',str(result))
+        self.assertEqual(self.call('/files/'+file['id']+'/metadata',token=stranger)[0],404)
+        thread = self.create(owner,context_entity='files',context_id=file['id'])
+        self.assertEqual(thread['context_id'],file['id'])
