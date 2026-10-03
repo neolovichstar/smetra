@@ -129,21 +129,33 @@
     });
     const supplierForm=document.querySelector('#construction-supplier');supplierForm.onsubmit=event=>{event.preventDefault();request('/construction/suppliers',{name:val(supplierForm,'name'),phone:val(supplierForm,'phone'),email:val(supplierForm,'email')},detail)};
     const purchaseForm=document.querySelector('#construction-purchase');
-    purchaseForm.insertAdjacentHTML('beforeend','<button class="construction-edit" id="construction-receipt-ocr" type="button">Заполнить по фото чека</button><p class="construction-hint" id="construction-ocr-note">Проверьте сумму и дату перед сохранением. 3 распознавания в месяц бесплатно.</p>');
-    document.querySelector('#construction-receipt-ocr').onclick=async event=>{
-      const fileId=val(purchaseForm,'receipt_file_id');
-      if(!fileId){notify('Выберите прикреплённое фото чека');return}
-      const button=event.currentTarget;button.disabled=true;
-      try{
-        const result=await api(`/construction/objects/${selected}/receipt-ocr`,{method:'POST',body:JSON.stringify({file_id:fileId})});
-        const draft=result.draft;
-        if(draft.date)purchaseForm.elements.purchased_on.value=draft.date;
-        const quantity=number(val(purchaseForm,'quantity'));
-        if(draft.amount_kopecks&&quantity>0)purchaseForm.elements.unit_price.value=(draft.amount_kopecks/100/quantity).toFixed(2);
-        if(draft.merchant)purchaseForm.elements.notes.value=draft.merchant;
-        document.querySelector('#construction-ocr-note').textContent='Распознано: '+(draft.merchant||'магазин не найден')+' · '+(draft.amount_kopecks?money(draft.amount_kopecks):'сумма не найдена')+'. Проверьте все поля и нажмите «Записать закупку».';
-      }catch(error){notify(error.message)}finally{button.disabled=false}
+    purchaseForm.insertAdjacentHTML('beforeend','<div id="construction-ocr" class="construction-ocr"><p class="construction-hint" id="construction-ocr-note" aria-live="polite">3 распознавания в месяц бесплатно. Результат сохраняется как черновик.</p><button class="construction-edit" id="construction-receipt-ocr" type="button">Распознать фото чека</button><button class="construction-edit" id="construction-ocr-cancel" type="button" hidden>Отменить распознавание</button><button class="construction-edit" id="construction-ocr-apply" type="button" hidden>Перенести данные в форму</button></div>');
+    const ocrObject=selected,ocrNote=document.querySelector('#construction-ocr-note'),ocrStart=document.querySelector('#construction-receipt-ocr'),ocrCancel=document.querySelector('#construction-ocr-cancel'),ocrApply=document.querySelector('#construction-ocr-apply');
+    let ocrDraft=null,ocrSequence=0,ocrTimer=null,ocrKey=null;
+    const ocrPath=()=>`/construction/objects/${ocrObject}/receipt-ocr/${encodeURIComponent(val(purchaseForm,'receipt_file_id'))}`;
+    const currentOcr=()=>purchaseForm.isConnected&&selected===ocrObject;
+    async function refreshOcr(){
+      clearTimeout(ocrTimer);const sequence=++ocrSequence,fileId=val(purchaseForm,'receipt_file_id');ocrDraft=null;ocrApply.hidden=true;ocrCancel.hidden=true;
+      if(!fileId){ocrStart.disabled=false;ocrNote.textContent='Выберите фото чека. Черновик сохраняется без изменения закупки.';return}
+      try{const info=await api(ocrPath());if(!currentOcr()||sequence!==ocrSequence||fileId!==val(purchaseForm,'receipt_file_id'))return;
+        const active=['queued','running','retry'].includes(info.state);ocrStart.disabled=active;ocrCancel.hidden=!active;ocrCancel.disabled=!!info.cancel_requested;
+        ocrStart.textContent=['failed','cancelled'].includes(info.state)?'Повторить распознавание':'Распознать фото чека';
+        const budget=`${info.quota.used} из ${info.quota.limit} в месяц`;
+        if(info.draft){ocrDraft=info.draft;ocrStart.hidden=true;ocrApply.hidden=false;ocrNote.textContent=`${ocrDraft.merchant||'Магазин не найден'} · Итого по чеку: ${money(ocrDraft.amount_kopecks)}${ocrDraft.date?' · '+ocrDraft.date:''}. ${budget}. Проверьте, относится ли весь итог к выбранному материалу.`}
+        else{ocrStart.hidden=false;ocrNote.textContent=(active?info.progress:info.error|| (info.state==='cancelled'?'Распознавание отменено.':'Результат появится здесь.'))+' · '+budget}
+        if(active)ocrTimer=setTimeout(()=>{if(currentOcr())refreshOcr()},document.hidden?15000:4000);
+      }catch(error){if(currentOcr()&&sequence===ocrSequence){ocrStart.disabled=false;ocrNote.textContent=error.message}}
+    }
+    ocrStart.onclick=async()=>{if(!val(purchaseForm,'receipt_file_id')){notify('Выберите фото чека');return}ocrStart.disabled=true;ocrKey ||= crypto.randomUUID();try{await api(ocrPath(),{method:'POST',headers:{'Idempotency-Key':ocrKey},body:'{}'});ocrKey=null;await refreshOcr()}catch(error){if(currentOcr()){ocrStart.disabled=false;ocrNote.textContent=error.message}}};
+    ocrCancel.onclick=async()=>{ocrCancel.disabled=true;try{await api(ocrPath(),{method:'DELETE'});await refreshOcr()}catch(error){if(currentOcr()){ocrCancel.disabled=false;notify(error.message)}}};
+    ocrApply.onclick=()=>{if(!ocrDraft)return;const quantity=number(val(purchaseForm,'quantity'));if(!val(purchaseForm,'material_id')||!(quantity>0)){notify('Сначала выберите материал и количество');return}
+      if(ocrDraft.date)purchaseForm.elements.purchased_on.value=ocrDraft.date;
+      if(ocrDraft.amount_kopecks>0)purchaseForm.elements.unit_price.value=(ocrDraft.amount_kopecks/100/quantity).toFixed(2);
+      if(ocrDraft.merchant)purchaseForm.elements.notes.value=[val(purchaseForm,'notes'),ocrDraft.merchant].filter(Boolean).join(' · ').slice(0,2000);
+      ocrNote.textContent='Данные перенесены в форму. Цена рассчитана из всего итога чека: исправьте её, если в чеке несколько материалов. Закупка ещё не сохранена.';
     };
+    purchaseForm.elements.receipt_file_id.addEventListener('change',()=>{ocrKey=null;refreshOcr()});
+    purchaseForm.addEventListener('reset',()=>{ocrKey=null;setTimeout(refreshOcr,0)});
     purchaseForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;
       const payload={material_id:val(form,'material_id'),supplier_id:val(form,'supplier_id'),purchased_on:val(form,'purchased_on'),quantity:val(form,'quantity'),unit_price_kopecks:Math.round(number(val(form,'unit_price'))*100),status:val(form,'status'),receipt_file_id:val(form,'receipt_file_id'),notes:val(form,'notes')};
       request(`/construction/objects/${selected}/purchases${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST');
@@ -151,6 +163,7 @@
     document.querySelectorAll('[data-purchase-edit]').forEach(button=>button.onclick=()=>{const item=purchases.find(row=>row.id===button.dataset.purchaseEdit);purchaseForm.dataset.edit=item.id;
       for(const key of ['material_id','supplier_id','purchased_on','quantity','status','receipt_file_id','notes'])purchaseForm.elements[key].value=item[key]??'';
       purchaseForm.elements.unit_price.value=item.unit_price_kopecks/100;purchaseForm.querySelector('.btn').textContent='Сохранить закупку';purchaseForm.querySelector('#construction-purchase-cancel').hidden=false;purchaseForm.scrollIntoView({behavior:'smooth',block:'center'});
+      ocrKey=null;refreshOcr();
     });
     document.querySelector('#construction-purchase-cancel').onclick=()=>{delete purchaseForm.dataset.edit;purchaseForm.reset();purchaseForm.querySelector('.btn').textContent='Записать закупку';purchaseForm.querySelector('#construction-purchase-cancel').hidden=true};
     document.querySelectorAll('[data-purchase-delete]').forEach(button=>button.onclick=async()=>{if(!confirm('Удалить запись о закупке?'))return;try{await api(`/construction/objects/${selected}/purchases/${button.dataset.purchaseDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}});
@@ -180,7 +193,7 @@
     document.querySelector('#construction-report').onclick=downloadReport;
     document.querySelector('#construction-project-open')?.addEventListener('click',()=>{location.hash='projects';tab='projects';window.render()});
     document.querySelector('#construction-file').onchange=upload;
-    loadFiles();
+    loadFiles().then(()=>{if(currentOcr())refreshOcr()});
   }
   async function loadFiles(){
     try{const files=(await api('/files?construction_id='+encodeURIComponent(selected))).items;

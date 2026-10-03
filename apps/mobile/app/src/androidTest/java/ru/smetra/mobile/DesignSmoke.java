@@ -23,7 +23,8 @@ public class DesignSmoke extends Instrumentation {
     private boolean assistantOnly;
     private boolean jobsOnly;
     private boolean attachmentsOnly;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));start();}
+    private boolean receiptsOnly;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -31,6 +32,14 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if(receiptsOnly){
+                click("Ещё");click("Объекты и замеры");waitText("Проверка чека");click("Проверка чека");waitPrefix("2026-10-01 · ");clickPrefix("2026-10-01 · ");waitText("Распознать фото чека");click("Распознать фото чека");
+                click("Ещё");click("Объекты и замеры");waitText("Проверка чека");click("Проверка чека");waitPrefix("2026-10-01 · ");clickPrefix("2026-10-01 · ");waitText("Проверить данные чека");waitText("1 из 3 чеков в месяц");shot("21-receipt-draft");
+                require(find("Сохранённое примечание")!=null,"OCR does not change saved purchase");click("Проверить данные чека");clickSheetAction("Перенести в форму");waitText("Сохранить закупку");
+                boolean preserved=false;for(EditText editor:editors())if(editor.getText().toString().contains("Сохранённое примечание · Тестовый магазин"))preserved=true;
+                require(preserved,"Receipt proposal preserves existing purchase notes");shot("22-receipt-review");
+                result.putString("stream","PASS: native receipt background job, navigation, saved draft, one monthly recognition, no automatic purchase mutation and explicit review preserving notes\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(attachmentsOnly){
                 click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай документ");
                 pickFixture(null);require(editors().get(0).getText().toString().equals("Прочитай документ"),"Cancelled picker preserves draft");

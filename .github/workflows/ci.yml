@@ -48,6 +48,7 @@ jobs:
           python scripts/android_ui_fixture.py > data/assistant-fixture.log 2>&1 &
           for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/assistant-fixture.log && break; sleep 1; done
           node tests/browser_assistant_edits.cjs
+          node tests/browser_receipts.cjs
   android:
     runs-on: ubuntu-latest
     steps:

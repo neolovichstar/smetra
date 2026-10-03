@@ -1221,20 +1221,41 @@ public class MainActivity extends Activity {
         text("received".equals(purchase.optString("status"))?"Получено":"Заказано");
         if(!purchase.optString("notes").isEmpty())text(purchase.optString("notes"));
         addButton(content,"Прикрепить чек или накладную",false,v->{uploadConstruction=id;uploadProject=null;uploadDefect=null;uploadLog=null;uploadPurchase=purchase.optString("id");Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
-        if(!purchase.optString("receipt_file_id").isEmpty())addButton(content,"Распознать фото чека",false,v->{try{
-            call("/construction/objects/"+id+"/receipt-ocr","POST",new JSONObject().put("file_id",purchase.optString("receipt_file_id")),answer->{
-                JSONObject draft=answer.optJSONObject("draft");if(draft==null)return;
+        if(!purchase.optString("receipt_file_id").isEmpty()){
+            LinearLayout ocr=new LinearLayout(this);ocr.setOrientation(LinearLayout.VERTICAL);content.addView(ocr);
+            loadReceiptDraft(id,purchase,ocr,pageVersion);
+        }
+        addButton(content,"Изменить",false,v->call("/construction/objects/"+id,"GET",null,result->constructionPurchaseForm(id,result.optJSONArray("quantities"),purchase)));
+        addButton(content,"Удалить",false,v->ui.sheet("Удалить закупку?","Список закупки пересчитается.","Удалить",false,()->call("/construction/objects/"+id+"/purchases/"+purchase.optString("id"),"DELETE",null,result->constructionDetail(id))));
+    }
+    private void loadReceiptDraft(String id,JSONObject purchase,LinearLayout host,int version){
+        if(version!=pageVersion||isFinishing())return;
+        String path="/construction/objects/"+id+"/receipt-ocr/"+purchase.optString("receipt_file_id");
+        call(path,"GET",null,info->{
+            if(version!=pageVersion)return;host.removeAllViews();String state=info.optString("state");
+            boolean active=state.equals("queued")||state.equals("running")||state.equals("retry");
+            JSONObject budget=info.optJSONObject("quota");if(budget!=null)host.addView(ui.label(budget.optInt("used")+" из "+budget.optInt("limit")+" чеков в месяц",12,MUTED,false));
+            JSONObject draft=info.optJSONObject("draft");
+            if(draft!=null){
                 String merchant=draft.optString("merchant"),date=draft.optString("date");long total=draft.optLong("amount_kopecks");
-                ui.sheet("Проверьте данные чека",(merchant.isEmpty()?"Магазин не найден":merchant)+" · "+exactMoney(total,"RUB")+(date.isEmpty()?"":" · "+date)+". Изменения сохранятся только после проверки формы и нажатия «Сохранить закупку».","Проверить в форме",false,()->{
-                    try{JSONObject proposed=new JSONObject(purchase.toString());if(!date.isEmpty())proposed.put("purchased_on",date);if(!merchant.isEmpty())proposed.put("notes",merchant);
+                host.addView(ui.label((merchant.isEmpty()?"Магазин не найден":merchant)+" · Итого "+exactMoney(total,"RUB")+(date.isEmpty()?"":" · "+date),14,INK,true));
+                addButton(host,"Проверить данные чека",false,v->ui.sheet("Проверка чека","Цена в форме будет рассчитана из всего итога чека. Если в чеке несколько материалов, исправьте её вручную. Закупка сохранится только после проверки формы.","Перенести в форму",false,()->{
+                    try{JSONObject proposed=new JSONObject(purchase.toString());if(!date.isEmpty())proposed.put("purchased_on",date);
+                        if(!merchant.isEmpty()){String notes=proposed.optString("notes");String combined=notes.isEmpty()?merchant:notes+" · "+merchant;proposed.put("notes",combined.substring(0,Math.min(2000,combined.length())));}
                         if(total>0){java.math.BigDecimal quantity=new java.math.BigDecimal(purchase.optString("quantity","1"));if(quantity.signum()>0)proposed.put("unit_price_kopecks",new java.math.BigDecimal(total).divide(quantity,0,java.math.RoundingMode.HALF_UP).longValueExact());}
                         call("/construction/objects/"+id,"GET",null,detail->constructionPurchaseForm(id,detail.optJSONArray("quantities"),proposed));
                     }catch(Exception error){message("Проверьте сумму и количество вручную");}
-                });
-            });
-        }catch(Exception error){message("Не удалось открыть чек");}});
-        addButton(content,"Изменить",false,v->call("/construction/objects/"+id,"GET",null,result->constructionPurchaseForm(id,result.optJSONArray("quantities"),purchase)));
-        addButton(content,"Удалить",false,v->ui.sheet("Удалить закупку?","Список закупки пересчитается.","Удалить",false,()->call("/construction/objects/"+id+"/purchases/"+purchase.optString("id"),"DELETE",null,result->constructionDetail(id))));
+                }));
+            }else if(active){
+                host.addView(ui.label(info.optString("progress","Распознаю чек…"),13,MUTED,false));
+                if(!info.optBoolean("cancel_requested"))addButton(host,"Отменить распознавание",false,v->call(path,"DELETE",null,r->loadReceiptDraft(id,purchase,host,version)));
+                host.postDelayed(()->{if(version==pageVersion)loadReceiptDraft(id,purchase,host,version);},4000);
+            }else{
+                if(!info.optString("error").isEmpty())host.addView(ui.label(info.optString("error"),13,MUTED,false));
+                final String requestKey=java.util.UUID.randomUUID().toString();
+                addButton(host,state.equals("failed")||state.equals("cancelled")?"Повторить распознавание":"Распознать фото чека",false,v->{try{call(path,"POST",new JSONObject().put("_request_key",requestKey),r->loadReceiptDraft(id,purchase,host,version));}catch(Exception error){message("Не удалось открыть чек");}});
+            }
+        });
     }
     private void constructionLogNew(String id,JSONArray zones,JSONArray quantities){constructionLogForm(id,zones,quantities,null);}
     private void constructionLogForm(String id,JSONArray zones,JSONArray quantities,JSONObject previous){

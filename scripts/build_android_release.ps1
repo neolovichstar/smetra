@@ -49,15 +49,22 @@ if (-not (Test-Path -LiteralPath $apksigner) -or -not (Test-Path -LiteralPath $a
 
 Push-Location $repo
 try {
-    & (Join-Path $repo 'apps\mobile\gradlew.bat') -p apps/mobile lintRelease assembleRelease "-PapiBaseUrl=$ApiBaseUrl" --no-daemon
-    if ($LASTEXITCODE -ne 0) { throw 'Release build or lint failed.' }
+    # Windows PowerShell can turn harmless SDK warnings on native stderr into
+    # terminating errors when output is redirected. Trust Gradle's exit code.
+    $taskNativePreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & (Join-Path $repo 'apps\mobile\gradlew.bat') -p apps/mobile lintRelease assembleRelease "-PapiBaseUrl=$ApiBaseUrl" --no-daemon 2>&1 | ForEach-Object { Write-Output "$_" }
+        $taskBuildExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $taskNativePreference }
+    if ($taskBuildExit -ne 0) { throw 'Release build or lint failed.' }
 
     $apk = Join-Path $repo 'apps\mobile\app\build\outputs\apk\release\app-release.apk'
     if (-not (Test-Path -LiteralPath $apk -PathType Leaf)) { throw 'Signed release APK was not produced.' }
     $badging = & $aapt dump badging $apk
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read APK manifest.' }
     $package = $badging | Where-Object { $_ -like 'package:*' } | Select-Object -First 1
-    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='19'" -or $package -notmatch "versionName='1\.7\.7'") {
+    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='20'" -or $package -notmatch "versionName='1\.7\.8'") {
         throw "Unexpected APK identity: $package"
     }
     $signature = & $apksigner verify --verbose --print-certs $apk 2>&1
@@ -69,7 +76,7 @@ try {
     if ($expected.Length -ne 64) { throw 'RUSTORE_CERT_SHA256 must contain a 64-digit SHA-256 fingerprint.' }
     if ($expected -ne $fingerprint) { throw 'Signing certificate differs from RUSTORE_CERT_SHA256. Do not publish this APK.' }
 
-    $destination = Join-Path $repo 'dist\smetra-mobile-1.7.7-release.apk'
+    $destination = Join-Path $repo 'dist\smetra-mobile-1.7.8-release.apk'
     New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
     Copy-Item -LiteralPath $apk -Destination $destination -Force
     Write-Output "APK: $destination"

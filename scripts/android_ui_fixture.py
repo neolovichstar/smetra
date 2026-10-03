@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import io
 import os
 from pathlib import Path
 import sys
@@ -90,6 +91,14 @@ def main():
             },
         )
         token = account["token"]
+        from PIL import Image
+        receipt_object = call('/construction/objects', {'name': 'Проверка чека'}, token)['object']['id']
+        receipt_zone = call('/construction/objects/' + receipt_object + '/zones', {'name': 'Комната', 'length': '2', 'width': '1'}, token)['zone']['id']
+        receipt_material = call('/construction/objects/' + receipt_object + '/quantities', {'zone_id': receipt_zone, 'kind': 'material', 'title': 'Тестовый материал', 'formula': 'area', 'unit_price': 10000}, token)['quantity']['id']
+        receipt_image = io.BytesIO()
+        Image.new('RGB', (30, 30), 'white').save(receipt_image, format='PNG')
+        receipt_file = call('/files', {'construction_id': receipt_object, 'name': 'receipt.png', 'content': base64.b64encode(receipt_image.getvalue()).decode()}, token)['file']['id']
+        call('/construction/objects/' + receipt_object + '/purchases', {'material_id': receipt_material, 'receipt_file_id': receipt_file, 'quantity': '2', 'unit_price_kopecks': 10000, 'status': 'received', 'purchased_on': '2026-10-01', 'notes': 'Сохранённое примечание'}, token)
         first_price = call(
             "/catalog",
             {
@@ -212,6 +221,13 @@ def main():
 
         assistant.query_model_stream = stream_fixture
         assistant.query_model = lambda messages: {"content": "Фоновая задача завершена."}
+        from backend import receipt_ocr
+
+        def receipt_fixture(*_):
+            time.sleep(3)
+            return {'merchant': 'Тестовый магазин', 'amount_kopecks': 123450, 'date': '2026-10-03'}
+
+        receipt_ocr._request = receipt_fixture
 
         def background_fixture():
             # A separate HTTP invocation models the production scheduler.

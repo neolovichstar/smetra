@@ -204,6 +204,10 @@ def _route(service, method, parts, query, data):
         }
     if method == "DELETE" and parts:
         row = service.get("files", parts[0])
+        from backend.assistant_jobs import refund
+        pending = service.con.execute("SELECT * FROM assistant_jobs WHERE file_id=? AND workspace_id=? AND user_id=? AND kind='receipt_ocr' AND status IN ('queued','running','retry')", (row['id'], service.wid, service.user['id'])).fetchall()
+        for job in pending:
+            refund(service.con, job)
         service.con.execute(
             "DELETE FROM files WHERE id=? AND workspace_id=?", (row["id"], service.wid)
         )

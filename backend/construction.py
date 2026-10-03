@@ -881,6 +881,9 @@ def route(service, method, parts, query, data):
         from backend.receipt_ocr import recognize
 
         return 200, recognize(service, obj, data)
+    if len(rest) == 2 and rest[0] == 'receipt-ocr':
+        from backend.receipt_ocr import route as receipt_route
+        return receipt_route(service, obj, method, rest[1])
     if rest == ["report.pdf"] and method == "GET":
         from backend.construction_report import report
         return 200, report(service, obj, detail(service, obj))

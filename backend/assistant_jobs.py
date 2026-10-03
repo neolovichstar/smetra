@@ -49,7 +49,7 @@ def route(service, method, parts, data):
     args = (service.wid, service.user['id'])
     if method == 'GET' and not parts:
         rows = service.con.execute(
-            f'SELECT {PUBLIC_COLUMNS} FROM assistant_jobs WHERE workspace_id=? AND user_id=? ORDER BY created_at DESC,id DESC LIMIT 20', args,
+            f"SELECT {PUBLIC_COLUMNS} FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind<>'receipt_ocr' ORDER BY created_at DESC,id DESC LIMIT 20", args,
         )
         return 200, {'jobs': [public(row) for row in rows], 'enabled': len(os.getenv('ASSISTANT_WORKER_SECRET', '')) >= 32}
     if parts:
@@ -184,7 +184,7 @@ def run_one(handler, con, origin):
         from backend.redis_infra import RedisUnavailable, acquire_lock
 
         try:
-            lease = acquire_lock('file-processing' if job['kind']=='file_index' else 'assistant', user['id'], ttl=120)
+            lease = acquire_lock('receipt-ocr' if job['kind']=='receipt_ocr' else 'file-processing' if job['kind']=='file_index' else 'assistant', user['id'], ttl=120)
         except RedisUnavailable:
             raise DomainError(503, 'Ассистент временно недоступен') from None
         if lease is None:
@@ -213,6 +213,9 @@ def run_one(handler, con, origin):
 
         if job['kind']=='file_index':
             file_processing.process(service,job,complete,progress,validate)
+        elif job['kind']=='receipt_ocr':
+            from backend.receipt_ocr import process
+            process(service,job,complete,progress,validate)
         else:
             file_processing.ensure_ready(service,context)
             assistant.answer_chat(service, job['prompt'], context=context, conversation_id=job['conversation_id'], on_status=progress, on_commit=complete)
