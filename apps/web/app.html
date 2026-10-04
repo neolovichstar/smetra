@@ -20,10 +20,12 @@
   <header class="nav app-nav">
     <div class="app-nav-inner">
       <div class="app-nav-brand">
+        <button id="sidebar-collapse" class="desktop-menu-toggle" type="button" aria-label="Свернуть меню" aria-controls="sidebar" aria-expanded="true"><span></span><span></span></button>
         <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Открыть разделы" aria-controls="sidebar" aria-expanded="false"><span></span><span></span></button>
         <a class="brand" href="/">сметра<span class="brand-mark">.</span></a>
         <span class="app-nav-caption">рабочее пространство</span>
       </div>
+      <nav class="workspace-modes" aria-label="Режим работы"><button type="button" data-mode="dashboard" aria-pressed="true">Сметы</button><button type="button" data-mode="assistant" aria-pressed="false">Ассистент</button></nav>
       <div class="app-nav-actions">
         <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
         <span id="header-user" class="nav-user"></span>

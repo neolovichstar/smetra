@@ -116,8 +116,8 @@
 @media(prefers-reduced-motion:reduce){.workspace-page *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 
 /* Conversational workspace: compact navigation, a central composer, quiet data. */
-.workspace-page:not(.auth-mode){--surface-base:#181818;--surface-input:#252525;--surface-hover:#2c2c2c;--stroke:#353535;background:#181818}
-.workspace-page:not(.auth-mode) .app-nav{background:#181818;border:0;backdrop-filter:none;height:60px}
+.workspace-page:not(.auth-mode){--surface-base:#000;--surface-input:#252525;--surface-hover:#2c2c2c;--stroke:#353535;background:#000}
+.workspace-page:not(.auth-mode) .app-nav{background:#000;border:0;backdrop-filter:none;height:60px}
 .workspace-page:not(.auth-mode) .app-nav-inner{padding-inline:20px}
 .workspace-page:not(.auth-mode) .app-nav-caption{display:none}
 .workspace-page:not(.auth-mode) .app-nav .brand{font-size:23px}
@@ -140,7 +140,7 @@
 .workspace-page:not(.auth-mode) .sidebar-foot>span{display:none}
 .workspace-page:not(.auth-mode) .sidebar-foot button{justify-content:flex-start;gap:12px;color:#c4c4c4;font-size:13px;min-height:40px}
 .workspace-page:not(.auth-mode) .sidebar-foot button>span{display:none}
-.workspace-page:not(.auth-mode) .main{background:#181818;max-width:1120px;padding:24px 40px 64px}
+.workspace-page:not(.auth-mode) .main{background:#000;max-width:1120px;padding:24px 40px 64px}
 .workspace-page:not(.auth-mode) .main .eyebrow{color:#909090;letter-spacing:0;font-size:11px}
 .workspace-page:not(.auth-mode) .main .eyebrow::before{display:none}
 .workspace-page:not(.auth-mode) .btn{background:transparent;border-color:#444;color:#e9e9e9;font-weight:500;border-radius:12px}
@@ -188,7 +188,7 @@
 .workspace-page:not(.auth-mode) .assistant-thread-action{border-color:transparent;background:transparent}
 .workspace-page:not(.auth-mode) .assistant-message+.assistant-message{border:0}
 .workspace-page:not(.auth-mode) .assistant-message.user .assistant-markdown{background:#303030;border:0;border-radius:22px}
-.workspace-page:not(.auth-mode) .assistant-composer{background:linear-gradient(#18181800,#181818 18px)}
+.workspace-page:not(.auth-mode) .assistant-composer{background:linear-gradient(#00000,#000 18px)}
 .workspace-page:not(.auth-mode) .assistant-composer form{background:#2b2b2b;border-color:#ffffff08;border-radius:24px;box-shadow:none;padding:10px}
 .workspace-page:not(.auth-mode) .assistant-page .assistant-header h1{font-size:22px}
 .workspace-page:not(.auth-mode) .assistant-markdown{font-size:15px}
@@ -209,3 +209,65 @@
  .workspace-page .workspace-home .dashboard-metric strong{font-size:20px}
  .workspace-page:not(.auth-mode) .assistant-composer form{border-radius:22px;padding:8px}
 }
+
+/* Reference refinement: one compact composer, a few primary destinations. */
+.workspace-page:not(.auth-mode) .app-nav-inner{position:relative}
+.workspace-modes{display:flex;gap:2px;position:absolute;left:50%;transform:translateX(-50%);background:#171717;padding:4px;border-radius:24px}
+.workspace-modes button{border:0;background:transparent;border-radius:20px;color:#a6a6a6;min-height:36px;min-width:108px;padding:8px 18px;font:500 13px var(--font);cursor:pointer}
+.workspace-modes button[aria-pressed=true]{background:#292929;color:#f3f3f3}
+.workspace-modes button:hover{color:#fff}
+.auth-mode .workspace-modes,.auth-mode .desktop-menu-toggle{display:none}
+.desktop-menu-toggle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:0;background:transparent;border-radius:10px;width:40px;height:40px;cursor:pointer}
+.desktop-menu-toggle span{width:17px;height:1px;background:#bbb}
+.desktop-menu-toggle:hover{background:#222}
+.workspace-page:not(.auth-mode) .app-nav-brand{gap:8px}
+.workspace-page:not(.auth-mode) .sidebar{background:#090909}
+.workspace-page:not(.auth-mode) .sidebar-scroll{order:1;padding-top:14px}
+.workspace-page:not(.auth-mode) .workspace-label{order:3;margin-top:auto;padding:16px 24px 2px}
+.workspace-page:not(.auth-mode) .sidebar-foot{order:4;background:#090909;padding-bottom:16px;margin-top:0}
+.workspace-page:not(.auth-mode) .sidebar-group{padding:0 0 8px}
+.workspace-page:not(.auth-mode) .sidebar-group button{font-size:14px;min-height:42px}
+.workspace-page:not(.auth-mode) .sidebar-group .sidebar-disclosure{color:#929292;justify-content:space-between;margin-top:12px;font-size:12px;min-height:38px}
+.sidebar-disclosure::after{content:'';width:6px;height:6px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(-45deg);margin-right:4px;transition:transform .2s}
+.sidebar-disclosure[aria-expanded=true]::after{transform:rotate(45deg)}
+.sidebar-group-items[hidden]{display:none}
+.workspace-page .workspace-home .capture-panel{gap:24px}
+.workspace-page .workspace-home .capture-heading h2{font-size:30px;font-weight:500;letter-spacing:-.025em}
+.workspace-page .workspace-home .capture-panel form{grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:0 6px;padding:8px;border-radius:30px;background:#222;box-shadow:none;border-color:#ffffff05;max-width:780px}
+.workspace-page .workspace-home .capture-panel form:not(:has(#capture-file)){grid-template-columns:minmax(0,1fr) auto}
+.workspace-home #capture-form:not(:has(#capture-file)) #capture-text{grid-column:1}
+.workspace-home #capture-form:not(:has(#capture-file)) .capture-actions{grid-column:2}
+.workspace-page .workspace-home #capture-text{grid-column:2;grid-row:1;min-height:44px;max-height:180px;padding:10px 4px;font-size:15px;line-height:24px;resize:none}
+.workspace-page .workspace-home .capture-file{grid-column:1;grid-row:1;min-height:44px;width:44px;font-size:0;padding:12px;border-radius:50%}
+.workspace-home .capture-file::before{width:20px;height:20px;mask-image:url('/assets/icons/plus.svg')}
+.workspace-page .workspace-home .capture-actions{grid-column:3;grid-row:1;align-self:center}
+.workspace-page .workspace-home .capture-actions .btn{min-height:42px;height:42px;font-size:12px;border-radius:24px;padding:10px 16px}
+.workspace-home #capture-status:not(:empty){padding:8px 12px 4px;overflow-wrap:anywhere}
+.capture-shortcuts{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:min(100%,780px)}
+.workspace-page .workspace-home .capture-shortcuts .btn{min-height:40px;font-size:12px;color:#aaa;border:0;padding:8px 12px;gap:8px;border-radius:12px}
+.workspace-page .workspace-home .capture-shortcuts .btn:hover{color:#f3f3f3;background:#171717}
+.workspace-page .workspace-home .dashboard-metrics{opacity:.75;gap:24px}
+.workspace-page .workspace-home .dashboard-metric strong{font-size:18px}
+.workspace-page:not(.auth-mode) .assistant-composer{background:linear-gradient(transparent,#000 18px)}
+.workspace-page:not(.auth-mode) .assistant-composer form{background:#222}
+@media(min-width:701px){.workspace-page.sidebar-compact:not(.auth-mode) .app-shell{grid-template-columns:minmax(0,1fr)}.workspace-page.sidebar-compact:not(.auth-mode) .sidebar{display:none}}
+@media(max-width:700px){
+ .desktop-menu-toggle{display:none}
+ .workspace-modes{position:static;transform:none;margin-inline:auto;padding:3px;gap:0}
+ .workspace-modes button{min-width:0;min-height:34px;font-size:11px;padding:7px 10px}
+ .workspace-page:not(.auth-mode) .app-nav .brand{font-size:20px}
+ .workspace-page:not(.auth-mode) .app-nav-inner{padding-inline:12px;gap:6px}
+ .workspace-page:not(.auth-mode) .app-nav-brand{gap:6px}
+ .workspace-page:not(.auth-mode) .nav-toggle{width:36px;height:40px;border:0;padding:8px}
+ .workspace-page:not(.auth-mode) .nav-search{width:32px;height:40px;padding:8px}
+ .workspace-page .workspace-home .capture-heading h2{font-size:26px}
+ .workspace-page .workspace-home .capture-panel form{grid-template-columns:36px minmax(0,1fr) 44px;gap:4px;padding:6px;border-radius:26px}
+ .workspace-page .workspace-home #capture-text{font-size:16px;line-height:24px;padding:10px 2px;min-height:44px}
+ .workspace-page .workspace-home .capture-file{width:36px;padding:8px}
+ .workspace-page .workspace-home .capture-actions .btn{width:44px;min-height:44px;height:44px;padding:0;font-size:0;gap:0}
+ .workspace-page .workspace-home .capture-actions .btn::before{content:'';display:block;width:20px;height:20px;background:currentColor;mask:url('/assets/icons/arrow-up-right.svg') center/contain no-repeat}
+ .capture-shortcuts{gap:4px}
+ .workspace-page .workspace-home .capture-shortcuts .btn{font-size:11px;padding:8px;min-height:44px}
+ .workspace-page:not(.auth-mode) .sidebar-group button{min-height:44px}
+}
+@media(max-width:359px){.workspace-page:not(.auth-mode) .app-nav .brand{font-size:18px}.workspace-modes button{font-size:10px;padding-inline:8px}.capture-shortcuts{gap:0}}
