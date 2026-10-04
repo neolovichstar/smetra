@@ -89,7 +89,7 @@ public class DesignSmoke extends Instrumentation {
             }
             if(jobsOnly){
                 click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");
-                click("Диалоги");click("Новый диалог");waitText("Создать диалог");fill("Фоновая проверка");click("Создать диалог");waitText("Настройки");waitEnabledPrefix("Отправить");
+                click("Диалоги");click("Новый диалог");waitText("Создать диалог");fill("Фоновая проверка");click("Создать диалог");waitDescription("Настройки диалога");waitEnabledPrefix("Отправить");
                 fill("Проверь рабочие данные в фоне");click("Выполнить в фоне");waitText("Задачи ассистента");
                 click("Ещё");click("Ассистент");waitText("Фоновая проверка");click("Фоновые задачи");waitText("Открыть ответ");shot("18-assistant-jobs");
                 click("Открыть ответ");waitText("Фоновая проверка");waitText("Фоновая задача завершена.");shot("19-assistant-job-result");
@@ -142,14 +142,15 @@ public class DesignSmoke extends Instrumentation {
         addMonitor(monitor);click("Прикрепить файл · PDF, TXT, MD");SystemClock.sleep(600);require(monitor.getHits()==1,"Document picker launched");removeMonitor(monitor);
     }
     private void checkAssistantThreads(String quoteTitle)throws Exception{
-            click("Диалоги");waitText("Новый диалог");click("Новый диалог");waitText("Создать диалог");fill("План работ");click("Создать диалог");waitText("Настройки");waitText("План работ");click("Настройки");waitText("Сохранить название");fill("План недели");click("Сохранить название");waitText("Настройки");waitText("План недели");click("Настройки");waitText("Закрепить диалог");click("Закрепить диалог");waitText("Настройки");waitText("План недели");shot("16-assistant-thread");
+            click("Диалоги");waitText("Новый диалог");click("Новый диалог");waitText("Создать диалог");fill("План работ");click("Создать диалог");waitDescription("Настройки диалога");waitText("План работ");clickDescription("Настройки диалога");waitText("Сохранить название");fill("План недели");click("Сохранить название");waitDescription("Настройки диалога");waitText("План недели");clickDescription("Настройки диалога");waitText("Закрепить диалог");click("Закрепить диалог");waitDescription("Настройки диалога");waitText("План недели");shot("16-assistant-thread");
             click("Диалоги");waitText("Общий диалог");waitText("План недели");click("Общий диалог");waitText("Общий диалог");
             click("Сегодня");waitText(""+quoteTitle+"");click(""+quoteTitle+"");waitText("Спросить ассистента");click("Спросить ассистента");waitText("Смета · "+quoteTitle+"");waitEnabledPrefix("Отправить");fill("Покажи контекст");clickPrefix("Отправить");waitText("Контекст сметы получен.");
             click("Ещё");click("Ассистент");waitText("Смета · "+quoteTitle+"");waitText("Контекст сметы получен.");click("Продолжить в новой ветке");waitPrefix("Ветка · "+quoteTitle+"");waitText("Контекст сметы получен.");shot("17-assistant-context");
             click("Убрать контекст");waitGone("Убрать контекст");waitEnabledPrefix("Отправить");fill("Теперь без контекста");clickPrefix("Отправить");waitText("Контекст не выбран.");waitText("Лимит на месяц исчерпан");shot("18-assistant-limit");
-            click("Настройки");waitText("Удалить диалог");click("Удалить диалог");clickSheetAction("Удалить");waitText("Общий диалог");require(find("Контекст не выбран.")==null,"Thread messages must not leak into global history");
+            clickDescription("Настройки диалога");waitText("Удалить диалог");click("Удалить диалог");clickSheetAction("Удалить");waitText("Общий диалог");require(find("Контекст не выбран.")==null,"Thread messages must not leak into global history");
             click("Диалоги");waitText("Бриф проекта");click("Бриф проекта");waitText("Файл · brief.txt");shot("19-assistant-file-context");
     }
+    private void waitDescription(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){for(View view:views())if(text.equals(String.valueOf(view.getContentDescription()))){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing accessible control "+text);}
     private void clickDescription(String text){for(View view:views())if(text.equals(String.valueOf(view.getContentDescription()))){runOnMainSync(view::performClick);SystemClock.sleep(500);return;}throw new AssertionError("Missing control "+text);}
     private void clickSheetAction(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text)){if(text.equals(String.valueOf(node.getText()))&&node.isClickable()&&node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){SystemClock.sleep(500);return;}}SystemClock.sleep(150);}throw new AssertionError("Missing sheet action "+text);}
     private void require(boolean condition,String message){if(!condition)throw new AssertionError(message);}

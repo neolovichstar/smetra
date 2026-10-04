@@ -6,6 +6,7 @@ import android.app.Dialog;
 import android.content.res.ColorStateList;
 import android.graphics.*;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.*;
 import android.view.animation.PathInterpolator;
@@ -14,8 +15,8 @@ import android.widget.*;
 /** Small native design system. All geometry is in dp; text respects the device font scale. */
 final class SmetraUi {
     static final int BG=Color.BLACK, SURFACE=Color.rgb(8,8,9), RAISED=Color.rgb(17,17,20);
-    static final int LINE=Color.rgb(37,37,42), INK=Color.rgb(247,247,248), MUTED=Color.rgb(163,163,173);
-    static int BLUE=Color.rgb(130,177,255);
+    static final int LINE=Color.rgb(38,38,38), INK=Color.rgb(243,244,246), MUTED=Color.rgb(169,171,179);
+    static int BLUE=Color.rgb(150,190,255);
     static final int GREEN=Color.rgb(137,224,191), AMBER=Color.rgb(241,203,140), RED=Color.rgb(255,158,167);
     static final PathInterpolator EASE=new PathInterpolator(.2f,.8f,.2f,1f);
     final Activity activity;
@@ -35,7 +36,7 @@ final class SmetraUi {
     void gap(LinearLayout parent,int size){parent.addView(new View(activity),new LinearLayout.LayoutParams(dp(size),1));}
     TextView label(String text,int size,int color,boolean strong){
         TextView view=new TextView(activity);view.setText(text);view.setTextSize(size);view.setTextColor(color);
-        view.setTypeface(strong?bold:regular);view.setIncludeFontPadding(false);view.setLineSpacing(dp(3),1);
+        view.setTypeface(strong?medium:regular);view.setIncludeFontPadding(false);view.setLineSpacing(dp(3),1);
         return view;
     }
     GradientDrawable shape(int color,int radius,int border){
@@ -56,21 +57,38 @@ final class SmetraUi {
         states.addState(new int[]{android.R.attr.state_pressed},press);states.addState(new int[]{},release);view.setStateListAnimator(states);
     }
     Button button(String title,boolean primary,Runnable action){
-        Button view=new Button(activity);view.setText(title);view.setAllCaps(false);view.setTextSize(15);view.setTypeface(medium);
-        view.setTextColor(primary?BG:INK);view.setMinHeight(dp(54));view.setMinimumHeight(dp(54));view.setPadding(dp(18),dp(15),dp(18),dp(15));
-        view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,12,primary?0xffb9d3ff:LINE);tap(view,action);
-        LinearLayout.LayoutParams params=match();params.topMargin=dp(10);view.setLayoutParams(params);return view;
+        Button view=new Button(activity);view.setText(title);view.setAllCaps(false);view.setTextSize(13);view.setTypeface(medium);
+        view.setTextColor(primary?BG:INK);view.setMinHeight(dp(48));view.setMinimumHeight(dp(48));view.setPadding(dp(14),dp(12),dp(14),dp(12));
+        view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,10,primary?0xffb9d3ff:LINE);tap(view,action);
+        String icon=actionIcon(title);if(icon!=null){
+            int size=dp(18);Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
+            Icon glyph=new Icon(icon,primary?BG:INK);glyph.layout(0,0,size,size);glyph.draw(new Canvas(bitmap));
+            BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),bitmap);drawable.setBounds(0,0,size,size);
+            view.setCompoundDrawablesRelative(drawable,null,null,null);view.setCompoundDrawablePadding(dp(8));
+        }
+        LinearLayout.LayoutParams params=match();params.topMargin=dp(8);view.setLayoutParams(params);return view;
+    }
+    private String actionIcon(String title){
+        if(title.startsWith("Создать")||title.startsWith("Добавить")||title.startsWith("Новый")||title.startsWith("Новая"))return "plus";
+        if(title.startsWith("Сохранить")||title.startsWith("Применить")||title.startsWith("Подтвердить"))return "check";
+        if(title.startsWith("Обновить")||title.startsWith("Повторить"))return "refresh";
+        if(title.startsWith("Отправить")||title.startsWith("Открыть"))return "arrow";
+        if(title.startsWith("Найти")||title.startsWith("Поиск"))return "search";
+        if(title.startsWith("Диалоги"))return "chat";
+        if(title.startsWith("Фоновые"))return "clock";
+        if(title.startsWith("Прикрепить"))return "attachment";
+        return null;
     }
     LinearLayout card(LinearLayout parent){
-        LinearLayout section=column();section.setPadding(0,dp(20),0,dp(20));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
+        LinearLayout section=column();section.setPadding(0,dp(16),0,dp(16));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
     }
     void enter(View view){if(!motion())return;view.setAlpha(0);view.setTranslationY(dp(12));view.animate().alpha(1).translationY(0).setDuration(340).setInterpolator(EASE).start();}
     TextView badge(String text,int color){TextView view=label(text,11,color,true);view.setPadding(0,dp(3),0,dp(3));view.setBackgroundColor(Color.TRANSPARENT);view.setLayoutParams(new LinearLayout.LayoutParams(-2,-2));return view;}
     EditText field(LinearLayout parent,String label,int type){
-        space(parent,18);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,8);
+        space(parent,16);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,8);
         EditText field=new EditText(activity);field.setTextSize(16);field.setTypeface(regular);field.setTextColor(INK);field.setHintTextColor(0xff69768a);
-        field.setInputType(type);field.setSingleLine(type!=1);field.setMinHeight(dp(type==1?112:56));field.setGravity(Gravity.TOP|Gravity.START);
-        field.setPadding(dp(16),dp(16),dp(16),dp(16));field.setBackground(shape(SURFACE,10,LINE));field.setSelectAllOnFocus(false);
+        field.setInputType(type);field.setSingleLine(type!=1);field.setMinHeight(dp(type==1?96:48));field.setGravity(type==1?Gravity.TOP|Gravity.START:Gravity.CENTER_VERTICAL|Gravity.START);
+        field.setPadding(dp(14),dp(12),dp(14),dp(12));field.setBackground(shape(SURFACE,10,LINE));field.setSelectAllOnFocus(false);
         field.setOnFocusChangeListener((v,focused)->field.setBackground(shape(focused?RAISED:SURFACE,10,focused?BLUE:LINE)));
         field.setId(View.generateViewId());title.setLabelFor(field.getId());parent.addView(field,match());return field;
     }
@@ -80,7 +98,7 @@ final class SmetraUi {
         box.setMinimumWidth(dp(48));box.setMinimumHeight(dp(48));tap(box,action);return box;
     }
     void section(LinearLayout parent,String title,String detail){
-        space(parent,26);LinearLayout heading=row();heading.addView(label(title,19,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+        space(parent,24);LinearLayout heading=row();heading.addView(label(title,17,INK,true),new LinearLayout.LayoutParams(0,-2,1));
         if(detail!=null)heading.addView(label(detail,12,MUTED,false));parent.addView(heading);space(parent,2);
     }
     void empty(LinearLayout parent,String icon,String title,String description){
@@ -94,7 +112,7 @@ final class SmetraUi {
         Dialog dialog=new Dialog(activity){@Override public void cancel(){if(close[0]!=null)close[0].run();else super.cancel();}};
         LinearLayout sheet=column();sheet.setPadding(dp(24),dp(12),dp(24),dp(24));sheet.setBackground(shape(SURFACE,30,LINE));
         View handle=new View(activity);handle.setBackground(shape(0xff576171,2,0));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(36),dp(4));hp.gravity=Gravity.CENTER;sheet.addView(handle,hp);
-        space(sheet,24);sheet.addView(label(title,25,INK,true));space(sheet,12);sheet.addView(label(copy,15,MUTED,false));space(sheet,20);
+        space(sheet,24);sheet.addView(label(title,22,INK,true));space(sheet,12);sheet.addView(label(copy,14,MUTED,false));space(sheet,16);
         final boolean[] closing={false};Runnable dismiss=()->{if(closing[0])return;closing[0]=true;if(!motion()){dialog.dismiss();return;}sheet.animate().translationY(dp(60)).alpha(0).setDuration(180).withEndAction(dialog::dismiss).start();};
         close[0]=dismiss;
         Button yes=button(action,true,()->{if(closing[0])return;dismiss.run();confirm.run();});if(destructive){ripple(yes,0xff47262d,18,0xff75404a);yes.setTextColor(RED);}sheet.addView(yes);
@@ -109,7 +127,7 @@ final class SmetraUi {
         Dialog dialog=new Dialog(activity);
         LinearLayout sheet=column();sheet.setPadding(dp(24),dp(18),dp(24),dp(24));sheet.setBackground(shape(SURFACE,30,LINE));
         View handle=new View(activity);handle.setBackground(shape(0xff576171,2,0));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(36),dp(4));hp.gravity=Gravity.CENTER;sheet.addView(handle,hp);
-        space(sheet,24);sheet.addView(label(title,25,INK,true));space(sheet,12);
+        space(sheet,24);sheet.addView(label(title,22,INK,true));space(sheet,12);
         for(int i=0;i<labels.length;i++){
             final int index=i;
             Button option=button(labels[i],i==0,()->{dialog.dismiss();actions[index].run();});
@@ -128,6 +146,8 @@ final class SmetraUi {
         @Override protected void onDraw(Canvas c){super.onDraw(c);c.save();c.scale(getWidth()/24f,getHeight()/24f);paint.setColor(tint);paint.setStrokeWidth(1.6f);paint.setStyle(Paint.Style.STROKE);paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);
             switch(kind){
                 case "spark":line(c,12,2,15,9,22,12,15,15,12,22,9,15,2,12,9,9,12,2);break;
+                case "chat":c.drawRoundRect(3,3,21,18,4,4,paint);line(c,7,18,7,22,12,18);line(c,7,8,17,8);line(c,7,12,14,12);break;
+                case "attachment":c.save();c.rotate(35,12,12);c.drawArc(6,2,18,18,180,180,false,paint);line(c,18,10,18,17);c.drawArc(6,11,18,23,0,180,false,paint);line(c,6,17,6,7);c.drawArc(6,3,14,11,180,180,false,paint);line(c,14,7,14,16);c.restore();break;
                 case "plus":line(c,12,5,12,19);line(c,5,12,19,12);break;
                 case "back":line(c,14,5,7,12,14,19);break;
                 case "arrow":line(c,6,18,18,6);line(c,7,6,18,6,18,17);break;
