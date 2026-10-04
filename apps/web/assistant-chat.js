@@ -67,6 +67,7 @@ window.SmetraAssistantContext=function(value){
 
 function assistantEditValue(field,value,currency='RUB'){
   if(value===null||value===undefined||value==='')return '—';
+  if(['optional','included'].includes(field))return value?'Да':'Нет';
   if(['amount','amount_kopecks','unit_price','price'].includes(field)){
     try{return new Intl.NumberFormat('ru-RU',{style:'currency',currency}).format(Number(value)/100)}catch{return String(value)}
   }
@@ -75,9 +76,11 @@ function assistantEditValue(field,value,currency='RUB'){
   return String(value);
 }
 function assistantEditPreview(preview){
-  const labels={unit_price:'Цена',quantity:'Количество',coefficient:'Коэффициент',markup:'Наценка, %',discount:'Скидка, %',tax:'Налог, %',unit:'Единица',category:'Категория',name:'Название',title:'Название',notes:'Заметки',description:'Описание',amount:'Сумма',items:'Позиции',phone:'Телефон',email:'Почта'};
-  const rows=(preview.rows||[]).map(row=>`<div class="assistant-diff-row"><span>${row.row?escapeHtml(row.row)+'. '+escapeHtml(row.name)+' · ':''}${escapeHtml(labels[row.field]||row.field)}</span><div><del>${escapeHtml(assistantEditValue(row.field,row.before,preview.currency))}</del><span aria-label="станет">${escapeHtml(assistantEditValue(row.field,row.after,preview.currency))}</span></div></div>`);
-  const totals=preview.kind==='quote_items'?`<div class="assistant-diff-total"><span>Итого по смете</span><div><del>${escapeHtml(assistantEditValue('amount',preview.before_total,preview.currency))}</del><strong>${escapeHtml(assistantEditValue('amount',preview.after_total,preview.currency))}</strong></div></div>`:'';
+  const labels={unit_price:'Цена',quantity:'Количество',coefficient:'Коэффициент',markup:'Наценка, %',discount:'Скидка, %',tax:'Налог, %',unit:'Единица',category:'Категория',optional:'Опциональная позиция',included:'Включена в расчёт',name:'Название',title:'Название',notes:'Заметки',description:'Описание',amount:'Сумма',items:'Позиции',phone:'Телефон',email:'Почта'};
+  const structure=preview.kind==='quote_structure';
+  const itemText=(item,position)=>item?`Строка ${position} · ${item.quantity} ${item.unit} × ${assistantEditValue('unit_price',item.unit_price,preview.currency)} · ${assistantEditValue('amount',item.subtotal,preview.currency)}${item.optional?(item.included?' · опция включена':' · опция исключена'):''}`:'—';
+  const rows=(preview.rows||[]).map(row=>structure?`<div class="assistant-diff-row"><span>${escapeHtml(({insert:'Добавить',remove:'Удалить',move:'Переместить'})[row.change]||'Изменить')} · ${escapeHtml((row.after||row.before)?.name||'Позиция')}</span><div><del>${escapeHtml(itemText(row.before,row.before_row))}</del><span aria-label="станет">${escapeHtml(itemText(row.after,row.after_row))}</span></div></div>`:`<div class="assistant-diff-row"><span>${row.row?escapeHtml(row.row)+'. '+escapeHtml(row.name)+' · ':''}${escapeHtml(labels[row.field]||row.field)}</span><div><del>${escapeHtml(assistantEditValue(row.field,row.before,preview.currency))}</del><span aria-label="станет">${escapeHtml(assistantEditValue(row.field,row.after,preview.currency))}</span></div></div>`);
+  const totals=['quote_items','quote_structure'].includes(preview.kind)?`${structure?`<p class="muted">Позиций: ${escapeHtml(preview.before_count)} → ${escapeHtml(preview.after_count)}</p>`:''}<div class="assistant-diff-total"><span>Итого по смете</span><div><del>${escapeHtml(assistantEditValue('amount',preview.before_total,preview.currency))}</del><strong>${escapeHtml(assistantEditValue('amount',preview.after_total,preview.currency))}</strong></div></div>`:'';
   return `<div class="assistant-edit-diff">${rows.slice(0,5).join('')}${rows.length>5?`<details><summary>Ещё ${rows.length-5} изменений</summary>${rows.slice(5).join('')}</details>`:''}${totals}</div>`;
 }
 window.SmetraAssistant=async function(){

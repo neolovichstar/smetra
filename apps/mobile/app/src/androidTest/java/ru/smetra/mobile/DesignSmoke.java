@@ -26,7 +26,8 @@ public class DesignSmoke extends Instrumentation {
     private boolean receiptsOnly;
     private boolean scansOnly;
     private boolean mixedScan;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));mixedScan=args!=null&&"true".equals(args.getString("mixedScan"));start();}
+    private boolean structureOnly;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));mixedScan=args!=null&&"true".equals(args.getString("mixedScan"));structureOnly=args!=null&&"true".equals(args.getString("structureOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -34,6 +35,10 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if(structureOnly){
+                click("Ещё");click("Ассистент");waitPrefix("Добавить позиции · ");waitText("Добавить · Подготовка стен");waitText("Позиций: 1 → 2");waitPrefix("Станет: Строка 2");shot("24-structure-preview");click("Применить");waitText("Отменить изменение");shot("25-structure-applied");click("Отменить изменение");waitPrefix("Изменение отменено · ");shot("26-structure-undone");
+                result.putString("stream","PASS: native quote structure preview, position/quantity/money/count, explicit application and undo\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(scansOnly){
                 click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай скан");pickFixture(mixedScan?"mixed.pdf":"scan.pdf");waitText("Прикрепить к диалогу");click("Прикрепить к диалогу");waitText("Распознать скан");
                 if(mixedScan)waitText("Без текста: стр. 2");

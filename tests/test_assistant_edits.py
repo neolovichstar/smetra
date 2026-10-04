@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend.assistant_edits import prepare_bulk
+from backend.assistant_edits import prepare_bulk, prepare_structure
 from backend.business import DomainError
 from tests import test_business
 
@@ -149,3 +149,144 @@ class AssistantEditTests(unittest.TestCase):
         with self.assertRaises(DomainError) as error:
             prepare_bulk(service, valid)
         self.assertEqual(error.exception.status, 409)
+
+    def test_insert_review_apply_replay_and_undo_preserve_existing_properties(self):
+        owner, _ = self.account('ai-insert')
+        quote = self.quote(owner)
+        addition = {'name': 'Подготовка стен', 'unit': 'м²', 'quantity': '1.25', 'unit_price': 10005, 'cost_price': 6000}
+        action = self.propose(owner, 'restructure_quote_items', {'id': quote['id'], 'operation': 'insert', 'after': 1,
+                              'items': [addition], '_undo_fields': {'items': []}, '_preview': {'after_total': 0}})
+        preview = action['preview']
+        self.assertEqual(preview['kind'], 'quote_structure')
+        self.assertEqual(preview['after_count'], 4)
+        self.assertEqual(preview['rows'][0]['after_row'], 2)
+        self.assertEqual(preview['rows'][0]['after']['subtotal'], 12506)
+        self.assertEqual(preview['after_total'], quote['amount_kopecks'] + 12506)
+        self.assertEqual(self.call('/quotes/' + quote['id'], token=owner)[1]['quote']['items'], quote['items'])
+        first = self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner)
+        self.assertEqual(first[0], 200, first)
+        self.assertEqual(first, self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner))
+        changed = first[1]['result']['quote']
+        self.assertEqual([changed['items'][i] for i in (0, 2, 3)], quote['items'])
+        self.assertTrue(first[1]['undoable'])
+        self.assertEqual(self.call('/assistant/undo', 'POST', {'id': action['id']}, owner)[0], 200)
+        self.assertEqual(self.call('/quotes/' + quote['id'], token=owner)[1]['quote']['items'], quote['items'])
+
+    def test_remove_optional_row_and_reorder_are_reversible(self):
+        owner, _ = self.account('ai-structure')
+        quote = self.quote(owner)
+        for operation, order in (('remove', [2]), ('reorder', [3, 1, 2])):
+            action = self.propose(owner, 'restructure_quote_items', {'id': quote['id'], 'operation': operation, 'rows': order})
+            self.assertEqual(action['preview']['after_total'], quote['amount_kopecks'])
+            result = self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner)
+            self.assertEqual(result[0], 200, result)
+            changed = result[1]['result']['quote']['items']
+            self.assertEqual(changed, [quote['items'][i - 1] for i in ([1, 3] if operation == 'remove' else order)])
+            self.assertEqual(self.call('/assistant/undo', 'POST', {'id': action['id']}, owner)[0], 200)
+            self.assertEqual(self.call('/quotes/' + quote['id'], token=owner)[1]['quote']['items'], quote['items'])
+
+    def test_structure_rejects_bad_rows_missing_price_bounds_and_simple_quote(self):
+        owner, _ = self.account('ai-structure-validation')
+        quote = self.quote(owner)
+        service = SimpleNamespace(get=lambda *args: quote, quote_view=lambda record: copy.deepcopy(record))
+        cases = [dict(operation='insert', items=[{'name': 'Без цены'}]),
+                 dict(operation='insert', items=[{'name': 'Цена', 'unit_price': -1}]),
+                 dict(operation='insert', items=[{'name': 'Цена', 'unit_price': 1}], after=True),
+                 dict(operation='insert', items=[{'name': 'Цена', 'unit_price': 1}] * 51),
+                 dict(operation='remove', rows=[1, 2, 3]), dict(operation='remove', rows=[1, 1]),
+                 dict(operation='remove', rows=[True]), dict(operation='remove', rows=[4]),
+                 dict(operation='reorder', rows=[1, 2]), dict(operation='reorder', rows=[1, 1, 3]),
+                 dict(operation='reorder', rows=[True, 2, 3]), dict(operation='reorder', rows=[1, 2, 3])]
+        for data in cases:
+            with self.subTest(data=data), self.assertRaises(DomainError):
+                prepare_structure(service, {'id': quote['id'], **data})
+        quote['itemized'] = False
+        with self.assertRaises(DomainError):
+            prepare_structure(service, {'id': quote['id'], 'operation': 'remove', 'rows': [2]})
+
+    def test_structure_stale_confirm_stale_undo_and_published_draft_are_guarded(self):
+        owner, _ = self.account('ai-structure-conflict')
+        quote = self.quote(owner)
+        action = self.propose(owner, 'restructure_quote_items', {'id': quote['id'], 'operation': 'remove', 'rows': [2]})
+        quote = self.call('/quotes/' + quote['id'], 'PATCH', {'revision': quote['revision'], 'title': 'Правка'}, owner)[1]['quote']
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner)[0], 409)
+        fresh = self.propose(owner, 'restructure_quote_items', {'id': quote['id'], 'operation': 'reorder', 'rows': [3, 2, 1]})
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': fresh['id']}, owner)[0], 200)
+        changed = self.call('/quotes/' + quote['id'], token=owner)[1]['quote']
+        changed = self.call('/quotes/' + quote['id'], 'PATCH', {'revision': changed['revision'], 'title': 'Следующая правка'}, owner)[1]['quote']
+        self.assertEqual(self.call('/assistant/undo', 'POST', {'id': fresh['id']}, owner)[0], 409)
+        self.assertEqual(self.call('/quotes/' + quote['id'], token=owner)[1]['quote'], changed)
+        self.call('/quotes/' + quote['id'] + '/publish', 'POST', {}, owner)
+        service = SimpleNamespace(get=lambda *args: {**changed, 'approval_state': 'sent'}, quote_view=lambda record: record)
+        with self.assertRaises(DomainError):
+            prepare_structure(service, {'id': quote['id'], 'operation': 'remove', 'rows': [2]})
+
+    def test_structure_parallel_confirm_undo_and_foreign_owner(self):
+        owner, _ = self.account('ai-structure-parallel')
+        stranger, _ = self.account('ai-structure-outsider')
+        quote = self.quote(owner)
+        action = self.propose(owner, 'restructure_quote_items', {'id': quote['id'], 'operation': 'insert', 'items': [{'name': 'Доставка', 'unit_price': 5000}]})
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action['id']}, stranger)[0], 404)
+        for path in ('confirm', 'undo'):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                responses = list(pool.map(lambda _: self.call('/assistant/' + path, 'POST', {'id': action['id']}, owner), range(2)))
+            self.assertTrue(all(code == 200 for code, _ in responses), responses)
+            self.assertEqual(responses[0], responses[1])
+        self.assertEqual(self.call('/quotes/' + quote['id'], token=owner)[1]['quote']['items'], quote['items'])
+
+    def test_optional_selection_has_boolean_preview_and_changes_total_only_after_confirm(self):
+        owner, _ = self.account('ai-option')
+        quote = self.quote(owner)
+        action = self.propose(owner, 'bulk_quote_items', {'id': quote['id'], 'rows': [2], 'field': 'included', 'value': True})
+        self.assertFalse(action['preview']['rows'][0]['before'])
+        self.assertTrue(action['preview']['rows'][0]['after'])
+        self.assertEqual(action['preview']['after_total'], quote['amount_kopecks'] + 80000)
+        result = self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner)
+        self.assertEqual(result[0], 200, result)
+        self.assertEqual(result[1]['result']['quote']['amount_kopecks'], quote['amount_kopecks'] + 80000)
+        self.assertEqual(self.call('/assistant/undo', 'POST', {'id': action['id']}, owner)[0], 200)
+        service = SimpleNamespace(get=lambda *args: quote, quote_view=lambda record: copy.deepcopy(record))
+        for bad in ({'value': 'true'}, {'value': 1}, {'operation': 'multiply', 'value': True}, {'rows': [1], 'value': False}):
+            with self.subTest(bad=bad), self.assertRaises(DomainError):
+                prepare_bulk(service, {'id': quote['id'], 'rows': [2], 'field': 'included', 'value': True, **bad})
+
+    def test_structure_background_worker_only_persists_reviewable_proposal(self):
+        from tests.test_assistant_jobs import SECRET, worker_token
+        owner, _ = self.account('ai-structure-job')
+        quote = self.quote(owner)
+        with patch.dict(os.environ, ASSISTANT_WORKER_SECRET=SECRET, OPENROUTER_API_KEY='test-only'):
+            code, queued = self.call('/assistant/jobs', 'POST', {'text': 'Добавь доставку', 'context': {'entity': 'quotes', 'id': quote['id']}}, owner, key='structure-job')
+            self.assertEqual(code, 202, queued)
+            with patch('backend.assistant.query_model', return_value=self.tool('restructure_quote_items', {'id': quote['id'], 'operation': 'insert', 'items': [{'name': 'Доставка', 'unit_price': 5000}]})):
+                self.assertEqual(self.call('/cron/assistant', token=worker_token())[0], 200)
+            job = self.call('/assistant/jobs/' + queued['job']['id'], token=owner)[1]['job']
+        self.assertEqual(job['status'], 'completed')
+        action = job['result']['actions'][0]
+        self.assertEqual(action['preview']['after_count'], 4)
+        self.assertEqual(self.call('/quotes/' + quote['id'], token=owner)[1]['quote']['items'], quote['items'])
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action['id']}, owner)[0], 200)
+
+    def test_structure_two_hundred_rows_reorders_without_losing_data_and_blocks_overflow(self):
+        owner, _ = self.account('ai-structure-200')
+        code, result = self.call('/quotes', 'POST', {'title': 'Большая смета', 'client': 'Клиент', 'items': [
+            {'name': f'Позиция {i}', 'unit_price': 101, 'quantity': '0.5', 'category': 'Тест'} for i in range(200)]}, owner)
+        self.assertEqual(code, 201, result)
+        quote = result['quote']
+        service = SimpleNamespace(get=lambda *args: quote, quote_view=lambda record: copy.deepcopy(record))
+        changed = prepare_structure(service, {'id': quote['id'], 'operation': 'reorder', 'rows': list(range(200, 0, -1))})
+        self.assertEqual(changed['items'], list(reversed(quote['items'])))
+        self.assertEqual(changed['_preview']['after_total'], quote['amount_kopecks'])
+        with self.assertRaises(DomainError):
+            prepare_structure(service, {'id': quote['id'], 'operation': 'insert', 'items': [{'name': 'Переполнение', 'unit_price': 1}]})
+
+    def test_insertion_positions_and_excluded_options_keep_currency_and_decimal_math(self):
+        owner, _ = self.account('ai-structure-currency')
+        quote = self.quote(owner)
+        quote['currency'] = 'USD'
+        service = SimpleNamespace(get=lambda *args: quote, quote_view=lambda record: copy.deepcopy(record))
+        for after in (0, 3):
+            action = prepare_structure(service, {'id': quote['id'], 'operation': 'insert', 'after': after, 'items': [
+                {'name': 'Опция', 'unit_price': 10005, 'quantity': '1.25', 'optional': True, 'included': False}]})
+            self.assertEqual(action['_preview']['currency'], 'USD')
+            self.assertEqual(action['_preview']['after_total'], quote['amount_kopecks'])
+            self.assertEqual(action['items'][after]['subtotal'], 12506)

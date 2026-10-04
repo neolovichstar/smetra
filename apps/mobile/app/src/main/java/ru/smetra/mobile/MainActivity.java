@@ -585,9 +585,10 @@ public class MainActivity extends Activity {
         ui.enter(row);
         return body;
     }
-    private String fieldLabel(String key){switch(key){case "unit_price":return "Цена";case "quantity":return "Количество";case "coefficient":return "Коэффициент";case "markup":return "Наценка, %";case "discount":return "Скидка, %";case "tax":return "Налог, %";case "unit":return "Единица";case "category":return "Категория";case "notes":return "Заметки";case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
+    private String fieldLabel(String key){switch(key){case "optional":return "\u041e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043f\u043e\u0437\u0438\u0446\u0438\u044f";case "included":return "\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u0430 \u0432 \u0440\u0430\u0441\u0447\u0451\u0442";case "unit_price":return "Цена";case "quantity":return "Количество";case "coefficient":return "Коэффициент";case "markup":return "Наценка, %";case "discount":return "Скидка, %";case "tax":return "Налог, %";case "unit":return "Единица";case "category":return "Категория";case "notes":return "Заметки";case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
     private String assistantEditValue(String field,Object value,String currency){
         if(value==null||value==JSONObject.NULL||value.toString().isEmpty())return "—";
+        if(field.equals("optional")||field.equals("included"))return Boolean.TRUE.equals(value)?"Да":"Нет";
         if(field.equals("unit_price")||field.equals("amount")||field.equals("amount_kopecks")||field.equals("price")){
             try{return exactMoney(Long.parseLong(value.toString()),currency);}catch(NumberFormatException ignored){}
         }
@@ -596,6 +597,13 @@ public class MainActivity extends Activity {
     }
     private void assistantDiffRow(LinearLayout host,JSONObject row,String currency){
         if(row==null)return;
+        if(row.has("change")){
+            String change=row.optString("change"),action=change.equals("insert")?"Добавить":change.equals("remove")?"Удалить":"Переместить";
+            JSONObject before=row.optJSONObject("before"),after=row.optJSONObject("after"),item=after!=null?after:before;
+            ui.space(host,12);host.addView(ui.label(action+" · "+(item==null?"Позиция":item.optString("name")),12,INK,true));
+            ui.space(host,5);host.addView(ui.label("Было: "+assistantStructureItem(before,row.optInt("before_row"),currency),11,MUTED,false));
+            ui.space(host,4);host.addView(ui.label("Станет: "+assistantStructureItem(after,row.optInt("after_row"),currency),11,BLUE,false));return;
+        }
         String field=row.optString("field");
         String heading=(row.has("row")?row.optInt("row")+". "+row.optString("name")+" · ":"")+fieldLabel(field);
         ui.space(host,12);host.addView(ui.label(heading,11,MUTED,false));ui.space(host,5);
@@ -605,12 +613,17 @@ public class MainActivity extends Activity {
         values.addView(before,new LinearLayout.LayoutParams(0,-2,1));
         values.addView(ui.label(assistantEditValue(field,row.opt("after"),currency),13,BLUE,false),new LinearLayout.LayoutParams(0,-2,1));
     }
+    private String assistantStructureItem(JSONObject item,int position,String currency){
+        if(item==null)return "—";
+        return "Строка "+position+" · "+item.optString("quantity")+" "+item.optString("unit")+" × "+exactMoney(item.optLong("unit_price"),currency)+" · "+exactMoney(item.optLong("subtotal"),currency)+(item.optBoolean("optional")?(item.optBoolean("included")?" · опция включена":" · опция исключена"):"");
+    }
     private void assistantPreview(LinearLayout host,JSONObject preview){
         String currency=preview.optString("currency","RUB");JSONArray rows=preview.optJSONArray("rows");
         if(rows!=null){for(int i=0;i<Math.min(5,rows.length());i++)assistantDiffRow(host,rows.optJSONObject(i),currency);
             if(rows.length()>5){LinearLayout extra=ui.column();extra.setVisibility(View.GONE);host.addView(extra);for(int i=5;i<rows.length();i++)assistantDiffRow(extra,rows.optJSONObject(i),currency);addButton(host,"Ещё "+(rows.length()-5)+" изменений",false,v->{boolean show=extra.getVisibility()!=View.VISIBLE;extra.setVisibility(show?View.VISIBLE:View.GONE);((Button)v).setText(show?"Свернуть":"Ещё "+(rows.length()-5)+" изменений");});}
         }
-        if(preview.optString("kind").equals("quote_items")){ui.space(host,18);host.addView(ui.label("Итого по смете",11,MUTED,false));ui.space(host,5);host.addView(ui.label(exactMoney(preview.optLong("before_total"),currency)+" → "+exactMoney(preview.optLong("after_total"),currency),17,INK,true));}
+        if(preview.optString("kind").equals("quote_structure")){ui.space(host,12);host.addView(ui.label("Позиций: "+preview.optInt("before_count")+" → "+preview.optInt("after_count"),11,MUTED,false));}
+        if(preview.optString("kind").equals("quote_items")||preview.optString("kind").equals("quote_structure")){ui.space(host,18);host.addView(ui.label("Итого по смете",11,MUTED,false));ui.space(host,5);host.addView(ui.label(exactMoney(preview.optLong("before_total"),currency)+" → "+exactMoney(preview.optLong("after_total"),currency),17,INK,true));}
     }
     private void assistantUndo(LinearLayout host,JSONObject action){
         host.removeAllViews();host.addView(ui.label("Сохранено · "+action.optString("summary"),14,INK,false));

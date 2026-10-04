@@ -200,16 +200,32 @@ def main():
                     },
                     token,
                 )
+        structure_qa = os.getenv('SMETRA_STRUCTURE_QA') == '1'
+        seed_tool = 'restructure_quote_items' if structure_qa else 'bulk_quote_items'
+        seed_args = {'id': quote['id'], 'operation': 'insert', 'items': [{'name': 'Подготовка стен', 'unit': 'м²', 'quantity': '1.25', 'unit_price': 10005}]} if structure_qa else {'id': quote['id'], 'rows': [1], 'field': 'unit_price', 'operation': 'multiply', 'value': '1.1'}
+        if structure_qa:
+            with app.db() as con:
+                con.execute("UPDATE users SET plan='pro',entitlement_until=? WHERE email=?", (int(time.time()) + 3600, 'android-design@test.invalid'))
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-not-a-real-key"), patch(
             "backend.assistant.query_model",
             return_value={"content": None, "tool_calls": [{"id": "fixture-bulk", "type": "function",
-                "function": {"name": "bulk_quote_items", "arguments": json.dumps({"id": quote["id"],
-                    "rows": [1], "field": "unit_price", "operation": "multiply", "value": "1.1"})}}]},
+                "function": {"name": seed_tool, "arguments": json.dumps(seed_args)}}]},
         ):
             call("/assistant/chat", {"text": "Увеличь цену на 10%"}, token)
         # Deterministic streaming exercises the real quota/history/context routes;
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
+            prompt = next((message['content'] for message in reversed(messages) if message['role'] == 'user'), '')
+            if structure_qa:
+                command = {
+                    'Добавь тестовую опцию': ('restructure_quote_items', {'operation': 'insert', 'items': [{'name': 'Опциональная доставка', 'unit_price': 5000, 'optional': True, 'included': False}]}),
+                    'Включи тестовую опцию': ('bulk_quote_items', {'rows': [2], 'field': 'included', 'value': True}),
+                    'Переставь тестовые строки': ('restructure_quote_items', {'operation': 'reorder', 'rows': [2, 1]}),
+                    'Удали тестовую опцию': ('restructure_quote_items', {'operation': 'remove', 'rows': [2]}),
+                }.get(prompt)
+                if command:
+                    name, arguments = command
+                    return {'content': None, 'tool_calls': [{'id': 'fixture-structure', 'type': 'function', 'function': {'name': name, 'arguments': json.dumps({'id': quote['id'], **arguments})}}]}
             selected = "Пользователь явно выбрал контекст: смета" in messages[0]["content"]
             file_selected = "Пользователь явно выбрал контекст: файл" in messages[0]["content"]
             answer = "Контекст сметы получен." if selected else "Контекст файла получен." if file_selected else "Контекст не выбран."

@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from backend.business import DomainError, calculate, choice, decimal, string, stamp, packed, transaction
 
-FIELDS = ("unit_price", "quantity", "coefficient", "markup", "discount", "tax", "unit", "category")
+FIELDS = ("unit_price", "quantity", "coefficient", "markup", "discount", "tax", "unit", "category", "optional", "included")
 
 
 def quote_snapshot(service, record):
@@ -30,7 +30,12 @@ def prepare_bulk(service, data):
     operation = choice(data.get("operation", "set"), ("set", "multiply"), "Операция")
     value = data.get("value")
     changed = copy.deepcopy(items)
-    if field in ("unit", "category"):
+    if field in ('optional', 'included'):
+        if operation != 'set' or type(value) is not bool:
+            raise DomainError(400, 'Для выбора опции передайте true или false с операцией set')
+        if field == 'included' and any(not items[row - 1]['optional'] for row in rows):
+            raise DomainError(409, 'Включать и исключать из расчёта можно только опциональные позиции')
+    elif field in ("unit", "category"):
         if operation != "set":
             raise DomainError(400, "Текст можно только заменить")
         value = string(value, "Новое значение", 30 if field == "unit" else 100, field == "unit")
@@ -62,6 +67,59 @@ def prepare_bulk(service, data):
                "before_total": quote["amount_kopecks"], "after_total": total, "rows": differences}
     return {"id": record["id"], "revision": record["revision"], "items": changed,
             "_undo_fields": {"items": items}, "_preview": preview}
+
+
+def prepare_structure(service, data):
+    record = service.get('quotes', string(data.get('id', ''), 'Смета', 80, True))
+    quote = quote_snapshot(service, record)
+    if not quote['itemized']:
+        raise DomainError(409, 'Для изменения состава выберите смету с позициями')
+    original = quote['items']
+    operation = choice(data.get('operation'), ('insert', 'remove', 'reorder'), 'Операция')
+    changed = copy.deepcopy(original)
+    differences = []
+    if operation == 'insert':
+        additions = data.get('items')
+        after = data.get('after', len(original))
+        if type(after) is not int or not 0 <= after <= len(original):
+            raise DomainError(400, 'Укажите номер строки для вставки; 0 означает начало')
+        if not isinstance(additions, list) or not 1 <= len(additions) <= 50 or len(original) + len(additions) > 200:
+            raise DomainError(400, 'Добавьте от 1 до 50 позиций; всего в смете не более 200')
+        # Every inserted price must be explicit; a missing price is not silently
+        # interpreted as free work. Existing rows retain all their properties.
+        if any(not isinstance(item, dict) or 'unit_price' not in item for item in additions):
+            raise DomainError(400, 'Для каждой новой позиции укажите цену в копейках')
+        changed[after:after] = copy.deepcopy(additions)
+        changed, total, _ = calculate(changed)
+        differences = [{'change': 'insert', 'before_row': None, 'after_row': after + index + 1,
+                        'before': None, 'after': changed[after + index]} for index in range(len(additions))]
+    elif operation == 'remove':
+        rows = data.get('rows')
+        if not isinstance(rows, list) or not 1 <= len(rows) <= 50 or any(type(row) is not int or not 1 <= row <= len(original) for row in rows) or len(set(rows)) != len(rows):
+            raise DomainError(400, 'Укажите от 1 до 50 разных существующих номеров строк')
+        if len(rows) == len(original):
+            raise DomainError(400, 'В смете должна остаться хотя бы одна позиция')
+        removed = set(rows)
+        changed = [item for index, item in enumerate(changed, 1) if index not in removed]
+        changed, total, _ = calculate(changed)
+        differences = [{'change': 'remove', 'before_row': row, 'after_row': None,
+                        'before': original[row - 1], 'after': None} for row in sorted(rows)]
+    else:
+        order = data.get('rows')
+        if not isinstance(order, list) or len(order) != len(original) or any(type(row) is not int for row in order) or set(order) != set(range(1, len(original) + 1)):
+            raise DomainError(400, 'Укажите все номера строк ровно один раз в новом порядке')
+        if order == list(range(1, len(original) + 1)):
+            raise DomainError(409, 'Порядок позиций уже совпадает')
+        changed = [changed[row - 1] for row in order]
+        changed, total, _ = calculate(changed)
+        differences = [{'change': 'move', 'before_row': row, 'after_row': index,
+                        'before': original[row - 1], 'after': changed[index - 1]}
+                       for index, row in enumerate(order, 1) if row != index]
+    preview = {'kind': 'quote_structure', 'operation': operation, 'title': quote['title'],
+               'currency': quote['currency'], 'before_count': len(original), 'after_count': len(changed),
+               'before_total': quote['amount_kopecks'], 'after_total': total, 'rows': differences}
+    return {'id': record['id'], 'revision': record['revision'], 'items': changed,
+            '_undo_fields': {'items': original}, '_preview': preview}
 
 
 def before_update(service, entity, record, arguments):

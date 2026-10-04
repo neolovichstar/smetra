@@ -46,11 +46,18 @@ jobs:
       - name: Assistant preview, undo and conversation context in mobile browser
         run: |
           python scripts/android_ui_fixture.py > data/assistant-fixture.log 2>&1 &
+          echo $! > data/assistant-fixture.pid
           for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/assistant-fixture.log && break; sleep 1; done
           node tests/browser_assistant_edits.cjs
           node tests/browser_receipts.cjs
           node tests/browser_scan_ocr.cjs
           SMETRA_MIXED_PDF=1 node tests/browser_scan_ocr.cjs
+      - name: Quote composition preview and reversal in mobile browser
+        run: |
+          kill "$(cat data/assistant-fixture.pid)"
+          SMETRA_STRUCTURE_QA=1 python scripts/android_ui_fixture.py > data/structure-fixture.log 2>&1 &
+          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/structure-fixture.log && break; sleep 1; done
+          node tests/browser_quote_structure.cjs
   android:
     runs-on: ubuntu-latest
     steps:

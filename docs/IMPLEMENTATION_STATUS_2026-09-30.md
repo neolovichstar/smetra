@@ -98,3 +98,12 @@ missing pages in its existing two-page window while preserving the original
 text index, including later pages. Missing pages outside that window remain
 explicitly partial. Text and scans within the same page and OCR beyond the first
 two pages remain unfinished. See MIXED_PDF_RELEASE_2026-10-04.md.
+
+## Quote composition / Android 1.7.11 (2026-10-04)
+
+Assistant proposals now support inserting/removing quote rows, full row ordering
+and optional item selection, with server-built composition/amount diffs on web
+and native Android. Confirmation and revision-checked undo are required; the
+background worker only stores proposals. 258 local tests (one skipped), streaming
+browser flow and native Android preview/apply/undo passed. See
+QUOTE_COMPOSITION_RELEASE_2026-10-04.md for exact bounds and verification gaps.
