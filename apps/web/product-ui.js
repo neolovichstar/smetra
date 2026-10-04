@@ -25,6 +25,15 @@
     [/^(фильтр)/i,'funnel'],[/^(диалоги)/i,'chat-circle']
   ];
   function decorate(root) {
+    root.querySelectorAll('.today-actions').forEach(section => {
+      section.classList.toggle('is-empty', !!section.querySelector('.today-clear'));
+    });
+    root.querySelectorAll('.dashboard-work').forEach(section => {
+      section.classList.toggle('is-empty', !section.querySelector('.record-line,.quote'));
+    });
+    root.querySelectorAll('.workspace-home .dashboard-aside').forEach(section => {
+      section.classList.toggle('is-empty', !section.querySelector('.record-line'));
+    });
     root.querySelectorAll('button, a.btn').forEach(button => {
       if (button.dataset.uiIcon) return;
       const name = navigation[button.dataset.tab] || explicit[button.id] ||
