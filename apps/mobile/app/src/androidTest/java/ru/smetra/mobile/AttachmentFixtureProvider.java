@@ -20,7 +20,7 @@ public class AttachmentFixtureProvider extends ContentProvider {
         if("empty.txt".equals(name))return new byte[0];
         if("binary.txt".equals(name))return new byte[]{(byte)0xff,0};
         if("large-text.txt".equals(name)){byte[] content=new byte[2_100_000];java.util.Arrays.fill(content,(byte)'a');return content;}
-        if("brief.pdf".equals(name)||"scan.pdf".equals(name))try(java.io.InputStream input=getContext().getAssets().open(name)){return input.readAllBytes();}
+        if("brief.pdf".equals(name)||"scan.pdf".equals(name)||"mixed.pdf".equals(name))try(java.io.InputStream input=getContext().getAssets().open(name)){return input.readAllBytes();}
         return "# Project brief\nPaint walls, 12 square metres.\n".getBytes(StandardCharsets.UTF_8);
     }
     @Override public String getType(Uri uri){return uri.toString().endsWith(".pdf")?"application/pdf":uri.toString().endsWith(".md")?"application/octet-stream":"text/plain";}

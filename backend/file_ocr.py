@@ -110,25 +110,36 @@ def process(service, job, complete, progress, validate):
                 raise ValueError('jpeg')
     except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
         raise DomainError(422, 'Не удалось безопасно прочитать скан. Попробуйте другой PDF') from None
-    texts = []
+    # Preserve verified PDF text beyond the OCR window and never send readable
+    # pages to the model. A mixed PDF must not lose its existing text index.
+    texts = {chunk['page']: chunk['text'] for chunk in service.con.execute(
+        'SELECT page,text FROM file_text_chunks WHERE file_id=? AND workspace_id=? AND source_sha256=?',
+        (row['id'], service.wid, job['source_sha256']),
+    ).fetchall()}
+    prepared_pages = max(len(pages), row['index_pages'] if texts else 0)
+    recognized = False
     for number, image in pages:
         validate()
+        if texts.get(number, '').strip():
+            continue
         progress(f'Распознаю страницу {number} из {len(pages)}…')
         text = request_page(image)
         if not isinstance(text, str) or len(text) > 6000:
             raise DomainError(422, 'Модель вернула некорректный текст. Повторите с более чётким сканом')
-        texts.append((number, text))
-    if not any(text.strip() for _, text in texts):
+        if text.strip():
+            texts[number] = text
+            recognized = True
+    if not recognized:
         raise DomainError(422, 'На первых двух страницах не найден читаемый текст. Лимит возвращён')
     progress('Сохраняю распознанный текст…')
-    truncated = rendered['truncated'] or any(not text.strip() for _, text in texts)
+    truncated = rendered['total_pages'] > prepared_pages or any(page not in texts for page in range(1, prepared_pages + 1)) or any(len(text) >= 10000 for text in texts.values())
     with transaction(service.con):
         validate()
         if service.get('files', row['id'])['sha256'] != job['source_sha256']:
             raise DomainError(409, 'Файл изменился. Старый текст не сохранён')
-        complete({'file_id': row['id'], 'name': row['name'], 'pages': len(texts), 'truncated': truncated, 'needs_ocr': False, 'method': 'ocr'})
+        complete({'file_id': row['id'], 'name': row['name'], 'pages': prepared_pages, 'truncated': truncated, 'needs_ocr': False, 'method': 'ocr'})
         service.con.execute('DELETE FROM file_text_chunks WHERE file_id=? AND workspace_id=?', (row['id'], service.wid))
-        for number, text in texts:
+        for number, text in sorted(texts.items()):
             if text.strip():
                 service.con.execute('INSERT INTO file_text_chunks(file_id,workspace_id,page,text,source_sha256) VALUES(?,?,?,?,?)', (row['id'], service.wid, number, text, job['source_sha256']))
-        service.con.execute("UPDATE files SET index_status='ready',index_method='ocr',index_hash=sha256,index_error='',index_pages=?,index_truncated=? WHERE id=? AND workspace_id=?", (len(texts), int(truncated), row['id'], service.wid))
+        service.con.execute("UPDATE files SET index_status='ready',index_method='ocr',index_hash=sha256,index_error='',index_pages=?,index_truncated=? WHERE id=? AND workspace_id=?", (prepared_pages, int(truncated), row['id'], service.wid))

@@ -1,6 +1,7 @@
 /* End-to-end scan preparation through real browser UI and the isolated worker. */
 const assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
+ const mixed=process.env.SMETRA_MIXED_PDF==='1';
  const watchdog=setTimeout(()=>{console.error('FAIL: scan OCR browser timeout');process.exit(1)},90000);
  const tabs=await(await fetch('http://127.0.0.1:'+(process.env.SMETRA_CDP_PORT||'9223')+'/json')).json();
  const ws=new WebSocket(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));
@@ -13,20 +14,23 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await send('Runtime.enable');await send('Page.enable');await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  await send('Page.navigate',{url:'http://localhost:8084/app'});await until("(!document.querySelector('#auth')?.classList.contains('hidden')&&!!document.querySelector('#auth-form')?.onsubmit)||(typeof user!=='undefined'&&!!user?.id&&!document.querySelector('#shell')?.classList.contains('hidden'))");
  if(await evaluate("!document.querySelector('#auth').classList.contains('hidden')")){await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("typeof user!=='undefined'&&!!user?.id&&!document.querySelector('#shell').classList.contains('hidden')")}
- const raw=fs.readFileSync('apps/mobile/app/src/androidTest/assets/scan.pdf').toString('base64');
- const file=await evaluate(`api('/files',{method:'POST',headers:{'Idempotency-Key':'browser-scan-upload'},body:JSON.stringify({assistant_upload:true,name:'scan-browser.pdf',content:${JSON.stringify(raw)}})}).then(r=>r.file)`);
+ const raw=fs.readFileSync('apps/mobile/app/src/androidTest/assets/'+(mixed?'mixed.pdf':'scan.pdf')).toString('base64');
+ const file=await evaluate(`api('/files',{method:'POST',headers:{'Idempotency-Key':${JSON.stringify(mixed?'browser-mixed-upload':'browser-scan-upload')}},body:JSON.stringify({assistant_upload:true,name:'scan-browser.pdf',content:${JSON.stringify(raw)}})}).then(r=>r.file)`);
  const before=await evaluate("api('/assistant').then(r=>r.quota.used)");
  await until("!!window.Workspace?.currentWorkspaceId?.()");
  await evaluate("document.querySelector('[data-tab=assistant]').onclick()");await until("document.querySelector('#assistant-input')");
  await evaluate(`window.SmetraAssistantContext({entity:'files',id:'${file.id}',label:'scan-browser.pdf',workspace_id:window.Workspace.currentWorkspaceId()});window.SmetraAssistant()`);
  await until("document.querySelector('.assistant-file-status')?.textContent.includes('Распознать скан')");
  assert.equal(await evaluate("document.querySelector('#assistant-send').disabled"),true);
+ if(mixed)assert.equal(await evaluate("document.querySelector('.assistant-file-status').textContent.includes('Без текста: стр. 2')"),true);
+ const beforeOcr=await evaluate(`api('/files/${file.id}/metadata').then(r=>r.processing.ocr_quota.used)`);
  await evaluate("document.querySelector('#assistant-input').value='Сохранённый вопрос о скане';document.querySelector('#assistant-input').dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('.assistant-file-status button')].find(b=>b.textContent==='Распознать скан').click()");
  await until("document.querySelector('.assistant-file-status')?.textContent.includes('Отменить подготовку')");
  await evaluate("document.querySelector('[data-tab=construction]').click()");await until("document.querySelector('.construction-object')");await evaluate("document.querySelector('[data-tab=assistant]').click()");
  await until("document.querySelector('.assistant-file-status')?.textContent.includes('OCR: проверьте суммы по оригиналу')");
  assert.equal(await evaluate("document.querySelector('#assistant-input').value"),'Сохранённый вопрос о скане');
- const info=await evaluate(`api('/files/${file.id}/metadata').then(r=>r.processing)`);assert.equal(info.method,'ocr');assert.equal(info.pages,2);assert.equal(info.truncated,true);assert.equal(info.ocr_quota.used,1);
+ const info=await evaluate(`api('/files/${file.id}/metadata').then(r=>r.processing)`);assert.equal(info.method,'ocr');assert.equal(info.pages,mixed?3:2);assert.equal(info.truncated,!mixed);assert.equal(info.ocr_quota.used,beforeOcr+1);
+ if(mixed)assert.deepEqual(info.missing_text_pages,[]);
  assert.equal(await evaluate("api('/assistant').then(r=>r.quota.used)"),before);
  await send('Page.navigate',{url:'http://localhost:8084/app#assistant'});await until("document.querySelector('.assistant-file-status')?.textContent.includes('OCR: проверьте суммы по оригиналу')");
  assert.equal(await evaluate("document.querySelector('#assistant-input').value"),'Сохранённый вопрос о скане');

@@ -33,12 +33,12 @@ class FileOcrTests(unittest.TestCase):
         self.assertEqual(code, 200, result)
         return model
 
-    def upload(self, owner, pages=1):
-        code, result = self.call('/files', 'POST', {'assistant_upload': True, 'name': 'scan.pdf', 'content': base64.b64encode(scan_pdf(pages)).decode()}, owner)
+    def upload(self, owner, pages=1, text_pages=(), expected='needs_ocr'):
+        code, result = self.call('/files', 'POST', {'assistant_upload': True, 'name': 'scan.pdf', 'content': base64.b64encode(scan_pdf(pages, text_pages)).decode()}, owner)
         self.assertEqual(code, 201, result)
         file = result['file']
         self.work().assert_not_called()
-        self.assertEqual(self.info(owner, file)['state'], 'needs_ocr')
+        self.assertEqual(self.info(owner, file)['state'], expected)
         return file
 
     def info(self, owner, file):
@@ -184,3 +184,43 @@ class FileOcrTests(unittest.TestCase):
         self.assertEqual(self.call('/files/' + file['id'] + '/ocr', 'POST', {}, owner, key='fourth')[0], 429)
         self.assertEqual(self.info(owner, file)['ocr_quota']['used'], 3)
         self.assertEqual(self.call('/assistant', token=owner)[1]['quota']['used'], 0)
+
+    def test_mixed_pdf_preserves_text_and_only_recognizes_missing_page(self):
+        owner, _ = self.account('ocr-mixed')
+        file = self.upload(owner, 4, text_pages=(1, 3, 4))
+        self.assertEqual(self.info(owner, file)['missing_text_pages'], [2])
+        self.enqueue(owner, file)
+        self.assertEqual(self.work().call_count, 1)
+        info = self.info(owner, file)
+        self.assertEqual(info['state'], 'ready')
+        self.assertEqual(info['pages'], 4)
+        self.assertFalse(info['truncated'])
+        self.assertEqual(info['missing_text_pages'], [])
+        with self.mod.db() as con:
+            chunks = con.execute('SELECT page,text FROM file_text_chunks WHERE file_id=? ORDER BY page', (file['id'],)).fetchall()
+            self.assertEqual([row['page'] for row in chunks], [1, 2, 3, 4])
+            for row in chunks:
+                self.assertIn('9876.54' if row['page'] != 2 else '1234.50', row['text'])
+
+    def test_mixed_pdf_later_scans_are_explicitly_partial_without_useless_ocr(self):
+        owner, _ = self.account('ocr-later-scan')
+        file = self.upload(owner, 4, text_pages=(1, 2, 4), expected='ready')
+        info = self.info(owner, file)
+        self.assertTrue(info['truncated'])
+        self.assertEqual(info['missing_text_pages'], [3])
+        self.assertFalse(info['ocr_supported'])
+        self.assertEqual(self.call('/files/' + file['id'] + '/ocr', 'POST', {}, owner, key='later')[0], 409)
+
+    def test_mixed_pdf_partial_failure_retains_original_text_and_refunds(self):
+        owner, _ = self.account('ocr-mixed-failure')
+        file = self.upload(owner, 3, text_pages=(1, 3))
+        self.enqueue(owner, file)
+        self.work(text='')
+        info = self.info(owner, file)
+        self.assertEqual(info['state'], 'failed')
+        self.assertEqual(info['ocr_quota']['used'], 0)
+        with self.mod.db() as con:
+            self.assertEqual(con.execute('SELECT count(*) FROM file_text_chunks WHERE file_id=?', (file['id'],)).fetchone()[0], 2)
+        self.enqueue(owner, file, 'retry-mixed')
+        self.assertEqual(self.work().call_count, 1)
+        self.assertFalse(self.info(owner, file)['truncated'])

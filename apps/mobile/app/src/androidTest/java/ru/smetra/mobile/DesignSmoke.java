@@ -25,7 +25,8 @@ public class DesignSmoke extends Instrumentation {
     private boolean attachmentsOnly;
     private boolean receiptsOnly;
     private boolean scansOnly;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));start();}
+    private boolean mixedScan;
+    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));mixedScan=args!=null&&"true".equals(args.getString("mixedScan"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -34,9 +35,11 @@ public class DesignSmoke extends Instrumentation {
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
             if(scansOnly){
-                click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай скан");pickFixture("scan.pdf");waitText("Прикрепить к диалогу");click("Прикрепить к диалогу");waitText("Распознать скан");
+                click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай скан");pickFixture(mixedScan?"mixed.pdf":"scan.pdf");waitText("Прикрепить к диалогу");click("Прикрепить к диалогу");waitText("Распознать скан");
+                if(mixedScan)waitText("Без текста: стр. 2");
                 require(editors().get(0).getText().toString().equals("Прочитай скан"),"Scan preparation preserves draft");require(!findPrefix("Отправить").isEnabled(),"Unread scan cannot spend chat quota");click("Распознать скан");
                 click("Сегодня");waitPrefix("Все · ");click("Ещё");click("Ассистент");waitText("Текст получен OCR. Проверьте суммы по оригиналу.");waitEnabledPrefix("Отправить");
+                if(mixedScan)waitText("Текст готов · 3 стр.");
                 require(editors().get(0).getText().toString().equals("Прочитай скан"),"OCR navigation preserves draft");waitText("OCR: 1 из 3 в месяц · первые 2 страницы");shot("23-scan-ocr-ready");clickPrefix("Отправить");waitText("Контекст файла получен.");
                 result.putString("stream","PASS: native scanned PDF attachment, blocked unread input, background OCR, navigation, preserved draft, OCR quota/provenance and streamed file context\n");finish(Activity.RESULT_OK,result);return;
             }

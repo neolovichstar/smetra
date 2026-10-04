@@ -90,3 +90,11 @@ Android 1.7.6 и веб-чат: повтор при потере ответа н
 ## Scan OCR / Android 1.7.9 (2026-10-04)
 
 Scanned PDFs can be recognized explicitly in the background, using a bounded private index (first two pages), a separate monthly quota, cancellation/retry and OCR provenance. Web question drafts persist across navigation/reload and are isolated by account, workspace and thread/context. Native Android and the real production scheduler/render/model/index pipeline passed. See SCAN_OCR_RELEASE_2026-10-04.md for evidence and remaining limitations.
+
+## Mixed PDF / Android 1.7.10 (2026-10-04)
+
+Mixed PDFs now expose pages without text and mark incomplete indexes. OCR fills
+missing pages in its existing two-page window while preserving the original
+text index, including later pages. Missing pages outside that window remain
+explicitly partial. Text and scans within the same page and OCR beyond the first
+two pages remain unfinished. See MIXED_PDF_RELEASE_2026-10-04.md.

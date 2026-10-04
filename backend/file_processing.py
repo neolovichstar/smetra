@@ -13,6 +13,11 @@ ACTIVE = ("queued", "running", "retry")
 
 def state(service, row):
     status = row["index_status"] if row["index_hash"] == row["sha256"] else "legacy"
+    indexed = {item['page'] for item in service.con.execute(
+        'SELECT page FROM file_text_chunks WHERE file_id=? AND workspace_id=? AND source_sha256=?',
+        (row['id'], service.wid, row['sha256']),
+    ).fetchall()} if row['mime'] == 'application/pdf' else set()
+    missing = [page for page in range(1, row['index_pages'] + 1) if page not in indexed] if row['mime'] == 'application/pdf' else []
     job = (
         service.con.execute(
             "SELECT id,status,cancel_requested FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind IN ('file_index','file_ocr') AND file_id=? AND source_sha256=? ORDER BY CASE WHEN status IN ('queued','running','retry') THEN 0 WHEN status='completed' THEN 1 ELSE 2 END,created_at DESC,id DESC LIMIT 1",
@@ -32,6 +37,7 @@ def state(service, row):
         "truncated": bool(row["index_truncated"]),
         "supported": row["mime"] in ("text/plain", "application/pdf"),
         "method": row['index_method'],
+        "missing_text_pages": missing,
         "ocr_supported": row['mime'] == 'application/pdf' and (status == 'needs_ocr' or row['index_method'] == 'ocr'),
     }
     if info['ocr_supported'] and service.user:
@@ -195,6 +201,9 @@ def process(service, job, complete, progress, validate):
             "Не удалось безопасно прочитать документ. Попробуйте текстовый PDF или TXT",
         ) from None
     progress("Сохраняю текст для поиска…")
+    missing = [number for number, text in pages if not text.strip()]
+    needs_ocr = not any(text.strip() for _, text in pages) or row['mime'] == 'application/pdf' and any(number <= 2 for number in missing)
+    partial = bool(extracted['truncated']) or row['mime'] == 'application/pdf' and bool(missing)
     with transaction(service.con):
         # Repeat session/role checks after parsing, and fence both source and lease.
         validate()
@@ -206,8 +215,8 @@ def process(service, job, complete, progress, validate):
                 "file_id": row["id"],
                 "name": row["name"],
                 "pages": len(pages),
-                "truncated": bool(extracted["truncated"]),
-                "needs_ocr": not any(text.strip() for _, text in pages),
+                "truncated": partial,
+                "needs_ocr": needs_ocr,
             }
         )
         service.con.execute(
@@ -229,8 +238,8 @@ def process(service, job, complete, progress, validate):
         service.con.execute(
             "UPDATE files SET index_status=?,index_hash=sha256,index_error='',index_method='text',index_truncated=?,index_pages=? WHERE id=? AND workspace_id=?",
             (
-                "ready" if any(text.strip() for _, text in pages) else "needs_ocr",
-                int(bool(extracted["truncated"])),
+                "needs_ocr" if needs_ocr else "ready",
+                int(partial),
                 len(pages),
                 row["id"],
                 service.wid,
