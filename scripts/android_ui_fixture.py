@@ -22,12 +22,19 @@ sys.path.insert(0, str(ROOT))
 
 
 def main():
+    port = int(os.getenv('SMETRA_FIXTURE_PORT', '8084'))
+    origin = f'http://localhost:{port}'
+    base_url = f'http://127.0.0.1:{port}'
     with tempfile.TemporaryDirectory(prefix="android-ui-", dir=ROOT / "data") as folder:
+        # Fixtures must never inherit a production DB, cache, payment or mail service.
+        for key in tuple(os.environ):
+            if key == 'DATABASE_URL' or key.startswith(('REDIS_', 'KV_', 'UPSTASH_', 'YOOKASSA_', 'SMTP_', 'YANDEX_', 'VK_')):
+                os.environ.pop(key, None)
         os.environ.update(
             DB_PATH=str(Path(folder) / "test.sqlite3"),
             UPLOAD_DIR=str(Path(folder) / "uploads"),
-            PUBLIC_ORIGIN="http://localhost:8084",
-            PORT="8084",
+            PUBLIC_ORIGIN=origin,
+            PORT=str(port),
             OPENROUTER_API_KEY="fixture-not-a-real-key",
             ASSISTANT_WORKER_SECRET="isolated-fixture-worker-secret-0123456789",
         )
@@ -65,7 +72,7 @@ def main():
                     return super().send_json(503, {"error": "Тестовая потеря ответа"}, cookie)
                 return super().send_json(status, value, cookie)
 
-        server = ThreadingHTTPServer(("127.0.0.1", 8084), UiHandler)
+        server = ThreadingHTTPServer(("127.0.0.1", port), UiHandler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
         def call(path, body=None, token=None):
@@ -75,7 +82,7 @@ def main():
             if token:
                 headers["Authorization"] = "Bearer " + token
             request = urllib.request.Request(
-                "http://127.0.0.1:8084/api" + path,
+                base_url + "/api" + path,
                 json.dumps(body).encode() if body is not None else None,
                 headers,
             )
@@ -91,6 +98,10 @@ def main():
             },
         )
         token = account["token"]
+        if os.getenv('SMETRA_ACTION_QA') == '1':
+            with app.db() as con:
+                con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (int(time.time())+3600,int(time.time()),account['user']['id']))
+            call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member'})
         from PIL import Image
         receipt_object = call('/construction/objects', {'name': 'Проверка чека'}, token)['object']['id']
         receipt_zone = call('/construction/objects/' + receipt_object + '/zones', {'name': 'Комната', 'length': '2', 'width': '1'}, token)['zone']['id']
@@ -230,6 +241,11 @@ def main():
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
             prompt = next((message['content'] for message in reversed(messages) if message['role'] == 'user'), '')
+            if os.getenv('SMETRA_ACTION_QA') == '1' and prompt == 'UI slow question':
+                on_delta('Тестовый поток начат. ')
+                time.sleep(1)
+                on_delta('Поток завершён.')
+                return {'content': 'Тестовый поток начат. Поток завершён.'}
             if resource_qa:
                 command = {
                     'Переименуй тестовый файл': ('rename_file', {'id': resource_file['id'], 'name': 'Сроки проекта.md'}),
@@ -282,7 +298,7 @@ def main():
                     moment, nonce = str(int(time.time())), uuid.uuid4().hex
                     signature = hmac.new(os.environ['ASSISTANT_WORKER_SECRET'].encode(),
                         ('smetra-assistant-worker:v1:' + moment + ':' + nonce).encode(),hashlib.sha256).hexdigest()
-                    request = urllib.request.Request('http://127.0.0.1:8084/api/cron/assistant',
+                    request = urllib.request.Request(base_url + '/api/cron/assistant',
                         headers={'Authorization': f'Bearer v1.{moment}.{nonce}.{signature}'})
                     with urllib.request.urlopen(request, timeout=10) as response:
                         response.read()
@@ -293,7 +309,7 @@ def main():
         file = call('/files', {'assistant_upload': True, 'name': 'brief.txt',
                     'content': base64.b64encode(b'file context').decode()}, token)['file']
         call('/assistant/conversations', {'title': 'Бриф проекта', 'context_entity': 'files', 'context_id': file['id']}, token)
-        print("ANDROID_UI_FIXTURE_READY http://127.0.0.1:8084", flush=True)
+        print("ANDROID_UI_FIXTURE_READY " + base_url, flush=True)
         try:
             threading.Event().wait()
         except KeyboardInterrupt:

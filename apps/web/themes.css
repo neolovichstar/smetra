@@ -1,0 +1,55 @@
+/* Opt-in workspace light theme. The public landing retains the black brand. */
+:root[data-theme=light]:has(.workspace-page){background:#fafbfc;color-scheme:light}
+:root[data-theme=light] .workspace-page{
+ --bg:#fafbfc;--paper:#fff;--ink:#17202e;--muted:#586477;--line:#dce2e9;
+ --accent:#2563eb;--accentText:#fff;--soft:#edf3ff;--danger:#b52f42;
+ --surface-base:#fafbfc;--surface-input:#f0f2f5;--surface-hover:#e9edf3;
+ --text-primary:#17202e;--text-secondary:#586477;--text-quiet:#64748b;
+ --action:#2563eb;--action-hover:#1d4ed8;--stroke:#dce2e9;--focus:#2563eb;
+ --cabinet-muted:var(--text-secondary);--cabinet-line:var(--stroke);--cabinet-blue:var(--action);
+ color-scheme:light;background:#fafbfc;color:var(--text-primary);
+}
+:root[data-theme=light] .workspace-page :is(.app-nav,.sidebar){background:#fafbfc;color:var(--text-primary);border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.brand,.topline h1,h1,h2,h3,h4,strong,b,.record-title){color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.muted,.note,.eyebrow,.overline,.app-nav-caption,.sidebar-heading,.sidebar-foot>span,.record-line small,.quote small,.agenda-day span,.activity-item small){color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page :is(.panel,.workspace-section,.construction-section,.stat,.quote,.record-line,.toolbar,.assistant-header,.assistant-workbar,.assistant-message,.table-wrap,.billing-plans>section){border-color:var(--stroke);color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.sidebar-group button,.sidebar-disclosure,.nav-search,.desktop-menu-toggle,.nav-toggle){color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page :is(.nav-search,.workspace-modes){background:var(--surface-input);border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.sidebar-group button.active,.workspace-modes button[aria-pressed=true]){color:var(--action);background:var(--soft)}
+:root[data-theme=light] .workspace-page .workspace-modes button{color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page :is(.sidebar-group button:hover,.record-line:hover){background:var(--surface-hover)}
+:root[data-theme=light] .workspace-page :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,select){background:var(--surface-input)!important;color:var(--text-primary)!important}
+:root[data-theme=light] .workspace-page :is(input,textarea)::placeholder{color:var(--text-quiet);opacity:1}
+:root[data-theme=light] .workspace-page :is(.field label,.check-label,.catalog-favorite-filter,.editor-total,.quote-summary,.business-stats span){color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page :is(.btn,.icon-button){background:transparent;color:var(--text-primary);border-color:var(--stroke);box-shadow:none}
+:root[data-theme=light] .workspace-page .btn.primary{background:var(--action);color:#fff;border-color:transparent}
+:root[data-theme=light] .workspace-page .btn.primary:hover:not(:disabled){background:var(--action-hover)}
+:root[data-theme=light] .workspace-page .btn.danger{color:var(--danger)}
+:root[data-theme=light] .workspace-page :is(dialog,.modal-panel,.modal,.experience-dialog,.assistant-history-list,.assistant-options-list,.admin-dialog){background:#fff;color:var(--text-primary);border-color:var(--stroke);box-shadow:0 24px 72px #26364d26}
+:root[data-theme=light] .workspace-page dialog::backdrop{background:#17202e66}
+:root[data-theme=light] .workspace-page :is(.toast,.palette-results button){background:#fff;color:var(--text-primary);border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.estimate-table th,.estimate-table td,.catalog-history-row,.section-top,.construction-tabs,.construction-summary,.document-row,.agenda-day){border-color:var(--stroke);color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.pill,.file-type,.file-center-type){background:var(--soft);border-color:var(--stroke);color:#2456a6}
+:root[data-theme=light] .workspace-page .assistant-refined{--composer-surface:#eef1f5;--composer-text:var(--text-primary);--composer-muted:#64748b}
+:root[data-theme=light] .workspace-page .assistant-composer{background:#fafbfce8}
+:root[data-theme=light] .workspace-page .assistant-refined .assistant-composer form:focus-within{background:#e8edf4}
+:root[data-theme=light] .workspace-page .assistant-composer textarea{background:transparent!important}
+:root[data-theme=light] .workspace-page :is(#assistant-send,#assistant-stop){background:var(--action);color:#fff}
+:root[data-theme=light] .workspace-page :is(.assistant-history summary,.assistant-history-list button,.assistant-thread-action,.assistant-suggestions button,.assistant-copy,.assistant-fork){color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page .assistant-message.user .assistant-markdown{background:#edf1f6;border-color:transparent;color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.assistant-message.assistant .assistant-markdown,.assistant-proposal,.proposal-field b,.assistant-job strong){color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.assistant-markdown pre,.assistant-markdown code,.assistant-text-diff pre){background:#edf1f6;color:#24354d;border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.assistant-markdown a,.assistant-job button,.assistant-context strong){color:var(--action)}
+:root[data-theme=light] .workspace-page :is(.assistant-welcome p,.assistant-composer-foot,.assistant-job span,.proposal-field,.assistant-copy,.assistant-fork){color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page .assistant-context button{background:var(--soft);color:var(--action)}
+:root[data-theme=light] .workspace-page :is(.construction-entry,.construction-inline,.construction-tab,.admin-navigation button,.admin-table th,.admin-table td,.admin-ticket,.file-editor-toolbar,.file-preview-toolbar){background:transparent;color:var(--text-primary);border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.admin-refresh,.admin-row-action button,.admin-dialog-actions button,.admin-ticket-actions button){color:var(--action);background:var(--soft);border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.nav-user,.workspace-label strong,.construction-row strong,.construction-table-row,.construction-price-diff,.file-editor-render,.admin-tabs button.active,.admin-tabs button:hover,.admin-table strong,.admin-dialog-facts strong){color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.admin-head p,.admin-dateline,.admin-dateline time,.admin-metrics span,.admin-metrics small,.admin-section-head p,.admin-section-count,.admin-person small,.admin-date,.admin-ticket-top,.admin-dialog-email,.admin-dialog-hint,.construction-hint,.construction-empty,.file-preview-top span){color:var(--text-secondary)}
+:root[data-theme=light] .workspace-page :is(.assistant-options-list button:hover,.assistant-history-list button:hover,.assistant-history-list button[aria-pressed=true],.admin-row-action button:hover){background:var(--surface-hover);color:var(--text-primary)}
+:root[data-theme=light] .workspace-page :is(.admin-avatar,.admin-plan,.admin-state,.admin-tabs button span,.admin-empty>span){background:var(--soft);color:var(--action);border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page :is(.assistant-knowledge,.assistant-proposal,.assistant-edit-diff,.file-editor-history,.file-editor-history-preview){background:transparent;border-color:var(--stroke)}
+:root[data-theme=light] .workspace-page .icon{filter:brightness(0) saturate(100%) invert(30%) sepia(30%) saturate(1700%) hue-rotate(185deg)}
+:root[data-theme=light] .workspace-page .support-topics button[aria-pressed=true]{background:var(--soft);color:var(--action)}
+.workspace-page .support-topics button[aria-pressed=true]{color:var(--action);background:#96beff12}
+.workspace-page #theme-alt{gap:10px}

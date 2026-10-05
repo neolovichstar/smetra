@@ -127,9 +127,10 @@
       dialog.querySelectorAll('button').forEach(item=>item.disabled=true);
       try {
         await api('/admin/users/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({action:button.dataset.adminAction,reason})});
+        await loadUsers();
         dialog.close();notify('Изменение сохранено');
         state.overview=await api('/admin/overview');
-        await window.SmetraAdmin();
+        await window.SmetraAdmin(state.overview);
       } catch(error) {
         dialog.querySelector('#admin-dialog-error').textContent=error.message;
         dialog.querySelectorAll('button').forEach(item=>item.disabled=item.dataset.adminAction==='block'&&selected.id===user.id);
@@ -138,14 +139,18 @@
     dialog.showModal();dialog.querySelector('#admin-reason').focus();
   }
 
-  window.SmetraAdmin = async function () {
+  window.SmetraAdmin = async function (overview=null) {
     if (user?.role!=='admin') return;
-    state.overview = state.overview || await api('/admin/overview');
+    const owner=user;
+    state.overview = overview || await api('/admin/overview');
+    if(user!==owner||tab!=='admin')return;
     view(heading());
     const content = document.querySelector('#content');
     content.querySelector('[data-admin-refresh]').onclick=async event=>{
-      event.currentTarget.disabled=true;
-      try {state.overview=await api('/admin/overview');await window.SmetraAdmin();notify('Данные обновлены');} catch(error) {notify(error.message);event.currentTarget.disabled=false;}
+      const button=event.currentTarget;if(button.disabled)return;button.disabled=true;
+      try {state.overview=await api('/admin/overview');await window.SmetraAdmin(state.overview);notify('Данные обновлены');}
+      catch(error) {notify(error.message);}
+      finally {if(button.isConnected)button.disabled=false;}
     };
     content.querySelector('.admin-tabs').onclick=event=>{
       const button=event.target.closest('[data-admin-section]');if(!button)return;

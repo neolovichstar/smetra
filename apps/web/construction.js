@@ -3,7 +3,7 @@
   let selected = null,generation=0,account=null,workspace=null;
   function pageRequest(){const mine=++generation,owner=user,space=sessionStorage.getItem('workspace_id');return ()=>mine===generation&&owner===user&&tab==='construction'&&space===sessionStorage.getItem('workspace_id')}
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  const val = (form, name) => (form.elements?.[name]||form.querySelector?.(`[name="${name}"]`))?.value?.trim() || '';
+  const val = (form, name) => (form.elements?.namedItem?.(name)||form.querySelector?.(`[name="${name}"]`))?.value?.trim() || '';
   const send = (path, data) => api(path, {method:'POST', body:JSON.stringify(data)});
   const money = kopecks => new Intl.NumberFormat('ru-RU', {style:'currency', currency:'RUB'}).format((kopecks || 0) / 100);
   const number = value => Number(String(value).replace(',', '.'));
@@ -12,9 +12,27 @@
   const options = (items, selectedId='') => items.map(item => `<option value="${esc(item.id)}" ${item.id===selectedId?'selected':''}>${esc(item.name)}</option>`).join('');
   const changeLine = (item={}) => `<div class="construction-change-line"><input aria-label="Работа" name="name" required maxlength="200" placeholder="Дополнительная работа" value="${esc(item.name||'')}"><input aria-label="Количество" name="quantity" type="number" required min="0.0001" step="any" placeholder="Кол-во" value="${esc(item.quantity||'')}"><select aria-label="Единица" name="unit">${['шт.','м²','м³','м','м.п.','компл.','л','кг','ч'].map(unit=>`<option value="${esc(unit)}" ${item.unit===unit?'selected':''}>${esc(unit)}</option>`).join('')}</select><input aria-label="Цена за единицу, ₽" name="price" type="number" required min="0" step="0.01" placeholder="Цена, ₽" value="${item.unit_price!=null?esc(item.unit_price/100):''}"><button type="button" class="construction-edit" data-change-remove aria-label="Удалить позицию">Удалить</button></div>`;
   const kinds = {work:'Работа',material:'Материал',equipment:'Оборудование',service:'Услуга',other:'Прочее'};
+  const pendingRequests=new Set();
   async function request(path, data, after, method='POST') {
-    try { await api(path, {method, body:JSON.stringify(data)}); await after(); }
-    catch (error) { notify(error.message); }
+    const key=method+':'+path;if(pendingRequests.has(key))return;
+    pendingRequests.add(key);
+    const owner=user,object=selected,space=sessionStorage.getItem('workspace_id');
+    const active=()=>owner===user&&object===selected&&tab==='construction'&&space===sessionStorage.getItem('workspace_id');
+    try {const result=await api(path, {method, body:JSON.stringify(data)});if(active())await after(result);}
+    catch (error) {if(active())notify(error.message);}
+    finally {pendingRequests.delete(key);}
+  }
+  function guardForms(){
+    document.querySelectorAll('#content form').forEach(form=>{
+      const handler=form.onsubmit;if(!handler)return;
+      form.onsubmit=async event=>{
+        event.preventDefault();if(form.dataset.submitting==='true')return;
+        form.dataset.submitting='true';
+        const buttons=[...form.querySelectorAll('button[type=submit],button:not([type])')];
+        buttons.forEach(button=>button.disabled=true);
+        try{await handler(event);}finally{delete form.dataset.submitting;buttons.forEach(button=>{if(button.isConnected)button.disabled=false;});}
+      };
+    });
   }
   async function list() {
     const active=pageRequest();
@@ -23,8 +41,9 @@
     view(`<div class="topline"><div><span class="eyebrow">СТРОИТЕЛЬНЫЙ РЕЖИМ</span><h1>Объекты и замеры</h1><p class="muted">От размеров помещения до сметы и контроля выполнения.</p></div></div>
       <section class="construction-intro"><div><strong>Новый объект</strong><small>Обычные сметы остаются доступны отдельно.</small></div><form id="construction-new" class="construction-inline">${field('name','Название объекта','text','required maxlength="200" placeholder="Квартира на Лесной"')}<button class="btn primary">Создать объект</button></form></section>
       <section class="construction-list"><div class="construction-section-title"><h2>В работе</h2><span>${result.items.length}</span></div>${result.items.length?result.items.map(item=>`<button class="construction-object" data-id="${esc(item.id)}"><span><strong>${esc(item.name)}</strong><small>${esc(item.description || 'Замеры, объёмы и смета')}</small></span><span class="construction-object-right">${item.project_id?'Заказ в работе':item.quote_id?'Смета создана':'Замеры'} <b>↗</b></span></button>`).join(''):'<p class="construction-empty">Создайте объект и добавьте первое помещение.</p>'}</section>`);
-    document.querySelector('#construction-new').onsubmit = event => {event.preventDefault();const form=event.currentTarget;request('/construction/objects',{name:val(form,'name')},async()=>{const objects=await api('/construction/objects');selected=objects.items[0]?.id;await detail()})};
+    document.querySelector('#construction-new').onsubmit = event => {event.preventDefault();const form=event.currentTarget;return request('/construction/objects',{name:val(form,'name')},async result=>{selected=result.object.id;await detail()})};
     document.querySelectorAll('.construction-object').forEach(button => button.onclick=()=>{selected=button.dataset.id;detail()});
+    guardForms();
   }
   async function detail() {
     const active=pageRequest();
@@ -61,15 +80,15 @@
       ${data.scope?.base_quote_kopecks!=null?`<p class="construction-hint">Основная смета ${money(data.scope.base_quote_kopecks)} · согласованные допработы ${money(data.scope.approved_changes_kopecks)} · вместе ${money(data.scope.current_total_kopecks)}</p>`:changes.some(item=>item.status==='approved')?`<p class="construction-hint">Согласованные допработы: ${money(data.scope.approved_changes_kopecks)}. Основная смета ещё не создана.</p>`:''}</section>
       <section class="construction-section"><div class="construction-section-title"><h2>09 / Фото и документы</h2><span id="construction-file-count"></span></div><label class="construction-upload">Прикрепить фото, PDF или TXT<input id="construction-file" type="file" accept="image/png,image/jpeg,application/pdf,text/plain" hidden></label><div id="construction-files"></div></section>`);
     document.querySelector('#construction-back').onclick=()=>{selected=null;list()};
-    const zoneForm=document.querySelector('#construction-zone');zoneForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;request(`/construction/objects/${selected}/zones${form.dataset.edit?'/'+form.dataset.edit:''}`,{name:val(form,'name'),length:val(form,'length'),width:val(form,'width'),height:val(form,'height')||0},detail,form.dataset.edit?'PATCH':'POST')};
-    document.querySelectorAll('[data-zone-edit]').forEach(button=>button.onclick=()=>{const item=zones.find(zone=>zone.id===button.dataset.zoneEdit);zoneForm.dataset.edit=item.id;for(const [key,value] of Object.entries({name:item.name,length:item.length_m,width:item.width_m,height:item.height_m}))zoneForm.elements[key].value=value;zoneForm.querySelector('button').textContent='Сохранить размеры';zoneForm.scrollIntoView({behavior:'smooth',block:'center'})});
-    const measureForm=document.querySelector('#construction-measurement');measureForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;request(`/construction/objects/${selected}/measurements${form.dataset.edit?'/'+form.dataset.edit:''}`,{zone_id:val(form,'zone_id'),symbol:val(form,'symbol'),value:val(form,'value'),unit:val(form,'unit'),source:'manual'},detail,form.dataset.edit?'PATCH':'POST')};
+    const zoneForm=document.querySelector('#construction-zone');zoneForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;return request(`/construction/objects/${selected}/zones${form.dataset.edit?'/'+form.dataset.edit:''}`,{name:val(form,'name'),length:val(form,'length'),width:val(form,'width'),height:val(form,'height')||0},detail,form.dataset.edit?'PATCH':'POST')};
+    document.querySelectorAll('[data-zone-edit]').forEach(button=>button.onclick=()=>{const item=zones.find(zone=>zone.id===button.dataset.zoneEdit);zoneForm.dataset.edit=item.id;for(const [key,value] of Object.entries({name:item.name,length:item.length_m,width:item.width_m,height:item.height_m}))zoneForm.elements.namedItem(key).value=value;zoneForm.querySelector('button').textContent='Сохранить размеры';zoneForm.scrollIntoView({behavior:'smooth',block:'center'})});
+    const measureForm=document.querySelector('#construction-measurement');measureForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;return request(`/construction/objects/${selected}/measurements${form.dataset.edit?'/'+form.dataset.edit:''}`,{zone_id:val(form,'zone_id'),symbol:val(form,'symbol'),value:val(form,'value'),unit:val(form,'unit'),source:'manual'},detail,form.dataset.edit?'PATCH':'POST')};
     document.querySelectorAll('[data-measure-edit]').forEach(button=>button.onclick=()=>{const item=data.measurements.find(row=>row.id===button.dataset.measureEdit);measureForm.dataset.edit=item.id;for(const [key,value] of Object.entries({zone_id:item.zone_id,symbol:item.symbol,value:item.value,unit:item.unit}))measureForm.elements[key].value=value;measureForm.querySelector('button').textContent='Сохранить замер';measureForm.scrollIntoView({behavior:'smooth',block:'center'})});
-    const quantityForm=document.querySelector('#construction-quantity');quantityForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;const price=Math.round(number(val(form,'unit_price'))*100);const payload={zone_id:val(form,'zone_id'),kind:val(form,'kind'),title:val(form,'title'),formula:val(form,'formula'),unit_price:price,price_coefficient:val(form,'price_coefficient'),markup_percent:val(form,'markup_percent'),discount_percent:val(form,'discount_percent'),coefficient_reason:val(form,'coefficient_reason')};if(!form.dataset.edit)payload.unit='м²';request(`/construction/objects/${selected}/quantities${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST')};
+    const quantityForm=document.querySelector('#construction-quantity');quantityForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;const price=Math.round(number(val(form,'unit_price'))*100);const payload={zone_id:val(form,'zone_id'),kind:val(form,'kind'),title:val(form,'title'),formula:val(form,'formula'),unit_price:price,price_coefficient:val(form,'price_coefficient'),markup_percent:val(form,'markup_percent'),discount_percent:val(form,'discount_percent'),coefficient_reason:val(form,'coefficient_reason')};if(!form.dataset.edit)payload.unit='м²';return request(`/construction/objects/${selected}/quantities${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST')};
     document.querySelectorAll('[data-quantity-edit]').forEach(button=>button.onclick=()=>{const item=rows.find(row=>row.id===button.dataset.quantityEdit);quantityForm.dataset.edit=item.id;for(const [key,value] of Object.entries({zone_id:item.zone_id,kind:item.kind,title:item.title,formula:item.formula,unit_price:item.unit_price/100,price_coefficient:item.price_coefficient,markup_percent:item.markup_percent,discount_percent:item.discount_percent,coefficient_reason:item.coefficient_reason}))if(quantityForm.elements[key])quantityForm.elements[key].value=value;quantityForm.querySelector('button').textContent='Пересчитать позицию';quantityForm.scrollIntoView({behavior:'smooth',block:'center'})});
-    const materialForm=document.querySelector('#construction-material');materialForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;const price=Math.round(number(val(form,'unit_price'))*100);const payload={title:val(form,'title'),consumption_rate:val(form,'consumption_rate'),waste_percent:val(form,'waste_percent')||0,unit_price:price,price_coefficient:val(form,'price_coefficient'),markup_percent:val(form,'markup_percent'),discount_percent:val(form,'discount_percent')};if(!form.dataset.edit)Object.assign(payload,{parent_work_id:val(form,'parent_work_id'),kind:'material',unit:'л'});request(`/construction/objects/${selected}/quantities${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST')};
+    const materialForm=document.querySelector('#construction-material');materialForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;const price=Math.round(number(val(form,'unit_price'))*100);const payload={title:val(form,'title'),consumption_rate:val(form,'consumption_rate'),waste_percent:val(form,'waste_percent')||0,unit_price:price,price_coefficient:val(form,'price_coefficient'),markup_percent:val(form,'markup_percent'),discount_percent:val(form,'discount_percent')};if(!form.dataset.edit)Object.assign(payload,{parent_work_id:val(form,'parent_work_id'),kind:'material',unit:'л'});return request(`/construction/objects/${selected}/quantities${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST')};
     document.querySelectorAll('[data-material-edit]').forEach(button=>button.onclick=()=>{const item=rows.find(row=>row.id===button.dataset.materialEdit);materialForm.dataset.edit=item.id;for(const [key,value] of Object.entries({parent_work_id:item.parent_work_id,title:item.title,consumption_rate:item.consumption_rate,waste_percent:item.waste_percent,unit_price:item.unit_price/100,price_coefficient:item.price_coefficient,markup_percent:item.markup_percent,discount_percent:item.discount_percent}))materialForm.elements[key].value=value;materialForm.querySelector('button').textContent='Пересчитать материал';materialForm.scrollIntoView({behavior:'smooth',block:'center'})});
-    const factForm=document.querySelector('#construction-fact');if(factForm)factForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;request(`/construction/objects/${selected}/facts`,{quantity_id:val(form,'quantity_id'),quantity:val(form,'quantity')},detail)};
+    const factForm=document.querySelector('#construction-fact');if(factForm)factForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;return request(`/construction/objects/${selected}/facts`,{quantity_id:val(form,'quantity_id'),quantity:val(form,'quantity')},detail)};
     const priceForm=document.querySelector('#construction-prices');
     if(priceForm){
       const checks=[...document.querySelectorAll('.construction-price-select')];
@@ -108,13 +127,13 @@
         catch(error){notify(error.message);undo.disabled=false}
       };
     }
-    const defectForm=document.querySelector('#construction-defect');defectForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;request(`/construction/objects/${selected}/defects`,{zone_id:val(form,'zone_id'),photo_file_id:val(form,'photo_file_id'),severity:val(form,'severity'),description:val(form,'description'),measurement_note:val(form,'measurement_note'),suggested_work:val(form,'suggested_work')},detail)};
+    const defectForm=document.querySelector('#construction-defect');defectForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;return request(`/construction/objects/${selected}/defects`,{zone_id:val(form,'zone_id'),photo_file_id:val(form,'photo_file_id'),severity:val(form,'severity'),description:val(form,'description'),measurement_note:val(form,'measurement_note'),suggested_work:val(form,'suggested_work')},detail)};
     document.querySelectorAll('[data-defect-status]').forEach(input=>input.onchange=event=>request(`/construction/objects/${selected}/defects/${input.dataset.defectStatus}`,{status:event.target.value},detail,'PATCH'));
     const logForm=document.querySelector('#construction-log');
     logForm.onsubmit=async event=>{event.preventDefault();const form=event.currentTarget;
       const photos=[...form.querySelectorAll('input[name="log_photo"]:checked')].map(input=>input.value);
       if(photos.length>4){notify('Выберите не больше четырёх фото');return}
-      const payload={work_date:val(form,'work_date'),zone_id:val(form,'zone_id'),quantity_id:val(form,'quantity_id'),work_description:val(form,'work_description'),workers:val(form,'workers'),worker_count:val(form,'worker_count')||0,completed_quantity:val(form,'completed_quantity')||0,unit:val(form,'unit'),comment:val(form,'comment')};
+      const payload={work_date:val(form,'work_date'),zone_id:val(form,'zone_id'),quantity_id:val(form,'quantity_id'),work_description:val(form,'work_description'),workers:val(form,'workers'),worker_count:number(val(form,'worker_count'))||0,completed_quantity:val(form,'completed_quantity')||0,unit:val(form,'unit'),comment:val(form,'comment')};
       const editing=logs.find(item=>item.id===form.dataset.edit);
       try{if(editing){const path=`/construction/objects/${selected}/logs/${editing.id}`;await api(path,{method:'PATCH',body:JSON.stringify(payload)});
           for(const id of editing.photo_file_ids||[])if(!photos.includes(id))await api(path+'/photos/'+encodeURIComponent(id),{method:'DELETE'});
@@ -132,7 +151,7 @@
     document.querySelectorAll('[data-log-delete]').forEach(button=>button.onclick=async()=>{if(!confirm('Удалить запись журнала и связанный фактический объём?'))return;
       try{await api(`/construction/objects/${selected}/logs/${button.dataset.logDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}
     });
-    const supplierForm=document.querySelector('#construction-supplier');supplierForm.onsubmit=event=>{event.preventDefault();request('/construction/suppliers',{name:val(supplierForm,'name'),phone:val(supplierForm,'phone'),email:val(supplierForm,'email')},detail)};
+    const supplierForm=document.querySelector('#construction-supplier');supplierForm.onsubmit=event=>{event.preventDefault();return request('/construction/suppliers',{name:val(supplierForm,'name'),phone:val(supplierForm,'phone'),email:val(supplierForm,'email')},detail)};
     const purchaseForm=document.querySelector('#construction-purchase');
     purchaseForm.insertAdjacentHTML('beforeend','<div id="construction-ocr" class="construction-ocr"><p class="construction-hint" id="construction-ocr-note" aria-live="polite">3 распознавания в месяц бесплатно. Результат сохраняется как черновик.</p><button class="construction-edit" id="construction-receipt-ocr" type="button">Распознать фото чека</button><button class="construction-edit" id="construction-ocr-cancel" type="button" hidden>Отменить распознавание</button><button class="construction-edit" id="construction-ocr-apply" type="button" hidden>Перенести данные в форму</button></div>');
     const ocrObject=selected,ocrNote=document.querySelector('#construction-ocr-note'),ocrStart=document.querySelector('#construction-receipt-ocr'),ocrCancel=document.querySelector('#construction-ocr-cancel'),ocrApply=document.querySelector('#construction-ocr-apply');
@@ -163,7 +182,7 @@
     purchaseForm.addEventListener('reset',()=>{ocrKey=null;setTimeout(refreshOcr,0)});
     purchaseForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;
       const payload={material_id:val(form,'material_id'),supplier_id:val(form,'supplier_id'),purchased_on:val(form,'purchased_on'),quantity:val(form,'quantity'),unit_price_kopecks:Math.round(number(val(form,'unit_price'))*100),status:val(form,'status'),receipt_file_id:val(form,'receipt_file_id'),notes:val(form,'notes')};
-      request(`/construction/objects/${selected}/purchases${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST');
+      return request(`/construction/objects/${selected}/purchases${form.dataset.edit?'/'+form.dataset.edit:''}`,payload,detail,form.dataset.edit?'PATCH':'POST');
     };
     document.querySelectorAll('[data-purchase-edit]').forEach(button=>button.onclick=()=>{const item=purchases.find(row=>row.id===button.dataset.purchaseEdit);purchaseForm.dataset.edit=item.id;
       for(const key of ['material_id','supplier_id','purchased_on','quantity','status','receipt_file_id','notes'])purchaseForm.elements[key].value=item[key]??'';
@@ -176,7 +195,7 @@
     document.querySelector('#construction-change-add').onclick=()=>{if(changeLines.children.length>=20){notify('Не больше 20 позиций в одной форме');return}changeLines.insertAdjacentHTML('beforeend',changeLine())};
     changeLines.onclick=event=>{if(event.target.closest('[data-change-remove]')&&changeLines.children.length>1)event.target.closest('.construction-change-line').remove()};
     changeForm.onsubmit=event=>{event.preventDefault();const items=[...changeLines.querySelectorAll('.construction-change-line')].map(line=>({name:val(line,'name'),quantity:val(line,'quantity'),unit:val(line,'unit'),unit_price:Math.round(number(val(line,'price'))*100)}));
-      request(`/construction/objects/${selected}/changes${changeForm.dataset.edit?'/'+changeForm.dataset.edit:''}`,{title:val(changeForm,'title'),description:val(changeForm,'description'),deadline_days:val(changeForm,'deadline_days')||0,items},detail,changeForm.dataset.edit?'PATCH':'POST');
+      return request(`/construction/objects/${selected}/changes${changeForm.dataset.edit?'/'+changeForm.dataset.edit:''}`,{title:val(changeForm,'title'),description:val(changeForm,'description'),deadline_days:number(val(changeForm,'deadline_days'))||0,items},detail,changeForm.dataset.edit?'PATCH':'POST');
     };
     document.querySelectorAll('[data-change-edit]').forEach(button=>button.onclick=()=>{const item=changes.find(row=>row.id===button.dataset.changeEdit);changeForm.dataset.edit=item.id;
       for(const key of ['title','description','deadline_days'])changeForm.elements[key].value=item[key]??'';
@@ -193,12 +212,20 @@
     document.querySelector('#construction-export').onclick=downloadSheet;
     document.querySelector('#construction-import').onchange=importSheet;
     document.querySelector('#construction-quote')?.addEventListener('click',()=>request(`/construction/objects/${selected}/quote`,{},detail));
-    document.querySelector('#construction-quote-open')?.addEventListener('click',()=>{location.hash='quotes';tab='quotes';window.render()});
+    document.querySelector('#construction-quote-open')?.addEventListener('click',()=>openLinked('quotes',obj.quote_id));
     document.querySelector('#construction-act').onclick=downloadFactAct;
     document.querySelector('#construction-report').onclick=downloadReport;
-    document.querySelector('#construction-project-open')?.addEventListener('click',()=>{location.hash='projects';tab='projects';window.render()});
+    document.querySelector('#construction-project-open')?.addEventListener('click',()=>openLinked('projects',obj.project_id));
     document.querySelector('#construction-file').onchange=upload;
+    guardForms();
     loadFiles().then(()=>{if(currentOcr())refreshOcr()});
+  }
+  async function openLinked(section,id){
+    const owner=user,space=sessionStorage.getItem('workspace_id');
+    location.hash=section;tab=section;
+    try{await window.render();if(user!==owner||tab!==section||space!==sessionStorage.getItem('workspace_id'))return;
+      if(section==='quotes')await window.Workspace.openQuote(id);else await window.Workspace.openEntity(section,id);
+    }catch(error){if(user===owner&&tab===section)notify(error.message);}
   }
   async function loadFiles(){
     try{const files=(await api('/files?construction_id='+encodeURIComponent(selected))).items;

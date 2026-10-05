@@ -108,7 +108,10 @@ def profile(provider, code, state, verifier, callback, device):
 def route(h, con, method, path, query, origin):
     if path == "/api/auth/providers" and method == "GET":
         return h.send_json(
-            200, {"providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", "")}
+            200, {
+                "providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", ""),
+                "email_delivery_available": all(os.getenv(key) for key in ("SMTP_HOST", "SMTP_FROM", "SMTP_USER", "SMTP_PASSWORD")),
+            }
         )
     if path == "/api/auth/native/exchange" and method == "POST":
         h.throttle("native-exchange:" + h.client_address[0], 30, 300)

@@ -206,6 +206,19 @@ class IdentityAssistantTests(unittest.TestCase):
             )
             self.assertNotIn("never-expose", json.dumps(data))
 
+    def test_email_delivery_capability_requires_complete_configuration(self):
+        values = dict(SMTP_HOST="", SMTP_FROM="", SMTP_USER="", SMTP_PASSWORD="")
+        with patch.dict(os.environ, values):
+            self.assertFalse(self.call("/auth/providers")[1]["email_delivery_available"])
+        values.update(SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private")
+        with patch.dict(os.environ, values):
+            data = self.call("/auth/providers")[1]
+            self.assertTrue(data["email_delivery_available"])
+            self.assertNotIn("fixture-private", json.dumps(data))
+        values["SMTP_PASSWORD"] = ""
+        with patch.dict(os.environ, values):
+            self.assertFalse(self.call("/auth/providers")[1]["email_delivery_available"])
+
     def test_vk_family_uses_server_callback_and_pkce(self):
         with patch.dict(os.environ, VK_CLIENT_ID="54792875"):
             for provider, expected in (("vk", "vkid"), ("mail", "mail_ru"), ("ok", "ok_ru")):

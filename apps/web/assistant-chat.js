@@ -167,13 +167,18 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   document.querySelector('.assistant-page').addEventListener('click',event=>{
     if(!event.target.closest('.assistant-workbar'))document.querySelectorAll('.assistant-workbar details').forEach(menu=>{menu.open=false});
   });
-  document.querySelector('#assistant-new-thread').onclick=async()=>{try{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);window.SmetraAssistant()}catch(error){notify(error.message)}};
-  document.querySelector('#assistant-knowledge').onclick=async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');if(!panel.classList.contains('hidden')){panel.classList.add('hidden');button.setAttribute('aria-expanded','false');return}await window.SmetraKnowledgePanel?.(panel);panel.classList.remove('hidden');button.setAttribute('aria-expanded','true')};
+  async function threadAction(button,action){
+    if(button.disabled)return;button.disabled=true;
+    try{await action();}catch(error){if(active())notify(error.message);}
+    finally{if(button.isConnected)button.disabled=false;}
+  }
+  document.querySelector('#assistant-new-thread').onclick=event=>threadAction(event.currentTarget,async()=>{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});if(!active())return;sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);await window.SmetraAssistant()});
+  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');if(!panel.classList.contains('hidden')){panel.classList.add('hidden');button.setAttribute('aria-expanded','false');return}await window.SmetraKnowledgePanel(panel);if(!active())return;panel.classList.remove('hidden');button.setAttribute('aria-expanded','true')});
   document.querySelector('#assistant-rename').onclick=()=>{document.querySelector('.assistant-options').open=false;const form=document.querySelector('#assistant-thread-edit');form.classList.remove('hidden');const name=document.querySelector('#assistant-thread-name');name.value=selectedThread.title;name.focus();name.select()};
   document.querySelector('#assistant-thread-cancel').onclick=()=>document.querySelector('#assistant-thread-edit').classList.add('hidden');
-  document.querySelector('#assistant-thread-edit').onsubmit=async event=>{event.preventDefault();try{await api(threadPath,{method:'PATCH',body:JSON.stringify({title:document.querySelector('#assistant-thread-name').value.trim()})});window.SmetraAssistant()}catch(error){notify(error.message)}};
-  document.querySelector('#assistant-pin').onclick=async()=>{try{await api(threadPath,{method:'PATCH',body:JSON.stringify({pinned:selectedThread.pinned?0:1})});window.SmetraAssistant()}catch(error){notify(error.message)}};
-  document.querySelector('#assistant-delete').onclick=async()=>{if(!confirm('Удалить этот диалог и его сообщения?'))return;try{await api(threadPath,{method:'DELETE'});sessionStorage.removeItem('smetra.assistant.conversation');window.SmetraAssistant()}catch(error){notify(error.message)}};
+  document.querySelector('#assistant-thread-edit').onsubmit=event=>{event.preventDefault();return threadAction(event.currentTarget.querySelector('button[type=submit]'),async()=>{await api(threadPath,{method:'PATCH',body:JSON.stringify({title:document.querySelector('#assistant-thread-name').value.trim()})});if(active())await window.SmetraAssistant()})};
+  document.querySelector('#assistant-pin').onclick=event=>threadAction(event.currentTarget,async()=>{await api(threadPath,{method:'PATCH',body:JSON.stringify({pinned:selectedThread.pinned?0:1})});if(active())await window.SmetraAssistant()});
+  document.querySelector('#assistant-delete').onclick=event=>{if(!confirm('Удалить этот диалог и его сообщения?'))return;return threadAction(event.currentTarget,async()=>{await api(threadPath,{method:'DELETE'});if(!active())return;sessionStorage.removeItem('smetra.assistant.conversation');await window.SmetraAssistant()})};
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';

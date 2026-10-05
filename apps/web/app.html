@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Кабинет · Сметра</title>
   <meta name="theme-color" content="#000000">
+  <script src="/theme-init.js"></script>
   <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/black.css">
@@ -15,6 +16,7 @@
   <link rel="stylesheet" href="/construction.css">
   <link rel="stylesheet" href="/file-editor.css">
   <link rel="stylesheet" href="/product-ui.css">
+  <link rel="stylesheet" href="/themes.css">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#content">К содержимому</a>
@@ -63,7 +65,7 @@
         <form id="auth-form">
           <div class="field hidden" id="name-field"><label for="name">Как к вам обращаться</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
           <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
-          <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
+          <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
           <p id="auth-form-error" class="auth-form-error" role="alert"></p>
           <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
         </form>
