@@ -133,7 +133,8 @@ class AssistantThreadTests(unittest.TestCase):
         status,result = self.call('/files/'+file['id']+'/metadata',token=owner)
         self.assertEqual(status,200,result)
         self.assertEqual(result['file']['name'],'brief.txt')
-        self.assertEqual(set(result['file']),{'id','name','mime','size','sha256','created_at','public'})
+        self.assertEqual(set(result['file']),{'id','name','mime','size','sha256','created_at','public',
+                                             'metadata_etag','client_id','project_id','quote_id','construction_id'})
         self.assertNotIn('Рабочий документ',str(result))
         self.assertEqual(self.call('/files/'+file['id']+'/metadata',token=stranger)[0],404)
         thread = self.create(owner,context_entity='files',context_id=file['id'])

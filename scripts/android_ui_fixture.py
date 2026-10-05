@@ -201,9 +201,15 @@ def main():
                     token,
                 )
         structure_qa = os.getenv('SMETRA_STRUCTURE_QA') == '1'
+        resource_qa = os.getenv('SMETRA_RESOURCE_QA') == '1'
         seed_tool = 'restructure_quote_items' if structure_qa else 'bulk_quote_items'
         seed_args = {'id': quote['id'], 'operation': 'insert', 'items': [{'name': 'Подготовка стен', 'unit': 'м²', 'quantity': '1.25', 'unit_price': 10005}]} if structure_qa else {'id': quote['id'], 'rows': [1], 'field': 'unit_price', 'operation': 'multiply', 'value': '1.1'}
-        if structure_qa:
+        resource_file = None
+        if resource_qa:
+            resource_file = call('/files', {'client_id': clients[0]['id'], 'name': 'resources.md',
+                                          'content': base64.b64encode('# Рабочий документ\nСрок 30 дней.\n'.encode()).decode()}, token)['file']
+            seed_tool, seed_args = 'create_document', {'quote_id': quote['id'], 'kind': 'invoice', 'template': 'Modern'}
+        if structure_qa or resource_qa:
             with app.db() as con:
                 con.execute("UPDATE users SET plan='pro',entitlement_until=? WHERE email=?", (int(time.time()) + 3600, 'android-design@test.invalid'))
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-not-a-real-key"), patch(
@@ -216,6 +222,14 @@ def main():
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
             prompt = next((message['content'] for message in reversed(messages) if message['role'] == 'user'), '')
+            if resource_qa:
+                command = {
+                    'Переименуй тестовый файл': ('rename_file', {'id': resource_file['id'], 'name': 'Сроки проекта.md'}),
+                    'Перенеси тестовый файл': ('move_file', {'id': resource_file['id'], 'target': 'projects', 'target_id': project['id']}),
+                }.get(prompt)
+                if command:
+                    return {'content': None, 'tool_calls': [{'id': 'resource-fixture', 'type': 'function',
+                            'function': {'name': command[0], 'arguments': json.dumps(command[1])}}]}
             if structure_qa:
                 command = {
                     'Добавь тестовую опцию': ('restructure_quote_items', {'operation': 'insert', 'items': [{'name': 'Опциональная доставка', 'unit_price': 5000, 'optional': True, 'included': False}]}),

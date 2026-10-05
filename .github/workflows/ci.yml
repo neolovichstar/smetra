@@ -57,8 +57,15 @@ jobs:
         run: |
           kill "$(cat data/assistant-fixture.pid)"
           SMETRA_STRUCTURE_QA=1 python scripts/android_ui_fixture.py > data/structure-fixture.log 2>&1 &
+          echo $! > data/assistant-fixture.pid
           for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/structure-fixture.log && break; sleep 1; done
           node tests/browser_quote_structure.cjs
+      - name: Assistant documents and file metadata in mobile browser
+        run: |
+          kill "$(cat data/assistant-fixture.pid)"
+          SMETRA_RESOURCE_QA=1 python scripts/android_ui_fixture.py > data/resources-fixture.log 2>&1 &
+          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/resources-fixture.log && break; sleep 1; done
+          node tests/browser_assistant_resources.cjs
   android:
     runs-on: ubuntu-latest
     steps:

@@ -37,6 +37,17 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if("true".equals(arguments.getString("resourcesOnly"))){
+                click("Ещё");click("Ассистент");waitText("Предпросмотр PDF");waitText("Документ");shot("31-document-preview");
+                click("Применить");waitText("Скачать PDF");waitText("Отменить изменение");shot("32-document-created");
+                click("Сегодня");waitText("Айдентика и упаковка");click("Ещё");click("Ассистент");waitText("Скачать PDF");
+                click("Отменить изменение");waitPrefix("Изменение отменено");require(find("Скачать PDF")==null,"Removed draft has no download control");
+                waitEnabledPrefix("Отправить");fill("Переименуй тестовый файл");clickPrefix("Отправить");waitText("Сроки проекта.md");shot("33-file-name-preview");
+                click("Применить");waitText("Отменить изменение");click("Отменить изменение");waitPrefix("Изменение отменено");
+                waitEnabledPrefix("Отправить");fill("Перенеси тестовый файл");clickPrefix("Отправить");waitText("Привязка");shot("34-file-move-preview");
+                click("Применить");waitText("Отменить изменение");click("Отменить изменение");waitPrefix("Изменение отменено");
+                result.putString("status","PASS: native document preview/apply/persistent download/undo and file rename/move previews with confirmation/undo");finish(Activity.RESULT_OK,result);return;
+            }
             interfaceOnly="true".equals(arguments.getString("interfaceOnly"));
             if(interfaceOnly){
                 click("Создать");waitSheetText("Создать в Сметре");shot("27-create-sheet");getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);SystemClock.sleep(500);require(find("Айдентика и упаковка")!=null,"Sheet back preserves page");

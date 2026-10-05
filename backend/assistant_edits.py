@@ -124,6 +124,8 @@ def prepare_structure(service, data):
 
 def before_update(service, entity, record, arguments):
     source = quote_snapshot(service, record) if entity == "quotes" else dict(record)
+    if entity == "stages":
+        source["currency"] = service.get("projects", source["project_id"])["currency"]
     if entity == "quotes":
         if "amount" in arguments and source["itemized"]:
             raise DomainError(400, "Итог сметы рассчитывается по строкам. Измените цены или количество позиций")
@@ -148,7 +150,8 @@ def undo(service, action_id):
     service.write_access()
     with transaction(service.con):
         row = service.con.execute(
-            "SELECT * FROM assistant_actions WHERE id=? AND workspace_id=? AND user_id=?",
+            "SELECT * FROM assistant_actions WHERE id=? AND workspace_id=? AND user_id=?" +
+            (" FOR UPDATE" if getattr(service.con, "is_postgres", False) else ""),
             (action_id, service.wid, service.user["id"]),
         ).fetchone()
         if not row:
@@ -159,6 +162,16 @@ def undo(service, action_id):
         state = result.get("undo")
         if row["status"] != "applied" or not isinstance(state, dict) or result.get("undo_until", 0) < stamp():
             raise DomainError(409, "Это действие уже нельзя отменить")
+        if state.get("mode"):
+            from backend.assistant_resources import undo_resource
+
+            restored = undo_resource(service, state)
+            reverted = {"ok": True, "summary": row["summary"], "result": restored, "undone": True}
+            result["undo_result"], result["undoable"] = reverted, False
+            service.con.execute("UPDATE assistant_actions SET status='undone',result=? WHERE id=?",
+                                (packed(result), action_id))
+            service.emit("ai", action_id, "Отменено: " + row["summary"])
+            return reverted
         from backend.assistant import TABLE
 
         current = service.get(TABLE.get(state["entity"], state["entity"]), state["id"])

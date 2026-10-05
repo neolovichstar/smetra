@@ -1,0 +1,48 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+(async()=>{
+ const watchdog=setTimeout(()=>{console.error('FAIL: resource browser verification timed out');process.exit(1)},90000);
+ const tabs=await(await fetch('http://127.0.0.1:'+(process.env.SMETRA_CDP_PORT||'9223')+'/json')).json();
+ const ws=new WebSocket(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));
+ let seq=0;const pending=new Map(),errors=[];
+ ws.addEventListener('message',event=>{const m=JSON.parse(event.data);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(m.error):p.resolve(m.result)}else if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails.text)});
+ const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))});
+ const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,userGesture:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value};
+ const until=async expression=>{for(let i=0;i<120;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100))}throw Error(expression+'\n'+await evaluate('document.body.innerText'))};
+ const screenshot=async name=>{const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync('data/'+name+'.png',Buffer.from(shot.data,'base64'))};
+ await send('Runtime.enable');await send('Page.enable');await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ await send('Page.navigate',{url:'http://localhost:8084/app'});
+ await until("document.querySelector('#auth-form')?.onsubmit && document.querySelector('#auth-login-tab')?.onclick");
+ await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
+ await until("document.querySelector('[data-work=quote-new]')");
+ const file=await evaluate("api('/files').then(r=>r.items.find(f=>f.name==='resources.md'))");
+ await evaluate("document.querySelector('[data-tab=assistant]').click()");
+ await until("[...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Предпросмотр PDF')");
+ assert.equal((await evaluate("api('/documents').then(r=>r.items)")).length,0);
+ await evaluate("window.resourcePdfResults=[];const originalFetch=window.fetch;window.fetch=async(...args)=>{const r=await originalFetch(...args);if(String(args[0]).includes('/preview.pdf')){const bytes=new Uint8Array(await r.clone().arrayBuffer());window.resourcePdfResults.push({status:r.status,prefix:String.fromCharCode(...bytes.slice(0,4))})}return r};[...document.querySelectorAll('#assistant-actions button')].find(b=>b.textContent==='Предпросмотр PDF').click()");
+ await until('window.resourcePdfResults.length===1');assert.deepEqual(await evaluate('window.resourcePdfResults[0]'),{status:200,prefix:'%PDF'});
+ await screenshot('resources-document-preview');
+ await evaluate("document.querySelector('[data-confirm]').click()");
+ await until("[...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Скачать PDF')");
+ const document=await evaluate("api('/documents').then(r=>r.items[0])");assert.ok(document.id);
+ await evaluate("window.SmetraAssistant()");await until("document.querySelector('.assistant-saved')?.textContent.includes('Скачать PDF')");
+ await evaluate("[...document.querySelectorAll('.assistant-saved button')].find(b=>b.textContent==='Отменить изменение').click()");
+ await until("document.querySelector('.assistant-saved')?.textContent.includes('Изменение отменено')");
+ assert.equal((await evaluate("api('/documents').then(r=>r.items)")).length,0);
+ for(const [prompt,field] of [['Переименуй тестовый файл','Название'],['Перенеси тестовый файл','Привязка']]){
+   await evaluate(`document.querySelector('#assistant-input').value=${JSON.stringify(prompt)};document.querySelector('#assistant-form').requestSubmit()`);
+   await until("document.querySelector('[data-confirm]')");assert.ok((await evaluate("document.querySelector('.assistant-edit-diff').innerText")).includes(field));
+   await evaluate("document.querySelector('[data-confirm]').click()");
+   await until("[...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Отменить изменение')");
+   await screenshot(field==='Название'?'resources-file-renamed':'resources-file-moved');
+   await evaluate("[...document.querySelectorAll('#assistant-actions button')].find(b=>b.textContent==='Отменить изменение').click()");
+   await until("![...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Отменить изменение')");
+ }
+ const restored=await evaluate(`api('/files/${file.id}/metadata').then(r=>r.file)`);assert.equal(restored.name,'resources.md');assert.equal(restored.client_id,file.client_id);assert.equal(restored.sha256,file.sha256);
+ await evaluate("document.querySelector('[data-tab=files]').click()");await until("document.querySelector('[data-file-manage]')");
+ await evaluate(`document.querySelector('[data-file-manage="${file.id}"]').click()`);await until("document.querySelector('#workspace-dialog form')?.onsubmit");
+ await evaluate("document.querySelector('#workspace-dialog [name=name]').value='Ручное название.md';document.querySelector('#workspace-dialog form').requestSubmit()");
+ await until("[...document.querySelectorAll('.file-center-row')].some(row=>row.textContent.includes('Ручное название.md'))");
+ assert.equal((await evaluate(`api('/files/${file.id}/metadata').then(r=>r.file)`)).name,'Ручное название.md');
+ assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);assert.deepEqual(errors,[]);
+ await screenshot('resources-file-center');clearTimeout(watchdog);console.log('PASS: mobile PDF preview/create/persistent download/undo, file rename/move confirmation/undo and manual metadata form; no overflow or JS errors');ws.close();
+})().catch(error=>{console.error(error);process.exit(1)});

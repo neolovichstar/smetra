@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);presentation=MobilePresentation.cached(this);presentation.apply(this);ui=new SmetraUi(this);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         vault=new TokenVault(this);token=vault.read();
+        if(state!=null)pendingPdfDocument=state.getString("pending_pdf_document");
         if(state!=null){assistantAttachmentRequestKey=state.getString("assistant_attachment_request_key","");assistantAttachmentPicking=state.getBoolean("assistant_attachment_picking",false);assistantAttachmentThread=state.getString("assistant_attachment_thread","");assistantAttachmentAccount=state.getString("assistant_attachment_account","");String uri=state.getString("assistant_attachment_uri");if(uri!=null)assistantAttachmentUri=android.net.Uri.parse(uri);try{String file=state.getString("assistant_attachment_uploaded");if(file!=null)assistantUploadedAttachment=new JSONObject(file);}catch(Exception ignored){}}
         String legacy=getPreferences(MODE_PRIVATE).getString("token",null);
         if(token==null&&legacy!=null){try{vault.save(legacy);token=legacy;}catch(Exception ignored){token=null;}}
@@ -85,6 +86,7 @@ public class MainActivity extends Activity {
     private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
     @Override public void onDestroy(){worker.shutdownNow();super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle state){
+        state.putString("pending_pdf_document",pendingPdfDocument);
         state.putString("assistant_attachment_request_key",assistantAttachmentRequestKey);
         super.onSaveInstanceState(state);state.putString("assistant_attachment_thread",assistantAttachmentThread);state.putString("assistant_attachment_account",assistantAttachmentAccount);
         state.putBoolean("assistant_attachment_picking",assistantAttachmentPicking);
@@ -279,7 +281,7 @@ public class MainActivity extends Activity {
             for(int i=0;i<list.length();i++){JSONObject item=list.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(listHost);row.addView(ui.label(item.optString("title"),15,INK,true));ui.space(row,5);row.addView(ui.label((item.optInt("pinned")==1?"Закреплён · ":"")+(item.optString("context_entity").isEmpty()?"Без контекста":"Контекст: "+assistantEntity(item.optString("context_entity"))),11,MUTED,false));ui.tap(row,()->selectAssistantThread(item));}
         });
     }
-    private String assistantEntity(String entity){switch(entity){case "clients":return "Клиент";case "quotes":return "Смета";case "projects":return "Заказ";case "files":return "Файл";default:return "Запись";}}
+    private String assistantEntity(String entity){switch(entity){case "clients":return "Клиент";case "quotes":return "Смета";case "projects":return "Заказ";case "files":return "Файл";case "documents":return "Документ";default:return "Запись";}}
     private void assistantThreadEdit(JSONObject thread){
         parentPage="assistant";page("Диалог","assistant-settings",true);content.addView(ui.label(thread==null?"Новый диалог":"Настройки диалога",26,INK,true));
         EditText title=field("Название диалога",1);title.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(120)});title.setText(thread==null?"Новый диалог":thread.optString("title"));
@@ -311,7 +313,7 @@ public class MainActivity extends Activity {
         TextView allowance=ui.label("Загружаю лимит…",11,MUTED,false);
         if(assistantContext!=null){LinearLayout contextBar=ui.card(content);TextView contextLabel=ui.label("Контекст · "+assistantEntity(assistantContext.optString("entity")),12,BLUE,false);contextBar.addView(contextLabel);
             String entity=assistantContext.optString("entity"),id=assistantContext.optString("id");
-            call("/"+entity+"/"+id+(entity.equals("files")?"/metadata":""),"GET",null,r->{JSONObject record=r.optJSONObject(entity.equals("quotes")?"quote":entity.equals("files")?"file":"item");if(record!=null)contextLabel.setText(assistantEntity(entity)+" · "+record.optString("title",record.optString("name",id)));});
+            call("/"+entity+"/"+id+(entity.equals("files")?"/metadata":""),"GET",null,r->{JSONObject record=r.optJSONObject(entity.equals("quotes")?"quote":entity.equals("files")?"file":entity.equals("documents")?"document":"item");if(record!=null)contextLabel.setText(assistantEntity(entity)+" · "+record.optString("title",record.optString("name",id)));});
             addButton(contextBar,"Убрать контекст",false,v->{try{call("/assistant/conversations/"+assistantConversation,"PATCH",new JSONObject().put("context_entity","").put("context_id",""),r->assistant());}catch(Exception error){message(error.getMessage());}});
         }
         LinearLayout preparation=ui.column();content.addView(preparation);
@@ -606,7 +608,7 @@ public class MainActivity extends Activity {
         ui.enter(row);
         return body;
     }
-    private String fieldLabel(String key){switch(key){case "optional":return "\u041e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043f\u043e\u0437\u0438\u0446\u0438\u044f";case "included":return "\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u0430 \u0432 \u0440\u0430\u0441\u0447\u0451\u0442";case "unit_price":return "Цена";case "quantity":return "Количество";case "coefficient":return "Коэффициент";case "markup":return "Наценка, %";case "discount":return "Скидка, %";case "tax":return "Налог, %";case "unit":return "Единица";case "category":return "Категория";case "notes":return "Заметки";case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
+    private String fieldLabel(String key){switch(key){case "text":return "Текст";case "attachment":return "Привязка";case "document":return "Документ";case "source":return "Источник";case "template":return "Шаблон";case "status":return "Статус";case "optional":return "\u041e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043f\u043e\u0437\u0438\u0446\u0438\u044f";case "included":return "\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u0430 \u0432 \u0440\u0430\u0441\u0447\u0451\u0442";case "unit_price":return "Цена";case "quantity":return "Количество";case "coefficient":return "Коэффициент";case "markup":return "Наценка, %";case "discount":return "Скидка, %";case "tax":return "Налог, %";case "unit":return "Единица";case "category":return "Категория";case "notes":return "Заметки";case "title":case "name":return "Название";case "client":return "Клиент";case "description":return "Описание";case "amount":case "amount_kopecks":return "Сумма";case "items":return "Работы";case "due_date":return "Срок";case "email":return "Почта";case "phone":return "Телефон";case "terms":return "Условия";case "currency":return "Валюта";default:return key;}}
     private String assistantEditValue(String field,Object value,String currency){
         if(value==null||value==JSONObject.NULL||value.toString().isEmpty())return "—";
         if(field.equals("optional")||field.equals("included"))return Boolean.TRUE.equals(value)?"Да":"Нет";
@@ -648,6 +650,7 @@ public class MainActivity extends Activity {
     }
     private void assistantUndo(LinearLayout host,JSONObject action){
         host.removeAllViews();host.addView(ui.label("Сохранено · "+action.optString("summary"),14,INK,false));
+        if(!action.optString("document_id").isEmpty()&&!action.isNull("document_id"))addButton(host,"Скачать PDF",false,v->saveAssistantPdf(action.optString("document_id")));
         addButton(host,"Отменить изменение",false,v->{v.setEnabled(false);try{call("/assistant/undo","POST",new JSONObject().put("id",action.optString("id")),r->{host.removeAllViews();host.addView(ui.label("Изменение отменено · "+action.optString("summary"),13,BLUE,false));});}catch(Exception error){message(error.getMessage());}v.setEnabled(true);});
     }
     private void assistantAction(LinearLayout host,JSONObject action){
@@ -656,7 +659,8 @@ public class MainActivity extends Activity {
         JSONObject preview=action.optJSONObject("preview"),fields=action.optJSONObject("arguments");
         if(preview!=null)assistantPreview(proposal,preview);
         else if(fields!=null){java.util.Iterator<String> keys=fields.keys();while(keys.hasNext()){String key=keys.next();if(key.equals("id")||key.equals("revision"))continue;ui.space(proposal,10);proposal.addView(ui.label(fieldLabel(key),11,MUTED,false));ui.space(proposal,3);proposal.addView(ui.label(assistantEditValue(key,fields.opt(key),fields.optString("currency","RUB")),14,INK,false));}}
-        addButton(proposal,"Применить",true,v->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{if(r.optBoolean("undoable"))assistantUndo(proposal,action);else{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));}});}catch(Exception error){message(error.getMessage());}});
+        if(action.optString("tool").equals("create_document"))addButton(proposal,"Предпросмотр PDF",false,v->saveAssistantPdf("assistant:"+action.optString("id")));
+        addButton(proposal,"Применить",true,v->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{JSONObject saved=r.optJSONObject("result"),document=saved==null?null:saved.optJSONObject("document");if(document!=null)try{action.put("document_id",document.optString("id"));}catch(Exception ignored){}if(r.optBoolean("undoable"))assistantUndo(proposal,action);else{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));}});}catch(Exception error){message(error.getMessage());}});
         addButton(proposal,"Не сейчас",false,v->{try{call("/assistant/dismiss","POST",new JSONObject().put("id",action.optString("id")),r->host.removeView(proposal));}catch(Exception error){message(error.getMessage());}});
     }
 
@@ -1033,12 +1037,15 @@ public class MainActivity extends Activity {
             addButton(content,"Скачать отчёт по объекту",false,v->{pendingPdfDocument="report:"+id;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-report.pdf");startActivityForResult(save,304);});
         });
     }
+    private void saveAssistantPdf(String documentId){
+        pendingPdfDocument=documentId;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,documentId.startsWith("assistant:")?"smetra-preview.pdf":"smetra-document.pdf");startActivityForResult(save,304);
+    }
     private void saveActPdf(int resultCode,Intent data){
         final String documentId=pendingPdfDocument;pendingPdfDocument=null;
         if(resultCode!=RESULT_OK||data==null||data.getData()==null||documentId==null)return;
-        final android.net.Uri uri=data.getData();message("Сохраняем акт…");
+        final android.net.Uri uri=data.getData();message("Сохраняем PDF…");
         worker.execute(()->{HttpURLConnection connection=null;try{
-            String path=documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf":"/api/documents/"+documentId+"/pdf";
+            String path=documentId.startsWith("assistant:")?"/api/assistant/actions/"+documentId.substring(10)+"/preview.pdf":documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf":"/api/documents/"+documentId+"/pdf";
             connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+path).openConnection();
             connection.setConnectTimeout(10000);connection.setReadTimeout(30000);
             connection.setRequestProperty("Authorization","Bearer "+token);

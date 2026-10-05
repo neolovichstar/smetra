@@ -9,6 +9,7 @@ import secrets
 import smtplib
 import sqlite3
 import socket
+import ssl
 import threading
 import time
 import urllib.error
@@ -121,10 +122,17 @@ def mail(to, subject, message):
     email = EmailMessage()
     email["From"], email["To"], email["Subject"] = os.environ["SMTP_FROM"], to, subject
     email.set_content(message)
-    with smtplib.SMTP(
-        os.environ["SMTP_HOST"], int(os.getenv("SMTP_PORT", "587")), timeout=12
-    ) as smtp:
-        smtp.starttls()
+    port = int(os.getenv("SMTP_PORT", "587"))
+    context = ssl.create_default_context()
+    options = {"timeout": 12}
+    if port == 465:
+        transport = smtplib.SMTP_SSL
+        options["context"] = context
+    else:
+        transport = smtplib.SMTP
+    with transport(os.environ["SMTP_HOST"], port, **options) as smtp:
+        if port != 465:
+            smtp.starttls(context=context)
         smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
         smtp.send_message(email)
 

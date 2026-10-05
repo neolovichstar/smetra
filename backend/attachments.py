@@ -89,12 +89,10 @@ def _route(service, method, parts, query, data):
         if method=='DELETE':
             return 200, {'processing':file_processing.cancel(service,row)}
         raise DomainError(405,'Метод не поддерживается')
-    if method == "GET" and len(parts) == 2 and parts[1] == "metadata":
-        from backend import file_processing
+    if len(parts) == 2 and parts[1] == "metadata":
+        from backend.file_metadata import route as metadata_route
 
-        row = service.get("files", parts[0])
-        return 200, {"file": {key: row[key] for key in
-                             ("id", "name", "mime", "size", "sha256", "created_at", "public")}, "processing":file_processing.state(service,row)}
+        return metadata_route(service, method, parts[0], data)
     if len(parts) >= 2 and parts[1] == "versions":
         row = service.get("files", parts[0])
         if row["mime"] != "text/plain" or Path(row["name"]).suffix.lower() != ".md":

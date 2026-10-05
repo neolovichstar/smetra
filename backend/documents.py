@@ -235,6 +235,14 @@ def documents(service, method, parts, query, data):
         }
     if method != "POST":
         raise DomainError(405, "Документы сохраняются как неизменяемые снимки")
+    document = prepare_document(service, data)
+    service.insert("documents", document)
+    service.emit("document", document["id"], "Документ сформирован", document["name"])
+    return 201, {"document": {k: v for k, v in document.items() if k != "snapshot"}}
+
+
+def prepare_document(service, data):
+    con = service.con
     row = service.get("quotes", string(data.get("quote_id", ""), "Смета", 50, True))
     kind = choice(data.get("kind", "estimate"), TITLES, "Вид документа")
     template = choice(
@@ -288,9 +296,7 @@ def documents(service, method, parts, query, data):
         created_at=stamp(),
     )
     pdf(document)  # Fail before persisting if rendering/dependencies are unavailable.
-    service.insert("documents", document)
-    service.emit("document", document["id"], "Документ сформирован", document["name"])
-    return 201, {"document": {k: v for k, v in document.items() if k != "snapshot"}}
+    return document
 
 
 TRANSFER_COLUMNS = {

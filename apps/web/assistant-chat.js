@@ -72,7 +72,7 @@ function assistantMarkdown(source) {
 }
 
 window.SmetraAssistantContext=function(value){
-  if(!value||!['clients','quotes','projects','files'].includes(value.entity)||typeof value.id!=='string')return;
+  if(!value||!['clients','quotes','projects','files','documents'].includes(value.entity)||typeof value.id!=='string')return;
   sessionStorage.setItem('smetra.assistant.context',JSON.stringify({entity:value.entity,id:value.id,label:String(value.label||'').slice(0,120),workspace_id:value.workspace_id||''}));
   sessionStorage.removeItem('smetra.assistant.conversation');
 };
@@ -88,7 +88,7 @@ function assistantEditValue(field,value,currency='RUB'){
   return String(value);
 }
 function assistantEditPreview(preview){
-  const labels={unit_price:'Цена',quantity:'Количество',coefficient:'Коэффициент',markup:'Наценка, %',discount:'Скидка, %',tax:'Налог, %',unit:'Единица',category:'Категория',optional:'Опциональная позиция',included:'Включена в расчёт',name:'Название',title:'Название',notes:'Заметки',description:'Описание',amount:'Сумма',items:'Позиции',phone:'Телефон',email:'Почта'};
+  const labels={text:'Текст',attachment:'Привязка',document:'Документ',source:'Источник',template:'Шаблон',amount_kopecks:'Сумма',due_date:'Срок',status:'Статус',unit_price:'Цена',quantity:'Количество',coefficient:'Коэффициент',markup:'Наценка, %',discount:'Скидка, %',tax:'Налог, %',unit:'Единица',category:'Категория',optional:'Опциональная позиция',included:'Включена в расчёт',name:'Название',title:'Название',notes:'Заметки',description:'Описание',amount:'Сумма',items:'Позиции',phone:'Телефон',email:'Почта'};
   const structure=preview.kind==='quote_structure';
   const itemText=(item,position)=>item?`Строка ${position} · ${item.quantity} ${item.unit} × ${assistantEditValue('unit_price',item.unit_price,preview.currency)} · ${assistantEditValue('amount',item.subtotal,preview.currency)}${item.optional?(item.included?' · опция включена':' · опция исключена'):''}`:'—';
   const rows=(preview.rows||[]).map(row=>structure?`<div class="assistant-diff-row"><span>${escapeHtml(({insert:'Добавить',remove:'Удалить',move:'Переместить'})[row.change]||'Изменить')} · ${escapeHtml((row.after||row.before)?.name||'Позиция')}</span><div><del>${escapeHtml(itemText(row.before,row.before_row))}</del><span aria-label="станет">${escapeHtml(itemText(row.after,row.after_row))}</span></div></div>`:`<div class="assistant-diff-row"><span>${row.row?escapeHtml(row.row)+'. '+escapeHtml(row.name)+' · ':''}${escapeHtml(labels[row.field]||row.field)}</span><div><del>${escapeHtml(assistantEditValue(row.field,row.before,preview.currency))}</del><span aria-label="станет">${escapeHtml(assistantEditValue(row.field,row.after,preview.currency))}</span></div></div>`);
@@ -169,7 +169,7 @@ window.SmetraAssistant=async function(){
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
-  if(context&&(!['clients','quotes','projects','files'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
+  if(context&&(!['clients','quotes','projects','files','documents'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
   if(activeConversation){
     context=selectedThread.context_entity?{entity:selectedThread.context_entity,id:selectedThread.context_id,workspace_id:currentWorkspace}:null;
     if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
@@ -178,7 +178,7 @@ window.SmetraAssistant=async function(){
   const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');contextBar.after(fileStatus);
   const renderContext=()=>{
     contextBar.classList.toggle('hidden',!context);
-    if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ',files:'Файл'})[context.entity]+': '+(context.label||context.id);
+    if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ',files:'Файл',documents:'Документ'})[context.entity]+': '+(context.label||context.id);
     else sessionStorage.removeItem('smetra.assistant.context');
   };
   renderContext();
@@ -258,14 +258,19 @@ window.SmetraAssistant=async function(){
     const detail=action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
     item.innerHTML=`<span class="overline">Предложение · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
     actions.append(item);
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    if(action.tool==='create_document'){
+      const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
+      preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
+    }
+    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
   };
-  const renderSavedAction=(item,action,undoable)=>{
+  const renderSavedAction=(item,action,undoable,documentId)=>{
     item.replaceChildren();const title=document.createElement('p');title.textContent='Сохранено · '+action.summary;item.append(title);
+    if(documentId){const pdf=document.createElement('button');pdf.type='button';pdf.className='btn ghost';pdf.textContent='Скачать PDF';pdf.onclick=()=>Workspace.download('/documents/'+encodeURIComponent(documentId)+'/pdf','smetra-document.pdf').catch(error=>notify(error.message));item.append(pdf)}
     if(!undoable)return;
     const button=document.createElement('button');button.type='button';button.className='btn ghost';button.textContent='Отменить изменение';item.append(button);
-    button.onclick=async()=>{button.disabled=true;try{await api('/assistant/undo',{method:'POST',body:JSON.stringify({id:action.id})});title.textContent='Изменение отменено · '+action.summary;button.remove();notify('Предыдущие значения восстановлены')}catch(error){button.disabled=false;notify(error.message)}};
+    button.onclick=async()=>{button.disabled=true;try{await api('/assistant/undo',{method:'POST',body:JSON.stringify({id:action.id})});item.replaceChildren(title);title.textContent='Изменение отменено · '+action.summary;notify('Изменение отменено')}catch(error){button.disabled=false;notify(error.message)}};
   };
   renderQuota(quota);
   let jobRequest=null,jobPollTimer=null,jobLoadSeq=0;
@@ -337,7 +342,7 @@ window.SmetraAssistant=async function(){
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
-  (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true)});
+  (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true,action.document_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит сообщений на этот месяц исчерпан.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
