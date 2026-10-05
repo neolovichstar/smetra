@@ -22,6 +22,10 @@ jobs:
       - run: pip-audit -r requirements-dev.txt -f cyclonedx-json -o python-sbom.json
       - run: python -m ruff check backend tests scripts
       - run: python -m unittest discover -s tests -v
+      - name: Office preview DOM interactions
+        run: |
+          npm install --prefix data/dom --no-audit --no-fund jsdom@27.4.0
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_office_files.cjs
       - run: python scripts/build_web.py
       - uses: actions/upload-artifact@v4
         with:
@@ -41,6 +45,10 @@ jobs:
           python backend/launcher.py > data/server.log 2>&1 &
           google-chrome --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9223 --user-data-dir=/tmp/smetra-chrome about:blank > data/chrome.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8082/health && curl -sf http://localhost:9223/json && break; sleep 1; done
+          if ! curl -sf http://localhost:9223/json > /dev/null; then
+            cat data/chrome.log
+            exit 1
+          fi
           node tests/browser_flows.cjs
           node tests/browser_construction_prices.cjs
       - name: Assistant preview, undo and conversation context in mobile browser
@@ -73,6 +81,12 @@ jobs:
           SMETRA_OFFICE_QA=1 python scripts/android_ui_fixture.py > data/office-fixture.log 2>&1 &
           for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/office-fixture.log && break; sleep 1; done
           node tests/browser_office_files.cjs
+      - name: Browser fixture diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-fixture-logs
+          path: data/*.log
   android:
     runs-on: ubuntu-latest
     steps:
