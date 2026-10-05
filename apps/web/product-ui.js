@@ -81,6 +81,17 @@
   if (sidebar) new MutationObserver(syncNavigation).observe(sidebar,{attributes:true,attributeFilter:['class'],subtree:true});
   syncNavigation();
   function decorate(root) {
+    root.querySelectorAll('.construction-section > form').forEach(form => {
+      if (form.dataset.compactEntry || form.querySelectorAll('label').length < 5) return;
+      form.dataset.compactEntry = 'true';
+      const titles = {'construction-zone':'Добавить помещение','construction-quantity':'Добавить работу',
+        'construction-material':'Добавить материал','construction-defect':'Зафиксировать дефект',
+        'construction-log':'Записать выполненные работы','construction-purchase':'Записать закупку'};
+      const entry = document.createElement('details'); entry.className = 'construction-entry';
+      entry.open = !matchMedia('(max-width:700px)').matches;
+      const summary = document.createElement('summary'); summary.textContent = titles[form.id] || 'Открыть форму';
+      form.before(entry); entry.append(summary,form);
+    });
     root.querySelectorAll('#capture-text').forEach(input => {
       if (input.dataset.autogrow) return;
       input.dataset.autogrow = 'true';

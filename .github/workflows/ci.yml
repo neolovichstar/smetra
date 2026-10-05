@@ -51,6 +51,7 @@ jobs:
           node tests/browser_assistant_edits.cjs
           node tests/browser_receipts.cjs
           node tests/browser_scan_ocr.cjs
+          node tests/browser_sections.cjs
           SMETRA_MIXED_PDF=1 node tests/browser_scan_ocr.cjs
       - name: Quote composition preview and reversal in mobile browser
         run: |

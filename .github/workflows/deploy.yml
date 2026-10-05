@@ -1,0 +1,43 @@
+name: Production deployment
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate web resources
+        run: python scripts/build_web.py
+      - name: Link the existing production project
+        run: |
+          mkdir -p .vercel
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          Path('.vercel/project.json').write_text(json.dumps({
+            'projectId': 'prj_uJoLjwMKglkJffweJtaYQBCgp5tZ',
+            'orgId': 'team_p4fteGCOWsomcnilLQvMEZ4V',
+            'projectName': 'smetra',
+          }))
+          PY
+      - name: Publish to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          test -n "$VERCEL_TOKEN"
+          npx --yes vercel@56.3.1 deploy --prod --yes

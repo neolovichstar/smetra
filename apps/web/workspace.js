@@ -12,7 +12,7 @@ window.Workspace = (() => {
   const select = (key,label,values,selected='') => `<div class="field"><label for="f-${key}">${e(label)}</label><select name="${key}" id="f-${key}">${option(values,selected)}</select></div>`;
   const empty = (title,text) => `<div class="empty"><span class="eyebrow">Начните с первого шага</span><h3>${e(title)}</h3><p>${e(text)}</p></div>`;
   const button = (label,action,id='',cls='') => `<button class="btn small ${cls}" data-work="${action}" data-id="${e(id)}">${label}</button>`;
-  const mainTitle = (title,subtitle,actions='') => header(title,'',actions);
+  const mainTitle = (title,subtitle,actions='') => header(title,subtitle,actions);
   const formObject = form => Object.fromEntries(new FormData(form));
   const amount = value => {const n=Number(value);if(!Number.isFinite(n)||n<0)throw Error('Проверьте сумму');return Math.round(n*100)};
   function closeModal(){if(!modal?.open)return;modal.classList.add('is-closing');clearTimeout(modalTimer);modalTimer=setTimeout(()=>{modal.close();modal.classList.remove('is-closing');document.body.classList.remove('modal-open')},matchMedia('(prefers-reduced-motion: reduce)').matches?0:200)}
@@ -39,7 +39,7 @@ window.Workspace = (() => {
     if(!workspace && section!=='dashboard')await init();
     let html='';
     let fileCenterData;
-    const add=roleCanWrite()?button('+ Добавить','new',section,'primary'):'';
+    const add=roleCanWrite()?button(({clients:'Добавить клиента',catalog:'Добавить расценку',projects:'Новый проект',tasks:'Новая задача',leads:'Новый лид'})[section]||'Добавить','new',section,'primary'):'';
     if(section==='dashboard'){
       const response=await api('/dashboard');if(mine!==generation)return;
       setWorkspace(response);
@@ -66,7 +66,8 @@ window.Workspace = (() => {
         `<div class="workspace-columns"><section class="panel"><h3>Поступления</h3>${moneyRows(receipts.items)}</section><section class="panel"><h3>Расходы</h3>${moneyRows(expenses.items,true)}</section></div>`;
     }else if(section==='calendar'){
       const result=await api('/overview');if(mine!==generation)return;
-      html=mainTitle('Календарь','Повестка заказов и задач с указанными сроками.',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${result.deadlines.length?result.deadlines.map(d=>`<div class="record-line"><time>${e(d.due_date)}</time><strong>${e(d.name)}</strong>${status(d.status)}</div>`).join(''):empty('Сроки пока не назначены','Укажите дату в заказе или задаче.')}</section>`;
+      const days=[...new Set(result.deadlines.map(item=>item.due_date))];
+      html=mainTitle('Календарь','Ближайшие сроки по задачам и проектам.',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${days.length?days.map(day=>`<section class="agenda-day"><time datetime="${e(day)}"><strong>${e(day.slice(-2))}</strong><span>${e(new Intl.DateTimeFormat('ru-RU',{month:'short',weekday:'short'}).format(new Date(day+'T12:00:00')))}</span></time><div>${result.deadlines.filter(item=>item.due_date===day).map(d=>`<div class="record-line"><button class="record-title" data-work="entity" data-kind="${d.kind==='task'?'tasks':'projects'}" data-id="${e(d.id)}"><strong>${e(d.name)}</strong><small>${d.kind==='task'?'Задача':'Проект'}</small></button>${status(d.status)}</div>`).join('')}</div></section>`).join(''):empty('Сроки пока не назначены','Укажите дату в проекте или задаче.')}</section>`;
     }else if(section==='activity'||section==='notifications'){
       const result=await api('/'+section);if(mine!==generation)return;
       html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel">${section==='activity'?activityList(result.items):result.items.map(n=>`<div class="record-line ${n.is_read?'':'unread'}"><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div>`).join('')||empty('Пока тихо','Новые события появятся здесь.')}</section>`;
@@ -80,10 +81,10 @@ window.Workspace = (() => {
         `<section class="panel file-center"><div class="toolbar"><input id="file-center-search" type="search" aria-label="Поиск файлов" placeholder="Найти файл по названию"></div><div id="file-center-list"></div></section>`;
     }else if(section==='documents'){
       const result=await api('/documents');if(mine!==generation)return;
-      html=mainTitle('Документы','Зафиксированные условия в аккуратном документе.',button('Создать документ','document','','primary'))+`<section class="panel">${result.items.length?result.items.map(d=>`<div class="record-line"><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div>${button('Скачать PDF','download-document',d.id)}</div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
+      html=mainTitle('Документы','Предложения, акты и условия работы.',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div>${button('Скачать PDF','download-document',d.id)}</div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
     }else return false;
     if(mine!==generation)return true;
-    view(html);bind(section);
+    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);bind(section);
     if(section==='files')bindFileCenter(fileCenterData);
     if(section==='team')await customFieldSettings();
     return true;
@@ -91,7 +92,7 @@ window.Workspace = (() => {
   function bindFileCenter(initial){
     const list=document.querySelector('#file-center-list'),search=document.querySelector('#file-center-search');
     let files=initial.items,timer;
-    const paint=()=>{list.innerHTML=files.length?files.map(file=>`<div class="record-line file-center-row"><div><strong>${e(file.name)}</strong><small>${Math.ceil(file.size/1024)} КБ · ${e(file.mime)} · ${date(file.created_at)}</small></div><div class="attachment-actions"><button class="btn small" data-file-open="${e(file.id)}">Открыть</button>${file.name.toLowerCase().endsWith('.md')?`<button class="btn small" data-file-edit="${e(file.id)}">Изменить</button>`:''}${['text/plain','application/pdf'].includes(file.mime)&&file.size<=2000000?`<button class="btn small" data-file-ask="${e(file.id)}">Спросить AI</button>`:''}</div></div>`).join(''):empty('Файлы не найдены','Прикрепите файл к смете, клиенту или заказу.')};
+    const paint=()=>{list.innerHTML=files.length?files.map(file=>`<div class="record-line file-center-row"><span class="file-type" aria-hidden="true">${e(file.name.split('.').pop().slice(0,4).toUpperCase())}</span><div class="file-description"><strong>${e(file.name)}</strong><small>${Math.ceil(file.size/1024)} КБ · ${date(file.created_at)}</small></div><div class="attachment-actions"><button class="btn small" data-file-open="${e(file.id)}">Открыть</button>${file.name.toLowerCase().endsWith('.md')?`<button class="btn small" data-file-edit="${e(file.id)}">Изменить</button>`:''}${['text/plain','application/pdf'].includes(file.mime)&&file.size<=2000000?`<button class="btn small" data-file-ask="${e(file.id)}">Спросить AI</button>`:''}</div></div>`).join(''):empty('Файлы не найдены','Прикрепите файл к смете, клиенту или проекту.')};
     paint();
     search.insertAdjacentHTML('afterend','<button class="btn small" id="file-new-note" type="button">+ Заметка .md</button>');
     document.querySelector('#file-new-note').onclick=()=>window.SmetraFileEditor?.open();
@@ -99,9 +100,34 @@ window.Workspace = (() => {
     list.onclick=event=>{const button=event.target.closest('[data-file-open],[data-file-ask],[data-file-edit]');if(!button)return;const id=button.dataset.fileOpen||button.dataset.fileAsk||button.dataset.fileEdit,file=files.find(item=>item.id===id);if(!file)return;if(button.dataset.fileAsk)askAbout('files',file.id,file.name);else if(button.dataset.fileEdit)window.SmetraFileEditor?.open(file);else window.SmetraFilePreview?.open(file,workspace?.id)};
   }
   function activityList(items){return items.length?`<div class="activity-list">${items.map(a=>`<div class="activity-item"><span class="activity-dot"></span><div><strong>${e(a.action)}</strong><small>${e(a.actor||'Сметра')} · ${date(a.created_at)}</small>${a.detail?`<p>${e(a.detail)}</p>`:''}</div></div>`).join('')}</div>`:empty('История начинается здесь','События появятся после первого действия.')}
-  function quoteRows(items){return items.length?items.map(q=>`<div class="record-line"><button class="record-title" data-work="quote" data-id="${q.id}"><strong>${e(q.title)}</strong><small>${e(q.client)} · ${q.published_version?'v'+q.published_version:'Новая смета'}</small></button><div class="record-meta">${status(q.approval_state)}<b>${money(q.amount_kopecks,q.currency)}</b>${button('Открыть ↗','quote',q.id)}</div></div>`).join(''):empty('Первый расчёт — начало работы','Создайте смету, добавьте позиции и отправьте ссылку клиенту.')}
-  function entityRows(kind,items){return items.length?items.map(r=>`<div class="record-line ${kind==='catalog'?'catalog-row':''}"><button class="record-title" data-work="entity" data-kind="${kind}" data-id="${r.id}"><strong>${e(r.name)}</strong><small>${e(r.company||r.email||r.category||r.due_date||r.description?.slice(0,80)||'')}${kind==='catalog'&&r.article?' · '+e(r.article):''}</small></button><div class="record-meta">${r.status?status(r.status):''}${kind==='catalog'?`<b>${money(r.price,workspace.currency)} / ${e(r.unit)}</b><button class="catalog-star" type="button" data-work="catalog-favorite" data-id="${e(r.id)}" aria-label="${r.favorite?'Убрать из избранного':'Добавить в избранное'}" aria-pressed="${r.favorite?'true':'false'}">${r.favorite?'★':'☆'}</button>`:''}${kind==='projects'?`<b>${money(r.amount_kopecks,r.currency)}</b>`:''}${button('Открыть ↗','entity',r.id).replace('data-work=',`data-kind="${kind}" data-work=`)}</div></div>`).join(''):empty('Пока нет записей','Добавьте первую запись — она сохранится в вашем пространстве.')}
-  function moneyRows(items,expense=false){return items.length?items.map(r=>`<div class="record-line"><div><strong>${e(r.name)}</strong><small>${e(expense?r.category:labels[r.method]||r.method)} · ${e(r.payment_date||r.expense_date)}</small></div><b>${money(r.amount_kopecks,r.currency)}</b></div>`).join(''):empty('Нет операций','Записывайте реальные поступления и расходы.')}
+  function quoteRows(items){return items.length?items.map(q=>`<div class="record-line quote-row"><button class="record-title" data-work="quote" data-id="${q.id}"><span class="quote-file-icon" aria-hidden="true"></span><span><strong>${e(q.title)}</strong><small>${e(q.client)} · ${q.published_version?'v'+q.published_version:'Новая смета'}</small></span></button><div class="record-meta">${status(q.approval_state)}<b>${money(q.amount_kopecks,q.currency)}</b>${button('Открыть ↗','quote',q.id)}</div></div>`).join(''):empty('Первый расчёт — начало работы','Создайте смету, добавьте позиции и отправьте ссылку клиенту.')}
+  function entityRows(kind,items){
+    const emptyStates={clients:['Ваши клиенты — здесь','Добавьте контакт, чтобы связать с ним сметы и проекты.'],catalog:['Начните со своих расценок','Добавьте работу или импортируйте прайс.'],projects:['Первый проект впереди','Создайте проект из согласованной сметы.'],tasks:['Всё под контролем','Добавьте задачу и назначьте срок.']};
+    if(!items.length)return empty(...(emptyStates[kind]||['Пока нет записей','Добавьте первую запись.']));
+    const row=r=>{
+      const initials=String(r.name||'').trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]||'').join('').toUpperCase();
+      const phone=String(r.phone||'').replace(/[^\d+]/g,'');
+      return `<div class="record-line ${kind}-row ${kind==='catalog'?'catalog-row':''}">
+        ${kind==='clients'?`<span class="contact-monogram" aria-hidden="true">${e(initials)}</span>`:''}
+        ${kind==='tasks'?roleCanWrite()?`<button type="button" class="task-toggle" data-work="task-toggle" data-id="${e(r.id)}" role="checkbox" aria-checked="${r.status==='done'}" aria-label="${r.status==='done'?'Вернуть в работу':'Завершить задачу'}: ${e(r.name)}"></button>`:'<span class="task-readonly" aria-hidden="true"></span>':''}
+        <button class="record-title" data-work="entity" data-kind="${kind}" data-id="${e(r.id)}"><strong>${e(r.name)}</strong><small>${e(r.company||r.email||r.category||r.due_date||r.description?.slice(0,80)||'')}${kind==='catalog'&&r.article?' · '+e(r.article):''}</small></button>
+        <div class="record-meta">${r.status?status(r.status):''}
+          ${kind==='clients'?`${phone?`<a class="contact-link" href="tel:${e(phone)}" aria-label="Позвонить ${e(r.name)}">Телефон</a>`:''}${r.email?`<a class="contact-link" href="mailto:${encodeURIComponent(r.email)}" aria-label="Написать ${e(r.name)}">Почта</a>`:''}`:''}
+          ${kind==='catalog'?`<b>${money(r.price,workspace.currency)} <small>/ ${e(r.unit)}</small></b><button class="catalog-star" type="button" data-work="catalog-favorite" data-id="${e(r.id)}" aria-label="${r.favorite?'Убрать из избранного':'Добавить в избранное'}" aria-pressed="${r.favorite?'true':'false'}">${r.favorite?'★':'☆'}</button>`:''}
+          ${kind==='projects'?`<b>${money(r.amount_kopecks,r.currency)}</b>`:''}${button('Открыть ↗','entity',r.id).replace('data-work=',`data-kind="${kind}" data-work=`)}
+        </div></div>`;
+    };
+    if(kind==='tasks')return [['todo','К выполнению'],['in_progress','В работе'],['waiting','Ожидание'],['done','Завершено'],['cancelled','Отменено']].map(([state,title])=>{
+      const group=items.filter(item=>item.status===state);return group.length?`<section class="task-group"><h3>${title}<span>${group.length}</span></h3>${group.map(row).join('')}</section>`:'';
+    }).join('')+items.filter(item=>!['todo','in_progress','waiting','done','cancelled'].includes(item.status)).map(row).join('');
+    if(kind==='clients'){
+      const sorted=[...items].sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+      const letters=[...new Set(sorted.map(item=>Array.from(String(item.name).trim())[0]?.toUpperCase()||'#'))];
+      return letters.map(letter=>`<section class="contact-group"><h3>${e(letter)}</h3><div>${sorted.filter(item=>(Array.from(String(item.name).trim())[0]?.toUpperCase()||'#')===letter).map(row).join('')}</div></section>`).join('');
+    }
+    return items.map(row).join('');
+  }
+  function moneyRows(items,expense=false){return items.length?items.map(r=>`<div class="record-line money-row ${expense?'money-expense':'money-income'}"><span class="money-direction" aria-hidden="true">${expense?'−':'+'}</span><div><strong>${e(r.name)}</strong><small>${e(expense?r.category:labels[r.method]||r.method)} · ${e(r.payment_date||r.expense_date)}</small></div><b>${money(r.amount_kopecks,r.currency)}</b></div>`).join(''):empty(expense?'Расходов пока нет':'Поступлений пока нет',expense?'Добавьте расходы по проекту.':'Запишите первую оплату от клиента.')}
   function kanban(items){return `<div class="kanban">${(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).map(s=>`<section class="kanban-column" data-stage="${e(s)}"><h3>${e(s)} <small>${items.filter(i=>i.status===s).length}</small></h3>${items.filter(i=>i.status===s).map(i=>`<button class="kanban-card" draggable="true" data-work="entity" data-kind="leads" data-id="${i.id}"><strong>${e(i.name)}</strong><small>${money(i.amount_kopecks,workspace.currency)}</small></button>`).join('')}</section>`).join('')}</div>`}
   function bind(section){
     document.querySelector('#content').onclick=ev=>{const b=ev.target.closest('[data-work]');if(b)action(b).catch(err=>notify(err.message))};
@@ -141,6 +167,13 @@ window.Workspace = (() => {
     const a=b.dataset.work,id=b.dataset.id;
     if(a==='navigate'){tab=id;location.hash=id;return window.render()}
     if(a==='quote-new')return editor();
+    if(a==='task-toggle'){
+      const item=window.Workspace.records?.find(row=>row.id===id);if(!item||!roleCanWrite())return;
+      b.disabled=true;
+      try{const result=await api('/tasks/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({revision:item.revision,status:item.status==='done'?'todo':'done'})});Object.assign(item,result.item);document.querySelector('#records').innerHTML=entityRows('tasks',window.Workspace.records)}
+      finally{if(b.isConnected)b.disabled=false}
+      return;
+    }
     if(a==='intake-link'){const r=await api('/intake',{method:'POST'});await navigator.clipboard.writeText(r.form.public_url);notify('Ссылка для заявки скопирована');return}
     if(a==='quote')return quoteDetail(id);
     if(a==='new')return entityForm(id);
