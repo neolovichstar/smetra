@@ -43,8 +43,14 @@ const assert = require('node:assert/strict');
   for(const width of [320,390]){
     await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await wait(200);
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
+    assert.equal(await evaluate("document.querySelector('.workspace-modes').getBoundingClientRect().top >= document.querySelector('.app-nav-brand').getBoundingClientRect().bottom"),true);
+    assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44 && document.querySelector('#command-open').getBoundingClientRect().height >= 44"),true);
+    assert.equal(await evaluate("document.querySelector('.capture-actions button').getBoundingClientRect().width >= 44"),true);
     await click('#nav-toggle');assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'true');
+    assert.equal(await evaluate("document.querySelector('#sidebar').getBoundingClientRect().top >= document.querySelector('.app-nav').getBoundingClientRect().bottom"),true);
+    await wait(300);await shot('mobile-brand-menu-'+width);
     await click('#nav-backdrop');assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'false');
+    await wait(300);await shot('mobile-brand-dashboard-'+width);
   }
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});await wait(500);
   await shot('workspace-dashboard');
