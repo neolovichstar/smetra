@@ -119,11 +119,11 @@ final class SmetraUi {
         space(parent,16);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,8);
         EditText field=new EditText(activity);field.setTextSize(16);field.setTypeface(regular);field.setTextColor(INK);field.setHintTextColor(0xff69768a);
         field.setInputType(type);field.setSingleLine(type!=1);field.setMinHeight(dp(type==1?96:48));field.setGravity(type==1?Gravity.TOP|Gravity.START:Gravity.CENTER_VERTICAL|Gravity.START);
-        field.setPadding(dp(14),dp(12),dp(14),dp(12));field.setBackground(shape(SURFACE,10,LINE));field.setSelectAllOnFocus(false);
+        field.setPadding(dp(14),dp(12),dp(14),dp(12));field.setBackground(shape(SURFACE,10,0));field.setSelectAllOnFocus(false);
         field.setOnFocusChangeListener((v,focused)->{
-            android.graphics.drawable.TransitionDrawable transition=new android.graphics.drawable.TransitionDrawable(new android.graphics.drawable.Drawable[]{field.getBackground(),shape(focused?RAISED:SURFACE,10,focused?BLUE:LINE)});
+            android.graphics.drawable.TransitionDrawable transition=new android.graphics.drawable.TransitionDrawable(new android.graphics.drawable.Drawable[]{field.getBackground(),shape(focused?RAISED:SURFACE,10,0)});
             field.setBackground(transition);transition.startTransition(motion()?160:0);
-            field.postDelayed(()->{if(field.getBackground()==transition)field.setBackground(shape(focused?RAISED:SURFACE,10,focused?BLUE:LINE));},170);
+            field.postDelayed(()->{if(field.getBackground()==transition)field.setBackground(shape(focused?RAISED:SURFACE,10,0));},170);
         });
         field.setId(View.generateViewId());title.setLabelFor(field.getId());parent.addView(field,match());return field;
     }

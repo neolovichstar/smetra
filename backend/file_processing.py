@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from backend.business import DomainError, identity, packed, stamp, string, transaction
+from backend.office_documents import READABLE, VIEWABLE
 
 ACTIVE = ("queued", "running", "retry")
 
@@ -35,7 +36,7 @@ def state(service, row):
         "max_bytes": 5_000_000,
         "pages": row["index_pages"],
         "truncated": bool(row["index_truncated"]),
-        "supported": row["mime"] in ("text/plain", "application/pdf"),
+        "supported": row["mime"] in READABLE,
         "method": row['index_method'],
         "missing_text_pages": missing,
         "ocr_supported": row['mime'] == 'application/pdf' and (status == 'needs_ocr' or row['index_method'] == 'ocr'),
@@ -48,8 +49,8 @@ def state(service, row):
 
 
 def enqueue(service, row, key=None):
-    if row["mime"] not in ("text/plain", "application/pdf") or row["size"] > 5_000_000:
-        raise DomainError(422, "Для подготовки выберите PDF, TXT или Markdown до 5 МБ")
+    if row["mime"] not in READABLE or row["size"] > 5_000_000:
+        raise DomainError(422, "Для подготовки выберите PDF, TXT, Markdown, DOCX или XLSX до 5 МБ")
     if len(os.getenv("ASSISTANT_WORKER_SECRET", "")) < 32:
         raise DomainError(503, "Фоновая обработка пока не подключена")
     fresh = service.get("files", row["id"])
@@ -202,7 +203,7 @@ def process(service, job, complete, progress, validate):
         ) from None
     progress("Сохраняю текст для поиска…")
     missing = [number for number, text in pages if not text.strip()]
-    needs_ocr = not any(text.strip() for _, text in pages) or row['mime'] == 'application/pdf' and any(number <= 2 for number in missing)
+    needs_ocr = row['mime'] not in VIEWABLE and (not any(text.strip() for _, text in pages) or row['mime'] == 'application/pdf' and any(number <= 2 for number in missing))
     partial = bool(extracted['truncated']) or row['mime'] == 'application/pdf' and bool(missing)
     with transaction(service.con):
         # Repeat session/role checks after parsing, and fence both source and lease.

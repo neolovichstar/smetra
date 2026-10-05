@@ -3,7 +3,9 @@ import hashlib
 import io
 import os
 import zlib
+import subprocess
 from pathlib import Path
+from backend.office_documents import DOCX, XLSX, CSV
 
 try:
     from backend.business import DomainError, identity, integer, stamp, string
@@ -48,6 +50,9 @@ def download(row, con=None):
         "image/jpeg": ".jpg",
         "application/pdf": ".pdf",
         "text/plain": ".txt",
+        DOCX: ".docx",
+        XLSX: ".xlsx",
+        CSV: ".csv",
     }[row["mime"]]
     if row["mime"] == "text/plain" and Path(row["name"]).suffix.lower() == ".md":
         suffix = ".md"
@@ -74,6 +79,10 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == "preview":
+        from backend.file_preview import route as preview_route
+
+        return preview_route(service, method, parts[0])
     if len(parts) == 2 and parts[1] == 'ocr':
         from backend.file_ocr import route as ocr_route
         return ocr_route(service, method, service.get('files', parts[0]))
@@ -233,10 +242,10 @@ def _route(service, method, parts, query, data):
             service.get(table, references[key])
     name = string(data.get("name", ""), "Имя файла", 180, True)
     extension = Path(name).suffix.lower()
-    if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md"):
-        raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT и MD")
-    if assistant_upload and extension not in (".pdf", ".txt", ".md"):
-        raise DomainError(400, "Ассистент читает PDF, TXT и MD")
+    if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
+        raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT, MD, DOCX, XLSX и CSV")
+    if assistant_upload and extension not in (".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
+        raise DomainError(400, "Ассистент читает PDF, TXT, MD, DOCX, XLSX и CSV")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
@@ -274,6 +283,14 @@ def _route(service, method, parts, query, data):
             raise DomainError(
                 400, "Изображение повреждено или слишком большое"
             ) from None
+    elif extension in (".docx", ".xlsx", ".csv"):
+        mime = {".docx": DOCX, ".xlsx": XLSX, ".csv": CSV}[extension]
+        from backend.file_processing import isolated_extract
+
+        try:
+            isolated_extract(raw, "validate-office:" + mime)
+        except (ValueError, OSError, subprocess.TimeoutExpired):
+            raise DomainError(400, "Документ повреждён, содержит активные элементы или превышает лимиты. Сохраните обычный DOCX/XLSX без макросов") from None
     elif extension == ".pdf":
         if not raw.startswith(b"%PDF-") or b"%%EOF" not in raw[-1024:]:
             raise DomainError(400, "Неверный формат PDF")
@@ -293,8 +310,6 @@ def _route(service, method, parts, query, data):
                 "PDF содержит активные элементы. Экспортируйте плоскую копию документа",
             )
         from backend.file_processing import isolated_extract
-        import subprocess
-
         try:
             if isolated_extract(raw,'validate-pdf').get('valid') is not True:
                 raise ValueError('validation')

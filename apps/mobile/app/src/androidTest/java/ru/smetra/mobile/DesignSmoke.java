@@ -83,6 +83,12 @@ public class DesignSmoke extends Instrumentation {
                 require(preserved,"Receipt proposal preserves existing purchase notes");shot("22-receipt-review");
                 result.putString("stream","PASS: native receipt background job, navigation, saved draft, one monthly recognition, no automatic purchase mutation and explicit review preserving notes\n");finish(Activity.RESULT_OK,result);return;
             }
+            if("true".equals(arguments.getString("officeOnly"))){
+                click("Ещё");click("Файлы");waitText("brief.docx");shot("35-office-files");click("brief.docx");waitText("Техническое задание");shot("36-docx-preview");fill("Покраска");waitPrefix("Покраска");require(find("Техническое задание")==null,"DOCX search filters unrelated text");
+                runOnMainSync(()->activity.onBackPressed());waitText("prices.xlsx");click("prices.xlsx");waitPrefix("3 строк");waitText("Формула (не рассчитана): =SUM(B2:B3)");click("B");waitText("B ↑");click("Работы");waitSheetText("Материалы");clickSheetAction("Материалы");waitText("Краска");click("Материалы");waitSheetText("Работы");clickSheetAction("Работы");waitPrefix("3 строк");shot("37-xlsx-preview");fill("Доставка");waitPrefix("1 строк");require(find("Покраска")==null,"XLSX search filters other rows");click("Шире");waitText("Доставка");
+                runOnMainSync(()->activity.onBackPressed());waitText("prices.csv");click("prices.csv");waitText("Покраска");shot("38-csv-preview");click("Спросить ассистента");waitText("Файл · prices.csv");waitEnabledPrefix("Отправить");
+                result.putString("stream","PASS: native office file center, DOCX text/table/search, XLSX formula text/search/width, CSV preview and assistant context\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(attachmentsOnly){
                 click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");fill("Прочитай документ");
                 pickFixture(null);require(editors().get(0).getText().toString().equals("Прочитай документ"),"Cancelled picker preserves draft");

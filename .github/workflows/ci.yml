@@ -64,8 +64,15 @@ jobs:
         run: |
           kill "$(cat data/assistant-fixture.pid)"
           SMETRA_RESOURCE_QA=1 python scripts/android_ui_fixture.py > data/resources-fixture.log 2>&1 &
+          echo $! > data/assistant-fixture.pid
           for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/resources-fixture.log && break; sleep 1; done
           node tests/browser_assistant_resources.cjs
+      - name: DOCX, XLSX and CSV preview in mobile and desktop browser
+        run: |
+          kill "$(cat data/assistant-fixture.pid)"
+          SMETRA_OFFICE_QA=1 python scripts/android_ui_fixture.py > data/office-fixture.log 2>&1 &
+          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/office-fixture.log && break; sleep 1; done
+          node tests/browser_office_files.cjs
   android:
     runs-on: ubuntu-latest
     steps:

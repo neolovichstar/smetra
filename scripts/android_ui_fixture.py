@@ -201,6 +201,14 @@ def main():
                     token,
                 )
         structure_qa = os.getenv('SMETRA_STRUCTURE_QA') == '1'
+        if os.getenv('SMETRA_OFFICE_QA') == '1':
+            from tests import office_fixtures
+
+            for name, raw in [('brief.docx', office_fixtures.docx('Техническое задание', [['Работа', 'Цена'], ['Покраска', '15000']])),
+                              ('prices.xlsx', office_fixtures.xlsx()),
+                              ('prices.csv', 'Работа;Цена\nПокраска;15000\nДоставка;2000'.encode())]:
+                call('/files', {'client_id': clients[0]['id'], 'name': name,
+                               'content': base64.b64encode(raw).decode()}, token)
         resource_qa = os.getenv('SMETRA_RESOURCE_QA') == '1'
         seed_tool = 'restructure_quote_items' if structure_qa else 'bulk_quote_items'
         seed_args = {'id': quote['id'], 'operation': 'insert', 'items': [{'name': 'Подготовка стен', 'unit': 'м²', 'quantity': '1.25', 'unit_price': 10005}]} if structure_qa else {'id': quote['id'], 'rows': [1], 'field': 'unit_price', 'operation': 'multiply', 'value': '1.1'}

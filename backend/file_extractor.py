@@ -90,6 +90,11 @@ def extract(content, mime):
     if not 0 < len(content) <= 5_000_000:
         raise ValueError("size")
     pages = []
+    from backend.office_documents import VIEWABLE, preview, text_sections
+
+    if mime in VIEWABLE:
+        result = preview(content, mime)
+        return text_sections(result), result["truncated"]
     if mime == "text/plain":
         text = content.decode("utf-8-sig")
         # Bounded index, rather than claiming to index an unlimited document.
@@ -124,6 +129,17 @@ def main():
     except ImportError:
         pass  # Windows QA: parent still enforces input/output/time bounds.
     content = sys.stdin.buffer.read(5_000_001)
+    if sys.argv[1].startswith(("validate-office:", "preview:")):
+        from backend.office_documents import CSV, archive, preview
+
+        mode, mime = sys.argv[1].split(":", 1)
+        if mode == "validate-office":
+            preview(content, mime) if mime == CSV else archive(content, mime)
+            result = {"valid": True}
+        else:
+            result = preview(content, mime)
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+        return
     if sys.argv[1] == 'render-pdf':
         if not 0 < len(content) <= 5_000_000:
             raise ValueError('size')
