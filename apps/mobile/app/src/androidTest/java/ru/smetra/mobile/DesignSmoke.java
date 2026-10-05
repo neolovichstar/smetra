@@ -20,14 +20,16 @@ import java.util.List;
 /** Exercises native views against scripts/android_ui_fixture.py, captures actual device pixels. */
 public class DesignSmoke extends Instrumentation {
     private Activity activity;
+    private Bundle arguments=new Bundle();
     private boolean assistantOnly;
+    private boolean interfaceOnly;
     private boolean jobsOnly;
     private boolean attachmentsOnly;
     private boolean receiptsOnly;
     private boolean scansOnly;
     private boolean mixedScan;
     private boolean structureOnly;
-    @Override public void onCreate(Bundle args){super.onCreate(args);assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));mixedScan=args!=null&&"true".equals(args.getString("mixedScan"));structureOnly=args!=null&&"true".equals(args.getString("structureOnly"));start();}
+    @Override public void onCreate(Bundle args){super.onCreate(args);arguments=args==null?new Bundle():args;assistantOnly=args!=null&&"true".equals(args.getString("assistantOnly"));jobsOnly=args!=null&&"true".equals(args.getString("jobsOnly"));attachmentsOnly=args!=null&&"true".equals(args.getString("attachmentsOnly"));receiptsOnly=args!=null&&"true".equals(args.getString("receiptsOnly"));scansOnly=args!=null&&"true".equals(args.getString("scansOnly"));mixedScan=args!=null&&"true".equals(args.getString("mixedScan"));structureOnly=args!=null&&"true".equals(args.getString("structureOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
@@ -35,6 +37,20 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            interfaceOnly="true".equals(arguments.getString("interfaceOnly"));
+            if(interfaceOnly){
+                click("Создать");waitSheetText("Создать в Сметре");shot("27-create-sheet");getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);SystemClock.sleep(500);require(find("Айдентика и упаковка")!=null,"Sheet back preserves page");
+                click("Ещё");click("Ассистент");waitEnabledPrefix("Отправить");waitText("Итого по смете");
+                View send=findPrefix("Отправить"),dock=findTag("assistant-composer");require(send!=null&&dock!=null,"Accessible composer and send exist");
+                require(send.getWidth()>=48*activity.getResources().getDisplayMetrics().density-1&&send.getHeight()>=48*activity.getResources().getDisplayMetrics().density-1,"Send touch target is at least 48dp");
+                int[] before=new int[2];runOnMainSync(()->dock.getLocationOnScreen(before));
+                runOnMainSync(()->{for(View view:viewsOnMain())if(view instanceof ScrollView)((ScrollView)view).scrollTo(0,10000);});SystemClock.sleep(400);int[] after=new int[2];runOnMainSync(()->dock.getLocationOnScreen(after));require(before[1]==after[1],"Composer does not scroll with history");shot("28-assistant-composer");
+                EditText input=editors().get(0);touch(input);SystemClock.sleep(1200);
+                if(android.os.Build.VERSION.SDK_INT>=30)require(decor().getRootWindowInsets().isVisible(android.view.WindowInsets.Type.ime()),"Software keyboard actually opened");
+                Rect visible=new Rect();runOnMainSync(()->decor().getWindowVisibleDisplayFrame(visible));int[] keyboardPos=new int[2];runOnMainSync(()->dock.getLocationOnScreen(keyboardPos));require(keyboardPos[1]+dock.getHeight()<=visible.bottom+2,"Composer stays above keyboard");shot("29-assistant-keyboard");
+                fill("Покажи контекст");clickPrefix("Отправить");waitText("Контекст не выбран.");require(editors().get(0).getText().length()==0,"Successful send clears draft");require(editors().get(0).isEnabled(),"Input restored after streaming");shot("30-assistant-answer");
+                result.putString("stream","PASS: native animated sheet/back, 48dp send icon, pinned composer, keyboard insets, streamed answer and input restoration\n");finish(Activity.RESULT_OK,result);return;
+            }
             if(structureOnly){
                 click("Ещё");click("Ассистент");waitPrefix("Добавить позиции · ");waitText("Добавить · Подготовка стен");waitText("Позиций: 1 → 2");waitPrefix("Станет: Строка 2");shot("24-structure-preview");click("Применить");waitText("Отменить изменение");shot("25-structure-applied");click("Отменить изменение");waitPrefix("Изменение отменено · ");shot("26-structure-undone");
                 result.putString("stream","PASS: native quote structure preview, position/quantity/money/count, explicit application and undo\n");finish(Activity.RESULT_OK,result);return;
@@ -134,6 +150,9 @@ public class DesignSmoke extends Instrumentation {
             finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","FAIL: "+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,result);}
     }
+    private View findTag(String tag){for(View view:views())if(tag.equals(view.getTag()))return view;return null;}
+    private List<View> viewsOnMain(){List<View> list=new ArrayList<>();walk(decor(),list);return list;}
+    private void waitSheetText(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root!=null&&!root.findAccessibilityNodeInfosByText(text).isEmpty()){SystemClock.sleep(400);return;}SystemClock.sleep(150);}throw new AssertionError("Missing sheet "+text);}
     private void pickFixture(String name){
         Intent data=name==null?null:new Intent().setData(android.net.Uri.parse("content://ru.smetra.mobile.test.documents/"+name)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         android.content.IntentFilter filter=new android.content.IntentFilter(Intent.ACTION_OPEN_DOCUMENT);
@@ -157,8 +176,8 @@ public class DesignSmoke extends Instrumentation {
     private View decor(){return activity.getWindow().getDecorView();}
     private void walk(View view,List<View> list){list.add(view);if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)walk(group.getChildAt(i),list);}}
     private List<View> views(){List<View> list=new ArrayList<>();runOnMainSync(()->walk(decor(),list));return list;}
-    private View find(String text){for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().equals(text))return view;return null;}
-    private View findPrefix(String prefix){for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().startsWith(prefix))return view;return null;}
+    private View find(String text){for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().equals(text))return view;for(View view:views())if(text.equals(String.valueOf(view.getContentDescription())))return view;return null;}
+    private View findPrefix(String prefix){if(prefix.equals("Отправить")){View send=findTag("assistant-send");if(send!=null)return send;}for(View view:views())if(view instanceof TextView&&((TextView)view).getText().toString().startsWith(prefix))return view;return null;}
     private String textStarting(String prefix){View view=findPrefix(prefix);return view instanceof TextView?((TextView)view).getText().toString():"";}
     private String allText(){StringBuilder out=new StringBuilder();for(View view:views())if(view instanceof TextView)out.append(((TextView)view).getText()).append('\n');return out.toString();}
     private void waitText(String text){waitText(text,15000);}
@@ -166,8 +185,10 @@ public class DesignSmoke extends Instrumentation {
     private void waitGone(String text){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(find(text)==null)return;SystemClock.sleep(150);}throw new AssertionError("Text still visible: "+text+"\n"+allText());}
     private void waitPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){if(findPrefix(prefix)!=null){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Missing prefix: "+prefix+"\n"+allText());}
     private void waitEnabledPrefix(String prefix){long until=SystemClock.uptimeMillis()+15000;while(SystemClock.uptimeMillis()<until){View view=findPrefix(prefix);if(view!=null&&view.isEnabled()){SystemClock.sleep(500);return;}SystemClock.sleep(150);}throw new AssertionError("Control not ready: "+prefix);}
-    private void click(String text){View target=find(text);require(target!=null,"Missing action "+text);runOnMainSync(()->{target.requestRectangleOnScreen(new Rect(0,0,target.getWidth(),target.getHeight()),true);View click=target;while(!click.isClickable()&&click.getParent() instanceof View)click=(View)click.getParent();require(click.isClickable(),"Not clickable: "+text);click.performClick();});SystemClock.sleep(450);}
-    private void clickPrefix(String prefix){View target=findPrefix(prefix);require(target!=null,"Missing action "+prefix);click(((TextView)target).getText().toString());}
+    private void click(String text){View target=find(text);require(target!=null,"Missing action "+text);clickTarget(target);}
+    private void clickTarget(View target){runOnMainSync(()->{target.requestRectangleOnScreen(new Rect(0,0,target.getWidth(),target.getHeight()),true);View click=target;while(!click.isClickable()&&click.getParent() instanceof View)click=(View)click.getParent();require(click.isClickable(),"Not clickable: "+target.getContentDescription());click.performClick();});SystemClock.sleep(450);}
+    private void touch(View target){int[] point=new int[2];runOnMainSync(()->target.getLocationOnScreen(point));long time=SystemClock.uptimeMillis();float x=point[0]+target.getWidth()/2f,y=point[1]+target.getHeight()/2f;android.view.MotionEvent down=android.view.MotionEvent.obtain(time,time,android.view.MotionEvent.ACTION_DOWN,x,y,0),up=android.view.MotionEvent.obtain(time,time+80,android.view.MotionEvent.ACTION_UP,x,y,0);try{require(getUiAutomation().injectInputEvent(down,true)&&getUiAutomation().injectInputEvent(up,true),"Touch injected");}finally{down.recycle();up.recycle();}}
+    private void clickPrefix(String prefix){View target=findPrefix(prefix);require(target!=null,"Missing action "+prefix);clickTarget(target);}
     private List<EditText> editors(){List<EditText> result=new ArrayList<>();for(View view:views())if(view instanceof EditText)result.add((EditText)view);return result;}
     private void fill(String... values){List<EditText> fields=editors();require(fields.size()==values.length,"Unexpected field count "+fields.size());runOnMainSync(()->{for(int i=0;i<values.length;i++)fields.get(i).setText(values[i]);});}
     private void top(){List<View> all=views();runOnMainSync(()->{for(View view:all)if(view instanceof ScrollView)((ScrollView)view).scrollTo(0,0);});SystemClock.sleep(400);}

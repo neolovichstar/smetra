@@ -57,7 +57,7 @@ final class SmetraUi {
         states.addState(new int[]{android.R.attr.state_pressed},press);states.addState(new int[]{},release);view.setStateListAnimator(states);
     }
     Button button(String title,boolean primary,Runnable action){
-        Button view=new Button(activity);view.setText(title);view.setAllCaps(false);view.setTextSize(13);view.setTypeface(medium);
+        Button view=new Button(activity){@Override public void setEnabled(boolean enabled){super.setEnabled(enabled);if("assistant-send".equals(getTag()))animate().alpha(enabled?1:.45f).setDuration(motion()?160:0).start();}};view.setText(title);view.setAllCaps(false);view.setTextSize(13);view.setTypeface(medium);
         view.setTextColor(primary?BG:INK);view.setMinHeight(dp(48));view.setMinimumHeight(dp(48));view.setPadding(dp(14),dp(12),dp(14),dp(12));
         view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,10,primary?0xffb9d3ff:LINE);tap(view,action);
         String icon=actionIcon(title);if(icon!=null){
@@ -72,7 +72,8 @@ final class SmetraUi {
         if(title.startsWith("Создать")||title.startsWith("Добавить")||title.startsWith("Новый")||title.startsWith("Новая"))return "plus";
         if(title.startsWith("Сохранить")||title.startsWith("Применить")||title.startsWith("Подтвердить"))return "check";
         if(title.startsWith("Обновить")||title.startsWith("Повторить"))return "refresh";
-        if(title.startsWith("Отправить")||title.startsWith("Открыть"))return "arrow";
+        if(title.startsWith("Отправить"))return "send";
+        if(title.startsWith("Открыть"))return "arrow";
         if(title.startsWith("Найти")||title.startsWith("Поиск"))return "search";
         if(title.startsWith("Диалоги"))return "chat";
         if(title.startsWith("Фоновые"))return "clock";
@@ -82,14 +83,48 @@ final class SmetraUi {
     LinearLayout card(LinearLayout parent){
         LinearLayout section=column();section.setPadding(0,dp(16),0,dp(16));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
     }
-    void enter(View view){if(!motion())return;view.setAlpha(0);view.setTranslationY(dp(12));view.animate().alpha(1).translationY(0).setDuration(340).setInterpolator(EASE).start();}
+    void enter(View view){enter(view,0);}
+    void enter(View view,int delay){if(!motion())return;view.setAlpha(0);view.setTranslationY(dp(10));view.animate().alpha(1).translationY(0).setStartDelay(delay).setDuration(280).setInterpolator(EASE).start();}
+    void transitions(ViewGroup group){
+        android.animation.LayoutTransition transition=new android.animation.LayoutTransition();
+        transition.setDuration(motion()?220:0);transition.setStartDelay(android.animation.LayoutTransition.APPEARING,0);
+        transition.setInterpolator(android.animation.LayoutTransition.APPEARING,EASE);
+        transition.setInterpolator(android.animation.LayoutTransition.CHANGE_APPEARING,EASE);
+        group.setLayoutTransition(transition);
+    }
+    void pulse(View view){
+        if(!motion())return;
+        android.animation.ObjectAnimator animator=android.animation.ObjectAnimator.ofFloat(view,"alpha",.35f,.85f);
+        animator.setDuration(900);animator.setRepeatCount(ValueAnimator.INFINITE);animator.setRepeatMode(ValueAnimator.REVERSE);
+        view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener(){
+            public void onViewAttachedToWindow(View v){animator.start();}
+            public void onViewDetachedFromWindow(View v){animator.cancel();}
+        });if(view.isAttachedToWindow())animator.start();
+    }
+    Button glyphButton(String icon,String description,boolean primary,Runnable action){
+        Button button=button("",primary,action);button.setTag("glyph-button");button.setContentDescription(description);
+        ripple(button,primary?BLUE:Color.TRANSPARENT,primary?16:12,primary?0xffb9d3ff:0);
+        button.setPadding(dp(12),dp(12),dp(12),dp(12));button.setGravity(Gravity.CENTER);
+        button.setLayoutParams(new LinearLayout.LayoutParams(dp(48),dp(48)));glyph(button,icon,primary?BG:INK);
+        button.setOnLongClickListener(v->{Toast.makeText(activity,description,Toast.LENGTH_SHORT).show();return true;});return button;
+    }
+    void glyph(Button button,String icon,int color){
+        int size=dp(24);Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
+        Icon view=new Icon(icon,color);view.layout(0,0,size,size);view.draw(new Canvas(bitmap));
+        BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),bitmap);drawable.setBounds(0,0,size,size);
+        button.setCompoundDrawablesRelative(drawable,null,null,null);button.setCompoundDrawablePadding(0);
+    }
     TextView badge(String text,int color){TextView view=label(text,11,color,true);view.setPadding(0,dp(3),0,dp(3));view.setBackgroundColor(Color.TRANSPARENT);view.setLayoutParams(new LinearLayout.LayoutParams(-2,-2));return view;}
     EditText field(LinearLayout parent,String label,int type){
         space(parent,16);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,8);
         EditText field=new EditText(activity);field.setTextSize(16);field.setTypeface(regular);field.setTextColor(INK);field.setHintTextColor(0xff69768a);
         field.setInputType(type);field.setSingleLine(type!=1);field.setMinHeight(dp(type==1?96:48));field.setGravity(type==1?Gravity.TOP|Gravity.START:Gravity.CENTER_VERTICAL|Gravity.START);
         field.setPadding(dp(14),dp(12),dp(14),dp(12));field.setBackground(shape(SURFACE,10,LINE));field.setSelectAllOnFocus(false);
-        field.setOnFocusChangeListener((v,focused)->field.setBackground(shape(focused?RAISED:SURFACE,10,focused?BLUE:LINE)));
+        field.setOnFocusChangeListener((v,focused)->{
+            android.graphics.drawable.TransitionDrawable transition=new android.graphics.drawable.TransitionDrawable(new android.graphics.drawable.Drawable[]{field.getBackground(),shape(focused?RAISED:SURFACE,10,focused?BLUE:LINE)});
+            field.setBackground(transition);transition.startTransition(motion()?160:0);
+            field.postDelayed(()->{if(field.getBackground()==transition)field.setBackground(shape(focused?RAISED:SURFACE,10,focused?BLUE:LINE));},170);
+        });
         field.setId(View.generateViewId());title.setLabelFor(field.getId());parent.addView(field,match());return field;
     }
     View iconButton(String icon,String description,Runnable action){
@@ -108,36 +143,43 @@ final class SmetraUi {
         TextView copy=label(description,13,MUTED,false);copy.setGravity(Gravity.CENTER);card.addView(copy);
     }
     void sheet(String title,String copy,String action,boolean destructive,Runnable confirm){
-        final Runnable[] close={null};
-        Dialog dialog=new Dialog(activity){@Override public void cancel(){if(close[0]!=null)close[0].run();else super.cancel();}};
-        LinearLayout sheet=column();sheet.setPadding(dp(24),dp(12),dp(24),dp(24));sheet.setBackground(shape(SURFACE,30,LINE));
-        View handle=new View(activity);handle.setBackground(shape(0xff576171,2,0));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(36),dp(4));hp.gravity=Gravity.CENTER;sheet.addView(handle,hp);
-        space(sheet,24);sheet.addView(label(title,22,INK,true));space(sheet,12);sheet.addView(label(copy,14,MUTED,false));space(sheet,16);
-        final boolean[] closing={false};Runnable dismiss=()->{if(closing[0])return;closing[0]=true;if(!motion()){dialog.dismiss();return;}sheet.animate().translationY(dp(60)).alpha(0).setDuration(180).withEndAction(dialog::dismiss).start();};
-        close[0]=dismiss;
-        Button yes=button(action,true,()->{if(closing[0])return;dismiss.run();confirm.run();});if(destructive){ripple(yes,0xff47262d,18,0xff75404a);yes.setTextColor(RED);}sheet.addView(yes);
-        sheet.addView(button("Отмена",false,dismiss));dialog.setContentView(sheet);Window window=dialog.getWindow();
-        if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.72f);window.setGravity(Gravity.BOTTOM);window.setLayout(-1,-2);window.setNavigationBarColor(BG);}
-        dialog.setOnCancelListener(d->{});dialog.show();
-        if(window!=null){window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(8),dp(8),dp(8));}
-        if(motion()){sheet.setTranslationY(dp(80));sheet.setAlpha(0);sheet.animate().translationY(0).alpha(1).setDuration(320).setInterpolator(EASE).start();}
+        AnimatedSheet dialog=new AnimatedSheet(title);space(dialog.body,12);dialog.body.addView(label(copy,14,MUTED,false));space(dialog.body,16);
+        Button yes=button(action,true,()->dialog.close(confirm));if(destructive){ripple(yes,0xff47262d,14,0xff75404a);yes.setTextColor(RED);glyph(yes,"trash",RED);yes.setCompoundDrawablePadding(dp(8));}dialog.body.addView(yes);
+        dialog.body.addView(button("Отмена",false,()->dialog.close(null)));dialog.open();
     }
     void choiceSheet(String title,String[] labels,Runnable[] actions){
         if(labels.length!=actions.length)throw new IllegalArgumentException("Choices and actions differ");
-        Dialog dialog=new Dialog(activity);
-        LinearLayout sheet=column();sheet.setPadding(dp(24),dp(18),dp(24),dp(24));sheet.setBackground(shape(SURFACE,30,LINE));
-        View handle=new View(activity);handle.setBackground(shape(0xff576171,2,0));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(36),dp(4));hp.gravity=Gravity.CENTER;sheet.addView(handle,hp);
-        space(sheet,24);sheet.addView(label(title,22,INK,true));space(sheet,12);
+        AnimatedSheet dialog=new AnimatedSheet(title);space(dialog.body,12);
         for(int i=0;i<labels.length;i++){
             final int index=i;
-            Button option=button(labels[i],i==0,()->{dialog.dismiss();actions[index].run();});
-            sheet.addView(option);space(sheet,8);
+            Button option=button(labels[i],i==0,()->dialog.close(actions[index]));dialog.body.addView(option);space(dialog.body,4);
         }
-        dialog.setContentView(sheet);Window window=dialog.getWindow();
-        if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(.72f);window.setGravity(Gravity.BOTTOM);window.setNavigationBarColor(BG);}
-        dialog.show();
-        if(window!=null){window.setLayout(-1,-2);window.getDecorView().setPadding(dp(8),dp(8),dp(8),dp(8));}
-        if(motion()){sheet.setTranslationY(dp(80));sheet.setAlpha(0);sheet.animate().translationY(0).alpha(1).setDuration(320).setInterpolator(EASE).start();}
+        dialog.open();
+    }
+    private final class AnimatedSheet extends Dialog {
+        final LinearLayout body=column();final ScrollView scroller=new ScrollView(activity);boolean closing;ValueAnimator dimAnimator;
+        AnimatedSheet(String title){
+            super(activity);body.setPadding(dp(22),dp(12),dp(22),dp(24));body.setBackground(shape(RAISED,26,LINE));
+            View handle=new View(activity);handle.setBackground(shape(MUTED,2,0));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(32),dp(4));hp.gravity=Gravity.CENTER;body.addView(handle,hp);space(body,16);
+            LinearLayout heading=row();heading.addView(label(title,20,INK,true),new LinearLayout.LayoutParams(0,-2,1));heading.addView(iconButton("close","Закрыть",()->close(null)),new LinearLayout.LayoutParams(dp(48),dp(48)));body.addView(heading);
+            scroller.setVerticalScrollBarEnabled(false);scroller.setOverScrollMode(View.OVER_SCROLL_NEVER);scroller.addView(body);setContentView(scroller);setCanceledOnTouchOutside(true);
+        }
+        @Override public void cancel(){close(null);}
+        void close(Runnable next){
+            if(closing)return;closing=true;body.animate().cancel();Runnable finish=()->{dismiss();if(next!=null&&!activity.isFinishing()&&!activity.isDestroyed())next.run();};
+            if(!motion()){finish.run();return;}
+            body.animate().translationY(dp(48)).alpha(0).setStartDelay(0).setDuration(190).setInterpolator(EASE).withEndAction(finish).start();
+            dim(.56f,0,190);
+        }
+        void dim(float from,float to,int duration){
+            Window window=getWindow();if(window==null)return;if(dimAnimator!=null)dimAnimator.cancel();ValueAnimator fade=ValueAnimator.ofFloat(from,to);dimAnimator=fade;fade.setDuration(duration);fade.addUpdateListener(a->{if(isShowing())window.setDimAmount((float)a.getAnimatedValue());});fade.start();
+        }
+        void open(){
+            Window window=getWindow();if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setDimAmount(motion()?0:.56f);window.setGravity(Gravity.BOTTOM);window.setNavigationBarColor(BG);window.setWindowAnimations(0);}
+            show();if(window!=null){window.getDecorView().setPadding(dp(8),dp(8),dp(8),dp(8));window.setLayout(-1,-2);}
+            scroller.post(()->{if(!isShowing())return;int max=(int)(activity.getWindow().getDecorView().getHeight()*.82f);if(scroller.getHeight()>max&&window!=null)window.setLayout(-1,max);});
+            if(motion()){body.setTranslationY(dp(56));body.setAlpha(0);body.animate().translationY(0).alpha(1).setDuration(300).setInterpolator(EASE).start();dim(0,.56f,240);}
+        }
     }
     final class Icon extends View {
         final Paint paint=new Paint(3);final String kind;final int tint;
@@ -151,6 +193,12 @@ final class SmetraUi {
                 case "plus":line(c,12,5,12,19);line(c,5,12,19,12);break;
                 case "back":line(c,14,5,7,12,14,19);break;
                 case "arrow":line(c,6,18,18,6);line(c,7,6,18,6,18,17);break;
+                case "send":line(c,12,19,12,5);line(c,6,11,12,5,18,11);break;
+                case "close":line(c,6,6,18,18);line(c,18,6,6,18);break;
+                case "more":c.drawCircle(5,12,1,paint);c.drawCircle(12,12,1,paint);c.drawCircle(19,12,1,paint);break;
+                case "home":line(c,3,10,12,3,21,10);line(c,5,9,5,21,10,21,10,15,14,15,14,21,19,21,19,9);break;
+                case "profile":c.drawCircle(12,8,4,paint);c.drawArc(4,14,20,28,180,180,false,paint);break;
+                case "trash":line(c,4,6,20,6);line(c,9,6,9,3,15,3,15,6);line(c,6,6,7,21,17,21,18,6);line(c,10,10,10,17);line(c,14,10,14,17);break;
                 case "chevron":line(c,9,6,15,12,9,18);break;
                 case "check":line(c,5,12,10,17,19,7);break;
                 case "search":c.drawCircle(10,10,6,paint);line(c,15,15,21,21);break;
