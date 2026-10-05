@@ -72,7 +72,8 @@ window.SmetraFilePreview = (() => {
     dialog.className = 'file-preview-dialog';
     dialog.innerHTML = '<div class="file-preview-top"><div><span>СМЕТРА / ФАЙЛ</span><strong class="file-preview-name"></strong></div><div class="file-preview-actions"><button class="btn small file-preview-save" type="button">Скачать</button><button class="file-preview-close" type="button" aria-label="Закрыть просмотр">×</button></div></div><div class="file-preview-body" role="status"></div>';
     dialog.querySelector('.file-preview-close').addEventListener('click', close);
-    dialog.addEventListener('close', release);
+    // Native close events are queued: the next document may already be open.
+    dialog.addEventListener('close', () => { if (!dialog.open) release(); });
     dialog.addEventListener('click', event => {
       if (event.target === dialog) close();
     });
@@ -149,7 +150,7 @@ window.SmetraFilePreview = (() => {
         if (!objectUrl) setTimeout(() => URL.revokeObjectURL(url), 30000);
       };
     } catch (error) {
-      if (error.name === 'AbortError' || !view.open) return;
+      if (error.name === 'AbortError' || request !== controller || !view.open) return;
       body.textContent = error.message;
     }
   }

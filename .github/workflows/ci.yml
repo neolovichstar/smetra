@@ -55,7 +55,8 @@ jobs:
         run: |
           python scripts/android_ui_fixture.py > data/assistant-fixture.log 2>&1 &
           echo $! > data/assistant-fixture.pid
-          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/assistant-fixture.log && break; sleep 1; done
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/assistant-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/assistant-fixture.log || { cat data/assistant-fixture.log; exit 1; }
           node tests/browser_assistant_edits.cjs
           node tests/browser_receipts.cjs
           node tests/browser_scan_ocr.cjs
@@ -66,27 +67,32 @@ jobs:
           kill "$(cat data/assistant-fixture.pid)"
           SMETRA_STRUCTURE_QA=1 python scripts/android_ui_fixture.py > data/structure-fixture.log 2>&1 &
           echo $! > data/assistant-fixture.pid
-          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/structure-fixture.log && break; sleep 1; done
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/structure-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/structure-fixture.log || { cat data/structure-fixture.log; exit 1; }
           node tests/browser_quote_structure.cjs
       - name: Assistant documents and file metadata in mobile browser
         run: |
           kill "$(cat data/assistant-fixture.pid)"
           SMETRA_RESOURCE_QA=1 python scripts/android_ui_fixture.py > data/resources-fixture.log 2>&1 &
           echo $! > data/assistant-fixture.pid
-          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/resources-fixture.log && break; sleep 1; done
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/resources-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/resources-fixture.log || { cat data/resources-fixture.log; exit 1; }
           node tests/browser_assistant_resources.cjs
       - name: DOCX, XLSX and CSV preview in mobile and desktop browser
         run: |
           kill "$(cat data/assistant-fixture.pid)"
           SMETRA_OFFICE_QA=1 python scripts/android_ui_fixture.py > data/office-fixture.log 2>&1 &
-          for i in $(seq 1 30); do rg -q ANDROID_UI_FIXTURE_READY data/office-fixture.log && break; sleep 1; done
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/office-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/office-fixture.log || { cat data/office-fixture.log; exit 1; }
           node tests/browser_office_files.cjs
       - name: Browser fixture diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-fixture-logs
-          path: data/*.log
+          path: |
+            data/*.log
+            data/office-*.png
   android:
     runs-on: ubuntu-latest
     steps:
