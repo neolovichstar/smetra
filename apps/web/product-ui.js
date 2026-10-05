@@ -101,7 +101,10 @@
       section.classList.toggle('is-empty', !section.querySelector('.record-line'));
     });
     root.querySelectorAll('button, a.btn').forEach(button => {
-      if (button.dataset.uiIcon) return;
+      if (button.dataset.uiIcon) {
+        if (/^[a-z-]+$/.test(button.dataset.uiIcon)) button.style.setProperty('--ui-icon', `url('/assets/icons/${button.dataset.uiIcon}.svg')`);
+        return;
+      }
       const name = navigation[button.dataset.tab] || ({dashboard:'file-text',assistant:'sparkle'})[button.dataset.mode] ||
         ({catalog:'book-open',assistant:'sparkle'})[button.dataset.id] || explicit[button.id] ||
         captions.find(([pattern]) => pattern.test(button.textContent.trim()))?.[1];

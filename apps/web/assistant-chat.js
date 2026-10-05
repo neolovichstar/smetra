@@ -25,10 +25,22 @@ function assistantInline(source) {
 function assistantMarkdown(source) {
   const lines=String(source||'').replace(/\r\n?/g,'\n').split('\n');
   const html=[];let index=0;
+  const cells=line=>line.trim().replace(/^\|/,'').replace(/\|$/,'').split(/(?<!\\)\|/).map(cell=>cell.trim().replace(/\\\|/g,'|'));
+  const isTable=position=>position+1<lines.length&&lines[position].includes('|')&&
+    cells(lines[position+1]).length===cells(lines[position]).length&&cells(lines[position+1]).every(cell=>/^:?-{3,}:?$/.test(cell));
   const isBlock=line=>/^\s*$|^```|^#{1,3}\s|^>\s?|^\s*[-*]\s+|^\s*\d+\.\s+|^---+\s*$/.test(line);
   while(index<lines.length){
     const line=lines[index];
     if(!line.trim()){index++;continue}
+    if(isTable(index)){
+      const headers=cells(line),dividers=cells(lines[index+1]);index+=2;
+      const align=dividers.map(cell=>cell.startsWith(':')&&cell.endsWith(':')?'center':cell.endsWith(':')?'right':'left');
+      const rows=[];
+      while(index<lines.length&&lines[index].includes('|')&&lines[index].trim()){
+        const values=cells(lines[index++]);rows.push(`<tr>${headers.map((_,column)=>`<td class="align-${align[column]}">${assistantInline(values[column]||'')}</td>`).join('')}</tr>`);
+      }
+      html.push(`<div class="assistant-table-scroll" role="region" aria-label="Таблица в ответе" tabindex="0"><table><thead><tr>${headers.map((header,column)=>`<th scope="col" class="align-${align[column]}">${assistantInline(header)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`);continue;
+    }
     if(line.startsWith('```')){
       const language=line.slice(3).trim().replace(/[^a-z0-9+#-]/gi,'').slice(0,24);
       const code=[];index++;
@@ -53,7 +65,7 @@ function assistantMarkdown(source) {
       html.push(`<${tag}>${items.join('')}</${tag}>`);continue;
     }
     const paragraph=[line];index++;
-    while(index<lines.length&&!isBlock(lines[index]))paragraph.push(lines[index++]);
+    while(index<lines.length&&!isBlock(lines[index])&&!isTable(index))paragraph.push(lines[index++]);
     html.push(`<p>${paragraph.map(assistantInline).join('<br>')}</p>`);
   }
   return html.join('');
@@ -89,19 +101,46 @@ window.SmetraAssistant=async function(){
   let activeConversation=sessionStorage.getItem('smetra.assistant.conversation')||'';
   if(activeConversation&&!threadIndex.items.some(item=>item.id===activeConversation))activeConversation='';
   const thread=activeConversation?await api('/assistant/conversations/'+encodeURIComponent(activeConversation)):data;
-  view(`<section class="assistant-page"><header class="assistant-header"><div><span class="overline"><span class="assistant-mark"></span>Сметра рядом</span><h1>Ассистент</h1></div><span id="assistant-quota" class="assistant-quota"></span></header><div class="assistant-workbar"><label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select"><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${item.pinned?'● ':''}${escapeHtml(item.title)}</option>`).join('')}</select><button class="btn small" id="assistant-new-thread" type="button">Новый диалог</button><button class="btn small" id="assistant-knowledge" type="button">Знания</button><button class="assistant-thread-action" id="assistant-rename" type="button" aria-label="Переименовать диалог" title="Переименовать" ${activeConversation?'':'disabled'}>✎</button><button class="assistant-thread-action" id="assistant-pin" type="button" aria-label="Закрепить диалог" title="Закрепить" ${activeConversation?'':'disabled'}>◇</button><button class="assistant-thread-action" id="assistant-delete" type="button" aria-label="Удалить диалог" title="Удалить" ${activeConversation?'':'disabled'}>×</button></div><form id="assistant-thread-edit" class="assistant-thread-edit hidden"><input id="assistant-thread-name" maxlength="120" aria-label="Название диалога"><button class="btn small" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form><div id="assistant-knowledge-panel" class="hidden"></div><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div><div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div><form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Спросите или поручите задачу…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" hidden>Стоп</button></form><div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span>Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a></div></section>`);
+  const currentTitle=threadIndex.items.find(item=>item.id===activeConversation)?.title||'Общий диалог';
+  view(`<section class="assistant-page assistant-refined">
+    <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
+    <div class="assistant-workbar">
+      <details class="assistant-history"><summary><span class="assistant-history-icon" aria-hidden="true"></span><span class="assistant-current-title">${escapeHtml(currentTitle)}</span><span class="assistant-chevron" aria-hidden="true"></span></summary>
+        <div class="assistant-history-list"><span class="assistant-history-label">Ваши диалоги</span>
+          <button type="button" data-conversation="" aria-pressed="${!activeConversation}">Общий диалог</button>
+          ${threadIndex.items.map(item=>`<button type="button" data-conversation="${escapeHtml(item.id)}" aria-pressed="${item.id===activeConversation}"><span>${escapeHtml(item.title)}</span>${item.pinned?'<span class="assistant-pinned" aria-label="Закреплён"></span>':''}</button>`).join('')}
+        </div>
+      </details>
+      <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
+      <button class="btn small" id="assistant-new-thread" type="button" aria-label="Новый диалог">Новый диалог</button>
+      <button class="btn small" id="assistant-knowledge" type="button" aria-label="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel">Знания</button>
+      <details class="assistant-options"><summary aria-label="Действия с диалогом" title="Действия с диалогом"><span aria-hidden="true"></span></summary><div class="assistant-options-list">
+        <button class="assistant-thread-action" id="assistant-rename" type="button" ${activeConversation?'':'disabled'}>Переименовать</button>
+        <button class="assistant-thread-action" id="assistant-pin" type="button" ${activeConversation?'':'disabled'}>${threadIndex.items.find(item=>item.id===activeConversation)?.pinned?'Открепить':'Закрепить'}</button>
+        <button class="assistant-thread-action" id="assistant-delete" type="button" ${activeConversation?'':'disabled'}>Удалить диалог</button>
+      </div></details>
+    </div>
+    <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><input id="assistant-thread-name" maxlength="120" aria-label="Название диалога"><button class="btn small" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
+    <div id="assistant-knowledge-panel" class="hidden"></div><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div>
+    <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
+      <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" hidden>Стоп</button></form>
+      <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span>Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
+    </div></section>`);
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
   const composer=document.querySelector('.assistant-composer');
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach">+ Файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md" hidden><span>PDF, TXT или Markdown · до 5 МБ</span>';
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить PDF, TXT или Markdown" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md" hidden><span>PDF, TXT или Markdown · до 5 МБ</span>';
   attachmentBar.querySelector('span').textContent='PDF, TXT или Markdown · до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
   const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.textContent='Выполнить в фоне';backgroundButton.hidden=true;
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
   jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));actions.after(jobList);
+  const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
+  composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
+  document.querySelector('#assistant-form').append(composeTools);
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const quotaLabel=document.querySelector('#assistant-quota');
@@ -109,9 +148,20 @@ window.SmetraAssistant=async function(){
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
   const threadPath=activeConversation?'/assistant/conversations/'+encodeURIComponent(activeConversation):'';
   document.querySelector('#assistant-thread-select').onchange=event=>{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',event.target.value);window.SmetraAssistant()};
+  document.querySelectorAll('[data-conversation]').forEach(button=>{button.onclick=()=>{
+    const select=document.querySelector('#assistant-thread-select');select.value=button.dataset.conversation;select.dispatchEvent(new Event('change'));
+  }});
+  document.querySelectorAll('.assistant-workbar details').forEach(menu=>{
+    menu.addEventListener('toggle',()=>{if(menu.open)document.querySelectorAll('.assistant-workbar details').forEach(other=>{if(other!==menu)other.open=false})});
+    menu.addEventListener('keydown',event=>{if(event.key==='Escape'){menu.open=false;menu.querySelector('summary').focus();event.stopPropagation()}});
+    menu.addEventListener('focusout',()=>{setTimeout(()=>{if(menu.isConnected&&!menu.contains(document.activeElement))menu.open=false},0)});
+  });
+  document.querySelector('.assistant-page').addEventListener('click',event=>{
+    if(!event.target.closest('.assistant-workbar'))document.querySelectorAll('.assistant-workbar details').forEach(menu=>{menu.open=false});
+  });
   document.querySelector('#assistant-new-thread').onclick=async()=>{try{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);window.SmetraAssistant()}catch(error){notify(error.message)}};
-  document.querySelector('#assistant-knowledge').onclick=async()=>{const panel=document.querySelector('#assistant-knowledge-panel');if(!panel.classList.contains('hidden')){panel.classList.add('hidden');return}await window.SmetraKnowledgePanel?.(panel);panel.classList.remove('hidden')};
-  document.querySelector('#assistant-rename').onclick=()=>{const form=document.querySelector('#assistant-thread-edit');form.classList.remove('hidden');const name=document.querySelector('#assistant-thread-name');name.value=selectedThread.title;name.focus();name.select()};
+  document.querySelector('#assistant-knowledge').onclick=async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');if(!panel.classList.contains('hidden')){panel.classList.add('hidden');button.setAttribute('aria-expanded','false');return}await window.SmetraKnowledgePanel?.(panel);panel.classList.remove('hidden');button.setAttribute('aria-expanded','true')};
+  document.querySelector('#assistant-rename').onclick=()=>{document.querySelector('.assistant-options').open=false;const form=document.querySelector('#assistant-thread-edit');form.classList.remove('hidden');const name=document.querySelector('#assistant-thread-name');name.value=selectedThread.title;name.focus();name.select()};
   document.querySelector('#assistant-thread-cancel').onclick=()=>document.querySelector('#assistant-thread-edit').classList.add('hidden');
   document.querySelector('#assistant-thread-edit').onsubmit=async event=>{event.preventDefault();try{await api(threadPath,{method:'PATCH',body:JSON.stringify({title:document.querySelector('#assistant-thread-name').value.trim()})});window.SmetraAssistant()}catch(error){notify(error.message)}};
   document.querySelector('#assistant-pin').onclick=async()=>{try{await api(threadPath,{method:'PATCH',body:JSON.stringify({pinned:selectedThread.pinned?0:1})});window.SmetraAssistant()}catch(error){notify(error.message)}};
@@ -173,7 +223,7 @@ window.SmetraAssistant=async function(){
   stop.onclick=()=>requestController?.abort();
   const renderQuota=value=>{
     quota=value;
-    quotaLabel.textContent=`${value.remaining} из ${value.limit} сообщений · ${value.plan==='free'?'Старт':'Про'}`;
+    quotaLabel.textContent=`Осталось ${value.remaining} из ${value.limit} · ${value.plan==='free'?'Старт':'Про'}`;
     quotaLabel.title=`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
     upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
     send.disabled=working||fileBlocking||!data.available||value.remaining<1;
@@ -282,7 +332,7 @@ window.SmetraAssistant=async function(){
   };
   refreshFile();
   if(!thread.messages.length){
-    messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line"></span><h2>Что сделаем сегодня?</h2><p>Спросите о сметах и заказах или поручите подготовить изменение. Сохранение всегда остаётся за вами.</p><div class="assistant-suggestions"><button type="button" data-prompt="Какие сметы ожидают согласования?">Что ждёт согласования?</button><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали.">Составить смету</button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">Разобраться в оплатах</button></div></div>';
+    messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line" aria-hidden="true"></span><h2>От задачи —<br>к результату.</h2><p>Сметы, проекты и оплаты.<br>Опишите задачу — разберёмся вместе.</p><div class="assistant-suggestions"><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали." data-ui-icon="file-text">Составить смету</button><button type="button" data-prompt="Какие сметы ожидают согласования?" data-ui-icon="check-square">Проверить согласования</button><button type="button" data-prompt="Покажи поступления и остатки по заказам." data-ui-icon="wallet">Разобраться в оплатах</button></div></div>';
     messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize()});
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));

@@ -38,6 +38,10 @@ const assert = require('node:assert/strict');
   await fill('#capture-text','');
   await click('[data-mode=assistant]');await until("document.querySelector('.assistant-page')");
   assert.equal(await evaluate("document.querySelector('[data-mode=assistant]').getAttribute('aria-pressed')"),'true');
+  await wait(300);await shot('assistant-refined-desktop');
+  assert.notEqual(await evaluate("getComputedStyle(document.querySelector('[data-prompt]'),'::before').maskImage"),'none');
+  assert.equal(await evaluate("new DOMParser().parseFromString(assistantMarkdown('| Item | Price |\\n| --- | ---: |\\n| **Work** | 100 |'),'text/html').querySelectorAll('tbody td').length"),2);
+  assert.equal(await evaluate("new DOMParser().parseFromString(assistantMarkdown('| Item | Price |\\n| --- | --- |\\n| <img src=x onerror=alert(1)> | 100 |'),'text/html').querySelector('img')===null"),true);
   await click('[data-mode=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
   assert.equal(await evaluate("document.querySelector('[data-mode=dashboard]').getAttribute('aria-pressed')"),'true');
   for(const width of [320,390]){
@@ -51,6 +55,16 @@ const assert = require('node:assert/strict');
     await wait(300);await shot('mobile-brand-menu-'+width);
     await click('#nav-backdrop');assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'false');
     await wait(300);await shot('mobile-brand-dashboard-'+width);
+    await click('[data-mode=assistant]');await until("document.querySelector('.assistant-refined')");
+    assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
+    assert.equal(await evaluate("!!document.querySelector('#assistant-form .assistant-compose-tools #assistant-attach')"),true);
+    await wait(300);await shot('assistant-refined-'+width);
+    await click('.assistant-history summary');await wait(100);
+    assert.equal(await evaluate("document.querySelector('.assistant-history').open"),true);
+    assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
+    await evaluate("document.querySelector('.assistant-history summary').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+    assert.equal(await evaluate("document.querySelector('.assistant-history').open"),false);
+    await click('[data-mode=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
   }
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});await wait(500);
   await shot('workspace-dashboard');
