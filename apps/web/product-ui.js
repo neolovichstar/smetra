@@ -117,7 +117,7 @@
         return;
       }
       const name = navigation[button.dataset.tab] || ({dashboard:'file-text',assistant:'sparkle'})[button.dataset.mode] ||
-        ({catalog:'book-open',assistant:'sparkle'})[button.dataset.id] || explicit[button.id] ||
+        (button.dataset.work === 'navigate' ? ({catalog:'book-open',assistant:'sparkle'})[button.dataset.id] : undefined) || explicit[button.id] ||
         captions.find(([pattern]) => pattern.test(button.textContent.trim()))?.[1];
       if (!name) return;
       button.dataset.uiIcon = name;
