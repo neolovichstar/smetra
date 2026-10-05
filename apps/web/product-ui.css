@@ -1,5 +1,7 @@
 /* Product rhythm: primitives → semantic roles → component states. */
+@font-face{font-family:Onest;src:url('/assets/fonts/onest-variable.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
 .workspace-page{
+  --font:Onest,Manrope,'Segoe UI',Arial,sans-serif;font-family:var(--font);font-optical-sizing:auto;
   --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-6:24px;--space-8:32px;
   --surface-base:#000;--surface-input:#090909;--surface-hover:#141414;
   --text-primary:#f3f4f6;--text-secondary:#a9abb3;--text-quiet:#81858f;
@@ -340,11 +342,11 @@
 @media(max-width:359px){.workspace-page .assistant-workbar .btn{font-size:0;gap:0}}
 
 /* Assistant: conversation first, tools available when they are needed. */
-.workspace-page .assistant-refined{max-width:780px;min-height:calc(100dvh - 148px)}
+.workspace-page .assistant-refined{max-width:800px;min-height:calc(100dvh - 148px);--composer-surface:#101112;--composer-text:var(--text-primary);--composer-muted:#9ba1ac;--composer-radius:24px}
 .workspace-page .assistant-refined .assistant-header{padding:0 0 16px;gap:12px;align-items:center}
-.workspace-page .assistant-refined .assistant-header h1{display:flex;align-items:center;gap:6px;font-size:22px;font-weight:500;margin:0;letter-spacing:-.035em}
+.workspace-page .assistant-refined .assistant-header h1{display:flex;align-items:center;gap:6px;font-size:24px;font-weight:600;margin:0;letter-spacing:-.035em}
 .assistant-brand-dot{width:5px;height:5px;border-radius:50%;background:#2684ff;align-self:flex-end;margin-bottom:4px}
-.workspace-page .assistant-refined .assistant-quota{font-size:11px;padding:6px 0;color:#9baec7}
+.workspace-page .assistant-refined .assistant-quota{font-size:12px;padding:6px 0;color:var(--text-secondary)}
 .workspace-page .assistant-refined .assistant-workbar{display:flex;flex-wrap:nowrap;gap:8px;padding:0 0 16px;position:relative;z-index:8}
 .assistant-refined #assistant-thread-select[hidden]{display:none!important}
 .assistant-refined .assistant-history{flex:1;min-width:0;position:relative}
@@ -375,10 +377,10 @@
 .workspace-page .assistant-refined .assistant-thread:has(.assistant-welcome){display:flex;align-items:center;justify-content:center;min-height:320px}
 .workspace-page .assistant-refined .assistant-welcome{width:100%;padding:30px 0 40px;text-align:center}
 .assistant-refined .assistant-welcome-line{display:block;width:42px;height:42px;margin:0 auto 22px;background:var(--action);box-shadow:none;mask:url('/assets/icons/sparkle.svg') center/contain no-repeat}
-.assistant-refined .assistant-welcome h2{font-size:clamp(30px,3vw,40px);line-height:1.15;font-weight:500;letter-spacing:-.04em;margin:0 0 16px}
-.assistant-refined .assistant-welcome p{margin:0 auto;color:#a6b0c0;font-size:14px;line-height:1.7}
+.assistant-refined .assistant-welcome h2{font-size:clamp(28px,3vw,36px);line-height:1.2;font-weight:500;letter-spacing:-.035em;margin:0 0 12px}
+.assistant-refined .assistant-welcome p{margin:0 auto;color:#a8adb7;font-size:14px;line-height:1.7}
 .assistant-refined .assistant-suggestions{justify-content:center;gap:8px;margin:24px 0 0}
-.assistant-refined .assistant-suggestions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 12px;border:0;background:none;font:12px var(--font);color:#c5d0e0;border-radius:12px}
+.assistant-refined .assistant-suggestions button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px 12px;border:0;background:none;font:13px var(--font);color:#c5ccd7;border-radius:12px}
 .assistant-refined .assistant-suggestions button::before{color:var(--action)}
 .assistant-refined .assistant-suggestions button:hover{background:#96beff0a;color:var(--action);transform:none}
 .workspace-page .assistant-refined .assistant-message{padding:18px 0}
@@ -388,26 +390,51 @@
 .assistant-refined .assistant-message.assistant>small::before{content:'';width:5px;height:5px;border-radius:50%;background:#2684ff}
 .assistant-refined .assistant-copy,.assistant-refined .assistant-fork{min-height:36px;padding:8px 0;font-size:11px}
 .workspace-page .assistant-refined .assistant-composer{margin-top:auto;padding-top:12px;padding-bottom:max(8px,env(safe-area-inset-bottom))}
-.workspace-page .assistant-refined .assistant-composer form{display:flex;flex-direction:column;align-items:stretch;padding:12px;border-radius:24px;gap:4px;background:#080a0d;border-color:#96beff30}
-.workspace-page .assistant-refined .assistant-composer textarea{min-height:52px;width:100%;padding:10px 8px;font-size:15px;box-sizing:border-box}
-.assistant-compose-tools{display:flex;align-items:center;gap:8px;width:100%;min-height:44px}
+.workspace-page .assistant-refined .assistant-composer form{display:flex;flex-direction:column;align-items:stretch;padding:12px;border-radius:var(--composer-radius);gap:8px;background:var(--composer-surface);transition:background-color .2s ease}
+.workspace-page .assistant-refined .assistant-composer form:focus-within{background:#151617}
+.workspace-page .assistant-refined .assistant-composer textarea{min-height:48px;width:100%;padding:10px 10px 6px;font-size:16px;line-height:1.65;letter-spacing:-.012em;color:var(--composer-text);box-sizing:border-box}
+.workspace-page .assistant-refined .assistant-composer textarea::placeholder{color:var(--composer-muted);opacity:1}
+.assistant-compose-tools{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;width:100%;min-height:44px}
 .workspace-page .assistant-refined .assistant-attachment-bar{margin:0;min-height:44px;gap:0;flex:none}
 .assistant-refined .assistant-attachment-bar>span{display:none}
 .workspace-page .assistant-refined #assistant-attach{display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;font-size:0;border-radius:50%;padding:0;background:transparent;color:var(--action);border:0}
 .assistant-refined #assistant-attach::before{content:'';width:21px;height:21px;background:currentColor;mask:url('/assets/icons/plus.svg') center/contain no-repeat}
-.assistant-refined #assistant-attach:hover{background:#96beff0c}
+.assistant-refined #assistant-attach:hover{background:#96beff0c;text-decoration:none}
 .workspace-page .assistant-refined .assistant-jobbar{margin:0 auto 0 0;min-width:0}
-.workspace-page .assistant-refined .assistant-jobbar button{min-height:44px;padding:8px;font-size:12px;color:#9bb4d7;white-space:nowrap}
-.workspace-page .assistant-refined #assistant-send{width:44px;min-height:44px;height:44px;flex:none;font-size:0;gap:0;margin-left:auto}
+.workspace-page .assistant-refined .assistant-jobbar button{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;font-size:13px;font-weight:500;color:var(--text-secondary);white-space:nowrap;transition:color .18s ease,background-color .18s ease}
+.assistant-refined #assistant-background::before{content:'';width:6px;height:6px;flex:none;border-radius:50%;background:#6e7581;transition:background-color .18s ease}
+.workspace-page .assistant-refined #assistant-background[aria-pressed=true]{background:#96beff14;color:var(--action)}
+.assistant-refined #assistant-background[aria-pressed=true]::before{background:var(--action)}
+.workspace-page .assistant-refined #assistant-background:hover:not(:disabled){color:var(--action);background:#96beff0d}
+.assistant-refined .assistant-compose-tools [hidden]{display:none!important}
+.workspace-page .assistant-refined #assistant-send{width:44px;min-height:44px;height:44px;grid-column:3;grid-row:1;font-size:0;gap:0;margin-left:0;border-radius:50%;background:var(--action);color:#091525;box-shadow:none;transition:background-color .18s ease,transform .18s ease,opacity .18s ease}
+.workspace-page .assistant-refined #assistant-send::before{content:'';display:block;width:20px;height:20px;background:currentColor;mask:url('/assets/icons/arrow-right.svg') center/contain no-repeat;transform:rotate(-90deg)}
+.workspace-page .assistant-refined #assistant-send:hover:not(:disabled){background:var(--action-hover);transform:translateY(-1px)}
+.workspace-page .assistant-refined #assistant-send:active:not(:disabled){transform:scale(.94)}
+.workspace-page .assistant-refined #assistant-send:disabled{opacity:.4}
 .assistant-refined #assistant-form:has(#assistant-stop:not([hidden])) #assistant-send{display:none}
-.workspace-page .assistant-refined #assistant-stop{border-color:#96beff30;min-height:44px;margin-left:auto}
-.workspace-page .assistant-refined .assistant-composer-foot{margin:8px 8px 0;font-size:10px;line-height:1.6;min-height:16px}
+.workspace-page .assistant-refined #assistant-stop{display:grid;place-items:center;grid-column:3;grid-row:1;width:44px;height:44px;min-height:44px;padding:0;border:0;border-radius:50%;background:var(--action);color:#091525;font-size:0;margin:0}
+.assistant-refined #assistant-stop::before{content:'';width:12px;height:12px;border-radius:3px;background:currentColor}
+.workspace-page .assistant-refined #assistant-stop[hidden],.workspace-page .assistant-refined #assistant-background[hidden]{display:none!important}
+.workspace-page .assistant-refined .assistant-composer-foot{margin:10px 12px 0;gap:12px;font-size:11px;line-height:1.6;min-height:18px;color:#959ba6}
+.assistant-refined #assistant-status:empty{display:none}
+.assistant-refined #assistant-delivery-hint{margin-left:auto;text-align:right}
+.assistant-refined .background-mode #assistant-delivery-hint{color:#b4c7e4}
+.assistant-refined #assistant-status:not(:empty){text-align:left;color:var(--action)}
 .workspace-page .assistant-refined .assistant-context{background:transparent;border:0;border-left:2px solid var(--action);border-radius:0;padding:4px 0 4px 10px;min-height:36px;margin-bottom:8px;width:100%;box-sizing:border-box}
 .assistant-refined .assistant-context>span{display:none}
 .assistant-refined .assistant-context button{margin-left:auto;width:36px;height:36px}
 .assistant-refined .assistant-file-status{padding:4px 0 8px;font-size:11px}
 .assistant-refined .assistant-jobs:empty{display:none}
 .assistant-refined .assistant-jobs{margin:8px 0 16px}
+.assistant-refined .assistant-job{gap:16px;padding:14px 4px;animation:chat-enter .24s ease both}
+.assistant-refined .assistant-job::before{content:'';width:6px;height:6px;flex:none;border-radius:50%;background:var(--action)}
+.assistant-refined .assistant-job[data-status=failed]::before{background:#ee929b}
+.assistant-refined .assistant-job[data-status=cancelled]::before{background:var(--text-quiet)}
+.assistant-refined .assistant-job strong{font-size:13px;color:var(--text-primary)}
+.assistant-refined .assistant-job span{font-size:12px;color:var(--text-secondary)}
+.assistant-refined .assistant-job button{min-height:44px;font-size:12px;border-radius:10px}
+.assistant-refined .assistant-job button:hover:not(:disabled){background:#96beff0d}
 .assistant-table-scroll{max-width:100%;overflow:auto;margin:18px 0;border-block:1px solid var(--stroke);scrollbar-width:thin}
 .assistant-table-scroll table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.6}
 .assistant-table-scroll th,.assistant-table-scroll td{padding:12px 14px;border-bottom:1px solid var(--stroke);min-width:100px;vertical-align:top;text-align:left}
@@ -432,10 +459,15 @@
  .assistant-refined .assistant-suggestions{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:20px}
  .assistant-refined .assistant-suggestions button{font-size:12px;min-height:44px}
  .workspace-page .assistant-refined .assistant-markdown{font-size:14px;line-height:1.8}
- .workspace-page .assistant-refined .assistant-composer textarea{font-size:16px;line-height:24px;min-height:52px;padding:8px 6px}
- .workspace-page .assistant-refined .assistant-composer form{padding:8px;border-radius:22px}
+ .workspace-page .assistant-refined .assistant-composer textarea{font-size:16px;line-height:25px;min-height:48px;padding:8px}
+ .workspace-page .assistant-refined .assistant-composer form{padding:10px;border-radius:22px;gap:6px}
  .assistant-refined .assistant-compose-tools{gap:4px}
- .workspace-page .assistant-refined .assistant-composer-foot{font-size:10px}
+ .workspace-page .assistant-refined .assistant-composer-foot{font-size:11px;flex-wrap:wrap;margin-inline:4px}
+ .assistant-refined .assistant-composer:not(.background-mode) #assistant-delivery-hint{display:none}
+ .assistant-refined .background-mode #assistant-delivery-hint{text-align:left;margin-left:0}
+ .workspace-page .assistant-refined .assistant-jobbar button{padding-inline:10px;font-size:12px}
+ .assistant-refined .assistant-job{gap:10px}
+ .assistant-refined .assistant-job button{max-width:100px;white-space:normal;text-align:right;line-height:1.4}
  .assistant-refined .assistant-thread-edit{flex-wrap:wrap}
  .assistant-refined .assistant-thread-edit input{flex-basis:100%;font-size:16px}
  .assistant-refined .assistant-thread-edit button{flex:1}
@@ -679,4 +711,5 @@
 @media(max-width:700px){.workspace-page .nav-backdrop{top:112px}}
 @media(prefers-reduced-motion:reduce){
  .workspace-page .sidebar,.workspace-page .nav-backdrop,.workspace-page .app-shell{transition:none!important}
+ .assistant-refined *, .assistant-refined *::before{animation:none!important;transition:none!important}
 }

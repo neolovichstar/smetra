@@ -59,7 +59,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await evaluate(`{const select=document.querySelector('#assistant-thread-select');select.value='${fileThread}';select.dispatchEvent(new Event('change'))}`);
  await until("document.querySelector('#assistant-context-label').textContent==='Файл: brief.txt'");
  await until("document.querySelector('.assistant-jobbar button')?.hidden===false");
- await evaluate("document.querySelector('#assistant-input').value='Проверь бриф в фоне';document.querySelector('.assistant-jobbar button').click()");
+ await evaluate("document.querySelector('#assistant-input').value='Проверь бриф в фоне';document.querySelector('#assistant-input').dispatchEvent(new Event('input'));document.querySelector('#assistant-background').click();document.querySelector('#assistant-send').click()");
  await until("document.querySelector('.assistant-job strong')?.textContent==='Проверь бриф в фоне'");
  await send('Page.navigate',{url:'http://localhost:8084/app#assistant'});
  await until("[...document.querySelectorAll('.assistant-job button')].some(b=>b.textContent==='Открыть ответ')");

@@ -128,8 +128,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><input id="assistant-thread-name" maxlength="120" aria-label="Название диалога"><button class="btn small" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
     <div id="assistant-knowledge-panel" class="hidden"></div><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div>
     <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
-      <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" hidden>Стоп</button></form>
-      <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span>Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
+      <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
+      <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
     </div></section>`);
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
@@ -140,7 +140,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   attachmentBar.querySelector('span').textContent='PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
-  const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.textContent='Выполнить в фоне';backgroundButton.hidden=true;
+  const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.id='assistant-background';backgroundButton.textContent='В фоне';backgroundButton.hidden=true;backgroundButton.disabled=true;
+  backgroundButton.setAttribute('aria-pressed','false');backgroundButton.setAttribute('aria-describedby','assistant-delivery-hint');
+  backgroundButton.title='Сохранить задачу на сервере и открыть ответ позже';
+  let backgroundEnabled=false,backgroundMode=false;
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
   jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));actions.after(jobList);
   const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
@@ -179,6 +182,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     context=selectedThread.context_entity?{entity:selectedThread.context_entity,id:selectedThread.context_id,workspace_id:currentWorkspace}:null;
     if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
   }
+  if(!active())return;
   const contextBar=document.querySelector('#assistant-context');
   const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');contextBar.after(fileStatus);
   const renderContext=()=>{
@@ -231,9 +235,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     quotaLabel.textContent=`Осталось ${value.remaining} из ${value.limit} · ${value.plan==='free'?'Старт':'Про'}`;
     quotaLabel.title=`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
     upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
-    send.disabled=working||fileBlocking||!data.available||value.remaining<1;
-    backgroundButton.disabled=working||fileBlocking||!data.available||value.remaining<1;
-    input.disabled=!data.available||value.remaining<1;
+    const blocked=working||fileBlocking||!data.available||value.remaining<1;
+    send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
+    backgroundButton.disabled=blocked||!backgroundEnabled;
+    input.disabled=working||!data.available||value.remaining<1;
   };
   const scrollBottom=()=>{if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-260)window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'})};
   const addMessage=(role,text,messageId)=>{
@@ -285,15 +290,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     try{
       if(document.hidden){jobPollTimer=setTimeout(refreshJobs,15000);return}
       const result=await api('/assistant/jobs');
-      if(!jobList.isConnected||sequence!==jobLoadSeq)return;
+      if(!active()||!jobList.isConnected||sequence!==jobLoadSeq)return;
+      backgroundEnabled=!!result.enabled;
       backgroundButton.hidden=!result.enabled;
-      backgroundButton.disabled=working||fileBlocking||quota.remaining<1||!data.available;
+      if(!backgroundEnabled&&backgroundMode){backgroundMode=false;renderDelivery()}
+      renderQuota(quota);
       jobList.replaceChildren();
       const labels={queued:'В очереди',running:'В работе',retry:'Повторю позже',completed:'Готово',failed:'Не удалось завершить',cancelled:'Отменено'};
       result.jobs.filter(job=>['queued','running','retry'].includes(job.status)||Date.now()/1000-job.updated_at<86400).slice(0,5).forEach(job=>{
-        const row=document.createElement('div');row.className='assistant-job';
+        const row=document.createElement('div');row.className='assistant-job';row.dataset.status=job.status;
         const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
-        title.textContent=job.prompt;detail.textContent=job.error||job.progress||labels[job.status];description.append(title,detail);row.append(description);
+        title.textContent=job.prompt;detail.textContent=job.error||job.progress||labels[job.status];detail.setAttribute('role','status');description.append(title,detail);row.append(description);
         const active=['queued','running','retry'].includes(job.status);
         if(active||job.status==='completed'){
           const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':['file_index','file_ocr'].includes(job.kind)?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
@@ -306,16 +313,33 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         jobList.append(row);
       });
       if(result.jobs.some(job=>['queued','running','retry'].includes(job.status)))jobPollTimer=setTimeout(refreshJobs,5000);
-    }catch{if(jobList.isConnected&&sequence===jobLoadSeq)jobPollTimer=setTimeout(refreshJobs,15000)}
+    }catch{if(active()&&jobList.isConnected&&sequence===jobLoadSeq)jobPollTimer=setTimeout(refreshJobs,15000)}
   };
-  backgroundButton.onclick=async()=>{
-    const text=input.value.trim();if(!text||working||fileBlocking||quota.remaining<1)return;
+  const renderDelivery=()=>{
+    backgroundButton.setAttribute('aria-pressed',String(backgroundMode));
+    composer.classList.toggle('background-mode',backgroundMode);
+    send.setAttribute('aria-label',backgroundMode?'Отправить задачу в фон':'Отправить сообщение');
+    send.title=backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
+    document.querySelector('#assistant-delivery-hint').textContent=backgroundMode?'Ответ сохранится в диалоге. Можно закрыть страницу.':'Enter — отправить · Shift+Enter — новая строка';
+  };
+  backgroundButton.onclick=()=>{
+    if(!backgroundEnabled||working||fileBlocking)return;
+    backgroundMode=!backgroundMode;renderDelivery();renderQuota(quota);input.focus();
+  };
+  const submitBackground=async()=>{
+    const text=input.value.trim();if(!text||working||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
     const body=JSON.stringify({text,context:context?{entity:context.entity,id:context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})});
     if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
-    working=true;backgroundButton.disabled=true;renderQuota(quota);
-    try{const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});renderQuota(result.quota);input.value='';clearSentDraft(text);resize();jobRequest=null;status.textContent='Задача сохранена. Можно закрыть экран.';refreshJobs()}
-    catch(error){notify(error.message)}finally{working=false;backgroundButton.disabled=false;renderQuota(quota)}
+    working=true;renderQuota(quota);status.textContent='Сохраняю фоновую задачу…';
+    try{
+      const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});
+      clearSentDraft(text);jobRequest=null;
+      if(!active())return;
+      renderQuota(result.quota);input.value='';resize();status.textContent='В очереди · можно закрыть страницу';refreshJobs();
+    }catch(error){if(active()){status.textContent=error.message;notify(error.message)}}
+    finally{working=false;if(active()){renderQuota(quota);if(!input.disabled)input.focus()}}
   };
+  renderDelivery();
   refreshJobs();
   const refreshFile=async()=>{
     clearTimeout(filePollTimer);const sequence=++filePollSeq;
@@ -342,8 +366,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   refreshFile();
   if(!thread.messages.length){
-    messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line" aria-hidden="true"></span><h2>От задачи —<br>к результату.</h2><p>Сметы, проекты и оплаты.<br>Опишите задачу — разберёмся вместе.</p><div class="assistant-suggestions"><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали." data-ui-icon="file-text">Составить смету</button><button type="button" data-prompt="Какие сметы ожидают согласования?" data-ui-icon="check-square">Проверить согласования</button><button type="button" data-prompt="Покажи поступления и остатки по заказам." data-ui-icon="wallet">Разобраться в оплатах</button></div></div>';
-    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize()});
+    messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line" aria-hidden="true"></span><h2>С чего начнём?</h2><p>Помогу со сметами, проектами и оплатами.</p><div class="assistant-suggestions"><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали." data-ui-icon="file-text">Составить смету</button><button type="button" data-prompt="Какие сметы ожидают согласования?" data-ui-icon="check-square">Проверить согласования</button><button type="button" data-prompt="Покажи поступления и остатки по заказам." data-ui-icon="wallet">Разобраться в оплатах</button></div></div>';
+    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize();renderQuota(quota)});
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
@@ -351,11 +375,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит сообщений на этот месяц исчерпан.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
-  input.addEventListener('input',()=>{resize();saveDraft()});resize();
+  input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota)});resize();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
-    event.preventDefault();const prompt=input.value.trim();if(!prompt||working||fileBlocking||quota.remaining<1)return;
-    working=true;send.disabled=true;input.disabled=true;stop.hidden=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
+    event.preventDefault();const prompt=input.value.trim();if(!prompt||working||fileBlocking||quota.remaining<1||!data.available)return;
+    if(backgroundMode){await submitBackground();return}
+    working=true;renderQuota(quota);stop.hidden=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
     messages.querySelector('.assistant-welcome')?.remove();
     const userMessage=addMessage('user',prompt);
     const assistantMessage=addMessage('assistant','');
