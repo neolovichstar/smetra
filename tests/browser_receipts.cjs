@@ -19,7 +19,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await until(`document.querySelector('#construction-purchase-receipt option[value="${setup.file}"]')`);await evaluate(`document.querySelector('[data-purchase-edit="${setup.purchase}"]').click()`);
  await until("!document.querySelector('#construction-receipt-ocr').disabled");await evaluate("document.querySelector('#construction-receipt-ocr').click()");
  await until("document.querySelector('#construction-ocr-cancel')&&!document.querySelector('#construction-ocr-cancel').hidden");
- await evaluate('window.SmetraAssistant()');await until("document.querySelector('#assistant-input')");await evaluate('window.SmetraConstruction()');
+ await evaluate("document.querySelector('[data-tab=assistant]').click()");await until("document.querySelector('#assistant-input')");await evaluate("document.querySelector('[data-tab=construction]').click()");
  await until(`document.querySelector('#construction-purchase-receipt option[value="${setup.file}"]')`);await evaluate(`document.querySelector('[data-purchase-edit="${setup.purchase}"]').click()`);
  await until("document.querySelector('#construction-ocr-apply')&&!document.querySelector('#construction-ocr-apply').hidden");
  assert.equal(await evaluate("document.querySelector('#construction-purchase [name=unit_price]').value"),'100');

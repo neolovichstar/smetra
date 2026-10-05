@@ -168,7 +168,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(!event.target.closest('.assistant-workbar'))document.querySelectorAll('.assistant-workbar details').forEach(menu=>{menu.open=false});
   });
   async function threadAction(button,action){
-    if(button.disabled)return;button.disabled=true;
+    if(button.disabled||!active())return;button.disabled=true;
     try{await action();}catch(error){if(active())notify(error.message);}
     finally{if(button.isConnected)button.disabled=false;}
   }
@@ -259,10 +259,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(activeConversation&&messageId){
       const fork=document.createElement('button');fork.type='button';fork.className='assistant-fork';fork.textContent='Новая ветка';
       fork.title='Продолжить диалог с этого сообщения отдельно';
-      fork.onclick=async()=>{fork.disabled=true;try{
+      fork.onclick=async()=>{if(fork.disabled||!active())return;fork.disabled=true;try{
         const result=await api('/assistant/conversations/'+encodeURIComponent(activeConversation)+'/fork',{method:'POST',body:JSON.stringify({message_id:messageId})});
-        sessionStorage.setItem('smetra.assistant.conversation',result.conversation.id);window.SmetraAssistant();
-      }catch(error){fork.disabled=false;notify(error.message)}};
+        if(!active())return;
+        sessionStorage.setItem('smetra.assistant.conversation',result.conversation.id);await window.SmetraAssistant();
+      }catch(error){if(active()){fork.disabled=false;notify(error.message)}}};
       item.append(fork);
     }
     messages.append(item);return {item,body};
