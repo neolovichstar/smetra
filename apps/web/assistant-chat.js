@@ -95,12 +95,17 @@ function assistantEditPreview(preview){
   const totals=['quote_items','quote_structure'].includes(preview.kind)?`${structure?`<p class="muted">Позиций: ${escapeHtml(preview.before_count)} → ${escapeHtml(preview.after_count)}</p>`:''}<div class="assistant-diff-total"><span>Итого по смете</span><div><del>${escapeHtml(assistantEditValue('amount',preview.before_total,preview.currency))}</del><strong>${escapeHtml(assistantEditValue('amount',preview.after_total,preview.currency))}</strong></div></div>`:'';
   return `<div class="assistant-edit-diff">${rows.slice(0,5).join('')}${rows.length>5?`<details><summary>Ещё ${rows.length-5} изменений</summary>${rows.slice(5).join('')}</details>`:''}${totals}</div>`;
 }
-window.SmetraAssistant=async function(){
+let assistantRenderRevision=0;
+window.SmetraAssistant=async function(parentActive=()=>true){
+  const mine=++assistantRenderRevision,owner=user,workspaceId=sessionStorage.getItem('workspace_id');
+  const active=()=>parentActive()&&mine===assistantRenderRevision&&owner===user&&tab==='assistant'&&workspaceId===sessionStorage.getItem('workspace_id');
   const [data,threadIndex]=await Promise.all([api('/assistant'),api('/assistant/conversations')]);
+  if(!active())return;
   const maxUpload=Math.min(5000000,data.file_upload_max_bytes||3000000),maxUploadLabel=Math.floor(maxUpload/1000000)+' МБ';
   let activeConversation=sessionStorage.getItem('smetra.assistant.conversation')||'';
   if(activeConversation&&!threadIndex.items.some(item=>item.id===activeConversation))activeConversation='';
   const thread=activeConversation?await api('/assistant/conversations/'+encodeURIComponent(activeConversation)):data;
+  if(!active())return;
   const currentTitle=threadIndex.items.find(item=>item.id===activeConversation)?.title||'Общий диалог';
   view(`<section class="assistant-page assistant-refined">
     <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>

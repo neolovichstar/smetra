@@ -1,6 +1,7 @@
 /* Field workflow: object -> room -> measured quantity -> estimate. */
 (() => {
-  let selected = null;
+  let selected = null,generation=0,account=null,workspace=null;
+  function pageRequest(){const mine=++generation,owner=user,space=sessionStorage.getItem('workspace_id');return ()=>mine===generation&&owner===user&&tab==='construction'&&space===sessionStorage.getItem('workspace_id')}
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const val = (form, name) => (form.elements?.[name]||form.querySelector?.(`[name="${name}"]`))?.value?.trim() || '';
   const send = (path, data) => api(path, {method:'POST', body:JSON.stringify(data)});
@@ -16,7 +17,9 @@
     catch (error) { notify(error.message); }
   }
   async function list() {
+    const active=pageRequest();
     const result = await api('/construction/objects');
+    if(!active())return;
     view(`<div class="topline"><div><span class="eyebrow">СТРОИТЕЛЬНЫЙ РЕЖИМ</span><h1>Объекты и замеры</h1><p class="muted">От размеров помещения до сметы и контроля выполнения.</p></div></div>
       <section class="construction-intro"><div><strong>Новый объект</strong><small>Обычные сметы остаются доступны отдельно.</small></div><form id="construction-new" class="construction-inline">${field('name','Название объекта','text','required maxlength="200" placeholder="Квартира на Лесной"')}<button class="btn primary">Создать объект</button></form></section>
       <section class="construction-list"><div class="construction-section-title"><h2>В работе</h2><span>${result.items.length}</span></div>${result.items.length?result.items.map(item=>`<button class="construction-object" data-id="${esc(item.id)}"><span><strong>${esc(item.name)}</strong><small>${esc(item.description || 'Замеры, объёмы и смета')}</small></span><span class="construction-object-right">${item.project_id?'Заказ в работе':item.quote_id?'Смета создана':'Замеры'} <b>↗</b></span></button>`).join(''):'<p class="construction-empty">Создайте объект и добавьте первое помещение.</p>'}</section>`);
@@ -24,7 +27,9 @@
     document.querySelectorAll('.construction-object').forEach(button => button.onclick=()=>{selected=button.dataset.id;detail()});
   }
   async function detail() {
+    const active=pageRequest();
     const [data,supplierData] = await Promise.all([api('/construction/objects/' + encodeURIComponent(selected)),api('/construction/suppliers')]);
+    if(!active())return;
     const obj=data.object, zones=data.zones, rows=data.quantities, logs=data.daily_logs||[], suppliers=supplierData.items||[], purchases=data.purchases||[], changes=data.changes||[];
     view(`<div class="construction-back"><button id="construction-back" type="button">← Все объекты</button><span>ОБЪЕКТ / ${esc(obj.status.toUpperCase())}</span></div>
       <div class="topline construction-heading"><div><h1>${esc(obj.name)}</h1><p class="muted">${esc(obj.description || 'Добавьте размеры помещений, затем работы и материалы.')}</p></div><div class="topline-actions"><label class="btn small construction-import" title="Помещения в XLSX должны совпадать с помещениями объекта">Импорт XLSX<input id="construction-import" type="file" accept=".xlsx" hidden></label><button id="construction-export" class="btn small">Скачать XLSX</button>${obj.project_id?`<button id="construction-project-open" class="btn small">Открыть заказ ↗</button>`:''}${obj.quote_id?`<button id="construction-quote-open" class="btn primary">Открыть смету ↗</button>`:`<button id="construction-quote" class="btn primary" ${rows.length?'':'disabled'}>Создать смету ↗</button>`}</div></div>
@@ -240,5 +245,5 @@
       const url=URL.createObjectURL(await response.blob()),anchor=document.createElement('a');anchor.href=url;anchor.download='smetra-report.pdf';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
     }catch(error){notify(error.message)}finally{button.disabled=false}
   }
-  window.SmetraConstruction = () => selected ? detail() : list();
+  window.SmetraConstruction = () => {const nextAccount=user?.id,nextWorkspace=sessionStorage.getItem('workspace_id');if(account!==nextAccount||workspace!==nextWorkspace){selected=null;account=nextAccount;workspace=nextWorkspace}return selected ? detail() : list()};
 })();

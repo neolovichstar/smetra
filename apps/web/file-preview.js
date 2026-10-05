@@ -88,7 +88,9 @@ window.SmetraFilePreview = (() => {
     const body = view.querySelector('.file-preview-body');
     body.classList.remove('file-office-body');
     body.textContent = 'Открываем файл…';
-    view.querySelector('.file-preview-save').disabled = true;
+    const saveButton=view.querySelector('.file-preview-save');
+    saveButton.disabled = true;
+    saveButton.onclick = null;
     if (!view.open) view.showModal();
     controller = new AbortController();
     const request = controller;
@@ -97,7 +99,7 @@ window.SmetraFilePreview = (() => {
         const response=await fetch('/api/files/'+encodeURIComponent(file.id)+'/preview',{credentials:'same-origin',headers:workspaceId?{'X-Workspace-Id':workspaceId}:{},signal:request.signal});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Не удалось открыть документ');
         if(request!==controller||!view.open)return;officeView(body,data);
-        const save=view.querySelector('.file-preview-save');save.disabled=false;save.onclick=async()=>{save.disabled=true;try{await window.Workspace.download('/files/'+encodeURIComponent(file.id),file.name)}catch(error){window.notify?.(error.message)}finally{save.disabled=false}};return;
+        const save=view.querySelector('.file-preview-save');save.disabled=false;save.onclick=async()=>{save.disabled=true;try{await window.Workspace.download('/files/'+encodeURIComponent(file.id),file.name)}catch(error){if(request===controller&&view.open)window.notify?.(error.message)}finally{if(request===controller&&view.open)save.disabled=false}};return;
       }
       const response = await fetch('/api/files/' + encodeURIComponent(file.id), {
         credentials: 'same-origin',

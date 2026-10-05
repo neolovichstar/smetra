@@ -2,7 +2,7 @@ const $ = (s) => document.querySelector(s);
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rub = (kopecks) => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(kopecks / 100);
 const date = (seconds) => new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'}).format(new Date(seconds * 1000));
-let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer;
+let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0;
 try{sessionStorage.removeItem('mobile_token')}catch{}
 async function api(path, options = {}) {
   const headers = {'Content-Type':'application/json',...options.headers};
@@ -24,7 +24,7 @@ $('#theme')?.addEventListener('click',theme);
 function view(html) { const content=$('#content');content.dataset.section=tab;content.innerHTML=html;content.classList.remove('app-view-enter');void content.offsetWidth;content.classList.add('app-view-enter'); }
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):document.body.classList.contains('sidebar-compact');const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncSidebarAccess()}
-function showAuth() { closeNavigation();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
+function showAuth() { renderRevision++;closeNavigation();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
 async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');await render();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
@@ -35,13 +35,17 @@ function quoteCard(q) {
 function quoteList() { return quotes.length?quotes.map(quoteCard).join(''):'<div class="empty"><h3>Здесь пока пусто</h3><p>Создайте первое предложение, чтобы отправить клиенту точную стоимость.</p></div>'; }
 async function render() {
   if(!user)return;
+  const owner=user,section=tab,mine=++renderRevision;
+  const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   try {
-    if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant();return;}
+    if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
-    if(window.Workspace && await window.Workspace.render(tab))return;
+    const handled=window.Workspace && await window.Workspace.render(tab);
+    if(!active()||handled)return;
     if(tab==='dashboard'||tab==='quotes') {
       await loadQuotes();
+      if(!active())return;
       const counts={sent:quotes.filter(x=>x.status==='sent').length,accepted:quotes.filter(x=>x.status==='accepted').length};
       const stats=tab==='dashboard'?`<div class="stats"><div class="stat"><strong>${user.quote_count}</strong><span>Создано всего</span></div><div class="stat"><strong>${counts.sent}</strong><span>Ожидают ответа</span></div><div class="stat"><strong>${counts.accepted}</strong><span>Согласованы</span></div></div>`:'';
       view(header(tab==='dashboard'?'Обзор':'Предложения',`Здравствуйте, ${escapeHtml(user.name)}. Всё по текущим клиентам здесь.`, '<button class="btn primary" id="new-quote">+ Предложение</button>')+stats+`<section class="panel"><div class="toolbar"><h3>Ваши предложения</h3><input id="search" type="search" placeholder="Найти по названию или клиенту" aria-label="Поиск" class="search-input"></div><div id="quote-list">${quoteList()}</div><button class="btn small" id="next-page">Показать ещё</button></section>`);
@@ -51,6 +55,7 @@ async function render() {
       $('#quote-list').addEventListener('click',quoteAction);
     } else if(tab==='billing') {
       const billing=await api('/billing');
+      if(!active())return;
       const checkoutReady=billing.email_verified&&['test','live'].includes(billing.checkout_mode);
       const paymentNote=billing.checkout_mode==='off'?'Приём оплаты Про пока подключается.':!billing.email_verified?'Для оплаты подтвердите почту в профиле. Пока можно работать на бесплатном тарифе.':billing.checkout_mode==='test'?'Тестовая оплата: деньги не списываются.':'Оплата откроется на защищённой странице ЮKassa.';
       const planNames={pro_month:'Про · 31 день',pro_year:'Про · 366 дней'},paymentNames={pending:'Ожидает оплаты',succeeded:'Оплачено',canceled:'Отменено',refunded:'Возврат'};
@@ -68,7 +73,7 @@ async function render() {
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
     } else {tab='dashboard';return render()}
-  } catch(err) { view(`<div class="panel"><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn" id="retry">Повторить</button></div>`);$('#retry').onclick=render; }
+  } catch(err) { if(!active())return;view(`<div class="panel"><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn" id="retry">Повторить</button></div>`);$('#retry').onclick=render; }
 }
 window.render=render;
 function showNewQuote(){

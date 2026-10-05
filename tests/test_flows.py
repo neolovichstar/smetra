@@ -222,6 +222,8 @@ class FlowTests(unittest.TestCase):
                     "id": "provider-test-1",
                     "test": True,
                     "recipient": {"account_id": "test_shop"},
+                    "amount": payload["amount"],
+                    "metadata": payload["metadata"],
                     "confirmation": {
                         "confirmation_url": "https://pay.example.test/checkout"
                     },

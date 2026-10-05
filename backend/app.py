@@ -915,7 +915,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             data = self.body()
             plan = data.get("plan")
             key = self.headers.get("Idempotency-Key", "")
-            if plan not in PLANS or not 16 <= len(key) <= 100:
+            if not isinstance(plan, str) or plan not in PLANS or not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
                 raise ApiError(400, "Неверный тариф или ключ запроса")
             mode = yookassa_mode(user)
             if mode == "off":
@@ -942,14 +942,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "description": "Доступ Сметра Про на " + ("31 день" if plan == "pro_month" else "366 дней"),
                 "metadata": {"user_id": user["id"], "plan": plan},
             }
-            result = self.provider_call("/payments", "POST", request, key)
+            # YooKassa keys belong to the shop, rather than a browser/account,
+            # and must be at most 64 characters. Keep retries deterministic.
+            provider_key = hashlib.sha256(("checkout:v1:"+user["id"]+":"+key).encode()).hexdigest()
+            result = self.provider_call("/payments", "POST", request, provider_key)
             self.verify_yookassa_shop(result)
+            if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
+                raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
             if not result.get("id") or not result.get("confirmation", {}).get(
                 "confirmation_url", ""
             ).startswith("https://"):
                 raise ApiError(502, "Платежный сервис вернул неполный ответ")
-            con.execute(
-                "INSERT INTO payments(id,user_id,provider_id,plan,amount_kopecks,status,idempotency_key,confirmation_url,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            inserted = con.execute(
+                "INSERT INTO payments(id,user_id,provider_id,plan,amount_kopecks,status,idempotency_key,confirmation_url,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING RETURNING id",
                 (
                     uid(),
                     user["id"],
@@ -961,7 +966,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     result["confirmation"]["confirmation_url"],
                     now(),
                 ),
-            )
+            ).fetchone()
+            if not inserted:
+                previous = con.execute("SELECT * FROM payments WHERE user_id=? AND idempotency_key=?", (user["id"], key)).fetchone()
+                if not previous or previous["plan"] != plan or previous["provider_id"] != result["id"]:
+                    raise ApiError(409, "Ключ уже использован для другого платежа")
+                return self.send_json(200, {"url": previous["confirmation_url"], "status": previous["status"]})
             event(con, user["id"], "checkout_started")
             return self.send_json(
                 201,

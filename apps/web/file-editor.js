@@ -1,13 +1,17 @@
 /* Workspace Markdown notes use the same safe renderer as assistant replies. */
 window.SmetraFileEditor = (() => {
+  let generation=0;
   const html = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const encode = value => {const bytes=new TextEncoder().encode(value);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary)};
   async function open(file=null) {
+    const mine=++generation,owner=user,section=tab,workspaceId=sessionStorage.getItem('workspace_id');
+    const active=()=>mine===generation&&owner===user&&section===tab&&workspaceId===sessionStorage.getItem('workspace_id');
     let content='';let places=[];
     try {
       if(file){const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;const response=await fetch('/api/files/'+encodeURIComponent(file.id),{credentials:'same-origin',headers});if(!response.ok)throw Error('Не удалось открыть документ');content=await response.text()}
       else {const [projects,objects]=await Promise.all([api('/projects'),api('/construction/objects')]);places=[...projects.items.map(item=>['project_id',item.id,'Заказ · '+item.name]),...objects.items.map(item=>['construction_id',item.id,'Объект · '+item.name])]}
-    }catch(error){notify(error.message);return}
+    }catch(error){if(active())notify(error.message);return}
+    if(!active())return;
     view(`<div class="file-editor-top"><button type="button" id="file-editor-back">← Файлы</button><span>СМЕТРА / ДОКУМЕНТ</span></div><div class="topline"><div><h1>${file?'Редактировать заметку':'Новая заметка'}</h1><p class="muted">Markdown-документ внутри вашего рабочего пространства.</p></div></div>
       <form id="file-editor-form" class="file-editor-layout"><section class="file-editor-input"><div class="file-editor-fields"><label><span>Название</span><input name="name" maxlength="176" required value="${html(file?file.name.replace(/\.md$/i,''):'')}" ${file?'readonly':''} placeholder="Например, осмотр кухни"></label>${file?'':`<label><span>Сохранить в</span><select name="target" required>${places.length?places.map(item=>`<option value="${html(item[0]+':'+item[1])}">${html(item[2])}</option>`).join(''):'<option value="">Сначала создайте объект или заказ</option>'}</select></label>`}</div><label class="file-editor-text-label" for="file-editor-text">Текст</label><textarea id="file-editor-text" name="content" maxlength="500000" spellcheck="true" placeholder="# Осмотр\n\nЧто измерили и что осталось проверить…"></textarea><div class="file-editor-actions"><button class="btn primary" ${!file&&!places.length?'disabled':''}>Сохранить документ</button>${file?'<button class="btn ghost" type="button" id="file-editor-improve">Улучшить выделенное</button>':''}<span id="file-editor-status" role="status"></span></div></section><section class="file-editor-preview"><span class="overline">ПРЕДПРОСМОТР</span><div id="file-editor-render" class="assistant-markdown"></div>${file?'<div class="file-editor-history"><div class="file-editor-history-head"><span class="overline">ИСТОРИЯ ИЗМЕНЕНИЙ</span><button type="button" id="file-editor-history-refresh">Обновить</button></div><div id="file-editor-history-list" role="status">Загружаем…</div><div id="file-editor-history-preview" class="assistant-markdown" hidden></div><button type="button" class="btn ghost" id="file-editor-restore" hidden>Восстановить эту версию</button></div>':''}</section></form>`);
     const form=document.querySelector('#file-editor-form'),input=form.elements.content,preview=document.querySelector('#file-editor-render');input.value=content;

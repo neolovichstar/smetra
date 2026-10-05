@@ -26,6 +26,7 @@ jobs:
         run: |
           npm install --prefix data/dom --no-audit --no-fund jsdom@27.4.0
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_office_files.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_navigation_races.cjs
       - run: python scripts/build_web.py
       - uses: actions/upload-artifact@v4
         with:
