@@ -77,6 +77,7 @@
     const compact = document.body.classList.toggle('sidebar-compact');
     collapse.setAttribute('aria-expanded',String(!compact));
     collapse.setAttribute('aria-label',compact?'Развернуть меню':'Свернуть меню');
+    window.syncSidebarAccess?.();
   };
   if (sidebar) new MutationObserver(syncNavigation).observe(sidebar,{attributes:true,attributeFilter:['class'],subtree:true});
   syncNavigation();
