@@ -8,6 +8,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
  await new Promise(resolve=>setTimeout(resolve,0));
  const disclosure=doc.querySelector('#email-disclosure'),name=doc.querySelector('#name'),tabs=doc.querySelector('.auth-tabs');
  assert.ok(disclosure.classList.contains('hidden'));assert.equal(name.required,false);assert.match(doc.querySelector('#auth-copy').textContent,/доступный сервис/);
+ assert.equal(doc.querySelector('.auth-provider-divider span').textContent,'Продолжить через сервис');
  tabs.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.ok(!disclosure.classList.contains('hidden'));
  tabs.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.ok(disclosure.classList.contains('hidden'));
  let calls=0;w.api=async()=>{calls++;throw Error('Offline')};

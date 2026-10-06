@@ -115,6 +115,7 @@ if($('#auth')){
   const syncEmailActions=()=>{
     if(new URLSearchParams(location.search).has('reset')){$('#forgot').classList.add('hidden');$('#name').required=false;return;}
     const providerOnly=registering&&window.SmetraEmailSignupAvailable===false;
+    const divider=$('.auth-provider-divider span');if(divider)divider.textContent=providerOnly?'Продолжить через сервис':'или используйте российский сервис';
     $('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);
     $('#email-disclosure').classList.toggle('hidden',providerOnly);
     $('#name').required=registering&&!providerOnly;
