@@ -81,6 +81,11 @@ class RevenueTests(unittest.TestCase):
         old=self.account('old',revenue.now()-2*86400)
         revenue.referral(self.con,old,code)
         self.assertIsNone(self.con.execute('SELECT * FROM referral_rewards WHERE invitee_id=?',(old['id'],)).fetchone())
+        for index in range(11):
+            extra=self.account('friend-'+str(index))
+            revenue.referral(self.con,extra,code)
+            revenue.activate(self.con,extra['id'],'estimate_created','quote-extra-'+str(index))
+        self.assertEqual(revenue.referral_bonus(self.con,self.user['id'],__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%Y-%m')),30)
 
     def test_mature_cohorts_unknown_costs_and_conversion_denominators(self):
         old=self.account('retained',revenue.now()-8*86400)

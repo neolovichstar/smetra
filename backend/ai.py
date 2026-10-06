@@ -248,12 +248,14 @@ def _draft(service, data):
                 raise ValueError("invalid unit price")
             # Allow an unknown zero price in the unsaved AI draft; regular save still validates the final total.
             calculate([{**item, "unit_price": item.get("unit_price") or 1}])
-        usage = result.get("usage", {})
+        usage = result.get("usage")
+        known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in ('prompt_tokens','completion_tokens'))
         service.con.execute(
-            "UPDATE ai_usage SET status='succeeded',input_tokens=?,output_tokens=? WHERE id=?",
+            "UPDATE ai_usage SET status=?,input_tokens=?,output_tokens=? WHERE id=?",
             (
-                int(usage.get("prompt_tokens", 0)),
-                int(usage.get("completion_tokens", 0)),
+                'succeeded' if known else 'usage_unknown',
+                usage['prompt_tokens'] if known else 0,
+                usage['completion_tokens'] if known else 0,
                 usage_id,
             ),
         )

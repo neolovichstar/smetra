@@ -185,7 +185,7 @@ def dashboard(con):
         row = con.execute('''SELECT count(*) AS eligible,
             coalesce(sum(CASE WHEN EXISTS(SELECT 1 FROM growth_events e WHERE e.user_id=u.id AND e.name='product_visit' AND e.created_at>=(u.created_at/86400)*86400+? AND e.created_at<(u.created_at/86400)*86400+?) THEN 1 ELSE 0 END),0) AS retained,
             coalesce(sum(CASE WHEN EXISTS(SELECT 1 FROM growth_events e WHERE e.user_id=u.id AND e.name='payment_success' AND e.created_at>=u.created_at AND e.created_at<u.created_at+?) THEN 1 ELSE 0 END),0) AS paid
-            FROM users u WHERE u.deleted_at IS NULL AND u.created_at>=? AND u.created_at<=?''', (day*86400,(day+1)*86400,day*86400,t-90*86400,t-(day+1)*86400)).fetchone()
+            FROM users u WHERE u.deleted_at IS NULL AND u.created_at>=? AND u.created_at/86400+?<?''', (day*86400,(day+1)*86400,day*86400,t-90*86400,day,t//86400)).fetchone()
         cohorts.append({'day':day, **dict(row), 'retention_pct':pct(row['retained'],row['eligible']), 'paid_pct':pct(row['paid'],row['eligible'])})
     # Daily signup cohorts use mature denominators; future days stay NULL, never fake zero.
     day_fields=[]
@@ -195,7 +195,7 @@ def dashboard(con):
             f"sum(CASE WHEN {mature} AND EXISTS(SELECT 1 FROM growth_events e WHERE e.user_id=u.id AND e.name='product_visit' AND e.created_at/86400=u.created_at/86400+{day}) THEN 1 ELSE 0 END) AS retained_d{day}",
             f"sum(CASE WHEN {mature} AND EXISTS(SELECT 1 FROM growth_events e WHERE e.user_id=u.id AND e.name='payment_success' AND e.created_at>=u.created_at AND e.created_at<u.created_at+{day*86400}) THEN 1 ELSE 0 END) AS paid_d{day}"))
     daily = [dict(r) for r in con.execute('''SELECT u.created_at/86400 AS signup_day,count(*) AS signups,
-        sum(CASE WHEN EXISTS(SELECT 1 FROM growth_events e WHERE e.user_id=u.id AND e.name='activated' AND e.created_at<u.created_at+86400) THEN 1 ELSE 0 END) AS activation_d0
+        sum(CASE WHEN EXISTS(SELECT 1 FROM growth_events e WHERE e.user_id=u.id AND e.name='activated' AND e.created_at/86400=u.created_at/86400) THEN 1 ELSE 0 END) AS activation_d0
         ,'''+','.join(day_fields)+''' FROM users u WHERE u.deleted_at IS NULL AND u.created_at>=? GROUP BY u.created_at/86400 ORDER BY signup_day DESC''', (t-35*86400,))]
     for cohort in daily:
         for day in (1,7,30):
