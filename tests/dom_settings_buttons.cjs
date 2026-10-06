@@ -10,6 +10,7 @@ function setup(saved){
  const source=fs.readFileSync('apps/web/app.js','utf8');w.load(source.slice(0,source.indexOf("if($('#auth')){")));
  w.eval("user={id:'qa',name:'QA',email:'qa@example.test',role:'user',email_verified:true,quote_count:0,plan:'free'};tab='settings'");
  w.Workspace={render:async()=>false,reset(){}};w.api=async()=>({});
+ w.load(fs.readFileSync('apps/web/growth.js','utf8'));
  return {w,doc,close:()=>dom.window.close()};
 }
 (async()=>{
@@ -33,7 +34,7 @@ function setup(saved){
   w.eval("tab='support'");await w.render();let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};doc.querySelector('#message').value='Help me';const form=doc.querySelector('#support-form');form.requestSubmit();form.requestSubmit();assert.equal(calls,1);reject(Error('Offline'));await tick();assert.equal(doc.querySelector('#message').value,'Help me');assert.equal(form.querySelector('button').disabled,false);
  });
  await test('billing status refresh prevents duplicate calls and never grants unpaid Pro',async({w,doc})=>{
-  const billing={email_verified:true,checkout_mode:'off',payments:[]};w.api=async()=>billing;w.eval("tab='billing'");await w.render();let resolve,calls=0;w.api=path=>path==='/billing'?Promise.resolve(billing):(calls++,new Promise(yes=>resolve=yes));const button=doc.querySelector('#sync');button.click();button.click();assert.equal(calls,1);resolve({user:{id:'qa',name:'QA',role:'user',plan:'free',quote_count:0,email_verified:true}});await tick();assert.match(doc.querySelector('#toast').textContent,/Старт/);
+  const billing={email_verified:true,checkout_mode:'off',payments:[],pricing:{plans:{pro_month:{amount_kopecks:49000},pro_year:{amount_kopecks:490000}},annual_saving_kopecks:98000,limits:{free_quotes:10,pro_quotes:10000,pro_ai:100}}};w.api=async path=>path==='/billing'?billing:{};w.eval("tab='billing'");await w.render();let resolve,calls=0;w.api=path=>path==='/billing'?Promise.resolve(billing):path==='/billing/sync'?(calls++,new Promise(yes=>resolve=yes)):Promise.resolve({});const button=doc.querySelector('#sync');button.click();button.click();assert.equal(calls,1);resolve({user:{id:'qa',name:'QA',role:'user',plan:'free',quote_count:0,email_verified:true}});await tick();assert.match(doc.querySelector('#toast').textContent,/Старт/);
  });
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exit(1)});
