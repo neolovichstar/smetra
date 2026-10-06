@@ -77,3 +77,24 @@ class ProfileMemoryTests(unittest.TestCase):
         with patch.dict(os.environ, OPENROUTER_API_KEY='test-only'), patch('backend.assistant.query_model', side_effect=[response, {'content': 'Не удалось сохранить'}]):
             self.assertEqual(self.call('/assistant/chat', 'POST', {'text': 'Привет'}, owner)[0], 200)
         self.assertEqual(self.call('/assistant/memory', token=owner)[1]['items'], [])
+
+    def test_search_then_remember_confirms_saved_fact_within_tool_budget(self):
+        import json
+
+        owner, _ = self.account('searched-memory')
+        self.call('/profile', 'PATCH', {'response_style': 'detailed'}, owner)
+        prompt = 'Я работаю архитектором'
+        def tool(name, args):
+            return {'tool_calls': [{'id': name, 'type': 'function', 'function': {
+                'name': name, 'arguments': json.dumps(args)}}]}
+        responses = [tool('search_knowledge', {'query': 'архитектор'}),
+                     tool('remember_knowledge', {'title': 'Работа', 'content': 'Архитектор', 'evidence': prompt})]
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-only'), patch('backend.assistant.query_model', side_effect=responses) as provider:
+            status, answer = self.call('/assistant/chat', 'POST', {'text': prompt}, owner)
+            system = provider.call_args.args[0][0]['content']
+            self.assertIn('detailed — подробно', system)
+            self.assertNotIn('Пиши кратко по-русски', system)
+        self.assertEqual(status, 200, answer)
+        self.assertEqual(answer['answer'], 'Запомнил. Буду учитывать это в дальнейших ответах.')
+        self.assertEqual(answer['actions'], [])
+        self.assertEqual(len(self.call('/assistant/memory', token=owner)[1]['items']), 1)
