@@ -5,9 +5,10 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   const tabs=await(await fetch('http://127.0.0.1:'+(process.env.SMETRA_CDP_PORT||'9223')+'/json')).json();
   const ws=new WebSocket(tabs.find(tab=>tab.type==='page').webSocketDebuggerUrl);
   await new Promise(resolve=>ws.addEventListener('open',resolve,{once:true}));
-  let seq=0;const pending=new Map(),errors=[];
+  let seq=0;const pending=new Map(),errors=[],assetFailures=[],requested=new Set();
   ws.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.id){const request=pending.get(data.id);pending.delete(data.id);data.error?request.reject(data.error):request.resolve(data.result)}else if(data.method==='Runtime.exceptionThrown')errors.push(data.params.exceptionDetails.text)});
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))});
+  ws.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.method==='Network.requestWillBeSent')requested.add(new URL(data.params.request.url).pathname);if(data.method==='Network.responseReceived'&&data.params.response.status>=400){const response=data.params.response;if(/\.(js|css|woff2?|ttf|png|svg|webmanifest)$/.test(new URL(response.url).pathname))assetFailures.push(response.status+' '+response.url)}});
   const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,userGesture:true});if(result.exceptionDetails)throw Error(JSON.stringify(result.exceptionDetails));return result.result.value};
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   const until=async expression=>{for(let attempt=0;attempt<100;attempt++){if(await evaluate(expression))return;await wait(100)}throw Error('Timeout: '+expression)};
@@ -17,6 +18,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await until("document.querySelector('#auth-form')?.onsubmit");
   await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
   await until("document.querySelector('.workspace-home')");
+  for(const file of ['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js'])assert.equal(requested.has('/'+file),false,'Initial screen should defer '+file);
   const testTask=await evaluate("api('/tasks',{method:'POST',body:JSON.stringify({name:'Mobile deadline check',due_date:'2026-10-06'})}).then(result=>result.item)");
   fs.mkdirSync('data/qa',{recursive:true});
   const routes=['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','billing','support','profile','settings','activity'];
@@ -55,5 +57,5 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
       assert.equal(await evaluate("document.querySelector('#message').value.length>0"),true);
     }
   }
-  assert.deepEqual(errors,[]);console.log('PASS: '+routes.length+' routes at 320/390/768/1440px; contact directory, task groups, calendar, support topics; no overflow or browser errors');ws.close();
+  assert.deepEqual(errors,[]);assert.deepEqual(assetFailures,[]);console.log('PASS: '+routes.length+' routes at 320/360/375/390/412/430/768/1440px; initial scripts deferred; contact directory, task groups, calendar, support topics; no overflow, missing assets or browser errors');ws.close();
 })().catch(error=>{console.error(error);process.exit(1)});

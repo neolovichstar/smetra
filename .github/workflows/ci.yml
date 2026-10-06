@@ -105,6 +105,7 @@ jobs:
             data/*.log
             data/office-*.png
             data/assistant-studio-*.png
+            data/qa/section-*.png
   android:
     runs-on: ubuntu-latest
     steps:
