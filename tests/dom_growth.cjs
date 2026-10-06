@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
+(async()=>{
+ const dom=new JSDOM('<div id="content"></div>',{url:'https://example.test/app#billing',runScripts:'dangerously'}),w=dom.window;
+ w.user={id:'owner',plan:'free',quote_count:0,entitlement_until:0};w.tab='billing';w.escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));w.rub=n=>(n/100).toFixed(2)+' ₽';w.date=()=> 'date';w.notify=()=>{};w.render=()=>{};w.view=html=>w.document.querySelector('#content').innerHTML=html;
+ let draft;w.Workspace={editor:value=>{draft=value}};
+ const calls=[];let hold,mode='off';const payments=[];
+ const pricing={experiment:'test',variant:'499',plans:{pro_month:{amount_kopecks:49900},pro_year:{amount_kopecks:399000}},annual_saving_kopecks:199800,limits:{free_quotes:10,pro_quotes:10000,pro_ai:100}};
+ w.api=async(path,options={})=>{calls.push({path,options});if(path==='/billing')return {pricing,email_verified:true,checkout_mode:mode,payments};if(path==='/workspace')return {workspace:{owner_id:'owner',settings:{}}};if(path==='/billing/referral')return {code:'safe-code'};if(path==='/billing/checkout')return new Promise((resolve,reject)=>hold={resolve,reject});return {ok:true}};
+ w.crypto.randomUUID=()=> 'idempotent-checkout-key';w.navigator.clipboard={writeText:async()=>{}};
+ w.eval(fs.readFileSync('apps/web/growth.js','utf8'));
+ await w.SmetraGrowth.billing(()=>true);
+ assert.equal(w.document.querySelector('#upgrade-checkout').disabled,true,'Unavailable shop cannot start checkout');
+ assert.ok(w.document.querySelector('#offer-price').textContent.includes('499.00'));
+ w.document.querySelector('[data-period=pro_year]').click();assert.ok(w.document.querySelector('#offer-price').textContent.includes('3990.00'));assert.ok(w.document.querySelector('#offer-saving').textContent.includes('1998.00'));
+ mode='live';await w.SmetraGrowth.billing(()=>true);w.document.querySelector('#upgrade-checkout').click();await new Promise(r=>setTimeout(r,0));assert.ok(hold);const key=calls.find(c=>c.path==='/billing/checkout').options.headers['Idempotency-Key'];hold.reject(new Error('Retry checkout'));await new Promise(r=>setTimeout(r,0));assert.ok(w.document.querySelector('#checkout-error').textContent.includes('Retry checkout'));
+ w.document.querySelector('#upgrade-checkout').click();await new Promise(r=>setTimeout(r,0));assert.equal(calls.filter(c=>c.path==='/billing/checkout').at(-1).options.headers['Idempotency-Key'],key,'Retry retains original checkout');hold.reject(Object.assign(new Error('Changed mode'),{status:409}));await new Promise(r=>setTimeout(r,0));assert.equal(w.sessionStorage.getItem('smetra.checkout.owner.pro_month'),null,'Confirmed conflict permits a fresh attempt');
+ w.SmetraGrowth.start('estimate');w.document.querySelector('[data-starter=repair]').click();assert.equal(draft.items.length,3);assert.ok(draft.items.every(item=>item.unit_price===0),'Starter must not invent market prices');assert.equal(draft.id,undefined,'Selecting a starter does not save or activate a quote');
+ w.view('<div id="work"><input value="draft"></div>');await w.SmetraGrowth.paywall('ai_limit');const notice=w.document.querySelector('.contextual-upgrade');assert.ok(notice);notice.querySelector('.icon-button').click();await w.SmetraGrowth.paywall('ai_limit');assert.equal(w.document.querySelector('.contextual-upgrade'),null,'No repeated interruption during cooldown');assert.ok(w.document.querySelector('#work input'),'Paywall preserves working content');
+ dom.window.close();console.log('PASS: server pricing/year savings, unavailable checkout, durable retry/conflict, honest starters and contextual paywall cooldown/draft preservation');
+})().catch(error=>{console.error(error);process.exit(1)});

@@ -62,5 +62,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
       assert.equal(await evaluate("document.querySelector('#message').value.length>0"),true);
     }
   }
+  if(await evaluate("user.role==='admin'")){
+    await evaluate("tab='admin';render()");await until("document.querySelector('[data-admin-section=revenue]')");
+    await evaluate("document.querySelector('[data-admin-section=revenue]').click()");await until("document.querySelector('.admin-revenue-metrics')");
+    for(const width of [320,390,1440]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});await wait(200);assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Revenue overflow '+width)}
+    fs.writeFileSync('data/qa/section-revenue-1440.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
+  }
   assert.deepEqual(errors,[]);assert.deepEqual(assetFailures,[]);console.log('PASS: '+routes.length+' routes at 320/360/375/390/412/430/768/1440px; initial scripts deferred; contact directory, task groups, calendar, support topics; no overflow, missing assets or browser errors');ws.close();
 })().catch(error=>{console.error(error);process.exit(1)});

@@ -25,6 +25,7 @@
       </div>
       <nav class="admin-tabs" aria-label="Разделы администрирования">
         <button data-admin-section="users" type="button">Пользователи</button>
+        <button data-admin-section="revenue" type="button">Выручка и активация</button>
         <button data-admin-section="support" type="button">Поддержка <span>${count(state.overview.tickets.filter(t=>t.status==='open').length)}</span></button>
         <button data-admin-section="payments" type="button">Платежи</button>
         <button data-admin-section="audit" type="button">Журнал</button>
@@ -103,11 +104,31 @@
       button.classList.toggle('active',active);
       button.setAttribute('aria-current',active?'page':'false');
     });
+    if(state.section==='revenue'){
+      target.innerHTML='<p class="admin-loading">Считаем подтверждённые оплаты и воронку…</p>';
+      const owner=user,current=++state.request;
+      api('/admin/revenue').then(data=>{if(user!==owner||tab!=='admin'||state.section!=='revenue'||current!==state.request)return;target.innerHTML=revenueSection(data)}).catch(error=>{if(user===owner&&state.section==='revenue'&&current===state.request)target.innerHTML=`<p class="admin-error">${label(error.message)}</p>`});return;
+    }
     target.innerHTML = ({users:usersSection,support:supportSection,payments:paymentsSection,audit:auditSection})[state.section]();
     if (state.section==='users') {
       document.querySelector('#admin-user-filter').value = state.status;
       loadUsers();
     }
+  }
+
+  function revenueSection(data){
+    const percentage=value=>value===null||value===undefined?'—':count(value)+'%';
+    const money=value=>value===null||value===undefined?'—':rub(value);
+    const metrics=[['Сегодня',money(data.revenue_today)],['7 дней',money(data.revenue_7d)],['30 дней',money(data.revenue_30d)],['MRR эквивалент',money(data.mrr_kopecks)],['ARR эквивалент',money(data.arr_kopecks)],['Платящий Про',count(data.paid_users)],['Бесплатный доступ',count(data.free_users)],['Free → Paid',percentage(data.free_to_paid_pct)],['ARPU · 30 дней',money(data.arpu_kopecks)],['ARPPU · 30 дней',money(data.arppu_kopecks)],['Успех завершённых оплат',percentage(data.payment_success_pct)],['Checkout → оплата',percentage(data.checkout_conversion_pct)],['Paywall → оплата',percentage(data.paywall_conversion_pct)],['Новые подписки · 30 дней',count(data.funnel.subscription_started)],['Продления · 30 дней',count(data.funnel.subscription_renewed)],['Истёкшие подписки',count(data.expired_subscriptions)],['Отток доступа · 30 дней',percentage(data.churn_pct)],['LTV',money(data.ltv_kopecks)]];
+    const eventNames={activated:'Активация',estimate_created:'Полезная смета',estimate_shared:'Отправка клиенту',estimate_approved:'Согласование',product_visit:'Вернулись к работе',paywall_viewed:'Просмотр Про',upgrade_clicked:'Выбор Про',checkout_started:'Начало оплаты',payment_success:'Подтверждённая оплата',checkout_cancelled:'Отмена оплаты',checkout_failed:'Ошибка checkout'};
+    const sources={ai_limit:'Ассистент',quote_limit:'Лимит смет',project_limit:'Проекты',pdf_export:'PDF',file_analysis:'Файлы',documents:'Документы',pricing_page:'Страница Про',settings:'Настройки',other:'Другие'};
+    return `<div class="admin-section-head"><div><span class="admin-section-index">ВЫРУЧКА / УДЕРЖАНИЕ</span><h2>Результат реальной работы</h2><p>Тестовые платежи и выданный вручную доступ не считаются выручкой.</p></div><time>${time(data.as_of)}</time></div><div class="admin-revenue-metrics">${metrics.map(([name,value])=>`<div><span>${name}</span><strong>${value}</strong></div>`).join('')}</div>
+      <p class="admin-footnote">MRR и ARR — эквивалент активного оплаченного доступа, не обещание будущих списаний: автопродления нет. «—» означает отсутствие данных или неприменимую метрику. ARPU считается по пользователям, работавшим за 30 дней. Старые платежи без проверенного режима магазина выделены отдельно: ${count(data.unclassified_payments)}.</p>
+      <h3>Воронка · 30 дней</h3><div class="admin-growth-funnel">${Object.entries(eventNames).map(([name,title])=>`<div><span>${title}</span><strong>${count(data.funnel[name])}</strong></div>`).join('')}</div><p class="admin-footnote">Уникальные пользователи каждого события. Регистрация сама по себе не считается активацией. Регистрация → смета: ${percentage(data.signup_to_estimate_pct)} · смета → отправка: ${percentage(data.estimate_to_share_pct)} · отправка → согласование: ${percentage(data.share_to_approval_pct)}.</p><p class="admin-footnote">Первая смета: ${data.first_estimate.mean_seconds===null?'нет данных':count(data.first_estimate.mean_seconds)+' сек. в среднем'} · успели за 3 минуты: ${percentage(data.first_estimate.under_3m_pct)}.</p>
+      <h3>Удержание и оплата когорт</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>День</th><th>Созревшая когорта</th><th>Вернулись</th><th>Free → Paid</th></tr></thead><tbody>${data.cohorts.map(c=>`<tr><td>D${c.day}</td><td>${count(c.eligible)}</td><td>${percentage(c.retention_pct)}</td><td>${percentage(c.paid_pct)}</td></tr>`).join('')}</tbody></table></div>
+      <h3>Дата регистрации → результат первого дня</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Регистрация · UTC</th><th>Пользователи</th><th>Активация D0</th><th>D1</th><th>Оплата 1 д.</th><th>D7</th><th>Оплата 7 д.</th><th>D30</th><th>Оплата 30 д.</th></tr></thead><tbody>${data.signup_cohorts.map(c=>`<tr><td>${time(c.signup_day*86400)}</td><td>${count(c.signups)}</td><td>${count(c.activation_d0)}</td>${[1,7,30].map(day=>`<td>${percentage(c["retention_d"+day])}</td><td>${percentage(c["paid_pct_d"+day])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <h3>Что приводит к оплате</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Источник</th><th>Ценовая когорта</th><th>Просмотры Про</th><th>Начало оплаты</th><th>Оплаты</th><th>Выручка</th></tr></thead><tbody>${data.sources.map(c=>`<tr><td>${label(sources[c.source]||c.source)}</td><td>${label(c.variant)}</td><td>${count(c.views||0)}</td><td>${count(c.checkouts)}</td><td>${count(c.paid)}</td><td>${rub(c.revenue_kopecks)}</td></tr>`).join('')}</tbody></table></div>
+      <h3>Экономика · 30 дней</h3><div class="admin-growth-funnel">${[['Выручка',data.economics.revenue_kopecks],['AI',data.economics.ai_cost_kopecks],['Комиссии',data.economics.payment_fees_kopecks],['Инфраструктура',data.economics.infrastructure_kopecks],['Хранение',data.economics.storage_kopecks],['Расчётный остаток',data.economics.gross_margin_kopecks]].map(([name,value])=>`<div><span>${name}</span><strong>${data.economics.costs_configured?money(value):name==='Выручка'?money(value):'—'}</strong></div>`).join('')}</div><p class="admin-footnote">${data.economics.costs_configured?'Расходы рассчитаны по заданным оператором ставкам. Это оценка, а не бухгалтерский отчёт.':'Для расчёта прибыли задайте ставки AI, комиссии, хранение и инфраструктуру в серверных переменных. Нулевой тариф API не означает отсутствие остальных расходов.'}</p><h3>Экономика пользователей</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Пользователь</th><th>Выручка</th><th>AI</th><th>Комиссии</th></tr></thead><tbody>${data.unit_users.map(p=>`<tr><td>${label(p.name||p.id)}</td><td>${money(p.revenue_kopecks)}</td><td>${data.economics.costs_configured?money(p.ai_cost_kopecks):'—'}</td><td>${data.economics.costs_configured?money(p.payment_fees_kopecks):'—'}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function manage(id) {

@@ -150,7 +150,7 @@ def _draft(service, data):
     usage_id = identity()
     with transaction(service.con):
         used = service.con.execute(
-            "SELECT count(*) FROM ai_usage WHERE user_id=? AND created_at>?",
+            "SELECT count(*) FROM ai_usage WHERE user_id=? AND action='estimate_draft' AND created_at>?",
             (service.user["id"], stamp() - 86400),
         ).fetchone()[0]
         if used >= 20:

@@ -201,7 +201,8 @@ def pdf(document):
         canvas.saveState()
         canvas.setFont("Smetra", 8)
         canvas.setFillColor(colors.HexColor("#7b8797"))
-        canvas.drawString(44, 28, "Сметра · " + document["template"])
+        if not data.get('hide_branding'):
+            canvas.drawString(44, 28, "Сделано в Сметре · smetra.vercel.app")
         canvas.drawRightString(551, 28, str(pdfdoc.page))
         canvas.restoreState()
 
@@ -260,6 +261,8 @@ def prepare_document(service, data):
         company_details=settings.get("company_details", ""),
         document_footer=settings.get("document_footer", ""),
     )
+    owner=con.execute('SELECT entitlement_until FROM users WHERE id=?',(workspace['owner_id'],)).fetchone()
+    snapshot['hide_branding']=settings.get('hide_branding') is True and owner['entitlement_until']>stamp()
     project = con.execute(
         "SELECT * FROM projects WHERE quote_id=? AND workspace_id=?",
         (row["id"], service.wid),

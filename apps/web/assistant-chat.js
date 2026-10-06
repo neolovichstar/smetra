@@ -189,6 +189,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     quotaLabel.textContent=`Осталось ${value.remaining} из ${value.limit} · ${value.plan==='free'?'Старт':'Про'}`;
     quotaLabel.title=`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
     upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
+    if(value.remaining<1&&value.plan!=='pro'){upgrade.onclick=()=>sessionStorage.setItem('smetra.paywall.source','ai_limit');Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
     const blocked=working||fileBlocking||!data.available||value.remaining<1;
     send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
     backgroundButton.disabled=blocked||!backgroundEnabled;

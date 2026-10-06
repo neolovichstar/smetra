@@ -21,10 +21,11 @@ from pathlib import Path
 from email.message import EmailMessage
 
 try:
-    from backend import business, mytracker
+    from backend import business, mytracker, revenue
 except ModuleNotFoundError:
     import business
     import mytracker
+    import revenue
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
@@ -83,7 +84,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=27"
+                "SELECT version FROM schema_migrations WHERE version=28"
             ).fetchone()
             if not version:
                 raise RuntimeError(
@@ -528,6 +529,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/workspace.js"] = ("workspace.js", "text/javascript")
         public["/admin.js"] = ("admin.js", "text/javascript")
         public["/admin.css"] = ("admin.css", "text/css")
+        public["/growth.js"] = ("growth.js", "text/javascript")
         for name in (
             "reference-hero",
             "reference-sphere",
@@ -600,6 +602,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def api(self, method, path, query, con):
+        if path == '/api/billing/pricing' and method == 'GET':
+            experiment,variants=revenue.configuration()
+            cheapest=min(variants.values(),key=lambda v:v['month'])
+            return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment})
         if path == "/api/cron/assistant" and method == "GET":
             from backend.assistant_jobs import run_one
 
@@ -670,6 +676,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     ),
                 )
                 event(con, user_id, "signup_completed")
+                revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
             except sqlite3.IntegrityError:
                 raise ApiError(409, "Такая почта уже зарегистрирована")
             if os.getenv("SMTP_HOST"):
@@ -816,7 +823,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
         if path == "/api/me" and method == "GET":
+            revenue.visit(con, user)
             return self.send_json(200, {"user": user_view(user, con)})
+        if path == "/api/admin/revenue" and method == "GET":
+            return self.send_json(200, revenue.dashboard(con))
+        if path == "/api/billing/events" and method == "POST":
+            self.throttle('growth:'+user['id'], 60, 3600)
+            data = self.body()
+            if data.get('name') not in revenue.CLIENT_EVENTS:
+                raise ApiError(400, 'Неизвестное событие')
+            offer = revenue.pricing(con, user)
+            origin = revenue.source(data.get('source'))
+            revenue.record(con, user['id'], data['name'], origin, offer['experiment']+':'+offer['variant'],
+                           ':'.join((data['name'],user['id'],origin,str(now()//1800))))
+            return self.send_json(200, {'ok': True})
+        if path == "/api/billing/referral" and method in ('GET','POST'):
+            self.throttle('referral:'+user['id'], 20, 3600)
+            data = self.body() if method == 'POST' else {}
+            code = data.get('code')
+            if code is not None and (not isinstance(code,str) or len(code)>80):
+                raise ApiError(400,'Неверный код приглашения')
+            return self.send_json(200, revenue.referral(con,user,code))
         if path == "/api/profile":
             from backend.profile_memory import profile_route
 
@@ -875,6 +902,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
                 con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
                 con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
+                con.execute("DELETE FROM pricing_assignments WHERE user_id=?", (user['id'],))
+                con.execute("DELETE FROM referral_rewards WHERE inviter_id=? OR invitee_id=?", (user['id'],user['id']))
+                con.execute("DELETE FROM referral_links WHERE user_id=?", (user['id'],))
+                con.execute("UPDATE growth_events SET user_id=NULL WHERE user_id=?", (user['id'],))
                 con.execute(
                     "UPDATE events SET user_id=NULL WHERE user_id=?", (user["id"],)
                 )
@@ -913,8 +944,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             return self.send_json(201, {"ok": True})
         if path == "/api/billing" and method == "GET":
+            offer=revenue.pricing(con,user)
             payments = con.execute(
-                """SELECT p.id,p.plan,p.amount_kopecks,p.created_at,
+                """SELECT p.id,p.plan,p.amount_kopecks,p.created_at,p.confirmation_url,
                 CASE WHEN EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                 THEN 'refunded' ELSE p.status END AS status
                 FROM payments p WHERE p.user_id=? ORDER BY p.created_at DESC LIMIT 30""",
@@ -924,7 +956,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 200,
                 {
                     "payments": [dict(r) for r in payments],
-                    "plans": {k: v[0] for k, v in PLANS.items()},
+                    "plans": {k: v['amount_kopecks'] for k, v in offer['plans'].items()},
+                    "pricing": offer,
                     "checkout_mode": yookassa_mode(user),
                     "email_verified": user["email_verified_at"] is not None,
                 },
@@ -947,11 +980,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if previous:
                 if previous["plan"] != plan:
                     raise ApiError(409, "Ключ уже использован для другого тарифа")
+                captured = con.execute('SELECT is_test FROM billing_intents WHERE payment_id=?', (previous['id'],)).fetchone()
+                if captured and captured['is_test'] != int(mode == 'test'):
+                    raise ApiError(409, "Режим магазина изменился. Начните новую оплату.")
                 return self.send_json(
                     200,
                     {"url": previous["confirmation_url"], "status": previous["status"]},
                 )
-            amount = PLANS[plan][0]
+            try:
+                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test')
+            except ValueError:
+                raise ApiError(409,'Условия оплаты изменились. Обновите страницу тарифа.') from None
+            amount = intent['amount_kopecks']
             request = {
                 "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
                 "capture": True,
@@ -959,13 +999,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "type": "redirect",
                     "return_url": ORIGIN + "/app?payment=return",
                 },
-                "description": "Доступ Сметра Про на " + ("31 день" if plan == "pro_month" else "366 дней"),
+                "description": "Доступ Сметра Про на " + str(intent['duration_days']) + " дней",
                 "metadata": {"user_id": user["id"], "plan": plan},
             }
             # YooKassa keys belong to the shop, rather than a browser/account,
             # and must be at most 64 characters. Keep retries deterministic.
             provider_key = hashlib.sha256(("checkout:v1:"+user["id"]+":"+key).encode()).hexdigest()
-            result = self.provider_call("/payments", "POST", request, provider_key)
+            try:
+                result = self.provider_call("/payments", "POST", request, provider_key)
+            except ApiError:
+                revenue.record(con,user['id'],'checkout_failed',intent['source'],intent['variant'],'checkout-failed:'+intent['id'])
+                raise
             self.verify_yookassa_shop(result)
             if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
                 raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
@@ -973,33 +1017,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "confirmation_url", ""
             ).startswith("https://"):
                 raise ApiError(502, "Платежный сервис вернул неполный ответ")
-            inserted = con.execute(
-                "INSERT INTO payments(id,user_id,provider_id,plan,amount_kopecks,status,idempotency_key,confirmation_url,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING RETURNING id",
-                (
-                    uid(),
-                    user["id"],
-                    result["id"],
-                    plan,
-                    amount,
-                    "pending",
-                    key,
-                    result["confirmation"]["confirmation_url"],
-                    now(),
-                ),
-            ).fetchone()
-            if not inserted:
-                previous = con.execute("SELECT * FROM payments WHERE user_id=? AND idempotency_key=?", (user["id"], key)).fetchone()
-                if not previous or previous["plan"] != plan or previous["provider_id"] != result["id"]:
-                    raise ApiError(409, "Ключ уже использован для другого платежа")
-                return self.send_json(200, {"url": previous["confirmation_url"], "status": previous["status"]})
-            event(con, user["id"], "checkout_started")
-            return self.send_json(
-                201,
-                {
-                    "url": result["confirmation"]["confirmation_url"],
-                    "status": "pending",
-                },
-            )
+            try:
+                saved, created = revenue.persist_checkout(con,user,key,plan,intent,result)
+            except ValueError:
+                raise ApiError(409,"Conflicting checkout") from None
+            return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"]})
         if path == "/api/billing/sync" and method == "POST":
             self.throttle("sync:" + user["id"], 5, 60)
             rows = con.execute(
@@ -1013,7 +1035,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             current = con.execute(
                 "SELECT * FROM users WHERE id=?", (user["id"],)
             ).fetchone()
-            return self.send_json(200, {"user": user_view(current, con)})
+            return self.send_json(200, {"user": user_view(current, con),"payments":[dict(r) for r in con.execute('SELECT id,status FROM payments WHERE user_id=? ORDER BY created_at DESC LIMIT 3',(user['id'],))]})
         if path == "/api/admin/overview" and method == "GET":
             stats = {
                 key: con.execute(sql).fetchone()[0]
@@ -1021,7 +1043,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "users": "SELECT count(*) FROM users WHERE deleted_at IS NULL",
                     "quotes": "SELECT count(*) FROM quotes",
                     "subscriptions": "SELECT count(*) FROM users WHERE entitlement_until > unixepoch() AND deleted_at IS NULL",
-                    "revenue_kopecks": "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p WHERE p.status='succeeded' AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')",
+                    "revenue_kopecks": "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id WHERE b.is_test=0 AND p.status='succeeded' AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')",
                 }.items()
             }
             users = [
@@ -1169,6 +1191,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ),
         )
         row = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        revenue.visit(con,row)
         payload = {"user": user_view(row, con)}
         # Browsers use the HttpOnly cookie; only native/API clients need a
         # bearer token in JSON. Browser JavaScript cannot override Origin.
@@ -1247,16 +1270,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (status, status, now(), local["id"]),
                     )
                     if status == "succeeded":
+                        terms = con.execute('SELECT duration_days FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
+                        prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
                         con.execute(
                             "UPDATE users SET entitlement_until=max(coalesce(entitlement_until,0),?)+?,plan=? WHERE id=?",
                             (
                                 now(),
-                                PLANS[local["plan"]][1] * 86400,
+                                (terms['duration_days'] if terms else PLANS[local["plan"]][1]) * 86400,
                                 "pro",
                                 local["user_id"],
                             ),
                         )
                         newly_succeeded = True
+                    if status in ('succeeded','canceled'):
+                        revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
                 con.execute("COMMIT")
@@ -1315,7 +1342,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     )
                     # Rebuild remaining paid time without the refunded grant.
                     grants = con.execute(
-                        """SELECT p.plan,p.activated_at FROM payments p
+                        """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
                         WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
                         AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                         ORDER BY p.activated_at,p.created_at,p.id""",
@@ -1325,7 +1352,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     for grant in grants:
                         until = (
                             max(until, grant["activated_at"])
-                            + PLANS[grant["plan"]][1] * 86400
+                            + (grant['duration_days'] or PLANS[grant["plan"]][1]) * 86400
                         )
                         plan = "pro"
                     con.execute(
@@ -1333,6 +1360,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
                     event(con, payment["user_id"], "payment_refunded")
+                    terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
+                    if terms and not terms['is_test']:
+                        revenue.record(con,payment['user_id'],'subscription_cancelled',terms['source'],terms['variant'],'refund:'+refund_id)
                     audit(con, None, "payment.refunded", payment["id"])
                 con.execute("COMMIT")
             except Exception:

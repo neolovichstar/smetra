@@ -256,6 +256,7 @@ def migrate(con):
         )
     )
     con.executescript((Path(__file__).parent / "migrations" / "019_profile_memory.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "020_revenue.sql").read_text(encoding="utf-8"))
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -406,6 +407,8 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(24,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(25,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(27,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(28,?)", (stamp(),))
 
 
 ENTITIES = {
@@ -775,6 +778,8 @@ class Service:
             (identity(), owner["id"], "quote_created", stamp()),
         )
         self.emit("quote", qid, "Смета создана")
+        from backend import revenue
+        revenue.activate(self.con,self.user['id'],'estimate_created',qid)
         return self.quote_view(self.get("quotes", qid))
 
     def publish(self, row, data):
@@ -821,6 +826,8 @@ class Service:
             ),
         )
         self.emit("quote", row["id"], "Смета отправлена", f"v{version}")
+        from backend import revenue
+        revenue.activate(self.con,self.user['id'],'estimate_shared',row['id'])
 
     def public(self, method, path, query):
         if path == "/api/public/intake":
@@ -873,6 +880,9 @@ class Service:
                     pdf(document), "application/pdf", "smetra-document.pdf"
                 )
             if method == "GET" and path == "/api/public/quote":
+                owner=self.con.execute('SELECT entitlement_until FROM users WHERE id=?',(row['user_id'],)).fetchone()
+                settings=json.loads(self.con.execute('SELECT settings FROM workspaces WHERE id=?',(self.wid,)).fetchone()[0])
+                show_branding=not (owner['entitlement_until']>stamp() and settings.get('hide_branding') is True)
                 state = (
                     "viewed"
                     if row["approval_state"] == "sent"
@@ -910,6 +920,7 @@ class Service:
                         (row["id"],),
                     )
                 ]
+                result['show_branding']=show_branding
                 result["files"] = [
                     dict(f)
                     for f in self.con.execute(
@@ -1009,6 +1020,9 @@ class Service:
                     f"{author}: {message}",
                     True,
                 )
+                if state=='approved':
+                    from backend import revenue
+                    revenue.record(self.con,row['user_id'],'estimate_approved',key='approved:'+row['id']+':'+str(row['published_version']))
             if message:
                 self.con.execute(
                     "INSERT INTO comments VALUES(?,?,?,?,?,?,?)",
@@ -1695,6 +1709,8 @@ class Service:
             (self.wid,),
         ):
             add("quote", row, "Клиент запросил изменения", "Открыть смету", row["title"])
+        for row in self.con.execute("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
+            add('quote',row,'Смета ждёт согласования','Открыть смету',row['client']+' · '+row['title'])
         for row in self.con.execute(
             "SELECT id,name,due_date FROM tasks WHERE workspace_id=? AND status!='done' "
             "AND due_date!='' AND due_date<=? ORDER BY due_date LIMIT 5",
@@ -1912,6 +1928,14 @@ class Service:
                 for key in ("company_details", "document_footer"):
                     if key in data["settings"]:
                         settings[key] = string(data["settings"][key], key, 3000)
+                if 'hide_branding' in data['settings']:
+                    hidden=data['settings']['hide_branding']
+                    if type(hidden) is not bool:
+                        raise DomainError(400,'Неверная настройка отметки Сметры')
+                    owner=self.con.execute('SELECT entitlement_until FROM users WHERE id=?',(row['owner_id'],)).fetchone()
+                    if hidden and owner['entitlement_until']<=stamp():
+                        raise DomainError(402,'Убрать отметку Сметры можно в Про')
+                    settings['hide_branding']=hidden
             self.con.execute(
                 "UPDATE workspaces SET name=?,currency=?,settings=? WHERE id=?",
                 (
@@ -2179,6 +2203,9 @@ class Service:
                 return 201, {"id": fid}
         if kind == "templates":
             if method == "GET":
+                if parts:
+                    row=self.get('estimate_templates',parts[0])
+                    return 200, {'snapshot':json.loads(row['snapshot']),'name':row['name']}
                 return 200, {
                     "items": [
                         dict(r)

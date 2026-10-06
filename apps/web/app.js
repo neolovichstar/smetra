@@ -5,13 +5,14 @@ const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
 let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0;
-try{sessionStorage.removeItem('mobile_token')}catch{}
+try{sessionStorage.removeItem('mobile_token');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 async function api(path, options = {}) {
   const headers = {'Content-Type':'application/json',...options.headers};
   const workspaceId=sessionStorage.getItem('workspace_id');
   if(workspaceId)headers['X-Workspace-Id']=workspaceId;
   const method=(options.method||'GET').toUpperCase();
+  const owner=user;
   const share=method==='GET'&&Object.keys(options).length===0;
   const key=JSON.stringify([user?.id||'',workspaceId||'',path]);
   if(method!=='GET')apiRequests.clear();
@@ -24,7 +25,7 @@ async function api(path, options = {}) {
       const response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
       let result;
       try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
-      if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;throw error}
+      if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
       return result;
     }catch(error){
       if(error.name==='AbortError')throw Error('Сервер отвечает слишком долго. Повторите попытку.');
@@ -47,7 +48,7 @@ function view(html) { const content=$('#content');content.dataset.section=tab;co
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):document.body.classList.contains('sidebar-compact');const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncSidebarAccess()}
 function showAuth() { renderRevision++;closeNavigation();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
-async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');await render();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
+async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
 function quoteCard(q) {
@@ -61,7 +62,7 @@ async function render() {
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   try {
-    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin'})[section];
+    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
@@ -79,15 +80,7 @@ async function render() {
       $('#new-quote').addEventListener('click',showNewQuote);
       $('#quote-list').addEventListener('click',quoteAction);
     } else if(tab==='billing') {
-      const billing=await api('/billing');
-      if(!active())return;
-      const checkoutReady=billing.email_verified&&['test','live'].includes(billing.checkout_mode);
-      const paymentNote=billing.checkout_mode==='off'?'Приём оплаты Про пока подключается.':!billing.email_verified?'Для оплаты подтвердите почту в профиле. Пока можно работать на бесплатном тарифе.':billing.checkout_mode==='test'?'Тестовая оплата: деньги не списываются.':'Оплата откроется на защищённой странице ЮKassa.';
-      const planNames={pro_month:'Про · 31 день',pro_year:'Про · 366 дней'},paymentNames={pending:'Ожидает оплаты',succeeded:'Оплачено',canceled:'Отменено',refunded:'Возврат'};
-      view(`<div class="billing-hero"><div><span class="overline">Ваш ритм работы</span><h1>Больше возможностей.<br>Та же ясность.</h1><p class="muted">Один тариф для сайта и приложения. Без автоматических списаний.</p><p class="note">Сейчас: ${escapeHtml(user.plan==='free'?'Старт':'Про')} · ${user.quote_count} смет${user.entitlement_until>Math.floor(Date.now()/1000)?' · до '+date(user.entitlement_until):''}</p></div><img class="black-art" src="/assets/black/flight.png" alt=""></div><div class="billing-plans"><section><span class="overline">Для начала</span><h3>Старт</h3><div class="open-price">0 ₽</div><ul class="open-benefits"><li>Первые 10 смет</li><li>Клиенты и согласования</li><li>Сайт и Android-приложение</li></ul></section><section><span class="overline">Для постоянной работы</span><h3>Про</h3><div class="open-price">490 ₽<small> / 31 день</small></div><ul class="open-benefits"><li>До 10 000 смет</li><li>Единый доступ на всех устройствах</li><li>Учёт заказов и поступлений</li></ul><div class="row"><button class="btn primary" data-plan="pro_month" ${checkoutReady?'':'disabled'}>Выбрать Про</button><button class="btn" data-plan="pro_year" ${checkoutReady?'':'disabled'}>Год · 4 900 ₽</button></div><p class="note">${paymentNote}</p></section></div><section><div class="section-top"><h3>История платежей</h3><button class="btn small" id="sync">Проверить оплату</button></div>${billing.payments.length?billing.payments.map(p=>`<div class="quote"><span>${escapeHtml(planNames[p.plan]||p.plan)} · ${date(p.created_at)}</span><b>${rub(p.amount_kopecks)} · ${escapeHtml(paymentNames[p.status]||p.status)}</b></div>`).join(''):'<p class="muted">Здесь появятся оплаты подписки.</p>'}</section>`);
-      $('#content').insertAdjacentHTML('beforeend','<p class="note billing-legal">Оплату принимает самозанятый МУРАВЬЕВ КОНСТАНТИН АЛЕКСЕЕВИЧ · ИНН 713304603876. <a href="/terms">Условия оплаты и возврата</a> · <a href="/contacts">Контакты</a></p>');
-      document.querySelectorAll('[data-plan]').forEach(b=>b.addEventListener('click',async()=>{b.disabled=true;const keyName='smetra.checkout.'+b.dataset.plan;let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}try{const r=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:b.dataset.plan})});location.href=r.url}catch(err){notify(err.message);b.disabled=false}}));
-      $('#sync').addEventListener('click',async event=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;try{const result=await api('/billing/sync',{method:'POST'});if(user!==owner)return;user=result.user;if(tab==='billing')await render();notify(user.plan==='pro'&&user.entitlement_until>Date.now()/1000?'Про активен до '+date(user.entitlement_until):'Тариф Старт. Подтверждённой оплаты Про нет.')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}});
+      await window.SmetraGrowth.billing(active);
     } else if(tab==='support') {
       view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:reyzin378@gmail.com">Написать на почту ↗</a></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
       const topics=[...document.querySelectorAll('[data-support-topic]')];let selectedTopic='';

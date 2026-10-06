@@ -276,6 +276,9 @@ def route(h, con, method, path, query, origin):
                     stamp() if not email.endswith('@identity.smetra.invalid') else None,
                 ),
             )
+        if not account and not row['link_user_id']:
+            from backend.revenue import record
+            record(con,user_id,'signup_completed',key='signup:'+user_id)
         if not account:
             con.execute(
                 "INSERT INTO external_identities(provider,subject,user_id,created_at) VALUES(?,?,?,?)",

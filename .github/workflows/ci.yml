@@ -30,6 +30,7 @@ jobs:
           node tests/quote_money.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_api_transport.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_capability.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_growth.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_office_files.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_navigation_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
@@ -59,6 +60,7 @@ jobs:
             exit 1
           fi
           node tests/browser_flows.cjs
+          node tests/browser_growth.cjs
           node tests/browser_pwa.cjs
           node tests/browser_construction_prices.cjs
       - name: Assistant preview, undo and conversation context in mobile browser

@@ -79,6 +79,8 @@ def quota(service):
     next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp()
     limit = 100 if paid else 3
+    from backend.revenue import referral_bonus
+    limit += referral_bonus(service.con,service.user['id'],period)
     key = hashlib.sha256(
         f"assistant:month:{period}:{service.user['id']}".encode()
     ).hexdigest()
@@ -393,6 +395,8 @@ def query_model(messages):
         answer = value["choices"][0]["message"]
         if not isinstance(answer, dict):
             raise ValueError("message")
+        if isinstance(value.get('usage'),dict):
+            answer['_usage']=value['usage']
         return answer
     except urllib.error.HTTPError as error:
         if error.code == 429:
@@ -431,7 +435,7 @@ def query_model_stream(messages, on_delta):
         },
         method="POST",
     )
-    pieces, calls, total_bytes, done = [], {}, 0, False
+    pieces, calls, total_bytes, done, usage = [], {}, 0, False, None
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
             for raw in response:
@@ -447,6 +451,8 @@ def query_model_stream(messages, on_delta):
                 if not data:
                     continue
                 event = json.loads(data)
+                if isinstance(event.get('usage'),dict):
+                    usage=event['usage']
                 if event.get("error"):
                     raise ValueError("provider error")
                 choice = (event.get("choices") or [{}])[0]
@@ -470,7 +476,10 @@ def query_model_stream(messages, on_delta):
                         raise ValueError("tool arguments too large")
         if not done:
             raise ValueError("incomplete stream")
-        return {"content": "".join(pieces), "tool_calls": list(calls.values())}
+        result={"content": "".join(pieces), "tool_calls": list(calls.values())}
+        if usage is not None:
+            result['_usage']=usage
+        return result
     except urllib.error.HTTPError as error:
         if error.code == 429:
             raise DomainError(429, "Бесплатная модель сейчас занята. Попробуйте позже.") from None
@@ -847,6 +856,10 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         if on_commit and on_status:
             on_status("Формулирую ответ…")
         response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+        usage=response.pop('_usage',None)
+        known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
+        service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+            (identity(),service.wid,service.user['id'],'assistant',os.getenv('OPENROUTER_MODEL','openrouter/free'),'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
         answer = str(response.get("content") or "")[:12000]
         calls = response.get("tool_calls") or []
         if not calls:

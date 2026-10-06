@@ -259,7 +259,8 @@ public class MainActivity extends Activity {
         content.addView(ui.label(active?"Ваш тариф · Про":"Ваш тариф · Старт",29,INK,true));
         text(active?"Про действует до "+subscriptionDate(me)+". Доступ общий для сайта и приложения.":"Первые 10 смет бесплатно. Оплата не требуется.");
         ui.space(content,26);ui.divider(content);ui.space(content,22);
-        content.addView(ui.label("ПРО · 490 ₽",18,BLUE,true));
+        TextView price=ui.label("Сметра Про",18,BLUE,true);content.addView(price);
+        call("/billing","GET",null,result->{JSONObject pricing=result.optJSONObject("pricing");JSONObject plans=pricing==null?null:pricing.optJSONObject("plans");JSONObject month=plans==null?null:plans.optJSONObject("pro_month");if(month!=null)price.setText("ПРО · "+exactMoney(month.optLong("amount_kopecks"),"RUB"));});
         text("31 день доступа · без автоматических списаний");
         ui.space(content,16);
         for(String benefit:new String[]{"До 10 000 смет","Клиенты, заказы и согласования","Учёт поступлений и расходов","Синхронизация на всех устройствах"}){
