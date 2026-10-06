@@ -31,6 +31,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
       await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});
       await evaluate('window.scrollTo({top:0,behavior:"instant"})');await wait(200);
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,route+' overflows at '+width);
+      if(route==='assistant'){
+        assert.equal(await evaluate(`(()=>{const content=document.querySelector('.assistant-content'),composer=document.querySelector('.assistant-composer');return content.getBoundingClientRect().bottom<=composer.getBoundingClientRect().top+1&&composer.getBoundingClientRect().bottom<=innerHeight+1})()`),true,'Assistant composer overlaps content or viewport at '+width);
+        await evaluate("document.querySelector('.assistant-content').scrollTop=document.querySelector('.assistant-content').scrollHeight");
+        assert.equal(await evaluate(`(()=>{const job=document.querySelector('.assistant-job'),content=document.querySelector('.assistant-content');return !job||job.getBoundingClientRect().bottom<=content.getBoundingClientRect().bottom+1})()`),true,'Last background job must remain readable at '+width);
+      }
       if([390,1440].includes(width))fs.writeFileSync(`data/qa/section-${route}-${width}.png`,Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
     }
     if(route==='clients')assert.equal(await evaluate("!!document.querySelector('.contact-group .contact-monogram')"),true);

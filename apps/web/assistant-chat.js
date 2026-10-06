@@ -55,7 +55,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       </div></details>
     </div>
     <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><label class="visually-hidden" for="assistant-thread-name">Название диалога</label><input id="assistant-thread-name" maxlength="120" required aria-label="Название диалога"><button class="btn small primary" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
-    <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div>
+    <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog><div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
     <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
       <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
       <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
@@ -64,6 +64,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
   const composer=document.querySelector('.assistant-composer');
+  const content=document.querySelector('.assistant-content');
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
   attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
   attachmentBar.querySelector('span').textContent='PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
@@ -195,7 +196,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     setThreadBusy(working||threadBusy);
   };
   const copyText=async(text,button)=>{if(button.disabled)return;const original=button.textContent;button.disabled=true;try{await navigator.clipboard.writeText(text);button.textContent='Скопировано';setTimeout(()=>{button.textContent=original},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false}};
-  const scrollBottom=()=>{if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-260)window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'})};
+  const nearBottom=()=>content.scrollHeight-content.scrollTop-content.clientHeight<100;
+  const scrollBottom=()=>{content.scrollTop=content.scrollHeight};
   const addMessage=(role,text,messageId)=>{
     const item=document.createElement('article');item.className='assistant-message '+role;
     const label=document.createElement('small');label.textContent=role==='user'?'ВЫ':'СМЕТРА';
@@ -342,8 +344,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const userMessage=addMessage('user',prompt);
     const assistantMessage=addMessage('assistant','');
     assistantMessage.item.classList.add('streaming');
+    scrollBottom();
     let generated='',paintPending=false,completed=false;
-    const paint=()=>{paintPending=false;assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);scrollBottom()};
+    const paint=()=>{const follow=nearBottom();paintPending=false;assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;setTimeout(()=>requestAnimationFrame(paint),50)}};
     try{
       const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});

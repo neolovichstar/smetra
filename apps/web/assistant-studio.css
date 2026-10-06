@@ -12,7 +12,10 @@
 @keyframes workspace-dialog-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes workspace-dialog-exit{to{opacity:0;transform:translateY(6px)}}
 @media(max-width:700px){.workspace-page .experience-dialog::backdrop,.assistant-knowledge-dialog::backdrop,.workspace-page .nav-backdrop{backdrop-filter:none!important}.workspace-page .record-line small{font-size:12px}.workspace-page .btn{min-height:44px}}
-.workspace-page .assistant-studio{width:100%;max-width:780px;min-height:calc(100dvh - 134px);color:var(--text-primary);--chat-surface:#0c0d0f;--chat-elevated:#121316;--chat-muted:#a0a6b0}
+.workspace-page .assistant-studio{width:100%;max-width:780px;height:calc(100dvh - 134px);min-height:420px;color:var(--text-primary);--chat-surface:#0c0d0f;--chat-elevated:#121316;--chat-muted:#a0a6b0}
+.assistant-studio>.assistant-content{flex:1;min-height:0;overflow:auto;overscroll-behavior-y:contain;scrollbar-width:none}
+.assistant-studio>.assistant-content::-webkit-scrollbar{display:none}
+.assistant-studio>:is(.assistant-header,.assistant-workbar,.assistant-thread-edit,.assistant-composer){flex-shrink:0}
 .workspace-page .assistant-studio .assistant-header{padding:0 0 18px;align-items:center}
 .workspace-page .assistant-studio .assistant-header h1{font-size:22px;line-height:1.35;font-weight:550;letter-spacing:-.035em}
 .workspace-page .assistant-studio .assistant-quota{font-size:11px;line-height:1.5;color:var(--text-secondary);white-space:normal;text-align:right}
@@ -78,7 +81,7 @@
 .assistant-studio .assistant-copy,.assistant-studio .assistant-fork{font-size:11px;min-height:36px;color:var(--text-secondary);border:0;background:none;padding:7px 0;margin-top:6px}
 .assistant-studio .assistant-copy:hover,.assistant-studio .assistant-fork:hover{color:var(--action)}
 .assistant-studio .assistant-message.streaming :is(.assistant-copy,.assistant-fork){visibility:hidden}
-.workspace-page .assistant-studio .assistant-composer{padding-top:16px;background:linear-gradient(transparent,var(--surface-base) 18px);margin-top:auto;bottom:0}
+.workspace-page .assistant-studio .assistant-composer{position:relative;padding-top:16px;background:var(--surface-base);margin-top:auto;bottom:auto}
 .workspace-page .assistant-studio .assistant-composer form{border:0!important;box-shadow:none!important;background:var(--chat-surface);padding:10px;border-radius:22px;gap:4px}
 .workspace-page .assistant-studio .assistant-composer form:focus-within{background:var(--chat-elevated)}
 .workspace-page .assistant-studio .assistant-composer textarea{font-size:15px;line-height:1.65;min-height:48px;padding:10px 10px 6px;background:transparent!important;outline:0!important;border:0!important;color:var(--text-primary)}
@@ -92,7 +95,7 @@
 .assistant-studio :is(button,summary,a,pre,.assistant-table-scroll):focus-visible{outline:2px solid var(--action);outline-offset:3px}
 :root[data-theme=light] .workspace-page .assistant-studio{--chat-surface:#f4f6f9;--chat-elevated:#eaf0f7;--chat-muted:#667487}
 @media(max-width:700px){
- .workspace-page .assistant-studio{min-height:calc(100dvh - 154px)}
+ .workspace-page .assistant-studio{height:calc(100dvh - 154px);min-height:420px}
  .workspace-page .assistant-studio .assistant-header{padding-bottom:12px;gap:12px}
  .workspace-page .assistant-studio .assistant-header h1{font-size:20px}
  .workspace-page .assistant-studio .assistant-quota{font-size:10px;max-width:140px}
