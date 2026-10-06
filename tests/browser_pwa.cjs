@@ -5,17 +5,22 @@ const assert=require('node:assert/strict');
  const ws=new WebSocket(tabs.find(tab=>tab.type==='page').webSocketDebuggerUrl);await new Promise(resolve=>ws.addEventListener('open',resolve,{once:true}));
  let seq=0;const pending=new Map();
  ws.addEventListener('message',event=>{const message=JSON.parse(event.data);if(message.id){const task=pending.get(message.id);pending.delete(message.id);message.error?task.reject(message.error):task.resolve(message.result)}});
- const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))});
+ const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}))});
  const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result.exceptionDetails)throw Error(JSON.stringify(result.exceptionDetails));return result.result.value};
  const until=async expression=>{for(let i=0;i<100;i++){try{if(await evaluate(expression))return}catch{}await new Promise(resolve=>setTimeout(resolve,100))}throw Error('Timed out: '+expression)};
+ let workerSession;
  try{
   await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Page.navigate',{url:site+'/app'});
   await until("navigator.serviceWorker.controller!==null");
   const manifest=await evaluate("fetch(document.querySelector('[rel=manifest]').href).then(r=>r.json())");assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/app');
   const keys=await evaluate("caches.open('smetra-public-offline-v1').then(c=>c.keys()).then(keys=>keys.map(k=>new URL(k.url).pathname).sort())");assert.deepEqual(keys,['/offline.css','/offline.html']);
+  const {targetInfos}=await send('Target.getTargets');const worker=targetInfos.find(target=>target.type==='service_worker'&&target.url===site+'/service-worker.js');assert.ok(worker,'Offline check needs the active worker target');
+  workerSession=(await send('Target.attachToTarget',{targetId:worker.targetId,flatten:true})).sessionId;await send('Network.enable',{},workerSession);
+  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0},workerSession);
   await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});await send('Page.navigate',{url:site+'/app'});
   await until("document.title==='Нет подключения · Сметра'");assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor==='rgb(0, 0, 0)'||getComputedStyle(document.documentElement).backgroundColor==='rgb(0, 0, 0)'"),true);
+  await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1},workerSession);
   await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});await send('Page.navigate',{url:site+'/app'});await until("document.querySelector('#auth-form')?.onsubmit");
   console.log('PASS: PWA manifest, active service worker, branded offline fallback, reconnect and public-only cache');
- }finally{await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});ws.close()}
+ }finally{if(workerSession){await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1},workerSession);await send('Target.detachFromTarget',{sessionId:workerSession})}await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});ws.close()}
 })().catch(error=>{console.error(error);process.exit(1)});
