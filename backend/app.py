@@ -83,7 +83,7 @@ def migrate():
         # Cloud schema changes are explicit, versioned Supabase migrations.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=26"
+                "SELECT version FROM schema_migrations WHERE version=27"
             ).fetchone()
             if not version:
                 raise RuntimeError(
@@ -408,7 +408,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "support", "mobile", "cron"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if path != "/api/cron/assistant" or method != "GET":
@@ -803,6 +803,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         user = self.auth(con, path.startswith("/api/admin/"))
         if path == "/api/me" and method == "GET":
             return self.send_json(200, {"user": user_view(user, con)})
+        if path == "/api/profile":
+            from backend.profile_memory import profile_route
+
+            return self.send_json(200, profile_route(con, user, method, self.body() if method == "PATCH" else {}))
         if path == "/api/auth/verify/resend" and method == "POST":
             if user["email_verified_at"] is not None:
                 return self.send_json(200, {"ok": True})
@@ -855,6 +859,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 con.execute("DELETE FROM support WHERE user_id=?", (user["id"],))
                 con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
+                con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
+                con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
                 con.execute(
                     "UPDATE events SET user_id=NULL WHERE user_id=?", (user["id"],)
                 )

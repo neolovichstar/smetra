@@ -41,6 +41,7 @@ async function render() {
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   try {
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
+    if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
     const handled=window.Workspace && await window.Workspace.render(tab);
     if(!active()||handled)return;
@@ -70,7 +71,9 @@ async function render() {
       topics.forEach(button=>{button.setAttribute('aria-pressed','false');button.onclick=()=>{const input=$('#message');const prefix=selectedTopic+': ';const text=selectedTopic&&input.value.startsWith(prefix)?input.value.slice(prefix.length):input.value;selectedTopic=button.dataset.supportTopic;input.value=selectedTopic+': '+text;topics.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));input.focus()}});
       $('#support-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('[type=submit],button:not([type])'),input=form.querySelector('#message'),message=input.value;if(button.disabled)return;button.disabled=true;try{await api('/support',{method:'POST',body:JSON.stringify({message})});if(input.value===message)input.value='';if(user===owner)notify('Сообщение отправлено')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='settings') {
-      view(header('Настройки','Управление аккаунтом и отображением.')+`<div class="panel"><h3>${escapeHtml(user.name)}</h3><p>${escapeHtml(user.email)}</p><p class="muted">Для изменения почты и имени напишите в поддержку.</p><button class="btn" id="theme-alt" type="button">Переключить тему</button></div><div class="panel"><h3>Удалить аккаунт</h3><p class="muted">Предложения и доступ будут удалены без возможности восстановления.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div>`);
+      view(header('Настройки','Отображение и поведение ассистента.')+`<div class="panel"><h3>Аккаунт</h3><p>${escapeHtml(user.email)}</p><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Переключить тему</button></div><section id="settings-personalization"></section><div class="panel"><h3>Удалить аккаунт</h3><p class="muted">Предложения и доступ будут удалены без возможности восстановления.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div>`);
+      $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
+      if(window.SmetraProfile){await window.SmetraProfile.settings(active);if(!active())return;}
       syncThemeLabel();$('#theme-alt').onclick=theme;$('#delete-account').onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();

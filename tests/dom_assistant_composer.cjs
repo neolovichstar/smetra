@@ -18,7 +18,7 @@ async function setup(enabled=true){
   if(path==='/assistant/jobs')return {enabled,jobs:[]};
   throw Error('Unexpected path: '+path);
  };
- w.load(fs.readFileSync('apps/web/assistant-chat.js','utf8'));await w.SmetraAssistant();await tick();
+ for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));await w.SmetraAssistant();await tick();
  return {w,doc:w.document,requests,notices,close:()=>dom.window.close()};
 }
 (async()=>{

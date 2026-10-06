@@ -13,6 +13,7 @@ function setup(){
  w.eval("user={id:'qa-user',name:'QA',role:'user',email_verified:true};tab='files'");
  w.api=async path=>path==='/workspace'?{workspace:{id:'qa-workspace',name:'QA',role:'owner',currency:'RUB',settings:{}},workspaces:[]}:{items:[]};
  w.load(fs.readFileSync('apps/web/workspace.js','utf8'));
+ for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
  return {dom,w,doc:w.document,close:()=>dom.window.close()};
 }
 (async()=>{

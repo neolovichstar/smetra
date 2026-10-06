@@ -1,0 +1,193 @@
+/* Smetra assistant. One quiet conversation column, black surfaces, blue actions. */
+.workspace-page .assistant-studio{width:100%;max-width:780px;min-height:calc(100dvh - 134px);color:var(--text-primary);--chat-surface:#0c0d0f;--chat-elevated:#121316;--chat-muted:#a0a6b0}
+.workspace-page .assistant-studio .assistant-header{padding:0 0 18px;align-items:center}
+.workspace-page .assistant-studio .assistant-header h1{font-size:22px;line-height:1.35;font-weight:550;letter-spacing:-.035em}
+.workspace-page .assistant-studio .assistant-quota{font-size:11px;line-height:1.5;color:var(--text-secondary);white-space:normal;text-align:right}
+.workspace-page .assistant-studio .assistant-workbar{padding:0 0 10px;gap:6px;align-items:center}
+.assistant-studio .assistant-history summary{padding-inline:8px;font-size:12px;color:var(--text-secondary)}
+.workspace-page .assistant-studio .assistant-workbar>.btn{font-size:12px;min-height:40px;padding:7px 10px;border:0;background:transparent;gap:7px}
+.workspace-page .assistant-studio #assistant-new-thread{background:transparent;border:0;color:var(--action)}
+.workspace-page .assistant-studio .assistant-workbar>.btn:hover:not(:disabled){background:#96beff0b}
+.assistant-studio .assistant-options summary{width:40px;height:40px;background:transparent}
+.assistant-studio summary[aria-disabled=true]{pointer-events:none;opacity:.5}
+.assistant-studio .assistant-history-list,.assistant-studio .assistant-options-list{background:var(--chat-surface);border:1px solid var(--stroke);border-radius:14px;box-shadow:0 16px 54px #0009;padding:6px}
+.workspace-page .assistant-studio .assistant-options-list #assistant-delete{color:#eea5a7}
+.workspace-page .assistant-studio .assistant-options-list .assistant-thread-action{font-size:12px;min-height:42px;padding:10px;gap:10px}
+.assistant-studio .assistant-history-label{font-size:10px;letter-spacing:.04em;color:var(--text-secondary);padding:8px 10px}
+.assistant-studio .assistant-history-list button{font-size:12px;min-height:42px;padding:10px}
+.workspace-page .assistant-studio .assistant-thread-edit{background:var(--chat-surface);border:0;border-radius:14px;padding:8px;margin:4px 0 12px;align-items:center;gap:6px}
+.assistant-studio .assistant-thread-edit input{font:13px var(--font);background:transparent!important;border:0!important;outline:0;padding:8px;min-height:40px;color:var(--text-primary)}
+.assistant-studio .assistant-thread-edit .btn{font-size:11px;min-height:38px;border:0;padding:8px 10px;flex:none}
+.workspace-page .assistant-studio .assistant-thread{padding:16px 0 22px;min-width:0}
+.workspace-page .assistant-studio .assistant-thread:has(.assistant-welcome){min-height:clamp(220px,38dvh,430px);align-items:center}
+.workspace-page .assistant-studio .assistant-welcome{padding:24px 0 30px}
+.assistant-studio .assistant-welcome-line{width:28px;height:28px;margin-bottom:18px;color:var(--action)}
+.assistant-studio .assistant-welcome h2{font-size:clamp(24px,3vw,32px);font-weight:500;line-height:1.25;letter-spacing:-.04em;margin-bottom:10px}
+.assistant-studio .assistant-welcome p{font-size:13px;line-height:1.65;color:var(--text-secondary)}
+.assistant-studio .assistant-suggestions{margin-top:22px;gap:4px 12px}
+.assistant-studio .assistant-suggestions button{font-size:12px;min-height:40px;padding:7px 8px;color:var(--text-secondary)}
+.workspace-page .assistant-studio .assistant-message{padding:17px 0;border:0}
+.workspace-page .assistant-studio .assistant-message.assistant>small{font-size:10px;letter-spacing:.07em;font-weight:550;color:var(--text-secondary);margin-bottom:12px}
+.workspace-page .assistant-studio .assistant-message.user .assistant-markdown{max-width:88%;border:0;background:var(--chat-elevated);border-radius:20px;padding:11px 16px;color:var(--text-primary)}
+.workspace-page .assistant-studio .assistant-message.user p{margin:0;font-size:14px;white-space:normal;line-height:1.65;color:inherit}
+.workspace-page .assistant-studio .assistant-markdown{font-size:14px;line-height:1.85;color:var(--text-primary);letter-spacing:0;overflow-wrap:anywhere}
+.workspace-page .assistant-studio .assistant-markdown p{font-size:inherit;color:inherit;line-height:inherit;white-space:normal;margin:0 0 14px}
+.assistant-studio .assistant-markdown :is(h3,h4,h5,h6){color:var(--text-primary);font-weight:600;line-height:1.4;letter-spacing:-.02em;margin:26px 0 10px}
+.assistant-studio .assistant-markdown h3{font-size:20px}.assistant-studio .assistant-markdown h4{font-size:17px}.assistant-studio .assistant-markdown :is(h5,h6){font-size:15px}
+.assistant-studio .assistant-markdown strong{color:var(--text-primary);font-weight:600}
+.assistant-studio .assistant-markdown :is(ul,ol){margin:10px 0 18px;padding-left:24px}
+.assistant-studio .assistant-markdown li{padding-left:3px;margin:6px 0}
+.assistant-studio .assistant-markdown li::marker{color:var(--action);font-size:.95em}
+.assistant-studio .assistant-markdown li>p{margin-bottom:6px}
+.assistant-studio .assistant-markdown li :is(ul,ol){margin:6px 0 10px}
+.assistant-studio .assistant-markdown blockquote{margin:18px 0;padding:3px 0 3px 16px;border-left:2px solid var(--action);background:none;color:var(--text-secondary)}
+.assistant-studio .assistant-markdown blockquote p:last-child{margin:0}
+.assistant-studio .assistant-markdown hr{border:0;border-top:1px solid var(--stroke);margin:24px 0}
+.assistant-studio .assistant-markdown a{color:var(--action);text-decoration:underline;text-decoration-color:#96beff60;text-underline-offset:3px;transition:text-decoration-color .18s}
+.assistant-studio .assistant-markdown a:hover{text-decoration-color:var(--action)}
+.assistant-studio .assistant-markdown :not(pre)>code{font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--chat-elevated);border:0;color:var(--action);border-radius:5px;padding:2px 5px;white-space:break-spaces}
+.assistant-code{margin:18px 0;background:var(--chat-surface);border-radius:12px;overflow:hidden;max-width:100%}
+.assistant-code header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--chat-elevated);gap:12px;color:var(--text-secondary);font:11px var(--font)}
+.assistant-code-copy{border:0;background:none;color:var(--text-secondary);font:11px var(--font);min-height:32px;padding:4px;cursor:pointer;transition:color .2s}
+.assistant-code-copy:hover{color:var(--action)}
+.workspace-page .assistant-studio .assistant-markdown .assistant-code pre{margin:0;padding:14px 16px 16px;background:transparent;border:0;border-radius:0;overflow:auto;max-width:100%;scrollbar-width:none}
+.workspace-page .assistant-studio .assistant-markdown .assistant-code pre code{font:12px/1.75 ui-monospace,SFMono-Regular,Consolas,monospace;background:transparent;color:var(--text-primary);display:block;white-space:pre;padding:0}
+.assistant-task{display:inline-block;position:relative;width:13px;height:13px;vertical-align:-1px;border:1px solid var(--text-secondary);border-radius:3px;margin-right:8px}
+.assistant-task.is-done{background:var(--action);border-color:var(--action)}
+.assistant-task.is-done::after{content:'';position:absolute;left:3px;top:2px;width:5px;height:7px;border-right:1.5px solid #08111f;border-bottom:1.5px solid #08111f;transform:rotate(40deg)}
+.assistant-image-alt{color:var(--text-secondary);font-style:italic}
+.assistant-studio .assistant-table-scroll{max-width:100%;margin:18px 0;border:0;border-radius:10px;background:var(--chat-surface);scrollbar-width:none}
+.assistant-studio .assistant-table-scroll table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.6;font-variant-numeric:tabular-nums}
+.assistant-studio .assistant-table-scroll :is(th,td){padding:11px 14px;border:0;border-bottom:1px solid var(--stroke);min-width:100px;vertical-align:top;color:var(--text-primary)}
+.assistant-studio .assistant-table-scroll th{background:var(--chat-elevated);font-weight:550;color:var(--text-secondary)}
+.assistant-studio .assistant-table-scroll tr:last-child td{border-bottom:0}
+.assistant-table-scroll .align-right{text-align:right}.assistant-table-scroll .align-center{text-align:center}.assistant-table-scroll .align-left{text-align:left}
+.assistant-studio .assistant-copy,.assistant-studio .assistant-fork{font-size:11px;min-height:36px;color:var(--text-secondary);border:0;background:none;padding:7px 0;margin-top:6px}
+.assistant-studio .assistant-copy:hover,.assistant-studio .assistant-fork:hover{color:var(--action)}
+.assistant-studio .assistant-message.streaming :is(.assistant-copy,.assistant-fork){visibility:hidden}
+.workspace-page .assistant-studio .assistant-composer{padding-top:16px;background:linear-gradient(transparent,var(--surface-base) 18px);margin-top:auto;bottom:0}
+.workspace-page .assistant-studio .assistant-composer form{border:0!important;box-shadow:none!important;background:var(--chat-surface);padding:10px;border-radius:22px;gap:4px}
+.workspace-page .assistant-studio .assistant-composer form:focus-within{background:var(--chat-elevated)}
+.workspace-page .assistant-studio .assistant-composer textarea{font-size:15px;line-height:1.65;min-height:48px;padding:10px 10px 6px;background:transparent!important;outline:0!important;border:0!important;color:var(--text-primary)}
+.workspace-page .assistant-studio .assistant-composer textarea::placeholder{color:var(--chat-muted)}
+.assistant-studio .assistant-compose-tools{gap:6px}
+.assistant-studio .assistant-composer-foot{font-size:10px!important;min-height:16px;margin-top:8px!important;color:var(--text-secondary)!important}
+.workspace-page .assistant-studio #assistant-background{font-size:11px;color:var(--text-secondary)}
+.workspace-page .assistant-studio #assistant-background[aria-pressed=true]{color:var(--action);background:#96beff0c;border-radius:20px}
+.workspace-page .assistant-studio .assistant-proposal{margin-top:12px;border-top:1px solid var(--stroke);padding:18px 0;background:transparent}
+.assistant-studio .assistant-proposal h3{font-size:15px;line-height:1.5;margin:8px 0 14px}
+.assistant-studio :is(button,summary,a,pre,.assistant-table-scroll):focus-visible{outline:2px solid var(--action);outline-offset:3px}
+:root[data-theme=light] .workspace-page .assistant-studio{--chat-surface:#f4f6f9;--chat-elevated:#eaf0f7;--chat-muted:#667487}
+@media(max-width:700px){
+ .workspace-page .assistant-studio{min-height:calc(100dvh - 154px)}
+ .workspace-page .assistant-studio .assistant-header{padding-bottom:12px;gap:12px}
+ .workspace-page .assistant-studio .assistant-header h1{font-size:20px}
+ .workspace-page .assistant-studio .assistant-quota{font-size:10px;max-width:140px}
+ .workspace-page .assistant-studio .assistant-workbar{display:flex;flex-wrap:wrap;gap:4px}
+ .assistant-studio .assistant-history{flex:1;min-width:120px}
+ .workspace-page .assistant-studio .assistant-workbar>.btn{min-height:44px;padding-inline:8px;font-size:11px}
+ .workspace-page .assistant-studio #assistant-new-thread{width:44px;font-size:0;gap:0;padding:0;justify-content:center}
+ .assistant-studio #assistant-new-thread::before{content:'';display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/plus.svg') center/contain no-repeat}
+ .assistant-studio #assistant-knowledge{font-size:0!important;width:44px;justify-content:center;gap:0!important}
+ .assistant-studio #assistant-knowledge::before{content:'';display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/book-open.svg') center/contain no-repeat}
+ .assistant-studio .assistant-options summary{width:44px;height:44px}
+ .assistant-studio .assistant-history-list{min-width:210px;width:min(300px,calc(100vw - 48px))}
+ .assistant-studio .assistant-options-list{min-width:200px;width:200px}
+ .workspace-page .assistant-studio .assistant-thread:has(.assistant-welcome){min-height:clamp(200px,35dvh,300px)}
+ .assistant-studio .assistant-welcome h2{font-size:25px}.assistant-studio .assistant-welcome p{font-size:12px}
+ .assistant-studio .assistant-suggestions{gap:2px 4px;margin-top:16px}
+ .assistant-studio .assistant-suggestions button{font-size:11px;padding:6px 7px}
+ .workspace-page .assistant-studio .assistant-composer textarea{font-size:16px;padding:8px;line-height:1.55}
+ .workspace-page .assistant-studio .assistant-message.user .assistant-markdown{max-width:92%;padding:10px 14px}
+ .workspace-page .assistant-studio .assistant-markdown{font-size:14px;line-height:1.8}
+ .assistant-studio .assistant-markdown h3{font-size:19px}
+ .assistant-studio .assistant-thread-edit{flex-wrap:wrap}
+ .assistant-studio .assistant-thread-edit input{flex-basis:100%}
+ .assistant-code-copy{min-height:40px}
+}
+@media(prefers-reduced-motion:reduce){.assistant-studio *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Separate knowledge window, with a directory and a quiet editor. */
+.assistant-knowledge-dialog{width:min(880px,calc(100vw - 40px));max-width:none;max-height:calc(100dvh - 40px);padding:0;border:1px solid var(--stroke);border-radius:20px;color:var(--text-primary);background:var(--surface-base);box-shadow:0 24px 100px #000a;overflow:hidden}
+.assistant-knowledge-dialog[open]{animation:knowledge-enter .22s cubic-bezier(.2,.8,.2,1) both}
+.assistant-knowledge-dialog:not([open]){display:none!important}
+.assistant-knowledge-dialog::backdrop{background:#0009;backdrop-filter:blur(8px);animation:knowledge-backdrop .2s ease both}
+.assistant-knowledge-dialog.is-closing{animation:knowledge-exit .15s ease both}
+.knowledge-window{display:flex;flex-direction:column;height:min(650px,calc(100dvh - 44px))}
+.knowledge-window-head{display:flex;justify-content:space-between;gap:20px;align-items:start;padding:24px 28px 16px;flex:none}
+.knowledge-window-head h2{margin:0 0 6px;font-size:22px;font-weight:550;letter-spacing:-.04em}
+.knowledge-window-head p{margin:0;color:var(--text-secondary);font-size:12px;line-height:1.6}
+#knowledge-close{min-width:40px;height:40px;border:0;border-radius:50%;background:var(--surface-input);color:var(--text-secondary);font:24px var(--font);cursor:pointer}
+.knowledge-tabs{display:flex;gap:16px;padding:0 28px 14px;flex:none}
+.knowledge-tabs button{border:0;background:transparent;color:var(--text-secondary);font:12px var(--font);min-height:36px;padding:7px 0;cursor:pointer}
+.knowledge-tabs button[aria-pressed=true]{color:var(--action);box-shadow:0 1px var(--action)}
+.knowledge-window-body{display:grid;grid-template-columns:240px minmax(0,1fr);flex:1;min-height:0;border-top:1px solid var(--stroke)}
+.knowledge-window-body>aside{min-height:0;overflow:auto;padding:16px 12px;background:var(--surface-input);scrollbar-width:none}
+.knowledge-list-head{display:flex;justify-content:space-between;align-items:center;padding:0 6px 12px;font-size:11px;color:var(--text-secondary)}
+#knowledge-add{border:0;background:none;color:var(--action);min-height:32px;cursor:pointer;font:11px var(--font);padding:4px}
+.knowledge-window .knowledge-list{display:flex;flex-direction:column;gap:2px;margin:0}
+.knowledge-window .knowledge-item{display:block;width:100%;border:0;border-radius:10px;padding:12px;background:transparent;text-align:left;color:var(--text-primary);transition:background .18s;cursor:pointer}
+.knowledge-window .knowledge-item:hover,.knowledge-window .knowledge-item[aria-pressed=true]{background:var(--surface-hover)}
+.knowledge-window .knowledge-item[aria-pressed=true] strong{color:var(--action)}
+.knowledge-window .knowledge-item strong{font:500 12px/1.5 var(--font);margin:0 0 5px;overflow-wrap:anywhere}
+.knowledge-window .knowledge-item small{font:11px/1.6 var(--font);color:var(--text-secondary);white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.knowledge-window .knowledge-item span{font-size:10px;line-height:1.6;margin-top:8px;color:var(--text-secondary)}
+.knowledge-editor{min-width:0;overflow:auto;padding:22px 28px;scrollbar-width:none}
+.knowledge-window #knowledge-form{max-width:none;gap:15px}
+.knowledge-window #knowledge-form h3{font-size:15px;font-weight:500;margin:0 0 3px}
+.knowledge-window #knowledge-form label{font-size:12px;gap:8px;color:var(--text-secondary)}
+.knowledge-window #knowledge-form :is(input:not([type=checkbox]),textarea,select){border:0!important;outline:0;background:var(--surface-input);border-radius:10px;padding:11px 12px;min-height:44px;font:13px/1.65 var(--font);color:var(--text-primary)}
+.knowledge-window #knowledge-form textarea{min-height:140px;resize:vertical;max-height:280px}
+.knowledge-window .knowledge-enabled{display:flex;gap:8px;font-size:12px!important;align-items:center}
+.knowledge-window input[type=checkbox]{accent-color:var(--action);width:16px;height:16px;min-height:0}
+.knowledge-form-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}
+.knowledge-form-actions .btn{font:12px var(--font);min-height:40px;padding:9px 12px;border:0}
+.knowledge-form-actions #knowledge-delete{color:#eea5a7}
+.knowledge-window-foot{padding:12px 28px;border-top:1px solid var(--stroke);color:var(--text-secondary);font-size:10px;line-height:1.65;flex:none}
+.knowledge-empty{padding:25px 10px}.knowledge-empty h3{font-size:13px;font-weight:500;color:var(--text-primary);margin:0 0 8px}
+.knowledge-empty p,.knowledge-readonly p{font-size:12px;line-height:1.7;color:var(--text-secondary)}
+.knowledge-readonly h3{font-size:16px}.knowledge-readonly #knowledge-read-content p{white-space:pre-wrap}
+.knowledge-paused{font-size:11px;line-height:1.6;color:var(--action);margin:0 0 16px}
+@keyframes knowledge-enter{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes knowledge-exit{to{opacity:0;transform:translateY(8px) scale(.98)}}
+@keyframes knowledge-backdrop{from{background:#0000}to{background:#0009}}
+/* Optional account details, without decorative panels. */
+.profile-page{max-width:900px;margin:0 auto;color:var(--text-primary)}
+.profile-page>header{margin-bottom:36px}.profile-page h1{font-size:28px;font-weight:550;letter-spacing:-.04em;margin:0 0 10px}
+.profile-page>header p{font-size:13px;line-height:1.7;color:var(--text-secondary);margin:0}
+.profile-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:54px}
+.profile-summary{min-width:0}.profile-avatar{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#96beff14;color:var(--action);font-size:24px;margin-bottom:16px}
+.profile-summary h2{font-size:15px;line-height:1.5;font-weight:500;overflow-wrap:anywhere;margin:0 0 6px}.profile-summary p{font-size:11px;line-height:1.6;color:var(--text-secondary);overflow-wrap:anywhere;margin:0}
+#profile-form>section{margin:0 0 26px}#profile-form h3{font-size:14px;font-weight:500;margin:0 0 16px}
+.profile-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#profile-form label,.personalization-settings form>label{display:grid;gap:8px;font-size:12px;line-height:1.6;color:var(--text-secondary)}
+#profile-form :is(input,textarea),.personalization-settings select{width:100%;font:13px/1.65 var(--font);color:var(--text-primary);background:var(--surface-input);border:0!important;border-radius:10px;padding:12px 14px;outline:0;min-height:46px;box-sizing:border-box}
+#profile-form textarea{resize:vertical;min-height:140px;max-height:380px}.profile-hint{font-size:11px;color:var(--text-secondary);line-height:1.6;margin:8px 0 0}
+#profile-form footer,.profile-save-row{display:flex;gap:16px;align-items:center;min-height:44px}
+#profile-form [role=status],.profile-save-row [role=status]{font-size:12px;color:var(--action)}
+#profile-form .btn,.personalization-settings .btn{font-size:12px;min-height:42px}
+.personalization-settings{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;padding:30px 0;border-top:1px solid var(--stroke);margin:0}
+.personalization-settings h3{font-size:16px;line-height:1.4;margin:0 0 8px;font-weight:500}.personalization-settings p{font-size:12px;color:var(--text-secondary);margin:0;line-height:1.6}
+.personalization-settings form{display:grid;gap:22px;max-width:560px}.personalization-settings select{max-width:360px}
+.personalization-settings .memory-setting{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.memory-setting strong,.memory-setting small{display:block}.memory-setting strong{font-size:13px;font-weight:500;color:var(--text-primary)}.memory-setting small{font-size:11px;line-height:1.65;margin-top:5px;max-width:400px}
+.memory-setting input{appearance:none;flex:none;width:38px;height:22px;border-radius:20px;background:#363b44;border:0;position:relative;cursor:pointer;transition:background .2s}
+.memory-setting input::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#e8eef7;transition:transform .2s}
+.memory-setting input:checked{background:var(--action)}.memory-setting input:checked::after{transform:translateX(16px);background:#091421}
+.memory-setting input:focus-visible{outline:2px solid var(--action);outline-offset:3px}
+@media(max-width:700px){
+ .assistant-knowledge-dialog{width:calc(100vw - 24px);max-height:calc(100dvh - 24px);border-radius:16px}
+ .knowledge-window{height:min(730px,calc(100dvh - 28px))}
+ .knowledge-window-head{padding:18px 18px 10px}.knowledge-window-head h2{font-size:20px}.knowledge-window-head p{font-size:11px}
+ .knowledge-tabs{padding:0 18px 10px;gap:20px}.knowledge-tabs button{min-height:40px}
+ .knowledge-window-body{display:block;overflow:auto;scrollbar-width:none}.knowledge-window-body>aside{max-height:170px;padding:10px}
+ .knowledge-editor{overflow:visible;padding:18px}.knowledge-window-foot{padding:10px 18px}
+ .knowledge-window .knowledge-item{padding:9px 10px}.knowledge-window .knowledge-item small{-webkit-line-clamp:1}.knowledge-window .knowledge-item span{margin-top:4px}
+ .knowledge-form-actions .btn{min-height:44px}.knowledge-window #knowledge-form textarea{min-height:110px}
+ .profile-page>header{margin-bottom:24px}.profile-page h1{font-size:25px}.profile-layout{grid-template-columns:1fr;gap:26px}
+ .profile-summary{display:flex;align-items:center;gap:14px}.profile-avatar{margin:0;flex:none;width:48px;height:48px;font-size:21px}
+ .profile-fields{gap:12px}#profile-form :is(input,textarea){font-size:16px;padding:11px 12px}
+ .personalization-settings{grid-template-columns:1fr;gap:20px;padding-block:26px}.personalization-settings select{font-size:16px;max-width:none}
+}
+@media(max-width:360px){.profile-fields{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.assistant-knowledge-dialog,.assistant-knowledge-dialog::backdrop{animation:none!important}.memory-setting input,.memory-setting input::after{transition:none}}

@@ -19,7 +19,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await until("document.querySelector('.workspace-home')");
   const testTask=await evaluate("api('/tasks',{method:'POST',body:JSON.stringify({name:'Mobile deadline check',due_date:'2026-10-06'})}).then(result=>result.item)");
   fs.mkdirSync('data/qa',{recursive:true});
-  const routes=['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','billing','support','settings','activity'];
+  const routes=['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','billing','support','profile','settings','activity'];
   if(await evaluate("user.role==='admin'"))routes.push('admin');
   for(const route of routes){
     await evaluate(`tab=${JSON.stringify(route)};render()`);

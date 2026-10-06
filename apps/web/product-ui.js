@@ -6,7 +6,7 @@
     construction:'buildings', leads:'users', tasks:'check-square', calendar:'calendar',
     assistant:'sparkle', finance:'wallet', catalog:'book-open', files:'folder',
     documents:'files', team:'users', notifications:'bell', billing:'credit-card',
-    support:'lifebuoy', settings:'gear', admin:'shield-check'
+    support:'lifebuoy', profile:'users', settings:'gear', admin:'shield-check'
   };
   const explicit = {
     'assistant-send':'arrow-up-right', 'assistant-rename':'pencil-simple',

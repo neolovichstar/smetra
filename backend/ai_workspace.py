@@ -1,5 +1,7 @@
 """Durable assistant conversations and curated workspace knowledge."""
 
+from contextlib import contextmanager
+
 from backend.business import DomainError, choice, identity, integer, stamp, string, transaction
 
 
@@ -14,6 +16,29 @@ def conversation(service, conversation_id):
 
 
 def conversations(service, method, parts, data):
+    if method == "POST" and not parts and data.get("adopt_general") is True or method == "DELETE" and parts == ["general"]:
+        with _general_edit_lock(service):
+            return _dispatch_conversations(service, method, parts, data)
+    return _dispatch_conversations(service, method, parts, data)
+
+
+@contextmanager
+def _general_edit_lock(service):
+    from backend.redis_infra import RedisUnavailable, acquire_lock
+
+    try:
+        lease = acquire_lock("assistant", service.user["id"], ttl=30)
+    except RedisUnavailable:
+        raise DomainError(503, "Изменение диалога временно недоступно") from None
+    if lease is None:
+        raise DomainError(409, "Дождитесь завершения ответа ассистента")
+    try:
+        yield
+    finally:
+        lease.release()
+
+
+def _dispatch_conversations(service, method, parts, data):
     if method == "POST":
         with transaction(service.con):
             operation = None
@@ -69,6 +94,11 @@ def _conversations(service, method, parts, data):
     if method == "POST" and not parts:
         title = string(data.get("title", "Новый диалог"), "Название", 120, True)
         context_entity, context_id = context_fields(service, data)
+        adopt = data.get("adopt_general", False)
+        if not isinstance(adopt, bool):
+            raise DomainError(400, "Неверный параметр сохранения общего диалога")
+        if adopt:
+            _ensure_general_idle(service)
         row = dict(
             id=identity(), workspace_id=service.wid, user_id=service.user["id"],
             title=title, context_entity=context_entity, context_id=context_id,
@@ -78,6 +108,17 @@ def _conversations(service, method, parts, data):
             "INSERT INTO assistant_conversations(id,workspace_id,user_id,title,context_entity,context_id,pinned,created_at,updated_at) "
             "VALUES(?,?,?,?,?,?,?,?,?)", tuple(row.values()),
         )
+        if adopt:
+            service.con.execute(
+                "UPDATE assistant_messages SET conversation_id=? "
+                "WHERE conversation_id IS NULL AND workspace_id=? AND user_id=?",
+                (row["id"], service.wid, service.user["id"]),
+            )
+            service.con.execute(
+                "UPDATE assistant_jobs SET conversation_id=? "
+                "WHERE conversation_id IS NULL AND kind='chat' AND workspace_id=? AND user_id=?",
+                (row["id"], service.wid, service.user["id"]),
+            )
         return 201, {"conversation": row}
     if method == "POST" and len(parts) == 2 and parts[1] == "fork":
         source = conversation(service, string(parts[0], "Диалог", 80, True))
@@ -108,6 +149,14 @@ def _conversations(service, method, parts, data):
                  item["created_at"], fork["id"]),
             )
         return 201, {"conversation": fork, "copied_messages": selected + 1}
+    if method == "DELETE" and parts == ["general"]:
+        with transaction(service.con):
+            _ensure_general_idle(service)
+            service.con.execute(
+                "DELETE FROM assistant_messages WHERE conversation_id IS NULL AND workspace_id=? AND user_id=?",
+                (service.wid, service.user["id"]),
+            )
+        return 200, {"ok": True}
     if len(parts) != 1:
         raise DomainError(404, "Диалог не найден")
     row = conversation(service, string(parts[0], "Диалог", 80, True))
@@ -157,6 +206,16 @@ def _conversations(service, method, parts, data):
             )
         return 200, {"ok": True}
     raise DomainError(405, "Метод не поддерживается")
+
+
+def _ensure_general_idle(service):
+    active = service.con.execute(
+        "SELECT id FROM assistant_jobs WHERE conversation_id IS NULL AND kind='chat' "
+        "AND workspace_id=? AND user_id=? AND status IN ('queued','running','retry') LIMIT 1",
+        (service.wid, service.user["id"]),
+    ).fetchone()
+    if active:
+        raise DomainError(409, "Дождитесь завершения фоновой задачи общего диалога или отмените её")
 
 
 def knowledge(service, method, parts, data):
@@ -235,9 +294,16 @@ def find_knowledge(service, query=""):
         (service.wid, phrase, phrase),
     ).fetchall()
     from backend.assistant_files import _SECRET
+    from backend.profile_memory import memory_items, profile
 
-    return {"items": [
+    personal = [item for item in memory_items(service) if item['enabled'] and
+                phrase in (item['title']+' '+item['content']).casefold()] if profile(service.con, service.user)['memory_enabled'] else []
+    return {"items": ([
+        {"id": item["id"], "title": item["title"], "scope": "personal",
+         "excerpt": _SECRET.sub("[секрет скрыт]", item["content"][:1200])}
+        for item in personal[:5]
+    ] + [
         {"id": row["id"], "title": row["title"],
          "excerpt": _SECRET.sub("[секрет скрыт]", row["content"][:1600])}
         for row in rows
-    ]}
+    ])[:5]}

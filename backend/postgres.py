@@ -21,6 +21,7 @@ TABLES = TABLES | frozenset(
 )
 TABLES = TABLES | frozenset("intake_forms client_requests".split())
 TABLES = TABLES | frozenset("assistant_conversations workspace_knowledge file_text_chunks".split())
+TABLES = TABLES | frozenset("user_profiles assistant_memory".split())
 TABLES = TABLES | frozenset("file_versions".split())
 TABLES = TABLES | frozenset("construction_price_batches".split())
 TABLES = TABLES | frozenset("quote_creation_requests".split())
