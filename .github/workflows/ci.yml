@@ -117,6 +117,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
+      - name: Native session isolation under delayed work
+        run: |
+          javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeSessionWork.java tests/NativeSessionWorkTest.java
+          java -cp data/native-session-tests ru.smetra.mobile.NativeSessionWorkTest
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:
