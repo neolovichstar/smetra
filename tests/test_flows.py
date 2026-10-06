@@ -155,6 +155,7 @@ class FlowTests(unittest.TestCase):
     def test_assistant_studio_assets_are_served(self):
         for path, mime in (
             ("/profile-ui.js", "text/javascript"),
+            ("/features.js", "text/javascript"),
             ("/chat-markdown.js", "text/javascript"),
             ("/vendor/markdown-it-15.0.2.min.js", "text/javascript"),
             ("/assistant-studio.css", "text/css"),

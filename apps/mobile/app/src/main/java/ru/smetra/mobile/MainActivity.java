@@ -21,6 +21,8 @@ import static ru.smetra.mobile.SmetraUi.*;
 
 public class MainActivity extends Activity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
+    // Navigation must not queue behind a long AI stream or file upload.
+    private final ExecutorService apiWorker=Executors.newFixedThreadPool(2);
     private LinearLayout content;
     private FrameLayout root;
     private LinearLayout pageShell;
@@ -84,7 +86,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
     private boolean openLink(Intent intent){if(intent==null)return false;if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
     private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
-    @Override public void onDestroy(){worker.shutdownNow();super.onDestroy();}
+    @Override public void onDestroy(){worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle state){
         state.putString("pending_pdf_document",pendingPdfDocument);
         state.putString("assistant_attachment_request_key",assistantAttachmentRequestKey);
@@ -111,14 +113,17 @@ public class MainActivity extends Activity {
     }
     private void call(String path,String method,JSONObject body,Done done){
         final int version=pageVersion;final Button submit=clickedButton;clickedButton=null;
+        final String sessionToken=token;
         if(submit!=null){submit.setEnabled(false);submit.setAlpha(.5f);}
-        worker.execute(()->{
+        apiWorker.execute(()->{
             try{
-                JSONObject data=request(path,method,body);
-                if(method.equals("GET")&&(path.equals("/dashboard")||path.equals("/quotes")||path.equals("/clients")||path.equals("/projects")))getPreferences(MODE_PRIVATE).edit().putString("cache:"+path,data.toString()).apply();
-                runOnUiThread(()->{if(version==pageVersion&&!isFinishing()){restore(submit);done.onResult(data);}});
+                JSONObject data=request(path,method,body,sessionToken);
+                runOnUiThread(()->{if(version==pageVersion&&!isFinishing()&&java.util.Objects.equals(sessionToken,token)){
+                    if(method.equals("GET")&&(path.equals("/dashboard")||path.equals("/quotes")||path.equals("/clients")||path.equals("/projects")))getPreferences(MODE_PRIVATE).edit().putString("cache:"+path,data.toString()).apply();
+                    restore(submit);done.onResult(data);
+                }});
             }catch(Exception error){runOnUiThread(()->{
-                if(version!=pageVersion||isFinishing())return;restore(submit);clearLoading(content);
+                if(version!=pageVersion||isFinishing()||!java.util.Objects.equals(sessionToken,token))return;restore(submit);clearLoading(content);
                 if(error instanceof ApiException&&((ApiException)error).status==401&&token!=null){clearSession();login(false);message("Сессия завершена. Войдите снова.");return;}
                 if(!(error instanceof ApiException)&&method.equals("GET")){
                     String cached=getPreferences(MODE_PRIVATE).getString("cache:"+path,null);
@@ -1693,11 +1698,42 @@ public class MainActivity extends Activity {
         });
     }
     private void receipt(String projectId,String currency){parentPage="projects";page("Полученная оплата","receipt",true);content.addView(ui.label("Зафиксируйте\nновое поступление.",26,INK,true));text("Укажите деньги, которые уже получили от клиента. Это запись в учёте, средства не списываются.");EditText value=field("Сумма оплаты, "+currencySymbol(currency),8194);value.setHint("0,00");final String key=java.util.UUID.randomUUID().toString();ui.space(content,20);button("Сохранить оплату",true,v->{try{long amount=cents(value);if(amount<=0)throw new IllegalArgumentException();call("/receipts","POST",new JSONObject().put("project_id",projectId).put("amount_kopecks",amount).put("method","bank_transfer").put("_request_key",key),r->{Analytics.event("payment_recorded",Analytics.params("currency",currency),true);project(projectId);message("Оплата записана");});}catch(Exception error){value.setError("Укажите сумму больше нуля");}});}
+    private void nativeProfile(){
+        parentPage="settings";page("О себе","profile",true);loading(content);
+        call("/profile","GET",null,result->{
+            clearLoading(content);JSONObject profile=result.optJSONObject("profile");if(profile==null){message("Не удалось загрузить профиль");return;}
+            text("Заполните по желанию. Ассистент учтёт эти данные в работе.");
+            String[] keys={"first_name","last_name","profession","company","about"};
+            String[] titles={"Имя","Фамилия","Чем занимаетесь","Компания","О себе"};
+            EditText[] fields=new EditText[keys.length];
+            for(int i=0;i<keys.length;i++){
+                fields[i]=field(titles[i],android.text.InputType.TYPE_CLASS_TEXT|(i==4?android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE:android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES));
+                fields[i].setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(i==4?2000:i<2?80:120)});
+                fields[i].setText(profile.optString(keys[i]));if(i==4){fields[i].setMinLines(4);fields[i].setGravity(Gravity.TOP|Gravity.START);}
+            }
+            ui.section(content,"Ассистент",null);
+            String[] styles={"concise","balanced","detailed"};
+            String[] styleLabels={"Кратко и по делу","С пояснениями","Подробно"};final int[] selectedStyle={0};
+            for(int i=0;i<styles.length;i++)if(styles[i].equals(profile.optString("response_style")))selectedStyle[0]=i;
+            final Button[] styleButton={null};styleButton[0]=button("Ответы: "+styleLabels[selectedStyle[0]],false,v->{
+                Runnable[] choices=new Runnable[3];for(int i=0;i<3;i++){final int index=i;choices[i]=()->{selectedStyle[0]=index;styleButton[0].setText("Ответы: "+styleLabels[index]);};}
+                ui.choiceSheet("Стиль ответа",styleLabels,choices);
+            });
+            final boolean[] memoryEnabled={profile.optInt("memory_enabled",1)==1};final Button[] memoryButton={null};
+            memoryButton[0]=button("Личная память: "+(memoryEnabled[0]?"включена":"выключена"),false,v->{memoryEnabled[0]=!memoryEnabled[0];memoryButton[0].setText("Личная память: "+(memoryEnabled[0]?"включена":"выключена"));});
+            text("Ассистент может запоминать полезные факты из разговора. Память общая с сайтом.");
+            button("Сохранить профиль",true,v->{
+                try{JSONObject data=new JSONObject();for(int i=0;i<keys.length;i++)data.put(keys[i],fields[i].getText().toString().trim());data.put("response_style",styles[selectedStyle[0]]);data.put("memory_enabled",memoryEnabled[0]?1:0);
+                    call("/profile","PATCH",data,saved->{String name=(data.optString("first_name")+" "+data.optString("last_name")).trim();try{if(me!=null&&!name.isEmpty())me.put("name",name);}catch(Exception ignored){}message("Профиль сохранён");});
+                }catch(Exception error){message("Проверьте заполненные поля");}
+            });
+        });
+    }
     private void settings(){
         publicView=false;page("Профиль","settings",false);content.addView(ui.label("Ваше пространство",26,INK,true));
         menu("wallet","Тариф и подписка","Старт и Про · один доступ везде",this::billing);LinearLayout profile=ui.card(content);profile.addView(ui.label(me==null?"Сметра":me.optString("name"),24,INK,true));ui.space(profile,8);profile.addView(ui.label(me==null?"":me.optString("email"),13,MUTED,false));ui.space(profile,18);profile.addView(ui.badge(me==null||me.optString("plan").equals("free")?"Базовый доступ":me.optString("plan").toUpperCase(Locale.ROOT),BLUE));text("Ваш доступ действует и на сайте, и в приложении.");
         if(me!=null&&!me.optBoolean("email_verified",false)){LinearLayout note=ui.card(content);note.addView(ui.label("Подтвердите почту",16,AMBER,true));ui.space(note,8);note.addView(ui.label("Откройте ссылку из письма, чтобы подтвердить адрес аккаунта.",13,MUTED,false));addButton(note,"Отправить письмо",false,v->call("/auth/verify/resend","POST",new JSONObject(),r->message("Письмо отправлено")));}
-        ui.section(content,"Управление",null);menu("clock","Задачи","Ближайшие шаги по проектам",()->records("tasks"));menu("refresh","Обновить доступ","Синхронизировать аккаунт",this::refresh);menu("document","Поддержка","Поможем разобраться",this::support);
+        ui.section(content,"Управление",null);menu("user","О себе и ассистенте","Профиль, стиль ответов и память",this::nativeProfile);menu("clock","Задачи","Ближайшие шаги по проектам",()->records("tasks"));menu("refresh","Обновить доступ","Синхронизировать аккаунт",this::refresh);menu("document","Поддержка","Поможем разобраться",this::support);
         ui.space(content,20);button("Выйти из аккаунта",false,v->ui.sheet("Выйти из Сметры?","Сметы и заказы останутся в аккаунте. Локальный черновик на этом устройстве будет удалён.","Выйти",false,()->call("/auth/logout","POST",new JSONObject(),r->{clearSession();login(false);})));
         Button remove=button("Удалить аккаунт",false,v->ui.sheet("Удалить аккаунт?","Все предложения и данные аккаунта будут удалены без возможности восстановления.","Удалить навсегда",true,()->call("/me","DELETE",null,r->{clearSession();login(false);})));remove.setTextColor(RED);
         ui.space(content,22);TextView version=ui.label("СМЕТРА  /  "+BuildConfig.VERSION_NAME,10,MUTED,false);version.setGravity(Gravity.CENTER);content.addView(version);

@@ -6,6 +6,8 @@ window.SmetraFileEditor = (() => {
   async function open(file=null) {
     const mine=++generation,owner=user,section=tab,workspaceId=sessionStorage.getItem('workspace_id');
     const active=()=>mine===generation&&owner===user&&section===tab&&workspaceId===sessionStorage.getItem('workspace_id');
+    await window.SmetraLoadFeature?.('markdown');
+    if(!active())return;
     let content='';let places=[];
     try {
       if(file){const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;const response=await fetch('/api/files/'+encodeURIComponent(file.id),{credentials:'same-origin',headers});if(!response.ok)throw Error('Не удалось открыть документ');content=await response.text()}

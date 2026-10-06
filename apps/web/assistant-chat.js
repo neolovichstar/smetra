@@ -1,8 +1,5 @@
 'use strict';
 
-function assistantInline(source){return window.SmetraMarkdown.inline(source)}
-function assistantMarkdown(source){return window.SmetraMarkdown.render(source)}
-
 window.SmetraAssistantContext=function(value){
   if(!value||!['clients','quotes','projects','files','documents'].includes(value.entity)||typeof value.id!=='string')return;
   sessionStorage.setItem('smetra.assistant.context',JSON.stringify({entity:value.entity,id:value.id,label:String(value.label||'').slice(0,120),workspace_id:value.workspace_id||''}));

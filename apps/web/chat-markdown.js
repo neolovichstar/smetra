@@ -1,5 +1,8 @@
 'use strict';
 
+function assistantInline(source){return window.SmetraMarkdown.inline(source)}
+function assistantMarkdown(source){return window.SmetraMarkdown.render(source)}
+
 // Local CommonMark renderer. Model/user HTML stays text; remote images never load.
 (() => {
   const md=window.markdownit({html:false,breaks:false,linkify:true,typographer:false});

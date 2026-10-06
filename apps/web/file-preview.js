@@ -3,6 +3,7 @@ window.SmetraFilePreview = (() => {
   let dialog;
   let objectUrl;
   let controller;
+  let openRevision=0;
   const officeTypes=['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv'];
 
   function officeView(body, data) {
@@ -82,6 +83,9 @@ window.SmetraFilePreview = (() => {
   }
 
   async function open(file, workspaceId) {
+    const mine=++openRevision,owner=window.user,section=typeof tab==='undefined'?'':tab;
+    await window.SmetraLoadFeature?.('markdown');
+    if(mine!==openRevision||owner!==window.user||(typeof tab!=='undefined'&&section!==tab))return;
     const view = ensureDialog();
     release();
     view.querySelector('.file-preview-name').textContent = file.name;

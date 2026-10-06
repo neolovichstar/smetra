@@ -1,18 +1,39 @@
 const $ = (s) => document.querySelector(s);
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const rub = (kopecks) => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(kopecks / 100);
-const date = (seconds) => new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'}).format(new Date(seconds * 1000));
+const rubFormatter=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2});
+const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
+const rub = (kopecks) => rubFormatter.format(kopecks / 100);
+const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
 let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0;
 try{sessionStorage.removeItem('mobile_token')}catch{}
+const apiRequests=new Map();
 async function api(path, options = {}) {
   const headers = {'Content-Type':'application/json',...options.headers};
   const workspaceId=sessionStorage.getItem('workspace_id');
   if(workspaceId)headers['X-Workspace-Id']=workspaceId;
-  const response = await fetch('/api' + path,{credentials:'same-origin',...options,headers});
-  let result;
-  try { result = await response.json(); } catch { throw Error('Сервер вернул некорректный ответ'); }
-  if (!response.ok) {const error=Error(result.error || `Ошибка ${response.status}`);error.status=response.status;throw error;}
-  return result;
+  const method=(options.method||'GET').toUpperCase();
+  const share=method==='GET'&&Object.keys(options).length===0;
+  const key=JSON.stringify([user?.id||'',workspaceId||'',path]);
+  if(method!=='GET')apiRequests.clear();
+  if(share&&apiRequests.has(key))return apiRequests.get(key);
+  const request=(async()=>{
+    const controller=options.signal?null:new AbortController();
+    const slow=method!=='GET'&&/^\/(assistant|ai|files)(\/|$)/.test(path);
+    const timer=controller?setTimeout(()=>controller.abort(),slow?120000:30000):null;
+    try{
+      const response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
+      let result;
+      try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
+      if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;throw error}
+      return result;
+    }catch(error){
+      if(error.name==='AbortError')throw Error('Сервер отвечает слишком долго. Повторите попытку.');
+      if(error instanceof TypeError)throw Error('Нет связи с сервером. Проверьте интернет и повторите попытку.');
+      throw error;
+    }finally{if(timer!==null)clearTimeout(timer)}
+  })();
+  if(share)apiRequests.set(key,request);
+  try{return await request}finally{if(apiRequests.get(key)===request)apiRequests.delete(key)}
 }
 function notify(message) { const el=$('#toast'); if(!el){alert(message);return;} el.textContent=message;el.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.add('hidden'),4500); }
 function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';button.innerHTML='<img class="icon" src="/assets/icons/'+(dark?'sun':'moon')+'.svg" alt="">'+(id==='theme-alt'?label:'');button.setAttribute('aria-label',label);button.title=label;} }
@@ -40,6 +61,8 @@ async function render() {
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   try {
+    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin'})[section];
+    if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}

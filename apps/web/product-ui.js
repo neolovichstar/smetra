@@ -112,7 +112,8 @@
     root.querySelectorAll('.workspace-home .dashboard-aside').forEach(section => {
       section.classList.toggle('is-empty', !section.querySelector('.record-line'));
     });
-    root.querySelectorAll('button, a.btn').forEach(button => {
+    const buttons=[...(root.matches?.('button,a.btn')?[root]:[]),...root.querySelectorAll('button, a.btn')];
+    buttons.forEach(button => {
       if (button.dataset.uiIcon) {
         if (/^[a-z-]+$/.test(button.dataset.uiIcon)) button.style.setProperty('--ui-icon', `url('/assets/icons/${button.dataset.uiIcon}.svg')`);
         return;
@@ -130,11 +131,20 @@
   }
   decorate(document);
   let pending = false;
+  const added=new Set();
   const content = document.getElementById('content');
   if (!content) return;
   new MutationObserver(records => {
-    if (pending || !records.some(record => record.addedNodes.length)) return;
-    pending = true;
-    requestAnimationFrame(() => { pending = false; decorate(content); });
+    for(const record of records)for(const node of record.addedNodes){
+      if(node.nodeType===1)added.add(node);
+      else if(record.target.matches?.('button,a.btn')&&!record.target.dataset.uiIcon)added.add(record.target);
+    }
+    if(pending||!added.size)return;
+    pending=true;
+    requestAnimationFrame(()=>{
+      pending=false;
+      const roots=[...added];added.clear();
+      for(const root of roots)if(root.isConnected&&!roots.some(other=>other!==root&&other.contains(root)))decorate(root);
+    });
   }).observe(content, {childList:true, subtree:true});
 })();

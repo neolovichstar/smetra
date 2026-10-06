@@ -168,6 +168,13 @@ def calculate(items):
 
 def ensure_workspace(con, user):
     wid = str(uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + user["id"]))
+    # Existing accounts need no writes on every page/API request.
+    if con.execute(
+        "SELECT 1 FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+        "WHERE w.id=? AND w.owner_id=? AND m.user_id=? AND m.role='owner'",
+        (wid, user["id"], user["id"]),
+    ).fetchone():
+        return wid
     con.execute(
         "INSERT OR IGNORE INTO workspaces(id,owner_id,name,created_at) VALUES(?,?,?,?)",
         (wid, user["id"], user["name"], stamp()),

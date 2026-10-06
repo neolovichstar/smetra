@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
+(async()=>{
+ const dom=new JSDOM('<div id="content"></div>',{url:'https://example.test/app',runScripts:'dangerously'}),w=dom.window;
+ w.matchMedia=()=>({matches:false});
+ const script=w.document.createElement('script');script.textContent=fs.readFileSync('apps/web/app.js','utf8').split("if($('#auth')){")[0];w.document.head.append(script);
+ w.eval("user={id:'owner'}");const calls=[];
+ w.fetch=(url,options)=>new Promise((resolve,reject)=>calls.push({url,options,resolve,reject}));
+ const reply=(index,value={},status=200)=>calls[index].resolve({ok:status<400,status,json:async()=>value});
+ const first=w.api('/clients'),second=w.api('/clients');assert.equal(calls.length,1);reply(0,{items:[]});await Promise.all([first,second]);
+ const fresh=w.api('/clients');assert.equal(calls.length,2,'Resolved GET is not cached');reply(1);await fresh;
+ const old=w.api('/workspace');w.sessionStorage.setItem('workspace_id','other');const other=w.api('/workspace');assert.equal(calls.length,4,'Workspace identity separates in-flight reads');reply(2);reply(3);await Promise.all([old,other]);
+ const before=w.api('/tasks');const write=w.api('/tasks',{method:'POST',body:'{}'});const after=w.api('/tasks');assert.equal(calls.length,7,'Mutation invalidates in-flight read sharing');reply(4,{items:['old']});reply(5);reply(6,{items:['new']});await Promise.all([before,write,after]);
+ const account=w.api('/profile');w.eval("user={id:'other-user'}");const another=w.api('/profile');assert.equal(calls.length,9);reply(7);reply(8);await Promise.all([account,another]);
+ const failed=w.api('/clients');calls[9].reject(new w.TypeError('Failed to fetch'));await assert.rejects(failed,/Нет связи с сервером/);
+ const denied=w.api('/clients');reply(10,{error:{code:'forbidden',message:'Нет доступа'}},403);await assert.rejects(denied,error=>error.message==='Нет доступа'&&error.status===403);
+ assert.equal(calls[0].options.credentials,'same-origin');assert.equal(calls[3].options.headers['X-Workspace-Id'],'other');
+ assert.ok(w.eval('rub(12345)').includes('123,45'),'Currency keeps kopecks');
+ dom.window.close();console.log('PASS: concurrent GET sharing, no persistent private cache, workspace/account isolation, write invalidation, network/structured errors and kopecks');
+})().catch(error=>{console.error(error);process.exit(1)});

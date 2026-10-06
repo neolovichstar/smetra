@@ -508,6 +508,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("black.js", "text/javascript"),
             ("assistant-chat.js", "text/javascript"),
             ("profile-ui.js", "text/javascript"),
+            ("features.js", "text/javascript"),
             ("chat-markdown.js", "text/javascript"),
             ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
             ("assistant-studio.css", "text/css"),

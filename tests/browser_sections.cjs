@@ -25,7 +25,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     await evaluate(`tab=${JSON.stringify(route)};render()`);
     await until(`document.querySelector('#content').dataset.section===${JSON.stringify(route)}`);
     assert.equal(await evaluate("!!document.querySelector('#retry')"),false,route+' failed to load');
-    for(const width of [320,390,768,1440]){
+    for(const width of [320,360,375,390,412,430,768,1440]){
       await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});
       await evaluate('window.scrollTo({top:0,behavior:"instant"})');await wait(200);
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,route+' overflows at '+width);
