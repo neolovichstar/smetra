@@ -152,6 +152,19 @@ class FlowTests(unittest.TestCase):
         except urllib.error.HTTPError as r:
             return r.code, json.load(r)
 
+    def test_assistant_studio_assets_are_served(self):
+        for path, mime in (
+            ("/profile-ui.js", "text/javascript"),
+            ("/chat-markdown.js", "text/javascript"),
+            ("/vendor/markdown-it-15.0.2.min.js", "text/javascript"),
+            ("/assistant-studio.css", "text/css"),
+        ):
+            with self.subTest(path=path):
+                with urllib.request.urlopen(self.base + path) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get_content_type(), mime)
+                    self.assertGreater(len(response.read()), 100)
+
     def test_signup_quote_accept_security_and_billing(self):
         email = "flow@sample.test"
         status, reg = self.request(
