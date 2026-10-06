@@ -175,6 +175,7 @@ class FlowTests(unittest.TestCase):
     def test_workspace_initial_assets_are_served(self):
         html = (ROOT / "apps/web/app.html").read_text(encoding="utf-8")
         assets = set(re.findall(r'(?:src|href)="(/[^"?#]+)', html))
+        assets.update('/'+str(file.relative_to(ROOT/'apps/web')).replace('\\', '/') for file in (ROOT/'apps/web/assets/icons').glob('*.svg'))
         for path in sorted(assets):
             if not Path(path).suffix:
                 continue

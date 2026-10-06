@@ -555,6 +555,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "buildings",
             "calendar",
             "chat-circle",
+            "chat-circle",
             "check-square",
             "credit-card",
             "download-simple",
