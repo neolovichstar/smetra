@@ -493,6 +493,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/pwa.js": ("pwa.js", "text/javascript"),
             "/offline.html": ("offline.html", "text/html"),
             "/offline.css": ("offline.css", "text/css"),
+            "/theme-init.js": ("theme-init.js", "text/javascript"),
+            "/themes.css": ("themes.css", "text/css"),
+            "/assets/fonts/onest-variable.woff2": ("assets/fonts/onest-variable.woff2", "font/woff2"),
         }
         for weight in (400, 500, 600, 700, 800):
             font = f"assets/fonts/manrope-{weight}.ttf"

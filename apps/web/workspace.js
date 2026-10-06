@@ -16,7 +16,28 @@ window.Workspace = (() => {
   const button = (label,action,id='',cls='') => `<button class="btn small ${cls}" data-work="${action}" data-id="${e(id)}">${label}</button>`;
   const mainTitle = (title,subtitle,actions='') => header(title,subtitle,actions);
   const formObject = form => Object.fromEntries(new FormData(form));
-  const amount = value => {const n=Number(value);if(!Number.isFinite(n)||n<0)throw Error('Проверьте сумму');return Math.round(n*100)};
+  const decimalUnits=(value,places=4)=>{
+    const match=String(value??0).trim().match(/^(\d{1,16})(?:\.(\d{0,16}))?(?:e([+-]?\d{1,2}))?$/i);
+    if(!match)throw Error('Проверьте числовое значение');
+    const exponent=Number(match[3]||0),shift=places+exponent-(match[2]||'').length;
+    if(Math.abs(exponent)>12)throw Error('Число слишком большое');
+    const digits=BigInt(match[1]+(match[2]||''));
+    if(shift>=0)return digits*10n**BigInt(shift);
+    const divisor=10n**BigInt(-shift);if(digits%divisor)throw Error('Допустимо до '+places+' знаков после запятой');return digits/divisor;
+  };
+  const safeMoney=value=>{const number=Number(value);if(!Number.isSafeInteger(number)||number<0)throw Error('Проверьте сумму');return number};
+  const amount = value => safeMoney(decimalUnits(value||'0',2));
+  const calculateLineTotal=row=>{
+    if(row.optional&&!row.included)return 0;
+    const scale=10000n,hundred=100n*scale;
+    const quantity=decimalUnits(row.quantity||'0'),coefficient=decimalUnits(row.coefficient||'1');
+    const markup=decimalUnits(row.markup||'0'),discount=decimalUnits(row.discount||'0'),tax=decimalUnits(row.tax||'0');
+    if(discount>hundred||tax>hundred)throw Error('Скидка и налог — до 100%');
+    const divisor=scale*scale*hundred*hundred;
+    const raw=quantity*BigInt(row.unit_price||0)*coefficient*(hundred+markup)*(hundred-discount);
+    const base=(raw+divisor/2n)/divisor;
+    return safeMoney(base+(base*tax+hundred/2n)/hundred);
+  };
   function closeModal(){if(!modal?.open)return;modal.classList.add('is-closing');clearTimeout(modalTimer);modalTimer=setTimeout(()=>{modal.close();modal.classList.remove('is-closing');document.body.classList.remove('modal-open')},matchMedia('(prefers-reduced-motion: reduce)').matches?0:200)}
   function openModal(title,subtitle,content){
     if(!modal){modal=document.createElement('dialog');modal.id='workspace-dialog';modal.className='experience-dialog workspace-dialog';document.body.append(modal);modal.addEventListener('cancel',ev=>{ev.preventDefault();closeModal()});modal.addEventListener('click',ev=>{if(ev.target===modal){const r=modal.getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)closeModal()}});modal.addEventListener('close',()=>{if(!modal.open){document.body.classList.remove('modal-open');modal.replaceChildren()}})}
@@ -213,7 +234,7 @@ window.Workspace = (() => {
     if(a==='import')return importForm(id);
   }
   async function confirmAction(title,text,fn){const root=openModal(title,text,`<form>${formEnd('Подтвердить')}`);bindCancel(root);submitForm(root.querySelector('form'),async()=>{await fn();closeModal()})}
-  function askAbout(entity,id,label){window.SmetraAssistantContext?.({entity,id,label,workspace_id:workspace?.id});document.querySelector('[data-tab="assistant"]')?.click()}
+  async function askAbout(entity,id,label){const active=pageRequest();try{if(window.SmetraLoadFeature)await window.SmetraLoadFeature('assistant');if(!active())return;window.SmetraAssistantContext?.({entity,id,label,workspace_id:workspace?.id});document.querySelector('[data-tab="assistant"]')?.click()}catch(error){if(active())notify(error.message)}}
   async function quoteDetail(id){
     const active=pageRequest(true);
     const [{quote:q,activity},versions]=await Promise.all([api('/quotes/'+id),api('/quotes/'+id+'/versions')]);
@@ -252,13 +273,13 @@ window.Workspace = (() => {
     const selectedRows=new Set();let pendingBulk=null,lastBulk=null;
     const bulkField=document.querySelector('#editor-bulk-field'),bulkValue=document.querySelector('#editor-bulk-value'),bulkDiff=document.querySelector('#editor-bulk-diff');
     const bulkCount=document.querySelector('#editor-bulk-count'),bulkAll=document.querySelector('#editor-bulk-all'),bulkUndo=document.querySelector('#editor-bulk-undo');
-    const lineTotal=r=>{if(r.optional&&!r.included)return 0;const base=Math.round(Number(r.quantity)*r.unit_price*Number(r.coefficient||1)*(1+Number(r.markup||0)/100)*(1-Number(r.discount||0)/100));return base+Math.round(base*Number(r.tax||0)/100)};
-    const total=()=>{document.querySelector('#editor-total').textContent=money(rows.reduce((sum,row)=>sum+lineTotal(row),0),form.elements.currency.value)};
+    const lineTotal=calculateLineTotal;
+    const total=()=>{try{document.querySelector('#editor-total').textContent=money(rows.reduce((sum,row)=>sum+lineTotal(row),0),form.elements.currency.value)}catch(error){document.querySelector('#editor-total').textContent=error.message}};
     const bulkState=()=>{bulkCount.textContent=selectedRows.size?`${selectedRows.size} из ${rows.length} строк`:'Не выбраны';bulkAll.textContent=selectedRows.size===Math.min(rows.length,50)?'Снять выбор':rows.length>50?'Выбрать первые 50':'Выбрать все';bulkUndo.hidden=!lastBulk};
     const clearBulk=()=>{pendingBulk=null;bulkDiff.replaceChildren();bulkState()};
     const paint=()=>{document.querySelector('#editor-rows').innerHTML=rows.map((i,n)=>`<div class="editor-item" data-row="${n}"><div class="item-heading"><label class="editor-row-select"><input type="checkbox" data-bulk-select="${n}" aria-label="Выбрать позицию ${n+1}" ${selectedRows.has(n)?'checked':''}></label><span class="muted">${String(n+1).padStart(2,'0')}</span><input data-key="name" aria-label="Название позиции ${n+1}" value="${e(i.name)}" placeholder="Название услуги, работы или товара" required maxlength="200"><button type="button" class="icon-button" data-remove="${n}" aria-label="Удалить позицию ${n+1}">×</button></div><div class="item-fields">${rowField('quantity','Количество',i.quantity,'number','0.0001')}${rowField('unit','Единица',i.unit)}${rowField('unit_price','Цена',i.unit_price/100,'number','0.01')}${rowField('cost_price','Себестоимость',i.cost_price/100,'number','0.01')}</div><details><summary>Скидка, налог и детали</summary><div class="item-fields">${rowField('discount','Скидка, %',i.discount||0,'number','0.01')}${rowField('tax','Налог, %',i.tax||0,'number','0.01')}${rowField('markup','Наценка, %',i.markup||0,'number','0.01')}${rowField('coefficient','Коэффициент цены',i.coefficient||1,'number','0.001')}${rowField('category','Категория',i.category||'')}</div><label class="check-label"><input type="checkbox" data-key="optional" ${i.optional?'checked':''}> Дополнительная позиция</label><label class="check-label"><input type="checkbox" data-key="included" ${i.included?'checked':''}> Включена в итог</label></details></div>`).join('');total();bulkState()};
     const rowContainer=document.querySelector('#editor-rows');
-    rowContainer.oninput=ev=>{const key=ev.target.dataset.key;if(!key)return;const index=Number(ev.target.closest('[data-row]').dataset.row),row=rows[index];row[key]=ev.target.type==='checkbox'?ev.target.checked:['unit_price','cost_price'].includes(key)?amount(ev.target.value):ev.target.value;if(lastBulk?.field===key&&lastBulk.changes.some(change=>change.index===index))lastBulk=null;total();clearBulk()};
+    rowContainer.oninput=ev=>{const key=ev.target.dataset.key;if(!key)return;const index=Number(ev.target.closest('[data-row]').dataset.row),row=rows[index];try{row[key]=ev.target.type==='checkbox'?ev.target.checked:['unit_price','cost_price'].includes(key)?amount(ev.target.value):ev.target.value;ev.target.setCustomValidity('')}catch(error){ev.target.setCustomValidity(error.message);return}if(lastBulk?.field===key&&lastBulk.changes.some(change=>change.index===index))lastBulk=null;total();clearBulk()};
     rowContainer.onchange=ev=>{if(ev.target.dataset.bulkSelect===undefined)return;const index=Number(ev.target.dataset.bulkSelect);if(ev.target.checked){if(selectedRows.size>=50){ev.target.checked=false;notify('За один раз можно изменить до 50 строк');return}selectedRows.add(index)}else selectedRows.delete(index);clearBulk()};
     rowContainer.onclick=ev=>{const b=ev.target.closest('[data-remove]');if(!b)return;if(rows.length===1){notify('Оставьте хотя бы одну позицию');return}rows.splice(Number(b.dataset.remove),1);selectedRows.clear();lastBulk=null;clearBulk();paint()};
     document.querySelector('#add-row').onclick=()=>{rows.push({name:'',quantity:'1',unit:'шт.',unit_price:0,cost_price:0,tax:'0',discount:'0',markup:'0',optional:false,included:true});clearBulk();paint()};
@@ -271,6 +292,7 @@ window.Workspace = (() => {
     bulkField.onchange=()=>{bulkValue.value='';bulkValue.placeholder=({coefficient:'Например, 1.15',markup:'Например, 8',unit:'Например, м²',category:'Например, Отделка'})[bulkField.value];bulkValue.inputMode=['coefficient','markup'].includes(bulkField.value)?'decimal':'text';clearBulk()};
     bulkValue.oninput=clearBulk;
     document.querySelector('#editor-bulk-preview').onclick=()=>{
+      for(const control of rowContainer.querySelectorAll('input[type=number]'))if(!control.reportValidity())return;
       if(!selectedRows.size){notify('Выберите позиции для изменения');return}
       const key=bulkField.value,raw=bulkValue.value.trim();let value=raw;
       if(key==='coefficient'||key==='markup'){
@@ -300,7 +322,7 @@ window.Workspace = (() => {
     submitForm(form,async()=>{const r=await api(q.id?'/quotes/'+q.id:'/quotes',{method:q.id?'PATCH':'POST',body:JSON.stringify(payload())});try{localStorage.removeItem(draftKey)}catch{}await quoteDetail(r.quote.id);notify('Смета сохранена')});
     paint();
   }
-  function rowField(key,label,value,type='text',step=''){return `<label>${label}<input data-key="${key}" value="${e(value)}" type="${type}" ${type==='number'?`min="0" step="${step||'1'}"`:''} aria-label="${label}"></label>`}
+  function rowField(key,label,value,type='text',step=''){const limits={quantity:[.0001,1000000],unit_price:[0,10000000000],cost_price:[0,10000000000],discount:[0,100],tax:[0,100],markup:[0,10000],coefficient:[.001,100]}[key]||[0,10000000000];return `<label>${label}<input data-key="${key}" value="${e(value)}" type="${type}" ${type==='number'?`required min="${limits[0]}" max="${limits[1]}" step="${step||'1'}"`:''} aria-label="${label}"></label>`}
   async function catalogDetail(id){
     const {item}=await api('/catalog/'+id);
     const history=item.price_history||[];
@@ -449,5 +471,5 @@ window.Workspace = (() => {
   document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'&&user){ev.preventDefault();palette()}});
   document.querySelector('#command-open')?.addEventListener('click',()=>{if(user)palette()});
   async function palette(){const root=openModal('Быстрый переход','Найдите клиента, смету, заказ или документ.',`<input id="command-search" type="search" placeholder="Поиск или действие…" aria-label="Глобальный поиск"><div id="command-results" class="command-results">${button('Создать смету','quote-new')}${Object.keys(names).slice(0,8).map(k=>button(names[k],'navigate',k)).join('')}</div>`);let timer;root.querySelector('input').focus();root.querySelector('input').oninput=ev=>{clearTimeout(timer);const q=ev.target.value;timer=setTimeout(async()=>{try{const r=await api('/search?q='+encodeURIComponent(q));if(root.querySelector('input').value!==q)return;root.querySelector('#command-results').innerHTML=r.items.map(i=>`<button class="command-result" data-work="${i.kind==='quotes'?'quote':'navigate'}" data-id="${i.kind==='quotes'?i.id:i.kind}"><span>${e(i.name)}</span><small>${e(names[i.kind]||'Смета')}</small></button>`).join('')||'<p class="muted">Ничего не найдено</p>'}catch(err){notify(err.message)}},180)};root.querySelector('#command-results').onclick=async ev=>{const b=ev.target.closest('[data-work]');if(b){closeModal();await action(b)}}}
-  return {render,editor,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,reset:()=>{workspace=null;current=null;workspaces=[];generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
+  return {render,editor,calculateLineTotal,majorToKopecks:amount,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,reset:()=>{workspace=null;current=null;workspaces=[];generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
 })();

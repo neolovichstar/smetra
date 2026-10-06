@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 (async()=>{
- const listeners={},stored=new Map(),deleted=[],network=[],registered=[];
+ const listeners={},stored=new Map(),deleted=[],network=[];
  const cache={addAll:async requests=>{for(const request of requests)stored.set(request.url.endsWith('/offline.css')?'/offline.css':'/offline.html',{offline:request.url.endsWith('/offline.html')})},match:async key=>stored.get(key)};
  const context={Request:class{constructor(url,options){this.url=url;this.options=options}},Response:{error:()=>({error:true})},URL,caches:{open:async()=>cache,keys:async()=>['other-app','smetra-public-offline-v0','smetra-public-offline-v1'],delete:async name=>deleted.push(name)},self:{location:{origin:'https://example.test'},skipWaiting:async()=>{},clients:{claim:async()=>{}},addEventListener:(name,callback)=>listeners[name]=callback},fetch:async request=>{network.push(request);if(request.offline)throw Error('Offline');return {online:true}}};
  vm.runInNewContext(fs.readFileSync('apps/web/service-worker.js','utf8'),context);

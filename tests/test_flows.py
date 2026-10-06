@@ -2,6 +2,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import re
 import secrets
 import tempfile
 import threading
@@ -170,6 +171,17 @@ class FlowTests(unittest.TestCase):
                     self.assertEqual(response.status, 200)
                     self.assertEqual(response.headers.get_content_type(), mime)
                     self.assertGreater(len(response.read()), 100)
+
+    def test_workspace_initial_assets_are_served(self):
+        html = (ROOT / "apps/web/app.html").read_text(encoding="utf-8")
+        assets = set(re.findall(r'(?:src|href)="(/[^"?#]+)', html))
+        for path in sorted(assets):
+            if not Path(path).suffix:
+                continue
+            with self.subTest(path=path):
+                with urllib.request.urlopen(self.base + path) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertGreater(len(response.read()), 0)
 
     def test_signup_quote_accept_security_and_billing(self):
         email = "flow@sample.test"

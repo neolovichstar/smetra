@@ -89,5 +89,13 @@ function setup(){
   doc.querySelector('[data-work="entity"]').click();await sleep(0);w.eval("tab='support'");doc.querySelector('#content').textContent='Support';request.resolve({items:[]});await sleep(0);
   assert.equal(doc.querySelector('#content').textContent,'Support');
  });
+ await test('first assistant use loads tools before applying record context',async({w,doc})=>{
+  w.eval("tab='quotes'");const request=deferred();w.SmetraLoadFeature=()=>request.promise;
+  const original=w.api;w.api=path=>path==='/quotes/quote'?Promise.resolve({quote:{id:'quote',title:'Context quote',client:'QA',currency:'RUB',items:[],approval_state:'draft'},activity:[]}):path==='/quotes/quote/versions'?Promise.resolve({versions:[]}):original(path);
+  await w.Workspace.openQuote('quote');let clicked=false,context;
+  const navigation=doc.createElement('button');navigation.dataset.tab='assistant';navigation.onclick=()=>clicked=true;doc.body.append(navigation);
+  doc.querySelector('#ask-ai').click();await sleep(0);assert.equal(clicked,false);
+  w.SmetraAssistantContext=value=>context=value;request.resolve();await sleep(0);assert.equal(clicked,true);assert.equal(context.id,'quote');
+ });
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exit(1)});

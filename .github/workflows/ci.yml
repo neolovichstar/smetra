@@ -27,6 +27,7 @@ jobs:
           npm install --prefix data/dom --no-audit --no-fund jsdom@27.4.0
           node tests/assistant_markdown.cjs
           node tests/pwa_cache.cjs
+          node tests/quote_money.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_api_transport.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_capability.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_office_files.cjs
