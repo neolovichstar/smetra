@@ -488,6 +488,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/favicon.ico": ("favicon.png", "image/png"),
             "/robots.txt": ("robots.txt", "text/plain"),
             "/sitemap.xml": ("sitemap.xml", "application/xml"),
+            "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
+            "/service-worker.js": ("service-worker.js", "text/javascript"),
+            "/pwa.js": ("pwa.js", "text/javascript"),
+            "/offline.html": ("offline.html", "text/html"),
+            "/offline.css": ("offline.css", "text/css"),
         }
         for weight in (400, 500, 600, 700, 800):
             font = f"assets/fonts/manrope-{weight}.ttf"

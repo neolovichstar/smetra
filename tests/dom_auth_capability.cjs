@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
+(async()=>{
+ const dom=new JSDOM(fs.readFileSync('apps/web/app.html','utf8'),{url:'https://example.test/app?register=1',runScripts:'outside-only'}),w=dom.window,doc=w.document;
+ w.matchMedia=()=>({matches:false,addEventListener(){}});w.SmetraEmailSignupAvailable=false;w.SmetraEmailDeliveryAvailable=false;
+ w.fetch=async()=>({ok:false,status:401,json:async()=>({error:'Войдите'})});
+ w.eval(fs.readFileSync('apps/web/app.js','utf8'));
+ await new Promise(resolve=>setTimeout(resolve,0));
+ const disclosure=doc.querySelector('#email-disclosure'),name=doc.querySelector('#name'),tabs=doc.querySelector('.auth-tabs');
+ assert.ok(disclosure.classList.contains('hidden'));assert.equal(name.required,false);assert.match(doc.querySelector('#auth-copy').textContent,/доступный сервис/);
+ tabs.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.ok(!disclosure.classList.contains('hidden'));
+ tabs.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.ok(disclosure.classList.contains('hidden'));
+ let calls=0;w.api=async()=>{calls++;throw Error('Offline')};
+ doc.querySelector('#auth-form').dispatchEvent(new w.Event('submit',{cancelable:true}));assert.equal(calls,0,'Unavailable email registration cannot submit');
+ doc.querySelector('#auth-login-tab').click();assert.ok(!disclosure.classList.contains('hidden'));
+ let fail;w.api=()=>{calls++;return new Promise((resolve,reject)=>fail=reject)};
+ const form=doc.querySelector('#auth-form');form.dispatchEvent(new w.Event('submit',{cancelable:true}));form.dispatchEvent(new w.Event('submit',{cancelable:true}));assert.equal(calls,1);
+ fail(Error('Offline'));await new Promise(resolve=>setTimeout(resolve,0));assert.equal(doc.querySelector('#auth-submit').disabled,false);assert.equal(doc.querySelector('#auth-form-error').textContent,'Offline');
+ w.SmetraEmailSignupAvailable=true;doc.dispatchEvent(new w.Event('smetra:email-capability'));doc.querySelector('#auth-register-tab').click();assert.ok(!disclosure.classList.contains('hidden'));assert.equal(name.required,true);
+ dom.window.close();console.log('PASS: provider-only registration, keyboard mode changes, login availability and duplicate submit prevention');
+})().catch(error=>{console.error(error);process.exit(1)});

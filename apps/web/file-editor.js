@@ -6,7 +6,7 @@ window.SmetraFileEditor = (() => {
   async function open(file=null) {
     const mine=++generation,owner=user,section=tab,workspaceId=sessionStorage.getItem('workspace_id');
     const active=()=>mine===generation&&owner===user&&section===tab&&workspaceId===sessionStorage.getItem('workspace_id');
-    await window.SmetraLoadFeature?.('markdown');
+    if(window.SmetraLoadFeature)await window.SmetraLoadFeature('markdown');
     if(!active())return;
     let content='';let places=[];
     try {

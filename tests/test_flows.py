@@ -159,6 +159,11 @@ class FlowTests(unittest.TestCase):
             ("/chat-markdown.js", "text/javascript"),
             ("/vendor/markdown-it-15.0.2.min.js", "text/javascript"),
             ("/assistant-studio.css", "text/css"),
+            ("/manifest.webmanifest", "application/manifest+json"),
+            ("/service-worker.js", "text/javascript"),
+            ("/pwa.js", "text/javascript"),
+            ("/offline.html", "text/html"),
+            ("/offline.css", "text/css"),
         ):
             with self.subTest(path=path):
                 with urllib.request.urlopen(self.base + path) as response:

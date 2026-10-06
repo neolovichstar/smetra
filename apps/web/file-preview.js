@@ -63,6 +63,7 @@ window.SmetraFilePreview = (() => {
   }
 
   function close() {
+    openRevision++;
     if (dialog?.open) dialog.close();
     release();
   }
@@ -83,9 +84,9 @@ window.SmetraFilePreview = (() => {
   }
 
   async function open(file, workspaceId) {
-    const mine=++openRevision,owner=window.user,section=typeof tab==='undefined'?'':tab;
-    await window.SmetraLoadFeature?.('markdown');
-    if(mine!==openRevision||owner!==window.user||(typeof tab!=='undefined'&&section!==tab))return;
+    const mine=++openRevision,owner=typeof user==='undefined'?null:user,section=typeof tab==='undefined'?'':tab;
+    if(window.SmetraLoadFeature)await window.SmetraLoadFeature('markdown');
+    if(mine!==openRevision||owner!==(typeof user==='undefined'?null:user)||(typeof tab!=='undefined'&&section!==tab))return;
     const view = ensureDialog();
     release();
     view.querySelector('.file-preview-name').textContent = file.name;

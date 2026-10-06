@@ -219,6 +219,17 @@ class IdentityAssistantTests(unittest.TestCase):
         with patch.dict(os.environ, values):
             self.assertFalse(self.call("/auth/providers")[1]["email_delivery_available"])
 
+    def test_email_signup_capability_matches_production_delivery(self):
+        values = dict(PUBLIC_ORIGIN="https://example.test", ALLOW_UNVERIFIED_SIGNUP="", SMTP_HOST="", SMTP_FROM="", SMTP_USER="", SMTP_PASSWORD="")
+        with patch.dict(os.environ, values):
+            self.assertFalse(self.call("/auth/providers")[1]["email_signup_available"])
+        values["PUBLIC_ORIGIN"] = "http://localhost:8080"
+        with patch.dict(os.environ, values):
+            self.assertTrue(self.call("/auth/providers")[1]["email_signup_available"])
+        values.update(PUBLIC_ORIGIN="https://example.test", SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private")
+        with patch.dict(os.environ, values):
+            self.assertTrue(self.call("/auth/providers")[1]["email_signup_available"])
+
     def test_vk_family_uses_server_callback_and_pkce(self):
         with patch.dict(os.environ, VK_CLIENT_ID="54792875"):
             for provider, expected in (("vk", "vkid"), ("mail", "mail_ru"), ("ok", "ok_ru")):

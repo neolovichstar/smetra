@@ -10,6 +10,7 @@
  try{
   const data=await api('/auth/providers');
   window.SmetraEmailDeliveryAvailable=data.email_delivery_available===true;
+  window.SmetraEmailSignupAvailable=data.email_signup_available!==false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
   const enabled=data.providers.filter(provider=>provider.enabled);
   host.classList.toggle('single',enabled.length===1);

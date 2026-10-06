@@ -54,7 +54,7 @@ public class MainActivity extends Activity {
     private int catalogLoadSeq=0;
     private boolean catalogHasMore=false;
     private JSONArray catalogItems=new JSONArray();
-    private boolean publicView=false;
+    private boolean publicView=false,emailSignupAvailable=false;
     private Button clickedButton;
     private TextView feedback;
     interface Done {void onResult(JSONObject json);}
@@ -212,7 +212,8 @@ public class MainActivity extends Activity {
                 call(create?"/auth/register":"/auth/login","POST",body,result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().clear().apply();}catch(Exception error){token=null;message("Не удалось защитить сессию на устройстве");return;}me=result.optJSONObject("user");if(create)Analytics.registration(me);else Analytics.login(me);afterLogin();});
             }catch(Exception error){message("Не удалось войти");}
         });
-        button(create?"Уже есть аккаунт · Войти":"Первый раз? Создать аккаунт",false,v->emailLogin(!create));
+        if(create||emailSignupAvailable)button(create?"Уже есть аккаунт · Войти":"Первый раз? Создать аккаунт",false,v->emailLogin(!create));
+        else button("Другие способы входа",false,v->login(false));
         ui.space(content,18);TextView note=ui.label("От первого расчёта до завершённого проекта",11,MUTED,false);note.setGravity(Gravity.CENTER);content.addView(note);
     }
     private void login(boolean ignored){
@@ -220,6 +221,7 @@ public class MainActivity extends Activity {
         LinearLayout methods=ui.column();content.addView(methods);
         addButton(methods,"Войти по почте",true,v->emailLogin(false));
         call("/auth/providers","GET",null,result->{
+            emailSignupAvailable=result.optBoolean("email_signup_available",true);
             JSONArray list=result.optJSONArray("providers");methods.removeAllViews();int enabled=0;
             if(list!=null)for(int i=0;i<list.length();i++){
                 JSONObject provider=list.optJSONObject(i);
@@ -1733,7 +1735,7 @@ public class MainActivity extends Activity {
         publicView=false;page("Профиль","settings",false);content.addView(ui.label("Ваше пространство",26,INK,true));
         menu("wallet","Тариф и подписка","Старт и Про · один доступ везде",this::billing);LinearLayout profile=ui.card(content);profile.addView(ui.label(me==null?"Сметра":me.optString("name"),24,INK,true));ui.space(profile,8);profile.addView(ui.label(me==null?"":me.optString("email"),13,MUTED,false));ui.space(profile,18);profile.addView(ui.badge(me==null||me.optString("plan").equals("free")?"Базовый доступ":me.optString("plan").toUpperCase(Locale.ROOT),BLUE));text("Ваш доступ действует и на сайте, и в приложении.");
         if(me!=null&&!me.optBoolean("email_verified",false)){LinearLayout note=ui.card(content);note.addView(ui.label("Подтвердите почту",16,AMBER,true));ui.space(note,8);note.addView(ui.label("Откройте ссылку из письма, чтобы подтвердить адрес аккаунта.",13,MUTED,false));addButton(note,"Отправить письмо",false,v->call("/auth/verify/resend","POST",new JSONObject(),r->message("Письмо отправлено")));}
-        ui.section(content,"Управление",null);menu("user","О себе и ассистенте","Профиль, стиль ответов и память",this::nativeProfile);menu("clock","Задачи","Ближайшие шаги по проектам",()->records("tasks"));menu("refresh","Обновить доступ","Синхронизировать аккаунт",this::refresh);menu("document","Поддержка","Поможем разобраться",this::support);
+        ui.section(content,"Управление",null);menu("profile","О себе и ассистенте","Профиль, стиль ответов и память",this::nativeProfile);menu("clock","Задачи","Ближайшие шаги по проектам",()->records("tasks"));menu("refresh","Обновить доступ","Синхронизировать аккаунт",this::refresh);menu("document","Поддержка","Поможем разобраться",this::support);
         ui.space(content,20);button("Выйти из аккаунта",false,v->ui.sheet("Выйти из Сметры?","Сметы и заказы останутся в аккаунте. Локальный черновик на этом устройстве будет удалён.","Выйти",false,()->call("/auth/logout","POST",new JSONObject(),r->{clearSession();login(false);})));
         Button remove=button("Удалить аккаунт",false,v->ui.sheet("Удалить аккаунт?","Все предложения и данные аккаунта будут удалены без возможности восстановления.","Удалить навсегда",true,()->call("/me","DELETE",null,r->{clearSession();login(false);})));remove.setTextColor(RED);
         ui.space(content,22);TextView version=ui.label("СМЕТРА  /  "+BuildConfig.VERSION_NAME,10,MUTED,false);version.setGravity(Gravity.CENTER);content.addView(version);
