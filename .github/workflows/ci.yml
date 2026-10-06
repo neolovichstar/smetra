@@ -75,6 +75,14 @@ jobs:
           node tests/browser_scan_ocr.cjs
           node tests/browser_sections.cjs
           SMETRA_MIXED_PDF=1 node tests/browser_scan_ocr.cjs
+      - name: Administrator revenue and pricing in mobile browser
+        run: |
+          SMETRA_ACTION_QA=1 SMETRA_FIXTURE_PORT=8096 python scripts/android_ui_fixture.py > data/revenue-fixture.log 2>&1 &
+          task_revenue_pid=$!
+          trap 'kill "$task_revenue_pid"' EXIT
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/revenue-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/revenue-fixture.log || { cat data/revenue-fixture.log; exit 1; }
+          SMETRA_TEST_PORT=8096 SMETRA_REVENUE_QA=1 node tests/browser_sections.cjs
       - name: Quote composition preview and reversal in mobile browser
         run: |
           kill "$(cat data/assistant-fixture.pid)"
