@@ -25,6 +25,7 @@ jobs:
       - name: Office preview DOM interactions
         run: |
           npm install --prefix data/dom --no-audit --no-fund jsdom@27.4.0
+          node tests/assistant_markdown.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_office_files.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_navigation_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
