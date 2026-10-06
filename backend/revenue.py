@@ -99,14 +99,16 @@ def activate(con, uid, name, quote_id):
         con.execute('UPDATE referral_rewards SET rewarded_at=?,period=? WHERE invitee_id=? AND rewarded_at IS NULL', (now(), period, uid))
 
 
-def prepare_intent(con, user, key, plan, origin, is_test):
+def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None):
     previous = con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
     if previous:
-        if previous['plan'] != plan or previous['is_test'] != int(is_test):
+        if previous['plan'] != plan or previous['is_test'] != int(is_test) or (expected_amount is not None and previous['amount_kopecks'] != expected_amount):
             raise ValueError('Checkout key belongs to another plan or shop mode')
         return previous
     offer = pricing(con, user)
     option = offer['plans'][plan]
+    if expected_amount is not None and expected_amount != option['amount_kopecks']:
+        raise ValueError('Displayed price changed before checkout')
     con.execute('INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
                 (str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'], option['duration_days'], offer['experiment']+':'+offer['variant'], source(origin), int(is_test), now()))
     return con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()

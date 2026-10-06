@@ -1,6 +1,15 @@
 /* Activation and paid value. Pricing and entitlements always come from the API. */
 (() => {
  const e=escapeHtml;
+ const syncRequests=new Map();
+ const sessionRevision=()=>typeof authRevision==='number'?authRevision:0;
+ function synchronize(key){
+  if(syncRequests.has(key))return syncRequests.get(key);
+  const request=api('/billing/sync',{method:'POST'});
+  syncRequests.set(key,request);
+  request.finally(()=>{if(syncRequests.get(key)===request)syncRequests.delete(key)}).catch(()=>{});
+  return request;
+ }
  const track=(name,source)=>api('/billing/events',{method:'POST',body:JSON.stringify({name,source})}).catch(()=>{});
  const starterNames={repair:'Ремонт',building:'Строительство',installation:'Монтаж',design:'Дизайн',equipment:'Ремонт техники',services:'Услуги',other:'Другое'};
  const starters={repair:['Подготовительные работы','Отделочные работы','Материалы'],building:['Подготовка площадки','Основные работы','Материалы'],installation:['Подготовка к монтажу','Монтаж','Проверка и запуск'],design:['Концепция','Разработка проекта','Подготовка материалов'],equipment:['Диагностика','Ремонт','Запасные части'],services:['Подготовка','Основная работа','Передача результата'],other:['Работа']};
@@ -29,7 +38,7 @@
   notice.querySelector('.icon-button').onclick=()=>notice.remove();notice.querySelector('.primary').onclick=()=>{document.querySelector('#local-draft')?.click();sessionStorage.setItem('smetra.checkout.return.'+user.id,tab);sessionStorage.setItem('smetra.paywall.source',source);track('upgrade_clicked',source);tab='billing';location.hash='billing';render()};track('paywall_viewed',source);
  }
  async function billing(active){
-  const owner=user,[b,space]=await Promise.all([api('/billing'),api('/workspace')]);if(!active())return;
+  const owner=user,revision=sessionRevision(),[b,space]=await Promise.all([api('/billing'),api('/workspace')]);if(!active()||sessionRevision()!==revision)return;
   const pricing=b.pricing;
   if(!pricing)throw Error('Не удалось получить условия тарифа. Повторите загрузку.');
   const source=sessionStorage.getItem('smetra.paywall.source')||'pricing_page';
@@ -52,15 +61,27 @@
   const paint=()=>{const amount=pricing.plans[plan].amount_kopecks;checkout.dataset.plan=plan;document.querySelector('#offer-price').textContent=rub(amount);document.querySelector('#offer-saving').textContent=plan==='pro_year'?rub(Math.round(amount/12))+' в месяц · экономия '+rub(pricing.annual_saving_kopecks)+' за 12 периодов':'Один платёж за 31 день';document.querySelectorAll('[data-period]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.period===plan)))};paint();
   document.querySelectorAll('[data-period]').forEach(button=>button.onclick=()=>{plan=button.dataset.period;paint()});
   const retryCancelled=recent&&['canceled','refunded'].includes(recent.status);if(retryCancelled)for(const value of ['pro_month','pro_year'])sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value);
-  checkout.onclick=async()=>{if(checkout.disabled)return;checkout.disabled=true;const selected=plan,keyName='smetra.checkout.'+owner.id+'.'+selected;let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}track('upgrade_clicked',source);if(!sessionStorage.getItem('smetra.checkout.return.'+owner.id))sessionStorage.setItem('smetra.checkout.return.'+owner.id,'dashboard');try{const result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:selected,source})});if(!active())return;if(result.status==='canceled'){sessionStorage.removeItem(keyName);throw Error('Предыдущая оплата отменена. Нажмите ещё раз для новой попытки.')}if(result.status==='succeeded'){await sync();return}location.href=result.url}catch(error){if(active()){if(error.status===409)sessionStorage.removeItem(keyName);document.querySelector('#checkout-error').textContent=error.message}}finally{if(checkout.isConnected)checkout.disabled=false}};
-  async function sync(){const button=document.querySelector('#sync');if(!button||button.disabled)return;button.disabled=true;try{const result=await api('/billing/sync',{method:'POST'});if(user!==owner)return;user=result.user;if(user.plan==='pro'){for(const value of ['pro_month','pro_year'])sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value)}if(tab==='billing')await render();notify(result.payments?.some(p=>p.status==='pending')?'Оплата пока не завершена. Текущий доступ сохранён.':user.plan==='pro'?'Про активен. Можно продолжать работу.':'Оплата пока не подтверждена. Доступ остаётся на тарифе Старт.')}catch(error){if(user===owner)notify(error.message)}finally{if(button.isConnected)button.disabled=false}}
+  checkout.onclick=async()=>{if(checkout.disabled)return;checkout.disabled=true;const selected=plan,keyName='smetra.checkout.'+owner.id+'.'+selected;let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}track('upgrade_clicked',source);if(!sessionStorage.getItem('smetra.checkout.return.'+owner.id))sessionStorage.setItem('smetra.checkout.return.'+owner.id,'dashboard');try{const result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:selected,source,expected_amount_kopecks:pricing.plans[selected].amount_kopecks})});if(!active()||sessionRevision()!==revision)return;if(result.status==='canceled'||result.status==='refunded'){sessionStorage.removeItem(keyName);throw Error('Предыдущая оплата завершена отменой или возвратом. Нажмите ещё раз для новой попытки.')}if(result.status==='succeeded'){await sync();return}location.href=result.url}catch(error){if(active()&&sessionRevision()===revision){if(error.status===409){sessionStorage.removeItem(keyName);checkout.disabled=true;checkout.textContent='Обновить условия';checkout.onclick=()=>render()}document.querySelector('#checkout-error').textContent=error.message}}finally{if(checkout.isConnected)checkout.disabled=false}};
+  async function sync(){
+   const button=document.querySelector('#sync');if(!active()||sessionRevision()!==revision||!button||button.disabled)return;
+   button.disabled=true;
+   try{
+    const result=await synchronize(owner.id+':'+revision);
+    if(!active()||user!==owner||sessionRevision()!==revision)return;
+    user=result.user;
+    if(user.plan==='pro'&&!result.payments?.some(p=>p.status==='pending'))for(const value of ['pro_month','pro_year'])sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value);
+    await render();
+    if(tab==='billing'&&user?.id===owner.id&&sessionRevision()===revision)notify(result.payments?.some(p=>p.status==='pending')?'Оплата пока не завершена. Текущий доступ сохранён.':user.plan==='pro'?'Про активен. Можно продолжать работу.':'Оплата пока не подтверждена. Доступ остаётся на тарифе Старт.');
+   }catch(error){if(active()&&user===owner&&sessionRevision()===revision)notify(error.message)}
+   finally{if(button.isConnected)button.disabled=false}
+  }
   document.querySelector('#sync').onclick=sync;
   if(ownSpace){const branding=document.createElement('button');branding.className='btn';branding.type='button';const hidden=space.workspace.settings?.hide_branding===true;branding.textContent=hidden?'Показывать отметку Сметры':'Убрать отметку Сметры · Про';document.querySelector('.billing-referral').before(branding);branding.onclick=async()=>{if(branding.disabled)return;if(!pro){paywall('pdf_export');return}branding.disabled=true;try{await api('/workspace',{method:'PATCH',body:JSON.stringify({settings:{hide_branding:!hidden}})});if(active())await render();notify('Оформление новых PDF и клиентских страниц обновлено')}catch(error){if(active())notify(error.message)}finally{if(branding.isConnected)branding.disabled=false}};}
   const resume=document.querySelector('#checkout-resume');if(resume)resume.onclick=()=>{if(pending.confirmation_url?.startsWith('https://'))location.href=pending.confirmation_url};
   document.querySelector('#payment-continue').onclick=()=>{const previous=sessionStorage.getItem('smetra.checkout.return.'+owner.id)||'dashboard';tab=['quotes','projects','assistant','documents','files','dashboard'].includes(previous)?previous:'dashboard';history.replaceState({},'','/app#'+tab);render()};
   document.querySelector('#referral-copy').onclick=async event=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;try{const result=await api('/billing/referral');if(!active())return;await navigator.clipboard.writeText(location.origin+'/app?register=1&ref='+encodeURIComponent(result.code));document.querySelector('#referral-status').textContent='Приглашение скопировано'}catch(error){if(active())document.querySelector('#referral-status').textContent=error.message}finally{button.disabled=false}};
   track('paywall_viewed',source);
-  if(pending&&new URLSearchParams(location.search).has('payment')){const pollKey='smetra.payment.poll.'+owner.id+'.'+pending.id,count=Number(sessionStorage.getItem(pollKey)||0);if(count<3){sessionStorage.setItem(pollKey,String(count+1));setTimeout(()=>{if(active()&&document.visibilityState==='visible')sync()},10000)}}
+  if(pending&&new URLSearchParams(location.search).has('payment')){const pollKey='smetra.payment.poll.'+owner.id+'.'+pending.id,count=Number(sessionStorage.getItem(pollKey)||0);if(count<3){setTimeout(()=>{if(active()&&sessionRevision()===revision&&document.visibilityState==='visible'){sessionStorage.setItem(pollKey,String(count+1));sync()}},count===0?0:10000)}}
  }
  window.SmetraGrowth={billing,onboarding,start,paywall};
 })();

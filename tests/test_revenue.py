@@ -1,8 +1,11 @@
 import os
 import sqlite3
 import hashlib
+import json
 import secrets
 import unittest
+import urllib.request
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -53,6 +56,16 @@ class RevenueTests(unittest.TestCase):
             revenue.prepare_intent(self.con,self.user,'durable_checkout_key','pro_year','settings',False)
         with self.assertRaises(ValueError):
             revenue.prepare_intent(self.con,self.user,'durable_checkout_key','pro_month','settings',True)
+
+    def test_displayed_price_is_checked_before_creating_payment_intent(self):
+        with self.assertRaises(ValueError):
+            revenue.prepare_intent(self.con,self.user,'mismatch_price_key','pro_month','pricing_page',False,49900)
+        self.assertEqual(self.con.execute('SELECT count(*) FROM billing_intents').fetchone()[0],0)
+        intent=revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,49000)
+        with patch.dict(os.environ,{'PRO_MONTH_PRICE_KOPECKS':'59900','PRO_YEAR_PRICE_KOPECKS':'599000'}):
+            self.assertEqual(revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,49000)['id'],intent['id'])
+        with self.assertRaises(ValueError):
+            revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,59900)
 
     def test_test_payments_manual_access_and_refunds_are_not_revenue(self):
         local,_=self.purchase(self.user)
@@ -112,6 +125,20 @@ class RevenueApiTests(unittest.TestCase):
             con.execute('INSERT INTO users(id,email,password_hash,name,role,created_at,email_verified_at) VALUES(?,?,?,?,?,?,?)',(uid,uid+'@test.invalid','unused','Revenue','admin' if admin else 'user',revenue.now(),revenue.now()))
             con.execute('INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)',(secrets.token_hex(16),uid,hashlib.sha256(token.encode()).hexdigest(),revenue.now()+3600))
         return token,uid
+
+    def test_checkout_rejects_changed_or_invalid_displayed_price_before_provider(self):
+        token,_=self.account()
+        def checkout(amount,key):
+            request=urllib.request.Request(self.base+'/api/billing/checkout',json.dumps({'plan':'pro_month','expected_amount_kopecks':amount}).encode(),{'Authorization':'Bearer '+token,'Content-Type':'application/json','Idempotency-Key':key},method='POST')
+            try:
+                with urllib.request.urlopen(request,timeout=5) as response:
+                    return response.code,json.load(response)
+            except urllib.error.HTTPError as error:
+                return error.code,json.load(error)
+        with patch.dict(os.environ,{'YOOKASSA_MODE':'live','YOOKASSA_SHOP_ID':'isolated-shop','YOOKASSA_SECRET_KEY':'live_isolated_test','YOOKASSA_MERCHANT_TYPE':'self_employed','PRO_MONTH_PRICE_KOPECKS':'49000','PRO_YEAR_PRICE_KOPECKS':'490000'}),patch.object(self.mod.Handler,'provider_call') as provider:
+            self.assertEqual(checkout(59900,'changed-price-checkout-key')[0],409)
+            self.assertEqual(checkout(True,'invalid-price-checkout-key')[0],400)
+            provider.assert_not_called()
 
     def test_public_price_and_private_revenue_cannot_be_forged(self):
         token,uid=self.account()

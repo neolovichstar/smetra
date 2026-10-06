@@ -30,6 +30,8 @@ jobs:
           node tests/quote_money.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_api_transport.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_capability.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_session_races.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_billing_session_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_growth.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_office_files.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_navigation_races.cjs
@@ -116,6 +118,7 @@ jobs:
             data/office-*.png
             data/assistant-studio-*.png
             data/qa/section-*.png
+            data/qa/growth-*.png
   android:
     runs-on: ubuntu-latest
     steps:
@@ -131,6 +134,8 @@ jobs:
         run: |
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeSessionWork.java tests/NativeSessionWorkTest.java
           java -cp data/native-session-tests ru.smetra.mobile.NativeSessionWorkTest
+          javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeImageSize.java tests/NativeImageSizeTest.java
+          java -cp data/native-session-tests ru.smetra.mobile.NativeImageSizeTest
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:

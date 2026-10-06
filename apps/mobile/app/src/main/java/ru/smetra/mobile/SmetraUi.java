@@ -45,7 +45,7 @@ final class SmetraUi {
     }
     GradientDrawable gradient(int radius){return shape(BG,0,0);}
     void divider(LinearLayout parent){View line=new View(activity);line.setBackgroundColor(LINE);parent.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
-    ImageView art(String name,int height){ImageView image=new ImageView(activity);image.setImageResource(name.equals("flight")?R.drawable.brand_flight:R.drawable.brand_unfold);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);image.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(height)));return image;}
+    ImageView art(String name,int height){ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);image.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(height)));BrandArt.load(image,name.equals("flight")?R.drawable.brand_flight:R.drawable.brand_unfold,activity.getResources().getDisplayMetrics().widthPixels,dp(height));return image;}
     void ripple(View view,int color,int radius,int border){view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22c4dcff),shape(color,radius,border),shape(Color.WHITE,radius,0)));}
     void tap(View view,Runnable action){
         view.setFocusable(true);view.setOnClickListener(v->{v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);action.run();});

@@ -134,7 +134,7 @@
 .contextual-upgrade{display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--stroke);padding:18px 0;margin-bottom:24px}
 .contextual-upgrade p{font-size:12px;line-height:1.65;margin:6px 0}.contextual-upgrade>div{flex:1;min-width:0}
 .revenue-billing{max-width:900px;margin:auto}.revenue-billing header{padding-bottom:32px}.revenue-billing h1{font-size:clamp(28px,4vw,42px);margin:12px 0 16px}
-.revenue-billing .billing-periods{display:flex;gap:8px}.billing-periods [aria-pressed=true]{background:var(--surface-input);color:var(--action)}
+.revenue-billing .billing-periods{display:flex;gap:8px}.revenue-billing .billing-periods .btn[aria-pressed=true]{background:var(--surface-input);color:var(--action)}
 .revenue-offer{display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:28px 0 32px;border-bottom:1px solid var(--stroke)}
 .revenue-offer .open-price{font-size:42px;line-height:1.2;margin-bottom:12px;font-variant-numeric:tabular-nums}.revenue-offer .note{font-size:12px;line-height:1.7}.revenue-offer .open-benefits{padding-left:20px;font-size:13px;line-height:1.7}.revenue-offer .open-benefits li{margin-bottom:12px}
 .billing-history,.billing-referral{padding:28px 0;border-bottom:1px solid var(--stroke)}.billing-referral h2,.billing-history h2{font-size:20px}.billing-referral p{font-size:13px;line-height:1.7}.billing-referral [role=status]{display:block;margin-top:8px;font-size:12px}

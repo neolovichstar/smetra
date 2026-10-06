@@ -970,6 +970,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             key = self.headers.get("Idempotency-Key", "")
             if not isinstance(plan, str) or plan not in PLANS or not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
                 raise ApiError(400, "Неверный тариф или ключ запроса")
+            expected_amount = data.get('expected_amount_kopecks')
+            if 'expected_amount_kopecks' in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
+                raise ApiError(400, "Некорректная сумма выбранного тарифа")
             mode = yookassa_mode(user)
             if mode == "off":
                 raise ApiError(503, "Оплата пока недоступна")
@@ -980,15 +983,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if previous:
                 if previous["plan"] != plan:
                     raise ApiError(409, "Ключ уже использован для другого тарифа")
+                if expected_amount is not None and expected_amount != previous['amount_kopecks']:
+                    raise ApiError(409, "Стоимость выбранной оплаты изменилась. Обновите тариф.")
                 captured = con.execute('SELECT is_test FROM billing_intents WHERE payment_id=?', (previous['id'],)).fetchone()
                 if captured and captured['is_test'] != int(mode == 'test'):
                     raise ApiError(409, "Режим магазина изменился. Начните новую оплату.")
+                refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous['id'],)).fetchone()
                 return self.send_json(
                     200,
-                    {"url": previous["confirmation_url"], "status": previous["status"]},
+                    {"url": previous["confirmation_url"], "status": 'refunded' if refunded else previous["status"]},
                 )
             try:
-                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test')
+                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount)
             except ValueError:
                 raise ApiError(409,'Условия оплаты изменились. Обновите страницу тарифа.') from None
             amount = intent['amount_kopecks']
