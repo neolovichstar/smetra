@@ -93,10 +93,22 @@ async function render() {
       syncThemeLabel();$('#theme-alt').onclick=theme;$('#delete-account').onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
-    } else {tab='dashboard';return render()}
+    } else {tab='dashboard';history.replaceState({},'',location.pathname+location.search+'#dashboard');return render()}
   } catch(err) { if(!active())return;view(`<div class="panel"><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn" id="retry">Повторить</button></div>`);$('#retry').onclick=render; }
 }
 window.render=render;
+const appSections=new Set(['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+async function renderNavigation(){
+  const owner=user,section=tab,pending=render(),revision=renderRevision;
+  await pending;
+  if(user!==owner||tab!==section||renderRevision!==revision)return;
+  $('#content')?.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
+}
+window.addEventListener('hashchange',()=>{
+  const section=location.hash.slice(1)||'dashboard';
+  if(!appSections.has(section)||section===tab)return;
+  tab=section;closeNavigation();if(user)renderNavigation();
+});
 function showNewQuote(){
   if(window.Workspace)return window.Workspace.editor();
   view(header('Новое предложение','Заполните детали и отправьте ссылку клиенту.')+`<div class="panel editor-panel"><form id="quote-form"><div class="form-grid"><div class="field"><label for="title">Название работы</label><input id="title" maxlength="120" required placeholder="Например, разработка сайта"></div><div class="field"><label for="client">Клиент</label><input id="client" maxlength="120" required placeholder="Имя или компания"></div></div><div class="field"><label for="amount">Стоимость в рублях</label><input id="amount" type="number" min="1" max="100000000" step="0.01" required placeholder="50000"></div><div class="field"><label for="description">Описание работ</label><textarea id="description" maxlength="3000" rows="5" placeholder="Что входит в работу"></textarea></div><div class="row"><button class="btn primary">Сохранить черновик</button><button type="button" class="btn" id="cancel-new">Отмена</button></div></form></div>`);
@@ -122,7 +134,7 @@ if($('#auth')){
   $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim()})});if(attempt!==authRevision)return;user=result.user;sessionStorage.removeItem('workspace_id');window.Workspace?.reset();await showApp()}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
-   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();await render();$('#content').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'})});
+   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();return renderNavigation()});
   $('#nav-backdrop').classList.remove('hidden');
   $('#nav-toggle').onclick=()=>{const open=!document.body.classList.contains('nav-open');document.body.classList.toggle('nav-open',open);$('#nav-toggle').setAttribute('aria-expanded',String(open));$('#nav-toggle').setAttribute('aria-label',open?'Закрыть разделы':'Открыть разделы');syncSidebarAccess()};
   matchMedia('(max-width:800px)').addEventListener('change',()=>{closeNavigation()});syncSidebarAccess();
@@ -147,7 +159,7 @@ if($('#auth')){
         const result=await api('/me');
         if(bootRevision!==authRevision)return;
         user=result.user;
-        if(params.has('payment'))tab='billing';
+        if(params.has('payment')){tab='billing';history.replaceState({},'',location.pathname+location.search+'#billing')}
         await showApp();
       }catch{if(bootRevision===authRevision){user=null;showAuth()}}
     });
