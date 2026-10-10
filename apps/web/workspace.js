@@ -264,7 +264,7 @@ window.Workspace = (() => {
     const [clients,catalog,capabilities]=await Promise.all([api('/clients'),api('/catalog'),api('/capabilities')]);
     if(!active())return;
     const catalogOptions=items=>[['','Выберите позицию'],...items.slice().sort((a,b)=>b.favorite-a.favorite).map(c=>[c.id,(c.favorite?'Избранное · ':'')+c.name+' · '+money(c.price,workspace.currency)+' / '+c.unit])];
-    const owner=user,workspaceId=workspace.id;
+    const owner=user,workspaceId=workspace.id,checkpointSession=crypto.randomUUID();
     const draftKey='smetra.draft.'+owner.id+'.'+workspaceId+'.'+(quote?.id||'new');
     let rows=quote?.items?.length?structuredClone(quote.items):[{name:'',quantity:'1',unit:'шт.',unit_price:quote?.amount_kopecks||0,cost_price:0,tax:'0',discount:'0',markup:'0',optional:false,included:true,description:'',category:''}];
     rows=rows.map(r=>({line_id:crypto.randomUUID(),cost_price:0,discount:'0',markup:'0',coefficient:'1',tax:'0',included:true,optional:false,...r}));
@@ -354,13 +354,13 @@ window.Workspace = (() => {
     retry.onclick=()=>writer.retry();
     const recover=async(sourceKey=draftKey)=>{if(saveState.dataset.state==='saving'){notify('Дождитесь текущего сохранения');return}try{const saved=JSON.parse(localStorage.getItem(sourceKey)||'null');if(!saved?.snapshot){notify('Локального черновика нет');return}
       if(saved.quote?.id&&saved.quote.id!==q.id){const result=await api('/quotes/'+saved.quote.id);if(!live())return;await editor(result.quote);const root=document.querySelector('#estimate-editor');if(root){const targetKey='smetra.draft.'+owner.id+'.'+workspaceId+'.'+saved.quote.id;localStorage.setItem(targetKey,JSON.stringify(saved));root.querySelector('#editor-recovery').hidden=false;root.querySelector('#editor-recover').click()}return}
-      if(q.id&&saved.quote?.revision!==q.revision&&!(saved.pending&&saved.quote?.revision===q.revision-1)){notify('Редакция на сервере изменилась. Откройте сохранённые правки как копию.');restore(saved.snapshot);history.push(snapshot());historyState();writer.conflict(saved.quote);conflict.hidden=false;saveState.textContent='Конфликт редакций. Сохраните правки копией.';return}
+      if(q.id&&!(sourceKey===draftKey+'.manual'&&saved.session===checkpointSession)&&saved.quote?.revision!==q.revision&&!(saved.pending&&saved.quote?.revision===q.revision-1)){notify('Редакция на сервере изменилась. Откройте сохранённые правки как копию.');restore(saved.snapshot);history.push(snapshot());historyState();writer.conflict(saved.quote);conflict.hidden=false;saveState.textContent='Конфликт редакций. Сохраните правки копией.';return}
       restore(saved.snapshot);history.push(snapshot());historyState();writer.restore(saved);recovery.hidden=true;
     }catch(error){if(live())notify(error.message||'Не удалось прочитать черновик')}};
     form.querySelector('#editor-recover').onclick=()=>recover();
     form.querySelector('#restore-draft').onclick=()=>recover(localStorage.getItem(draftKey+'.manual')?draftKey+'.manual':draftKey);
     form.querySelector('#editor-discard').onclick=()=>{localStorage.removeItem(draftKey);recovery.hidden=true};
-    form.querySelector('#local-draft').onclick=()=>{try{localStorage.setItem(draftKey+'.manual',JSON.stringify({quote:q,snapshot:snapshot(),savedAt:Date.now()}))}catch{notify('Хранилище устройства недоступно');return}writer.changed();form.querySelector('#draft-state').textContent='Правки сохранены на устройстве; автосохранение продолжится.'};
+    form.querySelector('#local-draft').onclick=()=>{try{localStorage.setItem(draftKey+'.manual',JSON.stringify({quote:q,snapshot:snapshot(),session:checkpointSession,savedAt:Date.now()}))}catch{notify('Хранилище устройства недоступно');return}writer.changed();form.querySelector('#draft-state').textContent='Правки сохранены на устройстве; автосохранение продолжится.'};
     form.querySelector('#editor-reload').onclick=async()=>{try{const value=await api('/quotes/'+q.id);if(live())await editor(value.quote)}catch(error){if(live())notify(error.message)}};
     const copyKey=crypto.randomUUID();let copyBody;
     form.querySelector('#editor-save-copy').onclick=async()=>{if(!form.reportValidity())return;const button=form.querySelector('#editor-save-copy');button.disabled=true;try{copyBody??={...payload(),title:payload().title.slice(0,110)+' — копия'};const result=await api('/quotes',{method:'POST',headers:{'Idempotency-Key':copyKey},body:JSON.stringify(copyBody)});if(!live())return;writer.stop(false);window.SmetraQuoteEditor=null;localStorage.removeItem(draftKey);user.quote_count++;await quoteDetail(result.quote.id);notify('Правки сохранены отдельной сметой')}catch(error){if(live())notify(error.message)}finally{button.disabled=false}};
