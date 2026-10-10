@@ -44,7 +44,7 @@ document.body.classList.toggle('dark',document.body.classList.contains('landing-
 document.documentElement.dataset.theme=document.body.classList.contains('dark')?'dark':'light';
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
-function view(html) { window.SmetraQuoteEditor?.leave();const content=$('#content');content.dataset.section=tab;content.innerHTML=html;content.classList.remove('app-view-enter');void content.offsetWidth;content.classList.add('app-view-enter'); }
+function view(html) { window.SmetraSelects?.close();window.SmetraQuoteEditor?.leave();const content=$('#content');content.dataset.section=tab;content.innerHTML=html;content.classList.remove('app-view-enter');void content.offsetWidth;content.classList.add('app-view-enter'); }
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):document.body.classList.contains('sidebar-compact');const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncSidebarAccess()}
 function showAuth() { window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;apiRequests.clear();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }

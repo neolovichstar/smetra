@@ -38,6 +38,7 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_history_editor_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_quote_review.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_quote_editor.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_select_menu.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_settings_buttons.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_app_actions.cjs

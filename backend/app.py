@@ -532,6 +532,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/growth.js"] = ("growth.js", "text/javascript")
         public["/quote-review.js"] = ("quote-review.js", "text/javascript")
         public["/quote-editor-state.js"] = ("quote-editor-state.js", "text/javascript")
+        public["/select-menu.js"] = ("select-menu.js", "text/javascript")
+        public["/select-menu.css"] = ("select-menu.css", "text/css")
         public["/quote-review.css"] = ("quote-review.css", "text/css")
         for name in (
             "reference-hero",

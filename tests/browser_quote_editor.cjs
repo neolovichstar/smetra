@@ -17,21 +17,36 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-submit')&&typeof api==='function'");
  await fill('#name','Проверка редактора');await fill('#email','editor-'+Date.now()+'@test.invalid');await fill('#password','secure comparison password');await click('#auth-submit');await until("document.querySelector('#capture-text')");
  const id=await evaluate("api('/quotes',{method:'POST',body:JSON.stringify({title:'Ремонт кухни',client:'Клиент',items:[{name:'Подготовка',unit_price:10000},{name:'Покраска',unit_price:20000}]})}).then(r=>r.quote.id)");
+ const catalogId=await evaluate("api('/catalog',{method:'POST',body:JSON.stringify({name:'Монтаж плинтуса QA',price:12500,unit:'м'})}).then(r=>r.item.id)");
+ const clientId=await evaluate("api('/clients',{method:'POST',body:JSON.stringify({name:'Клиент редактора QA'})}).then(r=>r.item.id)");
  const read=()=>evaluate(`api('/quotes/${id}').then(r=>r.quote)`);
  await evaluate(`(async()=>{tab='quotes';location.hash='quotes';await Workspace.editor((await api('/quotes/${id}')).quote)})()`);
  await until("document.querySelector('#editor-save-state')");
+ // The shipped custom menu owns focus while the native select owns form values.
+ await until("document.querySelector('#f-currency + .select-trigger')");
+ await click('#f-currency + .select-trigger');await fill('.select-menu-search','Доллары');await click('.select-option');assert.equal(await evaluate("document.querySelector('#f-currency').value"),'USD');
+ await click('#f-currency + .select-trigger');await fill('.select-menu-search','Рубли');await click('.select-option');assert.equal(await evaluate("document.querySelector('#f-currency').value"),'RUB');
+ await click('#f-client_id + .select-trigger');await fill('.select-menu-search','Клиент редактора QA');await click('.select-option');assert.equal(await evaluate("document.querySelector('#f-client').value"),'Клиент редактора QA');assert.equal(await evaluate("document.querySelector('#f-client_id').value"),clientId);
+ await click('#f-catalog + .select-trigger');await fill('.select-menu-search','Монтаж плинтуса');await until(`document.querySelector('.select-menu:not(.select-menu-closing) [role=option]').textContent.includes('Монтаж плинтуса')`);await click('.select-menu:not(.select-menu-closing) .select-option');assert.equal(await evaluate("document.querySelectorAll('[data-row]').length"),3);assert.equal(await evaluate("document.querySelector('[data-row=\"2\"] [data-key=name]').value"),'Монтаж плинтуса QA');await click('#editor-undo');assert.equal(await evaluate("document.querySelectorAll('[data-row]').length"),2);assert.ok(catalogId);
+ // A popover must also appear above a modal dialog's top layer.
+ await evaluate(`{const dialog=document.createElement('dialog');dialog.id='select-test-dialog';dialog.innerHTML='<label>Выбор<select><option>Первый</option><option>Второй</option></select></label>';document.body.append(dialog);dialog.showModal();SmetraSelects.enhance(dialog);dialog.querySelector('.select-trigger').click()}`);
+ assert.equal(await evaluate("document.querySelector('.select-menu:not(.select-menu-closing)').matches(':popover-open')"),true);
+ assert.equal(await evaluate("{const option=document.querySelector('.select-menu:not(.select-menu-closing) .select-option'),r=option.getBoundingClientRect();option.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))}"),true);
+ await evaluate("SmetraSelects.close();document.querySelector('#select-test-dialog').close();document.querySelector('#select-test-dialog').remove()");await sleep(180);
  await fill('#f-title','Новая кухня');await until("document.querySelector('#editor-save-state').dataset.state==='saved'");assert.equal((await read()).title,'Новая кухня');
  const starting=await read();
  await click('[data-duplicate="0"]');assert.equal(await evaluate("document.querySelectorAll('[data-row]').length"),3);
  await click('[data-move="0"][data-direction="1"]');await click('#editor-undo');await click('#editor-undo');assert.equal(await evaluate("document.querySelectorAll('[data-row]').length"),2);await click('#editor-redo');
  await fill('[data-row="1"] [data-key=name]','Дополнительная подготовка');
  await until("document.querySelector('#editor-save-state').dataset.state==='saved'");const duplicated=await read();assert.equal(duplicated.items.length,3);assert.notEqual(duplicated.items[0].line_id,duplicated.items[1].line_id);assert.equal(duplicated.amount_kopecks,40000);
- await fill('#f-expiry','2026-12-15');await click('#local-draft');await fill('#f-expiry','2026-12-20');await click('#restore-draft');assert.equal(await evaluate("document.querySelector('#f-expiry').value"),'2026-12-15');
+ await click('.editor-device summary');await fill('#f-expiry','2026-12-15');await click('#local-draft');await fill('#f-expiry','2026-12-20');await click('#restore-draft');assert.equal(await evaluate("document.querySelector('#f-expiry').value"),'2026-12-15');await click('.editor-device summary');
  await until("document.querySelector('#editor-save-state').dataset.state==='saved'");
  for(const width of [320,390,768,1440]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:width<768});await sleep(150);
   assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'No editor overflow at '+width);
   fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/quote-editor-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
+  await click('#f-currency + .select-trigger');await sleep(200);assert.equal(await evaluate("{const r=document.querySelector('.select-menu:not(.select-menu-closing)').getBoundingClientRect();r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight}"),true,'Menu inside viewport at '+width);
+  fs.writeFileSync('data/qa/quote-editor-menu-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));await evaluate('SmetraSelects.close()');await sleep(180);
  }
  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});
  await fill('#f-terms','Условия после обрыва связи');await until("document.querySelector('#editor-save-state').dataset.state==='offline'");
