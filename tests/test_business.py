@@ -1219,6 +1219,20 @@ class BusinessFlows(unittest.TestCase):
         public = self.call("/public/quote?token=" + latest["public_url"].split("quote=")[1])[1]["quote"]
         self.assertTrue(all("line_id" not in row and "cost_price" not in row for row in public["items"]))
 
+    def test_old_client_saving_without_line_ids_keeps_comparison_identity(self):
+        token, _ = self.account("compare-old-client")
+        original = self.publish(token, self.quote(token))
+        path = "/quotes/" + original["id"]
+        items = [{key: value for key, value in row.items() if key != "line_id"} for row in original["items"]]
+        items[0]["unit_price"] += 1000
+        status, updated = self.call(path, "PATCH", {"revision": original["revision"], "items": items}, token)
+        self.assertEqual(status, 200)
+        self.assertEqual([row["line_id"] for row in updated["quote"]["items"]], [row["line_id"] for row in original["items"]])
+        result = self.call(path + "/compare?from=1", token=token)[1]
+        self.assertEqual(result["summary"]["changed"], 1)
+        self.assertEqual(result["summary"]["added"], 0)
+        self.assertEqual(result["summary"]["removed"], 0)
+
     def test_tenant_isolation_viewer_rbac_and_revocation(self):
         owner, _ = self.account("team-owner")
         viewer, viewer_id = self.account("team-viewer")

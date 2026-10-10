@@ -2,7 +2,7 @@ import copy
 import unittest
 
 from backend.business import DomainError, calculate
-from backend.quote_versions import compare
+from backend.quote_versions import carry_identities, compare
 
 
 def quote(items, **values):
@@ -11,6 +11,20 @@ def quote(items, **values):
 
 
 class QuoteComparisonTests(unittest.TestCase):
+    def test_older_clients_keep_matching_ids_without_guessing_renames(self):
+        before = quote([{"name": "A", "unit_price": 100}, {"name": "B", "unit_price": 200}])
+        supplied = [{"name": "A", "unit_price": 150}, {"name": "B", "unit_price": 200}]
+        after = quote(supplied)
+        after["items"] = carry_identities(before["items"], after["items"], supplied)
+        result = compare(before, after)
+        self.assertEqual(result["summary"]["changed"], 1)
+        self.assertEqual(result["summary"]["unchanged"], 1)
+        self.assertEqual(result["summary"]["added"], 0)
+        renamed = [{"name": "Unknown replacement", "unit_price": 100}]
+        after = quote(renamed)
+        after["items"] = carry_identities(before["items"], after["items"], renamed)
+        self.assertNotEqual(after["items"][0]["line_id"], before["items"][0]["line_id"])
+
     def test_stable_identity_tracks_rename_price_and_private_cost(self):
         before = quote([{"name": "Work", "unit_price": 1000, "cost_price": 300}])
         after = quote([{**before["items"][0], "name": "Renamed", "unit_price": 2000, "cost_price": 500}])

@@ -661,6 +661,10 @@ class Service:
         )
         if "items" in data:
             items, total, cost = calculate(data["items"])
+            if old:
+                from backend.quote_versions import carry_identities
+
+                items = carry_identities(self.quote_view(old)["items"], items, data["items"])
             result.update(amount_kopecks=total, internal_cost=cost, itemized=1)
         elif old and old["itemized"]:
             items = None

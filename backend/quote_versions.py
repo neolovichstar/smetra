@@ -23,8 +23,7 @@ def signature(row):
     return tuple(value(row, field) for field in ITEM_FIELDS)
 
 
-def compare(before, after):
-    old, new = before.get("items", []), after.get("items", [])
+def match_rows(old, new):
     matches, used = {}, set()
     ids = {row["line_id"]: index for index, row in enumerate(old) if row.get("line_id")}
     for index, row in enumerate(new):
@@ -48,6 +47,23 @@ def compare(before, after):
                 queue.remove(previous)
                 matches[index] = previous
                 used.add(previous)
+    return matches, used
+
+
+def carry_identities(previous, rows, supplied):
+    """Older clients omit line_id. Keep safely matched identities on updates."""
+    legacy = [{key: value for key, value in row.items() if key != "line_id" or "line_id" in original}
+              for row, original in zip(rows, supplied)]
+    matches, _ = match_rows(previous, legacy)
+    for index, original in matches.items():
+        if "line_id" not in supplied[index] and previous[original].get("line_id"):
+            rows[index]["line_id"] = previous[original]["line_id"]
+    return rows
+
+
+def compare(before, after):
+    old, new = before.get("items", []), after.get("items", [])
+    matches, used = match_rows(old, new)
     old_order = {previous: rank for rank, previous in enumerate(sorted(used))}
     new_order = {index: rank for rank, index in enumerate(sorted(matches))}
     same_currency = before.get("currency", "RUB") == after.get("currency", "RUB")
