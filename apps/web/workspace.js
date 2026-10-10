@@ -263,7 +263,7 @@ window.Workspace = (() => {
     if(!active())return;
     const [clients,catalog,capabilities]=await Promise.all([api('/clients'),api('/catalog'),api('/capabilities')]);
     if(!active())return;
-    const catalogOptions=items=>[['','Выберите позицию'],...items.slice().sort((a,b)=>b.favorite-a.favorite).map(c=>[c.id,(c.favorite?'Избранное · ':'')+c.name+' · '+money(c.price,workspace.currency)+' / '+c.unit])];
+    const catalogOptions=items=>[['','Добавить из расценок'],...items.slice().sort((a,b)=>b.favorite-a.favorite).map(c=>[c.id,(c.favorite?'Избранное · ':'')+c.name+' · '+money(c.price,workspace.currency)+' / '+c.unit])];
     const owner=user,workspaceId=workspace.id,checkpointSession=crypto.randomUUID();
     const draftKey='smetra.draft.'+owner.id+'.'+workspaceId+'.'+(quote?.id||'new');
     let rows=quote?.items?.length?structuredClone(quote.items):[{name:'',quantity:'1',unit:'шт.',unit_price:quote?.amount_kopecks||0,cost_price:0,tax:'0',discount:'0',markup:'0',optional:false,included:true,description:'',category:''}];

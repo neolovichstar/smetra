@@ -7,6 +7,8 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
   w.matchMedia=()=>({matches:true});w.HTMLElement.prototype.scrollIntoView=()=>{};
   const script=d.createElement('script');script.textContent=fs.readFileSync('apps/web/select-menu.js','utf8');d.head.append(script);
   const select=d.querySelector('select'),trigger=d.querySelector('.select-trigger');let inputs=0,changes=0;
+  select.options[0].textContent='Новый клиент';w.SmetraSelects.enhance(d);
+  const icons=d.createElement('script');icons.textContent=fs.readFileSync('apps/web/product-ui.js','utf8');d.head.append(icons);assert.equal(trigger.dataset.uiIcon,undefined,'Value captions must not be decorated as actions');
   select.addEventListener('input',()=>inputs++);select.addEventListener('change',()=>changes++);
   assert.equal(d.querySelectorAll('.select-trigger').length,1);assert.equal(select.tabIndex,-1);assert.equal(trigger.getAttribute('aria-expanded'),'false');
   trigger.click();const search=d.querySelector('.select-menu-search');assert.equal(d.activeElement,search);

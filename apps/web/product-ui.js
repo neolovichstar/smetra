@@ -114,6 +114,7 @@
     });
     const buttons=[...(root.matches?.('button,a.btn')?[root]:[]),...root.querySelectorAll('button, a.btn')];
     buttons.forEach(button => {
+      if (button.matches('.select-trigger,.select-option')) return;
       if (button.dataset.uiIcon) {
         if (/^[a-z-]+$/.test(button.dataset.uiIcon)) button.style.setProperty('--ui-icon', `url('/assets/icons/${button.dataset.uiIcon}.svg')`);
         return;
