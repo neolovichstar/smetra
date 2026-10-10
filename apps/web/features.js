@@ -8,6 +8,7 @@
     construction:{ready:()=>!!window.SmetraConstruction,files:['/construction.js']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js']},
     growth:{ready:()=>!!window.SmetraGrowth,files:['/growth.js']},
+    quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js']},
   };
   const load=source=>{
     if(pending.has(source))return pending.get(source);

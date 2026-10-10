@@ -1186,6 +1186,31 @@ class BusinessFlows(unittest.TestCase):
             409,
         )
 
+    def test_compare_versions_is_private_read_only_and_validates_selectors(self):
+        owner, _ = self.account("compare-owner")
+        other, _ = self.account("compare-other")
+        original = self.publish(owner, self.quote(owner))
+        path = "/quotes/" + original["id"]
+        body = {"revision": original["revision"], "items": [{**row, "name": "Renamed", "unit_price": row["unit_price"] + 1000} for row in original["items"]], "terms": "New terms"}
+        updated = self.call(path, "PATCH", body, owner)[1]["quote"]
+        status, result = self.call(path + "/compare?from=1&to=current", token=owner)
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result["revision"], updated["revision"])
+        self.assertEqual(result["summary"]["changed"], len(original["items"]))
+        self.assertEqual(result["fields"][0]["field"], "terms")
+        self.assertEqual(self.call(path, token=owner)[1]["quote"], updated)
+        self.assertEqual(self.call(path + "/compare?from=1", token=other)[0], 404)
+        self.assertEqual(self.call(path + "/compare?from=1")[0], 401)
+        for query in ("from=current", "from=0", "from=-1", "from=1&to=evil", "from=9999999999"):
+            self.assertEqual(self.call(path + "/compare?" + query, token=owner)[0], 400)
+        self.assertEqual(self.call(path + "/compare?from=99", token=owner)[0], 404)
+        latest = self.publish(owner, updated)
+        status, immutable = self.call(path + "/compare?from=1&to=2", token=owner)
+        self.assertEqual(status, 200)
+        self.assertEqual(result["items"], immutable["items"])
+        public = self.call("/public/quote?token=" + latest["public_url"].split("quote=")[1])[1]["quote"]
+        self.assertTrue(all("line_id" not in row and "cost_price" not in row for row in public["items"]))
+
     def test_tenant_isolation_viewer_rbac_and_revocation(self):
         owner, _ = self.account("team-owner")
         viewer, viewer_id = self.account("team-viewer")

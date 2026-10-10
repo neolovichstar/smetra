@@ -113,10 +113,14 @@ def choice(value, options, label):
 def calculate(items):
     if not isinstance(items, list) or not 1 <= len(items) <= 200:
         raise DomainError(400, "Добавьте от 1 до 200 позиций")
-    result, total, cost = [], 0, 0
+    result, total, cost, line_ids = [], 0, 0, set()
     for item in items:
         if not isinstance(item, dict):
             raise DomainError(400, "Некорректная позиция")
+        line_id = item["line_id"] if "line_id" in item else identity()
+        if not isinstance(line_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", line_id) or line_id in line_ids:
+            raise DomainError(400, "Некорректный или повторяющийся идентификатор позиции")
+        line_ids.add(line_id)
         quantity = decimal(item.get("quantity", "1"), "Количество", "0.0001", "1000000")
         price = integer(item.get("unit_price", 0), "Цена")
         internal = integer(item.get("cost_price", 0), "Себестоимость")
@@ -140,6 +144,7 @@ def calculate(items):
             "Себестоимость позиции",
         )
         row = dict(
+            line_id=line_id,
             name=string(item.get("name", ""), "Позиция", 200, True),
             description=string(item.get("description", ""), "Описание"),
             category=string(item.get("category", ""), "Категория", 100),
@@ -568,7 +573,7 @@ class Service:
             for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by"):
                 result.pop(key, None)
             for item in result.get("items", []):
-                for key in ("cost_price", "internal_cost", "markup"):
+                for key in ("cost_price", "internal_cost", "markup", "line_id"):
                     item.pop(key, None)
         else:
             keys = (
@@ -1157,6 +1162,29 @@ class Service:
         row = self.get("quotes", parts[0])
         action = parts[1] if len(parts) > 1 else ""
         if method == "GET":
+            if action == "compare":
+                from backend.quote_versions import compare
+
+                def snapshot(selector):
+                    if selector == "current":
+                        return self.quote_view(row)
+                    if not isinstance(selector, str) or not re.fullmatch(r"[1-9][0-9]{0,8}", selector):
+                        raise DomainError(400, "Выберите версию сметы")
+                    version = self.con.execute("SELECT snapshot FROM quote_versions WHERE quote_id=? AND version=?",
+                                               (row["id"], int(selector))).fetchone()
+                    if not version:
+                        raise DomainError(404, "Версия сметы не найдена")
+                    return json.loads(version["snapshot"])
+
+                source, target = query.get("from", [""])[0], query.get("to", ["current"])[0]
+                if source == "current":
+                    raise DomainError(400, "Для исходной версии выберите отправленную смету")
+                result = compare(snapshot(source), snapshot(target))
+                if target == "current" and self.get("quotes", row["id"])["revision"] != row["revision"]:
+                    raise DomainError(409, "Смета изменилась во время сравнения. Повторите загрузку")
+                result.update(quote_id=row["id"], title=row["title"], source=source, target=target, revision=row["revision"],
+                              can_publish=target == "current" and row["approval_state"] in ("draft", "changes_requested", "rejected") and row["status"] not in ("accepted", "completed"))
+                return 200, result
             if action == "versions":
                 return 200, {
                     "versions": [

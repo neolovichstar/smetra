@@ -37,6 +37,14 @@ public class DesignSmoke extends Instrumentation {
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");
             waitText("Айдентика и упаковка");shot("02-overview");
+            if("true".equals(arguments.getString("versionsOnly"))){
+                click("Сравнение условий");waitText("Сравнить версии");click("Сравнить версии");waitPrefix("Стало: Срок 5 дней");top();shot("40-quote-review-current");
+                click("Версия 2");waitText("Исходная версия");clickSheetAction("Версия 1");waitText("Подготовка поверхности");waitText("Удалено");waitText("Добавлено");shot("41-quote-review-changes");
+                click("К смете");waitText("Проверить и отправить новую версию");click("Проверить и отправить новую версию");waitPrefix("Стало: Срок 5 дней");waitEnabledPrefix("Зафиксировать и отправить");top();shot("42-quote-review-before-send");
+                click("Зафиксировать и отправить");waitText("Отправить новую версию?");clickSheetAction("Отправить клиенту");waitText("Поделиться ссылкой");
+                click("Сравнить версии");waitText("Условия совпадают");shot("43-quote-review-published");
+                result.putString("stream","PASS: native private comparison, custom version picker, added/removed/changed rows, reviewed republication and unchanged saved snapshot\n");finish(Activity.RESULT_OK,result);return;
+            }
             if("true".equals(arguments.getString("resourcesOnly"))){
                 click("Ещё");click("Ассистент");waitText("Предпросмотр PDF");waitText("Документ");shot("31-document-preview");
                 click("Применить");waitText("Скачать PDF");waitText("Отменить изменение");shot("32-document-created");

@@ -309,6 +309,22 @@ def main():
         file = call('/files', {'assistant_upload': True, 'name': 'brief.txt',
                     'content': base64.b64encode(b'file context').decode()}, token)['file']
         call('/assistant/conversations', {'title': 'Бриф проекта', 'context_entity': 'files', 'context_id': file['id']}, token)
+        if os.getenv('SMETRA_QUOTE_REVIEW_QA') == '1':
+            quote_review = call('/quotes', {'title': 'Сравнение условий', 'client': 'Тестовый клиент', 'terms': 'Срок 10 дней',
+                                           'items': [{'name': 'Подготовка', 'unit_price': 10000}, {'name': 'Покраска', 'unit_price': 20000}, {'name': 'Доставка', 'unit_price': 3000}]}, token)['quote']
+            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision']}, token)['quote']
+
+            def revise_review(quote, terms, items):
+                payload = json.dumps({'revision': quote['revision'], 'terms': terms, 'items': items}).encode()
+                request = urllib.request.Request(base_url + '/api/quotes/' + quote['id'], data=payload,
+                                                 headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token}, method='PATCH')
+                with urllib.request.urlopen(request) as response:
+                    return json.load(response)['quote']
+
+            quote_review = revise_review(quote_review, 'Срок 7 дней', [{**quote_review['items'][0], 'name': 'Подготовка поверхности', 'unit_price': 12000},
+                                                                     quote_review['items'][1], {'name': 'Защита мебели', 'unit_price': 4000}])
+            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision']}, token)['quote']
+            revise_review(quote_review, 'Срок 5 дней', quote_review['items'])
         print("ANDROID_UI_FIXTURE_READY " + base_url, flush=True)
         try:
             threading.Event().wait()

@@ -530,6 +530,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/admin.js"] = ("admin.js", "text/javascript")
         public["/admin.css"] = ("admin.css", "text/css")
         public["/growth.js"] = ("growth.js", "text/javascript")
+        public["/quote-review.js"] = ("quote-review.js", "text/javascript")
+        public["/quote-review.css"] = ("quote-review.css", "text/css")
         for name in (
             "reference-hero",
             "reference-sphere",
