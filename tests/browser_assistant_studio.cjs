@@ -20,6 +20,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await evaluate("document.querySelector('#assistant-pin').click()");await until("document.querySelector('#assistant-pin').textContent==='Открепить'");await evaluate("document.querySelector('#assistant-pin').click()");await until("document.querySelector('#assistant-pin').textContent==='Закрепить'");
  await evaluate("document.querySelector('#assistant-delete').click()");await until("!sessionStorage.getItem('smetra.assistant.conversation')&&!document.querySelector('#assistant-delete').disabled");
  await evaluate("document.querySelector('#assistant-delete').click()");await until("document.querySelector('#assistant-delete')?.textContent==='Очистить диалог'&&!document.querySelector('#assistant-delete').disabled");
+ await until("document.querySelector('.assistant-welcome h2')");
+ for(const width of [320,390,768,1440]){
+  await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
+  const alignment=await evaluate("(()=>{const root=document.querySelector('.assistant-welcome'),bounds=root.getBoundingClientRect(),center=bounds.left+bounds.width/2;return [...root.querySelectorAll('.assistant-welcome-line,h2,p,.assistant-suggestions')].map(node=>{const r=node.getBoundingClientRect();return {delta:Math.abs(r.left+r.width/2-center),align:getComputedStyle(node).textAlign}})})()");
+  assert.ok(alignment.every(node=>node.delta<1),'Welcome centered at '+width);assert.equal(alignment[1].align,'center');assert.equal(alignment[2].align,'center');assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);await screenshot('welcome-aligned-'+width);
+ }
+ await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  await evaluate("document.querySelector('#assistant-knowledge').click()");await until("document.querySelector('#assistant-knowledge-panel').open");await screenshot('knowledge-mobile');
  await evaluate("document.querySelector('#knowledge-form [name=title]').value='Studio knowledge';document.querySelector('#knowledge-form [name=content]').value='Ремонт квартир';document.querySelector('#knowledge-form').requestSubmit()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Studio knowledge')");
  await evaluate("document.querySelector('.knowledge-item').click();document.querySelector('#knowledge-form [name=content]').value='Ремонт и отделка';document.querySelector('#knowledge-form').requestSubmit()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Ремонт и отделка')");

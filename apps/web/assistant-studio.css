@@ -36,10 +36,10 @@
 .assistant-studio .assistant-thread-edit .btn{font-size:11px;min-height:38px;border:0;padding:8px 10px;flex:none}
 .workspace-page .assistant-studio .assistant-thread{padding:16px 0 22px;min-width:0}
 .workspace-page .assistant-studio .assistant-thread:has(.assistant-welcome){min-height:clamp(220px,38dvh,430px);align-items:center}
-.workspace-page .assistant-studio .assistant-welcome{padding:24px 0 30px}
+.workspace-page .assistant-studio .assistant-welcome{display:flex;flex-direction:column;align-items:center;width:100%;padding:24px 0 30px;text-align:center}
 .assistant-studio .assistant-welcome-line{width:28px;height:28px;margin-bottom:18px;color:var(--action)}
-.assistant-studio .assistant-welcome h2{font-size:clamp(24px,3vw,32px);font-weight:500;line-height:1.25;letter-spacing:-.04em;margin-bottom:10px}
-.assistant-studio .assistant-welcome p{font-size:13px;line-height:1.65;color:var(--text-secondary)}
+.workspace-page .assistant-studio .assistant-welcome h2{width:100%;max-width:none;text-align:center;font-size:clamp(24px,3vw,32px);font-weight:500;line-height:1.25;letter-spacing:-.04em;margin:0 0 10px}
+.workspace-page .assistant-studio .assistant-welcome p{width:100%;max-width:540px;text-align:center;margin:0;font-size:13px;line-height:1.65;color:var(--text-secondary)}
 .assistant-studio .assistant-suggestions{margin-top:22px;gap:4px 12px}
 .assistant-studio .assistant-suggestions button{font-size:12px;min-height:40px;padding:7px 8px;color:var(--text-secondary)}
 .workspace-page .assistant-studio .assistant-message{padding:17px 0;border:0}
