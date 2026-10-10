@@ -1183,7 +1183,7 @@ class Service:
                 if target == "current" and self.get("quotes", row["id"])["revision"] != row["revision"]:
                     raise DomainError(409, "Смета изменилась во время сравнения. Повторите загрузку")
                 result.update(quote_id=row["id"], title=row["title"], source=source, target=target, revision=row["revision"],
-                              can_publish=target == "current" and row["approval_state"] in ("draft", "changes_requested", "rejected") and row["status"] not in ("accepted", "completed"))
+                              can_publish=self.role != "viewer" and target == "current" and row["approval_state"] in ("draft", "changes_requested", "rejected") and row["status"] not in ("accepted", "completed"))
                 return 200, result
             if action == "versions":
                 return 200, {
