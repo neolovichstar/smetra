@@ -207,8 +207,12 @@ class AssistantJobTests(unittest.TestCase):
     def test_worker_signature_is_short_lived_scoped_and_one_time(self):
         owner, _ = self.account('job-signatures')
         job = self.enqueue(owner)
-        for token in (SECRET,worker_token(int(time.time())-121),worker_token(int(time.time())+31),worker_token()[:-1]+'x'):
-            self.assertEqual(self.call('/cron/assistant',token=token)[0],401)
+        now = int(time.time())
+        # Freeze the verification clock: HTTP scheduling may cross a second and
+        # legitimately move a +31s token into the allowed +30s window.
+        with patch('backend.assistant_jobs.stamp', return_value=now):
+            for token in (SECRET,worker_token(now-121),worker_token(now+31),worker_token(now)[:-1]+'x'):
+                self.assertEqual(self.call('/cron/assistant',token=token)[0],401)
         signed = worker_token()
         with patch('backend.assistant.query_model',return_value={'content':'Signed answer'}) as provider:
             self.assertEqual(self.call('/cron/assistant',token=signed)[0],200)

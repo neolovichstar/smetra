@@ -37,6 +37,7 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_navigation_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_history_editor_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_quote_review.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_quote_editor.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_settings_buttons.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_app_actions.cjs
@@ -65,6 +66,7 @@ jobs:
           fi
           node tests/browser_flows.cjs
           node tests/browser_quote_review.cjs
+          node tests/browser_quote_editor.cjs
           node tests/browser_growth.cjs
           node tests/browser_pwa.cjs
           node tests/browser_construction_prices.cjs
@@ -123,6 +125,7 @@ jobs:
             data/qa/section-*.png
             data/qa/growth-*.png
             data/qa/quote-review-*.png
+            data/qa/quote-editor-*.png
   android:
     runs-on: ubuntu-latest
     steps:

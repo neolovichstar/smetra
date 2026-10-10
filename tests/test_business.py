@@ -1219,6 +1219,50 @@ class BusinessFlows(unittest.TestCase):
         public = self.call("/public/quote?token=" + latest["public_url"].split("quote=")[1])[1]["quote"]
         self.assertTrue(all("line_id" not in row and "cost_price" not in row for row in public["items"]))
 
+    def test_autosave_replay_noop_and_stale_revision_fence(self):
+        token, _ = self.account("autosave-replay")
+        original = self.quote(token)
+        path = "/quotes/" + original["id"] + "/autosave"
+        data = {"revision": original["revision"], "terms": "Срок 5 дней", "items": original["items"]}
+        status, first = self.call(path, "PATCH", data, token)
+        self.assertEqual(status, 200)
+        self.assertEqual(first["quote"]["revision"], original["revision"] + 1)
+        status, replay = self.call(path, "PATCH", data, token)
+        self.assertEqual(status, 200)
+        self.assertTrue(replay["unchanged"])
+        self.assertEqual(replay["quote"]["revision"], first["quote"]["revision"])
+        self.assertEqual(self.call(path, "PATCH", {**data, "terms": "Другая правка"}, token)[0], 409)
+        self.assertEqual(self.call(path, "PATCH", {**data, "revision": "1"}, token)[0], 409)
+        self.assertEqual(self.call(path, "PATCH", {**data, "revision": original["revision"] - 1}, token)[0], 409)
+        same = {**data, "revision": first["quote"]["revision"]}
+        self.assertTrue(self.call(path, "PATCH", same, token)[1]["unchanged"])
+        self.assertEqual(self.call("/quotes/" + original["id"], token=token)[1]["quote"]["revision"], first["quote"]["revision"])
+
+    def test_autosave_keeps_client_snapshot_and_rejects_approved_quote(self):
+        token, _ = self.account("autosave-published")
+        original = self.publish(token, self.quote(token))
+        path = "/quotes/" + original["id"]
+        snapshot = self.call(path + "/versions", token=token)[1]["versions"][0]["snapshot"]
+        status, saved = self.call(path + "/autosave", "PATCH", {"revision": original["revision"], "terms": "Черновик новых условий"}, token)
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["quote"]["approval_state"], "draft")
+        self.assertEqual(self.call(path + "/versions", token=token)[1]["versions"][0]["snapshot"], snapshot)
+        next_quote = self.publish(token, saved["quote"])
+        self.assertEqual(self.call("/public/accept", "POST", {"token": urllib.parse.parse_qs(urllib.parse.urlsplit(next_quote["public_url"]).query)["quote"][0], "version": 2})[0], 200)
+        approved = self.call(path, token=token)[1]["quote"]
+        self.assertEqual(self.call(path + "/autosave", "PATCH", {"revision": approved["revision"], "terms": "Не перезаписать"}, token)[0], 409)
+
+    def test_autosave_private_and_invalid_input(self):
+        token, _ = self.account("autosave-private")
+        other, _ = self.account("autosave-other")
+        original = self.quote(token)
+        path = "/quotes/" + original["id"] + "/autosave"
+        data = {"revision": original["revision"], "title": "Changed"}
+        self.assertEqual(self.call(path, "PATCH", data)[0], 401)
+        self.assertEqual(self.call(path, "PATCH", data, other)[0], 404)
+        self.assertEqual(self.call(path, "PATCH", {**data, "items": [{"name": "Invalid", "quantity": "-1"}]}, token)[0], 400)
+        self.assertEqual(self.call("/quotes/" + original["id"], token=token)[1]["quote"]["revision"], original["revision"])
+
     def test_old_client_saving_without_line_ids_keeps_comparison_identity(self):
         token, _ = self.account("compare-old-client")
         original = self.publish(token, self.quote(token))
@@ -1257,6 +1301,7 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(self.call("/intake", "POST", {}, viewer, wid)[0], 403)
         self.assertEqual(self.call("/intake", "PATCH", {"enabled": 0}, viewer, wid)[0], 403)
+        self.assertEqual(self.call("/quotes/" + q["id"] + "/autosave", "PATCH", {"revision": q["revision"], "title": "Denied"}, viewer, wid)[0], 403)
         attachment = {"quote_id": q["id"], "name": "scope.txt", "content": base64.b64encode(b"Private scope").decode()}
         file_status, file_result = self.call("/files", "POST", attachment, owner)
         self.assertEqual(file_status, 201, file_result)

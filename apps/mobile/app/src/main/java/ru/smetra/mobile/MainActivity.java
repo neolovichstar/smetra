@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
         if(!openLink(getIntent())){if(token==null)login(false);else{page("С возвращением","home",false);loading(content);refresh();}}
         refreshPresentation();
     }
-    @Override protected void onResume(){super.onResume();if(presentation!=null)refreshPresentation();}
+    @Override protected void onResume(){super.onResume();if(presentation!=null)refreshPresentation();if(quoteDraftEditor!=null)quoteDraftEditor.resume();}
     private void refreshPresentation(){
         long moment=System.currentTimeMillis();if(moment-lastPresentationCheck<300000)return;lastPresentationCheck=moment;
         worker.execute(()->{try{MobilePresentation next=MobilePresentation.fetch(BuildConfig.API_BASE_URL);postWorkerResult(()->{
@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
     private boolean openLink(Intent intent){if(intent==null)return false;if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
     private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
-    @Override public void onDestroy(){worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
+    @Override public void onDestroy(){if(quoteDraftEditor!=null)quoteDraftEditor.close();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle state){
         state.putString("pending_pdf_document",pendingPdfDocument);
         state.putString("assistant_attachment_request_key",assistantAttachmentRequestKey);
@@ -160,7 +160,9 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);params.setMargins(dp(20),dp(12),dp(20),0);parent.addView(toast,params);ui.enter(toast);
         toast.postDelayed(()->{if(toast.getParent()==parent)toast.animate().alpha(0).setDuration(ui.motion()?180:0).withEndAction(()->parent.removeView(toast)).start();},5500);
     }
+    private QuoteDraftEditor quoteDraftEditor;
     private void page(String title,String page,boolean back){
+        if(quoteDraftEditor!=null){quoteDraftEditor.close();quoteDraftEditor=null;}
         View focused=getCurrentFocus();if(focused!=null)((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(focused.getWindowToken(),0);
         currentPage=page;pageVersion++;clickedButton=null;feedback=null;
         root=new FrameLayout(this);root.setBackgroundColor(BG);LinearLayout shell=ui.column();pageShell=shell;root.addView(shell,new FrameLayout.LayoutParams(-1,-1));
@@ -760,11 +762,22 @@ public class MainActivity extends Activity {
         JSONArray items=q.optJSONArray("items");if(items!=null&&items.length()>0){ui.section(content,"Состав сметы",null);for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(content),top=ui.row();TextView name=ui.label(item.optString("name"),15,INK,true);name.setMaxLines(3);top.addView(name,new LinearLayout.LayoutParams(0,-2,1));ui.gap(top,10);top.addView(ui.label(exactMoney(item.optLong("subtotal"),currency),14,INK,false));row.addView(top);ui.space(row,7);row.addView(ui.label(item.optString("quantity","1")+" "+item.optString("unit","шт.")+(item.optBoolean("optional")&&!item.optBoolean("included",true)?" · Опционально":""),12,MUTED,false));}}
         String id=q.optString("id");ui.space(content,20);
         button("Спросить ассистента",false,v->askAssistant("quotes",id,q.optString("title")));
+        if(!state.equals("approved")&&!state.equals("accepted")&&!state.equals("completed"))button("Редактировать смету",false,v->quoteEdit(q));
         if(q.optInt("published_version")>0)button("Сравнить версии",false,v->quoteReview(q,false));
         if(state.equals("changes_requested")||state.equals("rejected")||state.equals("draft")&&q.optInt("published_version")>0)button("Проверить и отправить новую версию",true,v->quoteReview(q,true));
         if(state.equals("draft")&&q.optInt("published_version")==0)button("Отправить на согласование",true,v->ui.sheet("Всё готово к отправке?","Сохраним текущую версию сметы. Клиент сможет открыть её по ссылке и согласовать условия.","Опубликовать смету",false,()->{try{call("/quotes/"+id+"/status","POST",new JSONObject().put("status","sent").put("revision",q.optInt("revision")),r->{String url=r.optJSONObject("quote")!=null?r.optJSONObject("quote").optString("public_url"):"";Analytics.event("estimate_sent",Analytics.params("source","android"),true);home();share(url);});}catch(Exception error){message(error.getMessage());}}));
         if(state.equals("sent")||state.equals("viewed")||state.equals("changes_requested")||state.equals("approved")||state.equals("accepted"))button("Поделиться ссылкой",true,v->share(q.optString("public_url")));
         if(state.equals("approved")||state.equals("accepted"))button("Создать заказ из сметы",false,v->{try{call("/quotes/"+id+"/project","POST",new JSONObject(),r->{Analytics.event("project_created",Analytics.params("source","estimate"),true);records("projects");});}catch(Exception error){message(error.getMessage());}});
+    }
+    private void quoteEdit(JSONObject quote){
+        page("Редактор сметы","quote-edit",true);final int version=pageVersion;final String session=token;
+        try{quoteDraftEditor=new QuoteDraftEditor(ui,content,getPreferences(MODE_PRIVATE),me.optString("id"),quote,
+            (path,method,body,done,fail)->apiWorker.execute(()->{
+                if(isFinishing()||version!=pageVersion||!java.util.Objects.equals(session,token))return;
+                try{JSONObject result=request(path,method,body,session);postWorkerResult(()->{if(version==pageVersion&&java.util.Objects.equals(session,token))done.accept(result);});}
+                catch(Exception error){postWorkerResult(()->{if(version==pageVersion&&java.util.Objects.equals(session,token))fail.accept(error instanceof ApiException?((ApiException)error).status:0,error instanceof ApiException?error.getMessage():"Нет связи с сервером");});}
+            }),()->!isFinishing()&&version==pageVersion&&java.util.Objects.equals(session,token),value->{if(value!=null)quote(value);});
+        }catch(Exception error){message("Не удалось открыть редактор. Повторите попытку.");}
     }
     private String quoteReviewId;
     private void quoteReviewBack(){

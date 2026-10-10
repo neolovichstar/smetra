@@ -1292,13 +1292,25 @@ class Service:
                 ),
             )
             self.emit("quote", row["id"], "Статус изменён", status)
-        elif method == "PATCH" and not action:
-            self.check_revision(row, data)
+        elif method == "PATCH" and action in ("", "autosave"):
+            if not action:
+                self.check_revision(row, data)
             if row["approval_state"] == "approved":
                 raise DomainError(
                     409, "Согласованная версия защищена от изменений. Создайте копию"
                 )
             values, items = self.quote_data(data, row)
+            if action == "autosave":
+                same = all(
+                    (json.loads(row[key]) == json.loads(value) if key == "custom_fields" else row[key] == value)
+                    for key, value in values.items()
+                ) and (items is None or items == self.quote_view(row)["items"])
+                revision = data.get("revision")
+                if type(revision) is not int or revision < 1:
+                    self.check_revision(row, data)
+                if same and revision in (row["revision"], row["revision"] - 1):
+                    return 200, {"quote": self.quote_view(row), "unchanged": True}
+            self.check_revision(row, data)
             values.update(
                 revision=row["revision"] + 1,
                 updated_at=stamp(),
