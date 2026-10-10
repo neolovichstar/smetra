@@ -31,6 +31,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  // A popover must also appear above a modal dialog's top layer.
  await evaluate(`{const dialog=document.createElement('dialog');dialog.id='select-test-dialog';dialog.innerHTML='<label>Выбор<select><option>Первый</option><option>Второй</option></select></label>';document.body.append(dialog);dialog.showModal();SmetraSelects.enhance(dialog);dialog.querySelector('.select-trigger').click()}`);
  assert.equal(await evaluate("document.querySelector('.select-menu:not(.select-menu-closing)').matches(':popover-open')"),true);
+ await sleep(200);
  assert.equal(await evaluate("{const option=document.querySelector('.select-menu:not(.select-menu-closing) .select-option'),r=option.getBoundingClientRect();option.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))}"),true);
  await evaluate("SmetraSelects.close();document.querySelector('#select-test-dialog').close();document.querySelector('#select-test-dialog').remove()");await sleep(180);
  await fill('#f-title','Новая кухня');await until("document.querySelector('#editor-save-state').dataset.state==='saved'");assert.equal((await read()).title,'Новая кухня');
