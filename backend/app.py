@@ -534,6 +534,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/quote-editor-state.js"] = ("quote-editor-state.js", "text/javascript")
         public["/select-menu.js"] = ("select-menu.js", "text/javascript")
         public["/select-menu.css"] = ("select-menu.css", "text/css")
+        public["/data-export.js"] = ("data-export.js", "text/javascript")
+        public["/data-export.css"] = ("data-export.css", "text/css")
         public["/quote-review.css"] = ("quote-review.css", "text/css")
         for name in (
             "reference-hero",

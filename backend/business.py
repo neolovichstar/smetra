@@ -2061,8 +2061,14 @@ class Service:
             self.h.throttle(f"construction-import:{self.wid}:{self.user['id']}", 8, 60)
         if method == "GET" and kind == "search":
             self.h.throttle(f"search:{self.wid}:{self.user['id']}", 90, 60)
+        if method == "GET" and kind == "export":
+            if not rest:
+                self.h.throttle(f"export-manifest:{self.wid}:{self.user['id']}", 4, 3600)
+            else:
+                self.h.throttle(f"export-data:{self.wid}:{self.user['id']}", 120, 60)
         if method == "GET" and (
             kind == "files" and rest
+            or kind == "export" and len(rest) == 2 and rest[0] in ("files", "versions")
             or kind == "documents" and len(rest) == 2 and rest[1] == "pdf"
             or kind == "transfer" and rest
         ):
@@ -2120,6 +2126,13 @@ class Service:
             except ModuleNotFoundError:
                 from attachments import route
             return route(self, method, parts, query, data)
+        if kind == "export":
+            try:
+                from backend.data_export import route
+            except ModuleNotFoundError:
+                from data_export import route
+
+            return route(self, method, parts, query)
         if kind == "construction":
             from backend.construction import route
 
@@ -2320,6 +2333,7 @@ ROUTES = set(ENTITIES) | {
     "documents",
     "transfer",
     "files",
+    "export",
     "construction",
     "ai",
     "capabilities",

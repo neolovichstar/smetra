@@ -756,6 +756,69 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(code, 200, result)
         return result["token"], result["user"]["id"]
 
+    def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
+        from backend.data_export import _clean
+
+        token, _ = self.account("export-owner")
+        _, client = self.call("/clients", "POST", {"name": "Export client"}, token)
+        original = b"original export attachment"
+        file_status, uploaded = self.call("/files", "POST", {
+            "client_id": client["item"]["id"], "name": "brief.md",
+            "content": base64.b64encode(original).decode(),
+        }, token)
+        self.assertEqual(file_status, 201, uploaded)
+        changed_status, changed = self.call("/files/" + uploaded["file"]["id"], "PATCH", {
+            "sha256": uploaded["file"]["sha256"],
+            "content": base64.b64encode(b"current export attachment").decode(),
+        }, token)
+        self.assertEqual(changed_status, 200, changed)
+        workspace = self.call("/workspace", token=token)[1]["workspace"]
+
+        status, manifest = self.call("/export", token=token, workspace=workspace["id"])
+        self.assertEqual(status, 200, manifest)
+        self.assertEqual(manifest["format"], "smetra-workspace-export")
+        self.assertEqual(manifest["version"], 1)
+        self.assertEqual(manifest["user"]["email"], "export-owner@test.invalid")
+        self.assertIn("settings", manifest["workspace"])
+        self.assertNotIn("password_hash", json.dumps(manifest))
+        self.assertEqual(manifest["total_file_bytes"], len(b"current export attachment"))
+        self.assertNotIn("storage_name", json.dumps(manifest))
+        self.assertEqual(len(manifest["files"]), 1)
+        for table in manifest["tables"]:
+            page_status, page = self.call(
+                f"/export/data/{table['name']}?offset=0&limit=25",
+                token=token,
+                workspace=workspace["id"],
+            )
+            self.assertEqual(page_status, 200, (table["name"], page))
+            self.assertLessEqual(len(page["items"]), 25)
+        exported = self.call(
+            "/export/data/clients?offset=0&limit=25", token=token, workspace=workspace["id"]
+        )[1]["items"]
+        self.assertEqual([row["id"] for row in exported], [client["item"]["id"]])
+        binary_status, content = self.call(
+            "/export/files/" + uploaded["file"]["id"], token=token,
+            workspace=workspace["id"], raw=True,
+        )
+        self.assertEqual(binary_status, 200)
+        self.assertEqual(content, b"current export attachment")
+        self.assertEqual(len(manifest["file_versions"]), 1)
+        version_status, version_content = self.call(
+            "/export/versions/" + manifest["file_versions"][0]["id"],
+            token=token, workspace=workspace["id"], raw=True,
+        )
+        self.assertEqual(version_status, 200)
+        self.assertEqual(version_content, original)
+        self.assertEqual(_clean({"snapshot": '{"public_url":"https://example.test/?token=abc","title":"x"}'}),
+                         {"snapshot": '{"title":"x"}'})
+
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE workspace_members SET role='viewer' WHERE workspace_id=?",
+                (workspace["id"],),
+            )
+        self.assertEqual(self.call("/export", token=token, workspace=workspace["id"])[0], 403)
+
     def test_quote_creation_key_replays_atomically_and_counts_once(self):
         token, user_id = self.account("quote-replay-owner")
         body = {"title": "Повтор при плохой сети", "client": "Клиент", "amount": 10000}

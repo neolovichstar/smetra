@@ -5,6 +5,7 @@
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js']},
     assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js','/ai-workspace.js']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js']},
+    dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,files:['/construction.js']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js']},
     growth:{ready:()=>!!window.SmetraGrowth,files:['/growth.js']},
