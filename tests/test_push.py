@@ -172,8 +172,8 @@ class PushTests(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM push_deliveries WHERE completed_at IS NULL").fetchone()[0], 0)
         self.assertIsNotNone(self.con.execute("SELECT sent_at FROM push_outbox").fetchone()[0])
 
-    def test_project_not_found_does_not_mark_device_token_invalid(self):
-        self.assertFalse(push._is_invalid_token_error(404, b'{"message":"Project not found"}'))
-        self.assertTrue(push._is_invalid_token_error(404, b'{"message":"Registration token not found"}'))
-        self.assertFalse(push._is_invalid_token_error(400, b'{"message":"Invalid project configuration"}'))
-        self.assertTrue(push._is_invalid_token_error(400, b'{"message":"Invalid registration token"}'))
+    def test_rustore_token_errors_are_distinguished_from_project_errors(self):
+        self.assertFalse(push._is_invalid_token_error(404, b'{"error":{"status":"NOT_FOUND","message":"Project not found"}}'))
+        self.assertTrue(push._is_invalid_token_error(404, b'{"error":{"status":"NOT_FOUND","message":"Requested entity was not found."}}'))
+        self.assertTrue(push._is_invalid_token_error(400, b'{"error":{"status":"INVALID_ARGUMENT","message":"The registration token is not a valid FCM registration token"}}'))
+        self.assertFalse(push._is_invalid_token_error(400, b'{"error":{"status":"INVALID_ARGUMENT","message":"Invalid project configuration"}}'))
