@@ -69,8 +69,6 @@ CREATE INDEX IF NOT EXISTS idx_estimate_templates_workspace_id ON estimate_templ
 CREATE INDEX IF NOT EXISTS idx_leads_client_id ON leads(client_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_states_link_user_id ON oauth_states(link_user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_tickets_user_id ON oauth_tickets(user_id);
-CREATE INDEX IF NOT EXISTS idx_quote_followups_created_by ON quote_followups(created_by);
-CREATE INDEX IF NOT EXISTS idx_quote_followups_quote_id ON quote_followups(quote_id);
 CREATE INDEX IF NOT EXISTS idx_quote_versions_author_id ON quote_versions(author_id);
 CREATE INDEX IF NOT EXISTS idx_refunds_payment_id ON refunds(payment_id);
 CREATE INDEX IF NOT EXISTS idx_support_user_id ON support(user_id);
