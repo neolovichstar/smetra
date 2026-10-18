@@ -5,14 +5,14 @@ The app-side SDK integration and backend delivery queue are ready for review. De
 - `RUSTORE_PUSH_PROJECT_ID`: ID from the existing app's RuStore Console > Push notifications > Projects.
 - `RUSTORE_PUSH_SERVICE_TOKEN`: server-only service token from that project. Never put it in Android BuildConfig or a client file.
 
-The worker also requires `CRON_SECRET` (at least 32 characters) or `PUSH_WORKER_SECRET`. A scheduler must call `GET /api/cron/push` with `Authorization: Bearer <secret>`. Reuse the existing scheduling infrastructure; the current Supabase project already has `pg_cron` jobs, while the Vercel Hobby plan does not support frequent Vercel Cron schedules. Do not create another Vercel/Supabase project just for pushes.
+The worker reuses the existing `ASSISTANT_WORKER_SECRET` and Supabase Vault secret `smetra_assistant_worker_secret`. Its Supabase `pg_cron` job signs short-lived, one-use requests to `GET /api/cron/push`; it does not place a persistent bearer token into the `pg_net` request queue. The scheduler is added by `supabase/migrations/20261018213000_push_worker_scheduler.sql`.
 
 ## Deploy steps
 
 1. Review and merge this branch after CI is green.
 2. Back up the existing Supabase production database.
 3. Apply `supabase/migrations/20261018193000_rustore_push_notifications.sql`, then `supabase/migrations/20261018210000_query_performance_indexes.sql`, to the existing Supabase project. The first adds push-specific tables and delivery tracking without recreating or changing `file_versions`; the second adds indexes for common workspace relationships. The local SQLite startup applies `backend/migrations/022_push_notifications.sql` and `backend/migrations/023_query_performance_indexes.sql`.
-4. Configure the three server environment variables in the existing production environment.
+4. Configure `RUSTORE_PUSH_PROJECT_ID` and server-only `RUSTORE_PUSH_SERVICE_TOKEN` in the existing Vercel production environment. Keep the already configured `ASSISTANT_WORKER_SECRET` matched to the existing Supabase Vault secret; do not create a second worker secret.
 5. In RuStore Console, create a Push project for the existing application ID `ru.smetra.mobile`; match the SHA-256 certificate fingerprint of the signed release APK. Use the project ID as `-PrustorePushProjectId=...` or `RUSTORE_PUSH_PROJECT_ID=...` at Android build time.
 6. Build and test a signed Android APK/AAB in CI, then upload it to the existing RuStore app listing. No keystore or production secret is included in the repository.
 
