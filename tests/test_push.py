@@ -36,6 +36,7 @@ class PushTests(unittest.TestCase):
             CREATE TABLE sessions(id TEXT PRIMARY KEY,user_id TEXT,token_hash TEXT,expires_at INTEGER);
             CREATE TABLE push_devices(id TEXT PRIMARY KEY,installation_id TEXT UNIQUE,user_id TEXT,session_token_hash TEXT,token TEXT UNIQUE,platform TEXT,created_at INTEGER,updated_at INTEGER,last_seen INTEGER);
             CREATE TABLE push_outbox(id TEXT PRIMARY KEY,workspace_id TEXT,notification_id TEXT,title TEXT,body TEXT,entity_id TEXT,created_at INTEGER,next_attempt_at INTEGER,attempts INTEGER DEFAULT 0,lease_until INTEGER DEFAULT 0,sent_at INTEGER,last_error TEXT DEFAULT '');
+            CREATE TABLE push_deliveries(id TEXT PRIMARY KEY,workspace_id TEXT,outbox_id TEXT,device_id TEXT,attempts INTEGER DEFAULT 0,next_attempt_at INTEGER,lease_until INTEGER DEFAULT 0,sent_at INTEGER,completed_at INTEGER,last_error TEXT DEFAULT '',created_at INTEGER,UNIQUE(outbox_id,device_id));
         """)
         self.con.execute("INSERT INTO users VALUES('u1')")
         self.con.execute("INSERT INTO workspaces VALUES('w1')")
@@ -75,7 +76,7 @@ class PushTests(unittest.TestCase):
         with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
             push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
             push.enqueue(self.con, "w1", "n1", "Смета обновлена", "Откройте Сметру", "q1")
-            with patch.object(push, "_send", return_value=(True, 200)):
+            with patch.object(push, "_send", return_value=(True, 200, False)):
                 result = push.run_batch(self.con)
         self.assertEqual(result["processed"], 1)
         self.assertEqual(result["delivered"], 1)
@@ -85,7 +86,7 @@ class PushTests(unittest.TestCase):
         with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
             push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
             push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
-            with patch.object(push, "_send", return_value=(False, 503)):
+            with patch.object(push, "_send", return_value=(False, 503, False)):
                 result = push.run_batch(self.con)
         row = self.con.execute("SELECT attempts,next_attempt_at,sent_at FROM push_outbox").fetchone()
         self.assertEqual(result["processed"], 1)
@@ -109,7 +110,7 @@ class PushTests(unittest.TestCase):
         with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
             push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
             push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
-            with patch.object(push, "_send", return_value=(False, 404)):
+            with patch.object(push, "_send", return_value=(False, 404, True)):
                 push.run_batch(self.con)
         self.assertEqual(self.con.execute("SELECT count(*) FROM push_devices").fetchone()[0], 0)
     def test_postgres_translates_push_tables_to_private_schema(self):
@@ -119,3 +120,39 @@ class PushTests(unittest.TestCase):
         )
         self.assertIn("smetra.push_devices", sql)
         self.assertIn("smetra.push_outbox", sql)
+    def test_partial_failure_retries_only_failed_devices(self):
+        second_installation = "b3b3b3b3-1234-4234-8234-123456789abc"
+        second_token = "second-token-value-for-unit-tests-7890"
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+            other = Service(self.con)
+            other.user = {"id": "u2"}
+            self.con.execute("INSERT INTO users VALUES('u2')")
+            self.con.execute("INSERT INTO workspace_members VALUES('w1','u2','member')")
+            self.con.execute("INSERT INTO sessions VALUES('s2','u2','session-hash-2',9999999999)")
+            other.h.session_token_hash = "session-hash-2"
+            push.handle(other, "POST", [], {"installation_id": second_installation, "token": second_token})
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+            calls = []
+            def partial(token, event):
+                calls.append(token)
+                return (True, 200, False) if token == self.token else (False, 503, False)
+            with patch.object(push, "_send", side_effect=partial):
+                push.run_batch(self.con)
+            rows = self.con.execute("SELECT d.token,p.sent_at,p.completed_at FROM push_deliveries p JOIN push_devices d ON d.id=p.device_id ORDER BY d.token").fetchall()
+            self.assertEqual(len(rows), 2)
+            sent = {r["token"]: r["sent_at"] is not None for r in rows}
+            self.assertTrue(sent[self.token])
+            self.assertFalse(sent[second_token])
+            self.con.execute("UPDATE push_deliveries SET next_attempt_at=0 WHERE sent_at IS NULL")
+            with patch.object(push, "_send", side_effect=lambda token,event: (True, 200, False)):
+                push.run_batch(self.con)
+        self.assertEqual(calls.count(self.token), 1)
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM push_deliveries WHERE completed_at IS NULL").fetchone()[0], 0)
+        self.assertIsNotNone(self.con.execute("SELECT sent_at FROM push_outbox").fetchone()[0])
+
+    def test_project_not_found_does_not_mark_device_token_invalid(self):
+        self.assertFalse(push._is_invalid_token_error(404, b'{"message":"Project not found"}'))
+        self.assertTrue(push._is_invalid_token_error(404, b'{"message":"Registration token not found"}'))
+        self.assertFalse(push._is_invalid_token_error(400, b'{"message":"Invalid project configuration"}'))
+        self.assertTrue(push._is_invalid_token_error(400, b'{"message":"Invalid registration token"}'))
