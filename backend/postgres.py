@@ -28,6 +28,7 @@ TABLES = TABLES | frozenset("construction_price_batches".split())
 TABLES = TABLES | frozenset("quote_creation_requests".split())
 TABLES = TABLES | frozenset(["assistant_jobs"])
 TABLES = TABLES | frozenset(["creation_requests"])
+TABLES = TABLES | frozenset("push_devices push_outbox".split())
 TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
