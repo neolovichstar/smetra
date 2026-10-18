@@ -115,11 +115,12 @@ class PushTests(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT count(*) FROM push_devices").fetchone()[0], 0)
     def test_postgres_translates_push_tables_to_private_schema(self):
         sql = translate(
-            "SELECT d.token FROM push_devices d JOIN push_outbox o ON o.id=d.id",
+            "SELECT d.token FROM push_devices d JOIN push_outbox o ON o.id=d.id JOIN push_deliveries p ON p.device_id=d.id",
             "smetra",
         )
         self.assertIn("smetra.push_devices", sql)
         self.assertIn("smetra.push_outbox", sql)
+        self.assertIn("smetra.push_deliveries", sql)
     def test_partial_failure_retries_only_failed_devices(self):
         second_installation = "b3b3b3b3-1234-4234-8234-123456789abc"
         second_token = "second-token-value-for-unit-tests-7890"
