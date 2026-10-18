@@ -2,33 +2,6 @@ BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
 
--- Restore the table used by file history on PostgreSQL deployments where it is absent.
-CREATE TABLE IF NOT EXISTS smetra.file_versions (
- id TEXT PRIMARY KEY,
- workspace_id TEXT NOT NULL REFERENCES smetra.workspaces(id) ON DELETE CASCADE,
- file_id TEXT NOT NULL REFERENCES smetra.files(id) ON DELETE CASCADE,
- revision BIGINT NOT NULL CHECK(revision > 0),
- sha256 TEXT NOT NULL,
- content BYTEA NOT NULL,
- size BIGINT NOT NULL CHECK(size > 0),
- created_by TEXT REFERENCES smetra.users(id) ON DELETE SET NULL,
- created_at BIGINT NOT NULL,
- UNIQUE(file_id,revision)
-);
-CREATE INDEX IF NOT EXISTS idx_file_versions_file_revision ON smetra.file_versions(workspace_id,file_id,revision DESC);
-CREATE INDEX IF NOT EXISTS idx_file_versions_workspace_created ON smetra.file_versions(workspace_id,created_at DESC);
-ALTER TABLE smetra.file_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE smetra.file_versions FORCE ROW LEVEL SECURITY;
-GRANT SELECT,INSERT,UPDATE,DELETE ON smetra.file_versions TO smetra_runtime;
-REVOKE ALL ON smetra.file_versions FROM PUBLIC,anon,authenticated;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='smetra' AND tablename='file_versions' AND policyname='smetra_runtime_file_versions') THEN
-    CREATE POLICY smetra_runtime_file_versions ON smetra.file_versions FOR ALL TO smetra_runtime
-      USING (workspace_id=nullif(current_setting('smetra.workspace_id',true),'') AND smetra.runtime_workspace_allowed(workspace_id))
-      WITH CHECK (workspace_id=nullif(current_setting('smetra.workspace_id',true),'') AND smetra.runtime_workspace_allowed(workspace_id));
-  END IF;
-END $$;
-
 CREATE TABLE IF NOT EXISTS smetra.push_devices (
  id TEXT PRIMARY KEY,
  installation_id TEXT NOT NULL UNIQUE,
@@ -81,5 +54,5 @@ DO $$ BEGIN
 END $$;
 
 INSERT INTO smetra.schema_migrations(version,applied_at)
-VALUES(30,extract(epoch FROM now())::BIGINT) ON CONFLICT DO NOTHING;
+VALUES(31,extract(epoch FROM now())::BIGINT) ON CONFLICT DO NOTHING;
 COMMIT;
