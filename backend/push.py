@@ -277,6 +277,13 @@ def _complete_event_if_finished(con, event_id, now):
 def run_batch(con, limit=3):
     """Deliver bounded recipient batches without resending successful devices."""
     if not is_configured():
+        now = _now()
+        # Avoid waking the worker every minute while credentials are intentionally absent.
+        con.execute(
+            "UPDATE push_outbox SET next_attempt_at=?,lease_until=0,last_error='provider_not_configured' "
+            "WHERE sent_at IS NULL AND next_attempt_at<=? AND lease_until<?",
+            (now + 3600, now, now),
+        )
         return {"ok": True, "configured": False, "processed": 0, "delivered": 0}
     try:
         limit = max(1, min(int(limit), 3))

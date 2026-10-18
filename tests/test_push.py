@@ -192,3 +192,15 @@ class PushTests(unittest.TestCase):
             outbox = self.con.execute("SELECT next_attempt_at,lease_until FROM push_outbox").fetchone()
             self.assertEqual(outbox["next_attempt_at"], now + 35)
             self.assertEqual(outbox["lease_until"], 0)
+    def test_unconfigured_provider_defers_due_events(self):
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+        with patch.dict(os.environ, {}, clear=True):
+            now = push._now()
+            result = push.run_batch(self.con)
+        row = self.con.execute("SELECT attempts,next_attempt_at,sent_at,last_error FROM push_outbox").fetchone()
+        self.assertFalse(result["configured"])
+        self.assertEqual(row["attempts"], 0)
+        self.assertGreaterEqual(row["next_attempt_at"], now + 3599)
+        self.assertIsNone(row["sent_at"])
+        self.assertEqual(row["last_error"], "provider_not_configured")

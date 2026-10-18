@@ -68,6 +68,25 @@ SELECT cron.schedule(
   '* * * * *',
   'SELECT smetra.wake_push_worker()'
 );
+SELECT cron.unschedule(jobid)
+FROM cron.job
+WHERE jobname='smetra-push-maintenance';
+SELECT cron.schedule(
+  'smetra-push-maintenance',
+  '15 3 * * *',
+  $pushmaint$
+    DELETE FROM smetra.push_devices d
+    WHERE NOT EXISTS (
+      SELECT 1 FROM smetra.sessions s
+      WHERE s.user_id=d.user_id
+        AND s.token_hash=d.session_token_hash
+        AND s.expires_at>extract(epoch FROM now())::BIGINT
+    );
+    DELETE FROM smetra.push_outbox
+    WHERE sent_at IS NOT NULL
+      AND sent_at<extract(epoch FROM now()-interval '30 days')::BIGINT;
+  $pushmaint$
+);
 
 INSERT INTO smetra.schema_migrations(version,applied_at)
 VALUES(33,extract(epoch FROM now())::BIGINT) ON CONFLICT DO NOTHING;

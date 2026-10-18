@@ -20,4 +20,4 @@ The app asks for Android 13+ notification permission only when the user enables 
 
 ## Operational behavior
 
-The queue is transactional with in-app notifications, claims events with a short lease, sends to a bounded number of devices in parallel, retries transient provider failures with backoff, and removes expired provider tokens. No push is queued when RuStore provider credentials are absent.
+The queue is transactional with in-app notifications, tracks each recipient separately to prevent duplicate delivery after partial failure, claims work with short leases, sends to a bounded number of devices in parallel, and retries transient provider failures with backoff. If credentials are temporarily absent, due events are deferred for one hour instead of waking the worker every minute. Daily maintenance removes registrations tied to expired sessions and purges completed outbox history after 30 days. No new push is queued when RuStore provider credentials are absent.
