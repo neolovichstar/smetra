@@ -414,6 +414,13 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(27,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(28,?)", (stamp(),))
+    # Apply the idempotent SQLite migration only after the surrounding
+    # migration transaction has finished; executescript commits implicitly.
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "022_push_notifications.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
@@ -490,9 +497,21 @@ class Service:
             (identity(), self.wid, actor, kind, entity, action, detail[:1000], stamp()),
         )
         if notify:
+            notification_id = identity()
             self.con.execute(
                 "INSERT INTO notifications VALUES(?,?,?,?,?)",
-                (identity(), self.wid, action, entity, stamp()),
+                (notification_id, self.wid, action, entity, stamp()),
+            )
+            # Locked-screen text avoids client names, comments and amounts.
+            from backend.push import enqueue
+
+            enqueue(
+                self.con,
+                self.wid,
+                notification_id,
+                action,
+                "Откройте Сметру, чтобы посмотреть подробности.",
+                entity,
             )
 
     def write_access(self, managerial=False):
@@ -2055,6 +2074,10 @@ class Service:
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}
+        if kind == "push-devices":
+            from backend.push import handle as handle_push_devices
+
+            return handle_push_devices(self, method, rest, data)
         if method == "POST" and kind in ("files", "documents", "transfer"):
             self.h.throttle(f"{kind}:{self.wid}:{self.user['id']}", 12 if kind == "files" else 20, 60)
         if method == "POST" and kind == "construction" and rest[-1:] == ["import"]:
@@ -2327,6 +2350,7 @@ ROUTES = set(ENTITIES) | {
     "search",
     "activity",
     "notifications",
+    "push-devices",
     "custom-fields",
     "templates",
     "comments",
