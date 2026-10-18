@@ -15,7 +15,7 @@ public final class SmetraPushMessagingService extends RuStoreMessagingService {
     @Override public void onDeletedMessages() {
         // The in-app notification centre is refreshed whenever the user opens it.
     }
-    @Override public void onError(List<RuStorePushClientException> errors) {
+    @Override public void onError(List<? extends RuStorePushClientException> errors) {
         // Avoid logging service tokens or user tokens in production logs.
     }
 }
