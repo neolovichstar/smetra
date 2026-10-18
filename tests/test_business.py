@@ -56,6 +56,15 @@ class CalculationTests(unittest.TestCase):
             int(dt.datetime(2026, 9, 30, 21, 0, tzinfo=dt.timezone.utc).timestamp()),
         )
 
+    def test_construction_report_uses_business_timezone_date(self):
+        from backend.construction_report import _report_date
+
+        # 23:30 UTC is already the next calendar day in Smetra's Moscow timezone.
+        moment = int(dt.datetime(
+            2026, 9, 30, 23, 30, tzinfo=dt.timezone.utc
+        ).timestamp())
+        self.assertEqual(_report_date(moment), "01.10.2026")
+
     def test_construction_formula_is_bounded_and_safe(self):
         from backend.construction_math import evaluate, zone_values
 
