@@ -10,6 +10,12 @@ from backend.business import business_date
 from backend.documents import Download
 
 
+def _format_currency(value, code):
+    allowed = ("RUB", "USD", "EUR", "KZT", "BYN", "GBP")
+    code = code if code in allowed else "RUB"
+    return f'{Decimal(value) / 100:,.2f}'.replace(',', ' ') + ' ' + code
+
+
 def _report_date(moment=None):
     """Use Smetra's business timezone instead of the server's local timezone."""
     return business_date(moment).strftime("%d.%m.%Y")
@@ -35,10 +41,6 @@ def report(service, obj, snapshot):
     def text(value, style=body):
         return Paragraph(escape(str(value or '')), style)
 
-    def currency(value, code):
-        allowed = ("RUB", "USD", "EUR", "KZT", "BYN", "GBP")
-        code = code if code in allowed else "RUB"
-        return f'{Decimal(value) / 100:,.2f}'.replace(',', ' ') + ' ' + code
 
     project = service.con.execute(
         'SELECT status,amount_kopecks,currency FROM projects WHERE id=? AND workspace_id=?',
@@ -100,10 +102,10 @@ def report(service, obj, snapshot):
     story += [Spacer(1, 22), text('Согласование и оплаты', title), Spacer(1, 8)]
     base = snapshot['scope']['base_quote_kopecks']
     if base is not None:
-        story.append(text('Основная смета: ' + currency(base, scope_currency)))
-    story.append(text('Согласованные допработы: ' + currency(snapshot['scope']['approved_changes_kopecks'], scope_currency)))
+        story.append(text('Основная смета: ' + _format_currency(base, scope_currency)))
+    story.append(text('Согласованные допработы: ' + _format_currency(snapshot['scope']['approved_changes_kopecks'], scope_currency)))
     if project:
-        story.append(text('Учтено поступлений: ' + currency(paid, project['currency'] if project else scope_currency)))
+        story.append(text('Учтено поступлений: ' + _format_currency(paid, project['currency'] if project else scope_currency)))
     story.append(text('Поступления указаны по записям исполнителя и не являются кассовым чеком.', small))
     photos = service.con.execute(
         'SELECT f.*,l.work_date,l.work_description FROM construction_log_photos p '
