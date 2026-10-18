@@ -509,7 +509,7 @@ class Service:
                 self.con,
                 self.wid,
                 notification_id,
-                action,
+                "Событие в Сметре",
                 "Откройте Сметру, чтобы посмотреть подробности.",
                 entity,
             )
