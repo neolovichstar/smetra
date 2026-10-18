@@ -28,6 +28,37 @@ CREATE INDEX IF NOT EXISTS idx_events_user_id_created ON smetra.events(user_id,c
 CREATE INDEX IF NOT EXISTS idx_activity_actor_id ON smetra.activity(actor_id);
 CREATE INDEX IF NOT EXISTS idx_catalog_price_history_item_id ON smetra.catalog_price_history(item_id);
 
+CREATE INDEX IF NOT EXISTS idx_construction_changes_object_id ON smetra.construction_changes(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_daily_logs_object_id ON smetra.construction_daily_logs(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_daily_logs_fact_id ON smetra.construction_daily_logs(fact_id);
+CREATE INDEX IF NOT EXISTS idx_construction_daily_logs_quantity_id ON smetra.construction_daily_logs(quantity_id);
+CREATE INDEX IF NOT EXISTS idx_construction_daily_logs_zone_id ON smetra.construction_daily_logs(zone_id);
+CREATE INDEX IF NOT EXISTS idx_construction_defects_object_id ON smetra.construction_defects(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_defects_zone_id ON smetra.construction_defects(zone_id);
+CREATE INDEX IF NOT EXISTS idx_construction_defects_photo_file_id ON smetra.construction_defects(photo_file_id);
+CREATE INDEX IF NOT EXISTS idx_construction_facts_object_id ON smetra.construction_facts(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_facts_quantity_id ON smetra.construction_facts(quantity_id);
+CREATE INDEX IF NOT EXISTS idx_construction_measurements_zone_id ON smetra.construction_measurements(zone_id);
+CREATE INDEX IF NOT EXISTS idx_construction_zones_object_id ON smetra.construction_zones(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_zones_parent_id ON smetra.construction_zones(parent_id);
+CREATE INDEX IF NOT EXISTS idx_construction_quantities_object_id ON smetra.construction_quantities(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_quantities_zone_id ON smetra.construction_quantities(zone_id);
+CREATE INDEX IF NOT EXISTS idx_construction_quantities_catalog_id ON smetra.construction_quantities(catalog_id);
+CREATE INDEX IF NOT EXISTS idx_construction_quantities_parent_work_id ON smetra.construction_quantities(parent_work_id);
+CREATE INDEX IF NOT EXISTS idx_construction_purchases_object_id ON smetra.construction_purchases(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_purchases_supplier_id ON smetra.construction_purchases(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_construction_purchases_material_id ON smetra.construction_purchases(material_id);
+CREATE INDEX IF NOT EXISTS idx_construction_purchases_receipt_file_id ON smetra.construction_purchases(receipt_file_id);
+CREATE INDEX IF NOT EXISTS idx_construction_log_photos_object_id ON smetra.construction_log_photos(object_id);
+CREATE INDEX IF NOT EXISTS idx_construction_log_photos_file_id ON smetra.construction_log_photos(file_id);
+CREATE INDEX IF NOT EXISTS idx_construction_price_batches_object_id ON smetra.construction_price_batches(object_id);
+CREATE INDEX IF NOT EXISTS idx_catalog_price_history_changed_by ON smetra.catalog_price_history(changed_by);
+CREATE INDEX IF NOT EXISTS idx_workspace_knowledge_created_by ON smetra.workspace_knowledge(created_by);
+CREATE INDEX IF NOT EXISTS idx_creation_requests_user_id ON smetra.creation_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_referral_rewards_inviter_id ON smetra.referral_rewards(inviter_id);
+CREATE INDEX IF NOT EXISTS idx_referral_rewards_invitee_id ON smetra.referral_rewards(invitee_id);
+CREATE INDEX IF NOT EXISTS idx_client_requests_client_id ON smetra.client_requests(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_requests_form_id ON smetra.client_requests(form_id);
 INSERT INTO smetra.schema_migrations(version,applied_at)
 VALUES(32,extract(epoch FROM now())::BIGINT) ON CONFLICT DO NOTHING;
 COMMIT;
