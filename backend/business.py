@@ -916,9 +916,10 @@ class Service:
                 owner=self.con.execute('SELECT entitlement_until FROM users WHERE id=?',(row['user_id'],)).fetchone()
                 settings=json.loads(self.con.execute('SELECT settings FROM workspaces WHERE id=?',(self.wid,)).fetchone()[0])
                 show_branding=not (owner['entitlement_until']>stamp() and settings.get('hide_branding') is True)
+                expired = public_quote["approval_state"] == "expired"
                 state = (
                     "viewed"
-                    if row["approval_state"] == "sent"
+                    if row["approval_state"] == "sent" and not expired
                     else row["approval_state"]
                 )
                 self.update(
@@ -930,7 +931,7 @@ class Service:
                         approval_state=state,
                     ),
                 )
-                if row["view_count"] == 0:
+                if row["view_count"] == 0 and not expired:
                     self.emit("quote", row["id"], "Клиент открыл смету", notify=True)
                 public_quote["approval_state"] = (
                     "viewed"
@@ -1773,11 +1774,16 @@ class Service:
             add("quote", row, "Смета согласована", "Создать проект", row["title"])
         for row in self.con.execute(
             "SELECT id,title,currency FROM quotes WHERE workspace_id=? AND approval_state='changes_requested' "
-            "ORDER BY updated_at DESC LIMIT 5",
-            (self.wid,),
+            "AND (expires_at IS NULL OR expires_at>=?) ORDER BY updated_at DESC LIMIT 5",
+            (self.wid, stamp()),
         ):
             add("quote", row, "Клиент запросил изменения", "Открыть смету", row["title"])
-        for row in self.con.execute("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
+        for row in self.con.execute(
+            "SELECT id,title,currency,client FROM quotes WHERE workspace_id=? "
+            "AND approval_state IN ('sent','viewed') AND sent_at<=? "
+            "AND (expires_at IS NULL OR expires_at>=?) ORDER BY sent_at LIMIT 5",
+            (self.wid, stamp() - 2 * 86400, stamp()),
+        ):
             add('quote',row,'Смета ждёт согласования','Открыть смету',row['client']+' · '+row['title'])
         for row in self.con.execute(
             "SELECT id,name,due_date FROM tasks WHERE workspace_id=? AND status!='done' "
@@ -1884,8 +1890,12 @@ class Service:
             )
         quotes = dict(
             self.con.execute(
-                "SELECT count(*) AS total,sum(CASE WHEN approval_state IN ('sent','viewed','changes_requested') THEN 1 ELSE 0 END) AS waiting,sum(CASE WHEN approval_state='approved' THEN 1 ELSE 0 END) AS approved FROM quotes WHERE workspace_id=?",
-                (self.wid,),
+                "SELECT count(*) AS total,"
+                "sum(CASE WHEN approval_state IN ('sent','viewed','changes_requested') "
+                "AND (expires_at IS NULL OR expires_at>=?) THEN 1 ELSE 0 END) AS waiting,"
+                "sum(CASE WHEN approval_state='approved' THEN 1 ELSE 0 END) AS approved "
+                "FROM quotes WHERE workspace_id=?",
+                (stamp(), self.wid),
             ).fetchone()
         )
         deadlines = [
