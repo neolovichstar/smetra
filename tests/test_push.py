@@ -91,3 +91,23 @@ class PushTests(unittest.TestCase):
         self.assertEqual(row["attempts"], 1)
         self.assertIsNone(row["sent_at"])
         self.assertGreater(row["next_attempt_at"], push._now())
+    def test_installation_id_uuid_is_strict(self):
+        self.assertTrue(push._valid_installation_id(self.installation))
+        self.assertFalse(push._valid_installation_id("not-a-uuid"))
+        self.assertFalse(push._valid_installation_id("x" * 36))
+
+    def test_cron_requires_a_long_bearer_secret(self):
+        with patch.dict(os.environ, {"CRON_SECRET": "s" * 32}):
+            self.service.h.headers = {"Authorization": "Bearer " + "s" * 32}
+            push.authenticate_cron(self.service.h)
+            self.service.h.headers = {"Authorization": "Bearer wrong"}
+            with self.assertRaises(app.ApiError):
+                push.authenticate_cron(self.service.h)
+
+    def test_invalid_provider_registration_is_removed(self):
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+            with patch.object(push, "_send", return_value=(False, 404)):
+                push.run_batch(self.con)
+        self.assertEqual(self.con.execute("SELECT count(*) FROM push_devices").fetchone()[0], 0)
