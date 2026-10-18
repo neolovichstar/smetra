@@ -27,7 +27,7 @@ android {
         testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
         buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('\"', '') + '"'
         buildConfigField 'String', 'MYTRACKER_SDK_KEY', '"' + myTrackerSdkKey.replace('\"', '') + '"'
-        buildConfigField 'String', 'RUSTORE_PUSH_PROJECT_ID', '"' + rustorePushProjectId.replace('\\"', '') + '"'
+        buildConfigField 'String', 'RUSTORE_PUSH_PROJECT_ID', '"' + rustorePushProjectId + '"'
     }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
