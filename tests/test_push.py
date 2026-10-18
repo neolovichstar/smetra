@@ -1,0 +1,93 @@
+import os
+import sqlite3
+import unittest
+from unittest.mock import patch
+
+from backend import app, push
+
+
+class Handler:
+    def __init__(self):
+        self.headers = {}
+        self.session_token_hash = "session-hash"
+
+    def throttle(self, *args):
+        pass
+
+
+class Service:
+    def __init__(self, con):
+        self.con = con
+        self.user = {"id": "u1"}
+        self.wid = "w1"
+        self.h = Handler()
+
+
+class PushTests(unittest.TestCase):
+    def setUp(self):
+        self.con = sqlite3.connect(":memory:")
+        self.con.row_factory = sqlite3.Row
+        self.con.executescript("""
+            CREATE TABLE users(id TEXT PRIMARY KEY);
+            CREATE TABLE workspaces(id TEXT PRIMARY KEY);
+            CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT);
+            CREATE TABLE notifications(id TEXT PRIMARY KEY, workspace_id TEXT, message TEXT, entity_id TEXT, created_at INTEGER);
+            CREATE TABLE sessions(id TEXT PRIMARY KEY,user_id TEXT,token_hash TEXT,expires_at INTEGER);
+            CREATE TABLE push_devices(id TEXT PRIMARY KEY,installation_id TEXT UNIQUE,user_id TEXT,session_token_hash TEXT,token TEXT UNIQUE,platform TEXT,created_at INTEGER,updated_at INTEGER,last_seen INTEGER);
+            CREATE TABLE push_outbox(id TEXT PRIMARY KEY,workspace_id TEXT,notification_id TEXT,title TEXT,body TEXT,entity_id TEXT,created_at INTEGER,next_attempt_at INTEGER,attempts INTEGER DEFAULT 0,lease_until INTEGER DEFAULT 0,sent_at INTEGER,last_error TEXT DEFAULT '');
+        """)
+        self.con.execute("INSERT INTO users VALUES('u1')")
+        self.con.execute("INSERT INTO workspaces VALUES('w1')")
+        self.con.execute("INSERT INTO workspace_members VALUES('w1','u1','owner')")
+        self.con.execute("INSERT INTO sessions VALUES('s1','u1','session-hash',9999999999)")
+        self.con.execute("INSERT INTO notifications VALUES('n1','w1','Изменение','q1',1)")
+        self.service = Service(self.con)
+        self.installation = "a2a2a2a2-1234-4234-8234-123456789abc"
+        self.token = "token-value-for-unit-tests-123456"
+
+    def tearDown(self):
+        self.con.close()
+
+    def test_registration_is_idempotent_and_token_is_not_returned(self):
+        _, result = push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+        self.assertTrue(result["ok"])
+        push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token + "-rotated"})
+        _, result = push.handle(self.service, "GET", [], {})
+        self.assertNotIn("token", str(result))
+        self.assertEqual(self.con.execute("SELECT count(*) FROM push_devices").fetchone()[0], 1)
+
+    def test_invalid_installation_and_token_are_rejected(self):
+        with self.assertRaises(app.ApiError):
+            push.handle(self.service, "POST", [], {"installation_id": "bad", "token": self.token})
+        with self.assertRaises(app.ApiError):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": "bad\nvalue"})
+
+    def test_enqueues_only_when_provider_configured(self):
+        with patch.dict(os.environ, {}, clear=True):
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+        self.assertEqual(self.con.execute("SELECT count(*) FROM push_outbox").fetchone()[0], 0)
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+        self.assertEqual(self.con.execute("SELECT count(*) FROM push_outbox").fetchone()[0], 1)
+
+    def test_successful_delivery_marks_event_sent(self):
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+            push.enqueue(self.con, "w1", "n1", "Смета обновлена", "Откройте Сметру", "q1")
+            with patch.object(push, "_send", return_value=(True, 200)):
+                result = push.run_batch(self.con)
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["delivered"], 1)
+        self.assertIsNotNone(self.con.execute("SELECT sent_at FROM push_outbox").fetchone()[0])
+
+    def test_transient_failure_uses_backoff(self):
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+            with patch.object(push, "_send", return_value=(False, 503)):
+                result = push.run_batch(self.con)
+        row = self.con.execute("SELECT attempts,next_attempt_at,sent_at FROM push_outbox").fetchone()
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(row["attempts"], 1)
+        self.assertIsNone(row["sent_at"])
+        self.assertGreater(row["next_attempt_at"], push._now())
