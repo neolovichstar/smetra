@@ -11,7 +11,7 @@ The worker also requires `CRON_SECRET` (at least 32 characters) or `PUSH_WORKER_
 
 1. Review and merge this branch after CI is green.
 2. Back up the existing Supabase production database.
-3. Apply `supabase/migrations/20261018193000_rustore_push_notifications.sql` to the existing Supabase project. It adds only push-specific tables/indexes and does not recreate or change the existing `file_versions` table. The local SQLite startup applies `backend/migrations/022_push_notifications.sql`.
+3. Apply `supabase/migrations/20261018193000_rustore_push_notifications.sql`, then `supabase/migrations/20261018210000_query_performance_indexes.sql`, to the existing Supabase project. The first adds push-specific tables and delivery tracking without recreating or changing `file_versions`; the second adds indexes for common workspace relationships. The local SQLite startup applies `backend/migrations/022_push_notifications.sql` and `backend/migrations/023_query_performance_indexes.sql`.
 4. Configure the three server environment variables in the existing production environment.
 5. In RuStore Console, create a Push project for the existing application ID `ru.smetra.mobile`; match the SHA-256 certificate fingerprint of the signed release APK. Use the project ID as `-PrustorePushProjectId=...` or `RUSTORE_PUSH_PROJECT_ID=...` at Android build time.
 6. Build and test a signed Android APK/AAB in CI, then upload it to the existing RuStore app listing. No keystore or production secret is included in the repository.
