@@ -177,3 +177,18 @@ class PushTests(unittest.TestCase):
         self.assertTrue(push._is_invalid_token_error(404, b'{"error":{"status":"NOT_FOUND","message":"Requested entity was not found."}}'))
         self.assertTrue(push._is_invalid_token_error(400, b'{"error":{"status":"INVALID_ARGUMENT","message":"The registration token is not a valid FCM registration token"}}'))
         self.assertFalse(push._is_invalid_token_error(400, b'{"error":{"status":"INVALID_ARGUMENT","message":"Invalid project configuration"}}'))
+    def test_active_delivery_lease_delays_next_worker_wakeup(self):
+        with patch.dict(os.environ, {"RUSTORE_PUSH_PROJECT_ID": "project-12345678", "RUSTORE_PUSH_SERVICE_TOKEN": "test-service-token"}):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "q1")
+            event = self.con.execute("SELECT id FROM push_outbox").fetchone()
+            device = self.con.execute("SELECT id FROM push_devices").fetchone()
+            now = push._now()
+            self.con.execute(
+                "INSERT INTO push_deliveries(id,workspace_id,outbox_id,device_id,next_attempt_at,lease_until,created_at) VALUES(?,?,?,?,?,?,?)",
+                ("delivery-1", "w1", event["id"], device["id"], now - 10, now + 35, now),
+            )
+            self.assertFalse(push._complete_event_if_finished(self.con, event["id"], now))
+            outbox = self.con.execute("SELECT next_attempt_at,lease_until FROM push_outbox").fetchone()
+            self.assertEqual(outbox["next_attempt_at"], now + 35)
+            self.assertEqual(outbox["lease_until"], 0)
