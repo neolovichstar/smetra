@@ -29,4 +29,4 @@ CREATE INDEX IF NOT EXISTS idx_push_outbox_due ON push_outbox(sent_at,next_attem
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id,workspace_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_workspace_status_due ON tasks(workspace_id,status,due_date);
 CREATE INDEX IF NOT EXISTS idx_project_payments_workspace_created ON project_payments(workspace_id,created_at DESC);
-INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(30,strftime('%s','now'));
+INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(31,strftime('%s','now'));
