@@ -421,6 +421,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "023_query_performance_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
