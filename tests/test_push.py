@@ -204,3 +204,15 @@ class PushTests(unittest.TestCase):
         self.assertGreaterEqual(row["next_attempt_at"], now + 3599)
         self.assertIsNone(row["sent_at"])
         self.assertEqual(row["last_error"], "provider_not_configured")
+    def test_token_length_limit_matches_client_and_provider_contract(self):
+        longest = "t" * 4096
+        _, result = push.handle(
+            self.service, "POST", [],
+            {"installation_id": self.installation, "token": longest},
+        )
+        self.assertTrue(result["ok"])
+        with self.assertRaises(app.ApiError):
+            push.handle(
+                self.service, "POST", [],
+                {"installation_id": self.installation, "token": longest + "x"},
+            )

@@ -89,7 +89,7 @@ def handle(service, method, rest, data):
             raise ApiError(401, "Сессия не найдена. Войдите в аккаунт повторно")
         if (
             not isinstance(token, str)
-            or not 16 <= len(token) <= 2048
+            or not 16 <= len(token) <= 4096
             or any(ord(ch) < 33 or ord(ch) == 127 for ch in token)
             or not _valid_installation_id(installation_id)
         ):
