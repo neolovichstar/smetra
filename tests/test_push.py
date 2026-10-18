@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import os
 import sqlite3
 import unittest
@@ -98,11 +100,28 @@ class PushTests(unittest.TestCase):
         self.assertFalse(push._valid_installation_id("not-a-uuid"))
         self.assertFalse(push._valid_installation_id("x" * 36))
 
-    def test_cron_requires_a_long_bearer_secret(self):
-        with patch.dict(os.environ, {"CRON_SECRET": "s" * 32}):
-            self.service.h.headers = {"Authorization": "Bearer " + "s" * 32}
+    def test_cron_requires_a_fresh_signed_one_time_invocation(self):
+        secret = "s" * 32
+        moment = str(push._now())
+        nonce = "a" * 32
+        signature = hmac.new(
+            secret.encode(),
+            ("smetra-push-worker:v1:" + moment + ":" + nonce).encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        with patch.dict(os.environ, {"ASSISTANT_WORKER_SECRET": secret}):
+            self.service.h.headers = {"Authorization": f"Bearer v1.{moment}.{nonce}.{signature}"}
             push.authenticate_cron(self.service.h)
-            self.service.h.headers = {"Authorization": "Bearer wrong"}
+            self.service.h.headers = {"Authorization": f"Bearer v1.{moment}.{nonce}." + "0" * 64}
+            with self.assertRaises(app.ApiError):
+                push.authenticate_cron(self.service.h)
+            old_moment = str(push._now() - 600)
+            old_signature = hmac.new(
+                secret.encode(),
+                ("smetra-push-worker:v1:" + old_moment + ":" + nonce).encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            self.service.h.headers = {"Authorization": f"Bearer v1.{old_moment}.{nonce}.{old_signature}"}
             with self.assertRaises(app.ApiError):
                 push.authenticate_cron(self.service.h)
 
