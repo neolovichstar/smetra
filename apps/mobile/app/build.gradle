@@ -11,8 +11,10 @@ configurations.configureEach {
 def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://smetra.vercel.app').get()
 def verifyUnsignedRelease = providers.gradleProperty('verifyUnsignedRelease').map { it == 'true' }.orElse(false).get()
 def myTrackerSdkKey = providers.gradleProperty('myTrackerSdkKey').orElse(providers.environmentVariable('MYTRACKER_SDK_KEY')).orElse('').get()
+def rustorePushProjectId = providers.gradleProperty('rustorePushProjectId').orElse(providers.environmentVariable('RUSTORE_PUSH_PROJECT_ID')).orElse('').get()
 def localDebugApi = apiBase ==~ /http:\/\/(127\.0\.0\.1|10\.0\.2\.2)(:\d+)?/
 if (!apiBase.startsWith('https://') && !localDebugApi) throw new GradleException('apiBaseUrl must use HTTPS (loopback is allowed for debug tests)')
+if (rustorePushProjectId && !(rustorePushProjectId ==~ /[A-Za-z0-9_-]{8,128}/)) throw new GradleException('rustorePushProjectId must be a valid RuStore Push project id.')
 android {
     namespace 'ru.smetra.mobile'
     compileSdk 35
@@ -20,11 +22,12 @@ android {
         applicationId 'ru.smetra.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 33
-        versionName '1.7.21'
+        versionCode 37
+        versionName '1.7.25'
         testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
         buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('\"', '') + '"'
         buildConfigField 'String', 'MYTRACKER_SDK_KEY', '"' + myTrackerSdkKey.replace('\"', '') + '"'
+        buildConfigField 'String', 'RUSTORE_PUSH_PROJECT_ID', '"' + rustorePushProjectId.replace('\\"', '') + '"'
     }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -66,4 +69,5 @@ gradle.taskGraph.whenReady { graph ->
 
 dependencies {
     implementation 'com.my.tracker:mytracker-sdk:3.6.0'
+    implementation 'ru.rustore.sdk:pushclient:7.5.0'
 }
