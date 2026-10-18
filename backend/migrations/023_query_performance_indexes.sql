@@ -67,7 +67,6 @@ CREATE INDEX IF NOT EXISTS idx_construction_objects_project_id ON construction_o
 CREATE INDEX IF NOT EXISTS idx_construction_objects_quote_id ON construction_objects(quote_id);
 CREATE INDEX IF NOT EXISTS idx_estimate_templates_workspace_id ON estimate_templates(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_leads_client_id ON leads(client_id);
-CREATE INDEX IF NOT EXISTS idx_native_web_tickets_user_id ON native_web_tickets(user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_states_link_user_id ON oauth_states(link_user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_tickets_user_id ON oauth_tickets(user_id);
 CREATE INDEX IF NOT EXISTS idx_quote_followups_created_by ON quote_followups(created_by);
