@@ -59,6 +59,28 @@ CREATE INDEX IF NOT EXISTS idx_referral_rewards_inviter_id ON smetra.referral_re
 CREATE INDEX IF NOT EXISTS idx_referral_rewards_invitee_id ON smetra.referral_rewards(invitee_id);
 CREATE INDEX IF NOT EXISTS idx_client_requests_client_id ON smetra.client_requests(client_id);
 CREATE INDEX IF NOT EXISTS idx_client_requests_form_id ON smetra.client_requests(form_id);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_workspace_id ON smetra.ai_usage(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_actions_user_id ON smetra.assistant_actions(user_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_actions_workspace_id ON smetra.assistant_actions(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_conversations_user_id ON smetra.assistant_conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_construction_daily_logs_created_by ON smetra.construction_daily_logs(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_defects_created_by ON smetra.construction_defects(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_facts_created_by ON smetra.construction_facts(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_measurements_created_by ON smetra.construction_measurements(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_objects_client_id ON smetra.construction_objects(client_id);
+CREATE INDEX IF NOT EXISTS idx_construction_objects_project_id ON smetra.construction_objects(project_id);
+CREATE INDEX IF NOT EXISTS idx_construction_objects_quote_id ON smetra.construction_objects(quote_id);
+CREATE INDEX IF NOT EXISTS idx_estimate_templates_workspace_id ON smetra.estimate_templates(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_leads_client_id ON smetra.leads(client_id);
+CREATE INDEX IF NOT EXISTS idx_native_web_tickets_user_id ON smetra.native_web_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_states_link_user_id ON smetra.oauth_states(link_user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_tickets_user_id ON smetra.oauth_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_quote_followups_created_by ON smetra.quote_followups(created_by);
+CREATE INDEX IF NOT EXISTS idx_quote_followups_quote_id ON smetra.quote_followups(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quote_versions_author_id ON smetra.quote_versions(author_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_payment_id ON smetra.refunds(payment_id);
+CREATE INDEX IF NOT EXISTS idx_support_user_id ON smetra.support(user_id);
+
 INSERT INTO smetra.schema_migrations(version,applied_at)
 VALUES(32,extract(epoch FROM now())::BIGINT) ON CONFLICT DO NOTHING;
 COMMIT;
