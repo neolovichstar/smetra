@@ -20,6 +20,8 @@ import java.util.concurrent.Executors;
 import static ru.smetra.mobile.SmetraUi.*;
 
 public class MainActivity extends Activity {
+    private static final int REQUEST_PUSH_PERMISSION = 5901;
+    private boolean waitingForPushPermission = false;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     // Navigation must not queue behind a long AI stream or file upload.
     private final ExecutorService apiWorker=Executors.newFixedThreadPool(2);
@@ -86,8 +88,8 @@ public class MainActivity extends Activity {
         });}catch(Exception ignored){/* Keep the last native presentation while offline. */}});
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
-    private boolean openLink(Intent intent){if(intent==null)return false;if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
-    private void afterLogin(){if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
+    private boolean openLink(Intent intent){if(intent==null)return false;if("ru.smetra.mobile.OPEN_NOTIFICATIONS".equals(intent.getAction())){if(token==null)login(false);else notificationsCenter();return true;}if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
+    private void afterLogin(){PushManager.syncIfEnabled(this,token);if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
     @Override public void onDestroy(){if(quoteDraftEditor!=null)quoteDraftEditor.close();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle state){
         state.putString("pending_pdf_document",pendingPdfDocument);
@@ -150,7 +152,7 @@ public class MainActivity extends Activity {
         });
     }
     private void restore(Button button){if(button!=null){button.setEnabled(true);button.setAlpha(1);}}
-    private void clearSession(){token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
+    private void clearSession(){String oldToken=token;if(oldToken!=null&&PushManager.isEnabled(this)){PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,null);}token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
     private static byte[] readLimited(InputStream input,int maximum)throws IOException{if(input==null)throw new IOException("Пустой ответ сервера");ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1){if(output.size()+count>maximum)throw new IOException("Файл слишком большой");output.write(buffer,0,count);}return output.toByteArray();}
     private int dp(float value){return ui.dp(value);}
     private void message(String message){
@@ -1763,7 +1765,7 @@ public class MainActivity extends Activity {
             catalogDetail(item.optString("id"));message("Расценка сохранена");
         });
     }
-    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",26,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("projects","Объекты и замеры","Помещения, объёмы и контроль работ",this::constructionList);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("document","Расценки","Цены, история и избранное",this::catalogList);menu("document","Файлы","DOCX, XLSX, CSV",this::workspaceFiles);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
+    private void more(){publicView=false;page("Ещё","more",false);content.addView(ui.label("Всё для работы.",26,INK,true));text("Остальные разделы в одном месте.");menu("check","Согласования","Ответы клиентов по сметам",this::approvals);menu("bell","Уведомления","События по сметам и проектам",this::notificationsCenter);menu("projects","Объекты и замеры","Помещения, объёмы и контроль работ",this::constructionList);menu("wallet","Платежи","Полученные деньги и остатки",this::payments);menu("document","Расценки","Цены, история и избранное",this::catalogList);menu("document","Файлы","DOCX, XLSX, CSV",this::workspaceFiles);menu("spark","Ассистент","Подготовка действий с подтверждением",this::assistant);menu("clock","Задачи","Следующие шаги",()->records("tasks"));menu("wallet","Тариф и подписка","Ваш текущий доступ",this::billing);menu("grid","Профиль и настройки","Управление аккаунтом",this::settings);menu("document","Поддержка","Написать нам",this::support);}
     private void records(String kind){
         page("",kind,false);content.addView(ui.label(kind.equals("clients")?"Ваши клиенты":kind.equals("projects")?"Всё движется\nпо плану.":"Задачи",26,INK,true));text(kind.equals("clients")?"Люди, с которыми вы создаёте больше.":kind.equals("projects")?"Работа, договорённости и оплата.":"Следующий шаг для каждого проекта.");
         if(kind.equals("clients"))button("Добавить клиента",true,v->newClient());
@@ -1834,13 +1836,69 @@ public class MainActivity extends Activity {
             });
         });
     }
+
+    private void notificationsCenter(){
+        if(token==null){login(false);return;}
+        parentPage="more";page("Уведомления","notifications",true);content.addView(ui.label("Важное по работе",25,INK,true));
+        text("Согласования и изменения в рабочем пространстве.");
+        button("Отметить всё прочитанным",false,v->call("/notifications","POST",new JSONObject(),r->{notificationsCenter();message("Все уведомления отмечены прочитанными");}));
+        loading(content);
+        call("/notifications","GET",null,result->{clearLoading(content);JSONArray items=result.optJSONArray("items");if(items==null||items.length()==0){LinearLayout empty=ui.card(content);empty.addView(ui.label("Пока тихо",17,INK,true));ui.space(empty,6);empty.addView(ui.label("Новые события появятся здесь.",13,MUTED,false));return;}
+            java.text.SimpleDateFormat fmt=new java.text.SimpleDateFormat("dd.MM · HH:mm",Locale.getDefault());
+            for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item==null)continue;boolean read=item.optBoolean("is_read")||item.optInt("is_read",0)==1||"true".equalsIgnoreCase(item.optString("is_read"));LinearLayout card=ui.card(content),row=ui.row();row.addView(ui.new Icon(read?"check":"bell",read?MUTED:BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));ui.gap(row,12);LinearLayout copy=ui.column();copy.addView(ui.label(item.optString("message","Событие"),14,INK,!read));ui.space(copy,6);long stamp=item.optLong("created_at");copy.addView(ui.label(stamp>0?fmt.format(new java.util.Date(stamp*1000L)):"",11,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));card.addView(row);}
+        });
+    }
+
+    private void notificationSettings(){
+        parentPage="settings";page("Push-уведомления","push-settings",true);content.addView(ui.label("Не пропускайте важное",26,INK,true));
+        text("Получайте уведомления о событиях в Сметре, даже когда приложение закрыто.");
+        LinearLayout state=ui.card(content);
+        if(!PushManager.isConfigured()){
+            state.addView(ui.label("Нужна настройка RuStore",16,INK,true));ui.space(state,8);
+            state.addView(ui.label("Для включения доставки нужен ID проекта RuStore Push при сборке и серверный токен в настройках backend.",13,MUTED,false));
+            ui.space(content,16);button("Обновить статус",false,v->notificationSettings());return;
+        }
+        boolean enabled=PushManager.isEnabled(this);
+        state.addView(ui.label(enabled?"Уведомления включены":"Уведомления выключены",16,INK,true));ui.space(state,8);
+        state.addView(ui.label(enabled?"Устройство зарегистрировано для push-доставки. Можно отключить её в любой момент.":"Разрешение на показ запрашивается только после вашего согласия.",13,MUTED,false));
+        ui.space(content,16);
+        if(enabled){button("Отключить push-уведомления",false,v->ui.sheet("Отключить уведомления?","Вы перестанете получать push на этом устройстве. Внутренние уведомления останутся в приложении.","Отключить",false,()->{PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),token,()->{if(!isFinishing()&&currentPage.equals("push-settings"))notificationSettings();message("Push-уведомления отключены");});}));}
+        else {button("Включить уведомления",true,v->beginEnablePush());}
+        ui.space(content,10);button("Открыть центр уведомлений",false,v->notificationsCenter());
+    }
+
+    private void beginEnablePush(){
+        if(!PushManager.isConfigured()){notificationSettings();return;}
+        if(token==null){login(false);return;}
+        if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED){
+            waitingForPushPermission=true;requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},REQUEST_PUSH_PERMISSION);return;
+        }
+        enablePushNow();
+    }
+
+    private void enablePushNow(){
+        PushManager.setEnabled(this,true);
+        PushManager.requestTokenAndRegister(this,token,(success,description)->{
+            if(success){notificationSettings();message("Push-уведомления включены");}
+            else {PushManager.setEnabled(this,false);notificationSettings();message(description);}
+        });
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode==REQUEST_PUSH_PERMISSION&&waitingForPushPermission){waitingForPushPermission=false;
+            if(grantResults.length>0&&grantResults[0]==android.content.pm.PackageManager.PERMISSION_GRANTED)enablePushNow();
+            else {message("Разрешение на показ уведомлений не выдано");notificationSettings();}
+        }
+    }
+
     private void settings(){
         publicView=false;page("Профиль","settings",false);content.addView(ui.label("Ваше пространство",26,INK,true));
         menu("wallet","Тариф и подписка","Старт и Про · один доступ везде",this::billing);LinearLayout profile=ui.card(content);profile.addView(ui.label(me==null?"Сметра":me.optString("name"),24,INK,true));ui.space(profile,8);profile.addView(ui.label(me==null?"":me.optString("email"),13,MUTED,false));ui.space(profile,18);profile.addView(ui.badge(me==null||me.optString("plan").equals("free")?"Базовый доступ":me.optString("plan").toUpperCase(Locale.ROOT),BLUE));text("Ваш доступ действует и на сайте, и в приложении.");
         if(me!=null&&!me.optBoolean("email_verified",false)){LinearLayout note=ui.card(content);note.addView(ui.label("Подтвердите почту",16,AMBER,true));ui.space(note,8);note.addView(ui.label("Откройте ссылку из письма, чтобы подтвердить адрес аккаунта.",13,MUTED,false));addButton(note,"Отправить письмо",false,v->call("/auth/verify/resend","POST",new JSONObject(),r->message("Письмо отправлено")));}
-        ui.section(content,"Управление",null);menu("profile","О себе и ассистенте","Профиль, стиль ответов и память",this::nativeProfile);menu("clock","Задачи","Ближайшие шаги по проектам",()->records("tasks"));menu("refresh","Обновить доступ","Синхронизировать аккаунт",this::refresh);menu("document","Поддержка","Поможем разобраться",this::support);
-        ui.space(content,20);button("Выйти из аккаунта",false,v->ui.sheet("Выйти из Сметры?","Сметы и заказы останутся в аккаунте. Локальный черновик на этом устройстве будет удалён.","Выйти",false,()->call("/auth/logout","POST",new JSONObject(),r->{clearSession();login(false);})));
-        Button remove=button("Удалить аккаунт",false,v->ui.sheet("Удалить аккаунт?","Все предложения и данные аккаунта будут удалены без возможности восстановления.","Удалить навсегда",true,()->call("/me","DELETE",null,r->{clearSession();login(false);})));remove.setTextColor(RED);
+        ui.section(content,"Управление",null);menu("bell","Push-уведомления",PushManager.isEnabled(this)?"Включены на этом устройстве":"Настроить уведомления",this::notificationSettings);menu("profile","О себе и ассистенте","Профиль, стиль ответов и память",this::nativeProfile);menu("clock","Задачи","Ближайшие шаги по проектам",()->records("tasks"));menu("refresh","Обновить доступ","Синхронизировать аккаунт",this::refresh);menu("document","Поддержка","Поможем разобраться",this::support);
+        ui.space(content,20);button("Выйти из аккаунта",false,v->ui.sheet("Выйти из Сметры?","Сметы и заказы останутся в аккаунте. Локальный черновик на этом устройстве будет удалён.","Выйти",false,()->{String oldToken=token;PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,()->call("/auth/logout","POST",new JSONObject(),r->{clearSession();login(false);}));}));
+        Button remove=button("Удалить аккаунт",false,v->ui.sheet("Удалить аккаунт?","Все предложения и данные аккаунта будут удалены без возможности восстановления.","Удалить навсегда",true,()->{String oldToken=token;PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,()->call("/me","DELETE",null,r->{clearSession();login(false);}));}));remove.setTextColor(RED);
         ui.space(content,22);TextView version=ui.label("СМЕТРА  /  "+BuildConfig.VERSION_NAME,10,MUTED,false);version.setGravity(Gravity.CENTER);content.addView(version);
     }
     private void menu(String icon,String title,String subtitle,Runnable click){LinearLayout card=ui.card(content),row=ui.row();row.addView(ui.new Icon(icon,BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));ui.gap(row,16);LinearLayout copy=ui.column();copy.addView(ui.label(title,15,INK,true));ui.space(copy,5);copy.addView(ui.label(subtitle,11,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));row.addView(ui.new Icon("chevron",MUTED),new LinearLayout.LayoutParams(dp(18),dp(18)));card.addView(row);ui.tap(card,click);}

@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 /** Validated, cached presentation data for the existing native screens. */
 final class MobilePresentation {
     private static final String CACHE = "native_presentation_v1";
-    private static final int DEFAULT_BLUE = Color.rgb(150, 190, 255);
+    private static final int DEFAULT_BLUE = Color.rgb(130, 177, 255);
     final int version, accent;
     final String homeEyebrow, homeTitle, createLabel, captureLabel, loginTitle, loginSubtitle;
     final String raw;
@@ -69,8 +69,7 @@ final class MobilePresentation {
         if (!hex.matches("#[0-9A-Fa-f]{6}")) throw new IllegalArgumentException("Invalid accent");
         JSONObject home = value.getJSONObject("home"), login = value.getJSONObject("login");
         MobilePresentation fallback = defaults();
-        // Migrate the old default while retaining deliberately configured accents.
-        int accent=hex.equalsIgnoreCase("#82B1FF")?DEFAULT_BLUE:Color.parseColor(hex);
+        int accent = Color.parseColor(hex);
         return new MobilePresentation(value.getInt("version"), accent,
             text(home, "eyebrow", fallback.homeEyebrow, 30),
             text(home, "title", fallback.homeTitle, 45),

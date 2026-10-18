@@ -412,11 +412,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
-                    if path != "/api/cron/assistant" or method != "GET":
+                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
                         raise ApiError(404, "Не найдено")
-                    from backend.assistant_jobs import authenticate
+                    if path == "/api/cron/assistant":
+                        from backend.assistant_jobs import authenticate
 
-                    authenticate(self)
+                        authenticate(self)
+                    # /api/cron/push verifies its own dedicated server secret.
                 if root == "webhooks" and path != "/api/webhooks/yookassa":
                     raise ApiError(404, "Не найдено")
                 if root == "mobile" and path != "/api/mobile/presentation":
@@ -617,6 +619,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             from backend.assistant_jobs import run_one
 
             return self.send_json(200, run_one(self, con, ORIGIN))
+        if path == "/api/cron/push" and method == "GET":
+            from backend.push import authenticate_cron, run_batch
+
+            authenticate_cron(self)
+            return self.send_json(200, run_batch(con))
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
