@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from backend import app, push
+from backend.postgres import translate
 
 
 class Handler:
@@ -111,3 +112,10 @@ class PushTests(unittest.TestCase):
             with patch.object(push, "_send", return_value=(False, 404)):
                 push.run_batch(self.con)
         self.assertEqual(self.con.execute("SELECT count(*) FROM push_devices").fetchone()[0], 0)
+    def test_postgres_translates_push_tables_to_private_schema(self):
+        sql = translate(
+            "SELECT d.token FROM push_devices d JOIN push_outbox o ON o.id=d.id",
+            "smetra",
+        )
+        self.assertIn("smetra.push_devices", sql)
+        self.assertIn("smetra.push_outbox", sql)
