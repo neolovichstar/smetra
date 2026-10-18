@@ -65,6 +65,13 @@ class CalculationTests(unittest.TestCase):
         ).timestamp())
         self.assertEqual(_report_date(moment), "01.10.2026")
 
+    def test_construction_report_currency_uses_unambiguous_code(self):
+        from backend.construction_report import _format_currency
+
+        self.assertEqual(_format_currency(125099, "EUR"), "1 250.99 EUR")
+        self.assertEqual(_format_currency(125099, "KZT"), "1 250.99 KZT")
+        self.assertEqual(_format_currency(125099, "unsupported"), "1 250.99 RUB")
+
     def test_construction_formula_is_bounded_and_safe(self):
         from backend.construction_math import evaluate, zone_values
 
