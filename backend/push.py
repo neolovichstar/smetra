@@ -1,6 +1,8 @@
 """RuStore push registration, privacy-safe outbox and retrying delivery worker."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 import hmac
+import re
 import json
 import os
 import time
@@ -132,12 +134,27 @@ def handle(service, method, rest, data):
 
 
 def authenticate_cron(handler):
+    """Verify the same short-lived signed invocation pattern used by the existing worker."""
     from backend.app import ApiError
 
-    secret = (os.getenv("CRON_SECRET") or os.getenv("PUSH_WORKER_SECRET") or "").strip()
-    provided = handler.headers.get("Authorization", "")
-    if len(secret) < 32 or not hmac.compare_digest(provided, "Bearer " + secret):
+    secret = (os.getenv("ASSISTANT_WORKER_SECRET") or os.getenv("PUSH_WORKER_SECRET") or "").strip()
+    raw = handler.headers.get("Authorization", "")
+    match = re.fullmatch(r"Bearer v1\.(\d{10})\.([a-f0-9]{32})\.([a-f0-9]{64})", raw)
+    if len(secret) < 32 or not match:
         raise ApiError(401, "Нет доступа")
+    moment, nonce, signature = match.groups()
+    expected = hmac.new(
+        secret.encode(),
+        ("smetra-push-worker:v1:" + moment + ":" + nonce).encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    try:
+        fresh = -30 <= _now() - int(moment) <= 120
+    except ValueError:
+        fresh = False
+    if not fresh or not hmac.compare_digest(signature, expected):
+        raise ApiError(401, "Нет доступа")
+    handler.throttle("push:worker-nonce:" + nonce, 1, 180)
 
 
 def _is_invalid_token_error(status, response_body):
