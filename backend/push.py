@@ -177,7 +177,7 @@ def run_batch(con, limit=3):
             "SELECT DISTINCT d.id,d.token FROM push_devices d "
             "JOIN workspace_members m ON m.user_id=d.user_id "
             "JOIN sessions s ON s.user_id=d.user_id AND s.token_hash=d.session_token_hash "
-            "WHERE m.workspace_id=? AND s.expires_at>? ORDER BY d.id LIMIT 100",
+            "WHERE m.workspace_id=? AND s.expires_at>? ORDER BY d.id",
             (event["workspace_id"], now),
         ).fetchall()
         if not devices:
