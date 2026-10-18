@@ -89,7 +89,7 @@ def handle(service, method, rest, data):
             raise ApiError(401, "Сессия не найдена. Войдите в аккаунт повторно")
         if (
             not isinstance(token, str)
-            or not 16 <= len(token) <= 4096
+            or not 16 <= len(token) <= 2048
             or any(ord(ch) < 33 or ord(ch) == 127 for ch in token)
             or not _valid_installation_id(installation_id)
         ):
@@ -158,27 +158,36 @@ def authenticate_cron(handler):
 
 
 def _is_invalid_token_error(status, response_body):
-    """Distinguish invalid device tokens from project/auth/payload configuration errors."""
+    """Interpret documented RuStore token errors without deleting devices for project failures."""
     if status == 410:
         return True
     if status not in (400, 404):
         return False
     raw = response_body.decode("utf-8", errors="replace") if isinstance(response_body, bytes) else str(response_body or "")
-    lowered = raw.lower()
-    mentions_token = any(term in lowered for term in ("token", "registration", "device"))
-    indicates_invalid = any(
-        term in lowered
-        for term in (
-            "invalid",
-            "not found",
-            "not registered",
-            "unregistered",
-            "expired",
-            "unknown",
-            "not exist",
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        payload = {}
+    error = payload.get("error", payload) if isinstance(payload, dict) else {}
+    if not isinstance(error, dict):
+        error = {}
+    code = str(error.get("status", "")).upper()
+    message = str(error.get("message", "")).strip().lower()
+
+    if status == 404 and code == "NOT_FOUND":
+        # RuStore's documented expired-token response is exactly this generic message.
+        return message == "requested entity was not found." or any(
+            token_term in message for token_term in ("registration token", "push token", "device token")
         )
-    )
-    return mentions_token and indicates_invalid
+    if status == 400 and code == "INVALID_ARGUMENT":
+        mentions_registration = any(
+            token_term in message for token_term in ("registration token", "push token", "device token")
+        )
+        invalid_token = any(
+            term in message for term in ("invalid", "not a valid", "not registered", "unregistered", "expired")
+        )
+        return mentions_registration and invalid_token
+    return False
 
 
 def _read_error_body(error, limit=16_384):
