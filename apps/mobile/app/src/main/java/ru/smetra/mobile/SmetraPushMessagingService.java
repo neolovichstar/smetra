@@ -1,9 +1,9 @@
 package ru.smetra.mobile;
 
 import java.util.List;
-import ru.rustore.sdk.pushclient.messaging.RemoteMessage;
-import ru.rustore.sdk.pushclient.messaging.RuStoreMessagingService;
-import ru.rustore.sdk.pushclient.exception.RuStorePushClientException;
+import ru.rustore.sdk.pushclient.messaging.model.RemoteMessage;
+import ru.rustore.sdk.pushclient.messaging.service.RuStoreMessagingService;
+import ru.rustore.sdk.pushclient.messaging.exception.RuStorePushClientException;
 
 public final class SmetraPushMessagingService extends RuStoreMessagingService {
     @Override public void onNewToken(String token) {
