@@ -1,13 +1,18 @@
 """Private, client-safe field report generated from live construction records."""
 
 import io
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 from backend.attachments import download
+from backend.business import business_date
 from backend.documents import Download
+
+
+def _report_date(moment=None):
+    """Use Smetra's business timezone instead of the server's local timezone."""
+    return business_date(moment).strftime("%d.%m.%Y")
 
 
 def report(service, obj, snapshot):
@@ -48,7 +53,7 @@ def report(service, obj, snapshot):
                             topMargin=45, bottomMargin=45, title='Отчёт по объекту · Сметра')
     story = [text('СМЕТРА / ОТЧЁТ ПО ОБЪЕКТУ', small), Spacer(1, 14),
              text(obj['name'], title), Spacer(1, 8),
-             text(f'Сформирован {date.today().strftime("%d.%m.%Y")} · Исполнитель: {workspace["name"]}'),
+             text(f'Сформирован {_report_date()} · Исполнитель: {workspace["name"]}'),
              text(f'Заказчик: {client["name"] if client else "Не указан"}'),
              text(f'Статус: {project["status"] if project else obj["status"]}'), Spacer(1, 18)]
     work = [item for item in snapshot['quantities'] if item['kind'] == 'work' and Decimal(item['actual_quantity']) > 0]
