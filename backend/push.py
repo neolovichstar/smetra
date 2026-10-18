@@ -251,7 +251,7 @@ def _complete_event_if_finished(con, event_id, now):
     ).fetchone()["count"]
     if pending:
         next_attempt = con.execute(
-            "SELECT MIN(next_attempt_at) AS next_attempt_at FROM push_deliveries "
+            "SELECT MIN(CASE WHEN next_attempt_at>lease_until THEN next_attempt_at ELSE lease_until END) AS next_attempt_at FROM push_deliveries "
             "WHERE outbox_id=? AND completed_at IS NULL",
             (event_id,),
         ).fetchone()["next_attempt_at"]
