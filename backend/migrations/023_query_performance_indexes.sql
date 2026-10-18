@@ -54,4 +54,26 @@ CREATE INDEX IF NOT EXISTS idx_referral_rewards_inviter_id ON referral_rewards(i
 CREATE INDEX IF NOT EXISTS idx_referral_rewards_invitee_id ON referral_rewards(invitee_id);
 CREATE INDEX IF NOT EXISTS idx_client_requests_client_id ON client_requests(client_id);
 CREATE INDEX IF NOT EXISTS idx_client_requests_form_id ON client_requests(form_id);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_workspace_id ON ai_usage(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_actions_user_id ON assistant_actions(user_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_actions_workspace_id ON assistant_actions(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_assistant_conversations_user_id ON assistant_conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_construction_daily_logs_created_by ON construction_daily_logs(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_defects_created_by ON construction_defects(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_facts_created_by ON construction_facts(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_measurements_created_by ON construction_measurements(created_by);
+CREATE INDEX IF NOT EXISTS idx_construction_objects_client_id ON construction_objects(client_id);
+CREATE INDEX IF NOT EXISTS idx_construction_objects_project_id ON construction_objects(project_id);
+CREATE INDEX IF NOT EXISTS idx_construction_objects_quote_id ON construction_objects(quote_id);
+CREATE INDEX IF NOT EXISTS idx_estimate_templates_workspace_id ON estimate_templates(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_leads_client_id ON leads(client_id);
+CREATE INDEX IF NOT EXISTS idx_native_web_tickets_user_id ON native_web_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_states_link_user_id ON oauth_states(link_user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_tickets_user_id ON oauth_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_quote_followups_created_by ON quote_followups(created_by);
+CREATE INDEX IF NOT EXISTS idx_quote_followups_quote_id ON quote_followups(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quote_versions_author_id ON quote_versions(author_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_payment_id ON refunds(payment_id);
+CREATE INDEX IF NOT EXISTS idx_support_user_id ON support(user_id);
+
 INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(32,strftime('%s','now'));
