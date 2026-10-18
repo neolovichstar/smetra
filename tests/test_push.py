@@ -145,6 +145,7 @@ class PushTests(unittest.TestCase):
             self.assertTrue(sent[self.token])
             self.assertFalse(sent[second_token])
             self.con.execute("UPDATE push_deliveries SET next_attempt_at=0 WHERE sent_at IS NULL")
+            self.con.execute("UPDATE push_outbox SET next_attempt_at=0 WHERE sent_at IS NULL")
             with patch.object(push, "_send", side_effect=lambda token,event: (True, 200, False)):
                 push.run_batch(self.con)
         self.assertEqual(calls.count(self.token), 1)
