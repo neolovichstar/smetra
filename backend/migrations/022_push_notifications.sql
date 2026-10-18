@@ -26,6 +26,23 @@ CREATE TABLE IF NOT EXISTS push_outbox (
  last_error TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_push_outbox_due ON push_outbox(sent_at,next_attempt_at,lease_until,created_at);
+
+CREATE TABLE IF NOT EXISTS push_deliveries (
+ id TEXT PRIMARY KEY,
+ workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+ outbox_id TEXT NOT NULL REFERENCES push_outbox(id) ON DELETE CASCADE,
+ device_id TEXT NOT NULL REFERENCES push_devices(id) ON DELETE CASCADE,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ next_attempt_at INTEGER NOT NULL,
+ lease_until INTEGER NOT NULL DEFAULT 0,
+ sent_at INTEGER,
+ completed_at INTEGER,
+ last_error TEXT NOT NULL DEFAULT '',
+ created_at INTEGER NOT NULL,
+ UNIQUE(outbox_id,device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_push_deliveries_due ON push_deliveries(outbox_id,completed_at,next_attempt_at,lease_until);
+
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id,workspace_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_workspace_status_due ON tasks(workspace_id,status,due_date);
 CREATE INDEX IF NOT EXISTS idx_project_payments_workspace_created ON project_payments(workspace_id,created_at DESC);
