@@ -323,10 +323,10 @@ class BusinessFlows(unittest.TestCase):
             'formula': 'area', 'unit_price': 10000,
         }, owner)
         quantity = work['quantity']['id']
-        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)[0], 409)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {'review_confirmed': True}, owner)[0], 409)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '3'}, owner)[0], 201)
-        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)
+        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {'review_confirmed': True}, owner)
         self.assertEqual(status, 201, created_act)
         self.assertEqual(created_act['amount_kopecks'], 30000)
         document_id = created_act['document']['id']
