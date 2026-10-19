@@ -5,6 +5,17 @@ CREATE TABLE IF NOT EXISTS users (
  plan TEXT NOT NULL DEFAULT 'free', entitlement_until INTEGER NOT NULL DEFAULT 0,
  created_at INTEGER NOT NULL, deleted_at INTEGER, email_verified_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ document_version TEXT NOT NULL,
+ accepted_at INTEGER NOT NULL,
+ source TEXT NOT NULL CHECK(source IN ('registration','first_estimate')),
+ UNIQUE(user_id,document_version)
+);
+CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user_version
+ ON legal_acceptances(user_id,document_version);
+
 CREATE TABLE IF NOT EXISTS sessions (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL
