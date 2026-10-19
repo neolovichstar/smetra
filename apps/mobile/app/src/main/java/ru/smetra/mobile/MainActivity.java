@@ -22,7 +22,7 @@ import static ru.smetra.mobile.SmetraUi.*;
 public class MainActivity extends Activity {
     private static final int REQUEST_PUSH_PERMISSION = 5901;
     private static final String ESTIMATE_TERMS_VERSION = "2026-10-19-ai-estimate-v1";
-    private static final String AI_ESTIMATE_DISCLAIMER = "Расчет сгенерирован ИИ-ассистентом \\"сметра.\\" и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.";
+    private static final String AI_ESTIMATE_DISCLAIMER = "Расчет сгенерирован ИИ-ассистентом " + (char)34 + "сметра." + (char)34 + " и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.";
     private boolean waitingForPushPermission = false;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     // Navigation must not queue behind a long AI stream or file upload.
