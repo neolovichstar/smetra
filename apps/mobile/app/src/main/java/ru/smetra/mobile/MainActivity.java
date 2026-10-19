@@ -23,6 +23,7 @@ import static ru.smetra.mobile.SmetraUi.*;
 public class MainActivity extends Activity {
     private static final int REQUEST_PUSH_PERMISSION = 5901;
     private static final String LEGAL_CONSENT_VERSION = "2026-10-19-ai-estimate-v1";
+    private static final String REGISTRATION_CONSENT_VERSION = "2026-10-19-registration-v1";
     private static final String AI_ESTIMATE_DISCLAIMER = "Расчет сгенерирован ИИ-ассистентом \"сметра.\" и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.";
     private boolean waitingForPushPermission = false;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
@@ -308,7 +309,7 @@ public class MainActivity extends Activity {
             if(create&&!legalConsent.isChecked()){message("Примите условия использования перед регистрацией");return;}
             try{
                 JSONObject body=new JSONObject().put("email",email.getText().toString().trim()).put("password",password.getText().toString());
-                if(create)body.put("name",name.getText().toString().trim()).put("legal_acceptance",true).put("legal_version",LEGAL_CONSENT_VERSION);
+                if(create)body.put("name",name.getText().toString().trim()).put("legal_acceptance",true).put("legal_version",REGISTRATION_CONSENT_VERSION);
                 call(create?"/auth/register":"/auth/login","POST",body,result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().clear().apply();}catch(Exception error){token=null;message("Не удалось защитить сессию на устройстве");return;}me=result.optJSONObject("user");if(create)Analytics.registration(me);else Analytics.login(me);afterLogin();});
             }catch(Exception error){message("Не удалось войти");}
         });
