@@ -9,6 +9,8 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from backend.documents import pdf
+from backend.estimate_safety import AI_ESTIMATE_DISCLAIMER
 from tests.test_business import BusinessFlows
 
 
@@ -351,6 +353,88 @@ class EstimateSafetyTests(unittest.TestCase):
             )
         self.assertEqual(status, 502, result)
         self.assertIn("черновик", result["error"].lower())
+
+
+    def test_ai_generated_estimate_pdf_contains_fixed_disclaimer(self):
+        snapshot = {
+            "company": "Сметра QA",
+            "title": "Предварительная смета",
+            "client": "Клиент",
+            "company_details": "",
+            "description": "Черновик по описанию",
+            "items": [{
+                "name": "Грунтовка стен",
+                "description": "Требует замера по месту",
+                "quantity": "12",
+                "unit": "м²",
+                "unit_price": 3500,
+                "subtotal": 42000,
+                "included": True,
+            }],
+            "amount_kopecks": 42000,
+            "currency": "RUB",
+            "due_date": "",
+            "terms": "Предварительный состав",
+            "ai_generated": 1,
+        }
+        document = {
+            "kind": "estimate",
+            "number": 1,
+            "name": "Смета",
+            "template": "Minimal",
+            "snapshot": json.dumps(snapshot, ensure_ascii=False),
+        }
+        from pypdf import PdfReader
+
+        rendered = pdf(document)
+        extracted = " ".join(
+            " ".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(rendered)).pages).split()
+        )
+        for fragment in (
+            'Расчет сгенерирован ИИ-ассистентом "сметра."',
+            "предварительным черновиком",
+            "Обязательно проверьте объемы, технологию и цены перед подписанием",
+            "Сервис не несет ответственности за финансовые риски сторон",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, extracted)
+        self.assertIn("Требует замера по месту", extracted)
+        self.assertIn(AI_ESTIMATE_DISCLAIMER.split(".")[0], extracted)
+
+    def test_server_rejects_quote_publication_without_review_confirmation(self):
+        token, _ = self.account("quote-review-required")
+        status, created = self.call(
+            "/quotes",
+            "POST",
+            {
+                "title": "Смета на ремонт ванной",
+                "client": "Клиент",
+                "items": [{
+                    "name": "Грунтовка",
+                    "quantity": "12",
+                    "unit": "м²",
+                    "unit_price": 3500,
+                }],
+            },
+            token,
+        )
+        self.assertEqual(status, 201, created)
+        quote = created["quote"]
+        status, rejected = self.call(
+            "/quotes/" + quote["id"] + "/publish",
+            "POST",
+            {"revision": quote["revision"]},
+            token,
+        )
+        self.assertEqual(status, 400, rejected)
+        self.assertIn("провер", rejected["error"].lower())
+        status, published = self.call(
+            "/quotes/" + quote["id"] + "/publish",
+            "POST",
+            {"revision": quote["revision"], "review_confirmed": True},
+            token,
+        )
+        self.assertEqual(status, 200, published)
 
 
 if __name__ == "__main__":
