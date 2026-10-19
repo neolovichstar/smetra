@@ -9,7 +9,7 @@ function setup(){
  w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};
  const load=source=>{const script=doc.createElement('script');script.textContent=source;doc.head.append(script)};
  load(fs.readFileSync('apps/web/app.js','utf8').split("if($('#auth')){")[0]);w.eval("user={id:'qa'};tab='quotes'");
- const notices=[],opened=[];w.notify=text=>notices.push(text);w.Workspace={openQuote:async id=>{opened.push(id);w.view('Quote')}};
+ const notices=[],opened=[],consentCalls=[];w.notify=text=>notices.push(text);w.Workspace={openQuote:async id=>{opened.push(id);w.view('Quote')},ensureEstimateConsent:async()=>{consentCalls.push('terms');return true},confirmEstimateReview:async()=>{consentCalls.push('review');return true}};
  w.api=async()=>result();load(fs.readFileSync('apps/web/quote-review.js','utf8'));
  return {dom,w,doc,notices,opened,close:()=>dom.window.close()};
 }
@@ -23,7 +23,7 @@ function setup(){
   const request=deferred(),writes=[];w.api=(path,options)=>options?.method==='POST'?(writes.push(JSON.parse(options.body)),Promise.resolve({})):request.promise;
   const pending=w.SmetraQuoteReview.open(original,versions,{publish:true});const form=doc.querySelector('#review-publish');await form.onsubmit({preventDefault(){}});assert.equal(writes.length,0);
   request.resolve(result());await pending;form.querySelector('textarea').value='Reviewed conditions';await form.onsubmit({preventDefault(){}});
-  assert.deepEqual(writes,[{revision:7,comment:'Reviewed conditions'}]);assert.deepEqual(opened,['quote']);
+  assert.deepEqual(writes,[{revision:7,comment:'Reviewed conditions',review_confirmed:true}]);assert.deepEqual(consentCalls,['terms','review']);assert.deepEqual(opened,['quote']);
  });
  await test('historical target and unavailable state cannot publish',async({w,doc})=>{
   w.api=async()=>result({target:'1',can_publish:false});await w.SmetraQuoteReview.open(original,versions,{publish:true});assert.equal(doc.querySelector('#review-publish button').disabled,true);
