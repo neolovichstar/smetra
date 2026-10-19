@@ -752,7 +752,7 @@ class BusinessFlows(unittest.TestCase):
                 "name": name,
                 "password": "secure twelve password",
                 "legal_acceptance": True,
-                "legal_version": "2026-10-19-ai-estimate-v1",
+                "legal_version": "2026-10-19-registration-v1",
             },
         )
         self.assertEqual(code, 200, result)
