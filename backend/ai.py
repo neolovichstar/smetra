@@ -57,6 +57,29 @@ def _contains_aggregate_total(value):
     )
 
 
+_HIDDEN_PREPARATORY_PATTERN = re.compile(
+    r"демонтаж|грунтов|подготовк|защит|вынос|уборк|доставк|"
+    r"гидроизоляц|стяжк|выравнив|чернов",
+    re.IGNORECASE,
+)
+
+
+def _normalize_measurement_note(item):
+    """Validate the model's measurement flag and enforce mandatory wording."""
+    requires_measurement = item.pop("requires_site_measurement", None)
+    if type(requires_measurement) is not bool:
+        raise ValueError("invalid measurement flag")
+    name = string(item.get("name", ""), "Позиция", 200, True)
+    description = string(item.get("description", ""), "Описание")
+    if requires_measurement or _HIDDEN_PREPARATORY_PATTERN.search(name):
+        note = "Требует замера по месту"
+        if note.casefold() not in description.casefold():
+            description = (description.rstrip() + " " + note).strip()
+    item["name"] = name
+    item["description"] = description
+    return item
+
+
 def capture_file(value):
     """Inspect a small user-selected source in memory; never persist it."""
     if not isinstance(value, dict):
@@ -305,23 +328,7 @@ def _draft(service, data):
                 raise ValueError("item")
             if type(item.get("unit_price")) is not int or item["unit_price"] < 0:
                 raise ValueError("invalid unit price")
-            requires_measurement = item.pop("requires_site_measurement", None)
-            if type(requires_measurement) is not bool:
-                raise ValueError("invalid measurement flag")
-            name = string(item.get("name", ""), "Позиция", 200, True)
-            description = string(item.get("description", ""), "Описание")
-            hidden_or_preparatory = re.search(
-                r"демонтаж|грунтов|подготовк|защит|вынос|уборк|доставк|"
-                r"гидроизоляц|стяжк|выравнив|чернов",
-                name,
-                re.IGNORECASE,
-            )
-            if requires_measurement or hidden_or_preparatory:
-                measurement_note = "Требует замера по месту"
-                if measurement_note.casefold() not in description.casefold():
-                    description = (description.rstrip() + " " + measurement_note).strip()
-            item["name"] = name
-            item["description"] = description
+            _normalize_measurement_note(item)
             # Allow an unknown zero price in the unsaved AI draft; regular save still validates the final total.
             calculate([{**item, "unit_price": item.get("unit_price") or 1}])
         usage = result.get("usage")
