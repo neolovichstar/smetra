@@ -686,7 +686,7 @@ def prepare(service, name, args):
     }
 
 
-def confirm(service, action_id):
+def confirm(service, action_id, review_confirmed=False):
     try:
         from backend.redis_infra import Lease, RedisUnavailable, acquire_lock
     except ModuleNotFoundError:
@@ -698,12 +698,12 @@ def confirm(service, action_id):
     if lease is None:
         raise DomainError(409, "Действие уже применяется. Подождите и обновите результат.")
     try:
-        return _confirm(service, action_id)
+        return _confirm(service, action_id, review_confirmed)
     finally:
         lease.release()
 
 
-def _confirm(service, action_id):
+def _confirm(service, action_id, review_confirmed=False):
     service.write_access()
     with transaction(service.con):
         row = service.con.execute(
@@ -719,6 +719,21 @@ def _confirm(service, action_id):
             raise DomainError(
                 409, "Предложение устарело. Попросите ассистента обновить его."
             )
+        if row["tool"] == "publish_quote":
+            try:
+                from backend.legal import has_current_terms
+            except ModuleNotFoundError:
+                from legal import has_current_terms
+            if not has_current_terms(service.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед отправкой сметы",
+                )
+            if review_confirmed is not True:
+                raise DomainError(
+                    400,
+                    "Перед отправкой подтвердите проверку объёмов, технологии и цен",
+                )
         args = json.loads(row["arguments"])
         undo_fields = args.pop("_undo_fields", None)
         args.pop("_preview", None)
@@ -1036,7 +1051,11 @@ def route(service, method, parts, data):
             "quota": public_quota(service),
         }
     if parts == ["confirm"]:
-        return 200, confirm(service, string(data.get("id", ""), "Действие", 80, True))
+        return 200, confirm(
+            service,
+            string(data.get("id", ""), "Действие", 80, True),
+            review_confirmed=data.get("review_confirmed") is True,
+        )
     if parts == ["undo"]:
         from backend.assistant_edits import undo
 
