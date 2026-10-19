@@ -26,4 +26,8 @@ ALTER TABLE smetra.oauth_states
 ALTER TABLE smetra.quotes
     ALTER COLUMN ai_generated SET DEFAULT 0;
 
+INSERT INTO smetra.schema_migrations(version, applied_at)
+VALUES (36, extract(epoch FROM now())::BIGINT)
+ON CONFLICT DO NOTHING;
+
 COMMIT;
