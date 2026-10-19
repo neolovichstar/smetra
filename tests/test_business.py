@@ -758,6 +758,31 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(code, 200, result)
         return result["token"], result["user"]["id"]
 
+    def test_estimate_and_ai_write_entry_points_require_current_terms(self):
+        token, user_id = self.account("legal-gate-" + os.urandom(4).hex())
+        code, created = self.call(
+            "/construction/objects", "POST", {"name": "Объект для проверки"}, token
+        )
+        self.assertEqual(code, 201, created)
+        object_id = created["object"]["id"]
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE users SET terms_accepted_at=0,terms_version='' WHERE id=?",
+                (user_id,),
+            )
+
+        cases = (
+            ("/quotes", "POST", {"title": "Черновик", "client": "Клиент", "amount": 1000}),
+            ("/construction/objects/" + object_id + "/quote", "POST", {}),
+            ("/ai/draft", "POST", {"text": "Ремонт ванной"}),
+            ("/assistant/chat", "POST", {"text": "Создай черновик сметы"}),
+        )
+        for path, method, payload in cases:
+            with self.subTest(path=path):
+                status, result = self.call(path, method, payload, token)
+                self.assertEqual(status, 403, result)
+                self.assertTrue(result.get("error"))
+
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
         from backend.data_export import _clean
 
