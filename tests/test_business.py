@@ -751,6 +751,8 @@ class BusinessFlows(unittest.TestCase):
                 "email": name + "@test.invalid",
                 "name": name,
                 "password": "secure twelve password",
+                "terms_accepted": True,
+                "terms_version": "2026-10-19-ai-estimate-v1",
             },
         )
         self.assertEqual(code, 200, result)
@@ -917,11 +919,57 @@ class BusinessFlows(unittest.TestCase):
         code, result = self.call(
             "/quotes/" + quote["id"] + "/publish",
             "POST",
-            {"revision": quote["revision"]},
+            {"revision": quote["revision"], "review_confirmed": True},
             token,
         )
         self.assertEqual(code, 200, result)
         return result["quote"]
+
+    def test_registration_requires_explicit_current_estimate_terms(self):
+        status, result = self.call("/auth/register", "POST", {
+            "email": "missing-consent-" + os.urandom(4).hex() + "@test.invalid",
+            "name": "No Consent",
+            "password": "secure twelve password",
+        })
+        self.assertEqual(status, 400, result)
+        self.assertIn("соглас", result.get("error", "").lower())
+
+    def test_terms_acceptance_is_versioned_and_ai_access_checks_it(self):
+        token, user_id = self.account("terms-" + os.urandom(4).hex())
+        status, result = self.call("/auth/terms/accept", "POST", {
+            "accepted": True,
+            "terms_version": "old-version",
+        }, token)
+        self.assertEqual(status, 400, result)
+        status, result = self.call("/auth/terms/accept", "POST", {
+            "accepted": True,
+            "terms_version": "2026-10-19-ai-estimate-v1",
+        }, token)
+        self.assertEqual(status, 200, result)
+        self.assertTrue(result["user"]["estimate_terms_accepted"])
+
+        con = self.mod.db()
+        try:
+            con.execute("UPDATE users SET terms_accepted_at=0, terms_version='' WHERE id=?", (user_id,))
+            con.commit()
+        finally:
+            con.close()
+        status, result = self.call("/ai/draft", "POST", {"text": "Составить смету ремонта ванной"}, token)
+        self.assertEqual(status, 403, result)
+
+    def test_quote_publish_routes_require_review_confirmation(self):
+        token, _ = self.account("publish-gate-" + os.urandom(4).hex())
+        quote = self.quote(token, title="Draft requiring review")
+        status, result = self.call("/quotes/" + quote["id"] + "/publish", "POST", {
+            "revision": quote["revision"],
+        }, token)
+        self.assertEqual(status, 400, result)
+        status, result = self.call("/quotes/" + quote["id"] + "/status", "POST", {
+            "status": "sent", "revision": quote["revision"],
+        }, token)
+        self.assertEqual(status, 400, result)
+        published = self.publish(token, quote)
+        self.assertEqual(published["approval_state"], "sent")
 
     def test_catalog_price_history_filters_favorites_and_workspace_scope(self):
         owner, _ = self.account("catalog-history-owner")
