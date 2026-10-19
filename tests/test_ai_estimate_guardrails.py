@@ -1,4 +1,5 @@
 """Security and contract tests for structured AI estimate drafts."""
+import io
 import json
 import sqlite3
 import unittest
@@ -7,7 +8,8 @@ from unittest.mock import patch
 
 from backend import ai
 from backend.business import DomainError
-from backend.legal import TERMS_VERSION, has_current_terms
+from backend.documents import pdf
+from backend.legal import AI_ESTIMATE_DISCLAIMER, TERMS_VERSION, has_current_terms
 
 
 class FakeResponse:
@@ -136,6 +138,50 @@ class AIEstimateGuardrailsTests(unittest.TestCase):
         self.assertFalse(has_current_terms({"terms_accepted_at": 12345, "terms_version": "old"}))
         self.assertFalse(has_current_terms({"terms_accepted_at": 0, "terms_version": TERMS_VERSION}))
         self.assertFalse(has_current_terms(None))
+
+    def test_ai_estimate_pdf_contains_the_mandatory_warning(self):
+        snapshot = {
+            "company": "Исполнитель",
+            "title": "Ремонт ванной",
+            "client": "Клиент",
+            "description": "Черновик после структурирования ИИ",
+            "items": [
+                {
+                    "name": "Грунтовка",
+                    "description": "Требует замера по месту",
+                    "quantity": "12",
+                    "unit": "м²",
+                    "unit_price": 0,
+                    "subtotal": 0,
+                    "included": True,
+                }
+            ],
+            "amount_kopecks": 0,
+            "currency": "RUB",
+            "due_date": "",
+            "terms": "",
+            "ai_generated": 1,
+        }
+        document = {
+            "kind": "estimate",
+            "number": "QA-1",
+            "name": "Смета",
+            "template": "Minimal",
+            "snapshot": json.dumps(snapshot, ensure_ascii=False),
+        }
+        rendered = pdf(document)
+        from pypdf import PdfReader
+
+        extracted = "\\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(rendered)).pages)
+        for phrase in (
+            "Расчет сгенерирован ИИ-ассистентом",
+            "предварительным черновиком",
+            "Обязательно проверьте объемы, технологию и цены перед подписанием",
+            "финансовые риски сторон",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, extracted)
+        self.assertIn(AI_ESTIMATE_DISCLAIMER.split(".")[0], extracted)
 
     def test_postgres_migration_is_additive_and_versioned(self):
         migration = (
