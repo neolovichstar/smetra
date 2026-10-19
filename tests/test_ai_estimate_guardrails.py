@@ -116,10 +116,16 @@ class AIEstimateGuardrailsTests(unittest.TestCase):
         self.assertNotIn("total", json.dumps(draft).lower())
 
     def test_model_total_in_free_text_is_rejected(self):
-        payload = model_response(description="Итого ремонт ванной составит 150 000 руб.")
-        with self.assertRaises(DomainError) as error:
-            self.call_draft(payload)
-        self.assertEqual(error.exception.status, 502)
+        for description in (
+            "Итого ремонт ванной составит 150 000 руб.",
+            "Стоимость ремонта составит 150 тысяч рублей.",
+            "Бюджет: 1,5 млн руб.",
+        ):
+            with self.subTest(description=description):
+                payload = model_response(description=description)
+                with self.assertRaises(DomainError) as error:
+                    self.call_draft(payload)
+                self.assertEqual(error.exception.status, 502)
 
     def test_terms_consent_is_versioned(self):
         accepted = {"terms_accepted_at": 12345, "terms_version": TERMS_VERSION}
