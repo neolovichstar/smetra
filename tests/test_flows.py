@@ -193,6 +193,13 @@ class FlowTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         token = reg["token"]
+        status, accepted = self.request(
+            "/api/legal/acceptance",
+            "POST",
+            {"accepted": True, "terms_version": "2026-10-19"},
+            token,
+        )
+        self.assertEqual(status, 200, accepted)
         status, _ = self.request("/api/admin/overview", token=token)
         self.assertEqual(status, 403)
         status, result = self.request(
@@ -427,6 +434,13 @@ class FlowTests(unittest.TestCase):
                 "name": "Другой",
             },
         )
+        status, accepted = self.request(
+            "/api/legal/acceptance",
+            "POST",
+            {"accepted": True, "terms_version": "2026-10-19"},
+            first["token"],
+        )
+        self.assertEqual(status, 200, accepted)
         payload = {
             "title": "Монтаж",
             "client": "Компания",
