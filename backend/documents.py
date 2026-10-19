@@ -16,9 +16,9 @@ except ModuleNotFoundError:
     from business import DomainError, choice, identity, packed, stamp, string
 
 try:
-    from backend.legal import AI_ESTIMATE_DISCLAIMER
+    from backend.legal import AI_ESTIMATE_DISCLAIMER, has_current_terms
 except ModuleNotFoundError:
-    from legal import AI_ESTIMATE_DISCLAIMER
+    from legal import AI_ESTIMATE_DISCLAIMER, has_current_terms
 
 
 @dataclass
@@ -231,8 +231,13 @@ def documents(service, method, parts, query, data):
         if parts:
             row = service.get("documents", parts[0])
             if len(parts) == 2 and parts[1] == "pdf":
-                # The confirmation is enforced server-side so direct API requests
-                # cannot bypass the mandatory review modal in the browser.
+                # The confirmation and current consent are checked server-side so
+                # direct API requests cannot bypass the mandatory review modal.
+                if not has_current_terms(service.user):
+                    raise DomainError(
+                        403,
+                        "Подтвердите актуальное Пользовательское соглашение перед экспортом PDF",
+                    )
                 if query.get("review_confirmed") != ["1"]:
                     raise DomainError(
                         400,
