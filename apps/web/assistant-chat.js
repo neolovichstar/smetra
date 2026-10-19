@@ -66,8 +66,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
-  attachmentBar.querySelector('span').textContent='PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">Прикрепить файл или фото</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
+  attachmentBar.querySelector('span').textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
   const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.id='assistant-background';backgroundButton.textContent='В фоне';backgroundButton.hidden=true;backgroundButton.disabled=true;
@@ -150,11 +150,50 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
+  const attachmentInfo=attachmentBar.querySelector('span');
+  let pendingPhoto=null,pendingPhotoUrl='';
+  const clearPhoto=()=>{
+    pendingPhoto=null;input.required=true;
+    if(pendingPhotoUrl){URL.revokeObjectURL(pendingPhotoUrl);pendingPhotoUrl=''}
+    attachmentBar.querySelector('.assistant-photo-preview')?.remove();
+    attachmentInfo.textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
+    renderQuota(quota);
+  };
+  const renderPhoto=()=>{
+    attachmentBar.querySelector('.assistant-photo-preview')?.remove();
+    if(!pendingPhoto)return;
+    input.required=false;
+    const preview=document.createElement('div');preview.className='assistant-photo-preview';
+    const image=document.createElement('img');image.src=pendingPhotoUrl;image.alt='Предпросмотр прикреплённой фотографии';
+    const name=document.createElement('span');name.textContent=pendingPhoto.name;
+    const remove=document.createElement('button');remove.type='button';remove.className='assistant-photo-remove';remove.textContent='×';remove.setAttribute('aria-label','Убрать фотографию');
+    remove.onclick=clearPhoto;preview.append(image,name,remove);attachmentBar.append(preview);
+    attachmentInfo.textContent='Фото прикреплено · '+Math.ceil(pendingPhoto.size/1024)+' КБ';
+    renderQuota(quota);
+  };
+  const encodePhoto=async file=>{
+    const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
+    for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
+    const extension=file.name.toLowerCase().split('.').pop();
+    return {name:file.name,mime:file.type||(extension==='png'?'image/png':'image/jpeg'),content:btoa(binary)};
+  };
   attachButton.onclick=()=>fileInput.click();
   const uploadAttachment=async file=>{
     if(!file||attachButton.disabled)return;
     const extension=file.name.toLowerCase().split('.').pop();
-    if(!['pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите PDF, DOCX, XLSX, CSV, TXT или MD до '+maxUploadLabel;return}
+    if(['png','jpg','jpeg'].includes(extension)){
+      if(backgroundMode){status.textContent='Фото доступно в обычном чате, не в фоновой задаче.';fileInput.value='';return}
+      const expected=extension==='png'?'image/png':'image/jpeg';
+      if(file.size<1||file.size>2_000_000||file.type&&file.type!==expected){
+        status.textContent='Прикрепите корректное фото PNG/JPG размером до 2 МБ';fileInput.value='';return;
+      }
+      if(pendingPhotoUrl)URL.revokeObjectURL(pendingPhotoUrl);
+      pendingPhoto=file;pendingPhotoUrl=URL.createObjectURL(file);renderPhoto();
+      status.textContent='Фото прикреплено. Напишите, что нужно рассмотреть, и отправьте сообщение.';
+      input.focus();return;
+    }
+    if(!['pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите фото PNG/JPG до 2 МБ или документ до '+maxUploadLabel;return}
+    clearPhoto();
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -191,7 +230,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
     if(value.remaining<1&&value.plan!=='pro'){upgrade.onclick=()=>sessionStorage.setItem('smetra.paywall.source','ai_limit');Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
     const blocked=working||fileBlocking||!data.available||value.remaining<1;
-    send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
+    send.disabled=blocked||(!input.value.trim()&&!pendingPhoto)||(backgroundMode&&!backgroundEnabled);
     backgroundButton.disabled=blocked||!backgroundEnabled;
     input.disabled=working||!data.available||value.remaining<1;
     setThreadBusy(working||threadBusy);
@@ -284,10 +323,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   backgroundButton.onclick=()=>{
     if(!backgroundEnabled||working||fileBlocking)return;
+    if(pendingPhoto){status.textContent='Сначала отправьте фотографию в обычном чате или уберите её.';return}
     backgroundMode=!backgroundMode;renderDelivery();renderQuota(quota);input.focus();
   };
   const submitBackground=async()=>{
-    const text=input.value.trim();if(!text||working||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
+    const text=input.value.trim();if(!text||pendingPhoto||working||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
     const body=JSON.stringify({text,context:context?{entity:context.entity,id:context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})});
     if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
     working=true;renderQuota(quota);status.textContent='Сохраняю фоновую задачу…';
@@ -338,12 +378,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota)});resize();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
-    event.preventDefault();const prompt=input.value.trim();if(!prompt||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
+    event.preventDefault();const prompt=input.value.trim();if((!prompt&&!pendingPhoto)||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
     if(window.SmetraEstimateSafety){try{if(!(await window.SmetraEstimateSafety.ensureConsent()))return}catch(error){status.textContent=error.message;return}}
     if(backgroundMode){await submitBackground();return}
     working=true;renderQuota(quota);stop.hidden=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
     messages.querySelector('.assistant-welcome')?.remove();
-    const userMessage=addMessage('user',prompt);
+    const sentPhoto=pendingPhoto;
+    const userMessage=addMessage('user',prompt||(sentPhoto?'Посмотри прикреплённую фотографию.':''));
+    if(sentPhoto){const attached=document.createElement('small');attached.className='assistant-message-attachment';attached.textContent='Фото: '+sentPhoto.name;userMessage.body.append(attached)}
     const assistantMessage=addMessage('assistant','');
     assistantMessage.item.classList.add('streaming');
     scrollBottom();
@@ -351,7 +393,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const paint=()=>{const follow=nearBottom();paintPending=false;assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;setTimeout(()=>requestAnimationFrame(paint),50)}};
     try{
-      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
+      const image=sentPhoto?await encodePhoto(sentPhoto):null;
+      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(image?{image}:{}),...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
       if(!response.body)throw Error('Браузер не поддерживает потоковый ответ');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
@@ -368,7 +411,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
       if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.');
-      assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);resize();
+      assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);clearPhoto();resize();
     }catch(error){
       if(error.name==='AbortError'){assistantMessage.item.classList.remove('streaming');if(!generated){assistantMessage.item.remove();userMessage.item.remove()}status.textContent='Ответ остановлен.'}
       else{userMessage.item.remove();assistantMessage.item.remove();status.textContent=error.message}
