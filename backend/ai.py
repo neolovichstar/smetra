@@ -43,6 +43,39 @@ def _contains_financial_total(value):
     return isinstance(value, str) and bool(_TOTAL_CLAIM.search(value))
 
 
+
+_HIDDEN_WORK_TERMS = (
+    "демонтаж", "грунтов", "подготов", "выравниван", "скрыт",
+    "гидроизоляц", "вывоз мусора", "снятие покрытия", "разбор",
+    "зачист", "удаление стар", "подготовка основания",
+)
+
+
+def _validate_draft_item(item):
+    """Validate untrusted model output; return a line item, never a calculated total."""
+    if not isinstance(item, dict):
+        raise ValueError("item must be an object")
+    for key in ("name", "description", "quantity", "unit"):
+        if not isinstance(item.get(key), str):
+            raise ValueError("invalid item field: " + key)
+    if not item["name"].strip() or not item["unit"].strip():
+        raise ValueError("name and unit are required")
+    if type(item.get("unit_price")) is not int or item["unit_price"] < 0:
+        raise ValueError("invalid unit price")
+    if any(_contains_financial_total(item.get(key, "")) for key in ("name", "description")):
+        raise ValueError("model placed a calculated amount in an item label")
+
+    name_and_description = (item["name"] + " " + item["description"]).casefold()
+    if any(term in name_and_description for term in _HIDDEN_WORK_TERMS):
+        description = item["description"].strip()
+        if "Требует замера по месту" not in description:
+            item["description"] = (description + " Требует замера по месту.").strip()
+
+    # Exercise the same deterministic domain validation used by saved estimates.
+    # A temporary non-zero price permits unknown prices to remain explicitly zero.
+    calculate([{**item, "unit_price": item["unit_price"] or 1}])
+    return item
+
 def available():
     return bool(os.getenv("OPENROUTER_API_KEY"))
 
@@ -256,27 +289,7 @@ def _draft(service, data):
             or not 1 <= len(value["items"]) <= 30
         ):
             raise ValueError("items")
-        for item in value["items"]:
-            if not isinstance(item, dict):
-                raise ValueError("item")
-            if type(item.get("unit_price")) is not int or item["unit_price"] < 0:
-                raise ValueError("invalid unit price")
-            if any(_contains_financial_total(item.get(key, "")) for key in ("name", "description")):
-                raise ValueError("model placed a calculated amount in an item label")
-            name_and_description = (
-                str(item.get("name", "")) + " " + str(item.get("description", ""))
-            ).casefold()
-            hidden_work_terms = (
-                "демонтаж", "грунтов", "подготов", "выравниван", "скрыт",
-                "гидроизоляц", "вывоз мусора", "снятие покрытия", "разбор",
-                "зачист", "удаление стар", "подготовка основания",
-            )
-            if any(term in name_and_description for term in hidden_work_terms):
-                description = str(item.get("description", "")).strip()
-                if "Требует замера по месту" not in description:
-                    item["description"] = (description + " Требует замера по месту.").strip()
-            # Validate each proposed line using deterministic business rules; never ask the LLM for a subtotal.
-            calculate([{**item, "unit_price": item.get("unit_price") or 1}])
+        value["items"] = [_validate_draft_item(item) for item in value["items"]]
         usage = result.get("usage")
         known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in ('prompt_tokens','completion_tokens'))
         service.con.execute(
