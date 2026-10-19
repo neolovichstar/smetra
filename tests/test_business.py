@@ -932,7 +932,7 @@ class BusinessFlows(unittest.TestCase):
             "password": "secure twelve password",
         })
         self.assertEqual(status, 400, result)
-        self.assertIn("соглас", result.get("error", "").lower())
+        self.assertIn("соглашение", result.get("error", "").lower())
 
     def test_terms_acceptance_is_versioned_and_ai_access_checks_it(self):
         token, user_id = self.account("terms-" + os.urandom(4).hex())
