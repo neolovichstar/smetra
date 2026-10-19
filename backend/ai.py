@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import zipfile
@@ -28,6 +29,16 @@ except ModuleNotFoundError:
         string,
         transaction,
     )
+
+
+_TOTAL_CLAIM = re.compile(
+    r"(?iu)(?:\b(?:итого|итоговая\s+(?:сумма|стоимость)|общая\s+(?:сумма|стоимость)|к\s+оплате|сумма\s+к\s+оплате|стоимость\s+(?:работ|ремонта|сметы)\s+(?:составит|будет))\b.{0,120}(?:\d|₽|руб|р\.)|(?:\d[\d\s.,]{0,20}\s*(?:₽|руб(?:\.|лей|ля)?|р\.)|(?:₽|руб(?:\.|лей|ля)?|р\.)\s*\d)"
+)
+
+
+def _contains_financial_total(value):
+    """Reject a model-authored total or currency amount in free-form text fields."""
+    return isinstance(value, str) and bool(_TOTAL_CLAIM.search(value))
 
 
 def available():
@@ -236,6 +247,8 @@ def _draft(service, data):
             raise ValueError("incomplete/refused response")
         value = json.loads(content["message"]["content"])
         title = string(value.get("title", ""), "Название", 120, True)
+        if any(_contains_financial_total(value.get(key, "")) for key in ("title", "description", "terms")):
+            raise ValueError("model placed a calculated amount in free-form text")
         if (
             not isinstance(value.get("items"), list)
             or not 1 <= len(value["items"]) <= 30
@@ -246,6 +259,8 @@ def _draft(service, data):
                 raise ValueError("item")
             if type(item.get("unit_price")) is not int or item["unit_price"] < 0:
                 raise ValueError("invalid unit price")
+            if any(_contains_financial_total(item.get(key, "")) for key in ("name", "description")):
+                raise ValueError("model placed a calculated amount in an item label")
             name_and_description = (
                 str(item.get("name", "")) + " " + str(item.get("description", ""))
             ).casefold()
