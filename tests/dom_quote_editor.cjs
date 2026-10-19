@@ -7,7 +7,7 @@ function setup(){
  w.structuredClone=structuredClone;w.matchMedia=()=>({matches:false});w.scrollTo=()=>{};
  const load=file=>{const script=d.createElement('script');script.textContent=fs.readFileSync('apps/web/'+file,'utf8');d.head.append(script)};
  const app=fs.readFileSync('apps/web/app.js','utf8').split("if($('#auth')){")[0];const script=d.createElement('script');script.textContent=app;d.head.append(script);
- w.eval("user={id:'qa',quote_count:1};tab='quotes'");
+ w.eval("user={id:'qa',quote_count:1,estimate_terms_accepted:true};tab='quotes'");
  const quote={id:'q',revision:4,title:'Работы',client:'Клиент',currency:'RUB',items:[{line_id:'first',name:'Стены',quantity:'1',unit:'м²',unit_price:10000,cost_price:5000},{line_id:'second',name:'Пол',quantity:'2',unit:'м²',unit_price:20000,cost_price:6000}]};
  const writes=[];w.api=async(path,options)=>{if(options){const body=JSON.parse(options.body);writes.push({path,body,key:options.headers?.['Idempotency-Key']});return {quote:{...quote,...body,id:'q',revision:(body.revision||4)+1}}}if(path==='/workspace')return {workspace:{id:'w',name:'QA',currency:'RUB',role:'owner'},workspaces:[]};if(path==='/capabilities')return {};return {items:[]}};
  load('workspace.js');load('quote-editor-state.js');
