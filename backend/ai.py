@@ -4,7 +4,6 @@ import base64
 import io
 import json
 import os
-import re
 import urllib.error
 import urllib.request
 import zipfile
