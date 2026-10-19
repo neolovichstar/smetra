@@ -481,6 +481,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
+            "/disclaimer": ("disclaimer.html", "text/html"),
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),
