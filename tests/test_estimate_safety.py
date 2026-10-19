@@ -260,6 +260,38 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertTrue(image_url.startswith("data:image/jpeg;base64,"))
         self.assertIn("Требует замера по месту", result["draft"]["items"][0]["description"])
 
+    def test_general_assistant_chat_accepts_and_forwards_a_photo(self):
+        token, _ = self.account("assistant-photo")
+        image_bytes = io.BytesIO()
+        Image.new("RGB", (16, 10), (180, 190, 200)).save(image_bytes, format="PNG")
+        encoded = base64.b64encode(image_bytes.getvalue()).decode("ascii")
+        with (
+            patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
+            patch("backend.assistant.query_model", return_value={"content": "На фото видны поверхности. Размеры нужно измерить отдельно."}) as model,
+        ):
+            status, result = self.call(
+                "/assistant/chat",
+                "POST",
+                {
+                    "text": "Что ты видишь на фото?",
+                    "image": {
+                        "name": "room.jpg",
+                        "mime": "image/jpeg",
+                        "content": encoded,
+                    },
+                },
+                token,
+            )
+        self.assertEqual(status, 200, result)
+        self.assertIn("Размеры нужно измерить", result["answer"])
+        messages = model.call_args.args[0]
+        user_message = messages[-1]
+        self.assertEqual(user_message["role"], "user")
+        self.assertIsInstance(user_message["content"], list)
+        self.assertEqual(user_message["content"][0]["text"], "Что ты видишь на фото?")
+        self.assertEqual(user_message["content"][1]["type"], "image_url")
+        self.assertTrue(user_message["content"][1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
+
     def test_model_cannot_hide_a_final_sum_inside_narrative_text(self):
         token, _ = self.account("draft-narrative-total")
         model_result = {
