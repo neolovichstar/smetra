@@ -401,6 +401,86 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertIn("Требует замера по месту", extracted)
         self.assertIn(AI_ESTIMATE_DISCLAIMER.split(".")[0], extracted)
 
+    def test_ai_estimate_provenance_is_preserved_when_editor_saves(self):
+        token, _ = self.account("ai-provenance")
+        status, created = self.call(
+            "/quotes",
+            "POST",
+            {
+                "title": "AI-черновик",
+                "client": "Клиент",
+                "ai_generated": True,
+                "items": [{
+                    "name": "Грунтовка",
+                    "description": "Требует замера по месту",
+                    "quantity": "12",
+                    "unit": "м²",
+                    "unit_price": 0,
+                }],
+            },
+            token,
+        )
+        self.assertEqual(status, 201, created)
+        quote = created["quote"]
+        self.assertEqual(quote["ai_generated"], 1)
+        status, updated = self.call(
+            "/quotes/" + quote["id"],
+            "PATCH",
+            {
+                "revision": quote["revision"],
+                "title": "AI-черновик — уточнён",
+                "items": quote["items"],
+            },
+            token,
+        )
+        self.assertEqual(status, 200, updated)
+        self.assertEqual(updated["quote"]["ai_generated"], 1)
+
+    def test_ai_estimate_pdf_download_requires_review_confirmation(self):
+        token, _ = self.account("ai-pdf-gate")
+        status, created = self.call(
+            "/quotes",
+            "POST",
+            {
+                "title": "AI-черновик для PDF",
+                "client": "Клиент",
+                "ai_generated": True,
+                "items": [{
+                    "name": "Грунтовка",
+                    "description": "Требует замера по месту",
+                    "quantity": "12",
+                    "unit": "м²",
+                    "unit_price": 1000,
+                }],
+            },
+            token,
+        )
+        self.assertEqual(status, 201, created)
+        status, doc = self.call(
+            "/documents",
+            "POST",
+            {
+                "quote_id": created["quote"]["id"],
+                "kind": "estimate",
+                "review_confirmed": True,
+            },
+            token,
+        )
+        self.assertEqual(status, 201, doc)
+        status, rejected = self.call(
+            "/documents/" + doc["document"]["id"] + "/pdf",
+            token=token,
+            raw=True,
+        )
+        self.assertEqual(status, 400, rejected)
+        status, rendered = self.call(
+            "/documents/" + doc["document"]["id"] + "/pdf?review_confirmed=1",
+            token=token,
+            raw=True,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(rendered.startswith(b"%PDF-"))
+
     def test_server_rejects_quote_publication_without_review_confirmation(self):
         token, _ = self.account("quote-review-required")
         status, created = self.call(
