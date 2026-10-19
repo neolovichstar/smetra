@@ -409,7 +409,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "legal"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
@@ -615,6 +615,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             experiment,variants=revenue.configuration()
             cheapest=min(variants.values(),key=lambda v:v['month'])
             return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment})
+        if path == "/api/legal/acceptance":
+            from backend.legal import acceptance_status, has_valid_consent, record_acceptance
+
+            user = self.auth(con)
+            if method == "GET":
+                return self.send_json(200, acceptance_status(con, user["id"]))
+            if method != "POST":
+                raise ApiError(405, "Метод не поддерживается")
+            data = self.body()
+            if not has_valid_consent(data):
+                raise ApiError(
+                    400,
+                    "Поставьте галочку и примите актуальные Пользовательское соглашение "
+                    "и Политику отказа от ответственности (As Is).",
+                )
+            source = "android" if "Android" in self.headers.get("User-Agent", "") else "web"
+            with con:
+                record_acceptance(con, user["id"], source, now())
+            return self.send_json(200, acceptance_status(con, user["id"]))
         if path == "/api/cron/assistant" and method == "GET":
             from backend.assistant_jobs import run_one
 
@@ -656,6 +675,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/register" and method == "POST":
             self.throttle("register:" + self.client_address[0], 5, 3600)
             data = self.body()
+            from backend.legal import has_valid_consent, record_acceptance
+
+            if not has_valid_consent(data):
+                raise ApiError(
+                    400,
+                    "Поставьте галочку и примите актуальные Пользовательское соглашение "
+                    "и Политику отказа от ответственности (As Is).",
+                )
             email = str(data.get("email", "")).strip().lower()
             password = str(data.get("password", ""))
             name = str(data.get("name", "")).strip()
@@ -689,6 +716,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
                     ),
                 )
+                record_acceptance(con, user_id, "registration", now())
                 event(con, user_id, "signup_completed")
                 revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
             except sqlite3.IntegrityError:

@@ -751,10 +751,40 @@ class BusinessFlows(unittest.TestCase):
                 "email": name + "@test.invalid",
                 "name": name,
                 "password": "secure twelve password",
+                "terms_accepted": True,
+                "disclaimer_accepted": True,
+                "terms_version": "2026-10-19",
+                "disclaimer_version": "2026-10-19",
             },
         )
         self.assertEqual(code, 200, result)
         return result["token"], result["user"]["id"]
+
+    def test_registration_rejects_missing_or_stale_legal_consent(self):
+        base = {"email": "legal-gate@test.invalid", "name": "Legal Gate", "password": "secure twelve password"}
+        self.assertEqual(self.call("/auth/register", "POST", base)[0], 400)
+        stale = {**base, "terms_accepted": True, "disclaimer_accepted": True,
+                 "terms_version": "old-version", "disclaimer_version": "2026-10-19"}
+        self.assertEqual(self.call("/auth/register", "POST", stale)[0], 400)
+        valid = {**base, "terms_accepted": True, "disclaimer_accepted": True,
+                 "terms_version": "2026-10-19", "disclaimer_version": "2026-10-19"}
+        code, result = self.call("/auth/register", "POST", valid)
+        self.assertEqual(code, 200, result)
+        self.assertTrue(self.call("/legal/acceptance", token=result["token"])[1]["accepted"])
+
+    def test_ai_and_quote_writes_cannot_bypass_legal_acceptance(self):
+        token, user_id = self.account("legal-api-gate")
+        self.con.execute("DELETE FROM legal_acceptances WHERE user_id=?", (user_id,))
+        self.assertFalse(self.call("/legal/acceptance", token=token)[1]["accepted"])
+        self.assertEqual(self.call("/ai/draft", "POST", {"text": "Ванная"}, token)[0], 428)
+        self.assertEqual(self.call("/quotes", "POST", {
+            "title": "Тест", "client": "Клиент",
+            "items": [{"name": "Работа", "quantity": "1", "unit": "усл.", "unit_price": 100}],
+        }, token)[0], 428)
+        accepted = {"terms_accepted": True, "disclaimer_accepted": True,
+                    "terms_version": "2026-10-19", "disclaimer_version": "2026-10-19"}
+        self.assertEqual(self.call("/legal/acceptance", "POST", accepted, token)[0], 200)
+        self.assertTrue(self.call("/legal/acceptance", token=token)[1]["accepted"])
 
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
         from backend.data_export import _clean

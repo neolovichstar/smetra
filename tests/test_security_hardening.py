@@ -86,6 +86,8 @@ class SecurityHardeningTests(unittest.TestCase):
         body = json.dumps({
             "name": "Browser", "email": "browser-security@test.invalid",
             "password": "secure twelve password",
+            "terms_accepted": True, "disclaimer_accepted": True,
+            "terms_version": "2026-10-19", "disclaimer_version": "2026-10-19",
         }).encode()
         status, headers, result = self.request(
             "POST", "/api/auth/register", body,
