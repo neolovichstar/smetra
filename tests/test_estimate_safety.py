@@ -1,5 +1,6 @@
 """Server-side regression tests for safe AI estimate drafting and consent."""
 import base64
+import urllib.request
 import io
 import json
 import os
@@ -14,6 +15,17 @@ from tests.test_business import BusinessFlows
 class _Lease:
     def release(self):
         pass
+
+
+def _provider_reply(payload):
+    original_urlopen = urllib.request.urlopen
+
+    def reply(request, *args, **kwargs):
+        if request.full_url.startswith("https://openrouter.ai/"):
+            return _Response(payload)
+        return original_urlopen(request, *args, **kwargs)
+
+    return reply
 
 
 class _Response:
@@ -48,7 +60,7 @@ class EstimateSafetyTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 400, result)
-        self.assertIn("условия", result["error"].lower())
+        self.assertIn("соглашение", result["error"].lower())
 
     def test_ai_endpoints_cannot_bypass_server_side_consent(self):
         token, user_id = self.account("consent-gate")
@@ -126,7 +138,7 @@ class EstimateSafetyTests(unittest.TestCase):
         with (
             patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
             patch("backend.redis_infra.acquire_lock", return_value=_Lease()),
-            patch("backend.ai.urllib.request.urlopen", return_value=_Response(wire)) as opener,
+            patch("backend.ai.urllib.request.urlopen", side_effect=_provider_reply(wire)) as opener,
         ):
             status, result = self.call(
                 "/ai/draft", "POST", {"text": "Подготовить ванную комнату"}, token
@@ -182,7 +194,7 @@ class EstimateSafetyTests(unittest.TestCase):
         with (
             patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
             patch("backend.redis_infra.acquire_lock", return_value=_Lease()),
-            patch("backend.ai.urllib.request.urlopen", return_value=_Response(wire)),
+            patch("backend.ai.urllib.request.urlopen", side_effect=_provider_reply(wire)),
         ):
             status, result = self.call(
                 "/ai/draft", "POST", {"text": "Составь смету"}, token
@@ -220,7 +232,7 @@ class EstimateSafetyTests(unittest.TestCase):
         with (
             patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
             patch("backend.redis_infra.acquire_lock", return_value=_Lease()),
-            patch("backend.ai.urllib.request.urlopen", return_value=_Response(wire)) as opener,
+            patch("backend.ai.urllib.request.urlopen", side_effect=_provider_reply(wire)) as opener,
         ):
             status, result = self.call(
                 "/ai/draft",
@@ -274,7 +286,7 @@ class EstimateSafetyTests(unittest.TestCase):
         with (
             patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
             patch("backend.redis_infra.acquire_lock", return_value=_Lease()),
-            patch("backend.ai.urllib.request.urlopen", return_value=_Response(wire)),
+            patch("backend.ai.urllib.request.urlopen", side_effect=_provider_reply(wire)),
         ):
             status, result = self.call(
                 "/ai/draft", "POST", {"text": "Ремонт ванной"}, token
