@@ -212,7 +212,7 @@
     });
     document.querySelector('#construction-export').onclick=downloadSheet;
     document.querySelector('#construction-import').onchange=importSheet;
-    document.querySelector('#construction-quote')?.addEventListener('click',()=>request(`/construction/objects/${selected}/quote`,{},detail));
+    document.querySelector('#construction-quote')?.addEventListener('click',async()=>{if(window.Workspace?.ensureEstimateConsent&&!(await window.Workspace.ensureEstimateConsent()))return;try{await request(`/construction/objects/${selected}/quote`,{},detail)}catch(error){notify(error.message)}});
     document.querySelector('#construction-quote-open')?.addEventListener('click',()=>openLinked('quotes',obj.quote_id));
     document.querySelector('#construction-act').onclick=downloadFactAct;
     document.querySelector('#construction-report').onclick=downloadReport;
