@@ -246,6 +246,33 @@ class IdentityAssistantTests(unittest.TestCase):
                     self.assertEqual(len(params["code_challenge"][0]), 43)
                     self.assertIn("HttpOnly", headers["Set-Cookie"])
 
+    def test_new_oauth_account_requires_explicit_terms_consent(self):
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"), patch(
+            "backend.identity.profile",
+            return_value=("unconsented-subject", "Первый вход", "no-consent-oauth@test.invalid"),
+        ):
+            code, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?app_challenge=" + challenge("c" * 64)
+            )
+            self.assertEqual(code, 303)
+            state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
+            cookie = headers["Set-Cookie"].split(";")[0]
+            callback = "/api/auth/oauth/yandex/callback?code=provider-code&state=" + state
+            code, result, _ = self.get_redirect(callback, cookie)
+            self.assertEqual(code, 303)
+            self.assertEqual(result["Location"], "smetra://auth?error=consent_required")
+
+        with self.mod.db() as con:
+            self.assertIsNone(
+                con.execute("SELECT id FROM users WHERE email=?", ("no-consent-oauth@test.invalid",)).fetchone()
+            )
+            self.assertIsNone(
+                con.execute(
+                    "SELECT user_id FROM external_identities WHERE provider='yandex' AND subject=?",
+                    ("unconsented-subject",),
+                ).fetchone()
+            )
+
     def test_oauth_browser_binding_and_native_pkce_one_use(self):
         verifier = "a" * 64
         with (
@@ -256,7 +283,7 @@ class IdentityAssistantTests(unittest.TestCase):
             ) as provider,
         ):
             code, headers, _ = self.get_redirect(
-                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier)
+                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier) + "&terms_accepted=2026-10-19-ai-estimate-v1"
             )
             self.assertEqual(code, 303)
             state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
