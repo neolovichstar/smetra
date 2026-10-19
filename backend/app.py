@@ -97,6 +97,8 @@ def migrate():
         for table, column, definition in (
             ("users", "deleted_at", "INTEGER"),
             ("users", "email_verified_at", "INTEGER"),
+            ("users", "terms_accepted_at", "INTEGER"),
+            ("users", "terms_version", "TEXT"),
             ("payments", "activated_at", "INTEGER"),
         ):
             columns = {
@@ -193,6 +195,8 @@ def user_view(user, con):
         "plan": user["plan"] if expiry > now() else "free",
         "entitlement_until": expiry,
         "email_verified": user["email_verified_at"] is not None,
+        "terms_accepted": business.has_legal_acceptance(user),
+        "terms_version": user["terms_version"],
         "quote_count": con.execute(
             "SELECT count(*) FROM quotes WHERE user_id=?", (user["id"],)
         ).fetchone()[0],
@@ -409,7 +413,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "legal"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
@@ -676,10 +680,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(
                     503, "Регистрация временно недоступна: почта не настроена"
                 )
+            consent = data.get("terms_accepted", False)
+            consent_version = data.get("terms_version")
+            if consent is True and consent_version != business.TERMS_VERSION:
+                raise ApiError(400, "Версия Пользовательского соглашения устарела. Обновите страницу.")
             try:
                 user_id = uid()
                 con.execute(
-                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at,terms_accepted_at,terms_version) VALUES(?,?,?,?,?,?,?,?)",
                     (
                         user_id,
                         email,
@@ -687,6 +695,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         name,
                         now(),
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
+                        now() if consent is True else None,
+                        business.TERMS_VERSION if consent is True else None,
                     ),
                 )
                 event(con, user_id, "signup_completed")
@@ -836,6 +846,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Неизвестное событие")
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
+        if path == "/api/legal/acceptance" and method == "GET":
+            return self.send_json(200, {
+                "accepted": business.has_legal_acceptance(user),
+                "terms_version": business.TERMS_VERSION,
+            })
+        if path == "/api/legal/acceptance" and method == "POST":
+            data = self.body()
+            if data.get("accepted") is not True:
+                raise ApiError(400, "Подтвердите согласие с Пользовательским соглашением и условиями ответственности.")
+            if data.get("terms_version") != business.TERMS_VERSION:
+                raise ApiError(400, "Версия Пользовательского соглашения устарела. Обновите страницу.")
+            con.execute(
+                "UPDATE users SET terms_accepted_at=?,terms_version=? WHERE id=?",
+                (now(), business.TERMS_VERSION, user["id"]),
+            )
+            return self.send_json(200, {"accepted": True, "terms_version": business.TERMS_VERSION})
         if path == "/api/me" and method == "GET":
             revenue.visit(con, user)
             return self.send_json(200, {"user": user_view(user, con)})
