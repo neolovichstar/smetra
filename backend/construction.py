@@ -885,6 +885,15 @@ def route(service, method, parts, query, data):
         from backend.receipt_ocr import route as receipt_route
         return receipt_route(service, obj, method, rest[1])
     if rest == ["report.pdf"] and method == "GET":
+        try:
+            from backend.legal import has_current_terms
+        except ModuleNotFoundError:
+            from legal import has_current_terms
+        if not has_current_terms(service.user):
+            raise DomainError(
+                403,
+                "Подтвердите актуальное Пользовательское соглашение перед экспортом PDF",
+            )
         if query.get("review_confirmed") != ["1"]:
             raise DomainError(
                 400,
