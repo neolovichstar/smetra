@@ -33,6 +33,7 @@ except ModuleNotFoundError:
 
 _TOTAL_CLAIM = re.compile(
     r"(?iu)\b(?:итого|итоговая\s+(?:сумма|стоимость)|общая\s+(?:сумма|стоимость)|к\s+оплате|сумма\s+к\s+оплате|стоимость\s+(?:работ|ремонта|сметы)\s+(?:составит|будет)\b).{0,120}(?:\d|₽|руб|р\.)"
+    r"|(?:\d[\d\s.,]{0,20}\s*(?:тыс[а-я]*|млн[а-я]*|миллион[а-я]*)\s*(?:₽|руб(?:\.|лей|ля)?|р\.))"
     r"|(?:\d[\d\s.,]{0,20}\s*(?:₽|руб(?:\.|лей|ля)?|р\.)|(?:₽|руб(?:\.|лей|ля)?|р\.)\s*\d)"
 )
 
@@ -248,7 +249,7 @@ def _draft(service, data):
             raise ValueError("incomplete/refused response")
         value = json.loads(content["message"]["content"])
         title = string(value.get("title", ""), "Название", 120, True)
-        if any(_contains_financial_total(value.get(key, "")) for key in ("title", "description", "terms")):
+        if any(_contains_financial_total(value.get(key, "")) for key in ("title", "client", "description", "terms")):
             raise ValueError("model placed a calculated amount in free-form text")
         if (
             not isinstance(value.get("items"), list)
