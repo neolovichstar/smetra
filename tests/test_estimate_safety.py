@@ -62,6 +62,20 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertEqual(status, 400, result)
         self.assertIn("соглашение", result["error"].lower())
 
+    def test_registration_consent_is_separate_from_first_ai_use_consent(self):
+        token, user_id = self.account("consent-separation")
+        status, result = self.call("/me/legal-consent", token=token)
+        self.assertEqual(status, 200, result)
+        self.assertFalse(result["accepted"], "Registration consent must not skip the first-use AI prompt")
+        with self.mod.db() as con:
+            rows = con.execute(
+                "SELECT document_version,source FROM legal_acceptances WHERE user_id=?",
+                (user_id,),
+            ).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["document_version"], "2026-10-19-registration-v1")
+        self.assertEqual(rows[0]["source"], "registration")
+
     def test_ai_endpoints_cannot_bypass_server_side_consent(self):
         token, user_id = self.account("consent-gate")
         with self.mod.db() as con:
