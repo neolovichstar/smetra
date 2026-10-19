@@ -2129,6 +2129,11 @@ class Service:
                     403,
                     "Подтвердите актуальное Пользовательское соглашение перед использованием ИИ-ассистента",
                 )
+            if kind == "construction" and method == "POST" and rest and rest[-1] == "quote" and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед созданием сметы из объекта",
+                )
             if kind == "quotes" and method in ("POST", "PATCH") and not has_current_terms(self.user):
                 raise DomainError(
                     403,
