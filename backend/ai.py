@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import zipfile
@@ -34,6 +35,26 @@ except ModuleNotFoundError:
 
 def available():
     return bool(os.getenv("OPENROUTER_API_KEY"))
+
+
+_AGGREGATE_TOTAL_RE = re.compile(
+    r"\\b(?:итого|итоговая\\s+(?:сумма|стоимость)|общая\\s+(?:сумма|стоимость)|"
+    r"всего\\s+к\\s+оплате|сумма\\s+к\\s+оплате|grand\\s+total|total)\\b"
+    r"|(?:\\d[\\d\\s]*(?:[.,]\\d{1,2})?\\s*(?:₽|руб(?:\\.|лей|ля)?))",
+    re.IGNORECASE,
+)
+
+
+def _contains_aggregate_total(value):
+    """Reject narrative totals rather than passing them through as AI prose."""
+    fields = [value.get(key, "") for key in ("title", "description", "terms")]
+    for item in value.get("items", []):
+        if isinstance(item, dict):
+            fields.extend(item.get(key, "") for key in ("name", "description"))
+    return any(
+        isinstance(field, str) and _AGGREGATE_TOTAL_RE.search(field)
+        for field in fields
+    )
 
 
 def capture_file(value):
@@ -265,6 +286,8 @@ def _draft(service, data):
         if content.get("finish_reason") != "stop" or content["message"].get("refusal"):
             raise ValueError("incomplete/refused response")
         value = json.loads(content["message"]["content"])
+        if not isinstance(value, dict) or _contains_aggregate_total(value):
+            raise ValueError("narrative aggregate total")
         title = string(value.get("title", ""), "Название", 120, True)
         if (
             not isinstance(value.get("items"), list)
