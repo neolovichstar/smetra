@@ -522,7 +522,7 @@ window.Workspace = (() => {
     });
   }
   async function documentForm(quoteId=''){
-    const result=await api('/quotes');const root=openModal('Создать документ','Документ сохранит условия выбранной версии.',`<form>${select('quote_id','Смета',result.quotes.map(q=>[q.id,q.title]),quoteId)}<div class="form-grid">${select('kind','Вид',[['estimate','Смета'],['proposal','Предложение'],['invoice','Счёт'],['act','Акт'],['contract','Договор-шаблон'],['reference','Справка об оплате']],'estimate')}${select('template','Оформление',['Minimal','Classic','Business','Modern'],'Minimal')}</div>${formEnd('Сформировать PDF')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{if(!(await ensureEstimateConsent()))return;if(!(await confirmEstimateReview()))return;const r=await api('/documents',{method:'POST',body:JSON.stringify(d)});closeModal();await download('/documents/'+r.document.id+'/pdf','smetra-'+r.document.number+'.pdf',true);tab='documents';location.hash=tab;await window.render()});
+    const result=await api('/quotes');const root=openModal('Создать документ','Документ сохранит условия выбранной версии.',`<form>${select('quote_id','Смета',result.quotes.map(q=>[q.id,q.title]),quoteId)}<div class="form-grid">${select('kind','Вид',[['estimate','Смета'],['proposal','Предложение'],['invoice','Счёт'],['act','Акт'],['contract','Договор-шаблон'],['reference','Справка об оплате']],'estimate')}${select('template','Оформление',['Minimal','Classic','Business','Modern'],'Minimal')}</div>${formEnd('Сформировать PDF')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{if(!(await ensureEstimateConsent()))return;if(!(await confirmEstimateReview()))return;const r=await api('/documents',{method:'POST',body:JSON.stringify({...d,review_confirmed:true})});closeModal();await download('/documents/'+r.document.id+'/pdf','smetra-'+r.document.number+'.pdf',true);tab='documents';location.hash=tab;await window.render()});
   }
   async function download(path,filename,reviewAlreadyConfirmed=false){
     const isEstimatePdf=(/^\/documents\/[^/]+\/pdf$/.test(path)||/^\/construction\/objects\/[^/]+\/(?:report|act)\.pdf$/.test(path));
@@ -531,7 +531,8 @@ window.Workspace = (() => {
       if(!(await confirmEstimateReview()))return;
     }
     const headers={};if(sessionStorage.getItem('workspace_id'))headers['X-Workspace-Id']=sessionStorage.getItem('workspace_id');
-    const response=await fetch('/api'+path,{credentials:'same-origin',headers});
+    const guardedPath=isEstimatePdf?path+(path.includes('?')?'&':'?')+'review_confirmed=1':path;
+    const response=await fetch('/api'+guardedPath,{credentials:'same-origin',headers});
     if(!response.ok){const r=await response.json();throw Error(r.error||'Не удалось скачать файл')}
     const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)
   }
