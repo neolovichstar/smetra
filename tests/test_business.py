@@ -1103,6 +1103,16 @@ class BusinessFlows(unittest.TestCase):
             429,
         )
 
+    def test_empty_dashboard_quote_counters_are_zero(self):
+        token, _ = self.account("empty-quote-dashboard")
+
+        code, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(code, 200, dashboard)
+        self.assertEqual(
+            dashboard["overview"]["quotes"],
+            {"total": 0, "waiting": 0, "approved": 0},
+        )
+
     def test_expired_quotes_are_not_waiting_or_follow_up_actions(self):
         token, _ = self.account("expired-followup")
 
