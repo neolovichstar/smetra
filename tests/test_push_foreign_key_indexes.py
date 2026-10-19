@@ -7,7 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SQLITE_MIGRATION = ROOT / "backend" / "migrations" / "024_push_foreign_key_indexes.sql"
 POSTGRES_MIGRATION = (
-    ROOT / "supabase" / "migrations" / "20261019162437_push_foreign_key_indexes.sql"
+    ROOT / "supabase" / "migrations" / "20261019162801_push_foreign_key_indexes.sql"
 )
 
 EXPECTED_INDEXES = {
