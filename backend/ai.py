@@ -12,14 +12,13 @@ import zipfile
 
 # Monetary results must live in numeric unit_price fields, never in model prose.
 _CURRENCY_AMOUNT = re.compile(
-    r"\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?\\s*(?:₽|руб(?:ля|лей|ли|ль|лях)?\\.?|RUB|коп(?:еек|ейки|ейка|\\.?))(?![A-Za-zА-Яа-яЁё])",
+    r"\d[\d\s\u00a0]*(?:[.,]\d+)?\s*(?:₽|руб(?:ля|лей|ли|ль|лях)?\.?|RUB|коп(?:еек|ейки|ейка|\.?))(?![A-Za-zА-Яа-яЁё])",
     re.IGNORECASE,
 )
 _SUMMARY_AMOUNT = re.compile(
-    r"(?:\\bитого\\b|\\bобщая\\s+(?:сумма|стоимость)\\b|\\bк\\s+оплате\\b|\\bвсего\\s+(?:составит|выйдет|получится)\\b).{0,80}\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?",
+    r"(?:\bитого\b|\bобщая\s+(?:сумма|стоимость)\b|\bк\s+оплате\b|\bвсего\s+(?:составит|выйдет|получится)\b).{0,80}\d[\d\s\u00a0]*(?:[.,]\d+)?",
     re.IGNORECASE,
 )
-
 try:
     from backend.business import (
         DomainError,
