@@ -296,9 +296,19 @@ public class MainActivity extends Activity {
         EditText name=create?field("Как вас зовут",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS):null;
         EditText email=field("Электронная почта",33);email.setHint("you@company.ru");email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS);
         EditText password=field("Пароль",129);password.setHint("Введите пароль");password.setAutofillHints(create?"newPassword":View.AUTOFILL_HINT_PASSWORD);
+        CheckBox legalConsent=create?new CheckBox(this):null;
+        if(create){
+            legalConsent.setText("Я согласен с Пользовательским соглашением и Политикой отказа от ответственности (As Is)");
+            legalConsent.setTextSize(13);legalConsent.setTextColor(INK);content.addView(legalConsent);
+            TextView termsLink=ui.label("Прочитать условия использования AI",12,BLUE,true);content.addView(termsLink);
+            ui.tap(termsLink,()->openUrl(BuildConfig.API_BASE_URL+"/terms#ai-disclaimer"));
+        }
         ui.space(content,16);button(create?"Создать аккаунт":"Войти в пространство",true,v->{
             if(email.getText().toString().trim().isEmpty()){email.setError("Введите почту");return;}if(password.length()==0){password.setError("Введите пароль");return;}
-            try{JSONObject body=new JSONObject().put("email",email.getText().toString().trim()).put("password",password.getText().toString());if(create)body.put("name",name.getText().toString().trim());
+            if(create&&!legalConsent.isChecked()){message("Примите условия использования перед регистрацией");return;}
+            try{
+                JSONObject body=new JSONObject().put("email",email.getText().toString().trim()).put("password",password.getText().toString());
+                if(create)body.put("name",name.getText().toString().trim()).put("legal_acceptance",true).put("legal_version",LEGAL_CONSENT_VERSION);
                 call(create?"/auth/register":"/auth/login","POST",body,result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().clear().apply();}catch(Exception error){token=null;message("Не удалось защитить сессию на устройстве");return;}me=result.optJSONObject("user");if(create)Analytics.registration(me);else Analytics.login(me);afterLogin();});
             }catch(Exception error){message("Не удалось войти");}
         });
