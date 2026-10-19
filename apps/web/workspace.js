@@ -1,5 +1,8 @@
 /* Workspace UI. All persistent business actions go through the authenticated API. */
 window.Workspace = (() => {
+  const AI_ESTIMATE_DISCLAIMER = 'Расчет сгенерирован ИИ-ассистентом "сметра." и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.';
+  const LEGAL_VERSION = '2026-10-19';
+  let acceptedLegalUser = '', legalAcceptancePromise = null;
   const labels = {draft:'Черновик',sent:'Отправлена',viewed:'Просмотрена',changes_requested:'Нужны изменения',approved:'Согласована',rejected:'Отклонена',expired:'Истекла',planned:'Запланирован',in_progress:'В работе',waiting:'Ожидание',completed:'Завершён',cancelled:'Отменён',todo:'К выполнению',done:'Готово',person:'Физлицо',company:'Компания',low:'Низкий',normal:'Обычный',high:'Высокий',bank_transfer:'Перевод',cash:'Наличные',external:'Внешняя оплата',owner:'Владелец',admin:'Администратор',manager:'Менеджер',member:'Участник',viewer:'Наблюдатель'};
   const names = {clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
   const e = escapeHtml;
@@ -46,6 +49,49 @@ window.Workspace = (() => {
     modal.querySelector('[data-close]').onclick=closeModal;
     if(!modal.open)modal.showModal();document.body.classList.add('modal-open');
     return modal;
+  }
+  async function ensureLegalAcceptance(){
+    const owner=user?.id;
+    if(!owner)return false;
+    if(acceptedLegalUser===owner)return true;
+    if(legalAcceptancePromise)return legalAcceptancePromise;
+    legalAcceptancePromise=(async()=>{
+      const status=await api('/legal/acceptance');
+      if(status.accepted){acceptedLegalUser=owner;return true;}
+      return new Promise(resolve=>{
+        let settled=false;
+        const root=openModal('Согласие для работы со сметами','Перед первым использованием генератора нужно принять актуальные документы.',`<div class="legal-confirm-note">ИИ формирует только предварительный черновик. Количество, технологию и цену нужно проверить самостоятельно до отправки клиенту.</div><form id="legal-accept-form"><label class="legal-consent-check"><input id="legal-accept-checkbox" type="checkbox" required><span>Я согласен с <a href="/terms" target="_blank" rel="noopener">Пользовательским соглашением</a> и <a href="/terms#ai-disclaimer" target="_blank" rel="noopener">Политикой отказа от ответственности (As Is)</a>.</span></label><p class="form-error" role="alert"></p><div class="form-actions"><button class="btn primary" id="legal-accept-submit" type="submit" disabled>Принять и продолжить</button><button class="btn" id="legal-accept-cancel" type="button">Не сейчас</button></div></form>`);
+        const form=root.querySelector('#legal-accept-form'),checkbox=root.querySelector('#legal-accept-checkbox'),button=root.querySelector('#legal-accept-submit'),error=root.querySelector('[role="alert"]');
+        const finish=value=>{if(settled)return;settled=true;root.removeEventListener('close',onClose);if(root.open)closeModal();resolve(value)};
+        const onClose=()=>finish(false);
+        root.addEventListener('close',onClose);
+        root.querySelector('[data-close]').onclick=()=>finish(false);
+        root.querySelector('#legal-accept-cancel').onclick=()=>finish(false);
+        checkbox.onchange=()=>{button.disabled=!checkbox.checked};
+        form.onsubmit=async event=>{
+          event.preventDefault();
+          if(!checkbox.checked||button.disabled)return;
+          button.disabled=true;error.textContent='';
+          try{
+            await api('/legal/acceptance',{method:'POST',body:JSON.stringify({terms_accepted:true,disclaimer_accepted:true,terms_version:LEGAL_VERSION,disclaimer_version:LEGAL_VERSION,source:'web'})});
+            acceptedLegalUser=owner;finish(true);
+          }catch(err){error.textContent=err.message;button.disabled=false}
+        };
+      });
+    })();
+    try{return await legalAcceptancePromise}finally{legalAcceptancePromise=null}
+  }
+  function confirmEstimateReview(){
+    return new Promise(resolve=>{
+      let settled=false;
+      const root=openModal('Вы проверили объёмы и цены?','Подтвердите проверку перед отправкой клиенту или созданием PDF.',`<div class="legal-confirm-note">Проверьте каждую позицию, количество, единицу измерения, технологию выполнения и цену. Расчёт итогов выполняет приложение, а не ИИ.</div><div class="form-actions"><button class="btn primary" id="estimate-review-confirm" type="button">Да, всё верно</button><button class="btn" id="estimate-review-cancel" type="button">Отмена</button></div>`);
+      const finish=value=>{if(settled)return;settled=true;root.removeEventListener('close',onClose);if(root.open)closeModal();resolve(value)};
+      const onClose=()=>finish(false);
+      root.addEventListener('close',onClose);
+      root.querySelector('[data-close]').onclick=()=>finish(false);
+      root.querySelector('#estimate-review-confirm').onclick=()=>finish(true);
+      root.querySelector('#estimate-review-cancel').onclick=()=>finish(false);
+    });
   }
   async function submitForm(form,fn){
     form.onsubmit=async ev=>{ev.preventDefault();if(form.dataset.submitting==='true')return;form.dataset.submitting='true';const b=form.querySelector('[type=submit]');const error=form.querySelector('[role=alert]');if(b)b.disabled=true;if(error)error.textContent='';try{await fn(formObject(form));}catch(err){if(error)error.textContent=err.message;else notify(err.message)}finally{delete form.dataset.submitting;if(b?.isConnected)b.disabled=false}};
@@ -194,20 +240,21 @@ window.Workspace = (() => {
     const form=document.querySelector('#capture-form');if(!form)return;
     const input=form.querySelector('#capture-text'),status=form.querySelector('#capture-status');
     const attachment=form.querySelector('#capture-file');
+    ensureLegalAcceptance().then(accepted=>{if(!accepted&&status.isConnected)status.textContent='Чтобы начать смету, примите Пользовательское соглашение и Политику отказа от ответственности.'}).catch(err=>{if(status.isConnected)status.textContent=err.message});
     attachment?.addEventListener('change',()=>{
       status.textContent=attachment.files[0]?'Файл: '+attachment.files[0].name:'';
     });
     const key='smetra.capture.'+workspace.id;
     try{input.value=localStorage.getItem(key)||''}catch{}
     input.addEventListener('input',()=>{try{localStorage.setItem(key,input.value)}catch{}});
-    const manual=async()=>{const text=input.value.trim();if(!text){input.reportValidity();return}await editor({title:text.split(/\n|[.!?]/)[0].slice(0,120),description:text,client:'',items:[{name:'',quantity:'1',unit:'усл.',unit_price:0}]})};
+    const manual=async()=>{const text=input.value.trim();if(!text){input.reportValidity();return}if(!await ensureLegalAcceptance())return;await editor({title:text.split(/\n|[.!?]/)[0].slice(0,120),description:text,client:'',items:[{name:'',quantity:'1',unit:'усл.',unit_price:0}]})};
     form.querySelector('#capture-manual')?.addEventListener('click',()=>manual().catch(err=>{status.textContent=err.message}));
-    form.addEventListener('submit',async ev=>{ev.preventDefault();const button=form.querySelector('[type=submit]');if(!button||button.disabled)return;const text=input.value.trim(),file=form.querySelector('#capture-file')?.files[0];if(!text&&!file){input.focus();status.textContent='Вставьте запрос или выберите файл.';return}button.disabled=true;status.textContent='Составляем черновик…';try{const body={text};if(file){if(file.size>2_000_000)throw Error('Файл должен быть не больше 2 МБ');const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Не удалось прочитать файл'));reader.readAsDataURL(file)});body.file={name:file.name,mime:file.type||({pdf:'application/pdf',txt:'text/plain',md:'text/plain',csv:'text/csv',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}[file.name.split('.').pop().toLowerCase()]||''),content}}const result=await api('/ai/draft',{method:'POST',body:JSON.stringify(body)});await editor(result.draft);notify('Черновик готов. Проверьте позиции и цены.')}catch(err){status.textContent=err.message+' Текст сохранён здесь; можно повторить позже.'}finally{button.disabled=false}});
+    form.addEventListener('submit',async ev=>{ev.preventDefault();const button=form.querySelector('[type=submit]');if(!button||button.disabled)return;const text=input.value.trim(),file=form.querySelector('#capture-file')?.files[0];if(!text&&!file){input.focus();status.textContent='Вставьте запрос или выберите файл.';return}if(!await ensureLegalAcceptance())return;button.disabled=true;status.textContent='Составляем структурированный черновик…';try{const body={text};if(file){if(file.size>2_000_000)throw Error('Файл должен быть не больше 2 МБ');const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Не удалось прочитать файл'));reader.readAsDataURL(file)});body.file={name:file.name,mime:file.type||({pdf:'application/pdf',txt:'text/plain',md:'text/plain',csv:'text/csv',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}[file.name.split('.').pop().toLowerCase()]||''),content}}const result=await api('/ai/draft',{method:'POST',body:JSON.stringify(body)});await editor({...result.draft,ai_generated:true});notify('Черновик готов. Проверьте позиции и цены.')}catch(err){status.textContent=err.message+' Текст сохранён здесь; можно повторить позже.'}finally{button.disabled=false}});
   }
   async function action(b){
     const a=b.dataset.work,id=b.dataset.id;
     if(a==='navigate'){tab=id;location.hash=id;return window.render()}
-    if(a==='quote-new')return editor();
+    if(a==='quote-new'){if(!await ensureLegalAcceptance())return;return editor()}
     if(a==='task-toggle'){
       const item=window.Workspace.records?.find(row=>row.id===id);if(!item||!roleCanWrite())return;
       b.disabled=true;
@@ -229,7 +276,7 @@ window.Workspace = (() => {
       const q=document.querySelector('#workspace-search')?.value||'';const filters=kind==='catalog'?catalogQuery():'q='+encodeURIComponent(q);const result=await api('/'+kind+'?offset='+existing.length+'&'+filters);const next=result.quotes||result.items;existing.push(...next);document.querySelector('#records').innerHTML=kind==='quotes'?quoteRows(existing):kind==='leads'?kanban(existing):entityRows(kind,existing);if(next.length<(kind==='quotes'?30:50))b.disabled=true;return;
     }
     if(a==='document')return documentForm();
-    if(a==='download-document')return download('/documents/'+id+'/pdf','smetra-'+id+'.pdf');
+    if(a==='download-document'){if(!await ensureLegalAcceptance())return;if(!await confirmEstimateReview())return;return download('/documents/'+id+'/pdf','smetra-'+id+'.pdf')}
     if(a==='ask-document')return askAbout('documents',id,b.dataset.label||'Документ');
     if(a==='export')return download('/transfer/'+id+'?format=csv',id+'.csv');
     if(a==='import')return importForm(id);
@@ -247,8 +294,8 @@ window.Workspace = (() => {
     bind('quotes');document.querySelector('#ask-ai').onclick=()=>askAbout('quotes',id,q.title);document.querySelector('#quote-controls').onclick=async ev=>{const b=ev.target.closest('button');if(!b)return;ev.stopPropagation();b.disabled=true;try{
       if(b.dataset.work==='edit')return editor(q);
       if(b.dataset.work==='link'){await navigator.clipboard.writeText(q.public_url);notify('Ссылка скопирована');return}
-      if(b.dataset.work==='publish'&&q.published_version){await reviewQuote({publish:true});return}
-      if(b.dataset.work==='publish'){const root=openModal('Отправить новую версию','Клиент увидит зафиксированные позиции, стоимость и условия.',`<form>${field('comment','Что изменилось по сравнению с прошлой версией','','textarea')}${formEnd('Зафиксировать и отправить')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{await api('/quotes/'+id+'/publish',{method:'POST',body:JSON.stringify({revision:q.revision,comment:d.comment})});closeModal();await quoteDetail(id)});return}
+      if(b.dataset.work==='publish'&&q.published_version){if(!await ensureLegalAcceptance())return;await reviewQuote({publish:true});return}
+      if(b.dataset.work==='publish'){if(!await ensureLegalAcceptance())return;if(!await confirmEstimateReview())return;const root=openModal('Отправить новую версию','Клиент увидит зафиксированные позиции, стоимость и условия.',`<form>${field('comment','Что изменилось по сравнению с прошлой версией','','textarea')}${formEnd('Зафиксировать и отправить')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{await api('/quotes/'+id+'/publish',{method:'POST',body:JSON.stringify({revision:q.revision,comment:d.comment})});closeModal();await quoteDetail(id)});return}
       if(b.dataset.work==='project'){const r=await api('/quotes/'+id+'/project',{method:'POST'});return entityDetail('projects',r.project.id)}
       if(b.dataset.work==='copy'){const r=await api('/quotes/'+id+'/copy',{method:'POST'});return editor(r.quote)}
       if(b.dataset.work==='document')return documentForm(id);
@@ -257,6 +304,7 @@ window.Workspace = (() => {
   }
   function itemTable(items,currency='RUB'){return items?.length?`<div class="table-wrap"><table class="estimate-table"><thead><tr><th>Позиция</th><th>Количество</th><th>Цена</th><th>Сумма</th></tr></thead><tbody>${items.map(i=>`<tr class="${i.included?'':'excluded'}"><td><strong>${e(i.name)}</strong>${i.description?`<small>${e(i.description)}</small>`:''}${i.optional?'<small>Дополнительная позиция</small>':''}</td><td>${e(i.quantity)} ${e(i.unit)}</td><td>${money(i.unit_price,currency)}</td><td>${money(i.subtotal,currency)}${Number(i.tax)?`<small>Налог ${e(i.tax)}%</small>`:''}</td></tr>`).join('')}</tbody></table></div>`:''}
   async function editor(quote){
+    if(!await ensureLegalAcceptance())return;
     const active=pageRequest(true);
     if(window.SmetraLoadFeature)await window.SmetraLoadFeature('quoteEditor');
     if(!workspace)await init();
@@ -272,6 +320,7 @@ window.Workspace = (() => {
     const custom=await customControls('estimates',q.custom_fields);
     if(!active())return;
     view(mainTitle(q.id?'Редактирование сметы':'Новая смета','Черновик сохраняется автоматически. Отправьте клиенту, когда всё готово.',button('← К сметам','navigate','quotes'))+
+      (q.ai_generated?`<aside class="ai-estimate-disclaimer" role="note"><strong>Предварительный черновик ИИ</strong><p>${e(AI_ESTIMATE_DISCLAIMER)}</p></aside>`:'')+
       `<form id="estimate-editor"><div class="workspace-columns editor-layout"><section class="editor-main"><div class="panel editor-basics"><h3 class="editor-section-title">Данные сметы</h3><div class="form-grid">${field('title','Название',q.title||'','text','required maxlength="120"')}${select('currency','Валюта',[['RUB','Рубли · ₽'],['USD','Доллары · $'],['EUR','Евро · €'],['KZT','Тенге · ₸'],['BYN','Белорусские рубли'],['GBP','Фунты · £']],q.currency||workspace.currency)}${select('client_id','Клиент',[['','Новый клиент'],...clients.items.map(c=>[c.id,c.name])],q.client_id||'')}${field('client','Имя или компания',q.client||'','text','required maxlength="120"')}</div><details class="editor-description" ${q.description?'open':''}><summary>Описание сметы</summary>${field('description','Описание',q.description||'','textarea')}</details></div><section class="panel editor-positions"><div class="section-top"><h3 class="editor-section-title">Позиции</h3><div class="catalog-picker"><input id="catalog-search" type="search" aria-label="Найти расценку" placeholder="Найти расценку"><div class="row">${select('catalog','Добавить из расценок',catalogOptions(catalog.items))}</div></div></div><div class="editor-history"><div><button type="button" class="editor-tool" id="editor-undo" disabled aria-label="Отменить правку">↶ <span>Отменить</span></button><button type="button" class="editor-tool" id="editor-redo" disabled aria-label="Повторить правку">↷ <span>Повторить</span></button></div><span id="editor-save-state" role="status" aria-live="polite">Автосохранение включено</span></div><div class="editor-recovery" id="editor-recovery" hidden><span>Есть черновик с этого устройства</span><button type="button" id="editor-recover">Восстановить</button><button type="button" id="editor-discard">Удалить локальный</button></div><div class="editor-conflict" id="editor-conflict" hidden><p>Другая редакция сохранена на сервере. Ваши правки остались здесь.</p><button type="button" class="btn small" id="editor-reload">Открыть серверную</button><button type="button" class="btn small" id="editor-save-copy">Сохранить правки копией</button></div><button type="button" class="editor-tool" id="editor-retry" hidden>Повторить сохранение</button><div id="editor-rows"></div><details class="editor-bulk" id="editor-bulk"><summary>Изменить несколько позиций</summary><div class="editor-bulk-heading"><strong>Выбранные позиции</strong><span id="editor-bulk-count">Не выбраны</span><button class="editor-bulk-link" type="button" id="editor-bulk-all">Выбрать все</button></div><div class="editor-bulk-controls"><label>Поле<select id="editor-bulk-field"><option value="coefficient">Коэффициент цены</option><option value="markup">Наценка, %</option><option value="unit">Единица</option><option value="category">Категория</option></select></label><label>Новое значение<input id="editor-bulk-value" type="text" inputmode="decimal" maxlength="100" placeholder="Например, 1.15" autocomplete="off"></label><button class="btn small" type="button" id="editor-bulk-preview">Сравнить</button></div><div id="editor-bulk-diff" aria-live="polite"></div><button class="editor-bulk-link" type="button" id="editor-bulk-undo" hidden>Отменить последнюю правку</button></details><button type="button" class="btn small" id="add-row">+ Добавить позицию</button></section><details class="panel"><summary>Условия и сроки</summary>${field('terms','Условия',q.terms||'','textarea')}<div class="form-grid">${field('due_date','Срок выполнения',q.due_date||'','date')}${field('expiry','Предложение действительно до',q.expires_at?new Date(q.expires_at*1000).toISOString().slice(0,10):'','date')}</div></details></section><aside class="editor-aside"><section class="panel"><h3 class="editor-section-title">Итого по смете</h3><div class="editor-total" id="editor-total"></div><p class="muted">С учётом скидок и налогов</p><p class="form-error" role="alert"></p><button class="btn primary full-width" type="submit">Сохранить и закрыть</button><details class="editor-device"><summary>Черновик на устройстве</summary><button class="editor-tool" type="button" id="local-draft">Сохранить контрольную точку</button><button class="editor-tool" type="button" id="restore-draft">Восстановить контрольную точку</button><p class="note" id="draft-state" role="status"></p></details></section></aside></div></form>`);
     bind('quotes');const form=document.querySelector('#estimate-editor');window.SmetraSelects?.enhance(form);
     if(custom.html)form.querySelector('.editor-layout>section').insertAdjacentHTML('beforeend',`<details class="panel"><summary>Дополнительные поля</summary><div class="form-grid">${custom.html}</div></details>`);
@@ -423,7 +472,7 @@ window.Workspace = (() => {
     const active=pageRequest();
     const data=await api('/custom-fields');if(!active()||current!=='team')return;const section=document.createElement('section');section.className='panel';section.innerHTML=`<div class="section-top"><h3>Дополнительные поля</h3><button class="btn small" id="new-custom-field">+ Поле</button></div><p class="muted">Настройте клиентов, сметы и заказы под свой способ работы.</p>${data.items.map(f=>`<div class="record-line"><strong>${e(f.name)}</strong><small>${e({clients:'Клиенты',estimates:'Сметы',projects:'Заказы'}[f.entity_type])} · ${e(f.type)}</small></div>`).join('')}`;document.querySelector('#content').append(section);section.querySelector('button').onclick=()=>{const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});closeModal();await render('team')})};
   }
-  async function aiDraft(){const root=openModal('Из описания — в черновик','Текст будет отправлен AI-провайдеру. Проверьте позиции и цены перед сохранением.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}<p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor(r.draft)})}
+  async function aiDraft(){if(!await ensureLegalAcceptance())return;const root=openModal('Из описания — в черновик','Ассистент возвращает только структурированные позиции и ориентировочные цены за единицу. Математику выполняет код Сметры.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}<div class="ai-estimate-disclaimer" role="note"><strong>Предварительный черновик ИИ</strong><p>${e(AI_ESTIMATE_DISCLAIMER)}</p></div><p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{if(!await ensureLegalAcceptance())return;const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor({...r.draft,ai_generated:true})})}
   async function attachments(key,id){
     const active=pageRequest();
     const data=await api('/files?'+key+'='+encodeURIComponent(id));
@@ -471,6 +520,8 @@ window.Workspace = (() => {
     });
   }
   async function documentForm(quoteId=''){
+    if(!await ensureLegalAcceptance())return;
+    if(!await confirmEstimateReview())return;
     const result=await api('/quotes');const root=openModal('Создать документ','Документ сохранит условия выбранной версии.',`<form>${select('quote_id','Смета',result.quotes.map(q=>[q.id,q.title]),quoteId)}<div class="form-grid">${select('kind','Вид',[['estimate','Смета'],['proposal','Предложение'],['invoice','Счёт'],['act','Акт'],['contract','Договор-шаблон'],['reference','Справка об оплате']],'estimate')}${select('template','Оформление',['Minimal','Classic','Business','Modern'],'Minimal')}</div>${formEnd('Сформировать PDF')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/documents',{method:'POST',body:JSON.stringify(d)});closeModal();await download('/documents/'+r.document.id+'/pdf','smetra-'+r.document.number+'.pdf');tab='documents';location.hash=tab;await window.render()});
   }
   async function download(path,filename){const headers={};if(sessionStorage.getItem('workspace_id'))headers['X-Workspace-Id']=sessionStorage.getItem('workspace_id');const response=await fetch('/api'+path,{credentials:'same-origin',headers});if(!response.ok){const r=await response.json();throw Error(r.error||'Не удалось скачать файл')}const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
@@ -518,5 +569,5 @@ window.Workspace = (() => {
   document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'&&user){ev.preventDefault();palette()}});
   document.querySelector('#command-open')?.addEventListener('click',()=>{if(user)palette()});
   async function palette(){const root=openModal('Быстрый переход','Найдите клиента, смету, заказ или документ.',`<input id="command-search" type="search" placeholder="Поиск или действие…" aria-label="Глобальный поиск"><div id="command-results" class="command-results">${button('Создать смету','quote-new')}${Object.keys(names).slice(0,8).map(k=>button(names[k],'navigate',k)).join('')}</div>`);let timer;root.querySelector('input').focus();root.querySelector('input').oninput=ev=>{clearTimeout(timer);const q=ev.target.value;timer=setTimeout(async()=>{try{const r=await api('/search?q='+encodeURIComponent(q));if(!root.isConnected||root.querySelector('input')?.value!==q)return;root.querySelector('#command-results').innerHTML=r.items.map(i=>`<button class="command-result" data-work="${e(i.kind==='quotes'?'quote':'navigate')}" data-id="${e(i.kind==='quotes'?i.id:i.kind)}"><span>${e(i.name)}</span><small>${e(names[i.kind]||'Смета')}</small></button>`).join('')||'<p class="muted">Ничего не найдено</p>'}catch(err){notify(err.message)}},180)};root.querySelector('#command-results').onclick=async ev=>{const b=ev.target.closest('[data-work]');if(b){closeModal();await action(b)}}}
-  return {render,editor,calculateLineTotal,majorToKopecks:amount,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,reset:()=>{workspace=null;current=null;workspaces=[];generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
+  return {render,editor,calculateLineTotal,majorToKopecks:amount,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,confirmEstimateReview,ensureLegalAcceptance,reset:()=>{acceptedLegalUser='';legalAcceptancePromise=null;workspace=null;current=null;workspaces=[];generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
 })();

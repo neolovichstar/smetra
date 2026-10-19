@@ -120,3 +120,14 @@ html{background:#000;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-
 .auth-flow h1{font-size:clamp(30px,3vw,36px)}
 @media(max-width:1000px){.black-hero h1{font-size:clamp(48px,6vw,64px)}}
 @media(max-width:700px){.black-hero h1{font-size:clamp(41px,10vw,58px)}.black-hero p{font-size:14px}.section-heading h2{font-size:clamp(30px,8vw,43px)}}
+
+/* Fixed AI estimate caveat and explicit consent controls. */
+.ai-estimate-disclaimer{margin:16px 0;padding:16px 18px;border:1px solid #776b48;border-left:3px solid #d4b66c;border-radius:10px;background:#17150f;color:#e8dfc5;font-size:12px;line-height:1.75}
+.ai-estimate-disclaimer strong{display:block;margin-bottom:5px;color:#f5d98d;font-size:12px}
+.ai-estimate-disclaimer p{margin:0}
+.auth-consent{display:flex;align-items:flex-start;gap:10px;margin:12px 0 16px;padding:13px;border:1px solid #38383f;border-radius:10px;font-size:11px;line-height:1.7;color:#c6c6ce}
+.auth-consent input{margin-top:4px;flex:none;accent-color:#82b1ff}
+.auth-consent a{text-decoration:underline;text-underline-offset:3px}
+.workspace-dialog .legal-consent-check{display:flex;align-items:flex-start;gap:10px;padding:14px;border:1px solid #44434a;border-radius:10px;line-height:1.7}
+.workspace-dialog .legal-consent-check input{flex:none;margin-top:5px;accent-color:#82b1ff}
+.workspace-dialog .legal-confirm-note{padding:14px 16px;background:#17150f;border-left:3px solid #d4b66c;border-radius:8px;font-size:12px;line-height:1.75}
