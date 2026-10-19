@@ -651,11 +651,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "accepted": True,
                 "version": LEGAL_CONSENT_VERSION,
             })
-        if (
+        starts_ai_operation = method == "POST" and (
             path == "/api/ai/draft"
-            or path == "/api/assistant"
-            or path.startswith("/api/assistant/")
-        ):
+            or path in (
+                "/api/assistant",
+                "/api/assistant/chat",
+                "/api/assistant/stream",
+                "/api/assistant/jobs",
+            )
+        )
+        if starts_ai_operation:
             user = self.auth(con)
             accepted = con.execute(
                 "SELECT 1 FROM legal_acceptances WHERE user_id=? AND document_version=? LIMIT 1",
