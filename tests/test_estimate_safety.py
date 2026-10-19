@@ -187,5 +187,40 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertIn("черновик", result["error"].lower())
 
 
+    def test_model_cannot_hide_a_final_sum_inside_narrative_text(self):
+        token, _ = self.account("draft-narrative-total")
+        model_result = {
+            "title": "Ремонт ванной",
+            "client": "",
+            "description": "Итого ремонт ванной обойдётся в 150 000 рублей.",
+            "terms": "",
+            "items": [{
+                "name": "Укладка плитки",
+                "description": "Укладка напольной плитки",
+                "quantity": "12",
+                "unit": "м²",
+                "unit_price": 350000,
+                "requires_measurement": False,
+            }],
+        }
+        wire = {
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": json.dumps(model_result, ensure_ascii=False)},
+            }],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 20},
+        }
+        with (
+            patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
+            patch("backend.redis_infra.acquire_lock", return_value=_Lease()),
+            patch("backend.ai.urllib.request.urlopen", return_value=_Response(wire)),
+        ):
+            status, result = self.call(
+                "/ai/draft", "POST", {"text": "Ремонт ванной"}, token
+            )
+        self.assertEqual(status, 502, result)
+        self.assertIn("черновик", result["error"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()
