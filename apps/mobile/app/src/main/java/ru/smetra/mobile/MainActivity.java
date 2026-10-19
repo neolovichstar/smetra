@@ -183,7 +183,10 @@ public class MainActivity extends Activity {
         panel.addView(consent);
         ui.space(panel,6);
         TextView terms=ui.label("Открыть Пользовательское соглашение",12,BLUE,true);
-        panel.addView(terms);ui.tap(terms,()->openUrl(BuildConfig.API_BASE_URL+"/terms#ai-disclaimer"));
+        panel.addView(terms);ui.tap(terms,()->openUrl(BuildConfig.API_BASE_URL+"/terms"));
+        ui.space(panel,8);
+        TextView disclaimer=ui.label("Политика отказа от ответственности (As Is)",12,BLUE,true);
+        panel.addView(disclaimer);ui.tap(disclaimer,()->openUrl(BuildConfig.API_BASE_URL+"/disclaimer"));
         AlertDialog dialog=new AlertDialog.Builder(this)
             .setTitle("Перед использованием AI")
             .setView(panel)
@@ -301,8 +304,11 @@ public class MainActivity extends Activity {
         if(create){
             legalConsent.setText("Я согласен с Пользовательским соглашением и Политикой отказа от ответственности (As Is)");
             legalConsent.setTextSize(13);legalConsent.setTextColor(INK);content.addView(legalConsent);
-            TextView termsLink=ui.label("Прочитать условия использования AI",12,BLUE,true);content.addView(termsLink);
-            ui.tap(termsLink,()->openUrl(BuildConfig.API_BASE_URL+"/terms#ai-disclaimer"));
+            TextView termsLink=ui.label("Открыть Пользовательское соглашение",12,BLUE,true);content.addView(termsLink);
+            ui.tap(termsLink,()->openUrl(BuildConfig.API_BASE_URL+"/terms"));
+            ui.space(content,6);
+            TextView disclaimerLink=ui.label("Политика отказа от ответственности (As Is)",12,BLUE,true);content.addView(disclaimerLink);
+            ui.tap(disclaimerLink,()->openUrl(BuildConfig.API_BASE_URL+"/disclaimer"));
         }
         ui.space(content,16);button(create?"Создать аккаунт":"Войти в пространство",true,v->{
             if(email.getText().toString().trim().isEmpty()){email.setError("Введите почту");return;}if(password.length()==0){password.setError("Введите пароль");return;}
