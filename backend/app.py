@@ -184,6 +184,10 @@ def event(con, user_id, name):
 
 
 def user_view(user, con):
+    try:
+        from backend.legal import has_current_terms
+    except ModuleNotFoundError:
+        from legal import has_current_terms
     expiry = user["entitlement_until"] or 0
     return {
         "id": user["id"],
@@ -193,7 +197,7 @@ def user_view(user, con):
         "plan": user["plan"] if expiry > now() else "free",
         "entitlement_until": expiry,
         "email_verified": user["email_verified_at"] is not None,
-        "estimate_terms_accepted": __import__("backend.legal", fromlist=["has_current_terms"]).has_current_terms(user),
+        "estimate_terms_accepted": has_current_terms(user),
         "quote_count": con.execute(
             "SELECT count(*) FROM quotes WHERE user_id=?", (user["id"],)
         ).fetchone()[0],
@@ -677,6 +681,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             name = str(data.get("name", "")).strip()
             from backend.legal import TERMS_VERSION
             terms_accepted = data.get("terms_accepted") is True and data.get("terms_version") == TERMS_VERSION
+            if not terms_accepted:
+                raise ApiError(400, "Перед регистрацией примите Пользовательское соглашение и Политику отказа от ответственности (As Is)")
             if (
                 "@" not in email
                 or len(email) > 254
