@@ -37,6 +37,7 @@ _LOCK = threading.RLock()
 RATE = {}
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
 LEGAL_CONSENT_VERSION = "2026-10-19-ai-estimate-v1"
+REGISTRATION_CONSENT_VERSION = "2026-10-19-registration-v1"
 
 
 def yookassa_mode(user=None):
@@ -696,7 +697,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             data = self.body()
             if (
                 data.get("legal_acceptance") is not True
-                or data.get("legal_version") != LEGAL_CONSENT_VERSION
+                or data.get("legal_version") != REGISTRATION_CONSENT_VERSION
             ):
                 raise ApiError(
                     400,
@@ -738,7 +739,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute(
                     "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
                     "VALUES(?,?,?,?,?)",
-                    (uid(), user_id, LEGAL_CONSENT_VERSION, now(), "registration"),
+                    (uid(), user_id, REGISTRATION_CONSENT_VERSION, now(), "registration"),
                 )
                 event(con, user_id, "signup_completed")
                 revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
