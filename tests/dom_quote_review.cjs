@@ -9,6 +9,8 @@ function setup(){
  w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};
  const load=source=>{const script=doc.createElement('script');script.textContent=source;doc.head.append(script)};
  load(fs.readFileSync('apps/web/app.js','utf8').split("if($('#auth')){")[0]);w.eval("user={id:'qa'};tab='quotes'");
+  // The dedicated review-flow suite stubs the independent human-review dialog.
+  w.SmetraEstimateSafety.confirmReview=async()=>true;
  const notices=[],opened=[];w.notify=text=>notices.push(text);w.Workspace={openQuote:async id=>{opened.push(id);w.view('Quote')}};
  w.api=async()=>result();load(fs.readFileSync('apps/web/quote-review.js','utf8'));
  return {dom,w,doc,notices,opened,close:()=>dom.window.close()};
