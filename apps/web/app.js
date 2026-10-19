@@ -22,9 +22,15 @@ async function api(path, options = {}) {
     const slow=method!=='GET'&&/^\/(assistant|ai|files)(\/|$)/.test(path);
     const timer=controller?setTimeout(()=>controller.abort(),slow?120000:30000):null;
     try{
-      const response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
+      let response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
       let result;
       try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
+      if(response.status===428&&(path==='/ai/draft'||path==='/assistant'||path.startsWith('/assistant/'))&&window.SmetraEstimateSafety){
+        if(await window.SmetraEstimateSafety.ensureConsent()){
+          response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
+          try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
+        }
+      }
       if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
       return result;
     }catch(error){
@@ -37,6 +43,55 @@ async function api(path, options = {}) {
   try{return await request}finally{if(apiRequests.get(key)===request)apiRequests.delete(key)}
 }
 function notify(message) { const el=$('#toast'); if(!el){alert(message);return;} el.textContent=message;el.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.add('hidden'),4500); }
+const LEGAL_CONSENT_VERSION='2026-10-19-ai-estimate-v1';
+const AI_ESTIMATE_DISCLAIMER='Расчет сгенерирован ИИ-ассистентом "сметра." и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.';
+window.SmetraEstimateSafety=(()=>{
+  let consentPromise=null;
+  const bannerHtml=()=>'<aside class="estimate-ai-warning" role="note"><strong>Предварительный расчёт</strong><p>'+escapeHtml(AI_ESTIMATE_DISCLAIMER)+'</p></aside>';
+  const ensureConsent=()=>{
+    if(consentPromise)return consentPromise;
+    consentPromise=(async()=>{
+      const current=await api('/me/legal-consent');
+      if(current.accepted&&current.version===LEGAL_CONSENT_VERSION)return true;
+      return new Promise(resolve=>{
+        const dialog=document.createElement('dialog');
+        dialog.className='estimate-safety-dialog';
+        dialog.setAttribute('aria-labelledby','estimate-consent-title');
+        dialog.innerHTML='<div class="estimate-safety-heading"><span class="overline">СМЕТРА / УСЛОВИЯ</span><h2 id="estimate-consent-title">Перед использованием AI</h2><p>AI создаёт только предварительные черновики. Объёмы, технология и цены требуют проверки.</p></div><label class="estimate-consent-check"><input type="checkbox" id="estimate-consent-check"><span>Я согласен с <a href="/terms#ai-disclaimer" target="_blank" rel="noopener noreferrer">Пользовательским соглашением и Политикой отказа от ответственности (As Is)</a> и понимаю, что результат AI нужно проверить.</span></label><div class="estimate-safety-actions"><button type="button" class="btn" data-consent-cancel>Не сейчас</button><button type="button" class="btn primary" data-consent-accept disabled>Принять и продолжить</button></div><p class="form-error" role="alert" data-consent-error></p>';
+        let settled=false;
+        const finish=value=>{if(settled)return;settled=true;if(dialog.open)dialog.close();dialog.remove();resolve(value)};
+        const checkbox=dialog.querySelector('#estimate-consent-check'),accept=dialog.querySelector('[data-consent-accept]');
+        checkbox.addEventListener('change',()=>{accept.disabled=!checkbox.checked});
+        dialog.querySelector('[data-consent-cancel]').addEventListener('click',()=>finish(false));
+        dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false)});
+        accept.addEventListener('click',async()=>{
+          if(!checkbox.checked||accept.disabled)return;
+          accept.disabled=true;dialog.querySelector('[data-consent-error]').textContent='';
+          try{
+            const saved=await api('/me/legal-consent',{method:'POST',body:JSON.stringify({accepted:true,version:LEGAL_CONSENT_VERSION})});
+            finish(saved.accepted===true&&saved.version===LEGAL_CONSENT_VERSION);
+          }catch(error){dialog.querySelector('[data-consent-error]').textContent=error.message;accept.disabled=!checkbox.checked}
+        });
+        document.body.append(dialog);dialog.showModal();checkbox.focus();
+      });
+    })();
+    return consentPromise.finally(()=>{consentPromise=null});
+  };
+  const confirmReview=()=>new Promise(resolve=>{
+    const dialog=document.createElement('dialog');
+    dialog.className='estimate-safety-dialog estimate-review-dialog';
+    dialog.setAttribute('aria-labelledby','estimate-review-title');
+    dialog.innerHTML='<div class="estimate-safety-heading"><span class="overline">ПРОВЕРКА СМЕТЫ</span><h2 id="estimate-review-title">Вы проверили объёмы и цены?</h2><p>Перед экспортом PDF или отправкой клиенту убедитесь, что позиции, единицы, технология и цены соответствуют объекту.</p></div>'+bannerHtml()+'<div class="estimate-safety-actions"><button type="button" class="btn" data-review-cancel>Вернуться к проверке</button><button type="button" class="btn primary" data-review-confirm>Да, всё верно</button></div>';
+    let settled=false;
+    const finish=value=>{if(settled)return;settled=true;if(dialog.open)dialog.close();dialog.remove();resolve(value)};
+    dialog.querySelector('[data-review-cancel]').addEventListener('click',()=>finish(false));
+    dialog.querySelector('[data-review-confirm]').addEventListener('click',()=>finish(true));
+    dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false)});
+    document.body.append(dialog);dialog.showModal();dialog.querySelector('[data-review-cancel]').focus();
+  });
+  return {version:LEGAL_CONSENT_VERSION,disclaimer:AI_ESTIMATE_DISCLAIMER,bannerHtml,ensureConsent,confirmReview};
+})();
+
 function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';button.innerHTML='<img class="icon" src="/assets/icons/'+(dark?'sun':'moon')+'.svg" alt="">'+(id==='theme-alt'?label:'');button.setAttribute('aria-label',label);button.title=label;} }
 function theme() { const dark=document.body.classList.toggle('dark');document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('smetra_theme',dark?'dark':'light');}catch{} syncThemeLabel(); }
 let savedTheme;try{savedTheme=localStorage.getItem('smetra_theme');}catch{}
@@ -117,7 +172,7 @@ function showNewQuote(){
   $('#cancel-new').onclick=render;
   $('#quote-form').onsubmit=async(e)=>{e.preventDefault();const amount=Math.round(Number($('#amount').value)*100);if(!Number.isSafeInteger(amount)){notify('Некорректная сумма');return;}try{await api('/quotes',{method:'POST',body:JSON.stringify({title:$('#title').value,client:$('#client').value,description:$('#description').value,amount})});user.quote_count++;tab='quotes';render();notify('Черновик создан')}catch(err){notify(err.message)}};
 }
-async function quoteAction(e){const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;try{if(action==='copy'){await navigator.clipboard.writeText(b.dataset.url);notify('Ссылка скопирована');return;}if(action==='remove'){if(!confirm('Удалить предложение?'))return;await api('/quotes/'+b.dataset.id,{method:'DELETE'});user.quote_count--;}else{const status={send:'sent',decline:'declined',complete:'completed'}[action];const result=await api('/quotes/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status})});if(action==='send'){try{await navigator.clipboard.writeText(result.quote.public_url);notify('Отправлено. Ссылка скопирована')}catch{notify('Отправлено. Ссылка: '+result.quote.public_url)}}}await render()}catch(err){notify(err.message)}}
+async function quoteAction(e){const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;try{if(action==='send'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;if(action==='copy'){await navigator.clipboard.writeText(b.dataset.url);notify('Ссылка скопирована');return;}if(action==='remove'){if(!confirm('Удалить предложение?'))return;await api('/quotes/'+b.dataset.id,{method:'DELETE'});user.quote_count--;}else{const status={send:'sent',decline:'declined',complete:'completed'}[action];const result=await api('/quotes/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status})});if(action==='send'){try{await navigator.clipboard.writeText(result.quote.public_url);notify('Отправлено. Ссылка скопирована')}catch{notify('Отправлено. Ссылка: '+result.quote.public_url)}}}await render()}catch(err){notify(err.message)}}
 if($('#auth')){
   const syncEmailActions=()=>{
     if(new URLSearchParams(location.search).has('reset')){$('#forgot').classList.add('hidden');$('#name').required=false;return;}
@@ -126,14 +181,18 @@ if($('#auth')){
     $('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);
     $('#email-disclosure').classList.toggle('hidden',providerOnly);
     $('#name').required=registering&&!providerOnly;
+    $('#legal-consent-field').classList.toggle('hidden',!registering||providerOnly);
+    $('#legal-consent').required=registering&&!providerOnly;
+    $('#auth-submit').disabled=registering&&!providerOnly&&!$('#legal-consent').checked;
     if(providerOnly)$('#auth-copy').textContent='Создайте аккаунт через доступный сервис ниже. Один профиль для сайта и приложения.';
   };
+  $('#legal-consent').addEventListener('change',syncEmailActions);
   document.addEventListener('smetra:email-capability',syncEmailActions);syncEmailActions();
-  const setAuthMode=(mode)=>{registering=mode==='register';$('#auth-title').textContent=registering?'Ваша работа начинается здесь.':'С возвращением.';$('#auth-copy').textContent=registering?'Создайте пространство для смет, клиентов и заказов. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';$('#auth-submit').innerHTML=registering?'Создать пространство <span aria-hidden="true">↗</span>':'Войти в пространство <span aria-hidden="true">↗</span>';$('#name-field').classList.toggle('hidden',!registering);$('#name').required=registering;$('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);$('#password').value='';$('#password').autocomplete=registering?'new-password':'current-password';$('#auth-login-tab').setAttribute('aria-selected',String(!registering));$('#auth-register-tab').setAttribute('aria-selected',String(registering));$('#auth-login-tab').tabIndex=registering?-1:0;$('#auth-register-tab').tabIndex=registering?0:-1;$('#auth-form-error').textContent='';$('#email-disclosure').open=true};
+  const setAuthMode=(mode)=>{registering=mode==='register';$('#legal-consent').checked=false;$('#legal-consent').required=registering;$('#legal-consent-field').classList.toggle('hidden',!registering);$('#auth-submit').disabled=registering;$('#auth-title').textContent=registering?'Ваша работа начинается здесь.':'С возвращением.';$('#auth-copy').textContent=registering?'Создайте пространство для смет, клиентов и заказов. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';$('#auth-submit').innerHTML=registering?'Создать пространство <span aria-hidden="true">↗</span>':'Войти в пространство <span aria-hidden="true">↗</span>';$('#name-field').classList.toggle('hidden',!registering);$('#name').required=registering;$('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);$('#password').value='';$('#password').autocomplete=registering?'new-password':'current-password';$('#auth-login-tab').setAttribute('aria-selected',String(!registering));$('#auth-register-tab').setAttribute('aria-selected',String(registering));$('#auth-login-tab').tabIndex=registering?-1:0;$('#auth-register-tab').tabIndex=registering?0:-1;$('#auth-form-error').textContent='';$('#email-disclosure').open=true};
   $('#auth-login-tab').onclick=()=>{setAuthMode('login');syncEmailActions()};
   $('#auth-register-tab').onclick=()=>{setAuthMode('register');syncEmailActions()};
   $('.auth-tabs').onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const mode=event.key==='Home'?'login':event.key==='End'?'register':registering?'login':'register';setAuthMode(mode);syncEmailActions();$(mode==='login'?'#auth-login-tab':'#auth-register-tab').focus()};
-  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim()})});if(attempt!==authRevision)return;user=result.user;sessionStorage.removeItem('workspace_id');window.Workspace?.reset();await showApp()}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
+  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;if(registering&&!$('#legal-consent').checked){$('#auth-form-error').textContent='Примите условия и предупреждение перед регистрацией.';return}const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim(),...(registering?{legal_acceptance:$('#legal-consent').checked,legal_version:LEGAL_CONSENT_VERSION}:{})})});if(attempt!==authRevision)return;user=result.user;sessionStorage.removeItem('workspace_id');window.Workspace?.reset();await showApp()}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
    document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();return renderNavigation()});
