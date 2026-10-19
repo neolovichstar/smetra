@@ -33,10 +33,10 @@ def report(service, obj, snapshot):
     if 'Smetra' not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont('Smetra', str(font)))
     body = ParagraphStyle('ReportBody', fontName='Smetra', fontSize=9, leading=14,
-                          textColor=colors.HexColor('#2f3946'))
+                          textColor=colors.HexColor('#303030'))
     small = ParagraphStyle('ReportSmall', parent=body, fontSize=7.5, leading=11)
     title = ParagraphStyle('ReportTitle', parent=body, fontSize=23, leading=31,
-                           textColor=colors.HexColor('#17293c'))
+                           textColor=colors.HexColor('#222222'))
 
     def text(value, style=body):
         return Paragraph(escape(str(value or '')), style)
@@ -78,9 +78,9 @@ def report(service, obj, snapshot):
     if len(rows) == 1:
         rows.append([text('Фактические объёмы ещё не записаны', small), text('—', small), text('—', small)])
     table = Table(rows, colWidths=[270, 110, 127], repeatRows=1, hAlign='LEFT')
-    table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e9eef4')),
+    table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eeeeee')),
                                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                               ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dce3ec')),
+                               ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dddddd')),
                                ('TOPPADDING', (0, 0), (-1, -1), 8),
                                ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
     story += [table, Spacer(1, 22), text('Материалы', title), Spacer(1, 8)]
@@ -91,9 +91,9 @@ def report(service, obj, snapshot):
                                   text(item['required_quantity'] + ' ' + item['unit'], small),
                                   text(item['received_quantity'] + ' ' + item['unit'], small)])
         materials = Table(material_rows, colWidths=[270, 110, 127], repeatRows=1, hAlign='LEFT')
-        materials.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e9eef4')),
+        materials.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eeeeee')),
                                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                                       ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dce3ec')),
+                                       ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dddddd')),
                                        ('TOPPADDING', (0, 0), (-1, -1), 8),
                                        ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
         story.append(materials)
