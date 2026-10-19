@@ -339,7 +339,7 @@ class BusinessFlows(unittest.TestCase):
         self.assertNotIn('20 м²', first)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '4'}, owner)[0], 201)
-        status, unchanged = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        status, unchanged = self.call('/documents/' + document_id + '/pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         self.assertEqual(first, PdfReader(io.BytesIO(unchanged)).pages[0].extract_text())
 
