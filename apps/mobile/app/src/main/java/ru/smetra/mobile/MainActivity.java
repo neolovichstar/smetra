@@ -1198,11 +1198,14 @@ public class MainActivity extends Activity {
             }
             if(!object.optString("quote_id").isEmpty())button("Открыть смету",true,v->call("/quotes/"+object.optString("quote_id"),"GET",null,answer->openQuote(answer.optJSONObject("quote"))));
             boolean hasFact=false;if(quantities!=null)for(int i=0;i<quantities.length();i++){JSONObject row=quantities.optJSONObject(i);if(row!=null&&row.optDouble("actual_quantity")>0){hasFact=true;break;}}
-            if(hasFact)addButton(content,"Сформировать акт по факту",false,v->ui.sheet("Сформировать черновик акта?","В него попадут только записанные фактические объёмы. Поздние правки не изменят документ.","Сформировать",false,()->call("/construction/objects/"+id+"/act","POST",new JSONObject(),answer->{JSONObject document=answer.optJSONObject("document");if(document==null)return;pendingPdfDocument=document.optString("id");Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-akt-"+document.optInt("number")+".pdf");startActivityForResult(save,304);})));
-            addButton(content,"Скачать отчёт по объекту",false,v->{pendingPdfDocument="report:"+id;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-report.pdf");startActivityForResult(save,304);});
+            if(hasFact)addButton(content,"Сформировать акт по факту",false,v->requireEstimateConsent(()->confirmEstimateReview(()->ui.sheet("Сформировать черновик акта?","В него попадут только записанные фактические объёмы. Поздние правки не изменят документ.","Сформировать",false,()->call("/construction/objects/"+id+"/act","POST",new JSONObject(),answer->{JSONObject document=answer.optJSONObject("document");if(document==null)return;pendingPdfDocument=document.optString("id");Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-akt-"+document.optInt("number")+".pdf");startActivityForResult(save,304);})))));
+            addButton(content,"Скачать отчёт по объекту",false,v->requireEstimateConsent(()->confirmEstimateReview(()->{pendingPdfDocument="report:"+id;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-report.pdf");startActivityForResult(save,304);})));
         });
     }
     private void saveAssistantPdf(String documentId){
+        requireEstimateConsent(()->confirmEstimateReview(()->saveAssistantPdfConfirmed(documentId)));
+    }
+    private void saveAssistantPdfConfirmed(String documentId){
         pendingPdfDocument=documentId;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,documentId.startsWith("assistant:")?"smetra-preview.pdf":"smetra-document.pdf");startActivityForResult(save,304);
     }
     private void workspaceFiles(){
@@ -1261,7 +1264,7 @@ public class MainActivity extends Activity {
         if(resultCode!=RESULT_OK||data==null||data.getData()==null||documentId==null)return;
         final android.net.Uri uri=data.getData();message("Сохраняем PDF…");
         sessionWork.execute(()->{HttpURLConnection connection=null;try{
-            String path=documentId.startsWith("file:")?"/api/files/"+documentId.substring(5):documentId.startsWith("assistant:")?"/api/assistant/actions/"+documentId.substring(10)+"/preview.pdf":documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf":"/api/documents/"+documentId+"/pdf";
+            String path=documentId.startsWith("file:")?"/api/files/"+documentId.substring(5):documentId.startsWith("assistant:")?"/api/assistant/actions/"+documentId.substring(10)+"/preview.pdf":documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf?review_confirmed=1":"/api/documents/"+documentId+"/pdf?review_confirmed=1";
             connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+path).openConnection();
             connection.setConnectTimeout(10000);connection.setReadTimeout(30000);
             connection.setRequestProperty("Authorization","Bearer "+sessionWork.tokenForRequest(token));
