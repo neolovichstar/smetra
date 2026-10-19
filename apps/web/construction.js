@@ -257,9 +257,12 @@
   }
   async function downloadFactAct(){
     const button=document.querySelector('#construction-act');button.disabled=true;
-    try{const result=await api(`/construction/objects/${selected}/act`,{method:'POST',body:'{}'});
+    try{
+      if(window.Workspace?.ensureEstimateConsent&&!(await window.Workspace.ensureEstimateConsent()))return;
+      if(window.Workspace?.confirmEstimateReview&&!(await window.Workspace.confirmEstimateReview()))return;
+      const result=await api(`/construction/objects/${selected}/act`,{method:'POST',body:'{}'});
       const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;
-      const response=await fetch('/api/documents/'+encodeURIComponent(result.document.id)+'/pdf',{credentials:'same-origin',headers});
+      const response=await fetch('/api/documents/'+encodeURIComponent(result.document.id)+'/pdf?review_confirmed=1',{credentials:'same-origin',headers});
       if(!response.ok)throw Error((await response.json()).error||'Не удалось скачать акт');
       const url=URL.createObjectURL(await response.blob()),anchor=document.createElement('a');anchor.href=url;anchor.download='smetra-akt-'+result.document.number+'.pdf';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
       notify('Черновик акта сохранён в документах');
@@ -267,8 +270,11 @@
   }
   async function downloadReport(){
     const button=document.querySelector('#construction-report');button.disabled=true;
-    try{const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;
-      const response=await fetch('/api/construction/objects/'+encodeURIComponent(selected)+'/report.pdf',{credentials:'same-origin',headers});
+    try{
+      if(window.Workspace?.ensureEstimateConsent&&!(await window.Workspace.ensureEstimateConsent()))return;
+      if(window.Workspace?.confirmEstimateReview&&!(await window.Workspace.confirmEstimateReview()))return;
+      const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;
+      const response=await fetch('/api/construction/objects/'+encodeURIComponent(selected)+'/report.pdf?review_confirmed=1',{credentials:'same-origin',headers});
       if(!response.ok)throw Error((await response.json()).error||'Не удалось сформировать отчёт');
       const url=URL.createObjectURL(await response.blob()),anchor=document.createElement('a');anchor.href=url;anchor.download='smetra-report.pdf';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
     }catch(error){notify(error.message)}finally{button.disabled=false}
