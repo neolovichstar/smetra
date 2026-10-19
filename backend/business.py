@@ -27,6 +27,28 @@ class DomainError(Exception):
         self.status, self.message = status, message
 
 
+TERMS_VERSION = "2026-10-19"
+
+
+def has_legal_acceptance(user):
+    """Return whether the account accepted the current terms version."""
+    try:
+        return (
+            user["terms_accepted_at"] is not None
+            and user["terms_version"] == TERMS_VERSION
+        )
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
+def require_legal_acceptance(user):
+    if not has_legal_acceptance(user):
+        raise DomainError(
+            428,
+            "Сначала примите Пользовательское соглашение и условия ответственности (As Is).",
+        )
+
+
 def stamp():
     return int(time.time())
 
@@ -331,6 +353,7 @@ def migrate(con):
         "approved_by": "TEXT NOT NULL DEFAULT ''",
         "custom_fields": "TEXT NOT NULL DEFAULT '{}'",
         "itemized": "INTEGER NOT NULL DEFAULT 0",
+        "ai_generated": "INTEGER NOT NULL DEFAULT 0 CHECK(ai_generated IN (0,1))",
     }
     existing = {r["name"] for r in con.execute("PRAGMA table_info(quotes)")}
     with transaction(con):
@@ -423,6 +446,17 @@ def migrate(con):
     )
     con.executescript(
         (Path(__file__).parent / "migrations" / "023_query_performance_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    # Keep every new migration in the local/self-hosted path as well.
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "024_push_foreign_key_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "025_ai_estimate_legal_safety.sql").read_text(
             encoding="utf-8"
         )
     )
@@ -616,6 +650,7 @@ class Service:
                 "created_at",
                 "updated_at",
                 "itemized",
+                "ai_generated",
                 "view_count",
                 "first_viewed_at",
                 "sent_at",
@@ -667,6 +702,12 @@ class Service:
             ("RUB", "USD", "EUR", "KZT", "BYN", "GBP"),
             "Валюта",
         )
+        ai_generated = data.get(
+            "ai_generated", old["ai_generated"] if old else False
+        )
+        if type(ai_generated) not in (bool, int) or ai_generated not in (0, 1):
+            raise DomainError(400, "Некорректный источник сметы")
+        result["ai_generated"] = int(bool(ai_generated))
         result["due_date"] = date_value(
             data.get("due_date", old["due_date"] if old else "")
         )
@@ -772,6 +813,7 @@ class Service:
         return 201, {"quote": quote}
 
     def create_quote(self, data):
+        require_legal_acceptance(self.user)
         catalog_ids = data.get("catalog_ids", [])
         if not isinstance(catalog_ids, list) or len(catalog_ids) > 200:
             raise DomainError(400, "В одной смете может быть до 200 расценок")
@@ -816,6 +858,12 @@ class Service:
         return self.quote_view(self.get("quotes", qid))
 
     def publish(self, row, data):
+        require_legal_acceptance(self.user)
+        if data.get("review_confirmed") is not True:
+            raise DomainError(
+                428,
+                "Подтвердите проверку объёмов и цен перед отправкой клиенту.",
+            )
         if row["status"] in ("accepted", "completed"):
             raise DomainError(
                 409, "Согласованную смету нельзя отправить повторно: создайте копию"
