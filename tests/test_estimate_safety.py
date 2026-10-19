@@ -63,7 +63,19 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertIn("соглашение", result["error"].lower())
 
     def test_registration_consent_is_separate_from_first_ai_use_consent(self):
-        token, user_id = self.account("consent-separation")
+        status, registered = self.call(
+            "/auth/register",
+            "POST",
+            {
+                "email": "consent-separation@test.invalid",
+                "name": "consent-separation",
+                "password": "secure twelve password",
+                "legal_acceptance": True,
+                "legal_version": "2026-10-19-registration-v1",
+            },
+        )
+        self.assertEqual(status, 200, registered)
+        token, user_id = registered["token"], registered["user"]["id"]
         status, result = self.call("/me/legal-consent", token=token)
         self.assertEqual(status, 200, result)
         self.assertFalse(result["accepted"], "Registration consent must not skip the first-use AI prompt")
