@@ -756,6 +756,15 @@ class BusinessFlows(unittest.TestCase):
             },
         )
         self.assertEqual(code, 200, result)
+        # Most domain/assistant tests act as an existing user who has already
+        # accepted the first-use AI terms. Tests for the gate remove this row.
+        consent_code, consent = self.call(
+            "/me/legal-consent",
+            "POST",
+            {"accepted": True, "version": "2026-10-19-ai-estimate-v1"},
+            result["token"],
+        )
+        self.assertEqual(consent_code, 200, consent)
         return result["token"], result["user"]["id"]
 
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
