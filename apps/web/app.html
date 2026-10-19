@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Кабинет · Сметра</title>
   <meta name="theme-color" content="#000000">
+  <meta name="smetra-terms-version" content="2026-10-19-ai-estimate-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <script src="/pwa.js" defer></script>
   <script src="/theme-init.js"></script>
@@ -72,6 +73,7 @@
           <div class="field hidden" id="name-field"><label for="name">Как к вам обращаться</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
           <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
           <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
+          <div class="field hidden auth-consent" id="auth-consent-field"><label class="estimate-consent-choice" for="terms-consent"><input id="terms-consent" type="checkbox"><span>Я согласен с <a href="/terms#ai-estimates" target="_blank" rel="noopener">Пользовательским соглашением</a> и <a href="/responsibility" target="_blank" rel="noopener">Политикой отказа от ответственности (As Is)</a>.</span></label><small>Без согласия нельзя создать ИИ-смету или передать её клиенту.</small></div>
           <p id="auth-form-error" class="auth-form-error" role="alert"></p>
           <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
         </form>
