@@ -705,6 +705,9 @@ class Service:
         ai_generated = data.get(
             "ai_generated", old["ai_generated"] if old else False
         )
+        # Once an estimate has AI provenance, edits cannot silently remove it.
+        if old and old["ai_generated"]:
+            ai_generated = True
         if type(ai_generated) not in (bool, int) or ai_generated not in (0, 1):
             raise DomainError(400, "Некорректный источник сметы")
         result["ai_generated"] = int(bool(ai_generated))
