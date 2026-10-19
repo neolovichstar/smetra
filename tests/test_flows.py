@@ -189,7 +189,7 @@ class FlowTests(unittest.TestCase):
         status, reg = self.request(
             "/api/auth/register",
             "POST",
-            {"email": email, "password": "a secure password", "name": "Тест"},
+            {"email": email, "password": "a secure password", "name": "Тест", "terms_accepted": True, "terms_version": "2026-10-19-ai-estimate-v1"},
         )
         self.assertEqual(status, 200)
         token = reg["token"]
@@ -285,7 +285,7 @@ class FlowTests(unittest.TestCase):
                 {
                     "email": "billing@sample.test",
                     "password": "secure password twelve",
-                    "name": "Биллинг",
+                    "name": "Биллинг", "terms_accepted": True, "terms_version": "2026-10-19-ai-estimate-v1",
                 },
             )
             self.assertEqual(status, 200)
@@ -415,7 +415,7 @@ class FlowTests(unittest.TestCase):
             {
                 "email": "owner@sample.test",
                 "password": "secure password twelve",
-                "name": "Владелец",
+                "name": "Владелец", "terms_accepted": True, "terms_version": "2026-10-19-ai-estimate-v1",
             },
         )
         _, second = self.request(
@@ -424,7 +424,7 @@ class FlowTests(unittest.TestCase):
             {
                 "email": "other@sample.test",
                 "password": "secure password twelve",
-                "name": "Другой",
+                "name": "Другой", "terms_accepted": True, "terms_version": "2026-10-19-ai-estimate-v1",
             },
         )
         payload = {
@@ -472,7 +472,7 @@ class FlowTests(unittest.TestCase):
                 {
                     "email": "verify@sample.test",
                     "password": "old password secure",
-                    "name": "Проверка",
+                    "name": "Проверка", "terms_accepted": True, "terms_version": "2026-10-19-ai-estimate-v1",
                 },
             )
             self.assertFalse(registered["user"]["email_verified"])
