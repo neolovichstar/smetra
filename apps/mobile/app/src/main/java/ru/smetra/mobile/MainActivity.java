@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
     private int catalogLoadSeq=0;
     private boolean catalogHasMore=false;
     private JSONArray catalogItems=new JSONArray();
-    private boolean publicView=false,emailSignupAvailable=false,legalConsentAccepted=false,legalConsentDialogOpen=false;
+    private boolean publicView=false,emailSignupAvailable=false,legalConsentAccepted=false,legalConsentDialogOpen=false,registrationConsentAccepted=false;
     private Button clickedButton;
     private TextView feedback;
     interface Done {void onResult(JSONObject json);}
@@ -320,10 +320,11 @@ public class MainActivity extends Activity {
             }catch(Exception error){message("Не удалось войти");}
         });
         if(create||emailSignupAvailable)button(create?"Уже есть аккаунт · Войти":"Первый раз? Создать аккаунт",false,v->emailLogin(!create));
-        else button("Другие способы входа",false,v->login(false));
+        else button("Другие способы входа",false,v->{if(create&&!legalConsent.isChecked()){message("Примите условия использования перед регистрацией");return;}registrationConsentAccepted=create;login(create);});
         ui.space(content,18);TextView note=ui.label("От первого расчёта до завершённого проекта",11,MUTED,false);note.setGravity(Gravity.CENTER);content.addView(note);
     }
-    private void login(boolean ignored){
+    private void login(boolean registrationIntent){
+        if(!registrationIntent)registrationConsentAccepted=false;
         publicView=false;page("Вход","login",false);content.addView(ui.art("unfold",190));ui.space(content,16);content.addView(ui.label(presentation.loginTitle,34,INK,true));text(presentation.loginSubtitle);ui.space(content,22);
         LinearLayout methods=ui.column();content.addView(methods);
         addButton(methods,"Войти по почте",true,v->emailLogin(false));
@@ -333,7 +334,7 @@ public class MainActivity extends Activity {
             if(list!=null)for(int i=0;i<list.length();i++){
                 JSONObject provider=list.optJSONObject(i);
                 if(provider==null||!provider.optBoolean("enabled"))continue;
-                addButton(methods,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id")));
+                addButton(methods,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id"),registrationIntent));
                 enabled++;
             }
             addButton(methods,"Войти по почте",enabled==0,v->emailLogin(false));
@@ -342,7 +343,7 @@ public class MainActivity extends Activity {
         ui.space(content,18);TextView legal=ui.label("Продолжая, вы принимаете условия использования и политику конфиденциальности.",11,MUTED,false);content.addView(legal);button("Условия и конфиденциальность",false,v->openUrl(BuildConfig.API_BASE_URL+"/privacy"));
     }
     private void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception error){message("Не удалось открыть браузер");}}
-    private void startIdentity(String provider){try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();openUrl(BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
+    private void startIdentity(String provider,boolean registrationIntent){if(registrationIntent&&!registrationConsentAccepted){message("Примите соглашение перед регистрацией");return;}try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();String url=BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge+"&intent="+(registrationIntent?"register":"login");if(registrationIntent)url+="&legal_acceptance=1&legal_version="+REGISTRATION_CONSENT_VERSION;openUrl(url);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
     private boolean proActive(JSONObject account){return account!=null&&"pro".equals(account.optString("plan"))&&account.optLong("entitlement_until")>System.currentTimeMillis()/1000;}
     private String subscriptionDate(JSONObject account){
         return java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG,new Locale("ru","RU"))
