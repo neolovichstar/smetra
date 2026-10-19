@@ -16,7 +16,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-form')?.onsubmit");
- await fill('#name','Growth QA');await fill('#email','growth-'+Date.now()+'@test.invalid');await fill('#password','isolated growth password');await click('#auth-submit');
+ await click('#terms-consent');await fill('#name','Growth QA');await fill('#email','growth-'+Date.now()+'@test.invalid');await fill('#password','isolated growth password');await click('#auth-submit');
  await until("document.querySelector('[data-activation=estimate]')");await shot('growth-first-run-mobile');await click('[data-activation=estimate]');
  await until("document.querySelector('[data-starter=repair]')");assert.equal(await evaluate("document.querySelectorAll('[data-starter]').length"),7);
  await click('[data-starter=repair]');await until("document.querySelector('#estimate-editor')");
