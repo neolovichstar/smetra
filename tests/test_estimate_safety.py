@@ -1,8 +1,12 @@
 """Server-side regression tests for safe AI estimate drafting and consent."""
+import base64
+import io
 import json
 import os
 import unittest
 from unittest.mock import patch
+
+from PIL import Image
 
 from tests.test_business import BusinessFlows
 
@@ -186,6 +190,63 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertEqual(status, 502, result)
         self.assertIn("черновик", result["error"].lower())
 
+
+    def test_uploaded_photo_is_normalized_and_sent_to_the_vision_model(self):
+        token, _ = self.account("photo-estimate")
+        image_bytes = io.BytesIO()
+        Image.new("RGB", (12, 8), (240, 240, 240)).save(image_bytes, format="PNG")
+        image_content = base64.b64encode(image_bytes.getvalue()).decode("ascii")
+        model_result = {
+            "title": "Предварительный расчёт ванной",
+            "client": "",
+            "description": "Состав работ определён только по видимой части фотографии",
+            "terms": "Проверить размеры и скрытые коммуникации на объекте",
+            "items": [{
+                "name": "Подготовка основания",
+                "description": "Объём уточнить после осмотра",
+                "quantity": "1",
+                "unit": "компл.",
+                "unit_price": 0,
+                "requires_measurement": True,
+            }],
+        }
+        wire = {
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": json.dumps(model_result, ensure_ascii=False)},
+            }],
+            "usage": {"prompt_tokens": 60, "completion_tokens": 40},
+        }
+        with (
+            patch.dict(os.environ, OPENROUTER_API_KEY="test-only", OPENROUTER_MODEL="openrouter/free"),
+            patch("backend.redis_infra.acquire_lock", return_value=_Lease()),
+            patch("backend.ai.urllib.request.urlopen", return_value=_Response(wire)) as opener,
+        ):
+            status, result = self.call(
+                "/ai/draft",
+                "POST",
+                {
+                    "text": "Оцени видимые работы, не угадывай размеры",
+                    "file": {
+                        "name": "bathroom.png",
+                        "mime": "image/png",
+                        "content": image_content,
+                    },
+                },
+                token,
+            )
+
+        self.assertEqual(status, 200, result)
+        self.assertTrue(result["requires_review"])
+        payload = json.loads(opener.call_args.args[0].data)
+        user_message = payload["messages"][1]["content"]
+        self.assertIsInstance(user_message, list)
+        self.assertEqual(user_message[0]["type"], "text")
+        self.assertIn("не угадывай размеры", user_message[0]["text"])
+        self.assertEqual(user_message[1]["type"], "image_url")
+        image_url = user_message[1]["image_url"]["url"]
+        self.assertTrue(image_url.startswith("data:image/jpeg;base64,"))
+        self.assertIn("Требует замера по месту", result["draft"]["items"][0]["description"])
 
     def test_model_cannot_hide_a_final_sum_inside_narrative_text(self):
         token, _ = self.account("draft-narrative-total")
