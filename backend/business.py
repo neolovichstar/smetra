@@ -426,6 +426,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "024_legal_acceptances.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
@@ -2079,6 +2084,21 @@ class Service:
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}
+        from backend.legal import has_current_acceptance
+
+        requires_legal_acceptance = (
+            (kind == "ai" and method == "POST" and rest == ["draft"])
+            or (kind == "quotes" and method in ("POST", "PATCH", "DELETE"))
+            or (kind == "documents" and method == "POST")
+            or (kind == "documents" and method == "GET" and len(rest) == 2 and rest[1] == "pdf")
+            or (kind == "construction" and method == "POST" and bool(rest) and rest[-1] == "quote")
+        )
+        if requires_legal_acceptance and not has_current_acceptance(self.con, self.user["id"]):
+            raise DomainError(
+                428,
+                "Для работы со сметами примите Пользовательское соглашение и "
+                "Политику отказа от ответственности (As Is).",
+            )
         if kind == "push-devices":
             from backend.push import handle as handle_push_devices
 
