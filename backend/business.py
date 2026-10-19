@@ -816,6 +816,11 @@ class Service:
         return self.quote_view(self.get("quotes", qid))
 
     def publish(self, row, data):
+        if data.get("review_confirmed") is not True:
+            raise DomainError(
+                400,
+                "Перед отправкой подтвердите, что проверили объёмы, технологию и цены",
+            )
         if row["status"] in ("accepted", "completed"):
             raise DomainError(
                 409, "Согласованную смету нельзя отправить повторно: создайте копию"
