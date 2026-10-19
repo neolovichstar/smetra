@@ -4,9 +4,21 @@ import base64
 import io
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import zipfile
+
+
+# Monetary results must live in numeric unit_price fields, never in model prose.
+_CURRENCY_AMOUNT = re.compile(
+    r"\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?\\s*(?:₽|руб(?:ля|лей|ли|ль|лях)?\\.?|RUB|коп(?:еек|ейки|ейка|\\.?))(?![A-Za-zА-Яа-яЁё])",
+    re.IGNORECASE,
+)
+_SUMMARY_AMOUNT = re.compile(
+    r"(?:\\bитого\\b|\\bобщая\\s+(?:сумма|стоимость)\\b|\\bк\\s+оплате\\b|\\bвсего\\s+(?:составит|выйдет|получится)\\b).{0,80}\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?",
+    re.IGNORECASE,
+)
 
 try:
     from backend.business import (
@@ -277,6 +289,15 @@ def _draft(service, data):
             # no subtotal or total from this validation call is exposed to the model or user.
             calculate([{**normalized, "unit_price": normalized["unit_price"] or 1}])
             validated_items.append(normalized)
+        draft_client = string(value.get("client", ""), "Клиент", 120)
+        draft_description = string(value.get("description", ""), "Описание", 5000)
+        draft_terms = string(value.get("terms", ""), "Условия", 5000)
+        narrative = [title, draft_description, draft_terms]
+        for item in validated_items:
+            narrative.extend((item["name"], item["description"]))
+        if any(_CURRENCY_AMOUNT.search(text) or _SUMMARY_AMOUNT.search(text) for text in narrative):
+            raise ValueError("money totals must not be returned in narrative fields")
+
         usage = result.get("usage")
         known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in ('prompt_tokens','completion_tokens'))
         service.con.execute(
@@ -292,9 +313,9 @@ def _draft(service, data):
         return 200, {
             "draft": {
                 "title": title,
-                "client": string(value.get("client", ""), "Клиент", 120),
-                "description": string(value.get("description", ""), "Описание", 5000),
-                "terms": string(value.get("terms", ""), "Условия", 5000),
+                "client": draft_client,
+                "description": draft_description,
+                "terms": draft_terms,
                 "items": validated_items,
             },
             "requires_review": True,
