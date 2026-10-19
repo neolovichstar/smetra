@@ -15,6 +15,11 @@ try:
 except ModuleNotFoundError:
     from business import DomainError, choice, identity, packed, stamp, string
 
+try:
+    from backend.legal import AI_ESTIMATE_DISCLAIMER
+except ModuleNotFoundError:
+    from legal import AI_ESTIMATE_DISCLAIMER
+
 
 @dataclass
 class Download:
@@ -182,6 +187,16 @@ def pdf(document):
         ]
     else:
         story += [p(data.get("terms", ""))]
+    # Keep the exact AI warning in exported files, not only in the web editor.
+    # The ai_generated flag is sticky on the quote and copied into its snapshot.
+    if data.get("ai_generated") is True or str(data.get("ai_generated", 0)) == "1":
+        story += [
+            Spacer(1, 12),
+            KeepTogether([
+                p("Предварительный черновик · обязательная проверка", label),
+                p(AI_ESTIMATE_DISCLAIMER, small),
+            ]),
+        ]
     if document["kind"] == "act":
         story += [
             Spacer(1, 20),
