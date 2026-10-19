@@ -193,6 +193,7 @@ def user_view(user, con):
         "plan": user["plan"] if expiry > now() else "free",
         "entitlement_until": expiry,
         "email_verified": user["email_verified_at"] is not None,
+        "estimate_terms_accepted": __import__("backend.legal", fromlist=["has_current_terms"]).has_current_terms(user),
         "quote_count": con.execute(
             "SELECT count(*) FROM quotes WHERE user_id=?", (user["id"],)
         ).fetchone()[0],
@@ -479,6 +480,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
+            "/responsibility": ("responsibility.html", "text/html"),
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),
@@ -653,12 +655,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(payload.data)
                 return
             return self.send_json(status, payload)
+        if path == "/api/auth/terms/accept" and method == "POST":
+            from backend.legal import TERMS_VERSION
+            data = self.body()
+            if data.get("accepted") is not True or data.get("terms_version") != TERMS_VERSION:
+                raise ApiError(400, "Подтвердите актуальную редакцию документов")
+            account = self.auth(con)
+            accepted_at = now()
+            con.execute(
+                "UPDATE users SET terms_accepted_at=?,terms_version=? WHERE id=?",
+                (accepted_at, TERMS_VERSION, account["id"]),
+            )
+            updated = con.execute("SELECT * FROM users WHERE id=?", (account["id"],)).fetchone()
+            event(con, account["id"], "estimate_terms_accepted")
+            return self.send_json(200, {"ok": True, "user": user_view(updated, con)})
         if path == "/api/auth/register" and method == "POST":
             self.throttle("register:" + self.client_address[0], 5, 3600)
             data = self.body()
             email = str(data.get("email", "")).strip().lower()
             password = str(data.get("password", ""))
             name = str(data.get("name", "")).strip()
+            from backend.legal import TERMS_VERSION
+            terms_accepted = data.get("terms_accepted") is True and data.get("terms_version") == TERMS_VERSION
             if (
                 "@" not in email
                 or len(email) > 254
@@ -679,7 +697,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 user_id = uid()
                 con.execute(
-                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at,terms_accepted_at,terms_version) VALUES(?,?,?,?,?,?,?,?)",
                     (
                         user_id,
                         email,
@@ -687,6 +705,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         name,
                         now(),
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
+                        now() if terms_accepted else 0,
+                        TERMS_VERSION if terms_accepted else "",
                     ),
                 )
                 event(con, user_id, "signup_completed")
