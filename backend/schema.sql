@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS quotes (
  title TEXT NOT NULL, client TEXT NOT NULL, description TEXT NOT NULL,
  amount_kopecks INTEGER NOT NULL CHECK(amount_kopecks > 0),
  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','sent','accepted','declined','completed')),
- public_token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+ public_token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+ ai_generated INTEGER NOT NULL DEFAULT 0 CHECK(ai_generated IN (0,1))
 );
 CREATE INDEX IF NOT EXISTS idx_quotes_user_created ON quotes(user_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS payments (
