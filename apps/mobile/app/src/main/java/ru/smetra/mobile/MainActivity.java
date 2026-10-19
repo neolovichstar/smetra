@@ -965,7 +965,41 @@ public class MainActivity extends Activity {
         button("Надиктовать запрос",false,v->{try{Intent voice=new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE,"ru-RU");voice.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,"Опишите работу для сметы");startActivityForResult(voice,302);}catch(Exception error){message("Голосовой ввод недоступен на этом устройстве");}});
         ui.space(content,12);
         Button draft=button("Составить черновик",true,v->{});
-        draft.setOnClickListener(v->{requireLegalConsent(()->{String input=source.getText().toString().trim();android.net.Uri file=pendingCaptureFile;if(input.isEmpty()&&file==null){source.setError("Вставьте запрос или приложите файл");return;}draft.setEnabled(false);draft.setAlpha(.5f);int version=pageVersion;message("Составляем черновик…");sessionWork.execute(()->{try{JSONObject body=new JSONObject().put("text",input);if(file!=null)body.put("file",captureSource(file));JSONObject response=request("/ai/draft","POST",body);JSONObject result=response.optJSONObject("draft");if(result==null)throw new IOException("Черновик не получен");Analytics.event("ai_draft_generated",Analytics.params("source",file==null?"text":"file"),false);postWorkerResult(()->{if(version!=pageVersion||isFinishing())return;pendingCaptureText=input;getPreferences(MODE_PRIVATE).edit().putString("capture_draft",result.toString()).apply();draftPreview(result);});}catch(Exception error){postWorkerResult(()->{if(version!=pageVersion||isFinishing())return;draft.setEnabled(true);draft.setAlpha(1);message(error instanceof ApiException?error.getMessage():"Не удалось разобрать запрос. Текст сохранён, попробуйте ещё раз.");});}});});});
+        draft.setOnClickListener(v -> {
+            requireLegalConsent(() -> {
+                String input = source.getText().toString().trim();
+                android.net.Uri file = pendingCaptureFile;
+                if (input.isEmpty() && file == null) {
+                    source.setError("Вставьте запрос или приложите файл");
+                    return;
+                }
+                draft.setEnabled(false);draft.setAlpha(.5f);
+                int version = pageVersion;
+                message("Составляем черновик…");
+                sessionWork.execute(() -> {
+                    try {
+                        JSONObject body = new JSONObject().put("text", input);
+                        if (file != null) body.put("file", captureSource(file));
+                        JSONObject response = request("/ai/draft", "POST", body);
+                        JSONObject result = response.optJSONObject("draft");
+                        if (result == null) throw new IOException("Черновик не получен");
+                        Analytics.event("ai_draft_generated", Analytics.params("source", file == null ? "text" : "file"), false);
+                        postWorkerResult(() -> {
+                            if (version != pageVersion || isFinishing()) return;
+                            pendingCaptureText = input;
+                            getPreferences(MODE_PRIVATE).edit().putString("capture_draft", result.toString()).apply();
+                            draftPreview(result);
+                        });
+                    } catch (Exception error) {
+                        postWorkerResult(() -> {
+                            if (version != pageVersion || isFinishing()) return;
+                            draft.setEnabled(true);draft.setAlpha(1);
+                            message(error instanceof ApiException ? error.getMessage() : "Не удалось разобрать запрос. Текст сохранён, попробуйте ещё раз.");
+                        });
+                    }
+                });
+            });
+        });
         button("Продолжить вручную",false,v->{String input=source.getText().toString().trim();if(input.isEmpty()){source.setError("Вставьте запрос");return;}try{getPreferences(MODE_PRIVATE).edit().putString("draft",new JSONObject().put("title",input.split("[\\n.!?]")[0].substring(0,Math.min(input.split("[\\n.!?]")[0].length(),120))).put("description",input).toString()).apply();create();}catch(Exception error){message("Не удалось открыть редактор");}});
         String old=getPreferences(MODE_PRIVATE).getString("capture_draft",null);if(old!=null)button("Продолжить сохранённый черновик",false,v->{try{draftPreview(new JSONObject(old));}catch(Exception error){message("Черновик повреждён");}});
         text("При обработке текст или файл передаётся OpenRouter. Никакая смета не отправляется клиенту автоматически.").setTextSize(11);
