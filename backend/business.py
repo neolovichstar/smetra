@@ -267,6 +267,9 @@ def migrate(con):
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
     con.execute("CREATE INDEX IF NOT EXISTS idx_assistant_messages_conversation ON assistant_messages(conversation_id,created_at)")
     for table, columns in (
+        ("users", {"terms_accepted_at": "INTEGER NOT NULL DEFAULT 0", "terms_version": "TEXT NOT NULL DEFAULT ''"}),
+        ("quotes", {"ai_generated": "INTEGER NOT NULL DEFAULT 0"}),
+        ("oauth_states", {"terms_accepted_at": "INTEGER NOT NULL DEFAULT 0", "terms_version": "TEXT NOT NULL DEFAULT ''"}),
         ("files", {"construction_id": "TEXT REFERENCES construction_objects(id) ON DELETE CASCADE"}),
         ("catalog_items", {
             "item_type": "TEXT NOT NULL DEFAULT 'service'",
@@ -616,6 +619,7 @@ class Service:
                 "created_at",
                 "updated_at",
                 "itemized",
+                "ai_generated",
                 "view_count",
                 "first_viewed_at",
                 "sent_at",
@@ -653,6 +657,14 @@ class Service:
 
     def quote_data(self, data, old=None):
         result = {}
+        # AI provenance is sticky: subsequent edits must not hide the review warning.
+        if old is not None and int(old["ai_generated"] or 0) == 1:
+            result["ai_generated"] = 1
+        else:
+            source_flag = data.get("ai_generated", old["ai_generated"] if old else 0)
+            if type(source_flag) not in (int, bool) or int(source_flag) not in (0, 1):
+                raise DomainError(400, "Некорректный источник сметы")
+            result["ai_generated"] = int(source_flag)
         for key, limit, required in (
             ("title", 120, True),
             ("client", 120, True),
@@ -2079,6 +2091,10 @@ class Service:
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}
+        try:
+            from backend.legal import has_current_terms
+        except ModuleNotFoundError:
+            from legal import has_current_terms
         if kind == "push-devices":
             from backend.push import handle as handle_push_devices
 
@@ -2103,6 +2119,50 @@ class Service:
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
             self.write_access()
+            if kind == "ai" and method == "POST" and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите Пользовательское соглашение и отказ от ответственности перед использованием генератора смет",
+                )
+            if kind == "assistant" and method == "POST" and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед использованием ИИ-ассистента",
+                )
+            if kind == "construction" and method == "POST" and rest and rest[-1] == "quote" and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед созданием сметы из объекта",
+                )
+            if kind == "construction" and method == "POST" and rest and rest[-1] == "act":
+                if not has_current_terms(self.user):
+                    raise DomainError(
+                        403,
+                        "Подтвердите актуальное Пользовательское соглашение перед экспортом акта",
+                    )
+                if data.get("review_confirmed") is not True:
+                    raise DomainError(
+                        400,
+                        "Перед созданием PDF подтвердите проверку объёмов, технологии и цен",
+                    )
+            if kind == "quotes" and method in ("POST", "PATCH") and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед изменением сметы",
+                )
+            if kind == "quotes" and self.wid and rest:
+                requires_review = (
+                    method == "POST" and len(rest) == 2 and rest[1] == "publish"
+                    or method == "POST" and len(rest) == 2 and rest[1] == "status" and data.get("status") == "sent"
+                    or method == "PATCH" and len(rest) == 1 and data.get("status") == "sent"
+                )
+                if requires_review:
+                    own_quote = self.con.execute(
+                        "SELECT 1 FROM quotes WHERE id=? AND workspace_id=?",
+                        (rest[0], self.wid),
+                    ).fetchone()
+                    if own_quote and data.get("review_confirmed") is not True:
+                        raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
             if kind == "assistant":
                 from backend.assistant import route
 

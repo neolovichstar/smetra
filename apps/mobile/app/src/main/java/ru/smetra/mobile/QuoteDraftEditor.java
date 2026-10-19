@@ -47,6 +47,13 @@ final class QuoteDraftEditor {
         JSONArray items=data.optJSONArray("items");if(items==null||items.length()==0){items=new JSONArray().put(new JSONObject().put("line_id",java.util.UUID.randomUUID().toString()).put("name",data.optString("title")).put("quantity","1").put("unit","шт.").put("unit_price",data.optLong("amount_kopecks")));data.put("items",items);}
         saved=payload().toString();history.add(data.toString());
         status=ui.label("Автосохранение включено",12,SmetraUi.BLUE,false);host.addView(status);
+        if(quote.optInt("ai_generated")==1){
+            ui.space(host,10);
+            host.addView(ui.label("Предварительный черновик · обязательная проверка",13,SmetraUi.INK,true));
+            TextView warning=ui.label("Расчет сгенерирован ИИ-ассистентом \"сметра.\" и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.",12,SmetraUi.MUTED,false);
+            warning.setTextIsSelectable(true);
+            host.addView(warning);
+        }
         total=ui.label("",22,SmetraUi.INK,true);ui.space(host,12);host.addView(total);
         LinearLayout tools=ui.row();undo=ui.button("Отменить",false,()->travel(-1));redo=ui.button("Повторить",false,()->travel(1));
         tools.addView(undo,new LinearLayout.LayoutParams(0,-2,1));ui.gap(tools,8);tools.addView(redo,new LinearLayout.LayoutParams(0,-2,1));host.addView(tools);

@@ -246,6 +246,33 @@ class IdentityAssistantTests(unittest.TestCase):
                     self.assertEqual(len(params["code_challenge"][0]), 43)
                     self.assertIn("HttpOnly", headers["Set-Cookie"])
 
+    def test_new_oauth_account_requires_explicit_terms_consent(self):
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"), patch(
+            "backend.identity.profile",
+            return_value=("unconsented-subject", "Первый вход", "no-consent-oauth@test.invalid"),
+        ):
+            code, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?app_challenge=" + challenge("c" * 64)
+            )
+            self.assertEqual(code, 303)
+            state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
+            cookie = headers["Set-Cookie"].split(";")[0]
+            callback = "/api/auth/oauth/yandex/callback?code=provider-code&state=" + state
+            code, result, _ = self.get_redirect(callback, cookie)
+            self.assertEqual(code, 303)
+            self.assertEqual(result["Location"], "smetra://auth?error=consent_required")
+
+        with self.mod.db() as con:
+            self.assertIsNone(
+                con.execute("SELECT id FROM users WHERE email=?", ("no-consent-oauth@test.invalid",)).fetchone()
+            )
+            self.assertIsNone(
+                con.execute(
+                    "SELECT user_id FROM external_identities WHERE provider='yandex' AND subject=?",
+                    ("unconsented-subject",),
+                ).fetchone()
+            )
+
     def test_oauth_browser_binding_and_native_pkce_one_use(self):
         verifier = "a" * 64
         with (
@@ -256,7 +283,7 @@ class IdentityAssistantTests(unittest.TestCase):
             ) as provider,
         ):
             code, headers, _ = self.get_redirect(
-                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier)
+                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier) + "&terms_accepted=2026-10-19-ai-estimate-v1"
             )
             self.assertEqual(code, 303)
             state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
@@ -304,6 +331,46 @@ class IdentityAssistantTests(unittest.TestCase):
             status, _, raw = self.get_redirect("/api/me", cookie)
             self.assertEqual(status, 200)
             self.assertEqual(json.loads(raw)["user"]["id"], session["user"]["id"])
+
+    def test_assistant_quote_publish_requires_explicit_review_confirmation(self):
+        owner, _ = self.account("assistant-publish-review")
+        quote = BusinessFlows.quote(self, owner, title="Проверяемая AI-смета")
+        response = {
+            "content": None,
+            "tool_calls": [{
+                "id": "publish-quote-test",
+                "type": "function",
+                "function": {
+                    "name": "publish_quote",
+                    "arguments": json.dumps({"id": quote["id"]}),
+                },
+            }],
+        }
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"), patch(
+            "backend.assistant.query_model", return_value=response
+        ):
+            status, proposal = self.call(
+                "/assistant/chat", "POST",
+                {"text": "Отправь смету клиенту"}, owner,
+            )
+        self.assertEqual(status, 200, proposal)
+        action_id = proposal["actions"][0]["id"]
+
+        status, rejected = self.call(
+            "/assistant/confirm", "POST", {"id": action_id}, owner
+        )
+        self.assertEqual(status, 400, rejected)
+        quote_after_rejection = self.call("/quotes/" + quote["id"], token=owner)[1]["quote"]
+        self.assertEqual(quote_after_rejection["published_version"], 0)
+
+        status, accepted = self.call(
+            "/assistant/confirm", "POST",
+            {"id": action_id, "review_confirmed": True}, owner,
+        )
+        self.assertEqual(status, 200, accepted)
+        quote_after_acceptance = self.call("/quotes/" + quote["id"], token=owner)[1]["quote"]
+        self.assertEqual(quote_after_acceptance["published_version"], 1)
+        self.assertEqual(quote_after_acceptance["approval_state"], "sent")
 
     def test_assistant_proposal_is_scoped_confirmed_and_idempotent(self):
         token, _ = self.account("assistant-owner")

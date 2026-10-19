@@ -1,7 +1,7 @@
 'use strict';
 (async function configureIdentity(){
  const host=document.querySelector('#provider-buttons');if(!host)return;
- const errors={unavailable:'Этот способ входа пока подключается. Сейчас можно войти по почте.',expired:'Время входа истекло. Попробуйте ещё раз.',cancelled:'Вход отменён. Можно выбрать другой способ.',provider:'Не удалось получить ответ сервиса входа. Попробуйте ещё раз.',blocked:'Этот аккаунт недоступен.',conflict:'Этот способ входа связан с другим профилем.',link_required:'Аккаунт с такой почтой уже существует. Используйте первоначальный способ входа или обратитесь в поддержку.'};
+ const errors={consent_required:'Чтобы создать аккаунт, примите Пользовательское соглашение и Политику отказа от ответственности.',unavailable:'Этот способ входа пока подключается. Сейчас можно войти по почте.',expired:'Время входа истекло. Попробуйте ещё раз.',cancelled:'Вход отменён. Можно выбрать другой способ.',provider:'Не удалось получить ответ сервиса входа. Попробуйте ещё раз.',blocked:'Этот аккаунт недоступен.',conflict:'Этот способ входа связан с другим профилем.',link_required:'Аккаунт с такой почтой уже существует. Используйте первоначальный способ входа или обратитесь в поддержку.'};
  const params=new URLSearchParams(location.search);if(params.has('auth_error')){document.querySelector('#auth-status').textContent=errors[params.get('auth_error')]||'Не удалось войти';history.replaceState({},'',location.pathname+location.hash)}
  if(params.has('reset'))document.querySelector('#email-disclosure').open=true;
  const note=document.querySelector('#provider-note');
@@ -18,7 +18,15 @@
    const button=document.createElement('button');
    button.type='button';button.className='btn'+(provider.id==='yandex'?' primary':'');
    button.textContent='Продолжить с '+provider.name;
-   button.onclick=()=>{location.href='/api/auth/oauth/'+encodeURIComponent(provider.id)+'/start'};
+   button.onclick=()=>{
+    const registering=document.querySelector('#auth-register-tab')?.getAttribute('aria-selected')==='true';
+    const checkbox=document.querySelector('#terms-consent');
+    const version=document.querySelector('meta[name="smetra-terms-version"]')?.content||'';
+    if(registering&&!checkbox?.checked){document.querySelector('#auth-form-error').textContent='Для регистрации подтвердите согласие с условиями.';checkbox?.focus();return}
+    const params=new URLSearchParams();
+    if(registering&&version)params.set('terms_accepted',version);
+    location.href='/api/auth/oauth/'+encodeURIComponent(provider.id)+'/start'+(params.size?'?'+params.toString():'');
+   };
    host.append(button);
   }
   if(!enabled.length){
@@ -33,6 +41,17 @@
   document.querySelector('#auth-status').textContent='Способы входа временно не загрузились. Войдите по почте.';
  }
 })();
+const syncConsentProviderButtons=()=>{
+ const registering=document.querySelector('#auth-register-tab')?.getAttribute('aria-selected')==='true';
+ const allowed=!registering||!!document.querySelector('#terms-consent')?.checked;
+ document.querySelectorAll('#provider-buttons button').forEach(button=>{button.disabled=!allowed});
+};
+document.addEventListener('smetra:consent-change',syncConsentProviderButtons);
+document.querySelector('#terms-consent')?.addEventListener('change',syncConsentProviderButtons);
+document.querySelector('#auth-register-tab')?.addEventListener('click',()=>setTimeout(syncConsentProviderButtons,0));
+document.querySelector('#auth-login-tab')?.addEventListener('click',()=>setTimeout(syncConsentProviderButtons,0));
+document.addEventListener('smetra:email-capability',syncConsentProviderButtons);
+syncConsentProviderButtons();
 const proposalLabels={title:'Название',name:'Название',client:'Клиент',client_id:'Клиент',description:'Описание',amount:'Стоимость',amount_kopecks:'Сумма',price:'Цена',cost_price:'Себестоимость',currency:'Валюта',quantity:'Количество',unit_price:'Цена',items:'Работы',due_date:'Срок',status:'Статус',email:'Почта',phone:'Телефон',terms:'Условия',project_id:'Заказ',note:'Примечание'};
 function proposalValue(key,value){if(['amount','amount_kopecks','price','cost_price','unit_price'].includes(key)&&typeof value==='number')return rub(value);if(key==='items'&&Array.isArray(value))return value.map(item=>`${item.name} · ${item.quantity} × ${rub(item.unit_price)}`).join('\n');return typeof value==='object'?JSON.stringify(value):String(value)}
 function proposalFields(args){return Object.entries(args).filter(([key])=>!['id','revision'].includes(key)).map(([key,value])=>`<div class="proposal-field"><span>${escapeHtml(proposalLabels[key]||key)}</span><b>${escapeHtml(proposalValue(key,value))}</b></div>`).join('')}

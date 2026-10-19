@@ -17,6 +17,6 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
  let fail;w.api=()=>{calls++;return new Promise((resolve,reject)=>fail=reject)};
  const form=doc.querySelector('#auth-form');form.dispatchEvent(new w.Event('submit',{cancelable:true}));form.dispatchEvent(new w.Event('submit',{cancelable:true}));assert.equal(calls,1);
  fail(Error('Offline'));await new Promise(resolve=>setTimeout(resolve,0));assert.equal(doc.querySelector('#auth-submit').disabled,false);assert.equal(doc.querySelector('#auth-form-error').textContent,'Offline');
- w.SmetraEmailSignupAvailable=true;doc.dispatchEvent(new w.Event('smetra:email-capability'));doc.querySelector('#auth-register-tab').click();assert.ok(!disclosure.classList.contains('hidden'));assert.equal(name.required,true);
+ w.SmetraEmailSignupAvailable=true;doc.dispatchEvent(new w.Event('smetra:email-capability'));doc.querySelector('#auth-register-tab').click();assert.ok(!disclosure.classList.contains('hidden'));assert.equal(name.required,true);assert.equal(doc.querySelector('#auth-submit').disabled,true,'registration remains blocked until the terms checkbox is checked');doc.querySelector('#terms-consent').click();assert.equal(doc.querySelector('#auth-submit').disabled,false,'accepting the current terms enables registration');
  dom.window.close();console.log('PASS: provider-only registration, keyboard mode changes, login availability and duplicate submit prevention');
 })().catch(error=>{console.error(error);process.exit(1)});

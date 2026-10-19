@@ -245,7 +245,7 @@ class BusinessFlows(unittest.TestCase):
             'work_date': '2026-09-30', 'work_description': 'Окрашена стена',
             'photo_file_ids': [photo['file']['id']],
         }, owner)[0], 201)
-        status, payload = self.call(f'/construction/objects/{obj}/report.pdf', token=owner, raw=True)
+        status, payload = self.call(f'/construction/objects/{obj}/report.pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(payload))
@@ -323,14 +323,14 @@ class BusinessFlows(unittest.TestCase):
             'formula': 'area', 'unit_price': 10000,
         }, owner)
         quantity = work['quantity']['id']
-        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)[0], 409)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {'review_confirmed': True}, owner)[0], 409)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '3'}, owner)[0], 201)
-        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)
+        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {'review_confirmed': True}, owner)
         self.assertEqual(status, 201, created_act)
         self.assertEqual(created_act['amount_kopecks'], 30000)
         document_id = created_act['document']['id']
-        status, content = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        status, content = self.call('/documents/' + document_id + '/pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         from pypdf import PdfReader
         first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
@@ -339,7 +339,7 @@ class BusinessFlows(unittest.TestCase):
         self.assertNotIn('20 м²', first)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '4'}, owner)[0], 201)
-        status, unchanged = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        status, unchanged = self.call('/documents/' + document_id + '/pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         self.assertEqual(first, PdfReader(io.BytesIO(unchanged)).pages[0].extract_text())
 
@@ -751,10 +751,37 @@ class BusinessFlows(unittest.TestCase):
                 "email": name + "@test.invalid",
                 "name": name,
                 "password": "secure twelve password",
+                "terms_accepted": True,
+                "terms_version": "2026-10-19-ai-estimate-v1",
             },
         )
         self.assertEqual(code, 200, result)
         return result["token"], result["user"]["id"]
+
+    def test_estimate_and_ai_write_entry_points_require_current_terms(self):
+        token, user_id = self.account("legal-gate-" + os.urandom(4).hex())
+        code, created = self.call(
+            "/construction/objects", "POST", {"name": "Объект для проверки"}, token
+        )
+        self.assertEqual(code, 201, created)
+        object_id = created["object"]["id"]
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE users SET terms_accepted_at=0,terms_version='' WHERE id=?",
+                (user_id,),
+            )
+
+        cases = (
+            ("/quotes", "POST", {"title": "Черновик", "client": "Клиент", "amount": 1000}),
+            ("/construction/objects/" + object_id + "/quote", "POST", {}),
+            ("/ai/draft", "POST", {"text": "Ремонт ванной"}),
+            ("/assistant/chat", "POST", {"text": "Создай черновик сметы"}),
+        )
+        for path, method, payload in cases:
+            with self.subTest(path=path):
+                status, result = self.call(path, method, payload, token)
+                self.assertEqual(status, 403, result)
+                self.assertTrue(result.get("error"))
 
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
         from backend.data_export import _clean
@@ -917,11 +944,84 @@ class BusinessFlows(unittest.TestCase):
         code, result = self.call(
             "/quotes/" + quote["id"] + "/publish",
             "POST",
-            {"revision": quote["revision"]},
+            {"revision": quote["revision"], "review_confirmed": True},
             token,
         )
         self.assertEqual(code, 200, result)
         return result["quote"]
+
+    def test_registration_requires_explicit_current_estimate_terms(self):
+        status, result = self.call("/auth/register", "POST", {
+            "email": "missing-consent-" + os.urandom(4).hex() + "@test.invalid",
+            "name": "No Consent",
+            "password": "secure twelve password",
+        })
+        self.assertEqual(status, 400, result)
+        self.assertIn("соглашение", result.get("error", "").lower())
+
+    def test_terms_acceptance_is_versioned_and_ai_access_checks_it(self):
+        token, user_id = self.account("terms-" + os.urandom(4).hex())
+        status, result = self.call("/auth/terms/accept", "POST", {
+            "accepted": True,
+            "terms_version": "old-version",
+        }, token)
+        self.assertEqual(status, 400, result)
+        status, result = self.call("/auth/terms/accept", "POST", {
+            "accepted": True,
+            "terms_version": "2026-10-19-ai-estimate-v1",
+        }, token)
+        self.assertEqual(status, 200, result)
+        self.assertTrue(result["user"]["estimate_terms_accepted"])
+
+        with self.mod.db() as con:
+            con.execute("UPDATE users SET terms_accepted_at=0, terms_version='' WHERE id=?", (user_id,))
+        status, result = self.call("/ai/draft", "POST", {"text": "Составить смету ремонта ванной"}, token)
+        self.assertEqual(status, 403, result)
+
+    def test_quote_publish_routes_require_review_confirmation(self):
+        token, _ = self.account("publish-gate-" + os.urandom(4).hex())
+        quote = self.quote(token, title="Draft requiring review")
+        status, result = self.call("/quotes/" + quote["id"] + "/publish", "POST", {
+            "revision": quote["revision"],
+        }, token)
+        self.assertEqual(status, 400, result)
+        status, result = self.call("/quotes/" + quote["id"] + "/status", "POST", {
+            "status": "sent", "revision": quote["revision"],
+        }, token)
+        self.assertEqual(status, 400, result)
+        published = self.publish(token, quote)
+        self.assertEqual(published["approval_state"], "sent")
+
+    def test_ai_estimate_document_export_requires_explicit_review_confirmation(self):
+        token, _ = self.account("ai-estimate-export-" + os.urandom(4).hex())
+        quote = self.quote(token, title="AI draft requiring review", ai_generated=1)
+        self.assertEqual(quote["ai_generated"], 1)
+
+        status, result = self.call(
+            "/documents", "POST", {"quote_id": quote["id"], "kind": "estimate"}, token
+        )
+        self.assertEqual(status, 400, result)
+        self.assertIn("подтвердите проверку", result.get("error", "").lower())
+
+        status, result = self.call(
+            "/documents", "POST",
+            {"quote_id": quote["id"], "kind": "estimate", "review_confirmed": True},
+            token,
+        )
+        self.assertEqual(status, 201, result)
+        document_id = result["document"]["id"]
+
+        status, _ = self.call(
+            "/documents/" + document_id + "/pdf", token=token, raw=True
+        )
+        self.assertEqual(status, 400, "Direct PDF endpoint must not bypass the review modal")
+
+        status, content = self.call(
+            "/documents/" + document_id + "/pdf?review_confirmed=1",
+            token=token, raw=True,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(content.startswith(b"%PDF-"))
 
     def test_catalog_price_history_filters_favorites_and_workspace_scope(self):
         owner, _ = self.account("catalog-history-owner")
@@ -1193,7 +1293,7 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(code, 201, document)
         code, content = self.call(
-            "/documents/" + document["document"]["id"] + "/pdf", token=token, raw=True
+            "/documents/" + document["document"]["id"] + "/pdf?review_confirmed=1", token=token, raw=True
         )
         self.assertEqual(code, 200)
         self.assertTrue(content.startswith(b"%PDF-"))

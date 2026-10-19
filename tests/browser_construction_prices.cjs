@@ -40,7 +40,7 @@ const assert = require('node:assert/strict');
   await send('Page.navigate', {url:site + '/app?register=1'});
   await until("(document.querySelector('#auth')&&!document.querySelector('#auth').classList.contains('hidden'))||document.querySelector('[data-work=quote-new]')");
   if (await evaluate("!document.querySelector('#auth').classList.contains('hidden')")) {
-    await evaluate(`document.querySelector('#name').value='Проверка расценок';document.querySelector('#email').value='bulk-browser-${Date.now()}@test.invalid';document.querySelector('#password').value='long secure password';document.querySelector('#auth-submit').click()`);
+    await evaluate(`document.querySelector('#terms-consent').click();document.querySelector('#name').value='Проверка расценок';document.querySelector('#email').value='bulk-browser-${Date.now()}@test.invalid';document.querySelector('#password').value='long secure password';document.querySelector('#auth-submit').click()`);
   }
   await until("document.querySelector('[data-work=quote-new]')");
   assert.deepEqual(await evaluate("Promise.all(['/construction.js','/construction.css','/ai-workspace.js','/file-editor.js','/file-editor.css'].map(path=>fetch(path).then(response=>response.status)))"), [200,200,200,200,200]);
