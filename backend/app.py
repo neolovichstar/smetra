@@ -27,6 +27,11 @@ except ModuleNotFoundError:
     import mytracker
     import revenue
 
+try:
+    from backend.estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
+except ModuleNotFoundError:
+    from estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
 WEB = ROOT / "apps" / "web"
@@ -36,8 +41,6 @@ COOKIE_SECURE = ORIGIN.startswith("https://")
 _LOCK = threading.RLock()
 RATE = {}
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
-LEGAL_CONSENT_VERSION = "2026-10-19-ai-estimate-v1"
-REGISTRATION_CONSENT_VERSION = "2026-10-19-registration-v1"
 
 
 def yookassa_mode(user=None):
