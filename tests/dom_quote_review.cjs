@@ -25,7 +25,7 @@ function setup(){
   request.resolve(result());await pending;form.querySelector('textarea').value='Reviewed conditions';
   form.querySelector('#review-publish-confirmed').checked=true;form.querySelector('#review-publish-confirmed').dispatchEvent(new w.Event('change',{bubbles:true}));
   await form.onsubmit({preventDefault(){}});
-  assert.deepEqual(writes,[{revision:7,comment:'Reviewed conditions'}]);assert.deepEqual(opened,['quote']);
+  assert.deepEqual(writes,[{revision:7,comment:'Reviewed conditions',review_confirmed:true}]);assert.deepEqual(opened,['quote']);
  });
  await test('historical target and unavailable state cannot publish',async({w,doc})=>{
   w.api=async()=>result({target:'1',can_publish:false});await w.SmetraQuoteReview.open(original,versions,{publish:true});assert.equal(doc.querySelector('#review-publish button').disabled,true);
