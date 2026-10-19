@@ -700,7 +700,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ):
                 raise ApiError(
                     400,
-                    "Для регистрации примите Пользовательское соглашение и предупреждение об использовании AI",
+                    "Для регистрации примите Пользовательское соглашение, условия и предупреждение об использовании AI",
                 )
             email = str(data.get("email", "")).strip().lower()
             password = str(data.get("password", ""))
