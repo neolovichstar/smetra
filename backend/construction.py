@@ -428,6 +428,15 @@ def create_fact_act(service, obj):
     import json
     settings = json.loads(workspace["settings"])
     client = service.get("clients", obj["client_id"]) if obj["client_id"] else None
+    project = service.con.execute(
+        "SELECT currency FROM projects WHERE id=? AND workspace_id=?",
+        (obj["project_id"], service.wid),
+    ).fetchone() if obj["project_id"] else None
+    quote = service.con.execute(
+        "SELECT currency FROM quotes WHERE id=? AND workspace_id=?",
+        (obj["quote_id"], service.wid),
+    ).fetchone() if obj["quote_id"] else None
+    currency = project["currency"] if project else quote["currency"] if quote else "RUB"
     items = []
     for item in performed:
         quantity = Decimal(item["actual_quantity"])
@@ -441,7 +450,7 @@ def create_fact_act(service, obj):
         "document_footer": settings.get("document_footer", ""), "title": obj["name"],
         "client": client["name"] if client else "Заказчик не указан",
         "description": "Фактические работы по объекту на дату формирования.",
-        "currency": "RUB", "items": items,
+        "currency": currency, "items": items,
         "amount_kopecks": sum(item["subtotal"] for item in items),
         "due_date": "", "terms": "Черновик по учтённому факту. Требует проверки и подписей сторон.",
     }
