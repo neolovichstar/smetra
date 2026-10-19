@@ -232,7 +232,20 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
     }
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{
+      const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);
+      try{
+        const payload={id:action.id};
+        if(action.tool==='publish_quote'){
+          if(!window.Workspace?.ensureEstimateConsent||!(await window.Workspace.ensureEstimateConsent())){buttons.forEach(button=>button.disabled=false);return}
+          if(!window.Workspace?.confirmEstimateReview||!(await window.Workspace.confirmEstimateReview())){buttons.forEach(button=>button.disabled=false);return}
+          payload.review_confirmed=true;
+        }
+        const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify(payload)});
+        renderSavedAction(item,action,result.undoable,result.result?.document?.id);
+        notify('Изменения сохранены');
+      }catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}
+    };
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
   };
   const renderSavedAction=(item,action,undoable,documentId)=>{
