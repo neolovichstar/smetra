@@ -36,6 +36,7 @@ COOKIE_SECURE = ORIGIN.startswith("https://")
 _LOCK = threading.RLock()
 RATE = {}
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
+LEGAL_CONSENT_VERSION = "2026-10-19-ai-estimate-v1"
 
 
 def yookassa_mode(user=None):
@@ -624,6 +625,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_batch(con))
+        if path == "/api/me/legal-consent" and method in ("GET", "POST"):
+            user = self.auth(con)
+            if method == "GET":
+                row = con.execute(
+                    "SELECT document_version,accepted_at,source FROM legal_acceptances "
+                    "WHERE user_id=? AND document_version=? LIMIT 1",
+                    (user["id"], LEGAL_CONSENT_VERSION),
+                ).fetchone()
+                return self.send_json(200, {
+                    "accepted": bool(row),
+                    "version": LEGAL_CONSENT_VERSION,
+                    "accepted_at": row["accepted_at"] if row else None,
+                })
+            data = self.body()
+            if data.get("accepted") is not True or data.get("version") != LEGAL_CONSENT_VERSION:
+                raise ApiError(400, "Подтвердите согласие с действующей редакцией условий")
+            con.execute(
+                "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(user_id,document_version) DO NOTHING",
+                (uid(), user["id"], LEGAL_CONSENT_VERSION, now(), "first_estimate"),
+            )
+            return self.send_json(200, {
+                "accepted": True,
+                "version": LEGAL_CONSENT_VERSION,
+            })
+        if (
+            path == "/api/ai/draft"
+            or path == "/api/assistant"
+            or path.startswith("/api/assistant/")
+        ):
+            user = self.auth(con)
+            accepted = con.execute(
+                "SELECT 1 FROM legal_acceptances WHERE user_id=? AND document_version=? LIMIT 1",
+                (user["id"], LEGAL_CONSENT_VERSION),
+            ).fetchone()
+            if not accepted:
+                raise ApiError(428, "Сначала примите условия использования AI-черновиков")
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
@@ -656,6 +694,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/register" and method == "POST":
             self.throttle("register:" + self.client_address[0], 5, 3600)
             data = self.body()
+            if (
+                data.get("legal_acceptance") is not True
+                or data.get("legal_version") != LEGAL_CONSENT_VERSION
+            ):
+                raise ApiError(
+                    400,
+                    "Для регистрации примите Пользовательское соглашение и предупреждение об использовании AI",
+                )
             email = str(data.get("email", "")).strip().lower()
             password = str(data.get("password", ""))
             name = str(data.get("name", "")).strip()
@@ -688,6 +734,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         now(),
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
                     ),
+                )
+                con.execute(
+                    "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                    "VALUES(?,?,?,?,?)",
+                    (uid(), user_id, LEGAL_CONSENT_VERSION, now(), "registration"),
                 )
                 event(con, user_id, "signup_completed")
                 revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
