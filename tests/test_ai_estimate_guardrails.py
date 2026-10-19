@@ -172,7 +172,8 @@ class AIEstimateGuardrailsTests(unittest.TestCase):
         rendered = pdf(document)
         from pypdf import PdfReader
 
-        extracted = "\\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(rendered)).pages)
+        extracted = " ".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(rendered)).pages)
+        extracted = " ".join(extracted.split())
         for phrase in (
             "Расчет сгенерирован ИИ-ассистентом",
             "предварительным черновиком",
