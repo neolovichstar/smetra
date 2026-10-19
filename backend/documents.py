@@ -216,6 +216,15 @@ def documents(service, method, parts, query, data):
         if parts:
             row = service.get("documents", parts[0])
             if len(parts) == 2 and parts[1] == "pdf":
+                # AI-generated estimates need an explicit review confirmation even if
+                # a caller bypasses the browser modal and invokes the endpoint directly.
+                if row["quote_id"]:
+                    quote = service.get("quotes", row["quote_id"])
+                    if int(quote["ai_generated"] or 0) == 1 and query.get("review_confirmed") != ["1"]:
+                        raise DomainError(
+                            400,
+                            "Перед экспортом подтвердите проверку объёмов, технологии и цен",
+                        )
                 return 200, Download(
                     pdf(row), "application/pdf", f"smetra-{row['number']}.pdf"
                 )
@@ -245,6 +254,11 @@ def documents(service, method, parts, query, data):
 def prepare_document(service, data):
     con = service.con
     row = service.get("quotes", string(data.get("quote_id", ""), "Смета", 50, True))
+    if int(row["ai_generated"] or 0) == 1 and data.get("review_confirmed") is not True:
+        raise DomainError(
+            400,
+            "Перед экспортом подтвердите проверку объёмов, технологии и цен",
+        )
     kind = choice(data.get("kind", "estimate"), TITLES, "Вид документа")
     template = choice(
         data.get("template", "Minimal"),
