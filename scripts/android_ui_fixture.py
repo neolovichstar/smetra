@@ -173,7 +173,7 @@ def main():
             if index < 2:
                 quote = call(
                     "/quotes/" + quote["id"] + "/publish",
-                    {"revision": quote["revision"]},
+                    {"revision": quote["revision"], "review_confirmed": True},
                     token,
                 )["quote"]
             if index == 0:
@@ -314,7 +314,7 @@ def main():
         if os.getenv('SMETRA_QUOTE_REVIEW_QA') == '1':
             quote_review = call('/quotes', {'title': 'Сравнение условий', 'client': 'Тестовый клиент', 'terms': 'Срок 10 дней',
                                            'items': [{'name': 'Подготовка', 'unit_price': 10000}, {'name': 'Покраска', 'unit_price': 20000}, {'name': 'Доставка', 'unit_price': 3000}]}, token)['quote']
-            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision']}, token)['quote']
+            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision'], 'review_confirmed': True}, token)['quote']
 
             def revise_review(quote, terms, items):
                 payload = json.dumps({'revision': quote['revision'], 'terms': terms, 'items': items}).encode()
@@ -325,7 +325,7 @@ def main():
 
             quote_review = revise_review(quote_review, 'Срок 7 дней', [{**quote_review['items'][0], 'name': 'Подготовка поверхности', 'unit_price': 12000},
                                                                      quote_review['items'][1], {'name': 'Защита мебели', 'unit_price': 4000}])
-            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision']}, token)['quote']
+            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision'], 'review_confirmed': True}, token)['quote']
             revise_review(quote_review, 'Срок 5 дней', quote_review['items'])
         print("ANDROID_UI_FIXTURE_READY " + base_url, flush=True)
         try:
