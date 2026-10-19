@@ -314,8 +314,14 @@ class BusinessFlows(unittest.TestCase):
 
     def test_construction_act_freezes_recorded_fact_instead_of_plan(self):
         owner, _ = self.account('act-owner')
+        quote = self.quote(owner, title="Act currency", currency="EUR")
         _, created = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, owner)
         obj = created['object']['id']
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE construction_objects SET quote_id=? WHERE id=?",
+                (quote["id"], obj),
+            )
         _, room = self.call(f'/construction/objects/{obj}/zones', 'POST',
                             {'name': 'Кухня', 'length': '5', 'width': '4'}, owner)
         _, work = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
@@ -336,6 +342,8 @@ class BusinessFlows(unittest.TestCase):
         first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
         self.assertIn('Покраска', first)
         self.assertIn('3 м²', first)
+        self.assertIn('EUR', first)
+        self.assertNotIn('RUB', first)
         self.assertNotIn('20 м²', first)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '4'}, owner)[0], 201)
