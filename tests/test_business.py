@@ -245,7 +245,7 @@ class BusinessFlows(unittest.TestCase):
             'work_date': '2026-09-30', 'work_description': 'Окрашена стена',
             'photo_file_ids': [photo['file']['id']],
         }, owner)[0], 201)
-        status, payload = self.call(f'/construction/objects/{obj}/report.pdf', token=owner, raw=True)
+        status, payload = self.call(f'/construction/objects/{obj}/report.pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(payload))
@@ -255,7 +255,7 @@ class BusinessFlows(unittest.TestCase):
         self.assertNotIn('Секретный поставщик', report)
         self.assertNotIn('12 345,67', report)
         self.assertTrue(any(page.images for page in reader.pages))
-        self.assertEqual(self.call(f'/construction/objects/{obj}/report.pdf', token=outsider)[0], 404)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/report.pdf?review_confirmed=1', token=outsider)[0], 404)
 
     def test_additional_work_requires_separate_client_approval_and_preserves_versions(self):
         owner, _ = self.account('change-owner')
@@ -323,14 +323,14 @@ class BusinessFlows(unittest.TestCase):
             'formula': 'area', 'unit_price': 10000,
         }, owner)
         quantity = work['quantity']['id']
-        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)[0], 409)
+        self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {'review_confirmed': True}, owner)[0], 409)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '3'}, owner)[0], 201)
-        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)
+        status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {'review_confirmed': True}, owner)
         self.assertEqual(status, 201, created_act)
         self.assertEqual(created_act['amount_kopecks'], 30000)
         document_id = created_act['document']['id']
-        status, content = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        status, content = self.call('/documents/' + document_id + '/pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         from pypdf import PdfReader
         first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
@@ -339,7 +339,7 @@ class BusinessFlows(unittest.TestCase):
         self.assertNotIn('20 м²', first)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '4'}, owner)[0], 201)
-        status, unchanged = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        status, unchanged = self.call('/documents/' + document_id + '/pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         self.assertEqual(first, PdfReader(io.BytesIO(unchanged)).pages[0].extract_text())
 
