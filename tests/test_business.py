@@ -967,6 +967,37 @@ class BusinessFlows(unittest.TestCase):
         published = self.publish(token, quote)
         self.assertEqual(published["approval_state"], "sent")
 
+    def test_ai_estimate_document_export_requires_explicit_review_confirmation(self):
+        token, _ = self.account("ai-estimate-export-" + os.urandom(4).hex())
+        quote = self.quote(token, title="AI draft requiring review", ai_generated=1)
+        self.assertEqual(quote["ai_generated"], 1)
+
+        status, result = self.call(
+            "/documents", "POST", {"quote_id": quote["id"], "kind": "estimate"}, token
+        )
+        self.assertEqual(status, 400, result)
+        self.assertIn("подтвердите проверку", result.get("error", "").lower())
+
+        status, result = self.call(
+            "/documents", "POST",
+            {"quote_id": quote["id"], "kind": "estimate", "review_confirmed": True},
+            token,
+        )
+        self.assertEqual(status, 201, result)
+        document_id = result["document"]["id"]
+
+        status, _ = self.call(
+            "/documents/" + document_id + "/pdf", token=token, raw=True
+        )
+        self.assertEqual(status, 400, "Direct PDF endpoint must not bypass the review modal")
+
+        status, content = self.call(
+            "/documents/" + document_id + "/pdf?review_confirmed=1",
+            token=token, raw=True,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(content.startswith(b"%PDF-"))
+
     def test_catalog_price_history_filters_favorites_and_workspace_scope(self):
         owner, _ = self.account("catalog-history-owner")
         outsider, _ = self.account("catalog-history-outsider")
