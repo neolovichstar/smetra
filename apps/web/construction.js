@@ -260,7 +260,7 @@
     try{
       if(window.Workspace?.ensureEstimateConsent&&!(await window.Workspace.ensureEstimateConsent()))return;
       if(window.Workspace?.confirmEstimateReview&&!(await window.Workspace.confirmEstimateReview()))return;
-      const result=await api(`/construction/objects/${selected}/act`,{method:'POST',body:'{}'});
+      const result=await api(`/construction/objects/${selected}/act`,{method:'POST',body:JSON.stringify({review_confirmed:true})});
       const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;
       const response=await fetch('/api/documents/'+encodeURIComponent(result.document.id)+'/pdf?review_confirmed=1',{credentials:'same-origin',headers});
       if(!response.ok)throw Error((await response.json()).error||'Не удалось скачать акт');
