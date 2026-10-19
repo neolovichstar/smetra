@@ -332,6 +332,46 @@ class IdentityAssistantTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(json.loads(raw)["user"]["id"], session["user"]["id"])
 
+    def test_assistant_quote_publish_requires_explicit_review_confirmation(self):
+        owner, _ = self.account("assistant-publish-review")
+        quote = BusinessFlows.quote(self, owner, title="Проверяемая AI-смета")
+        response = {
+            "content": None,
+            "tool_calls": [{
+                "id": "publish-quote-test",
+                "type": "function",
+                "function": {
+                    "name": "publish_quote",
+                    "arguments": json.dumps({"id": quote["id"]}),
+                },
+            }],
+        }
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"), patch(
+            "backend.assistant.query_model", return_value=response
+        ):
+            status, proposal = self.call(
+                "/assistant/chat", "POST",
+                {"text": "Отправь смету клиенту"}, owner,
+            )
+        self.assertEqual(status, 200, proposal)
+        action_id = proposal["actions"][0]["id"]
+
+        status, rejected = self.call(
+            "/assistant/confirm", "POST", {"id": action_id}, owner
+        )
+        self.assertEqual(status, 400, rejected)
+        quote_after_rejection = self.call("/quotes/" + quote["id"], token=owner)[1]["quote"]
+        self.assertEqual(quote_after_rejection["published_version"], 0)
+
+        status, accepted = self.call(
+            "/assistant/confirm", "POST",
+            {"id": action_id, "review_confirmed": True}, owner,
+        )
+        self.assertEqual(status, 200, accepted)
+        quote_after_acceptance = self.call("/quotes/" + quote["id"], token=owner)[1]["quote"]
+        self.assertEqual(quote_after_acceptance["published_version"], 1)
+        self.assertEqual(quote_after_acceptance["approval_state"], "sent")
+
     def test_assistant_proposal_is_scoped_confirmed_and_idempotent(self):
         token, _ = self.account("assistant-owner")
         stranger, _ = self.account("assistant-stranger")
