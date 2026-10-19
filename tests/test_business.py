@@ -948,12 +948,8 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(status, 200, result)
         self.assertTrue(result["user"]["estimate_terms_accepted"])
 
-        con = self.mod.db()
-        try:
+        with self.mod.db() as con:
             con.execute("UPDATE users SET terms_accepted_at=0, terms_version='' WHERE id=?", (user_id,))
-            con.commit()
-        finally:
-            con.close()
         status, result = self.call("/ai/draft", "POST", {"text": "Составить смету ремонта ванной"}, token)
         self.assertEqual(status, 403, result)
 
