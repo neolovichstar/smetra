@@ -2097,12 +2097,21 @@ class Service:
             from legal import has_current_terms
         if kind == "ai" and method == "POST" and not has_current_terms(self.user):
             raise DomainError(403, "Подтвердите Пользовательское соглашение и отказ от ответственности перед использованием генератора смет")
-        if kind == "quotes" and method == "POST" and len(rest) == 2 and rest[1] == "publish" and data.get("review_confirmed") is not True:
-            raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
-        if kind == "quotes" and method == "POST" and len(rest) == 2 and rest[1] == "status" and data.get("status") == "sent" and data.get("review_confirmed") is not True:
-            raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
-        if kind == "quotes" and method == "PATCH" and len(rest) == 1 and data.get("status") == "sent" and data.get("review_confirmed") is not True:
-            raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
+        if kind == "quotes" and self.wid and rest and method in ("POST", "PATCH"):
+            requires_review = (
+                method == "POST" and len(rest) == 2 and rest[1] == "publish"
+                or method == "POST" and len(rest) == 2 and rest[1] == "status" and data.get("status") == "sent"
+                or method == "PATCH" and len(rest) == 1 and data.get("status") == "sent"
+            )
+            if requires_review:
+                # Check workspace ownership before returning the review-specific error;
+                # foreign IDs must follow the normal 403/404 path without an oracle.
+                own_quote = self.con.execute(
+                    "SELECT 1 FROM quotes WHERE id=? AND workspace_id=?",
+                    (rest[0], self.wid),
+                ).fetchone()
+                if own_quote and data.get("review_confirmed") is not True:
+                    raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
         if kind == "push-devices":
             from backend.push import handle as handle_push_devices
 
