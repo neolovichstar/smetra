@@ -2091,7 +2091,10 @@ class Service:
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
         data = self.h.body() if method in ("POST", "PATCH") else {}
-        from backend.legal import has_current_terms
+        try:
+            from backend.legal import has_current_terms
+        except ModuleNotFoundError:
+            from legal import has_current_terms
         if kind == "ai" and method == "POST" and not has_current_terms(self.user):
             raise DomainError(403, "Подтвердите Пользовательское соглашение и отказ от ответственности перед использованием генератора смет")
         if kind == "quotes" and method == "POST" and len(rest) == 2 and rest[1] == "publish" and data.get("review_confirmed") is not True:
