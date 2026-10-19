@@ -107,19 +107,34 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertEqual(status, 200)
 
     def test_estimate_requires_versioned_consent_and_explicit_publish_review(self):
-        # Deliberately avoid BusinessFlows.account(): this account has not yet
-        # accepted the current terms version and must be blocked server-side.
-        code, registered = self.call(
-            "/auth/register",
+        # Deliberately avoid accepting terms during registration: server-side
+        # checks must reject direct API calls that bypass the UI checkbox.
+        status, _, registered = self.request(
             "POST",
-            {
+            "/api/auth/register",
+            json.dumps({
                 "email": "legal-gate@test.invalid",
                 "name": "Legal gate",
                 "password": "secure twelve password",
-            },
+            }).encode(),
+            {"Content-Type": "application/json"},
         )
-        self.assertEqual(code, 200, registered)
+        self.assertEqual(status, 200, registered)
         token = registered["token"]
+
+        def call(path, method="GET", data=None):
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token,
+            }
+            status, _, result = self.request(
+                method,
+                "/api" + path,
+                json.dumps(data).encode() if data is not None else None,
+                headers,
+            )
+            return status, result
+
         quote_data = {
             "title": "Проверка основания",
             "client": "Тестовый клиент",
@@ -133,42 +148,40 @@ class SecurityHardeningTests(unittest.TestCase):
                 }
             ],
         }
-        self.assertFalse(self.call("/legal/acceptance", token=token)[1]["accepted"])
-        status, blocked = self.call("/ai/draft", "POST", {"text": "Грунтовка"}, token)
+        status, current = call("/legal/acceptance")
+        self.assertEqual(status, 200)
+        self.assertFalse(current["accepted"])
+        status, blocked = call("/ai/draft", "POST", {"text": "Грунтовка"})
         self.assertEqual(status, 428, blocked)
-        status, blocked = self.call("/quotes", "POST", quote_data, token)
+        status, blocked = call("/quotes", "POST", quote_data)
         self.assertEqual(status, 428, blocked)
-        status, rejected = self.call(
+        status, rejected = call(
             "/legal/acceptance",
             "POST",
             {"accepted": True, "terms_version": "outdated"},
-            token,
         )
         self.assertEqual(status, 400, rejected)
-        status, accepted = self.call(
+        status, accepted = call(
             "/legal/acceptance",
             "POST",
             {"accepted": True, "terms_version": "2026-10-19"},
-            token,
         )
         self.assertEqual(status, 200, accepted)
         self.assertTrue(accepted["accepted"])
-        status, created = self.call("/quotes", "POST", quote_data, token)
+        status, created = call("/quotes", "POST", quote_data)
         self.assertEqual(status, 201, created)
         quote_id = created["quote"]["id"]
         revision = created["quote"]["revision"]
-        status, unconfirmed = self.call(
+        status, unconfirmed = call(
             "/quotes/" + quote_id + "/publish",
             "POST",
             {"revision": revision},
-            token,
         )
         self.assertEqual(status, 428, unconfirmed)
-        status, published = self.call(
+        status, published = call(
             "/quotes/" + quote_id + "/publish",
             "POST",
             {"revision": revision, "review_confirmed": True},
-            token,
         )
         self.assertEqual(status, 200, published)
 
