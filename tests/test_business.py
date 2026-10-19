@@ -1020,6 +1020,45 @@ class BusinessFlows(unittest.TestCase):
             Service(handler, con, self.base).handle("GET", "/api/dashboard", {})
             self.assertFalse(any("quote_items" in sql for sql in statements))
 
+    def test_monthly_receipt_summary_excludes_future_dated_payments(self):
+        token, _ = self.account("future-receipt-summary")
+        quote = self.publish(token, self.quote(token, title="Future payment"))
+        public_token = quote["public_url"].split("quote=")[1]
+        code, _ = self.call(
+            "/public/accept",
+            "POST",
+            {"token": public_token, "version": 1, "name": "Client"},
+        )
+        self.assertEqual(code, 200)
+        code, project = self.call(
+            "/quotes/" + quote["id"] + "/project", "POST", {}, token
+        )
+        self.assertEqual(code, 201, project)
+        code, payment = self.call(
+            "/receipts",
+            "POST",
+            {
+                "project_id": project["project"]["id"],
+                "amount_kopecks": 10000,
+                "payment_date": "2026-11-01",
+                "method": "bank_transfer",
+            },
+            token,
+            key="future-summary-payment-key",
+        )
+        self.assertEqual(code, 201, payment)
+
+        with patch(
+            "backend.business.business_date",
+            return_value=dt.date(2026, 10, 19),
+        ):
+            code, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(code, 200, dashboard)
+        self.assertEqual(
+            dashboard["actions"]["summary"]["received_this_month"],
+            {},
+        )
+
     def test_today_lists_real_followups_without_other_workspace_data(self):
         token, _ = self.account("today-owner")
         other_token, _ = self.account("today-other")
