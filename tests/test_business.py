@@ -317,11 +317,6 @@ class BusinessFlows(unittest.TestCase):
         quote = self.quote(owner, title="Act currency", currency="EUR")
         _, created = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, owner)
         obj = created['object']['id']
-        with self.mod.db() as con:
-            con.execute(
-                "UPDATE construction_objects SET quote_id=? WHERE id=?",
-                (quote["id"], obj),
-            )
         _, room = self.call(f'/construction/objects/{obj}/zones', 'POST',
                             {'name': 'Кухня', 'length': '5', 'width': '4'}, owner)
         _, work = self.call(f'/construction/objects/{obj}/quantities', 'POST', {
@@ -332,6 +327,11 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)[0], 409)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '3'}, owner)[0], 201)
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE construction_objects SET quote_id=? WHERE id=?",
+                (quote["id"], obj),
+            )
         status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)
         self.assertEqual(status, 201, created_act)
         self.assertEqual(created_act['amount_kopecks'], 30000)
