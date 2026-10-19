@@ -267,9 +267,12 @@ def route(h, con, method, path, query, origin):
                 row["terms_version"] != TERMS_VERSION
                 or int(row["terms_accepted_at"] or 0) <= 0
             ):
-                return redirect(
-                    h, origin + "/app?register=1&auth_error=consent_required"
+                target = (
+                    "smetra://auth?error=consent_required"
+                    if row["app_challenge"]
+                    else origin + "/app?register=1&auth_error=consent_required"
                 )
+                return redirect(h, target)
             user_id = identity()
             email = (
                 email.lower()
