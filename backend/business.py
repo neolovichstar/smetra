@@ -2095,8 +2095,6 @@ class Service:
             from backend.legal import has_current_terms
         except ModuleNotFoundError:
             from legal import has_current_terms
-        if kind == "ai" and method == "POST" and not has_current_terms(self.user):
-            raise DomainError(403, "Подтвердите Пользовательское соглашение и отказ от ответственности перед использованием генератора смет")
         if kind == "push-devices":
             from backend.push import handle as handle_push_devices
 
@@ -2121,6 +2119,21 @@ class Service:
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
             self.write_access()
+            if kind == "ai" and method == "POST" and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите Пользовательское соглашение и отказ от ответственности перед использованием генератора смет",
+                )
+            if kind == "assistant" and method == "POST" and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед использованием ИИ-ассистента",
+                )
+            if kind == "quotes" and method in ("POST", "PATCH") and not has_current_terms(self.user):
+                raise DomainError(
+                    403,
+                    "Подтвердите актуальное Пользовательское соглашение перед изменением сметы",
+                )
             if kind == "quotes" and self.wid and rest:
                 requires_review = (
                     method == "POST" and len(rest) == 2 and rest[1] == "publish"
