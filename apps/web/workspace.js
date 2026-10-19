@@ -424,7 +424,75 @@ window.Workspace = (() => {
     const active=pageRequest();
     const data=await api('/custom-fields');if(!active()||current!=='team')return;const section=document.createElement('section');section.className='panel';section.innerHTML=`<div class="section-top"><h3>Дополнительные поля</h3><button class="btn small" id="new-custom-field">+ Поле</button></div><p class="muted">Настройте клиентов, сметы и заказы под свой способ работы.</p>${data.items.map(f=>`<div class="record-line"><strong>${e(f.name)}</strong><small>${e({clients:'Клиенты',estimates:'Сметы',projects:'Заказы'}[f.entity_type])} · ${e(f.type)}</small></div>`).join('')}`;document.querySelector('#content').append(section);section.querySelector('button').onclick=()=>{const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});closeModal();await render('team')})};
   }
-  async function aiDraft(){if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.ensureConsent()))return;const root=openModal('Из описания — в черновик','Черновой AI-ассистент структурирует позиции; итоговую математику выполняет приложение. Проверьте данные перед сохранением.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}${window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():''}<p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor({...r.draft,_ai_generated:true})})}
+  async function aiDraft(){
+    if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.ensureConsent()))return;
+    const root=openModal(
+      'Из описания и фото — в черновик',
+      'Добавьте фотографию помещения, объекта или чертежа. AI распознает видимые работы и предложит позиции для проверки.',
+      `<form id="estimate-ai-draft-form">
+        ${field('text','Что нужно сделать?','','textarea','maxlength="8000" placeholder="Например: оценить подготовку стен, укладку плитки и монтаж сантехники"')}
+        <section class="estimate-photo-upload">
+          <div class="estimate-photo-heading"><strong>Фотография объекта</strong><span>PNG или JPG · до 2 МБ</span></div>
+          <input id="estimate-ai-photo" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" hidden>
+          <button class="btn" type="button" id="estimate-ai-photo-pick">＋ Прикрепить фото</button>
+          <div id="estimate-ai-photo-preview" class="estimate-photo-preview" aria-live="polite"></div>
+          <p class="muted">По фото нельзя надёжно определить скрытые слои, точные размеры и состояние основания. Неизвестные цены останутся нулевыми.</p>
+        </section>
+        ${window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():''}
+        <p class="muted">Результат появится как черновик. Ничего не отправляется клиенту автоматически.</p>
+        ${formEnd('Составить черновик')}
+      </form>`
+    );
+    bindCancel(root);
+    const form=root.querySelector('#estimate-ai-draft-form');
+    const picker=form.querySelector('#estimate-ai-photo');
+    const choose=form.querySelector('#estimate-ai-photo-pick');
+    const preview=form.querySelector('#estimate-ai-photo-preview');
+    let photo=null,previewUrl='';
+    const clearPreviewUrl=()=>{if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=''}};
+    const renderPhoto=()=>{
+      preview.replaceChildren();
+      if(!photo)return;
+      const card=document.createElement('div');card.className='estimate-photo-card';
+      const image=document.createElement('img');image.src=previewUrl;image.alt='Предпросмотр фотографии объекта';
+      const details=document.createElement('div');details.className='estimate-photo-file';
+      const name=document.createElement('strong');name.textContent=photo.name;
+      const size=document.createElement('span');size.textContent=(photo.size/1024).toFixed(0)+' КБ';
+      const remove=document.createElement('button');remove.type='button';remove.className='btn small';remove.textContent='Убрать фото';remove.setAttribute('aria-label','Убрать прикреплённое фото');
+      remove.addEventListener('click',()=>{clearPreviewUrl();photo=null;picker.value='';renderPhoto()});
+      details.append(name,size,remove);card.append(image,details);preview.append(card);
+    };
+    choose.addEventListener('click',()=>picker.click());
+    picker.addEventListener('change',()=>{
+      const selected=picker.files?.[0]||null;
+      if(!selected){clearPreviewUrl();photo=null;renderPhoto();return}
+      const ext=selected.name.toLowerCase().split('.').pop();
+      const expected=ext==='png'?'image/png':['jpg','jpeg'].includes(ext)?'image/jpeg':'';
+      if(!expected||selected.type&&selected.type!==expected){
+        picker.value='';photo=null;clearPreviewUrl();renderPhoto();notify('Прикрепите изображение PNG, JPG или JPEG');return;
+      }
+      if(!selected.size||selected.size>2_000_000){
+        picker.value='';photo=null;clearPreviewUrl();renderPhoto();notify('Фото должно быть не больше 2 МБ');return;
+      }
+      clearPreviewUrl();photo=selected;previewUrl=URL.createObjectURL(selected);renderPhoto();
+    });
+    submitForm(form,async d=>{
+      if(!d.text.trim()&&!photo)throw Error('Добавьте описание или фотографию объекта');
+      const body={text:d.text.trim()};
+      if(photo){
+        const selected=photo;
+        const dataUrl=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();
+          reader.onload=()=>typeof reader.result==='string'?resolve(reader.result):reject(Error('Не удалось прочитать фотографию'));
+          reader.onerror=()=>reject(Error('Не удалось прочитать фотографию'));
+          reader.readAsDataURL(selected);
+        });
+        body.file={name:selected.name,mime:selected.type||(/\.png$/i.test(selected.name)?'image/png':'image/jpeg'),content:dataUrl.slice(dataUrl.indexOf(',')+1)};
+      }
+      const result=await api('/ai/draft',{method:'POST',body:JSON.stringify(body)});
+      clearPreviewUrl();closeModal();await editor({...result.draft,_ai_generated:true});
+    });
+  }
   async function attachments(key,id){
     const active=pageRequest();
     const data=await api('/files?'+key+'='+encodeURIComponent(id));
