@@ -261,6 +261,15 @@ def route(h, con, method, path, query, origin):
                 ).fetchone()
             ):
                 return redirect(h, origin + "/app?auth_error=link_required")
+            # OAuth can be initiated from the login tab. Never let a first-time
+            # provider login silently create an account without explicit consent.
+            if (
+                row["terms_version"] != TERMS_VERSION
+                or int(row["terms_accepted_at"] or 0) <= 0
+            ):
+                return redirect(
+                    h, origin + "/app?register=1&auth_error=consent_required"
+                )
             user_id = identity()
             email = (
                 email.lower()
