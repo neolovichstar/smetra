@@ -275,8 +275,8 @@ class EstimateSafetyTests(unittest.TestCase):
                 {
                     "text": "Что ты видишь на фото?",
                     "image": {
-                        "name": "room.jpg",
-                        "mime": "image/jpeg",
+                        "name": "room.png",
+                        "mime": "image/png",
                         "content": encoded,
                     },
                 },
