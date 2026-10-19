@@ -209,7 +209,7 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(status, 201)
         qid = result["quote"]["id"]
         status, _ = self.request(
-            "/api/quotes/" + qid + "/status", "POST", {"status": "sent"}, token
+            "/api/quotes/" + qid + "/status", "POST", {"status": "sent", "review_confirmed": True}, token
         )
         self.assertEqual(status, 200)
         public = result["quote"]["public_url"].split("quote=")[1]
