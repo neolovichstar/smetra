@@ -415,7 +415,7 @@ class EstimateSafetyTests(unittest.TestCase):
                     "description": "Требует замера по месту",
                     "quantity": "12",
                     "unit": "м²",
-                    "unit_price": 0,
+                    "unit_price": 3500,
                 }],
             },
             token,
