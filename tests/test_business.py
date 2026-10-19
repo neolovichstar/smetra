@@ -1137,6 +1137,24 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(code, 201, receipt)
         self.assertEqual(receipt["item"]["payment_date"], "2026-10-01")
 
+        with patch(
+            "backend.business.business_date",
+            return_value=dt.date(2026, 10, 1),
+        ):
+            expense_code, expense = self.call(
+                "/expenses",
+                "POST",
+                {
+                    "project_id": project["project"]["id"],
+                    "amount_kopecks": 5000,
+                    "category": "Материалы",
+                },
+                token,
+                key="expense-business-date-key",
+            )
+        self.assertEqual(expense_code, 201, expense)
+        self.assertEqual(expense["item"]["expense_date"], "2026-10-01")
+
     def test_full_client_quote_project_partial_payments_expense_document(self):
         token, _ = self.account("lifecycle")
         code, c = self.call(
