@@ -2099,6 +2099,8 @@ class Service:
             raise DomainError(403, "Подтвердите Пользовательское соглашение и отказ от ответственности перед использованием генератора смет")
         if kind == "quotes" and method == "POST" and len(rest) == 2 and rest[1] == "publish" and data.get("review_confirmed") is not True:
             raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
+        if kind == "quotes" and method == "POST" and len(rest) == 2 and rest[1] == "status" and data.get("status") == "sent" and data.get("review_confirmed") is not True:
+            raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
         if kind == "quotes" and method == "PATCH" and len(rest) == 1 and data.get("status") == "sent" and data.get("review_confirmed") is not True:
             raise DomainError(400, "Перед отправкой подтвердите, что проверили объёмы, технологию и цены")
         if kind == "push-devices":
