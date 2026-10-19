@@ -160,7 +160,8 @@ def route(h, con, method, path, query, origin):
         if intent not in ("login", "register"):
             return redirect(h, origin + "/app?auth_error=expired")
         legal_accepted = (
-            query.get("legal_acceptance", [""])[0] == "1"
+            intent == "register"
+            and query.get("legal_acceptance", [""])[0] == "1"
             and query.get("legal_version", [""])[0] == REGISTRATION_CONSENT_VERSION
         )
         if intent == "register" and not legal_accepted:
