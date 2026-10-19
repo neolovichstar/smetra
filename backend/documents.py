@@ -272,6 +272,11 @@ def documents(service, method, parts, query, data):
 def prepare_document(service, data):
     con = service.con
     row = service.get("quotes", string(data.get("quote_id", ""), "Смета", 50, True))
+    if int(row["ai_generated"] or 0) == 1 and not has_current_terms(service.user):
+        raise DomainError(
+            403,
+            "Подтвердите актуальное Пользовательское соглашение перед экспортом ИИ-сметы",
+        )
     if int(row["ai_generated"] or 0) == 1 and data.get("review_confirmed") is not True:
         raise DomainError(
             400,
