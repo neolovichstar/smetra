@@ -1708,7 +1708,7 @@ class Service:
             values.update(
                 stage_id=stage,
                 payment_date=date_value(
-                    data.get("payment_date", dt.date.today().isoformat())
+                    data.get("payment_date", business_date().isoformat())
                 ),
                 method=choice(
                     data.get("method", "bank_transfer"),
