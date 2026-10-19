@@ -1891,9 +1891,9 @@ class Service:
         quotes = dict(
             self.con.execute(
                 "SELECT count(*) AS total,"
-                "sum(CASE WHEN approval_state IN ('sent','viewed','changes_requested') "
-                "AND (expires_at IS NULL OR expires_at>=?) THEN 1 ELSE 0 END) AS waiting,"
-                "sum(CASE WHEN approval_state='approved' THEN 1 ELSE 0 END) AS approved "
+                "coalesce(sum(CASE WHEN approval_state IN ('sent','viewed','changes_requested') "
+                "AND (expires_at IS NULL OR expires_at>=?) THEN 1 ELSE 0 END),0) AS waiting,"
+                "coalesce(sum(CASE WHEN approval_state='approved' THEN 1 ELSE 0 END),0) AS approved "
                 "FROM quotes WHERE workspace_id=?",
                 (stamp(), self.wid),
             ).fetchone()
