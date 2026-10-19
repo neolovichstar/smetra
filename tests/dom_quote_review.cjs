@@ -11,7 +11,7 @@ function setup(){
  load(fs.readFileSync('apps/web/app.js','utf8').split("if($('#auth')){")[0]);w.eval("user={id:'qa'};tab='quotes'");
  const notices=[],opened=[],consentCalls=[];w.notify=text=>notices.push(text);w.Workspace={openQuote:async id=>{opened.push(id);w.view('Quote')},ensureEstimateConsent:async()=>{consentCalls.push('terms');return true},confirmEstimateReview:async()=>{consentCalls.push('review');return true}};
  w.api=async()=>result();load(fs.readFileSync('apps/web/quote-review.js','utf8'));
- return {dom,w,doc,notices,opened,close:()=>dom.window.close()};
+ return {dom,w,doc,notices,opened,consentCalls,close:()=>dom.window.close()};
 }
 (async()=>{
  const failures=[];
@@ -19,7 +19,7 @@ function setup(){
  await test('safe report preserves values and does not execute stored HTML',async({w,doc})=>{
   await w.SmetraQuoteReview.open(original,versions);assert.equal(doc.querySelector('.quote-review img'),null);assert.equal(doc.querySelector('.quote-review script'),null);assert.ok(doc.querySelector('#review-report').textContent.includes('<script>alert(1)</script>'));assert.equal(doc.querySelectorAll('.review-field').length,3);
  });
- await test('publishing waits for comparison and uses its exact revision',async({w,doc,opened})=>{
+ await test('publishing waits for comparison and uses its exact revision',async({w,doc,opened,consentCalls})=>{
   const request=deferred(),writes=[];w.api=(path,options)=>options?.method==='POST'?(writes.push(JSON.parse(options.body)),Promise.resolve({})):request.promise;
   const pending=w.SmetraQuoteReview.open(original,versions,{publish:true});const form=doc.querySelector('#review-publish');await form.onsubmit({preventDefault(){}});assert.equal(writes.length,0);
   request.resolve(result());await pending;form.querySelector('textarea').value='Reviewed conditions';await form.onsubmit({preventDefault(){}});
