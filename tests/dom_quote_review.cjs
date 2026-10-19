@@ -22,7 +22,9 @@ function setup(){
  await test('publishing waits for comparison and uses its exact revision',async({w,doc,opened})=>{
   const request=deferred(),writes=[];w.api=(path,options)=>options?.method==='POST'?(writes.push(JSON.parse(options.body)),Promise.resolve({})):request.promise;
   const pending=w.SmetraQuoteReview.open(original,versions,{publish:true});const form=doc.querySelector('#review-publish');await form.onsubmit({preventDefault(){}});assert.equal(writes.length,0);
-  request.resolve(result());await pending;form.querySelector('textarea').value='Reviewed conditions';await form.onsubmit({preventDefault(){}});
+  request.resolve(result());await pending;form.querySelector('textarea').value='Reviewed conditions';
+  form.querySelector('#review-publish-confirmed').checked=true;form.querySelector('#review-publish-confirmed').dispatchEvent(new w.Event('change',{bubbles:true}));
+  await form.onsubmit({preventDefault(){}});
   assert.deepEqual(writes,[{revision:7,comment:'Reviewed conditions'}]);assert.deepEqual(opened,['quote']);
  });
  await test('historical target and unavailable state cannot publish',async({w,doc})=>{
@@ -37,7 +39,7 @@ function setup(){
   const request=deferred();w.api=()=>request.promise;const pending=w.SmetraQuoteReview.open(original,versions);w.eval("user={id:'other'};tab='support'");w.view('Support');request.resolve(result());await pending;assert.equal(doc.querySelector('#content').textContent,'Support');
  });
  await test('failed publication keeps comment and reloads comparison before retry',async({w,doc})=>{
-  let reads=0;w.api=async(path,options)=>{if(options?.method==='POST')throw Error('Conflict');reads++;return result({revision:reads+6})};await w.SmetraQuoteReview.open(original,versions,{publish:true});const form=doc.querySelector('#review-publish');form.querySelector('textarea').value='Keep this';await form.onsubmit({preventDefault(){}});
+  let reads=0;w.api=async(path,options)=>{if(options?.method==='POST')throw Error('Conflict');reads++;return result({revision:reads+6})};await w.SmetraQuoteReview.open(original,versions,{publish:true});const form=doc.querySelector('#review-publish');form.querySelector('textarea').value='Keep this';form.querySelector('#review-publish-confirmed').checked=true;form.querySelector('#review-publish-confirmed').dispatchEvent(new w.Event('change',{bubbles:true}));await form.onsubmit({preventDefault(){}});
   assert.equal(reads,2);assert.equal(form.querySelector('textarea').value,'Keep this');assert.equal(form.querySelector('button').disabled,false);assert.ok(doc.querySelector('#review-publish-status').textContent.includes('Conflict'));
  });
  await test('currency change never invents a conversion difference',async({w,doc})=>{
