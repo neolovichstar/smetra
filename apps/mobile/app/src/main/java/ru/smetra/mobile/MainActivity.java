@@ -1194,7 +1194,7 @@ public class MainActivity extends Activity {
             addButton(content,"Прикрепить фото или файл",false,v->{uploadConstruction=id;uploadProject=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.setType("*/*");picker.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/png","image/jpeg","application/pdf","text/plain","text/csv","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});picker.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(picker,301);});
             ui.space(content,16);
             if(object.optString("quote_id").isEmpty()&&quantities!=null&&quantities.length()>0){
-                button("Создать смету",true,v->ui.sheet("Создать смету?","Ведомость станет черновиком сметы. Проверьте объёмы и цены.","Создать",false,()->call("/construction/objects/"+id+"/quote","POST",new JSONObject(),answer->openQuote(answer.optJSONObject("quote")))));
+                button("Создать смету",true,v->requireEstimateConsent(()->ui.sheet("Создать смету?","Ведомость станет черновиком сметы. Проверьте объёмы и цены.","Создать",false,()->call("/construction/objects/"+id+"/quote","POST",new JSONObject(),answer->openQuote(answer.optJSONObject("quote"))))));
             }
             if(!object.optString("quote_id").isEmpty())button("Открыть смету",true,v->call("/quotes/"+object.optString("quote_id"),"GET",null,answer->openQuote(answer.optJSONObject("quote"))));
             boolean hasFact=false;if(quantities!=null)for(int i=0;i<quantities.length();i++){JSONObject row=quantities.optJSONObject(i);if(row!=null&&row.optDouble("actual_quantity")>0){hasFact=true;break;}}
