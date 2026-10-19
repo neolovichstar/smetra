@@ -27,7 +27,7 @@ class CaptureDraftTests(unittest.TestCase):
                 "client": "",
                 "description": "Дизайн и вёрстка",
                 "terms": "Срок: три недели",
-                "items": [{"name": "Дизайн", "description": "", "quantity": "1", "unit": "усл.", "unit_price": 0}],
+                "items": [{"name": "Дизайн", "description": "", "quantity": "1", "unit": "усл.", "unit_price": 0, "requires_site_measurement": False}],
             }, ensure_ascii=False)}}],
             "usage": {"prompt_tokens": 20, "completion_tokens": 40},
         }
