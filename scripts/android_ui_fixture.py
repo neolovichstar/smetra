@@ -96,14 +96,14 @@ def main():
                 "password": "android design test only",
                 "name": "Александр",
                 "legal_acceptance": True,
-                "legal_version": "2026-10-19-ai-estimate-v1",
+                "legal_version": "2026-10-19-registration-v1",
             },
         )
         token = account["token"]
         if os.getenv('SMETRA_ACTION_QA') == '1':
             with app.db() as con:
                 con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (int(time.time())+3600,int(time.time()),account['user']['id']))
-            call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member', 'legal_acceptance': True, 'legal_version': '2026-10-19-ai-estimate-v1'})
+            call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member', 'legal_acceptance': True, 'legal_version': '2026-10-19-registration-v1'})
         from PIL import Image
         receipt_object = call('/construction/objects', {'name': 'Проверка чека'}, token)['object']['id']
         receipt_zone = call('/construction/objects/' + receipt_object + '/zones', {'name': 'Комната', 'length': '2', 'width': '1'}, token)['zone']['id']
