@@ -53,7 +53,33 @@ class EstimateSafetyTests(unittest.TestCase):
         self.assertIn("черновой ассистент-структуризатор", source)
         self.assertIn("КАТЕГОРИЧЕСКИ НЕ ВЫЧИСЛЯЙ", source)
         self.assertIn("Требует замера по месту", source)
+        self.assertIn("requires_site_measurement", source)
         self.assertIn("unit_price=0", source)
+
+    def test_measurement_note_is_enforced_for_flagged_and_hidden_work(self):
+        flagged = {
+            "name": "Работы по основанию",
+            "description": "Объём уточнить на объекте",
+            "requires_site_measurement": True,
+        }
+        ai._normalize_measurement_note(flagged)
+        self.assertIn("Требует замера по месту", flagged["description"])
+
+        hidden = {
+            "name": "Грунтовка стен",
+            "description": "Подготовительный слой",
+            "requires_site_measurement": False,
+        }
+        ai._normalize_measurement_note(hidden)
+        self.assertIn("Требует замера по месту", hidden["description"])
+
+    def test_invalid_measurement_flag_is_rejected(self):
+        with self.assertRaises(ValueError):
+            ai._normalize_measurement_note({
+                "name": "Покраска",
+                "description": "",
+                "requires_site_measurement": "yes",
+            })
 
     def test_narrative_aggregate_totals_are_rejected(self):
         self.assertTrue(ai._contains_aggregate_total({
