@@ -87,7 +87,7 @@ class SecurityHardeningTests(unittest.TestCase):
             "name": "Browser", "email": "browser-security@test.invalid",
             "password": "secure twelve password",
             "legal_acceptance": True,
-            "legal_version": "2026-10-19-ai-estimate-v1",
+            "legal_version": "2026-10-19-registration-v1",
         }).encode()
         status, headers, result = self.request(
             "POST", "/api/auth/register", body,
