@@ -341,6 +341,7 @@ def migrate(con):
         "approved_by": "TEXT NOT NULL DEFAULT ''",
         "custom_fields": "TEXT NOT NULL DEFAULT '{}'",
         "itemized": "INTEGER NOT NULL DEFAULT 0",
+        "ai_generated": "INTEGER NOT NULL DEFAULT 0",
     }
     existing = {r["name"] for r in con.execute("PRAGMA table_info(quotes)")}
     with transaction(con):
@@ -425,6 +426,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(27,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(28,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(36,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(37,?)", (stamp(),))
     # Apply the idempotent SQLite migration only after the surrounding
     # migration transaction has finished; executescript commits implicitly.
     con.executescript(
@@ -627,6 +629,7 @@ class Service:
                 "created_at",
                 "updated_at",
                 "itemized",
+                "ai_generated",
                 "view_count",
                 "first_viewed_at",
                 "sent_at",
@@ -664,6 +667,13 @@ class Service:
 
     def quote_data(self, data, old=None):
         result = {}
+        previously_ai_generated = bool(old["ai_generated"]) if old is not None and "ai_generated" in old.keys() else False
+        requested_ai_generated = data.get("ai_generated") is True or (
+            type(data.get("ai_generated")) is int and data.get("ai_generated") == 1
+        )
+        # Provenance is monotonic: saving or editing an AI draft must never
+        # clear its warning/export requirements.
+        result["ai_generated"] = int(previously_ai_generated or requested_ai_generated)
         for key, limit, required in (
             ("title", 120, True),
             ("client", 120, True),
