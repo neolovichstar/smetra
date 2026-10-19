@@ -1204,7 +1204,7 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(code, 201, document)
         code, content = self.call(
-            "/documents/" + document["document"]["id"] + "/pdf", token=token, raw=True
+            "/documents/" + document["document"]["id"] + "/pdf?review_confirmed=1", token=token, raw=True
         )
         self.assertEqual(code, 200)
         self.assertTrue(content.startswith(b"%PDF-"))
