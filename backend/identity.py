@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from http.cookies import SimpleCookie
 from backend.business import DomainError, identity, stamp, transaction
+from backend.legal import TERMS_VERSION
 
 
 def digest(value):
@@ -160,8 +161,10 @@ def route(h, con, method, path, query, origin):
             secrets.token_urlsafe(48),
             secrets.token_urlsafe(32),
         )
+        accepted_version = query.get("terms_accepted", [""])[0]
+        consented = accepted_version == TERMS_VERSION
         con.execute(
-            "INSERT INTO oauth_states(state_hash,provider,verifier,browser_hash,app_challenge,link_user_id,expires_at) VALUES(?,?,?,?,?,?,?)",
+            "INSERT INTO oauth_states(state_hash,provider,verifier,browser_hash,app_challenge,link_user_id,expires_at,terms_accepted_at,terms_version) VALUES(?,?,?,?,?,?,?,?,?)",
             (
                 digest(state),
                 provider,
@@ -170,6 +173,8 @@ def route(h, con, method, path, query, origin):
                 app_challenge,
                 linked,
                 stamp() + 600,
+                stamp() if consented else 0,
+                TERMS_VERSION if consented else "",
             ),
         )
         params = dict(
@@ -266,7 +271,7 @@ def route(h, con, method, path, query, origin):
             from backend.app import hash_password
 
             con.execute(
-                "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at,terms_accepted_at,terms_version) VALUES(?,?,?,?,?,?,?,?)",
                 (
                     user_id,
                     email,
@@ -274,7 +279,14 @@ def route(h, con, method, path, query, origin):
                     name[:80],
                     stamp(),
                     stamp() if not email.endswith('@identity.smetra.invalid') else None,
+                    row["terms_accepted_at"] if row["terms_version"] == TERMS_VERSION else 0,
+                    row["terms_version"] if row["terms_version"] == TERMS_VERSION else "",
                 ),
+            )
+        if row["terms_version"] == TERMS_VERSION and int(row["terms_accepted_at"] or 0) > 0:
+            con.execute(
+                "UPDATE users SET terms_accepted_at=?,terms_version=? WHERE id=?",
+                (row["terms_accepted_at"], TERMS_VERSION, user_id),
             )
         if not account and not row['link_user_id']:
             from backend.revenue import record
