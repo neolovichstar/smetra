@@ -2,6 +2,7 @@
 import json
 import sqlite3
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from backend import ai
@@ -126,6 +127,20 @@ class AIEstimateGuardrailsTests(unittest.TestCase):
         self.assertFalse(has_current_terms({"terms_accepted_at": 12345, "terms_version": "old"}))
         self.assertFalse(has_current_terms({"terms_accepted_at": 0, "terms_version": TERMS_VERSION}))
         self.assertFalse(has_current_terms(None))
+
+    def test_postgres_migration_is_additive_and_versioned(self):
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "supabase"
+            / "migrations"
+            / "20261019190000_ai_estimate_legal_guardrails.sql"
+        ).read_text(encoding="utf-8")
+        self.assertIn("ADD COLUMN IF NOT EXISTS terms_accepted_at BIGINT NOT NULL DEFAULT 0", migration)
+        self.assertIn("ADD COLUMN IF NOT EXISTS terms_version TEXT NOT NULL DEFAULT ''", migration)
+        self.assertIn("ADD COLUMN IF NOT EXISTS ai_generated BIGINT NOT NULL DEFAULT 0", migration)
+        self.assertIn("ALTER COLUMN terms_accepted_at SET DEFAULT 0", migration)
+        self.assertIn("VALUES (36, extract(epoch FROM now())::BIGINT)", migration)
+        self.assertNotIn("DROP TABLE", migration.upper())
 
 
 if __name__ == "__main__":
