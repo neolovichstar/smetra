@@ -1103,6 +1103,40 @@ class BusinessFlows(unittest.TestCase):
             429,
         )
 
+    def test_receipt_default_date_uses_business_timezone(self):
+        token, _ = self.account("receipt-business-date")
+        quote = self.publish(token, self.quote(token, title="Receipt date"))
+        public_token = quote["public_url"].split("quote=")[1]
+        code, _ = self.call(
+            "/public/accept",
+            "POST",
+            {"token": public_token, "version": 1, "name": "Client"},
+        )
+        self.assertEqual(code, 200)
+        code, project = self.call(
+            "/quotes/" + quote["id"] + "/project", "POST", {}, token
+        )
+        self.assertEqual(code, 201, project)
+
+        with patch(
+            "backend.business.business_date",
+            return_value=dt.date(2026, 10, 1),
+        ):
+            code, receipt = self.call(
+                "/receipts",
+                "POST",
+                {
+                    "project_id": project["project"]["id"],
+                    "amount_kopecks": 10000,
+                    "method": "bank_transfer",
+                },
+                token,
+                key="receipt-business-date-key",
+            )
+
+        self.assertEqual(code, 201, receipt)
+        self.assertEqual(receipt["item"]["payment_date"], "2026-10-01")
+
     def test_full_client_quote_project_partial_payments_expense_document(self):
         token, _ = self.account("lifecycle")
         code, c = self.call(
