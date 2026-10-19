@@ -928,7 +928,7 @@ class BusinessFlows(unittest.TestCase):
         code, result = self.call(
             "/quotes/" + quote["id"] + "/publish",
             "POST",
-            {"revision": quote["revision"]},
+            {"revision": quote["revision"], "review_confirmed": True},
             token,
         )
         self.assertEqual(code, 200, result)
