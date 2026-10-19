@@ -88,6 +88,12 @@ class EstimateSafetyTests(unittest.TestCase):
             "terms": "",
             "items": [{"name": "Грунтовка", "description": "Требует замера по месту"}],
         }))
+        self.assertTrue(ai._contains_aggregate_total({
+            "title": "Ремонт",
+            "description": "Стоимость ремонта: 150000",
+            "terms": "",
+            "items": [],
+        }))
         self.assertFalse(ai._contains_aggregate_total({
             "title": "Ремонт ванной",
             "description": "Предварительный список работ",
