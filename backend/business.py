@@ -200,6 +200,16 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    # OAuth registration consent is stored with the one-use server-side state.
+    # Add columns idempotently for databases created before this guardrail.
+    oauth_state_columns = {r["name"] for r in con.execute("PRAGMA table_info(oauth_states)")}
+    for column, definition in (
+        ("registration_intent", "INTEGER NOT NULL DEFAULT 0"),
+        ("legal_acceptance", "INTEGER NOT NULL DEFAULT 0"),
+        ("legal_version", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        if column not in oauth_state_columns:
+            con.execute(f"ALTER TABLE oauth_states ADD COLUMN {column} {definition}")
     con.executescript(
         (Path(__file__).parent / "migrations" / "003_files_ai.sql").read_text(
             encoding="utf-8"
@@ -331,6 +341,7 @@ def migrate(con):
         "approved_by": "TEXT NOT NULL DEFAULT ''",
         "custom_fields": "TEXT NOT NULL DEFAULT '{}'",
         "itemized": "INTEGER NOT NULL DEFAULT 0",
+        "ai_generated": "INTEGER NOT NULL DEFAULT 0",
     }
     existing = {r["name"] for r in con.execute("PRAGMA table_info(quotes)")}
     with transaction(con):
@@ -414,6 +425,8 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(27,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(28,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(36,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(37,?)", (stamp(),))
     # Apply the idempotent SQLite migration only after the surrounding
     # migration transaction has finished; executescript commits implicitly.
     con.executescript(
@@ -616,6 +629,7 @@ class Service:
                 "created_at",
                 "updated_at",
                 "itemized",
+                "ai_generated",
                 "view_count",
                 "first_viewed_at",
                 "sent_at",
@@ -653,6 +667,13 @@ class Service:
 
     def quote_data(self, data, old=None):
         result = {}
+        previously_ai_generated = bool(old["ai_generated"]) if old is not None and "ai_generated" in old.keys() else False
+        requested_ai_generated = data.get("ai_generated") is True or (
+            type(data.get("ai_generated")) is int and data.get("ai_generated") == 1
+        )
+        # Provenance is monotonic: saving or editing an AI draft must never
+        # clear its warning/export requirements.
+        result["ai_generated"] = int(previously_ai_generated or requested_ai_generated)
         for key, limit, required in (
             ("title", 120, True),
             ("client", 120, True),
@@ -816,6 +837,11 @@ class Service:
         return self.quote_view(self.get("quotes", qid))
 
     def publish(self, row, data):
+        if data.get("review_confirmed") is not True:
+            raise DomainError(
+                400,
+                "Перед отправкой подтвердите, что проверили объёмы, технологию и цены",
+            )
         if row["status"] in ("accepted", "completed"):
             raise DomainError(
                 409, "Согласованную смету нельзя отправить повторно: создайте копию"

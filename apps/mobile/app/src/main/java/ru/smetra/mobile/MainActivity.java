@@ -1,6 +1,7 @@
 package ru.smetra.mobile;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.*;
@@ -21,6 +22,9 @@ import static ru.smetra.mobile.SmetraUi.*;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_PUSH_PERMISSION = 5901;
+    private static final String LEGAL_CONSENT_VERSION = "2026-10-19-ai-estimate-v1";
+    private static final String REGISTRATION_CONSENT_VERSION = "2026-10-19-registration-v1";
+    private static final String AI_ESTIMATE_DISCLAIMER = "Расчет сгенерирован ИИ-ассистентом \"сметра.\" и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.";
     private boolean waitingForPushPermission = false;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     // Navigation must not queue behind a long AI stream or file upload.
@@ -58,7 +62,7 @@ public class MainActivity extends Activity {
     private int catalogLoadSeq=0;
     private boolean catalogHasMore=false;
     private JSONArray catalogItems=new JSONArray();
-    private boolean publicView=false,emailSignupAvailable=false;
+    private boolean publicView=false,emailSignupAvailable=false,legalConsentAccepted=false,legalConsentDialogOpen=false,registrationConsentAccepted=false;
     private Button clickedButton;
     private TextView feedback;
     interface Done {void onResult(JSONObject json);}
@@ -137,6 +141,9 @@ public class MainActivity extends Activity {
                 }});
             }catch(Exception error){postWorkerResult(()->{
                 if(version!=pageVersion||isFinishing()||!java.util.Objects.equals(sessionToken,token))return;restore(submit);clearLoading(content);
+                if(error instanceof ApiException&&((ApiException)error).status==428&&(path.equals("/ai/draft")||path.equals("/assistant")||path.startsWith("/assistant/"))){
+                    legalConsentAccepted=false;requireLegalConsent(()->call(path,method,body,done));return;
+                }
                 if(error instanceof ApiException&&((ApiException)error).status==401&&token!=null){clearSession();login(false);message("Сессия завершена. Войдите снова.");return;}
                 if(!(error instanceof ApiException)&&method.equals("GET")){
                     String cached=getPreferences(MODE_PRIVATE).getString("cache:"+path,null);
@@ -152,7 +159,79 @@ public class MainActivity extends Activity {
         });
     }
     private void restore(Button button){if(button!=null){button.setEnabled(true);button.setAlpha(1);}}
-    private void clearSession(){String oldToken=token;if(oldToken!=null&&PushManager.isEnabled(this)){PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,null);}token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
+
+    private void requireLegalConsent(Runnable onAccepted){
+        if(token==null){message("Войдите в Сметру перед использованием AI");return;}
+        if(legalConsentAccepted){onAccepted.run();return;}
+        if(legalConsentDialogOpen)return;
+        call("/me/legal-consent","GET",null,result->{
+            if(result.optBoolean("accepted")&&LEGAL_CONSENT_VERSION.equals(result.optString("version"))){
+                legalConsentAccepted=true;onAccepted.run();return;
+            }
+            showLegalConsent(onAccepted);
+        });
+    }
+    private void showLegalConsent(Runnable onAccepted){
+        if(legalConsentDialogOpen)return;
+        legalConsentDialogOpen=true;
+        LinearLayout panel=ui.column();panel.setPadding(dp(4),dp(4),dp(4),0);
+        TextView warning=ui.label(AI_ESTIMATE_DISCLAIMER,12,MUTED,false);warning.setLineSpacing(dp(2),1f);panel.addView(warning);
+        ui.space(panel,14);
+        CheckBox consent=new CheckBox(this);
+        consent.setText("Я согласен с Пользовательским соглашением и Политикой отказа от ответственности (As Is)");
+        consent.setTextSize(14);consent.setTextColor(INK);consent.setPadding(0,dp(4),0,dp(4));
+        panel.addView(consent);
+        ui.space(panel,6);
+        TextView terms=ui.label("Открыть Пользовательское соглашение",12,BLUE,true);
+        panel.addView(terms);ui.tap(terms,()->openUrl(BuildConfig.API_BASE_URL+"/terms"));
+        ui.space(panel,8);
+        TextView disclaimer=ui.label("Политика отказа от ответственности (As Is)",12,BLUE,true);
+        panel.addView(disclaimer);ui.tap(disclaimer,()->openUrl(BuildConfig.API_BASE_URL+"/disclaimer"));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("Перед использованием AI")
+            .setView(panel)
+            .setNegativeButton("Не сейчас",(d,which)->{})
+            .setPositiveButton("Принять и продолжить",null)
+            .create();
+        dialog.setOnDismissListener(d->legalConsentDialogOpen=false);
+        dialog.setOnShowListener(d->{
+            Button accept=dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            accept.setEnabled(consent.isChecked());
+            consent.setOnCheckedChangeListener((button,checked)->accept.setEnabled(checked));
+            accept.setOnClickListener(view->{
+                if(!consent.isChecked())return;
+                accept.setEnabled(false);
+                final String session=token;
+                final JSONObject requestBody;
+                try{requestBody=new JSONObject().put("accepted",true).put("version",LEGAL_CONSENT_VERSION);}
+                catch(Exception error){accept.setEnabled(true);message("Не удалось подготовить согласие");return;}
+                apiWorker.execute(()->{
+                    try{
+                        JSONObject saved=request("/me/legal-consent","POST",requestBody,session);
+                        postWorkerResult(()->{
+                            if(isFinishing()||!java.util.Objects.equals(session,token))return;
+                            if(!saved.optBoolean("accepted")||!LEGAL_CONSENT_VERSION.equals(saved.optString("version"))){
+                                accept.setEnabled(consent.isChecked());message("Сервер не подтвердил согласие");return;
+                            }
+                            legalConsentAccepted=true;dialog.dismiss();onAccepted.run();
+                        });
+                    }catch(Exception error){
+                        postWorkerResult(()->{
+                            if(isFinishing()||!java.util.Objects.equals(session,token))return;
+                            accept.setEnabled(consent.isChecked());
+                            message(error instanceof ApiException?error.getMessage():"Не удалось сохранить согласие. Проверьте связь и повторите попытку.");
+                        });
+                    }
+                });
+            });
+        });
+        dialog.show();
+    }
+    private void confirmEstimateReview(Runnable onConfirmed){
+        ui.sheet("Вы проверили объёмы и цены?",AI_ESTIMATE_DISCLAIMER,"Да, всё верно",false,onConfirmed);
+    }
+
+    private void clearSession(){legalConsentAccepted=false;String oldToken=token;if(oldToken!=null&&PushManager.isEnabled(this)){PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,null);}token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
     private static byte[] readLimited(InputStream input,int maximum)throws IOException{if(input==null)throw new IOException("Пустой ответ сервера");ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1){if(output.size()+count>maximum)throw new IOException("Файл слишком большой");output.write(buffer,0,count);}return output.toByteArray();}
     private int dp(float value){return ui.dp(value);}
     private void message(String message){
@@ -221,17 +300,31 @@ public class MainActivity extends Activity {
         EditText name=create?field("Как вас зовут",android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS):null;
         EditText email=field("Электронная почта",33);email.setHint("you@company.ru");email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS);
         EditText password=field("Пароль",129);password.setHint("Введите пароль");password.setAutofillHints(create?"newPassword":View.AUTOFILL_HINT_PASSWORD);
+        CheckBox legalConsent=create?new CheckBox(this):null;
+        if(create){
+            legalConsent.setText("Я согласен с Пользовательским соглашением и Политикой отказа от ответственности (As Is)");
+            legalConsent.setTextSize(13);legalConsent.setTextColor(INK);content.addView(legalConsent);
+            TextView termsLink=ui.label("Открыть Пользовательское соглашение",12,BLUE,true);content.addView(termsLink);
+            ui.tap(termsLink,()->openUrl(BuildConfig.API_BASE_URL+"/terms"));
+            ui.space(content,6);
+            TextView disclaimerLink=ui.label("Политика отказа от ответственности (As Is)",12,BLUE,true);content.addView(disclaimerLink);
+            ui.tap(disclaimerLink,()->openUrl(BuildConfig.API_BASE_URL+"/disclaimer"));
+        }
         ui.space(content,16);button(create?"Создать аккаунт":"Войти в пространство",true,v->{
             if(email.getText().toString().trim().isEmpty()){email.setError("Введите почту");return;}if(password.length()==0){password.setError("Введите пароль");return;}
-            try{JSONObject body=new JSONObject().put("email",email.getText().toString().trim()).put("password",password.getText().toString());if(create)body.put("name",name.getText().toString().trim());
+            if(create&&!legalConsent.isChecked()){message("Примите условия использования перед регистрацией");return;}
+            try{
+                JSONObject body=new JSONObject().put("email",email.getText().toString().trim()).put("password",password.getText().toString());
+                if(create)body.put("name",name.getText().toString().trim()).put("legal_acceptance",true).put("legal_version",REGISTRATION_CONSENT_VERSION);
                 call(create?"/auth/register":"/auth/login","POST",body,result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().clear().apply();}catch(Exception error){token=null;message("Не удалось защитить сессию на устройстве");return;}me=result.optJSONObject("user");if(create)Analytics.registration(me);else Analytics.login(me);afterLogin();});
             }catch(Exception error){message("Не удалось войти");}
         });
         if(create||emailSignupAvailable)button(create?"Уже есть аккаунт · Войти":"Первый раз? Создать аккаунт",false,v->emailLogin(!create));
-        else button("Другие способы входа",false,v->login(false));
+        else button("Другие способы входа",false,v->{if(create&&!legalConsent.isChecked()){message("Примите условия использования перед регистрацией");return;}registrationConsentAccepted=create;login(create);});
         ui.space(content,18);TextView note=ui.label("От первого расчёта до завершённого проекта",11,MUTED,false);note.setGravity(Gravity.CENTER);content.addView(note);
     }
-    private void login(boolean ignored){
+    private void login(boolean registrationIntent){
+        if(!registrationIntent)registrationConsentAccepted=false;
         publicView=false;page("Вход","login",false);content.addView(ui.art("unfold",190));ui.space(content,16);content.addView(ui.label(presentation.loginTitle,34,INK,true));text(presentation.loginSubtitle);ui.space(content,22);
         LinearLayout methods=ui.column();content.addView(methods);
         addButton(methods,"Войти по почте",true,v->emailLogin(false));
@@ -241,7 +334,7 @@ public class MainActivity extends Activity {
             if(list!=null)for(int i=0;i<list.length();i++){
                 JSONObject provider=list.optJSONObject(i);
                 if(provider==null||!provider.optBoolean("enabled"))continue;
-                addButton(methods,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id")));
+                addButton(methods,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id"),registrationIntent));
                 enabled++;
             }
             addButton(methods,"Войти по почте",enabled==0,v->emailLogin(false));
@@ -250,7 +343,7 @@ public class MainActivity extends Activity {
         ui.space(content,18);TextView legal=ui.label("Продолжая, вы принимаете условия использования и политику конфиденциальности.",11,MUTED,false);content.addView(legal);button("Условия и конфиденциальность",false,v->openUrl(BuildConfig.API_BASE_URL+"/privacy"));
     }
     private void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception error){message("Не удалось открыть браузер");}}
-    private void startIdentity(String provider){try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();openUrl(BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
+    private void startIdentity(String provider,boolean registrationIntent){if(registrationIntent&&!registrationConsentAccepted){message("Примите соглашение перед регистрацией");return;}try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();String url=BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge+"&intent="+(registrationIntent?"register":"login");if(registrationIntent)url+="&legal_acceptance=1&legal_version="+REGISTRATION_CONSENT_VERSION;openUrl(url);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
     private boolean proActive(JSONObject account){return account!=null&&"pro".equals(account.optString("plan"))&&account.optLong("entitlement_until")>System.currentTimeMillis()/1000;}
     private String subscriptionDate(JSONObject account){
         return java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG,new Locale("ru","RU"))
@@ -685,7 +778,8 @@ public class MainActivity extends Activity {
         if(preview!=null)assistantPreview(proposal,preview);
         else if(fields!=null){java.util.Iterator<String> keys=fields.keys();while(keys.hasNext()){String key=keys.next();if(key.equals("id")||key.equals("revision"))continue;ui.space(proposal,10);proposal.addView(ui.label(fieldLabel(key),11,MUTED,false));ui.space(proposal,3);proposal.addView(ui.label(assistantEditValue(key,fields.opt(key),fields.optString("currency","RUB")),14,INK,false));}}
         if(action.optString("tool").equals("create_document"))addButton(proposal,"Предпросмотр PDF",false,v->saveAssistantPdf("assistant:"+action.optString("id")));
-        addButton(proposal,"Применить",true,v->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{JSONObject saved=r.optJSONObject("result"),document=saved==null?null:saved.optJSONObject("document");if(document!=null)try{action.put("document_id",document.optString("id"));}catch(Exception ignored){}if(r.optBoolean("undoable"))assistantUndo(proposal,action);else{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));}});}catch(Exception error){message(error.getMessage());}});
+        Runnable applyAction=()->{try{call("/assistant/confirm","POST",new JSONObject().put("id",action.optString("id")),r->{JSONObject saved=r.optJSONObject("result"),document=saved==null?null:saved.optJSONObject("document");if(document!=null)try{action.put("document_id",document.optString("id"));}catch(Exception ignored){}if(r.optBoolean("undoable"))assistantUndo(proposal,action);else{proposal.removeAllViews();proposal.addView(ui.label("Сохранено · "+action.optString("summary"),14,BLUE,false));}});}catch(Exception error){message(error.getMessage());}};
+        addButton(proposal,"Применить",true,v->{if("publish_quote".equals(action.optString("tool")))confirmEstimateReview(applyAction);else applyAction.run();});
         addButton(proposal,"Не сейчас",false,v->{try{call("/assistant/dismiss","POST",new JSONObject().put("id",action.optString("id")),r->host.removeView(proposal));}catch(Exception error){message(error.getMessage());}});
     }
 
@@ -759,7 +853,7 @@ public class MainActivity extends Activity {
         String id=q.optString("id");page("Смета","quote",true);loading(content);
         call("/quotes/"+id,"GET",null,result->{JSONObject full=result.optJSONObject("quote");if(full!=null)quote(full);});
     }
-    private void quote(JSONObject q){parentPage="home";page("Смета","quote",true);String state=q.optString("approval_state",q.optString("status")),currency=q.optString("currency","RUB");content.addView(ui.badge(status(state),statusColor(state)));ui.space(content,18);content.addView(ui.label(q.optString("title"),26,INK,true));text(q.optString("client"));LinearLayout price=ui.card(content);price.addView(ui.label("Стоимость работ",12,BLUE,false));ui.space(price,12);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),currency),32,INK,true));
+    private void quote(JSONObject q){parentPage="home";page("Смета","quote",true);String state=q.optString("approval_state",q.optString("status")),currency=q.optString("currency","RUB");content.addView(ui.badge(status(state),statusColor(state)));ui.space(content,18);content.addView(ui.label(q.optString("title"),26,INK,true));if(q.optBoolean("ai_generated")||q.optInt("ai_generated")==1){LinearLayout warning=ui.card(content);warning.addView(ui.label("Предварительный черновик · обязательная проверка",13,INK,true));ui.space(warning,6);TextView notice=ui.label(AI_ESTIMATE_DISCLAIMER,12,MUTED,false);notice.setTextIsSelectable(true);warning.addView(notice);ui.space(content,10);}text(q.optString("client"));LinearLayout price=ui.card(content);price.addView(ui.label("Стоимость работ",12,BLUE,false));ui.space(price,12);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),currency),32,INK,true));
         if(!q.optString("description").isEmpty()){ui.section(content,"О проекте",null);text(q.optString("description"));}
         JSONArray items=q.optJSONArray("items");if(items!=null&&items.length()>0){ui.section(content,"Состав сметы",null);for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item==null)continue;LinearLayout row=ui.card(content),top=ui.row();TextView name=ui.label(item.optString("name"),15,INK,true);name.setMaxLines(3);top.addView(name,new LinearLayout.LayoutParams(0,-2,1));ui.gap(top,10);top.addView(ui.label(exactMoney(item.optLong("subtotal"),currency),14,INK,false));row.addView(top);ui.space(row,7);row.addView(ui.label(item.optString("quantity","1")+" "+item.optString("unit","шт.")+(item.optBoolean("optional")&&!item.optBoolean("included",true)?" · Опционально":""),12,MUTED,false));}}
         String id=q.optString("id");ui.space(content,20);
@@ -767,7 +861,7 @@ public class MainActivity extends Activity {
         if(!state.equals("approved")&&!state.equals("accepted")&&!state.equals("completed"))button("Редактировать смету",false,v->quoteEdit(q));
         if(q.optInt("published_version")>0)button("Сравнить версии",false,v->quoteReview(q,false));
         if(state.equals("changes_requested")||state.equals("rejected")||state.equals("draft")&&q.optInt("published_version")>0)button("Проверить и отправить новую версию",true,v->quoteReview(q,true));
-        if(state.equals("draft")&&q.optInt("published_version")==0)button("Отправить на согласование",true,v->ui.sheet("Всё готово к отправке?","Сохраним текущую версию сметы. Клиент сможет открыть её по ссылке и согласовать условия.","Опубликовать смету",false,()->{try{call("/quotes/"+id+"/status","POST",new JSONObject().put("status","sent").put("revision",q.optInt("revision")),r->{String url=r.optJSONObject("quote")!=null?r.optJSONObject("quote").optString("public_url"):"";Analytics.event("estimate_sent",Analytics.params("source","android"),true);home();share(url);});}catch(Exception error){message(error.getMessage());}}));
+        if(state.equals("draft")&&q.optInt("published_version")==0)button("Отправить на согласование",true,v->confirmEstimateReview(()->ui.sheet("Всё готово к отправке?","Сохраним текущую версию сметы. Клиент сможет открыть её по ссылке и согласовать условия.","Опубликовать смету",false,()->{try{call("/quotes/"+id+"/status","POST",new JSONObject().put("status","sent").put("revision",q.optInt("revision")).put("review_confirmed",true),r->{String url=r.optJSONObject("quote")!=null?r.optJSONObject("quote").optString("public_url"):"";Analytics.event("estimate_sent",Analytics.params("source","android"),true);home();share(url,true);});}catch(Exception error){message(error.getMessage());}})));
         if(state.equals("sent")||state.equals("viewed")||state.equals("changes_requested")||state.equals("approved")||state.equals("accepted"))button("Поделиться ссылкой",true,v->share(q.optString("public_url")));
         if(state.equals("approved")||state.equals("accepted"))button("Создать заказ из сметы",false,v->{try{call("/quotes/"+id+"/project","POST",new JSONObject(),r->{Analytics.event("project_created",Analytics.params("source","estimate"),true);records("projects");});}catch(Exception error){message(error.getMessage());}});
     }
@@ -805,9 +899,9 @@ public class MainActivity extends Activity {
             if(comment!=null)comment.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(1000)});
             Button send=publish?button("Зафиксировать и отправить",true,v->{
                 JSONObject selected=checked[0];if(selected==null||!selected.optString("target").equals("current")){message("Сначала сравните с текущим черновиком");return;}
-                ui.sheet("Отправить новую версию?","Клиентская ссылка откроет новые позиции, стоимость и условия.","Отправить клиенту",false,()->{
-                    try{JSONObject body=new JSONObject().put("revision",selected.optInt("revision")).put("comment",comment.getText().toString());call("/quotes/"+id+"/publish","POST",body,response->{JSONObject value=response.optJSONObject("quote");if(value!=null)quote(value);message("Новая версия отправлена");});}catch(Exception error){message("Не удалось отправить версию");}
-                });
+                confirmEstimateReview(()->ui.sheet("Отправить новую версию?","Клиентская ссылка откроет новые позиции, стоимость и условия.","Отправить клиенту",false,()->{
+                    try{JSONObject body=new JSONObject().put("revision",selected.optInt("revision")).put("comment",comment.getText().toString()).put("review_confirmed",true);call("/quotes/"+id+"/publish","POST",body,response->{JSONObject value=response.optJSONObject("quote");if(value!=null)quote(value);message("Новая версия отправлена");});}catch(Exception error){message("Не удалось отправить версию");}
+                }));
             }):null;
             if(send!=null)send.setEnabled(false);
             button("К смете",false,v->quoteReviewBack());
@@ -857,7 +951,12 @@ public class MainActivity extends Activity {
             host.addView(ui.label(item.isNull("delta_kopecks")?"Разные валюты":"Влияние на итог: "+exactMoney(item.optLong("delta_kopecks"),newCurrency),12,BLUE,false));ui.space(host,16);
         }}ui.enter(host);
     }
-    private void share(String url){if(url.isEmpty()){message("Ссылка ещё не готова. Обновите смету.");return;}Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,"Предложение по работе: "+url);startActivity(Intent.createChooser(intent,"Отправить предложение"));}
+    private void share(String url){share(url,false);}
+    private void share(String url,boolean reviewed){
+        if(url.isEmpty()){message("Ссылка ещё не готова. Обновите смету.");return;}
+        if(!reviewed){confirmEstimateReview(()->share(url,true));return;}
+        Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,"Предложение по работе: "+url);startActivity(Intent.createChooser(intent,"Отправить предложение"));
+    }
     private void capture(){
         parentPage="home";page("Новый запрос","capture",true);
         content.addView(ui.label("Что нужно посчитать?",26,INK,true));
@@ -874,7 +973,41 @@ public class MainActivity extends Activity {
         button("Надиктовать запрос",false,v->{try{Intent voice=new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE,"ru-RU");voice.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,"Опишите работу для сметы");startActivityForResult(voice,302);}catch(Exception error){message("Голосовой ввод недоступен на этом устройстве");}});
         ui.space(content,12);
         Button draft=button("Составить черновик",true,v->{});
-        draft.setOnClickListener(v->{String input=source.getText().toString().trim();android.net.Uri file=pendingCaptureFile;if(input.isEmpty()&&file==null){source.setError("Вставьте запрос или приложите файл");return;}draft.setEnabled(false);draft.setAlpha(.5f);int version=pageVersion;message("Составляем черновик…");sessionWork.execute(()->{try{JSONObject body=new JSONObject().put("text",input);if(file!=null)body.put("file",captureSource(file));JSONObject response=request("/ai/draft","POST",body);JSONObject result=response.optJSONObject("draft");if(result==null)throw new IOException("Черновик не получен");Analytics.event("ai_draft_generated",Analytics.params("source",file==null?"text":"file"),false);postWorkerResult(()->{if(version!=pageVersion||isFinishing())return;pendingCaptureText=input;getPreferences(MODE_PRIVATE).edit().putString("capture_draft",result.toString()).apply();draftPreview(result);});}catch(Exception error){postWorkerResult(()->{if(version!=pageVersion||isFinishing())return;draft.setEnabled(true);draft.setAlpha(1);message(error instanceof ApiException?error.getMessage():"Не удалось разобрать запрос. Текст сохранён, попробуйте ещё раз.");});}});});
+        draft.setOnClickListener(v -> {
+            requireLegalConsent(() -> {
+                String input = source.getText().toString().trim();
+                android.net.Uri file = pendingCaptureFile;
+                if (input.isEmpty() && file == null) {
+                    source.setError("Вставьте запрос или приложите файл");
+                    return;
+                }
+                draft.setEnabled(false);draft.setAlpha(.5f);
+                int version = pageVersion;
+                message("Составляем черновик…");
+                sessionWork.execute(() -> {
+                    try {
+                        JSONObject body = new JSONObject().put("text", input);
+                        if (file != null) body.put("file", captureSource(file));
+                        JSONObject response = request("/ai/draft", "POST", body);
+                        JSONObject result = response.optJSONObject("draft");
+                        if (result == null) throw new IOException("Черновик не получен");
+                        Analytics.event("ai_draft_generated", Analytics.params("source", file == null ? "text" : "file"), false);
+                        postWorkerResult(() -> {
+                            if (version != pageVersion || isFinishing()) return;
+                            pendingCaptureText = input;
+                            getPreferences(MODE_PRIVATE).edit().putString("capture_draft", result.toString()).apply();
+                            draftPreview(result);
+                        });
+                    } catch (Exception error) {
+                        postWorkerResult(() -> {
+                            if (version != pageVersion || isFinishing()) return;
+                            draft.setEnabled(true);draft.setAlpha(1);
+                            message(error instanceof ApiException ? error.getMessage() : "Не удалось разобрать запрос. Текст сохранён, попробуйте ещё раз.");
+                        });
+                    }
+                });
+            });
+        });
         button("Продолжить вручную",false,v->{String input=source.getText().toString().trim();if(input.isEmpty()){source.setError("Вставьте запрос");return;}try{getPreferences(MODE_PRIVATE).edit().putString("draft",new JSONObject().put("title",input.split("[\\n.!?]")[0].substring(0,Math.min(input.split("[\\n.!?]")[0].length(),120))).put("description",input).toString()).apply();create();}catch(Exception error){message("Не удалось открыть редактор");}});
         String old=getPreferences(MODE_PRIVATE).getString("capture_draft",null);if(old!=null)button("Продолжить сохранённый черновик",false,v->{try{draftPreview(new JSONObject(old));}catch(Exception error){message("Черновик повреждён");}});
         text("При обработке текст или файл передаётся OpenRouter. Никакая смета не отправляется клиенту автоматически.").setTextSize(11);
@@ -889,7 +1022,7 @@ public class MainActivity extends Activity {
     }
     private void draftPreview(JSONObject draft){
         parentPage="home";page("Проверка черновика","draft-preview",true);
-        content.addView(ui.label("Проверьте перед сохранением.",26,INK,true));text("Неизвестные цены остались пустыми. Укажите клиента и стоимость работ.");
+        content.addView(ui.label("Проверьте перед сохранением.",26,INK,true));LinearLayout aiWarning=ui.card(content);aiWarning.addView(ui.label("Предварительный расчёт",13,BLUE,true));ui.space(aiWarning,6);aiWarning.addView(ui.label(AI_ESTIMATE_DISCLAIMER,12,MUTED,false));ui.space(content,10);text("Неизвестные цены остались пустыми. Укажите клиента и стоимость работ.");
         EditText title=field("Название",1),client=field("Клиент",1),description=field("Описание",1),terms=field("Условия и сроки",1);
         title.setText(draft.optString("title"));client.setText(draft.optString("client"));description.setText(draft.optString("description"));terms.setText(draft.optString("terms"));
         JSONArray source=draft.optJSONArray("items");if(source==null)source=new JSONArray();
@@ -1147,12 +1280,14 @@ public class MainActivity extends Activity {
             }
             if(!object.optString("quote_id").isEmpty())button("Открыть смету",true,v->call("/quotes/"+object.optString("quote_id"),"GET",null,answer->openQuote(answer.optJSONObject("quote"))));
             boolean hasFact=false;if(quantities!=null)for(int i=0;i<quantities.length();i++){JSONObject row=quantities.optJSONObject(i);if(row!=null&&row.optDouble("actual_quantity")>0){hasFact=true;break;}}
-            if(hasFact)addButton(content,"Сформировать акт по факту",false,v->ui.sheet("Сформировать черновик акта?","В него попадут только записанные фактические объёмы. Поздние правки не изменят документ.","Сформировать",false,()->call("/construction/objects/"+id+"/act","POST",new JSONObject(),answer->{JSONObject document=answer.optJSONObject("document");if(document==null)return;pendingPdfDocument=document.optString("id");Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-akt-"+document.optInt("number")+".pdf");startActivityForResult(save,304);})));
-            addButton(content,"Скачать отчёт по объекту",false,v->{pendingPdfDocument="report:"+id;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-report.pdf");startActivityForResult(save,304);});
+            if(hasFact)addButton(content,"Сформировать акт по факту",false,v->confirmEstimateReview(()->ui.sheet("Сформировать черновик акта?","В него попадут только записанные фактические объёмы. Поздние правки не изменят документ.","Сформировать",false,()->{try{call("/construction/objects/"+id+"/act","POST",new JSONObject().put("review_confirmed",true),answer->{JSONObject document=answer.optJSONObject("document");if(document==null)return;pendingPdfDocument=document.optString("id");Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-akt-"+document.optInt("number")+".pdf");startActivityForResult(save,304);});}catch(Exception error){message("Не удалось сформировать акт");}})));
+            addButton(content,"Скачать отчёт по объекту",false,v->confirmEstimateReview(()->{pendingPdfDocument="report:"+id;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"smetra-report.pdf");startActivityForResult(save,304);}));
         });
     }
     private void saveAssistantPdf(String documentId){
-        pendingPdfDocument=documentId;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,documentId.startsWith("assistant:")?"smetra-preview.pdf":"smetra-document.pdf");startActivityForResult(save,304);
+        confirmEstimateReview(()->{
+            pendingPdfDocument=documentId;Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/pdf");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,documentId.startsWith("assistant:")?"smetra-preview.pdf":"smetra-document.pdf");startActivityForResult(save,304);
+        });
     }
     private void workspaceFiles(){
         parentPage="more";page("Файлы","files",true);EditText search=field("Поиск файлов",android.text.InputType.TYPE_CLASS_TEXT);search.setHint("Название документа");search.setSingleLine(true);search.setMinHeight(dp(48));search.setGravity(Gravity.CENTER_VERTICAL|Gravity.START);
@@ -1210,7 +1345,7 @@ public class MainActivity extends Activity {
         if(resultCode!=RESULT_OK||data==null||data.getData()==null||documentId==null)return;
         final android.net.Uri uri=data.getData();message("Сохраняем PDF…");
         sessionWork.execute(()->{HttpURLConnection connection=null;try{
-            String path=documentId.startsWith("file:")?"/api/files/"+documentId.substring(5):documentId.startsWith("assistant:")?"/api/assistant/actions/"+documentId.substring(10)+"/preview.pdf":documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf":"/api/documents/"+documentId+"/pdf";
+            String path=documentId.startsWith("file:")?"/api/files/"+documentId.substring(5):documentId.startsWith("assistant:")?"/api/assistant/actions/"+documentId.substring(10)+"/preview.pdf":documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf?review_confirmed=1":"/api/documents/"+documentId+"/pdf?review_confirmed=1";
             connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+path).openConnection();
             connection.setConnectTimeout(10000);connection.setReadTimeout(30000);
             connection.setRequestProperty("Authorization","Bearer "+sessionWork.tokenForRequest(token));

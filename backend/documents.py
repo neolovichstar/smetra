@@ -15,6 +15,11 @@ try:
 except ModuleNotFoundError:
     from business import DomainError, choice, identity, packed, stamp, string
 
+try:
+    from backend.estimate_safety import AI_ESTIMATE_DISCLAIMER, has_current_consent
+except ModuleNotFoundError:
+    from estimate_safety import AI_ESTIMATE_DISCLAIMER, has_current_consent
+
 
 @dataclass
 class Download:
@@ -182,6 +187,14 @@ def pdf(document):
         ]
     else:
         story += [p(data.get("terms", ""))]
+    if data.get("ai_generated") is True or str(data.get("ai_generated", 0)) == "1":
+        story += [
+            Spacer(1, 12),
+            KeepTogether([
+                p("Предварительный черновик · обязательная проверка", label),
+                p(AI_ESTIMATE_DISCLAIMER, small),
+            ]),
+        ]
     if document["kind"] == "act":
         story += [
             Spacer(1, 20),
@@ -216,6 +229,14 @@ def documents(service, method, parts, query, data):
         if parts:
             row = service.get("documents", parts[0])
             if len(parts) == 2 and parts[1] == "pdf":
+                if query.get("review_confirmed") != ["1"]:
+                    raise DomainError(
+                        400,
+                        "Перед экспортом подтвердите проверку объёмов, технологии и цен",
+                    )
+                snapshot = json.loads(row["snapshot"])
+                if (snapshot.get("ai_generated") is True or str(snapshot.get("ai_generated", 0)) == "1") and not has_current_consent(service.con, service.user["id"]):
+                    raise DomainError(403, "Подтвердите актуальные условия для ИИ-смет перед экспортом")
                 return 200, Download(
                     pdf(row), "application/pdf", f"smetra-{row['number']}.pdf"
                 )
@@ -245,6 +266,11 @@ def documents(service, method, parts, query, data):
 def prepare_document(service, data):
     con = service.con
     row = service.get("quotes", string(data.get("quote_id", ""), "Смета", 50, True))
+    is_ai_estimate = row["ai_generated"] is True or str(row["ai_generated"] or 0) == "1"
+    if is_ai_estimate and not has_current_consent(service.con, service.user["id"]):
+        raise DomainError(403, "Подтвердите актуальные условия для ИИ-смет перед экспортом")
+    if is_ai_estimate and data.get("review_confirmed") is not True:
+        raise DomainError(400, "Перед экспортом подтвердите проверку объёмов, технологии и цен")
     kind = choice(data.get("kind", "estimate"), TITLES, "Вид документа")
     template = choice(
         data.get("template", "Minimal"),
@@ -252,6 +278,7 @@ def prepare_document(service, data):
         "Шаблон",
     )
     snapshot = service.quote_view(row, bool(row["published_version"]))
+    snapshot["ai_generated"] = int(is_ai_estimate)
     workspace = con.execute(
         "SELECT * FROM workspaces WHERE id=?", (service.wid,)
     ).fetchone()

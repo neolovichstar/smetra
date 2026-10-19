@@ -27,6 +27,11 @@ except ModuleNotFoundError:
     import mytracker
     import revenue
 
+try:
+    from backend.estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
+except ModuleNotFoundError:
+    from estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
 WEB = ROOT / "apps" / "web"
@@ -291,7 +296,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 3_000_000 if path == "/api/ai/draft" else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":
@@ -479,6 +484,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
+            "/disclaimer": ("disclaimer.html", "text/html"),
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),
@@ -624,6 +630,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_batch(con))
+        if path == "/api/me/legal-consent" and method in ("GET", "POST"):
+            user = self.auth(con)
+            if method == "GET":
+                row = con.execute(
+                    "SELECT document_version,accepted_at,source FROM legal_acceptances "
+                    "WHERE user_id=? AND document_version=? LIMIT 1",
+                    (user["id"], LEGAL_CONSENT_VERSION),
+                ).fetchone()
+                return self.send_json(200, {
+                    "accepted": bool(row),
+                    "version": LEGAL_CONSENT_VERSION,
+                    "accepted_at": row["accepted_at"] if row else None,
+                })
+            data = self.body()
+            if data.get("accepted") is not True or data.get("version") != LEGAL_CONSENT_VERSION:
+                raise ApiError(400, "Подтвердите согласие с действующей редакцией условий")
+            con.execute(
+                "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(user_id,document_version) DO NOTHING",
+                (uid(), user["id"], LEGAL_CONSENT_VERSION, now(), "first_estimate"),
+            )
+            return self.send_json(200, {
+                "accepted": True,
+                "version": LEGAL_CONSENT_VERSION,
+            })
+        starts_ai_operation = method == "POST" and (
+            path == "/api/ai/draft"
+            or path in (
+                "/api/assistant",
+                "/api/assistant/chat",
+                "/api/assistant/stream",
+                "/api/assistant/jobs",
+            )
+        )
+        if starts_ai_operation:
+            user = self.auth(con)
+            accepted = con.execute(
+                "SELECT 1 FROM legal_acceptances WHERE user_id=? AND document_version=? LIMIT 1",
+                (user["id"], LEGAL_CONSENT_VERSION),
+            ).fetchone()
+            if not accepted:
+                raise ApiError(428, "Сначала примите условия использования AI-черновиков")
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
@@ -656,6 +704,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/register" and method == "POST":
             self.throttle("register:" + self.client_address[0], 5, 3600)
             data = self.body()
+            if (
+                data.get("legal_acceptance") is not True
+                or data.get("legal_version") != REGISTRATION_CONSENT_VERSION
+            ):
+                raise ApiError(
+                    400,
+                    "Для регистрации примите Пользовательское соглашение, условия и предупреждение об использовании AI",
+                )
             email = str(data.get("email", "")).strip().lower()
             password = str(data.get("password", ""))
             name = str(data.get("name", "")).strip()
@@ -688,6 +744,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         now(),
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
                     ),
+                )
+                con.execute(
+                    "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                    "VALUES(?,?,?,?,?)",
+                    (uid(), user_id, REGISTRATION_CONSENT_VERSION, now(), "registration"),
                 )
                 event(con, user_id, "signup_completed")
                 revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)

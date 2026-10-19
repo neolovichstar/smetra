@@ -246,6 +246,52 @@ class IdentityAssistantTests(unittest.TestCase):
                     self.assertEqual(len(params["code_challenge"][0]), 43)
                     self.assertIn("HttpOnly", headers["Set-Cookie"])
 
+    def test_oauth_cannot_create_new_account_without_registration_consent(self):
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"):
+            status, headers, _ = self.get_redirect("/api/auth/oauth/yandex/start?intent=register")
+            self.assertEqual(status, 303)
+            self.assertIn("auth_error=registration_consent_required", headers["Location"])
+
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=register&legal_acceptance=1"
+                "&legal_version=outdated"
+            )
+            self.assertEqual(status, 303)
+            self.assertIn("auth_error=registration_consent_required", headers["Location"])
+
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=register&legal_acceptance=1"
+                "&legal_version=2026-10-19-registration-v1"
+            )
+            self.assertEqual(status, 303)
+            state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
+            cookie = headers["Set-Cookie"].split(";")[0]
+
+            with patch(
+                "backend.identity.profile",
+                return_value=("new-consent-subject", "OAuth без согласия", "oauth-consent@test.invalid"),
+            ):
+                status, response, _ = self.get_redirect(
+                    "/api/auth/oauth/yandex/callback?code=provider-code&state=" + state,
+                    cookie,
+                )
+            self.assertTrue(response["Location"].endswith("/app?auth_error=registration_consent_required") is False)
+            self.assertEqual(status, 303)
+            with self.mod.db() as con:
+                account = con.execute(
+                    "SELECT id FROM users WHERE email=?",
+                    ("oauth-consent@test.invalid",),
+                ).fetchone()
+                self.assertIsNotNone(account)
+                accepted = con.execute(
+                    "SELECT document_version,source FROM legal_acceptances WHERE user_id=?",
+                    (account["id"],),
+                ).fetchall()
+            self.assertEqual(
+                [(row["document_version"], row["source"]) for row in accepted],
+                [("2026-10-19-registration-v1", "registration")],
+            )
+
     def test_oauth_browser_binding_and_native_pkce_one_use(self):
         verifier = "a" * 64
         with (
@@ -256,7 +302,7 @@ class IdentityAssistantTests(unittest.TestCase):
             ) as provider,
         ):
             code, headers, _ = self.get_redirect(
-                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier)
+                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier) + "&intent=register&legal_acceptance=1&legal_version=2026-10-19-registration-v1"
             )
             self.assertEqual(code, 303)
             state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]

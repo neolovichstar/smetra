@@ -876,6 +876,11 @@ def route(service, method, parts, query, data):
     if rest == ["quote"] and method == "POST":
         return to_quote(service, obj)
     if rest == ["act"] and method == "POST":
+        if data.get("review_confirmed") is not True:
+            raise DomainError(
+                400,
+                "Перед созданием акта подтвердите проверку фактических объёмов и цен",
+            )
         return create_fact_act(service, obj)
     if rest == ["receipt-ocr"] and method == "POST":
         from backend.receipt_ocr import recognize
@@ -885,6 +890,11 @@ def route(service, method, parts, query, data):
         from backend.receipt_ocr import route as receipt_route
         return receipt_route(service, obj, method, rest[1])
     if rest == ["report.pdf"] and method == "GET":
+        if query.get("review_confirmed") != ["1"]:
+            raise DomainError(
+                400,
+                "Перед экспортом подтвердите проверку объёмов, технологии и цен",
+            )
         from backend.construction_report import report
         return 200, report(service, obj, detail(service, obj))
     if rest and rest[0] == "changes":
