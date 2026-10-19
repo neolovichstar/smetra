@@ -126,6 +126,9 @@ class AIEstimateGuardrailsTests(unittest.TestCase):
                 with self.assertRaises(DomainError) as error:
                     self.call_draft(payload)
                 self.assertEqual(error.exception.status, 502)
+                # Each HTTP request gets a fresh DB connection; close out the
+                # failed-usage status update before the next independent subcase.
+                self.service.con.commit()
 
     def test_terms_consent_is_versioned(self):
         accepted = {"terms_accepted_at": 12345, "terms_version": TERMS_VERSION}
