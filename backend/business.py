@@ -1720,7 +1720,7 @@ class Service:
             values.update(
                 category=string(data.get("category", ""), "Категория", 100, True),
                 expense_date=date_value(
-                    data.get("expense_date", dt.date.today().isoformat())
+                    data.get("expense_date", business_date().isoformat())
                 ),
             )
         self.insert(table, values)
