@@ -245,7 +245,7 @@ class BusinessFlows(unittest.TestCase):
             'work_date': '2026-09-30', 'work_description': 'Окрашена стена',
             'photo_file_ids': [photo['file']['id']],
         }, owner)[0], 201)
-        status, payload = self.call(f'/construction/objects/{obj}/report.pdf', token=owner, raw=True)
+        status, payload = self.call(f'/construction/objects/{obj}/report.pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(payload))
@@ -330,7 +330,7 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(status, 201, created_act)
         self.assertEqual(created_act['amount_kopecks'], 30000)
         document_id = created_act['document']['id']
-        status, content = self.call('/documents/' + document_id + '/pdf', token=owner, raw=True)
+        status, content = self.call('/documents/' + document_id + '/pdf?review_confirmed=1', token=owner, raw=True)
         self.assertEqual(status, 200)
         from pypdf import PdfReader
         first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
@@ -1268,7 +1268,7 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(code, 201, document)
         code, content = self.call(
-            "/documents/" + document["document"]["id"] + "/pdf", token=token, raw=True
+            "/documents/" + document["document"]["id"] + "/pdf?review_confirmed=1", token=token, raw=True
         )
         self.assertEqual(code, 200)
         self.assertTrue(content.startswith(b"%PDF-"))
