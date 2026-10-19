@@ -200,6 +200,16 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    # OAuth registration consent is stored with the one-use server-side state.
+    # Add columns idempotently for databases created before this guardrail.
+    oauth_state_columns = {r["name"] for r in con.execute("PRAGMA table_info(oauth_states)")}
+    for column, definition in (
+        ("registration_intent", "INTEGER NOT NULL DEFAULT 0"),
+        ("legal_acceptance", "INTEGER NOT NULL DEFAULT 0"),
+        ("legal_version", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        if column not in oauth_state_columns:
+            con.execute(f"ALTER TABLE oauth_states ADD COLUMN {column} {definition}")
     con.executescript(
         (Path(__file__).parent / "migrations" / "003_files_ai.sql").read_text(
             encoding="utf-8"
@@ -414,6 +424,7 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(27,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(28,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(36,?)", (stamp(),))
     # Apply the idempotent SQLite migration only after the surrounding
     # migration transaction has finished; executescript commits implicitly.
     con.executescript(
