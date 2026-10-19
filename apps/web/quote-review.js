@@ -44,7 +44,9 @@ window.SmetraQuoteReview=(()=>{
   sourceInput.onchange=load;targetInput.onchange=load;
   if(form)form.onsubmit=async event=>{
    event.preventDefault();const button=form.querySelector('button');if(button.disabled||!checked||checked.target!=='current'||!active())return;
-   button.disabled=true;sourceInput.disabled=true;targetInput.disabled=true;const status=form.querySelector('#review-publish-status');status.textContent='Отправляем новую версию…';
+   button.disabled=true;
+    if(window.Workspace?.confirmEstimateReview&&!(await window.Workspace.confirmEstimateReview())){button.disabled=false;return}
+    sourceInput.disabled=true;targetInput.disabled=true;const status=form.querySelector('#review-publish-status');status.textContent='Отправляем новую версию…';
    try{await api('/quotes/'+encodeURIComponent(quote.id)+'/publish',{method:'POST',body:JSON.stringify({revision:checked.revision,comment:form.querySelector('textarea').value})});if(!active())return;await window.Workspace.openQuote(quote.id);notify('Новая версия отправлена. Клиентская ссылка обновлена.')}
    catch(error){if(active())status.textContent=error.message+' Проверьте сравнение повторно перед отправкой.';checked=null;}
    finally{if(active()){sourceInput.disabled=false;targetInput.disabled=false;if(!checked){await load();}}}
