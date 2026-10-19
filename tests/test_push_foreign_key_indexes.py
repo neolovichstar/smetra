@@ -63,6 +63,11 @@ class PushForeignKeyIndexTests(unittest.TestCase):
         for name, (table, columns) in EXPECTED_INDEXES.items():
             with self.subTest(index=name):
                 self.assertIn(name, names)
+                index_table = self.con.execute(
+                    "SELECT tbl_name FROM sqlite_master WHERE type='index' AND name=?",
+                    (name,),
+                ).fetchone()[0]
+                self.assertEqual(index_table, table)
                 actual_columns = tuple(
                     row[2] for row in self.con.execute(f"PRAGMA index_info('{name}')")
                 )
