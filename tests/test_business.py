@@ -1490,6 +1490,11 @@ class BusinessFlows(unittest.TestCase):
             "ai_generated": 0,
             "ai_draft_usage_id": draft_id,
         }
+        outsider, _ = self.account("ai-provenance-outsider")
+        status, error = self.call("/quotes", "POST", payload, outsider)
+        self.assertEqual(status, 409, error)
+        self.assertEqual(self.call("/quotes", token=outsider)[1]["quotes"], [])
+
         status, result = self.call("/quotes", "POST", payload, token)
         self.assertEqual(status, 201, result)
         self.assertEqual(result["quote"]["ai_generated"], 1)
