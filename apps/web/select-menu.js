@@ -4,7 +4,7 @@
   function close(focus=false){if(!opened)return;const current=opened;opened=null;current.trigger.setAttribute('aria-expanded','false');current.panel.classList.add('select-menu-closing');current.cleanup();setTimeout(()=>current.panel.remove(),matchMedia('(prefers-reduced-motion: reduce)').matches?0:140);if(focus&&current.trigger.isConnected)current.trigger.focus()}
   function enhance(root=document){
     const nodes=[...(root.matches?.('select')?[root]:[]),...root.querySelectorAll('select')];
-    for(const select of nodes){if(select.multiple)continue;if(instances.has(select)){instances.get(select).sync();continue}
+    for(const select of nodes){if(select.multiple||select.hidden||select.closest('[hidden]'))continue;if(instances.has(select)){instances.get(select).sync();continue}
       const wrap=document.createElement('div');wrap.className='select-control';select.before(wrap);wrap.append(select);
       const trigger=document.createElement('button');trigger.type='button';trigger.className='select-trigger';trigger.setAttribute('role','combobox');trigger.setAttribute('aria-haspopup','listbox');trigger.setAttribute('aria-expanded','false');
       const label=document.createElement('span'),chevron=document.createElement('span');chevron.className='select-chevron';chevron.setAttribute('aria-hidden','true');trigger.append(label,chevron);wrap.append(trigger);

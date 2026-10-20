@@ -339,7 +339,7 @@
  .workspace-page .topline{gap:12px}
  .workspace-page .topline p{font-size:13px}
 }
-@media(max-width:359px){.workspace-page .assistant-workbar .btn{font-size:0;gap:0}}
+@media(max-width:359px){.workspace-page .assistant-workbar .btn{font-size:0;gap:0}.assistant-refined .assistant-suggestions{grid-template-columns:minmax(0,1fr)}.assistant-refined .assistant-suggestions button:last-child:nth-child(odd){grid-column:auto}}
 
 /* Assistant: conversation first, tools available when they are needed. */
 .workspace-page .assistant-refined{max-width:800px;min-height:calc(100dvh - 148px);--composer-surface:#101112;--composer-text:var(--text-primary);--composer-muted:#9ba1ac;--composer-radius:24px}
@@ -456,8 +456,9 @@
  .assistant-refined .assistant-welcome-line{width:36px;height:36px;margin-bottom:18px}
  .assistant-refined .assistant-welcome h2{font-size:32px}
  .assistant-refined .assistant-welcome p{font-size:13px}
- .assistant-refined .assistant-suggestions{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:20px}
- .assistant-refined .assistant-suggestions button{font-size:12px;min-height:44px}
+ .assistant-refined .assistant-suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:7px;margin-top:20px}
+ .assistant-refined .assistant-suggestions button{font-size:12px;min-height:54px;min-width:0;width:100%;white-space:normal;overflow-wrap:anywhere}
+ .assistant-refined .assistant-suggestions button:last-child:nth-child(odd){grid-column:1/-1;justify-content:center}
  .workspace-page .assistant-refined .assistant-markdown{font-size:14px;line-height:1.8}
  .workspace-page .assistant-refined .assistant-composer textarea{font-size:16px;line-height:25px;min-height:48px;padding:8px}
  .workspace-page .assistant-refined .assistant-composer form{padding:10px;border-radius:22px;gap:6px}

@@ -12,9 +12,14 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  const screenshot=async name=>fs.writeFileSync('data/assistant-studio-'+name+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
  const visit=async tab=>{await evaluate(`document.querySelector('[data-tab="${tab}"]').click()`);await until(`document.querySelector('#content').dataset.section==='${tab}'&&!document.querySelector('#retry')`)};
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Browser.grantPermissions',{origin:site,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
- await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await send('Network.deleteCookies',{name:'session',url:site});await send('Page.navigate',{url:site+'/app'});
+ await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+await send('Network.deleteCookies',{name:'session',url:site});await send('Page.navigate',{url:site+'/app'});
  await until("document.querySelector('#auth-form')?.onsubmit");await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('.workspace-home')");
- await visit('assistant');await until("document.querySelector('#assistant-input')");await screenshot('welcome-mobile');
+ await visit('assistant');await until("document.querySelector('#assistant-input')");
+ assert.equal(await evaluate("document.querySelector('#assistant-thread-select')?.closest('.select-control')===null"),true,'Hidden compatibility select must not create a duplicate visible dropdown');
+ assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display"),'none','Mobile layout hides the desktop collapse control');
+ assert.notEqual(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display"),'none','Mobile navigation toggle is visible');
+ await screenshot('welcome-mobile');
  assert.equal(await evaluate("document.querySelector('#assistant-rename').disabled||document.querySelector('#assistant-pin').disabled||document.querySelector('#assistant-delete').disabled"),false);
  await evaluate("document.querySelector('.assistant-options').open=true;document.querySelector('#assistant-rename').click();document.querySelector('#assistant-thread-name').value='Studio conversation';document.querySelector('#assistant-thread-edit').requestSubmit()");await until("document.querySelector('.assistant-current-title').textContent==='Studio conversation'");
  await evaluate("document.querySelector('#assistant-pin').click()");await until("document.querySelector('#assistant-pin').textContent==='Открепить'");await evaluate("document.querySelector('#assistant-pin').click()");await until("document.querySelector('#assistant-pin').textContent==='Закрепить'");
@@ -24,9 +29,25 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  for(const width of [320,390,768,1440]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
   const alignment=await evaluate("(()=>{const root=document.querySelector('.assistant-welcome'),bounds=root.getBoundingClientRect(),center=bounds.left+bounds.width/2;return [...root.querySelectorAll('.assistant-welcome-line,h2,p,.assistant-suggestions')].map(node=>{const r=node.getBoundingClientRect();return {delta:Math.abs(r.left+r.width/2-center),align:getComputedStyle(node).textAlign}})})()");
-  assert.ok(alignment.every(node=>node.delta<1),'Welcome centered at '+width);assert.equal(alignment[1].align,'center');assert.equal(alignment[2].align,'center');assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);await screenshot('welcome-aligned-'+width);
+  assert.ok(alignment.every(node=>node.delta<1),'Welcome centered at '+width);assert.equal(alignment[1].align,'center');assert.equal(alignment[2].align,'center');
+  if(width<701){
+   const vertical=await evaluate("(()=>{const items=[...document.querySelectorAll('.assistant-suggestions button')],last=items[items.length-1],composer=document.querySelector('.assistant-composer');if(!last||!composer)return null;const a=last.getBoundingClientRect(),b=composer.getBoundingClientRect();return {lastBottom:Math.round(a.bottom),composerTop:Math.round(b.top),gap:Math.round(b.top-a.bottom)}})()");
+   assert.ok(vertical&&vertical.gap>=0,'Last welcome suggestion must remain above the sticky composer at '+width+'px: '+JSON.stringify(vertical));
+  }
+  const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
+  if(width<701){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Mobile menu toggle shown at '+width)}
+  else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width)}
+  const overflow=await evaluate("(()=>{const vw=innerWidth;const offenders=[...document.querySelectorAll('body *')].map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,id:el.id,cls:typeof el.className==='string'?el.className:'',left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scroll:el.scrollWidth,client:el.clientWidth}}).filter(x=>x.width>0&&(x.left < -1||x.right>vw+1)).sort((a,b)=>(b.right-vw)-(a.right-vw)).slice(0,10);return {vw,doc:document.documentElement.scrollWidth,offenders}})()");
+  assert.equal(overflow.doc<=overflow.vw,true,'No horizontal overflow at '+width+': '+JSON.stringify(overflow));
+  await screenshot('welcome-aligned-'+width);
  }
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ const geometry=await evaluate("(()=>{const form=document.querySelector('#assistant-form'),input=document.querySelector('#assistant-input'),tools=document.querySelector('.assistant-compose-tools'),attach=document.querySelector('#assistant-attach'),send=document.querySelector('#assistant-send');const f=form.getBoundingClientRect(),i=input.getBoundingClientRect(),t=tools.getBoundingClientRect(),a=attach.getBoundingClientRect(),s=send.getBoundingClientRect();return {width:innerWidth,form:{left:Math.round(f.left),right:Math.round(f.right),width:Math.round(f.width)},input:{left:Math.round(i.left),right:Math.round(i.right),width:Math.round(i.width)},tools:{left:Math.round(t.left),right:Math.round(t.right),width:Math.round(t.width)},attach:{left:Math.round(a.left),right:Math.round(a.right)},send:{left:Math.round(s.left),right:Math.round(s.right)},hasSelectWrapper:!!document.querySelector('#assistant-thread-select')?.closest('.select-control')}})()");
+ assert.equal(geometry.hasSelectWrapper,false,'Hidden conversation select stays hidden and unenhanced');
+ assert.equal(geometry.form.left>=0&&geometry.form.right<=geometry.width+1,true,'Composer surface fits viewport: '+JSON.stringify(geometry));
+ assert.equal(geometry.input.width>=180&&geometry.input.left>=geometry.form.left&&geometry.input.right<=geometry.form.right+1,true,'Composer input has a usable width inside the outer surface: '+JSON.stringify(geometry));
+ assert.equal(geometry.attach.left>=geometry.tools.left&&geometry.attach.right<=geometry.tools.right+1&&geometry.send.left>=geometry.tools.left&&geometry.send.right<=geometry.tools.right+1,true,'Attach and send buttons fit the inner toolbar: '+JSON.stringify(geometry));
+
  await evaluate("document.querySelector('#assistant-knowledge').click()");await until("document.querySelector('#assistant-knowledge-panel').open");await screenshot('knowledge-mobile');
  await evaluate("document.querySelector('#knowledge-form [name=title]').value='Studio knowledge';document.querySelector('#knowledge-form [name=content]').value='Ремонт квартир';document.querySelector('#knowledge-form').requestSubmit()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Studio knowledge')");
  await evaluate("document.querySelector('.knowledge-item').click();document.querySelector('#knowledge-form [name=content]').value='Ремонт и отделка';document.querySelector('#knowledge-form').requestSubmit()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Ремонт и отделка')");

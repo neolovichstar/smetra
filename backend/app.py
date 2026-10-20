@@ -540,6 +540,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/data-export.css"] = ("data-export.css", "text/css")
         public["/quote-review.css"] = ("quote-review.css", "text/css")
         public["/design-system.css"] = ("design-system.css", "text/css")
+        public["/ui-foundation.css"] = ("ui-foundation.css", "text/css")
         for name in (
             "reference-hero",
             "reference-sphere",
