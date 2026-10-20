@@ -54,7 +54,7 @@ const assert = require('node:assert/strict');
   });
   requests.length = 0;
   await send('Page.navigate', { url: site + '/?ref=landing-motion-qa' });
-  await until("document.querySelector('[data-motion-scene] .motion-orbit-one')");
+  await until("document.querySelector('[data-motion-scene] img.black-art')");
   await until("document.querySelector('#preview-document table')");
   await wait(150);
 
@@ -68,33 +68,28 @@ const assert = require('node:assert/strict');
     false,
     'A regular landing visit must not eagerly download the cabinet runtime'
   );
-  assert.equal(
-    await evaluate("getComputedStyle(document.querySelector('.motion-orbit-one')).animationName"),
-    'motion-orbit-drift',
-    'The hero scene uses CSS-composited motion'
-  );
+  assert.equal(await evaluate("document.querySelectorAll('.motion-orbit,.motion-glow,.motion-sweep,.motion-spark').length"),0,'The hero avoids decorative orbit/glow/sweep effects');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.black-hero h1')).animationName"),'motion-title-arrive','The hero uses one purposeful title entrance animation');
 
   const rect = await evaluate("(function(){const r=document.querySelector('[data-motion-scene]').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()");
+  const beforeTransform = await evaluate("getComputedStyle(document.querySelector('[data-motion-scene] img.black-art')).transform");
   await send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: rect.x + rect.width * 0.78,
     y: rect.y + rect.height * 0.34
   });
   await until("document.querySelector('[data-motion-scene]').style.getPropertyValue('--scene-x') !== ''");
-  assert.notEqual(
-    await evaluate("document.querySelector('[data-motion-scene]').style.getPropertyValue('--scene-x')"),
-    '0.00px',
-    'Desktop pointer movement should drive subtle parallax'
-  );
+  assert.notEqual(await evaluate("document.querySelector('[data-motion-scene]').style.getPropertyValue('--scene-x')"),'0.00px','Desktop pointer movement should update the scene offset');
+  assert.notEqual(await evaluate("getComputedStyle(document.querySelector('[data-motion-scene] img.black-art')).transform"),beforeTransform,'The scene offset must visibly transform the hero artwork');
 
   await send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
   });
   await wait(100);
   assert.equal(
-    await evaluate("getComputedStyle(document.querySelector('.motion-orbit-one')).animationName"),
+    await evaluate("getComputedStyle(document.querySelector('.black-hero h1')).animationName"),
     'none',
-    'Reduced-motion preference disables orbit animation'
+    'Reduced-motion preference disables title entrance animation'
   );
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('[data-motion-scene]')).transitionDuration"),
