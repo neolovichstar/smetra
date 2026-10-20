@@ -835,3 +835,106 @@
   .workspace-page *::before,
   .workspace-page *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* The assistant composer deliberately has no nested field border or focus ring. */
+.workspace-page #content .assistant-composer form,
+.workspace-page #content .assistant-composer form:focus-within {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.workspace-page #content .assistant-composer :is(input,textarea,select),
+.workspace-page #content .assistant-composer :is(input,textarea,select):focus,
+.workspace-page #content .assistant-composer :is(input,textarea,select):focus-visible {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.workspace-page #content .assistant-composer textarea {
+  min-height: 44px;
+  padding: 10px 8px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.workspace-page .workspace-home .activation-intro [data-activation="estimate"]::before {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background: currentColor;
+  mask: url('/assets/icons/plus.svg') center / contain no-repeat;
+  content: "";
+}
+@media (max-width: 700px) {
+  .workspace-page:not(.auth-mode) .app-nav {
+    height: 112px;
+    min-height: 112px;
+  }
+  .workspace-page:not(.auth-mode) .app-nav-inner {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    grid-template-rows: 56px 48px;
+    gap: 0 12px;
+    padding: 0 16px 8px;
+  }
+  .workspace-page:not(.auth-mode) .app-nav-brand {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 10px;
+  }
+  .workspace-page:not(.auth-mode) .app-nav-actions {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 0;
+  }
+  .workspace-page:not(.auth-mode) .app-nav .brand {
+    font-size: 24px;
+    letter-spacing: -.05em;
+  }
+  .workspace-page:not(.auth-mode) .nav-toggle,
+  .workspace-page:not(.auth-mode) .nav-search {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+  .workspace-page:not(.auth-mode) .nav-toggle { flex: 0 0 44px; }
+  .workspace-page .workspace-modes {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    width: 100%;
+    margin: 0;
+    padding: 3px;
+    gap: 4px;
+    border-radius: 14px;
+  }
+  .workspace-page .workspace-modes button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: 11px;
+    font-size: 12px;
+  }
+  .workspace-page:not(.auth-mode) .app-shell {
+    display: block;
+    min-height: calc(100dvh - 112px);
+  }
+  .workspace-page:not(.auth-mode) .sidebar {
+    position: fixed;
+    top: 112px;
+    height: calc(100dvh - 112px);
+    height: calc(100dvh - 112px - env(safe-area-inset-bottom));
+  }
+  .workspace-page .nav-backdrop { top: 112px; }
+  .workspace-page #content .assistant-composer textarea {
+    min-height: 44px;
+    padding: 10px 6px;
+    font-size: 16px;
+    line-height: 24px;
+  }
+}
