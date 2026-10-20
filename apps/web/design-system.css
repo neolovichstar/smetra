@@ -938,3 +938,69 @@
     line-height: 24px;
   }
 }
+
+
+/* Mobile dashboard composer: the input and send control occupy separate grid cells.
+   Keep the action compact; never let its icon-only mobile variant cover the text. */
+@media (max-width: 600px) {
+  .workspace-page .workspace-home .capture-panel form {
+    grid-template-columns: 36px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 6px;
+  }
+  .workspace-page .workspace-home .capture-panel form:not(:has(.capture-file)) {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+  .workspace-page .workspace-home .capture-panel form #capture-text {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    max-height: 130px;
+    resize: none;
+    padding: 10px 3px;
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .workspace-page .workspace-home .capture-panel form .capture-file {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+    width: 36px;
+    min-height: 40px;
+  }
+  .workspace-page .workspace-home .capture-panel form .capture-actions {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    justify-content: center;
+    min-width: 44px;
+  }
+  .workspace-page .workspace-home .capture-panel form .capture-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .workspace-page .workspace-home .capture-panel form:not(:has(.capture-file)) #capture-text {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .workspace-page .workspace-home .capture-panel form:not(:has(.capture-file)) .capture-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .workspace-page .workspace-home .capture-panel form #capture-status {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
