@@ -475,10 +475,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/health":
             return self.send_json(200, {"ok": True})
         if path == "/ready":
-            with db() as con:
-                con.execute("SELECT 1")
+            try:
+                with db() as con:
+                    con.execute("SELECT 1")
+            except Exception:
+                # Readiness failure is expected for an isolated Preview without a DB.
+                # Return dependency status instead of a generic 500 or leaking details.
+                return self.send_json(503, {"ok": False, "database": False})
             return self.send_json(200, {"ok": True, "database": True})
-        public = {
             "/": ("index.html", "text/html"),
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
