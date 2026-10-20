@@ -488,7 +488,79 @@
   box-shadow: none !important;
 }
 .workspace-page #content .assistant-composer #assistant-form:focus-within {
-  border-color: #777 !important;
+  border-color: var(--smetra-focus) !important;
   background: var(--smetra-surface) !important;
+  outline: 2px solid var(--smetra-focus) !important;
+  outline-offset: 2px !important;
   box-shadow: 0 0 0 3px #80808016 !important;
+}
+
+
+/* Last palette normalization: retain semantic danger states, remove blue-only UI decoration. */
+.workspace-page .main :is(input[type="checkbox"],input[type="radio"],input[type="range"]),
+.workspace-page .main input[type="checkbox"],
+.workspace-page .main input[type="radio"],
+.workspace-page .main input[type="range"] {
+  accent-color: var(--smetra-action) !important;
+}
+.workspace-page :is(.auth-legal a,.support-guide>a,.assistant-message.assistant>small,.assistant-refined .background-mode #assistant-delivery-hint) {
+  color: var(--smetra-text-muted) !important;
+}
+.workspace-page .main .provider-buttons .btn.primary,
+.workspace-page .main .provider-buttons .btn.primary:hover:not(:disabled) {
+  background: var(--smetra-action) !important;
+  border-color: var(--smetra-action) !important;
+  color: var(--smetra-action-text) !important;
+  box-shadow: none !important;
+}
+.workspace-page .main :is(.editor-item:focus-within,.catalog-detail:focus-within) {
+  border-color: var(--smetra-line-strong) !important;
+  box-shadow: 0 0 0 2px #80808012 !important;
+}
+.workspace-page .main .editor-row-select input,
+.workspace-page .main .catalog-favorite-filter input,
+.workspace-page .main .catalog-favorite-field input,
+.workspace-page .main .catalog-duplicate-warning input,
+.workspace-page .main .construction-price-select,
+.workspace-page .main .construction-log-photos input {
+  accent-color: var(--smetra-action) !important;
+}
+.workspace-page .main .admin-tabs button.active::after,
+.workspace-page .main .admin-tabs button.active:after {
+  background: var(--smetra-action) !important;
+}
+.workspace-page .main .admin-switch button.active {
+  background: var(--smetra-surface-raised) !important;
+  border-color: var(--smetra-line-strong) !important;
+  color: var(--smetra-text) !important;
+  box-shadow: inset 0 0 0 1px var(--smetra-line-strong) !important;
+}
+.workspace-page .main .admin-switch button.active::after,
+.workspace-page .main .admin-switch button.active:after {
+  background: var(--smetra-action) !important;
+  box-shadow: none !important;
+}
+.workspace-page .main .admin-pagination button:hover:not(:disabled) {
+  background: var(--smetra-surface-hover) !important;
+  border-color: var(--smetra-line-strong) !important;
+  color: var(--smetra-text) !important;
+}
+.workspace-page .main .admin-audit-mark {
+  background: var(--smetra-surface-raised) !important;
+  border-color: var(--smetra-line-strong) !important;
+  box-shadow: 0 0 0 4px #8080800a !important;
+}
+.workspace-page .main .admin-plan.is-pro {
+  background: var(--smetra-surface-raised) !important;
+  border-color: var(--smetra-line-strong) !important;
+  color: var(--smetra-text) !important;
+}
+.workspace-page .main .admin-search > span:not(.sr-only),
+.workspace-page .main :is(.admin-subline,.admin-ticket-top time,.admin-dialog-email,.admin-dialog-facts span,.admin-dialog-hint) {
+  color: var(--smetra-text-muted) !important;
+}
+:root[data-theme="light"] .workspace-page #content .assistant-composer #assistant-form:focus-within {
+  border-color: var(--smetra-focus) !important;
+  outline-color: var(--smetra-focus) !important;
+  box-shadow: 0 0 0 3px #0000000a !important;
 }
