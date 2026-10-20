@@ -42,6 +42,24 @@ class PostgresQueryTests(unittest.TestCase):
             ):
                 schema_name()
 
+    def test_preview_environment_cannot_select_production_schema(self):
+        with (
+            patch.dict("os.environ", {"VERCEL_ENV": "preview", "SMETRA_DB_SCHEMA": "smetra"}),
+            self.assertRaisesRegex(ValueError, "Preview deployment must use an isolated"),
+        ):
+            schema_name()
+
+    def test_preview_environment_can_select_an_isolated_qa_schema(self):
+        with patch.dict(
+            "os.environ",
+            {"VERCEL_ENV": "preview", "SMETRA_DB_SCHEMA": "smetra_qa_20260928"},
+        ):
+            self.assertEqual(schema_name(), "smetra_qa_20260928")
+
+    def test_production_environment_can_select_production_schema(self):
+        with patch.dict("os.environ", {"VERCEL_ENV": "production", "SMETRA_DB_SCHEMA": "smetra"}):
+            self.assertEqual(schema_name(), "smetra")
+
     def test_rows_support_mapping_and_index_access(self):
         row = Row(id="abc", total=12)
         self.assertEqual(row[0], row["id"])

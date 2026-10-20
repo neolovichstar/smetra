@@ -61,6 +61,12 @@ def schema_name():
     name = os.getenv("SMETRA_DB_SCHEMA", "smetra")
     if not re.fullmatch(r"smetra(?:_[a-z0-9_]+)?", name):
         raise ValueError("Invalid Smetra database schema")
+    # Defense in depth: preview builds must never use the production schema,
+    # even if a production database URL is accidentally reintroduced in Vercel.
+    if os.getenv("VERCEL_ENV", "").lower() == "preview" and name == "smetra":
+        raise ValueError(
+            "Preview deployment must use an isolated SMETRA_DB_SCHEMA, not production schema 'smetra'"
+        )
     return name
 
 
