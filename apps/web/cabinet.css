@@ -325,3 +325,76 @@
 @media(max-width:800px){.workspace-page .editor-layout{display:flex;flex-direction:column;gap:0}.workspace-page .editor-main,.workspace-page .editor-aside{width:100%}.workspace-page .editor-aside{position:static}.workspace-page .editor-aside .panel{padding-bottom:24px}.workspace-page .editor-positions .section-top{display:flex}.workspace-page .editor-layout .panel{padding:20px 0}.workspace-page .editor-section-title{margin-bottom:16px}.workspace-page .editor-basics .form-grid{gap:14px}.workspace-page .editor-layout .item-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.workspace-page .editor-basics .form-grid{grid-template-columns:1fr}.workspace-page .editor-layout .editor-item{padding:16px 0}.workspace-page .editor-positions .catalog-picker{width:65%}.workspace-page .editor-layout input:not([type=checkbox]){font-size:16px}.workspace-page .editor-history [role=status]{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.workspace-page .editor-layout details[open]>:not(summary){animation:none}.workspace-page .editor-layout summary:after{transition:none}}
+
+
+/* Compact density pass: keep more work visible without shrinking readable text. */
+@media(min-width:801px){
+ .workspace-page .app-nav{height:62px}
+ .app-nav-inner{padding-inline:26px;gap:16px}
+ .app-nav-brand,.app-nav-actions{gap:14px}
+ .app-nav-caption{padding-left:14px}
+ .workspace-modes{gap:3px}
+ .workspace-page .app-shell{grid-template-columns:220px minmax(0,1fr);min-height:calc(100dvh - 62px)}
+ .workspace-page .sidebar{top:62px;height:calc(100dvh - 62px)}
+ .workspace-page .workspace-label{padding:19px 20px 16px}
+ .workspace-label .eyebrow{margin-bottom:7px}
+ .workspace-label strong{font-size:15px}
+ .sidebar-scroll{padding:7px 10px}
+ .sidebar-group{padding:11px 0 12px}
+ .sidebar-heading{padding:0 10px 6px;font-size:9px}
+ .workspace-page .sidebar-group button{min-height:36px;padding:7px 10px;font-size:11.5px}
+ .sidebar-foot{padding:10px 20px 14px}
+ .workspace-page .main{padding:30px clamp(24px,3.2vw,54px) 72px}
+ .workspace-page .topline{margin-bottom:23px;gap:24px}
+ .workspace-page .topline h1{font-size:clamp(30px,2.8vw,42px);margin:10px 0 8px}
+ .workspace-page .topline p{font-size:12.5px}
+ .workspace-page .panel{padding:17px 0 19px;margin-bottom:7px}
+ .workspace-page .record-line,.workspace-page .quote{padding:13px 0}
+ .workspace-page .record-line strong,.workspace-page .quote strong{font-size:12.5px}
+ .workspace-page .record-line small{font-size:10.5px}
+ .workspace-page .btn{min-height:38px;padding:9px 13px;font-size:11px}
+ .workspace-page .btn.small{min-height:32px;padding:6px 10px}
+ .workspace-page input:not([type=checkbox]):not([type=radio]),.workspace-page select{min-height:39px;padding-block:9px}
+ .workspace-page textarea{padding:11px 13px}
+ .dashboard-metrics{margin-bottom:18px}
+ .dashboard-metric{padding:13px 20px 15px 0}
+ .dashboard-metric+.dashboard-metric{padding-left:20px}
+ .dashboard-metric span{font-size:10.5px;margin-bottom:6px}
+ .dashboard-metric strong{font-size:clamp(22px,2vw,31px)}
+ .today-actions{margin-bottom:26px}
+ .today-action{padding:13px 0;gap:14px}
+ .today-action strong{font-size:13px}
+ .today-action small{font-size:11px}
+ .dashboard-work{gap:36px}
+ .dashboard-aside{padding-left:26px}
+ .workspace-page .capture-panel{gap:28px;padding-bottom:19px;margin-bottom:18px}
+ .workspace-page .capture-panel textarea{min-height:78px}
+ .workspace-page .auth-flow{padding-block:36px}
+ .workspace-page .auth-flow h1{font-size:clamp(35px,3.2vw,48px);margin:20px 0 8px}
+ .workspace-page .auth-flow .auth-intro{margin-bottom:20px}
+ .workspace-page .auth-wrap .field{margin-bottom:12px}
+ .auth-tabs{margin-bottom:16px}
+ .workspace-page .auth-wrap .field input{min-height:40px}
+ .assistant-message{padding:16px 0}
+ .assistant-message p{font-size:14px;line-height:1.6}
+ .assistant-composer{padding:14px 0}
+ .assistant-composer textarea{min-height:46px;padding:12px}
+}
+@media(min-width:801px) and (max-width:1150px){
+ .workspace-page .app-shell{grid-template-columns:198px minmax(0,1fr)}
+ .workspace-page .main{padding-inline:23px}
+ .app-nav-inner{padding-inline:20px}
+ .app-nav-caption{display:none}
+ .dashboard-work{gap:22px}
+ .dashboard-aside{padding-left:18px}
+}
+@media(max-width:800px){
+ .workspace-page .app-nav{height:60px}
+ .workspace-page .app-shell{min-height:calc(100dvh - 60px)}
+ .workspace-page .sidebar{top:60px;height:calc(100dvh - 60px)}
+ .nav-open .nav-backdrop{inset:60px 0 0}
+ .workspace-page .main{padding-top:24px}
+}
+@media(prefers-reduced-motion:reduce){
+ .workspace-page .sidebar,.workspace-page .sidebar-group button,.workspace-page .record-line{transition:none}
+}
