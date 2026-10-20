@@ -394,6 +394,49 @@
 .workspace-page :is(.empty,.empty-state) h3 { margin: 0 0 9px; color: #eee; }
 .workspace-page :is(.empty,.empty-state) p { max-width: 520px; margin: 0 auto; color: var(--text-secondary); font-size: 12px; }
 
+/* First-run onboarding uses the same type scale and button baseline as the rest of the workspace. */
+.workspace-page .workspace-home .activation-intro {
+  margin: 0 0 22px;
+  padding: 0 0 22px;
+  border-bottom: 1px solid #292929;
+}
+.workspace-page .workspace-home .activation-intro .overline {
+  display: block;
+  margin: 0 0 6px;
+  color: #b8b8b8;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+.workspace-page .workspace-home .activation-intro h2 {
+  margin: 0 0 14px;
+  color: #f2f2f2;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.025em;
+}
+.workspace-page .workspace-home .activation-intro .row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.workspace-page .workspace-home .activation-intro .btn {
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.workspace-page .workspace-home .activation-intro .note {
+  margin: 0;
+  color: #a7a7a7;
+  font-size: 11px;
+  line-height: 1.5;
+}
 /* Dashboard: remove the growing-card/metrics collision and align the composer. */
 .workspace-page .workspace-home {
   display: flex;
@@ -411,9 +454,9 @@
   flex-wrap: wrap;
   gap: 14px;
   min-width: 0;
-  margin: 0 0 24px;
-  padding: 0 0 22px;
-  border-bottom: 1px solid #292929;
+  margin: 0 0 18px;
+  padding: 0;
+  border-bottom: 0;
 }
 .workspace-page .workspace-home .dashboard-intro h1 {
   margin: 0;
@@ -689,6 +732,11 @@
 :root[data-theme="light"] .workspace-page .workspace-home .dashboard-metrics { background: #fff; border-color: #ddd; }
 :root[data-theme="light"] .workspace-page .workspace-home .dashboard-metric strong { color: #171717; }
 :root[data-theme="light"] .workspace-page .workspace-home .capture-heading h2 { color: #171717; }
+:root[data-theme="light"] .workspace-page .workspace-home .activation-intro { border-color: #dedede; }
+:root[data-theme="light"] .workspace-page .workspace-home .activation-intro .overline { color: #5e5e5e; }
+:root[data-theme="light"] .workspace-page .workspace-home .activation-intro h2 { color: #171717; }
+:root[data-theme="light"] .workspace-page .workspace-home .activation-intro .note { color: #5e5e5e; }
+
 :root[data-theme="light"] .workspace-page :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,select) {
   color: #171717 !important;
   background: #f4f4f4 !important;
