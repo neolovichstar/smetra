@@ -1004,3 +1004,272 @@
     grid-row: 2;
   }
 }
+
+
+/* Assistant toolbar: the history disclosure replaces its hidden compatibility select.
+   A four-column grid keeps all actions aligned without pushing labels into each other. */
+.workspace-page .assistant-studio #assistant-thread-select[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+}
+.workspace-page .assistant-studio .assistant-workbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 44px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 12px;
+  flex-wrap: initial;
+}
+.workspace-page .assistant-studio .assistant-history {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  min-width: 0;
+  flex: initial;
+  position: relative;
+}
+.workspace-page .assistant-studio .assistant-history summary {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  gap: 9px;
+}
+.workspace-page .assistant-studio .assistant-current-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-page .assistant-studio #assistant-new-thread {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.workspace-page .assistant-studio #assistant-knowledge {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.workspace-page .assistant-studio .assistant-options {
+  grid-column: 4;
+  grid-row: 1;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+.workspace-page .assistant-studio .assistant-options summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+.workspace-page .assistant-studio .assistant-history-list {
+  width: min(340px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+.workspace-page .assistant-brand-dot,
+.workspace-page .assistant-refined .assistant-message.assistant > small::before {
+  background: #d8d8d8 !important;
+  box-shadow: none !important;
+}
+.workspace-page .assistant-refined .assistant-history summary,
+.workspace-page .assistant-refined .assistant-options summary,
+.workspace-page .assistant-refined .assistant-history-label {
+  color: #bdbdbd;
+}
+
+/* Neutral monochrome accents across assistant, construction and financial components. */
+.workspace-page .quote-row .record-meta b,
+.workspace-page .projects-row .record-meta b,
+.workspace-page .contact-link,
+.workspace-page .assistant-refined .background-mode #assistant-delivery-hint,
+.workspace-page .assistant-markdown a,
+.workspace-page .assistant-markdown em,
+.workspace-page .assistant-markdown li::marker,
+.workspace-page .assistant-attachment-bar button,
+.workspace-page .assistant-fork,
+.workspace-page .assistant-upgrade,
+.workspace-page .assistant-composer-foot #assistant-status:not(:empty),
+.workspace-page .assistant-diff-row > div > span,
+.workspace-page .assistant-diff-total strong,
+.workspace-page .assistant-edit-diff summary,
+.workspace-page .assistant-jobbar button,
+.workspace-page .assistant-job button,
+.workspace-page .construction-back button,
+.workspace-page .construction-object-right b,
+.workspace-page .construction-price-diff-head span,
+.workspace-page .construction-price-diff-row b,
+.workspace-page .construction-log-date,
+.workspace-page .construction-procurement-row b,
+.workspace-page .construction-change-row small {
+  color: #d0d0d0 !important;
+}
+.workspace-page .assistant-markdown blockquote {
+  border-left-color: #575757 !important;
+  color: #c8c8c8;
+}
+.workspace-page .assistant-markdown code {
+  color: #e0e0e0;
+}
+.workspace-page .assistant-welcome-line {
+  background: #cfcfcf !important;
+  box-shadow: none !important;
+}
+.workspace-page .assistant-suggestions button:hover {
+  border-color: #555 !important;
+  background: #171717 !important;
+}
+.workspace-page .assistant-page .assistant-proposal {
+  border-color: #333 !important;
+}
+.workspace-page .assistant-fork:hover,
+.workspace-page .assistant-copy:hover {
+  color: #fff !important;
+}
+.workspace-page .assistant-context {
+  border-color: #363636 !important;
+  background: #111 !important;
+  color: #ddd !important;
+}
+.workspace-page .assistant-context button {
+  background: #242424 !important;
+  color: #eee !important;
+}
+.workspace-page .assistant-context button:hover {
+  background: #333 !important;
+}
+.workspace-page .assistant-composer form {
+  border-color: #333 !important;
+  box-shadow: none !important;
+}
+.workspace-page .assistant-thread-action {
+  border-color: #393939 !important;
+  background: #111 !important;
+  color: #ddd !important;
+}
+.workspace-page .assistant-text-diff pre {
+  border-left-color: #777 !important;
+  color: #ddd !important;
+}
+.workspace-page .assistant-text-diff pre:nth-of-type(2) {
+  border-color: #777 !important;
+  color: #ddd !important;
+}
+.workspace-page .construction-back button:hover,
+.workspace-page .construction-object:hover strong,
+.workspace-page .construction-object:hover b {
+  color: #fff !important;
+}
+.workspace-page .construction-inline input:focus,
+.workspace-page .construction-inline select:focus,
+.workspace-page .construction-price-controls input:focus,
+.workspace-page .construction-change-line input:focus,
+.workspace-page .construction-change-line select:focus {
+  outline: 2px solid #aaa !important;
+}
+.workspace-page .construction-fact-open,
+.workspace-page .construction-upload,
+.workspace-page .construction-price-tools,
+.workspace-page .construction-price-controls input,
+.workspace-page .construction-defect-row select,
+.workspace-page .construction-log-photos label {
+  border-color: #363636 !important;
+  color: #ddd !important;
+}
+.workspace-page .construction-fact-open,
+.workspace-page .construction-price-controls input,
+.workspace-page .construction-defect-row select {
+  background: #111 !important;
+}
+.workspace-page .construction-hint code {
+  color: #ddd !important;
+  background: #171717 !important;
+}
+.workspace-page .construction-price-select,
+.workspace-page .construction-log-photos input {
+  accent-color: #ddd !important;
+}
+.workspace-page .workspace-section > .topline p,
+.workspace-page .workspace-section .empty p,
+.workspace-page .catalog-row .record-meta b > small,
+.workspace-page .section-finance .stat > span,
+.workspace-page .section-finance .stat small {
+  color: var(--text-secondary) !important;
+}
+:root[data-theme="light"] .workspace-page .assistant-studio {
+  --chat-surface: #f3f3f3;
+  --chat-elevated: #e8e8e8;
+  --chat-muted: #666;
+}
+:root[data-theme="light"] .workspace-page .assistant-context {
+  border-color: #d0d0d0 !important;
+  background: #f5f5f5 !important;
+  color: #222 !important;
+}
+:root[data-theme="light"] .workspace-page .assistant-context button {
+  background: #e7e7e7 !important;
+  color: #222 !important;
+}
+:root[data-theme="light"] .workspace-page .assistant-markdown code,
+:root[data-theme="light"] .workspace-page .assistant-markdown pre {
+  background: #f2f2f2 !important;
+  color: #222 !important;
+  border-color: #d0d0d0 !important;
+}
+
+@media (max-width: 700px) {
+  .workspace-page .assistant-studio .assistant-workbar {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 4px;
+    padding-bottom: 12px;
+  }
+  .workspace-page .assistant-studio .assistant-history {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .workspace-page .assistant-studio #assistant-new-thread {
+    grid-column: 2;
+    grid-row: 2;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .workspace-page .assistant-studio #assistant-knowledge {
+    grid-column: 3;
+    grid-row: 2;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .workspace-page .assistant-studio .assistant-options {
+    grid-column: 4;
+    grid-row: 2;
+  }
+  .workspace-page .assistant-studio .assistant-history-list {
+    width: min(340px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+  }
+}
