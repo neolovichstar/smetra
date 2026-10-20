@@ -30,6 +30,10 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
   const alignment=await evaluate("(()=>{const root=document.querySelector('.assistant-welcome'),bounds=root.getBoundingClientRect(),center=bounds.left+bounds.width/2;return [...root.querySelectorAll('.assistant-welcome-line,h2,p,.assistant-suggestions')].map(node=>{const r=node.getBoundingClientRect();return {delta:Math.abs(r.left+r.width/2-center),align:getComputedStyle(node).textAlign}})})()");
   assert.ok(alignment.every(node=>node.delta<1),'Welcome centered at '+width);assert.equal(alignment[1].align,'center');assert.equal(alignment[2].align,'center');
+  if(width<701){
+   const vertical=await evaluate("(()=>{const items=[...document.querySelectorAll('.assistant-suggestions button')],last=items[items.length-1],composer=document.querySelector('.assistant-composer');if(!last||!composer)return null;const a=last.getBoundingClientRect(),b=composer.getBoundingClientRect();return {lastBottom:Math.round(a.bottom),composerTop:Math.round(b.top),gap:Math.round(b.top-a.bottom)}})()");
+   assert.ok(vertical&&vertical.gap>=0,'Last welcome suggestion must remain above the sticky composer at '+width+'px: '+JSON.stringify(vertical));
+  }
   const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
   if(width<701){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Mobile menu toggle shown at '+width)}
   else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width)}

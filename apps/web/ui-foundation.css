@@ -680,3 +680,45 @@
     white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important;line-height:1.4!important
   }
 }
+
+
+/* Keep the last mobile welcome suggestion above the sticky composer on compact screens. */
+@media (max-width:700px) {
+  body.workspace-page #content .assistant-studio .assistant-thread:has(.assistant-welcome) {
+    min-height:0!important;
+    padding:0 0 8px!important;
+    align-items:flex-start!important;
+    justify-content:flex-start!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-welcome {
+    padding:12px 0 14px!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-welcome .assistant-welcome-line {
+    width:32px!important;
+    height:32px!important;
+    margin:0 auto 12px!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-welcome h2 {
+    margin:8px 0 6px!important;
+    font-size:25px!important;
+    line-height:1.28!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-welcome p {
+    margin:0 auto 8px!important;
+    font-size:13px!important;
+    line-height:1.55!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-suggestions {
+    margin-top:12px!important;
+    gap:6px!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-suggestions button {
+    min-height:48px!important;
+    padding:8px 9px!important;
+    font-size:12px!important;
+    line-height:1.35!important;
+  }
+  body.workspace-page #content .assistant-studio .assistant-content {
+    padding-bottom:calc(96px + env(safe-area-inset-bottom))!important;
+  }
+}
