@@ -1792,7 +1792,7 @@ class Service:
                 ORDER BY updated_at DESC LIMIT 5
             ),
             stale_quote_action_rows AS (
-                SELECT 'quote', id, 'Смета ждёт согласования', title, 'Открыть смету',
+                SELECT 'quote', id, 'Смета ждёт согласования', client || ' · ' || title, 'Открыть смету',
                        '', 0, currency, 3, CAST(sent_at AS TEXT), 1
                 FROM quotes
                 WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=?
