@@ -26,6 +26,13 @@ class HealthProbeTests(unittest.TestCase):
         connection.execute.assert_called_once_with("SELECT 1")
         self.handler.send_json.assert_called_once_with(200, {"ok": True, "database": True})
 
+    def test_ready_probe_returns_503_when_database_is_unavailable(self):
+        with patch("backend.app.db", side_effect=RuntimeError("internal connection detail")):
+            self.handler.static("/ready")
+        self.handler.send_json.assert_called_once_with(
+            503, {"ok": False, "database": False}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
