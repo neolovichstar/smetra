@@ -348,7 +348,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     scrollBottom();
     let generated='',paintPending=false,completed=false;
     const paint=()=>{const follow=nearBottom();paintPending=false;assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
-    const schedule=()=>{if(!paintPending){paintPending=true;setTimeout(()=>requestAnimationFrame(paint),50)}};
+    const schedule=()=>{if(!paintPending){paintPending=true;requestAnimationFrame(paint)}};
     try{
       const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
