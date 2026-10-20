@@ -52,6 +52,7 @@ const assert = require('node:assert/strict');
   await send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }]
   });
+  requests.length = 0;
   await send('Page.navigate', { url: site + '/?ref=landing-motion-qa' });
   await until("document.querySelector('[data-motion-scene] .motion-orbit-one')");
   await until("document.querySelector('#preview-document table')");
