@@ -299,7 +299,7 @@
 .workspace-page :is(input,textarea,select):focus {
   border-color: #aaa !important;
   background: #0d0d0d !important;
-  box-shadow: 0 0 0 3px #fff0a !important;
+  box-shadow: 0 0 0 3px #ffffff0a !important;
 }
 .workspace-page :is(input[type=checkbox],input[type=radio],input[type=range],input[type=color]) { accent-color: #ddd; }
 .workspace-page label { display: block; margin: 0 0 7px; color: #bdbdbd; font-size: 12px; font-weight: 550; line-height: 1.4; }
@@ -452,8 +452,11 @@
   box-shadow: none;
 }
 .workspace-page .workspace-home .capture-panel form:not(:has(.capture-file)) { grid-template-columns: minmax(0,1fr) auto; }
+.workspace-page .workspace-home .capture-panel form:not(:has(.capture-file)) #capture-text { grid-column: 1; }
+.workspace-page .workspace-home .capture-panel form:not(:has(.capture-file)) .capture-actions { grid-column: 2; }
 .workspace-page .workspace-home #capture-text {
-  grid-column: auto;
+  grid-column: 2;
+  grid-row: 1;
   width: 100%;
   min-width: 0;
   min-height: 48px;
@@ -471,6 +474,8 @@
 .workspace-page .workspace-home #capture-text:focus { border: 0 !important; box-shadow: none !important; }
 .workspace-page .workspace-home #capture-text::placeholder { color: #a9a9a9 !important; }
 .workspace-page .workspace-home .capture-file {
+  grid-column: 1;
+  grid-row: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -487,9 +492,9 @@
 .workspace-page .workspace-home .capture-file::before { width: 18px; height: 18px; }
 .workspace-page .workspace-home .capture-file:hover { background: #292929; }
 .workspace-page .workspace-home #capture-form:has(#capture-file:focus-visible) .capture-file { outline: 2px solid #ddd; outline-offset: 2px; }
-.workspace-page .workspace-home .capture-actions { display: flex; align-items: center; justify-content: flex-end; grid-column: auto; align-self: center; margin: 0; }
+.workspace-page .workspace-home .capture-actions { display: flex; align-items: center; justify-content: flex-end; grid-column: 3; grid-row: 1; align-self: center; margin: 0; }
 .workspace-page .workspace-home .capture-actions .btn { min-height: 42px; padding: 10px 15px; border-radius: 999px; white-space: nowrap; }
-.workspace-page .workspace-home #capture-status { grid-column: 1 / -1; margin: 0; color: #bbb; font-size: 11px; line-height: 1.5; }
+.workspace-page .workspace-home #capture-status { grid-column: 1 / -1; grid-row: 2; margin: 0; color: #bbb; font-size: 11px; line-height: 1.5; }
 .workspace-page .workspace-home #capture-status:empty { display: none; }
 .workspace-page .workspace-home .capture-shortcuts {
   display: flex;
