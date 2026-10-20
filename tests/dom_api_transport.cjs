@@ -20,6 +20,8 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
  const account=w.api('/profile');w.eval("user={id:'other-user'}");const another=w.api('/profile');assert.equal(calls.length,9,'Account identity separates cached reads');reply(7,{user:'old'});reply(8,{user:'new'});await Promise.all([account,another]);
  const failed=w.api('/clients');calls[9].reject(new w.TypeError('Failed to fetch'));await assert.rejects(failed,/Нет связи с сервером/);
  const denied=w.api('/clients');reply(10,{error:{code:'forbidden',message:'Нет доступа'}},403);await assert.rejects(denied,error=>error.message==='Нет доступа'&&error.status===403);
+ const adminFirst=w.api('/admin/overview');assert.equal(calls.length,12,'Admin overview is not served from the short-lived read cache');reply(11,{revision:1});await adminFirst;
+ const adminSecond=w.api('/admin/overview');assert.equal(calls.length,13,'Explicit admin refresh always reaches the server');reply(12,{revision:2});assert.equal((await adminSecond).revision,2);
  assert.equal(calls[0].options.credentials,'same-origin');assert.equal(calls[2].options.headers['X-Workspace-Id'],'other');
  assert.ok(w.eval('rub(12345)').includes('123,45'),'Currency keeps kopecks');
  dom.window.close();console.log('PASS: short GET cache, snapshot isolation, workspace/account isolation, write invalidation, errors and kopecks');
