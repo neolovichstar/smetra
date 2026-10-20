@@ -15,6 +15,10 @@ class FakePool:
         self.getconn_calls = []
         self.__class__.instances.append(self)
 
+    @staticmethod
+    def check_connection(connection):
+        return None
+
     def open(self, *, wait, timeout):
         self.open_calls.append((wait, timeout))
 
