@@ -118,7 +118,7 @@ final class SmetraUi {
         button.setOnLongClickListener(v->{Toast.makeText(activity,description,Toast.LENGTH_SHORT).show();return true;});return button;
     }
     private Bitmap glyphBitmap(String icon,int color,int size){
-        String key=icon+\"|\"+color+\"|\"+size;
+        String key=icon+"|"+color+"|"+size;
         Bitmap cached=GLYPH_BITMAPS.get(key);
         if(cached!=null&&!cached.isRecycled())return cached;
         Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
