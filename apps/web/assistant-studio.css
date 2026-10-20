@@ -23,7 +23,7 @@
 .assistant-studio .assistant-history summary{padding-inline:8px;font-size:12px;color:var(--text-secondary)}
 .workspace-page .assistant-studio .assistant-workbar>.btn{font-size:12px;min-height:40px;padding:7px 10px;border:0;background:transparent;gap:7px}
 .workspace-page .assistant-studio #assistant-new-thread{background:transparent;border:0;color:var(--action)}
-.workspace-page .assistant-studio .assistant-workbar>.btn:hover:not(:disabled){background:#96beff0b}
+.workspace-page .assistant-studio .assistant-workbar>.btn:hover:not(:disabled){background:#b8b8b80b}
 .assistant-studio .assistant-options summary{width:40px;height:40px;background:transparent}
 .assistant-studio summary[aria-disabled=true]{pointer-events:none;opacity:.5}
 .assistant-studio .assistant-history-list,.assistant-studio .assistant-options-list{background:var(--chat-surface);border:1px solid var(--stroke);border-radius:14px;box-shadow:0 16px 54px #0009;padding:6px}
@@ -59,7 +59,7 @@
 .assistant-studio .assistant-markdown blockquote{margin:18px 0;padding:3px 0 3px 16px;border-left:2px solid var(--action);background:none;color:var(--text-secondary)}
 .assistant-studio .assistant-markdown blockquote p:last-child{margin:0}
 .assistant-studio .assistant-markdown hr{border:0;border-top:1px solid var(--stroke);margin:24px 0}
-.assistant-studio .assistant-markdown a{color:var(--action);text-decoration:underline;text-decoration-color:#96beff60;text-underline-offset:3px;transition:text-decoration-color .18s}
+.assistant-studio .assistant-markdown a{color:var(--action);text-decoration:underline;text-decoration-color:#b8b8b860;text-underline-offset:3px;transition:text-decoration-color .18s}
 .assistant-studio .assistant-markdown a:hover{text-decoration-color:var(--action)}
 .assistant-studio .assistant-markdown :not(pre)>code{font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--chat-elevated);border:0;color:var(--action);border-radius:5px;padding:2px 5px;white-space:break-spaces}
 .assistant-code{margin:18px 0;background:var(--chat-surface);border-radius:12px;overflow:hidden;max-width:100%}
@@ -89,7 +89,7 @@
 .assistant-studio .assistant-compose-tools{gap:6px}
 .assistant-studio .assistant-composer-foot{font-size:10px!important;min-height:16px;margin-top:8px!important;color:var(--text-secondary)!important}
 .workspace-page .assistant-studio #assistant-background{font-size:11px;color:var(--text-secondary)}
-.workspace-page .assistant-studio #assistant-background[aria-pressed=true]{color:var(--action);background:#96beff0c;border-radius:20px}
+.workspace-page .assistant-studio #assistant-background[aria-pressed=true]{color:var(--action);background:#b8b8b80c;border-radius:20px}
 .workspace-page .assistant-studio .assistant-proposal{margin-top:12px;border-top:1px solid var(--stroke);padding:18px 0;background:transparent}
 .assistant-studio .assistant-proposal h3{font-size:15px;line-height:1.5;margin:8px 0 14px}
 .assistant-studio :is(button,summary,a,pre,.assistant-table-scroll):focus-visible{outline:2px solid var(--action);outline-offset:3px}
@@ -188,7 +188,7 @@
 .profile-page>header{margin-bottom:36px}.profile-page h1{font-size:28px;font-weight:550;letter-spacing:-.04em;margin:0 0 10px}
 .profile-page>header p{font-size:13px;line-height:1.7;color:var(--text-secondary);margin:0}
 .profile-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:54px}
-.profile-summary{min-width:0}.profile-avatar{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#96beff14;color:var(--action);font-size:24px;margin-bottom:16px}
+.profile-summary{min-width:0}.profile-avatar{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#b8b8b814;color:var(--action);font-size:24px;margin-bottom:16px}
 .profile-summary h2{font-size:15px;line-height:1.5;font-weight:500;overflow-wrap:anywhere;margin:0 0 6px}.profile-summary p{font-size:11px;line-height:1.6;color:var(--text-secondary);overflow-wrap:anywhere;margin:0}
 #profile-form>section{margin:0 0 26px}#profile-form h3{font-size:14px;font-weight:500;margin:0 0 16px}
 .profile-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}

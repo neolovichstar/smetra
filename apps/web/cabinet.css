@@ -1,5 +1,5 @@
 /* Product surfaces: quiet hierarchy, thin dividers, one blue action color. */
-.workspace-page{--cabinet-line:#24262b;--cabinet-muted:#9b9ea8;--cabinet-blue:#89b6ff;background:#000;color:#f4f5f7}
+.workspace-page{--cabinet-line:#24262b;--cabinet-muted:#9b9ea8;--cabinet-blue:#bdbdbd;background:#000;color:#f4f5f7}
 .workspace-page .app-nav{height:74px;position:sticky;top:0;z-index:30;background:#050506eF;border-bottom:1px solid var(--cabinet-line);backdrop-filter:blur(18px)}
 .app-nav-inner{height:100%;padding:0 34px;display:flex;align-items:center;justify-content:space-between;gap:22px}
 .app-nav-brand,.app-nav-actions{display:flex;align-items:center;gap:20px;min-width:0}
@@ -26,7 +26,7 @@
 .workspace-page .sidebar-group button{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:37px;padding:8px 12px;border:0;border-radius:7px;background:transparent;color:#a6aab3;font-size:12px;font-weight:500;text-align:left;transition:background .18s,color .18s}
 .workspace-page .sidebar-group button:hover{background:#121419;color:#f5f7fb}
 .workspace-page .sidebar-group button.active{background:#161d2a;color:#eaf2ff;box-shadow:inset 2px 0 var(--cabinet-blue)}
-.sidebar-accent{width:5px;height:5px;border-radius:50%;background:#91baff;box-shadow:0 0 8px #5797ff77}
+.sidebar-accent{width:5px;height:5px;border-radius:50%;background:#b8b8b8;box-shadow:0 0 8px #88888877}
 .sidebar-foot{margin-top:auto;padding:13px 24px 19px;border-top:1px solid var(--cabinet-line)}
 .sidebar-foot>span{display:block;color:#686d78;font-size:9px;letter-spacing:.12em;margin-bottom:8px}
 .workspace-page .sidebar-foot button{width:100%;display:flex;align-items:center;justify-content:space-between;padding:7px 0;border:0;background:none;color:#aeb2bc;text-align:left;font-size:12px}
@@ -41,8 +41,8 @@
 .workspace-page .panel{border-top:1px solid var(--cabinet-line);padding:23px 0 25px;margin-bottom:10px}
 .workspace-page .btn{border-radius:8px;min-height:40px;font-size:11px}
 .workspace-page .btn.small{min-height:34px;padding:7px 12px}
-.workspace-page .btn.primary{background:#88b4fa;color:#07101d;border-color:#a8cbff;box-shadow:0 0 18px #398cff18}
-.workspace-page .btn.primary:hover{background:#a3c6ff;box-shadow:0 0 22px #398cff30}
+.workspace-page .btn.primary{background:#e6e6e6;color:#07101d;border-color:#eeeeee;box-shadow:0 0 18px #99999918}
+.workspace-page .btn.primary:hover{background:#a3c6ff;box-shadow:0 0 22px #99999930}
 .workspace-page .record-line,.workspace-page .quote{padding:18px 0;border-bottom-color:#25272c}
 .workspace-page .record-line strong,.workspace-page .quote strong{font-size:13px;font-weight:600}
 .workspace-page .record-line small{font-size:11px;color:#999da8}

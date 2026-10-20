@@ -16,7 +16,7 @@ import android.widget.*;
 final class SmetraUi {
     static final int BG=Color.BLACK, SURFACE=Color.rgb(8,8,9), RAISED=Color.rgb(17,17,20);
     static final int LINE=Color.rgb(38,38,38), INK=Color.rgb(243,244,246), MUTED=Color.rgb(169,171,179);
-    static int BLUE=Color.rgb(150,190,255);
+    static int BLUE=Color.rgb(218,218,218);
     static final int GREEN=Color.rgb(137,224,191), AMBER=Color.rgb(241,203,140), RED=Color.rgb(255,158,167);
     static final PathInterpolator EASE=new PathInterpolator(.2f,.8f,.2f,1f);
     final Activity activity;
@@ -46,7 +46,7 @@ final class SmetraUi {
     GradientDrawable gradient(int radius){return shape(BG,0,0);}
     void divider(LinearLayout parent){View line=new View(activity);line.setBackgroundColor(LINE);parent.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
     ImageView art(String name,int height){ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);image.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(height)));BrandArt.load(image,name.equals("flight")?R.drawable.brand_flight:R.drawable.brand_unfold,activity.getResources().getDisplayMetrics().widthPixels,dp(height));return image;}
-    void ripple(View view,int color,int radius,int border){view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22c4dcff),shape(color,radius,border),shape(Color.WHITE,radius,0)));}
+    void ripple(View view,int color,int radius,int border){view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),shape(color,radius,border),shape(Color.WHITE,radius,0)));}
     void tap(View view,Runnable action){
         view.setFocusable(true);view.setOnClickListener(v->{v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);action.run();});
         android.animation.StateListAnimator states=new android.animation.StateListAnimator();
@@ -59,7 +59,7 @@ final class SmetraUi {
     Button button(String title,boolean primary,Runnable action){
         Button view=new Button(activity){@Override public void setEnabled(boolean enabled){super.setEnabled(enabled);if("assistant-send".equals(getTag()))animate().alpha(enabled?1:.45f).setDuration(motion()?160:0).start();}};view.setText(title);view.setAllCaps(false);view.setTextSize(13);view.setTypeface(medium);
         view.setTextColor(primary?BG:INK);view.setMinHeight(dp(48));view.setMinimumHeight(dp(48));view.setPadding(dp(14),dp(12),dp(14),dp(12));
-        view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,10,primary?0xffb9d3ff:LINE);tap(view,action);
+        view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,10,primary?0xffdddddd:LINE);tap(view,action);
         String icon=actionIcon(title);if(icon!=null){
             int size=dp(18);Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
             Icon glyph=new Icon(icon,primary?BG:INK);glyph.layout(0,0,size,size);glyph.draw(new Canvas(bitmap));
@@ -103,7 +103,7 @@ final class SmetraUi {
     }
     Button glyphButton(String icon,String description,boolean primary,Runnable action){
         Button button=button("",primary,action);button.setTag("glyph-button");button.setContentDescription(description);
-        ripple(button,primary?BLUE:Color.TRANSPARENT,primary?16:12,primary?0xffb9d3ff:0);
+        ripple(button,primary?BLUE:Color.TRANSPARENT,primary?16:12,primary?0xffdddddd:0);
         button.setPadding(dp(12),dp(12),dp(12),dp(12));button.setGravity(Gravity.CENTER);
         button.setLayoutParams(new LinearLayout.LayoutParams(dp(48),dp(48)));glyph(button,icon,primary?BG:INK);
         button.setOnLongClickListener(v->{Toast.makeText(activity,description,Toast.LENGTH_SHORT).show();return true;});return button;

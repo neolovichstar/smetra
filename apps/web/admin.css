@@ -1,9 +1,9 @@
 /* Smetra operations console: a quiet, data-first surface. */
 .admin-head{display:flex;align-items:end;justify-content:space-between;gap:25px;padding:4px 0 34px}
 .admin-kicker,.admin-section-index{display:inline-flex;align-items:center;gap:9px;color:#8b95a6;font-size:10px;font-weight:600;letter-spacing:.12em}
-.admin-kicker i{width:5px;height:5px;border-radius:50%;background:#8bbaff;box-shadow:0 0 12px #6ea9ff}
+.admin-kicker i{width:5px;height:5px;border-radius:50%;background:#b8b8b8;box-shadow:0 0 12px #999999}
 .admin-head h1{margin:13px 0 8px;font-size:clamp(35px,3.4vw,54px);font-weight:500;letter-spacing:-.065em;line-height:1.07}
-.admin-head h1 span{color:#8db9fc}
+.admin-head h1 span{color:#d0d0d0}
 .admin-head p{margin:0;color:#a3a8b3;font-size:13px}
 .admin-refresh{display:inline-flex;align-items:center;gap:9px;flex:none;padding:9px 13px;border:1px solid #30343b;border-radius:7px;background:#0b0d11;color:#d0d8e3;font-size:11px;transition:border-color .25s,background .25s,transform .25s}
 .admin-refresh:hover{border-color:#749bc9;background:#111923;transform:translateY(-2px)}
@@ -32,7 +32,7 @@
 .admin-search>span:not(.sr-only){position:absolute;left:13px;top:50%;transform:translateY(-55%);color:#9aafc9;font-size:21px;line-height:1}
 .admin-search input,.admin-filter select{height:42px;border:1px solid #30343c;border-radius:7px;background:#0a0c0f;color:#e4eaf2;font-size:12px;transition:border-color .2s,box-shadow .2s}
 .admin-search input{padding:0 13px 0 38px}
-.admin-search input:focus,.admin-filter select:focus{border-color:#83b1ee;box-shadow:0 0 0 3px #75adf51a}
+.admin-search input:focus,.admin-filter select:focus{border-color:#aaaaaa;box-shadow:0 0 0 3px #9999991a}
 .admin-filter{display:block;width:177px;margin:0}
 .admin-filter select{padding:0 12px;cursor:pointer}
 .admin-table-scroll{width:100%;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#293e5a transparent}
@@ -52,7 +52,7 @@
 .admin-state i{width:5px;height:5px;border-radius:50%;background:#8792a1}
 .admin-state-green{color:#a1c6ba}.admin-state-green i{background:#8fc7ad;box-shadow:0 0 9px #67b99555}
 .admin-state-red{color:#d0a5aa}.admin-state-red i{background:#d899a2}
-.admin-state-blue{color:#a9c8f1}.admin-state-blue i{background:#91baff;box-shadow:0 0 9px #6ea9ff77}
+.admin-state-blue{color:#c8c8c8}.admin-state-blue i{background:#b8b8b8;box-shadow:0 0 9px #99999977}
 .admin-plan{color:#a0a9b6}.admin-plan.is-pro{color:#afccf2}
 .admin-subline{display:block;margin-top:3px;color:#738194;font-size:10px}
 .admin-date,.admin-email{color:#9aa6b5}
@@ -134,5 +134,5 @@
  .admin-revenue-metrics strong{display:block;font-size:24px;font-weight:500;line-height:1.5;font-variant-numeric:tabular-nums}
  .admin-growth-funnel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 24px;margin:16px 0 24px}
  .admin-growth-funnel>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--stroke,#222);font-size:12px;line-height:1.65}
- .admin-growth-funnel strong{color:var(--action,#96beff);font-variant-numeric:tabular-nums;white-space:nowrap}
+ .admin-growth-funnel strong{color:var(--action,#b8b8b8);font-variant-numeric:tabular-nums;white-space:nowrap}
  @media(max-width:700px){.admin-revenue-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.admin-growth-funnel{grid-template-columns:1fr}.admin-revenue-metrics strong{font-size:22px}}

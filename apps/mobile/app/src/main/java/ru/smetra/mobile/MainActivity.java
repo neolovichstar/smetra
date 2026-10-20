@@ -1854,9 +1854,9 @@ public class MainActivity extends Activity {
         text("Получайте уведомления о событиях в Сметре, даже когда приложение закрыто.");
         LinearLayout state=ui.card(content);
         if(!PushManager.isConfigured()){
-            state.addView(ui.label("Нужна настройка RuStore",16,INK,true));ui.space(state,8);
-            state.addView(ui.label("Для включения доставки нужен ID проекта RuStore Push при сборке и серверный токен в настройках backend.",13,MUTED,false));
-            ui.space(content,16);button("Обновить статус",false,v->notificationSettings());return;
+            state.addView(ui.label("Push-доставка пока недоступна",16,INK,true));ui.space(state,8);
+            state.addView(ui.label("События по сметам и заказам сохраняются в центре уведомлений. Когда push-доставка будет готова, включение появится здесь.",13,MUTED,false));
+            ui.space(content,16);button("Открыть центр уведомлений",true,v->notificationsCenter());return;
         }
         boolean enabled=PushManager.isEnabled(this);
         state.addView(ui.label(enabled?"Уведомления включены":"Уведомления выключены",16,INK,true));ui.space(state,8);

@@ -44,11 +44,11 @@ final class PushManager {
     }
 
     static void requestTokenAndRegister(Activity activity, String sessionToken, Callback cb) {
-        if (!isConfigured()) { cb.complete(false, "Push ещё не подключён: не задан ID проекта RuStore."); return; }
+        if (!isConfigured()) { cb.complete(false, "Push-доставка пока недоступна. Центр уведомлений остаётся доступен в приложении."); return; }
         if (sessionToken == null || sessionToken.trim().isEmpty()) { cb.complete(false, "Сначала войдите в аккаунт Сметры."); return; }
         ru.rustore.sdk.pushclient.RuStorePushClient.INSTANCE.getToken()
             .addOnSuccessListener(t -> register(activity, sessionToken, t, cb))
-            .addOnFailureListener(e -> cb.complete(false, "RuStore не выдал push-токен. Проверьте установку RuStore и подпись приложения."));
+            .addOnFailureListener(e -> cb.complete(false, "Не удалось подготовить push-уведомления на этом устройстве. Установите приложение через RuStore и попробуйте ещё раз."));
     }
 
     static void syncIfEnabled(Context c, String sessionToken) {
@@ -72,7 +72,7 @@ final class PushManager {
         prefs(a).edit().putString(TOKEN, pushToken).apply();
         IO.execute(() -> {
             boolean ok = send(a, session, "POST", "/api/push-devices", pushToken);
-            MAIN.post(() -> cb.complete(ok, ok ? "Push-уведомления подключены." : "Не удалось привязать устройство. Проверьте backend и повторите попытку."));
+            MAIN.post(() -> cb.complete(ok, ok ? "Push-уведомления подключены." : "Не удалось включить уведомления. Проверьте подключение к интернету и попробуйте позже."));
         });
     }
 
