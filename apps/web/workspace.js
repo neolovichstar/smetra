@@ -240,7 +240,7 @@ window.Workspace = (() => {
     const active=pageRequest(true);
     const [{quote:q,activity},versions]=await Promise.all([api('/quotes/'+id),api('/quotes/'+id+'/versions')]);
     if(!active())return;
-    view(mainTitle(e(q.title),`${e(q.client)} · ${q.currency} · ${q.published_version?'Версия '+q.published_version:'Новый расчёт'}`,button('← Все сметы','navigate','quotes')+'<button class="btn small" id="ask-ai">Спросить AI ↗</button>')+
+    view(mainTitle(e(q.title),`${e(q.client)} · ${q.currency} · ${q.published_version?'Версия '+q.published_version:'Новый расчёт'}${q.ai_generated?' · Подготовлено с ИИ':''}`,button('← Все сметы','navigate','quotes')+'<button class="btn small" id="ask-ai">Спросить AI ↗</button>')+
       `<div class="workspace-columns quote-detail"><section class="panel"><div class="section-top">${status(q.approval_state)}<span class="muted">${q.view_count} просмотров</span></div><p class="preserve-lines">${e(q.description)}</p>${itemTable(q.items,q.currency)}<div class="quote-summary"><span>Итого</span><strong>${money(q.amount_kopecks,q.currency)}</strong></div><p class="muted preserve-lines">${e(q.terms)}</p><div class="row wrap" id="quote-controls">${q.approval_state!=='approved'?button('Редактировать','edit'):''}${['draft','changes_requested','rejected'].includes(q.approval_state)?button('Отправить клиенту','publish','','primary'):''}${q.published_version?button('Клиентская ссылка ↗','link'):''}${q.approval_state==='approved'?button('Создать заказ','project','','primary'):''}${q.published_version?button('Сравнить версии','review'):''}${button('Создать копию','copy')}${button('Документ','document')}</div></section><aside><section class="panel"><span class="eyebrow">Только для команды</span><h3>Экономика сметы</h3><div class="record-line"><span>Себестоимость</span><strong>${money(q.internal_cost,q.currency)}</strong></div><div class="record-line"><span>Плановая прибыль</span><strong>${money(q.profit,q.currency)}</strong></div><p class="muted">Эти данные скрыты от клиента.</p></section><section class="panel"><h3>Версии</h3>${versions.versions.length?versions.versions.map(v=>`<div class="record-line"><div><strong>v${v.version}</strong><small>${date(v.created_at)} · ${e(v.comment)}</small></div><b>${money(v.snapshot.amount_kopecks,q.currency)}</b>${button('Сравнить','review',String(v.version))}</div>`).join(''):'<p class="muted">Версия фиксируется при отправке.</p>'}</section></aside></div><section class="panel"><h3>История</h3>${activityList(activity)}</section>`);
     const reviewQuote=async options=>{if(window.SmetraLoadFeature)await window.SmetraLoadFeature('quoteReview');if(active())await window.SmetraQuoteReview.open(q,versions.versions,options)};
     document.querySelectorAll('[data-work="review"]').forEach(button=>button.onclick=async event=>{event.stopPropagation();if(button.disabled)return;button.disabled=true;try{await reviewQuote(button.dataset.id?{source:button.dataset.id}:{})}catch(error){if(active())notify(error.message)}finally{if(button.isConnected)button.disabled=false}});
@@ -269,6 +269,7 @@ window.Workspace = (() => {
     let rows=quote?.items?.length?structuredClone(quote.items):[{name:'',quantity:'1',unit:'шт.',unit_price:quote?.amount_kopecks||0,cost_price:0,tax:'0',discount:'0',markup:'0',optional:false,included:true,description:'',category:''}];
     rows=rows.map(r=>({line_id:crypto.randomUUID(),cost_price:0,discount:'0',markup:'0',coefficient:'1',tax:'0',included:true,optional:false,...r}));
     let q=quote||{};
+    let aiDraftUsageId=quote?.ai_draft_usage_id||'';
     const custom=await customControls('estimates',q.custom_fields);
     if(!active())return;
     view(mainTitle(q.id?'Редактирование сметы':'Новая смета','Черновик сохраняется автоматически. Отправьте клиенту, когда всё готово.',button('← К сметам','navigate','quotes'))+
@@ -341,9 +342,17 @@ window.Workspace = (() => {
     const recovery=form.querySelector('#editor-recovery');let local;
     try{local=JSON.parse(localStorage.getItem(draftKey)||'null');recovery.hidden=!local?.snapshot}catch{}
     writer=window.SmetraQuoteEditorState.writer({quote:q,active:live,data:payload,snapshot,valid:()=>{try{return form.checkValidity()&&rows.length>0&&rows.every(row=>row.name.trim()&&Number(row.quantity)>0)&&rows.reduce((sum,row)=>sum+lineTotal(row),0)>0}catch{return false}},
-      request:api,persist:value=>{try{localStorage.setItem(draftKey,JSON.stringify(value))}catch{saveState.dataset.localUnavailable='true'}},
+      request:(path,options)=>{
+        if(path==='/quotes'&&aiDraftUsageId){
+          const body=JSON.parse(options.body);
+          body.ai_draft_usage_id=aiDraftUsageId;
+          return api(path,{...options,body:JSON.stringify(body)});
+        }
+        return api(path,options);
+      },
+      persist:value=>{try{localStorage.setItem(draftKey,JSON.stringify(value))}catch{saveState.dataset.localUnavailable='true'}},
       state:(kind,text)=>{saveState.dataset.state=kind;saveState.textContent=text+(saveState.dataset.localUnavailable?' · Локальное хранилище недоступно':'');retry.hidden=!['offline','invalid'].includes(kind);conflict.hidden=kind!=='conflict'},
-      accept:(quote,first)=>{q=quote;if(first)user.quote_count++}
+      accept:(quote,first)=>{q=quote;if(first){aiDraftUsageId='';user.quote_count++}}
     });
     window.SmetraQuoteEditor={leave:()=>{writer.stop();if(window.SmetraQuoteEditor?.form===form)window.SmetraQuoteEditor=null},form};
     const undo=()=>{const value=history.undo();if(value){restore(value);historyState();writer.changed()}};
