@@ -8,10 +8,16 @@ import hashlib
 import os
 import re
 import sqlite3
+import threading
 import urllib.parse
 from decimal import Decimal
 
 import psycopg
+
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:  # The direct-connection fallback keeps local/minimal tools usable.
+    ConnectionPool = None
 
 TABLES = frozenset(
     "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits".split()
@@ -33,6 +39,41 @@ TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
+_POOL_LOCK = threading.Lock()
+_POOLS = {}
+
+
+def _connection_pool(database_url, local_test):
+    """Return a small process-local pool; Vercel warm instances can reuse TLS sessions."""
+    if ConnectionPool is None:
+        return None
+    key = hashlib.sha256((database_url + ("|local" if local_test else "|tls")).encode()).hexdigest()
+    with _POOL_LOCK:
+        pool = _POOLS.get(key)
+        if pool is None:
+            try:
+                max_size = int(os.getenv("SMETRA_DB_POOL_MAX", "2"))
+            except ValueError:
+                max_size = 2
+            max_size = max(1, min(4, max_size))
+            pool = ConnectionPool(
+                conninfo=database_url,
+                min_size=0,
+                max_size=max_size,
+                timeout=5,
+                max_idle=5,
+                max_lifetime=300,
+                kwargs={
+                    "sslmode": "disable" if local_test else "require",
+                    "connect_timeout": 5,
+                    "prepare_threshold": None,
+                    "autocommit": True,
+                    "row_factory": row_factory,
+                },
+                open=True,
+            )
+            _POOLS[key] = pool
+        return pool
 
 
 class Row(dict):
@@ -103,17 +144,23 @@ class Connection:
         self.runtime = runtime
         self.scoped = False
         self.nested = False
+        self.pool = None
+        self.raw = None
         database_url = os.environ["RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"]
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
-        self.raw = psycopg.connect(
-            database_url,
-            sslmode="disable" if local_test else "require",
-            connect_timeout=15,
-            prepare_threshold=None,
-            autocommit=True,
-            row_factory=row_factory,
-        )
+        self.pool = _connection_pool(database_url, local_test)
+        if self.pool is not None:
+            self.raw = self.pool.getconn(timeout=5)
+        else:
+            self.raw = psycopg.connect(
+                database_url,
+                sslmode="disable" if local_test else "require",
+                connect_timeout=5,
+                prepare_threshold=None,
+                autocommit=True,
+                row_factory=row_factory,
+            )
         self.lock_key = int.from_bytes(
             hashlib.sha256(self.schema.encode()).digest()[:8], "big", signed=True
         )
@@ -134,17 +181,38 @@ class Connection:
             self.raw.execute("ROLLBACK")
             raise
 
+    def _release(self):
+        raw, self.raw = self.raw, None
+        if raw is None:
+            return
+        if self.pool is not None:
+            try:
+                self.pool.putconn(raw)
+                return
+            except Exception:
+                # A broken connection should not be handed back to application code.
+                try:
+                    raw.close()
+                except Exception:
+                    pass
+                return
+        raw.close()
+
     def finish(self, success):
-        if self.scoped:
-            if self.nested:
+        if self.scoped and self.nested:
+            try:
                 self.raw.execute("ROLLBACK")
+            finally:
                 self.scoped = self.nested = False
-                self.raw.close()
-                raise RuntimeError("Unfinished runtime write transaction")
-            self.raw.execute("COMMIT" if success else "ROLLBACK")
+                self._release()
+            raise RuntimeError("Unfinished runtime write transaction")
+        try:
+            if self.scoped:
+                self.raw.execute("COMMIT" if success else "ROLLBACK")
+        finally:
             self.scoped = False
             self.nested = False
-        self.raw.close()
+            self._release()
 
     def execute(self, sql, parameters=None):
         command = sql.strip().upper()
@@ -199,10 +267,15 @@ class Connection:
             self.raw.commit()
 
     def close(self):
-        if self.scoped:
-            self.raw.execute("ROLLBACK")
+        if self.raw is None:
+            return
+        try:
+            if self.scoped:
+                self.raw.execute("ROLLBACK")
+        finally:
             self.scoped = False
-        self.raw.close()
+            self.nested = False
+            self._release()
 
 
 def throttle(key, limit, window, moment):
