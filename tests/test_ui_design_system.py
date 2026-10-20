@@ -21,7 +21,7 @@ def is_chromatic_dark_blue(rgb):
     r, g, b = rgb
     maximum, minimum = max(rgb), min(rgb)
     delta = maximum - minimum
-    if maximum == 0 or delta < 10 or sum(rgb) / 3 < 12:
+    if maximum == 0 or delta == 0:
         return False
     if maximum == r:
         hue = 60 * (((g - b) / delta) % 6)
@@ -31,7 +31,7 @@ def is_chromatic_dark_blue(rgb):
         hue = 60 * ((r - g) / delta + 4)
     if hue < 0:
         hue += 360
-    return 190 <= hue <= 260 and delta / maximum >= 0.18
+    return 185 <= hue <= 275 and delta / maximum >= 0.04
 
 
 def contrast_ratio(foreground, background):
@@ -94,6 +94,11 @@ class UIDesignSystemTests(unittest.TestCase):
 
     def test_workspace_microcopy_is_not_set_below_ten_pixels(self):
         self.assertNotRegex(self.cabinet, r"font-size:9px")
+        for low_contrast_text in ("color:#666b75", "color:#686d78", "color:#707070", "color:#757575"):
+            self.assertNotIn(low_contrast_text, self.cabinet)
+        self.assertNotIn("color:#707070", self.style)
+        self.assertNotIn("color:#737373", self.style)
+        self.assertNotIn("color:#747480", self.black)
 
     def test_release_gate_prompt_requires_verified_ten_out_of_ten(self):
         self.assertIn("10/10 по каждой области", self.prompt)
