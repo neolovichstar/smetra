@@ -106,6 +106,85 @@ class SecurityHardeningTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
 
+    def test_estimate_requires_versioned_consent_and_explicit_publish_review(self):
+        # Deliberately avoid accepting terms during registration: server-side
+        # checks must reject direct API calls that bypass the UI checkbox.
+        status, _, registered = self.request(
+            "POST",
+            "/api/auth/register",
+            json.dumps({
+                "email": "legal-gate@test.invalid",
+                "name": "Legal gate",
+                "password": "secure twelve password",
+            }).encode(),
+            {"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200, registered)
+        token = registered["token"]
+
+        def call(path, method="GET", data=None):
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token,
+            }
+            status, _, result = self.request(
+                method,
+                "/api" + path,
+                json.dumps(data).encode() if data is not None else None,
+                headers,
+            )
+            return status, result
+
+        quote_data = {
+            "title": "Проверка основания",
+            "client": "Тестовый клиент",
+            "items": [
+                {
+                    "name": "Грунтовка",
+                    "description": "Требует замера по месту",
+                    "quantity": "2.5",
+                    "unit": "м²",
+                    "unit_price": 10000,
+                }
+            ],
+        }
+        status, current = call("/legal/acceptance")
+        self.assertEqual(status, 200)
+        self.assertFalse(current["accepted"])
+        status, blocked = call("/ai/draft", "POST", {"text": "Грунтовка"})
+        self.assertEqual(status, 428, blocked)
+        status, blocked = call("/quotes", "POST", quote_data)
+        self.assertEqual(status, 428, blocked)
+        status, rejected = call(
+            "/legal/acceptance",
+            "POST",
+            {"accepted": True, "terms_version": "outdated"},
+        )
+        self.assertEqual(status, 400, rejected)
+        status, accepted = call(
+            "/legal/acceptance",
+            "POST",
+            {"accepted": True, "terms_version": "2026-10-19"},
+        )
+        self.assertEqual(status, 200, accepted)
+        self.assertTrue(accepted["accepted"])
+        status, created = call("/quotes", "POST", quote_data)
+        self.assertEqual(status, 201, created)
+        quote_id = created["quote"]["id"]
+        revision = created["quote"]["revision"]
+        status, unconfirmed = call(
+            "/quotes/" + quote_id + "/publish",
+            "POST",
+            {"revision": revision},
+        )
+        self.assertEqual(status, 428, unconfirmed)
+        status, published = call(
+            "/quotes/" + quote_id + "/publish",
+            "POST",
+            {"revision": revision, "review_confirmed": True},
+        )
+        self.assertEqual(status, 200, published)
+
     def test_vercel_client_ip_uses_platform_forwarded_header(self):
         request = handler.__new__(handler)
         request.client_address = ("127.0.0.1", 0)

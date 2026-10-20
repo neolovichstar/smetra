@@ -125,7 +125,7 @@ const assert = require('node:assert/strict');
   await click('#editor-bulk-preview');await click('#editor-bulk-apply');
   assert.equal(await evaluate("api('/quotes').then(result=>result.quotes.length)"),0);
   await shot('estimate-editor');await click('#estimate-editor [type=submit]');await until("document.querySelector('#quote-controls')");
-  await click('#quote-controls [data-work=publish]');await until("document.querySelector('#workspace-dialog')?.open");await click('#workspace-dialog [type=submit]');await until("!document.querySelector('#workspace-dialog')?.open && document.querySelector('#quote-controls [data-work=link]')");
+  await click('#quote-controls [data-work=publish]');await until("document.querySelector('#workspace-dialog')?.open");await click('#workspace-dialog #publish-review-confirmed');await click('#workspace-dialog [type=submit]');await until("!document.querySelector('#workspace-dialog')?.open && document.querySelector('#quote-controls [data-work=link]')");
   const quote=await evaluate("api('/quotes').then(r=>r.quotes[0])");
   await send('Page.navigate',{url:quote.public_url});await until("document.querySelector('#client-response')");
   await wait(400);await shot('client-portal');await fill('#client-response [name=name]','Тестовый клиент');await click('#client-response [type=submit]');await until("document.querySelector('#public-quote').textContent.includes('Условия согласованы')");

@@ -11,9 +11,13 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 try:
-    from backend.business import DomainError, choice, identity, packed, stamp, string
+    from backend.business import (
+        DomainError, choice, identity, packed, require_legal_acceptance, stamp, string
+    )
 except ModuleNotFoundError:
-    from business import DomainError, choice, identity, packed, stamp, string
+    from business import (
+        DomainError, choice, identity, packed, require_legal_acceptance, stamp, string
+    )
 
 
 @dataclass
@@ -216,6 +220,12 @@ def documents(service, method, parts, query, data):
         if parts:
             row = service.get("documents", parts[0])
             if len(parts) == 2 and parts[1] == "pdf":
+                require_legal_acceptance(service.user)
+                if service.h.headers.get("X-Smetra-Review-Confirmed") != "true":
+                    raise DomainError(
+                        428,
+                        "Подтвердите проверку объёмов и цен перед экспортом PDF.",
+                    )
                 return 200, Download(
                     pdf(row), "application/pdf", f"smetra-{row['number']}.pdf"
                 )
@@ -236,6 +246,12 @@ def documents(service, method, parts, query, data):
         }
     if method != "POST":
         raise DomainError(405, "Документы сохраняются как неизменяемые снимки")
+    require_legal_acceptance(service.user)
+    if data.get("review_confirmed") is not True:
+        raise DomainError(
+            428,
+            "Подтвердите проверку объёмов и цен перед созданием PDF.",
+        )
     document = prepare_document(service, data)
     service.insert("documents", document)
     service.emit("document", document["id"], "Документ сформирован", document["name"])

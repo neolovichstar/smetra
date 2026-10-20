@@ -76,9 +76,15 @@
           <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
         </form>
       </details>
+      <div id="signup-legal-consent" class="auth-legal-consent hidden">
+        <label for="signup-legal-checkbox"><input id="signup-legal-checkbox" type="checkbox">
+          <span>Я согласен с <a href="/terms" target="_blank" rel="noopener">Пользовательским соглашением</a> и <a href="/terms#as-is" target="_blank" rel="noopener">Политикой отказа от ответственности (As Is)</a>.</span>
+        </label>
+        <p id="signup-legal-error" class="auth-form-error" role="alert"></p>
+      </div>
       <div class="auth-provider-block"><div class="auth-provider-divider"><span>или используйте российский сервис</span></div><div id="provider-buttons" class="provider-buttons" aria-label="Способ входа"></div><p id="provider-note" class="auth-provider-pending"></p></div>
       <p id="auth-status" class="auth-status" role="status"></p>
-      <p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
+      <p class="auth-legal">Перед использованием Сметры ознакомьтесь с <a href="/terms">Пользовательским соглашением</a> и <a href="/privacy">Политикой конфиденциальности</a>.</p>
     </section>
   </main>
 

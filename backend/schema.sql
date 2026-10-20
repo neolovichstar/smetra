@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS users (
  name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user','admin')),
  blocked INTEGER NOT NULL DEFAULT 0 CHECK(blocked IN (0,1)),
  plan TEXT NOT NULL DEFAULT 'free', entitlement_until INTEGER NOT NULL DEFAULT 0,
- created_at INTEGER NOT NULL, deleted_at INTEGER, email_verified_at INTEGER
+ created_at INTEGER NOT NULL, deleted_at INTEGER, email_verified_at INTEGER,
+ terms_accepted_at INTEGER, terms_version TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

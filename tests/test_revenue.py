@@ -122,7 +122,7 @@ class RevenueApiTests(unittest.TestCase):
     def account(self,admin=False):
         token,uid=secrets.token_urlsafe(32),secrets.token_hex(16)
         with self.mod.db() as con:
-            con.execute('INSERT INTO users(id,email,password_hash,name,role,created_at,email_verified_at) VALUES(?,?,?,?,?,?,?)',(uid,uid+'@test.invalid','unused','Revenue','admin' if admin else 'user',revenue.now(),revenue.now()))
+            con.execute('INSERT INTO users(id,email,password_hash,name,role,created_at,email_verified_at,terms_accepted_at,terms_version) VALUES(?,?,?,?,?,?,?,?,?)',(uid,uid+'@test.invalid','unused','Revenue','admin' if admin else 'user',revenue.now(),revenue.now(),revenue.now(),'2026-10-19'))
             con.execute('INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)',(secrets.token_hex(16),uid,hashlib.sha256(token.encode()).hexdigest(),revenue.now()+3600))
         return token,uid
 
@@ -160,7 +160,7 @@ class RevenueApiTests(unittest.TestCase):
         status,created=self.request('/api/quotes','POST',{'title':'Repair','client':'Client','items':[{'name':'Work','quantity':'1','unit':'job','unit_price':10000}]},token)
         self.assertEqual(status,201)
         quote=created['quote']
-        self.assertEqual(self.request('/api/quotes/'+quote['id']+'/publish','POST',{'revision':quote['revision']},token)[0],200)
+        self.assertEqual(self.request('/api/quotes/'+quote['id']+'/publish','POST',{'revision':quote['revision'],'review_confirmed':True},token)[0],200)
         public_token=quote['public_url'].split('quote=')[1]
         self.assertEqual(self.request('/api/public/respond','POST',{'token':public_token,'version':1,'name':'Client','action':'approved'})[0],200)
         with self.mod.db() as con:

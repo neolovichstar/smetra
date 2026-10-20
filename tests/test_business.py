@@ -754,6 +754,13 @@ class BusinessFlows(unittest.TestCase):
             },
         )
         self.assertEqual(code, 200, result)
+        accepted_code, accepted = self.call(
+            "/legal/acceptance",
+            "POST",
+            {"accepted": True, "terms_version": "2026-10-19"},
+            result["token"],
+        )
+        self.assertEqual(accepted_code, 200, accepted)
         return result["token"], result["user"]["id"]
 
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
@@ -917,7 +924,7 @@ class BusinessFlows(unittest.TestCase):
         code, result = self.call(
             "/quotes/" + quote["id"] + "/publish",
             "POST",
-            {"revision": quote["revision"]},
+            {"revision": quote["revision"], "review_confirmed": True},
             token,
         )
         self.assertEqual(code, 200, result)
