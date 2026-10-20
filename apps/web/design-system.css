@@ -1545,6 +1545,8 @@
   line-height: 1.45;
 }
 .workspace-page .assistant-studio #assistant-form {
+  border: 1px solid #333 !important;
+  box-shadow: none !important;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 48px;
   align-items: end;
@@ -1560,9 +1562,9 @@
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 .workspace-page .assistant-studio #assistant-form:focus-within {
-  border-color: #737373;
+  border-color: #737373 !important;
   background: #0d0d0d;
-  box-shadow: 0 0 0 3px #ffffff0b;
+  box-shadow: 0 0 0 3px #ffffff0b !important;
 }
 .workspace-page .assistant-studio #assistant-input {
   display: block;
