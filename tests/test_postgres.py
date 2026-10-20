@@ -31,6 +31,37 @@ class PostgresQueryTests(unittest.TestCase):
             "INSERT INTO smetra.files(id) VALUES(%s) ON CONFLICT DO NOTHING",
         )
 
+    def test_sql_translation_cache_reuses_identical_queries(self):
+        from backend.postgres import translate
+
+        translate.cache_clear()
+        sql = "SELECT id FROM quotes WHERE user_id=?"
+        first = translate(sql, "smetra", True)
+        second = translate(sql, "smetra", True)
+
+        self.assertEqual(first, "SELECT id FROM smetra.quotes WHERE user_id=%s")
+        self.assertEqual(second, first)
+        self.assertEqual(translate.cache_info().hits, 1)
+        self.assertEqual(translate.cache_info().misses, 1)
+        self.assertEqual(translate.cache_info().maxsize, 4096)
+
+    def test_sql_translation_cache_keys_include_schema_and_parameter_mode(self):
+        from backend.postgres import translate
+
+        translate.cache_clear()
+        sql = "SELECT id FROM quotes WHERE user_id=?"
+        parameterized = translate(sql, "smetra", True)
+        unparameterized = translate(sql, "smetra", False)
+        isolated_schema = translate(sql, "smetra_preview", True)
+
+        self.assertIn("FROM smetra.quotes", parameterized)
+        self.assertIn("user_id=%s", parameterized)
+        self.assertIn("FROM smetra.quotes", unparameterized)
+        self.assertIn("user_id=?", unparameterized)
+        self.assertIn("FROM smetra_preview.quotes", isolated_schema)
+        self.assertEqual(translate.cache_info().misses, 3)
+        self.assertEqual(translate.cache_info().hits, 0)
+
     def test_monthly_quota_upsert_targets_existing_counter(self):
         sql = (
             "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "

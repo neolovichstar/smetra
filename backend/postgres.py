@@ -5,6 +5,7 @@ Supavisor transaction pooling needs neither session state nor prepared queries.
 """
 
 import hashlib
+from functools import lru_cache
 import os
 import re
 import sqlite3
@@ -105,8 +106,13 @@ def schema_name():
     return name
 
 
+@lru_cache(maxsize=4096)
 def translate(sql, schema, parameters=False):
-    """Translate our small SQL subset without touching quoted values."""
+    """Translate SQL to PostgreSQL once per unique query shape in a bounded process-local cache.
+
+    Only the translated statement is cached; query results and parameters are never cached.
+    Schema and placeholder mode are part of the cache key.
+    """
     ignore = sql.lstrip().upper().startswith("INSERT OR IGNORE")
     sql = re.sub(r"\bINSERT OR IGNORE\b", "INSERT", sql, flags=re.I)
     parts = TOKENS.split(sql)
