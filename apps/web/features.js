@@ -26,7 +26,18 @@
     const feature=features[name];if(!feature)throw Error('Раздел не найден');
     if(feature.ready())return;
     for(const dependency of feature.deps||[])await window.SmetraLoadFeature(dependency);
-    for(const file of feature.files)await load(file);
+    // Ordered classic scripts retain execution order while fetching concurrently.
+    await Promise.all(feature.files.map(load));
     if(!feature.ready())throw Error('Не удалось открыть раздел. Повторите попытку.');
+  };
+  let warmed=false;
+  window.SmetraWarmFeatures=()=>{
+    if(warmed||navigator.connection?.saveData||/2g/.test(navigator.connection?.effectiveType||''))return;
+    warmed=true;
+    const run=()=>{
+      const files=new Set(Object.values(features).flatMap(feature=>[...(feature.deps||[]).flatMap(dep=>features[dep]?.files||[]),...feature.files]));
+      for(const source of files){if(pending.has(source))continue;const href=new URL(source,location.href).href;if(document.querySelector(`link[rel="prefetch"][href="${href}"]`))continue;const link=document.createElement('link');link.rel='prefetch';link.as='script';link.href=source;document.head.append(link);}
+    };
+    if(window.requestIdleCallback)window.requestIdleCallback(run,{timeout:3500});else setTimeout(run,900);
   };
 })();
