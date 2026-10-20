@@ -22,8 +22,8 @@ android {
         applicationId 'ru.smetra.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 38
-        versionName '1.7.26'
+        versionCode 39
+        versionName '1.7.27'
         testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
         buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('\"', '') + '"'
         buildConfigField 'String', 'MYTRACKER_SDK_KEY', '"' + myTrackerSdkKey.replace('\"', '') + '"'
