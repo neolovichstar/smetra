@@ -81,6 +81,47 @@ class PostgresQueryTests(unittest.TestCase):
             ):
                 schema_name()
 
+    def test_row_scoped_postgres_transaction_skips_schema_advisory_lock(self):
+        from unittest.mock import Mock, call
+        from backend.postgres import Connection
+
+        connection = Connection.__new__(Connection)
+        connection.runtime = False
+        connection.nested = False
+        connection.raw = Mock()
+
+        connection.execute("BEGIN ROW")
+
+        self.assertEqual(
+            connection.raw.execute.call_args_list,
+            [
+                call("BEGIN"),
+                call("SET LOCAL lock_timeout='15s'"),
+                call("SELECT 1"),
+            ],
+        )
+
+    def test_schema_scoped_postgres_transaction_keeps_advisory_lock(self):
+        from unittest.mock import Mock, call
+        from backend.postgres import Connection
+
+        connection = Connection.__new__(Connection)
+        connection.runtime = False
+        connection.nested = False
+        connection.raw = Mock()
+        connection.lock_key = 918273
+
+        connection.execute("BEGIN IMMEDIATE")
+
+        self.assertEqual(
+            connection.raw.execute.call_args_list,
+            [
+                call("BEGIN"),
+                call("SET LOCAL lock_timeout='15s'"),
+                call("SELECT pg_advisory_xact_lock(%s)", (918273,)),
+            ],
+        )
+
     def test_connection_returns_warm_connection_to_pool(self):
         from unittest.mock import Mock, patch
         from backend.postgres import Connection

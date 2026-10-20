@@ -225,7 +225,7 @@ class Connection:
         try:
             if self.runtime and not self.scoped:
                 raise RuntimeError("Runtime query without verified session scope")
-            if command == "BEGIN IMMEDIATE":
+            if command in ("BEGIN IMMEDIATE", "BEGIN ROW"):
                 if self.runtime:
                     if self.nested:
                         raise RuntimeError("Nested runtime write transaction")
@@ -233,8 +233,11 @@ class Connection:
                     self.nested = True
                 else:
                     self.raw.execute("BEGIN")
-                # Preserve SQLite's atomic read/check/write semantics across instances.
                 self.raw.execute("SET LOCAL lock_timeout='15s'")
+                if command == "BEGIN ROW":
+                    # Row-scoped callers lock their user/token rows explicitly in a stable order.
+                    return self.raw.execute("SELECT 1")
+                # Default behaviour remains compatible with SQLite's schema-wide write lock.
                 return self.raw.execute(
                     "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
                 )

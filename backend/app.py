@@ -79,6 +79,23 @@ def db():
         con.close()
 
 
+def begin_atomic_write(con, row_scoped=False):
+    """Begin an atomic write, avoiding the schema-wide PostgreSQL lock only for audited row-scoped flows."""
+    if row_scoped and getattr(con, "is_postgres", False):
+        con.execute("BEGIN ROW")
+    else:
+        con.execute("BEGIN IMMEDIATE")
+
+
+def lock_user_row(con, user_id):
+    """Serialize sensitive auth mutations and account deletion on one user row in PostgreSQL."""
+    if getattr(con, "is_postgres", False):
+        con.execute(
+            "SELECT id FROM users WHERE id=? FOR UPDATE",
+            (user_id,),
+        ).fetchone()
+
+
 def migrate():
     if os.getenv("DATABASE_URL"):
         # Cloud schema changes are explicit, versioned Supabase migrations.
@@ -731,8 +748,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchone()
             if not row:
                 raise ApiError(400, "Ссылка устарела или уже использована")
-            con.execute("BEGIN IMMEDIATE")
+            begin_atomic_write(con, row_scoped=True)
             try:
+                lock_user_row(con, row["user_id"])
                 changed = con.execute(
                     "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
                     (now(), row["id"]),
@@ -779,8 +797,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchone()
             if not row:
                 raise ApiError(400, "Ссылка устарела или уже использована")
-            con.execute("BEGIN IMMEDIATE")
+            begin_atomic_write(con, row_scoped=True)
             try:
+                lock_user_row(con, row["user_id"])
                 changed = con.execute(
                     "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
                     (now(), row["id"]),
@@ -907,6 +926,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ]
             con.execute("BEGIN IMMEDIATE")
             try:
+                lock_user_row(con, user["id"])
                 con.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
                 con.execute("DELETE FROM quotes WHERE user_id=?", (user["id"],))
                 con.execute("DELETE FROM workspaces WHERE owner_id=?", (user["id"],))
