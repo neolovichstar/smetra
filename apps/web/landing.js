@@ -61,7 +61,37 @@ document.querySelector('#use-preview').onclick=()=>{const draft={title:'Сайт
  function selectPlan(button){planButtons.forEach(b=>{b.setAttribute('aria-selected',String(b===button));b.tabIndex=b===button?0:-1});const year=button.dataset.pricePlan==='year';const amount=document.querySelector('#plan-amount');amount.textContent=offer?(offer.from_price?'\u043e\u0442 ':'')+new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format((year?offer.year:offer.month)/100):'\u0426\u0435\u043d\u0430 \u0432 \u043a\u0430\u0431\u0438\u043d\u0435\u0442\u0435';restartMotion(amount,'number-enter');document.querySelector('#plan-period').textContent=year?' / 366 дней':' / 31 день'}
 planButtons.forEach((button,index)=>{button.onclick=()=>selectPlan(button);button.onkeydown=event=>{const next=event.key==='Home'?0:event.key==='End'?planButtons.length-1:event.key==='ArrowRight'?(index+1)%planButtons.length:event.key==='ArrowLeft'?(index+planButtons.length-1)%planButtons.length:-1;if(next<0)return;event.preventDefault();selectPlan(planButtons[next]);planButtons[next].focus()}});selectPlan(planButtons[0]);
 fetch('/api/auth/providers').then(r=>r.json()).then(data=>{if(data.rustore_url&&/^https:\/\/(www\.)?rustore\.ru\//.test(data.rustore_url)){const button=document.querySelector('#rustore');button.href=data.rustore_url;button.textContent='Открыть в RuStore';button.removeAttribute('aria-disabled');document.querySelector('#mobile-note').textContent='Карточка приложения в RuStore. Доступность установки проверьте на странице магазина.'}}).catch(()=>{});
- const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const motionPreference=matchMedia('(prefers-reduced-motion: reduce)');
+ const reducedMotion=motionPreference.matches;
+ const scene=document.querySelector('[data-motion-scene]');
+ const finePointer=matchMedia('(hover: hover) and (pointer: fine)');
+ if(scene&&!reducedMotion&&finePointer.matches){
+  const hero=scene.closest('.black-hero');
+  let rect=null,frame=0,x=0,y=0;
+  const paint=()=>{
+   scene.style.setProperty('--scene-x',`${(x*10).toFixed(2)}px`);
+   scene.style.setProperty('--scene-y',`${(y*10).toFixed(2)}px`);
+   hero?.style.setProperty('--hero-shift-x',`${(x*-3).toFixed(2)}px`);
+   hero?.style.setProperty('--hero-shift-y',`${(y*-3).toFixed(2)}px`);
+   frame=0;
+  };
+  const reset=()=>{
+   rect=null;x=0;y=0;
+   if(!frame)frame=requestAnimationFrame(paint);
+  };
+  scene.addEventListener('pointerenter',()=>{if(!motionPreference.matches)rect=scene.getBoundingClientRect()},{passive:true});
+  scene.addEventListener('pointermove',event=>{
+   if(motionPreference.matches||event.pointerType==='touch')return;
+   if(!rect)rect=scene.getBoundingClientRect();
+   if(!rect.width||!rect.height)return;
+   x=Math.max(-.5,Math.min(.5,(event.clientX-rect.left)/rect.width-.5));
+   y=Math.max(-.5,Math.min(.5,(event.clientY-rect.top)/rect.height-.5));
+   if(!frame)frame=requestAnimationFrame(paint);
+  },{passive:true});
+  scene.addEventListener('pointerleave',reset,{passive:true});
+  motionPreference.addEventListener?.('change',()=>{if(motionPreference.matches)reset()});
+  window.addEventListener('resize',()=>{rect=null},{passive:true});
+ }
  if(!reducedMotion&&'IntersectionObserver' in window){
   const targets=document.querySelectorAll('.landing-section,.feature-list article,.mobile-cta');
   targets.forEach((element,index)=>{element.classList.add('scroll-reveal');element.style.setProperty('--reveal-delay',`${Math.min(index%3,2)*75}ms`)});
