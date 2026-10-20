@@ -1,5 +1,5 @@
-/* Product surfaces: quiet hierarchy, thin dividers, one blue action color. */
-.workspace-page{--cabinet-line:#24262b;--cabinet-muted:#9b9ea8;--cabinet-blue:var(--accent);background:#090909;color:#f4f5f7}
+/* Product surfaces: quiet hierarchy, thin dividers and one warm action accent. */
+.workspace-page{--cabinet-line:#24262b;--cabinet-muted:#9b9ea8;--cabinet-accent:var(--accent);background:#090909;color:#f4f5f7}
 .workspace-page .app-nav{height:74px;position:sticky;top:0;z-index:30;background:#050506eF;border-bottom:1px solid var(--cabinet-line);backdrop-filter:blur(18px)}
 .app-nav-inner{height:100%;padding:0 34px;display:flex;align-items:center;justify-content:space-between;gap:22px}
 .app-nav-brand,.app-nav-actions{display:flex;align-items:center;gap:20px;min-width:0}
