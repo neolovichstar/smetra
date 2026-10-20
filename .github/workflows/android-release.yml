@@ -1,0 +1,138 @@
+name: Android signed draft release
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: Android versionName from apps/mobile/app/build.gradle
+        required: true
+        type: string
+        default: '1.7.27'
+      version_code:
+        description: Android versionCode from apps/mobile/app/build.gradle
+        required: true
+        type: string
+        default: '39'
+      release_notes:
+        description: Draft release notes
+        required: true
+        type: string
+        default: Security hardening and Android release verification
+permissions:
+  contents: read
+concurrency:
+  group: android-signed-release
+  cancel-in-progress: false
+jobs:
+  build-and-draft:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: android-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          gradle-version: '8.9'
+      - name: Validate requested version
+        env:
+          VERSION_NAME_INPUT: ${{ inputs.version_name }}
+          VERSION_CODE_INPUT: ${{ inputs.version_code }}
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          from pathlib import Path
+          name = os.environ['VERSION_NAME_INPUT']
+          code = os.environ['VERSION_CODE_INPUT']
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', name):
+              sys.exit('version_name must use numeric semantic version form, e.g. 1.7.27')
+          if not re.fullmatch(r'[1-9][0-9]*', code):
+              sys.exit('version_code must be a positive integer')
+          gradle = Path('apps/mobile/app/build.gradle').read_text(encoding='utf-8')
+          actual_name = re.search(r"(?m)^\s*versionName\s+'([^']+)'\s*$", gradle)
+          actual_code = re.search(r'(?m)^\s*versionCode\s+([0-9]+)\s*$', gradle)
+          if not actual_name or not actual_code:
+              sys.exit('Could not read Android version from Gradle')
+          if actual_name.group(1) != name or actual_code.group(1) != code:
+              sys.exit(f'Requested {name} ({code}) does not match Gradle {actual_name.group(1)} ({actual_code.group(1)})')
+          PY
+      - name: Build, sign and verify APK
+        id: signed-apk
+        env:
+          VERSION_NAME_INPUT: ${{ inputs.version_name }}
+          VERSION_CODE_INPUT: ${{ inputs.version_code }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          RUSTORE_CERT_SHA256: ${{ secrets.RUSTORE_CERT_SHA256 }}
+          MYTRACKER_SDK_KEY: ${{ secrets.MYTRACKER_SDK_KEY }}
+          RUSTORE_PUSH_PROJECT_ID: ${{ vars.RUSTORE_PUSH_PROJECT_ID }}
+          SIGNING_STORE_FILE: ${{ runner.temp }}/smetra-release.p12
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_PASSWORD RUSTORE_CERT_SHA256; do
+            if [[ -z "${!name:-}" ]]; then echo "Required Android release secret is missing: $name" >&2; exit 1; fi
+          done
+          umask 077
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$SIGNING_STORE_FILE"
+          test -s "$SIGNING_STORE_FILE"
+          trap 'rm -f "$SIGNING_STORE_FILE"' EXIT
+          bash apps/mobile/gradlew -p apps/mobile --no-daemon lintRelease assembleRelease "-PapiBaseUrl=https://smetra.vercel.app"
+          APK='apps/mobile/app/build/outputs/apk/release/app-release.apk'
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -s "$APK"
+          BADGING="$("$AAPT" dump badging "$APK")"
+          printf '%s\n' "$BADGING" | grep -F "name='ru.smetra.mobile' versionCode='${VERSION_CODE_INPUT}' versionName='${VERSION_NAME_INPUT}'" >/dev/null
+          SIGNATURE="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)" || { printf '%s\n' "$SIGNATURE" >&2; exit 1; }
+          ACTUAL_CERT="$(printf '%s\n' "$SIGNATURE" | sed -nE 's/.*certificate SHA-256 digest: ([0-9a-fA-F]{64}).*/\1/p' | head -n1 | tr '[:lower:]' '[:upper:]')"
+          EXPECTED_CERT="$(printf '%s' "$RUSTORE_CERT_SHA256" | tr -cd '0-9a-fA-F' | tr '[:lower:]' '[:upper:]')"
+          if [[ ${#EXPECTED_CERT} -ne 64 || "$ACTUAL_CERT" != "$EXPECTED_CERT" ]]; then echo 'APK signing certificate does not match RUSTORE_CERT_SHA256; refusing release.' >&2; exit 1; fi
+          mkdir -p dist
+          DEST="dist/smetra-mobile-${VERSION_NAME_INPUT}-release.apk"
+          cp "$APK" "$DEST"
+          sha256sum "$DEST" | awk -v name="$(basename "$DEST")" '{ print $1 "  " name }' > "$DEST.sha256"
+          DIGEST="$(sha256sum "$DEST" | cut -d ' ' -f1)"
+          echo "sha256=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Verified signed APK: $DEST"
+          echo "SHA-256: $DIGEST"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: smetra-mobile-${{ inputs.version_name }}-${{ inputs.version_code }}-signed
+          path: |
+            dist/smetra-mobile-${{ inputs.version_name }}-release.apk
+            dist/smetra-mobile-${{ inputs.version_name }}-release.apk.sha256
+          retention-days: 30
+      - name: Create draft GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: android-v${{ inputs.version_name }}
+          target_commitish: ${{ github.sha }}
+          name: Smetra Android ${{ inputs.version_name }} (build ${{ inputs.version_code }})
+          draft: true
+          prerelease: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/smetra-mobile-${{ inputs.version_name }}-release.apk
+            dist/smetra-mobile-${{ inputs.version_name }}-release.apk.sha256
+          body: |
+            ${{ inputs.release_notes }}
+
+            SHA-256: `${{ steps.signed-apk.outputs.sha256 }}`
+
+            This is a draft prerelease. Test the APK on devices and manually review before publishing or uploading to RuStore.
