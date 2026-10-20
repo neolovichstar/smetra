@@ -18,7 +18,12 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await until("document.querySelector('#auth-form')?.onsubmit");
   await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
   await until("document.querySelector('.workspace-home')");
-  for(const file of ['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js'])assert.equal(requested.has('/'+file),false,'Initial screen should defer '+file);
+  for(const file of ['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js']){
+    const state=await evaluate(`(()=>({executed:!!document.querySelector('script[src$=${JSON.stringify('/'+file)}]'),prefetched:!!document.querySelector('link[rel="prefetch"][href$=${JSON.stringify('/'+file)}]')}))()`);
+    assert.equal(state.executed,false,'Initial screen must not execute '+file);
+    if(['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js'].includes(file))assert.equal(state.prefetched,true,'Idle-prefetch should warm '+file+' without executing it');
+  }
+  assert.equal(await evaluate("typeof window.SmetraAssistant"),'undefined','Assistant stays uninitialized until its section opens');
   const testTask=await evaluate("api('/tasks',{method:'POST',body:JSON.stringify({name:'Mobile deadline check',due_date:'2026-10-06'})}).then(result=>result.item)");
   fs.mkdirSync('data/qa',{recursive:true});
   const routes=process.env.SMETRA_REVENUE_QA==='1'?['billing']:['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','billing','support','profile','settings','activity'];
