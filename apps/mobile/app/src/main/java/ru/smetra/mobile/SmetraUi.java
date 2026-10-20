@@ -75,7 +75,7 @@ final class SmetraUi {
             int size=dp(18);BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),glyphBitmap(icon,primary?BG:INK,size));drawable.setBounds(0,0,size,size);
             view.setCompoundDrawablesRelative(drawable,null,null,null);view.setCompoundDrawablePadding(dp(8));
         }
-        LinearLayout.LayoutParams params=match();params.topMargin=dp(8);view.setLayoutParams(params);return view;
+        LinearLayout.LayoutParams params=match();params.topMargin=dp(6);view.setLayoutParams(params);return view;
     }
     private String actionIcon(String title){
         if(title.startsWith("Создать")||title.startsWith("Добавить")||title.startsWith("Новый")||title.startsWith("Новая"))return "plus";
@@ -90,7 +90,7 @@ final class SmetraUi {
         return null;
     }
     LinearLayout card(LinearLayout parent){
-        LinearLayout section=column();section.setPadding(0,dp(16),0,dp(16));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
+        LinearLayout section=column();section.setPadding(0,dp(12),0,dp(12));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
     }
     void enter(View view){enter(view,0);}
     void enter(View view,int delay){if(!motion())return;view.setAlpha(0);view.setTranslationY(dp(10));view.animate().alpha(1).translationY(0).setStartDelay(delay).setDuration(280).setInterpolator(EASE).start();}
@@ -132,7 +132,7 @@ final class SmetraUi {
     }
     TextView badge(String text,int color){TextView view=label(text,11,color,true);view.setPadding(0,dp(3),0,dp(3));view.setBackgroundColor(Color.TRANSPARENT);view.setLayoutParams(new LinearLayout.LayoutParams(-2,-2));return view;}
     EditText field(LinearLayout parent,String label,int type){
-        space(parent,16);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,8);
+        space(parent,12);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,6);
         EditText field=new EditText(activity);field.setTextSize(16);field.setTypeface(regular);field.setTextColor(INK);field.setHintTextColor(0xff69768a);
         field.setInputType(type);field.setSingleLine(type!=1);field.setMinHeight(dp(type==1?96:48));field.setGravity(type==1?Gravity.TOP|Gravity.START:Gravity.CENTER_VERTICAL|Gravity.START);
         field.setPadding(dp(14),dp(12),dp(14),dp(12));field.setBackground(shape(SURFACE,10,0));field.setSelectAllOnFocus(false);
@@ -149,11 +149,11 @@ final class SmetraUi {
         box.setMinimumWidth(dp(48));box.setMinimumHeight(dp(48));tap(box,action);return box;
     }
     void section(LinearLayout parent,String title,String detail){
-        space(parent,24);LinearLayout heading=row();heading.addView(label(title,17,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+        space(parent,20);LinearLayout heading=row();heading.addView(label(title,17,INK,true),new LinearLayout.LayoutParams(0,-2,1));
         if(detail!=null)heading.addView(label(detail,12,MUTED,false));parent.addView(heading);space(parent,2);
     }
     void empty(LinearLayout parent,String icon,String title,String description){
-        LinearLayout card=card(parent);card.setGravity(Gravity.CENTER);card.setPadding(dp(24),dp(30),dp(24),dp(30));
+        LinearLayout card=card(parent);card.setGravity(Gravity.CENTER);card.setPadding(dp(20),dp(24),dp(20),dp(24));
         Icon glyph=new Icon(icon,BLUE);card.addView(glyph,new LinearLayout.LayoutParams(dp(36),dp(36)));space(card,18);
         TextView name=label(title,17,INK,true);name.setGravity(Gravity.CENTER);card.addView(name);space(card,8);
         TextView copy=label(description,13,MUTED,false);copy.setGravity(Gravity.CENTER);card.addView(copy);
