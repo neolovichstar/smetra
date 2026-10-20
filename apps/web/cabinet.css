@@ -25,7 +25,7 @@
 .sidebar-heading{padding:0 12px 9px;color:#6b6b6b;letter-spacing:.14em;font-size:10px;font-weight:700}
 .workspace-page .sidebar-group button{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:37px;padding:8px 12px;border:0;border-radius:7px;background:transparent;color:#aaaaaa;font-size:12px;font-weight:500;text-align:left;transition:background .18s,color .18s}
 
-.workspace-page .sidebar-group button.active{background:#1c1c1c;color:#f1f1f1;box-shadow:inset 2px 0 var(--cabinet-blue)}
+.workspace-page .sidebar-group button.active{background:#1c1c1c;color:#f1f1f1;box-shadow:inset 2px 0 var(--cabinet-accent)}
 .sidebar-accent{width:5px;height:5px;border-radius:50%;background:var(--accent)}
 .sidebar-foot{margin-top:auto;padding:13px 24px 19px;border-top:1px solid var(--cabinet-line)}
 .sidebar-foot>span{display:block;color:#6d6d6d;font-size:10px;letter-spacing:.12em;margin-bottom:8px}
