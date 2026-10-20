@@ -306,7 +306,8 @@
 .workspace-page .assistant-studio #assistant-stop[hidden],.workspace-page .assistant-page #assistant-stop[hidden]{display:none!important}
 .workspace-page .assistant-studio #assistant-form:has(#assistant-stop:not([hidden])),.workspace-page .assistant-page #assistant-form:has(#assistant-stop:not([hidden])){grid-template-columns:minmax(0,1fr) 48px 48px}
 .workspace-page .assistant-studio .assistant-composer-foot,.workspace-page .assistant-page .assistant-composer-foot{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;margin:9px 4px 0;color:var(--smetra-text-subtle);font-size:11px;line-height:1.5}
-.workspace-page .assistant-studio .assistant-brand-dot,.workspace-page .assistant-studio .assistant-welcome-line,.workspace-page .assistant-refined .assistant-message.assistant>small::before{background:var(--smetra-text-muted)!important;box-shadow:none!important}
+.workspace-page .assistant-studio .assistant-brand-dot{background:#d8d8d8!important;box-shadow:none!important}
+.workspace-page .assistant-studio .assistant-welcome-line,.workspace-page .assistant-refined .assistant-message.assistant>small::before{background:var(--smetra-text-muted)!important;box-shadow:none!important}
 
 /* Quote editor, construction, files, catalog, finance and admin use the same neutral component language. */
 .workspace-page .main :is(.editor-history,.editor-history-head,.editor-toolbar,.editor-summary,.quote-summary,.business-stats,.construction-summary,.construction-price-diff,.admin-metrics,.admin-controls,.admin-tabs,.admin-section,.file-preview-top,.file-editor-top){min-width:0;border-color:var(--smetra-line)}
