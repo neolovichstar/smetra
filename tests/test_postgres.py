@@ -31,6 +31,37 @@ class PostgresQueryTests(unittest.TestCase):
             "INSERT INTO smetra.files(id) VALUES(%s) ON CONFLICT DO NOTHING",
         )
 
+    def test_sql_translation_cache_reuses_identical_queries(self):
+        from backend.postgres import translate
+
+        translate.cache_clear()
+        sql = "SELECT id FROM quotes WHERE user_id=?"
+        first = translate(sql, "smetra", True)
+        second = translate(sql, "smetra", True)
+
+        self.assertEqual(first, "SELECT id FROM smetra.quotes WHERE user_id=%s")
+        self.assertEqual(second, first)
+        self.assertEqual(translate.cache_info().hits, 1)
+        self.assertEqual(translate.cache_info().misses, 1)
+        self.assertEqual(translate.cache_info().maxsize, 4096)
+
+    def test_sql_translation_cache_keys_include_schema_and_parameter_mode(self):
+        from backend.postgres import translate
+
+        translate.cache_clear()
+        sql = "SELECT id FROM quotes WHERE user_id=?"
+        parameterized = translate(sql, "smetra", True)
+        unparameterized = translate(sql, "smetra", False)
+        isolated_schema = translate(sql, "smetra_preview", True)
+
+        self.assertIn("FROM smetra.quotes", parameterized)
+        self.assertIn("user_id=%s", parameterized)
+        self.assertIn("FROM smetra.quotes", unparameterized)
+        self.assertIn("user_id=?", unparameterized)
+        self.assertIn("FROM smetra_preview.quotes", isolated_schema)
+        self.assertEqual(translate.cache_info().misses, 3)
+        self.assertEqual(translate.cache_info().hits, 0)
+
     def test_monthly_quota_upsert_targets_existing_counter(self):
         sql = (
             "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
@@ -49,6 +80,47 @@ class PostgresQueryTests(unittest.TestCase):
                 self.assertRaises(ValueError),
             ):
                 schema_name()
+
+    def test_row_scoped_postgres_transaction_skips_schema_advisory_lock(self):
+        from unittest.mock import Mock, call
+        from backend.postgres import Connection
+
+        connection = Connection.__new__(Connection)
+        connection.runtime = False
+        connection.nested = False
+        connection.raw = Mock()
+
+        connection.execute("BEGIN ROW")
+
+        self.assertEqual(
+            connection.raw.execute.call_args_list,
+            [
+                call("BEGIN"),
+                call("SET LOCAL lock_timeout='15s'"),
+                call("SELECT 1"),
+            ],
+        )
+
+    def test_schema_scoped_postgres_transaction_keeps_advisory_lock(self):
+        from unittest.mock import Mock, call
+        from backend.postgres import Connection
+
+        connection = Connection.__new__(Connection)
+        connection.runtime = False
+        connection.nested = False
+        connection.raw = Mock()
+        connection.lock_key = 918273
+
+        connection.execute("BEGIN IMMEDIATE")
+
+        self.assertEqual(
+            connection.raw.execute.call_args_list,
+            [
+                call("BEGIN"),
+                call("SET LOCAL lock_timeout='15s'"),
+                call("SELECT pg_advisory_xact_lock(%s)", (918273,)),
+            ],
+        )
 
     def test_connection_returns_warm_connection_to_pool(self):
         from unittest.mock import Mock, patch
