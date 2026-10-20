@@ -341,6 +341,27 @@
 .workspace-page .main :is(.workspace-section>.topline p,.workspace-section .empty p,.catalog-row .record-meta b>small,.section-finance .stat>span,.section-finance .stat small){color:var(--smetra-text-muted)!important}
 
 /* Responsive layouts are true rearrangements, not a scaled-down desktop. */
+
+/* The textarea and the tool row are siblings inside the form; action buttons live inside the row. */
+.workspace-page .assistant-page .assistant-compose-tools,.workspace-page .assistant-studio .assistant-compose-tools{
+  display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;width:100%;min-width:0;min-height:44px;margin:0
+}
+.workspace-page .assistant-page .assistant-compose-tools>.assistant-attachment-bar,.workspace-page .assistant-studio .assistant-compose-tools>.assistant-attachment-bar{
+  display:flex;grid-column:1;grid-row:1;align-items:center;width:44px;min-width:44px;min-height:44px;margin:0
+}
+.workspace-page .assistant-page .assistant-compose-tools>.assistant-jobbar,.workspace-page .assistant-studio .assistant-compose-tools>.assistant-jobbar{
+  display:flex;grid-column:2;grid-row:1;align-items:center;min-width:0;width:100%;max-width:100%;margin:0;overflow:hidden
+}
+.workspace-page .assistant-page .assistant-compose-tools #assistant-send,.workspace-page .assistant-studio .assistant-compose-tools #assistant-send,
+.workspace-page .assistant-page .assistant-compose-tools #assistant-stop,.workspace-page .assistant-studio .assistant-compose-tools #assistant-stop{
+  grid-column:3;grid-row:1;width:44px;min-width:44px;height:44px;min-height:44px;margin:0
+}
+.workspace-page .assistant-page .assistant-compose-tools #assistant-send,.workspace-page .assistant-studio .assistant-compose-tools #assistant-send{border-radius:50%;padding:0}
+.workspace-page .assistant-page .assistant-compose-tools #assistant-stop,.workspace-page .assistant-studio .assistant-compose-tools #assistant-stop{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;padding:0}
+.workspace-page .assistant-page .assistant-compose-tools #assistant-stop[hidden],.workspace-page .assistant-studio .assistant-compose-tools #assistant-stop[hidden]{display:none!important}
+.workspace-page .assistant-page .assistant-history:not([open])>.assistant-history-list,.workspace-page .assistant-page .assistant-options:not([open])>.assistant-options-list{display:none!important}
+.workspace-page .assistant-page .assistant-history-list[hidden],.workspace-page .assistant-page .assistant-options-list[hidden]{display:none!important}
+
 @media(max-width:1100px){
   .workspace-page .app-shell{grid-template-columns:210px minmax(0,1fr)}
   .workspace-page .main{padding-inline:24px}
@@ -440,30 +461,27 @@
   .workspace-page .assistant-studio .assistant-composer-foot,.workspace-page .assistant-page .assistant-composer-foot{font-size:11px}
   .workspace-page .main .file-editor-input textarea{height:min(52vh,460px);min-height:220px}
 }
+  
+@media(max-width:430px){
   .workspace-page .assistant-refined .assistant-header{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;padding-bottom:12px}
   .workspace-page .assistant-refined .assistant-header>div{width:100%;flex:0 0 auto}
   .workspace-page .assistant-refined .assistant-quota{width:100%;text-align:left;font-size:12px;padding:0}
-  .workspace-page .assistant-refined .assistant-history-list[hidden],.workspace-page .assistant-refined .assistant-options-list[hidden]{display:none!important}
+}
+@media(max-width:700px){
   .workspace-page .assistant-refined .assistant-suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:7px}
   .workspace-page .assistant-refined .assistant-suggestions button{width:100%;min-width:0;min-height:54px;justify-content:flex-start;text-align:left;white-space:normal;overflow-wrap:anywhere}
   .workspace-page .assistant-refined .assistant-suggestions button:last-child:nth-child(odd){grid-column:1/-1;justify-content:center}
-  .workspace-page .assistant-page .assistant-compose-tools,.workspace-page .assistant-studio .assistant-compose-tools{
-    display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;align-items:center;gap:6px;width:100%;min-width:0;min-height:44px;margin:0
-  }
-  .workspace-page .assistant-page .assistant-compose-tools>.assistant-attachment-bar,.workspace-page .assistant-studio .assistant-compose-tools>.assistant-attachment-bar{grid-column:1;grid-row:1;width:44px;min-width:44px;min-height:44px}
-  .workspace-page .assistant-page .assistant-compose-tools>.assistant-jobbar,.workspace-page .assistant-studio .assistant-compose-tools>.assistant-jobbar{grid-column:2;grid-row:1;min-width:0;width:100%;max-width:100%;margin:0;overflow:hidden}
-  .workspace-page .assistant-page .assistant-compose-tools #assistant-send,.workspace-page .assistant-studio .assistant-compose-tools #assistant-send,
-  .workspace-page .assistant-page .assistant-compose-tools #assistant-stop,.workspace-page .assistant-studio .assistant-compose-tools #assistant-stop{grid-column:3;grid-row:1;width:44px;min-width:44px;height:44px;min-height:44px;margin:0}
+  .workspace-page .assistant-page .assistant-compose-tools,.workspace-page .assistant-studio .assistant-compose-tools{gap:4px}
   .workspace-page .assistant-refined .assistant-composer form{gap:6px;padding:8px!important;border-radius:18px!important}
-  .workspace-page .assistant-refined .assistant-composer textarea{display:block;width:100%;min-width:0;min-height:50px;max-height:min(35vh,180px);padding:10px 10px 8px;border:0!important;border-radius:0!important;outline:0!important;background:transparent!important;resize:none!important;overflow-y:hidden}
+  .workspace-page .assistant-refined .assistant-composer textarea{display:block;width:100%;min-width:0;min-height:50px;max-height:min(35vh,180px);padding:10px;border:0!important;border-radius:0!important;outline:0!important;background:transparent!important;resize:none!important;overflow-y:hidden}
   .workspace-page .assistant-refined .assistant-composer textarea:focus,.workspace-page .assistant-refined .assistant-composer textarea:focus-visible{border:0!important;outline:0!important;box-shadow:none!important}
-  .workspace-page .assistant-refined .assistant-suggestions button:last-child:nth-child(odd){grid-column:1/-1}
   .workspace-page .main .editor-positions>.section-top{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:12px}
   .workspace-page .main .editor-positions .catalog-picker{width:100%;max-width:100%;min-width:0;flex:1 1 auto}
   .workspace-page .main .editor-positions .catalog-picker>.row{display:block;width:100%;min-width:0}
   .workspace-page .main .editor-positions .catalog-picker .select-control{display:block;width:100%;max-width:100%;min-width:0}
   .workspace-page .main .editor-positions .catalog-picker .select-trigger{display:flex;width:100%;min-width:0;min-height:44px;height:auto;padding:10px 12px;white-space:normal;align-items:center}
   .workspace-page .main .editor-positions .catalog-picker .select-trigger>span:first-child{min-width:0;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4}
+}
 
 @media(max-width:359px){
   .workspace-page:not(.auth-mode) .app-nav-inner{padding-inline:10px;gap:6px}
