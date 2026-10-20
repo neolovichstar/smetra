@@ -19,6 +19,9 @@ Current threat model, unresolved risks and verification status: `docs/THREAT_MOD
 - The development requirements no longer override `pypdf` with an older version. Local `pip-audit` checks of both requirement sets found no known advisories on 30 September 2026; CI now runs the audit and emits a CycloneDX Python SBOM. This is a dependency check, not a complete SAST or security review.
 - Public intake submission attempts are rate-limited per IP before the token lookup, including requests with invalid tokens.
 
+- GitHub Actions in CI/deployment are pinned to immutable commit SHAs. CodeQL is configured for Python, JavaScript/TypeScript and Java/Kotlin; Dependabot is configured for Actions, Python and Gradle. Review first remote results; configuration alone does not prove scans passed.
+- Android CI attaches a versioned debug APK and checksum for QA. A separate manual signed-release workflow uses `android-release`, verifies the known certificate and creates only a draft GitHub Release. The owner must configure required reviewers and signing secrets first.
+
 ## Before a paid release
 
 - Configure and test SMTP delivery, email verification, and password reset. Until then, `ALLOW_UNVERIFIED_SIGNUP=1` allows unverified email accounts so onboarding works; this is a deliberate temporary limitation.
@@ -27,4 +30,4 @@ Current threat model, unresolved risks and verification status: `docs/THREAT_MOD
 - Review the Vercel Firewall traffic graph after each limit change. During an active attack, use the Vercel dashboard's temporary Attack Challenge Mode; it may challenge legitimate visitors, so do not leave it on indefinitely. Recheck dependency advisories regularly.
 - The current Vercel team does not expose Firewall counters through the CLI without Observability Plus. Review the Firewall dashboard for false positives after launch and adjust the 300/min threshold if real users behind a shared IP encounter 429 responses.
 - Rotate all secrets previously shared in chat, including database, Vercel, GitHub, OpenRouter, and bot credentials. Keep credentials only in server environment variables or ignored local secret files.
-- The private PostgreSQL schema has RLS enabled and public/client roles revoked, but the server uses a privileged connection. Tenant isolation therefore also depends on application `workspace_id` checks; commission an independent database/API isolation review before scale-up.
+- A read-only production configuration check found no `USAGE` on the private `smetra` schema for `anon`/`authenticated`, and no direct client-readable production tables. The `smetra_app` and inherited `smetra_runtime` roles do not have `BYPASSRLS`; 10 internal tables need a table-by-table review because `FORCE ROW LEVEL SECURITY` is not enabled on them. This snapshot is not proof of complete isolation. Tenant isolation also depends on explicit workspace authorization and scoped runtime transactions; commission an independent database/API isolation review before scale-up.
