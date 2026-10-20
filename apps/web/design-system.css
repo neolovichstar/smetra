@@ -146,6 +146,17 @@
   line-height: 1.25;
 }
 .workspace-page .nav-search:hover { border-color: #333; background: #141414; color: #fff; }
+.workspace-page:not(.auth-mode) .nav-search span,
+.workspace-page:not(.auth-mode) .nav-search kbd { display: none; }
+.workspace-page:not(.auth-mode) .nav-search::before {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: currentColor;
+  mask: url('/assets/icons/magnifying-glass.svg') center / contain no-repeat;
+  content: '';
+}
 .workspace-page .nav-search kbd { padding: 2px 5px; border: 1px solid #393939; border-radius: 5px; background: #171717; color: #aaa; font: inherit; font-size: 10px; }
 .workspace-page .desktop-menu-toggle,
 .workspace-page .nav-toggle {
