@@ -154,3 +154,12 @@ jobs:
         with:
           name: android-debug
           path: apps/mobile/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build installable Android APK for production API
+        run: bash apps/mobile/gradlew -p apps/mobile assembleDebug -PapiBaseUrl=https://smetra.vercel.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smetra-android-apk
+          path: apps/mobile/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
