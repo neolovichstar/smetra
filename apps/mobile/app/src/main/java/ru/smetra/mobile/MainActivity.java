@@ -174,7 +174,7 @@ public class MainActivity extends Activity {
         });
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         pageScroll=scroll;
-        content=ui.column();content.setPadding(dp(20),dp(8),dp(20),dp(24));content.setFocusableInTouchMode(true);scroll.addView(content);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        content=ui.column();content.setPadding(dp(16),dp(4),dp(16),dp(18));content.setFocusableInTouchMode(true);scroll.addView(content);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         if(token!=null&&!publicView)navigation(shell);
         setContentView(root);root.requestApplyInsets();
         LinearLayout header=ui.row();
@@ -183,7 +183,7 @@ public class MainActivity extends Activity {
         if(!back){android.text.SpannableString wordmark=new android.text.SpannableString("сметра.");wordmark.setSpan(new android.text.style.ForegroundColorSpan(0xff2186ff),6,7,0);brand.setText(wordmark);}
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
         if(!back&&token!=null&&!publicView)header.addView(ui.iconButton("profile","Открыть профиль",this::settings),new LinearLayout.LayoutParams(dp(48),dp(48)));
-        content.addView(header);ui.space(content,back?16:20);
+        content.addView(header);ui.space(content,back?12:16);
         if(ui.motion()){content.setAlpha(0);content.setTranslationX(dp(returning?-10:10));content.animate().alpha(1).translationX(0).setDuration(240).setInterpolator(EASE).start();}returning=false;
     }
     private void navigation(LinearLayout shell){
