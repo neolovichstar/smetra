@@ -68,6 +68,7 @@ class UIDesignSystemTests(unittest.TestCase):
     def test_primary_accent_is_shared_and_not_decorative_blue(self):
         self.assertIn("--accent:#efb56b", self.black)
         self.assertIn("--cabinet-accent:var(--accent)", self.cabinet)
+        self.assertNotIn("--cabinet-blue", self.cabinet)
         self.assertIn("background:var(--accent)", self.black)
         self.assertIn("box-shadow:none", self.black[self.black.find(".btn.primary{"):self.black.find(".btn.primary{") + 180])
 
