@@ -28,3 +28,10 @@
 ## Блокирующие условия для заявления «production security ready»
 
 Read-only снимок Production от 20 октября 2026 подтвердил, что роли `smetra_app`/`smetra_runtime` не имеют `BYPASSRLS`, а `anon`/`authenticated` не имеют доступа к закрытой схеме `smetra`. Это исправляет прежнее утверждение о том, что штатная прикладная роль безусловно обходит RLS, но не доказывает полную изоляцию всех путей: у десяти внутренних таблиц не включён `FORCE ROW LEVEL SECURITY`, а полная матрица endpoint × role × workspace ещё не проверена. Preview теперь дополнительно блокирует использование production-схемы на уровне кода. До независимой проверки изоляции, ротации ранее раскрытых секретов, перевода `YANDEX_CLIENT_SECRET` в Secret, проверки SMTP и боевых sandbox-платежей/OAuth, а также полного backup-restore drill и ASVS L2/pentest не заявлять, что защита полностью проверена.
+
+ 
+## RLS tenant-boundary finding — migration required
+
+A read-only inspection of the current production policy for `smetra.file_text_chunks` found a tautological parent-file condition: `f.workspace_id = f.workspace_id`. The policy still restricts each chunk row by its own `workspace_id`, but it does not independently prove the referenced file belongs to the same workspace. The pending migration `20261020110000_query_hot_path_rls_performance.sql` changes that predicate to `f.workspace_id = file_text_chunks.workspace_id` and wraps only row-independent context/helper calls in statement-level subqueries.
+
+**This finding is not fixed in the live database yet.** The migration is in draft PR #12 and has not been applied to Production. Before closing this risk, review and apply it through the production migration process, then verify the policy in `pg_policies` and test cross-workspace file/chunk access with two real isolated test workspaces. Do not count the code change alone as deployed remediation.
