@@ -92,6 +92,24 @@ fetch('/api/auth/providers').then(r=>r.json()).then(data=>{if(data.rustore_url&&
   motionPreference.addEventListener?.('change',()=>{if(motionPreference.matches)reset()});
   window.addEventListener('resize',()=>{rect=null},{passive:true});
  }
+ const progressBar=document.querySelector('.motion-progress > span');
+ if(progressBar){
+  let progressFrame=0;
+  const paintProgress=()=>{
+   const root=document.documentElement;
+   const travel=Math.max(1,root.scrollHeight-window.innerHeight);
+   const value=Math.max(0,Math.min(1,window.scrollY/travel));
+   progressBar.style.transform='scaleX('+value.toFixed(4)+')';
+   progressFrame=0;
+  };
+  const queueProgress=()=>{
+   if(progressFrame)return;
+   progressFrame=requestAnimationFrame(paintProgress);
+  };
+  paintProgress();
+  window.addEventListener('scroll',queueProgress,{passive:true});
+  window.addEventListener('resize',queueProgress,{passive:true});
+ }
  if(!reducedMotion&&'IntersectionObserver' in window){
   const targets=document.querySelectorAll('.landing-section,.feature-list article,.mobile-cta');
   targets.forEach((element,index)=>{element.classList.add('scroll-reveal');element.style.setProperty('--reveal-delay',`${Math.min(index%3,2)*75}ms`)});
