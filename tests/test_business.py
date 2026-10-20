@@ -1467,7 +1467,7 @@ class BusinessFlows(unittest.TestCase):
         )
 
     def test_ai_draft_provenance_is_server_owned_workspace_bound_and_single_use(self):
-        token, user_id = self.account("ai-provenance-owner")
+        token, _ = self.account("ai-provenance-owner")
         workspace_id = self.call("/workspace", token=token)[1]["workspace"]["id"]
         with sqlite3.connect(os.environ["DB_PATH"]) as con:
             draft_id = "ai-provenance-one-use"
