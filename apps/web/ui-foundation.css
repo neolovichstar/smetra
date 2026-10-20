@@ -351,6 +351,18 @@
   .workspace-page .main .admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .workspace-page .main .file-editor-layout{grid-template-columns:minmax(0,1fr)}
 }
+@media(min-width:701px) and (max-width:900px){
+  .workspace-page:not(.auth-mode) .app-nav-inner{
+    display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr) auto;grid-template-rows:64px;gap:10px;padding-inline:16px;
+  }
+  .workspace-page:not(.auth-mode) .app-nav-brand{grid-column:1;grid-row:1;gap:10px;min-width:0}
+  .workspace-page:not(.auth-mode) .workspace-modes{grid-column:2;grid-row:1;justify-self:center;min-width:0;max-width:100%;padding:3px;gap:2px}
+  .workspace-page:not(.auth-mode) .workspace-modes button{min-width:76px;min-height:36px;padding:8px 10px;font-size:12px}
+  .workspace-page:not(.auth-mode) .app-nav-actions{grid-column:3;grid-row:1;gap:4px;min-width:0}
+  .workspace-page:not(.auth-mode) .nav-search span,.workspace-page:not(.auth-mode) .nav-search kbd,.workspace-page:not(.auth-mode) #header-user{display:none}
+  .workspace-page:not(.auth-mode) .nav-search::before{display:block;width:18px;height:18px;background:currentColor;mask:url('/assets/icons/magnifying-glass.svg') center/contain no-repeat;content:""}
+  .workspace-page:not(.auth-mode) .nav-search,.workspace-page:not(.auth-mode) #theme{width:40px;min-width:40px;height:40px;min-height:40px;padding:8px}
+}
 @media(max-width:700px){
   .workspace-page:not(.auth-mode) .app-nav{height:112px;min-height:112px}
   .workspace-page:not(.auth-mode) .app-nav-inner{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:56px 48px;gap:0 10px;padding:0 14px 8px}
@@ -564,3 +576,9 @@
   outline-color: var(--smetra-focus) !important;
   box-shadow: 0 0 0 3px #0000000a !important;
 }
+
+.workspace-page .main .eyebrow::before{background:var(--smetra-text-muted)!important;box-shadow:none!important}
+.workspace-page .main :is(.catalog-star:hover,.catalog-star:focus-visible){color:var(--smetra-text)!important;background:var(--smetra-surface-hover)!important;border-color:var(--smetra-line-strong)!important}
+.workspace-page .main .admin-table tbody tr:hover{background:var(--smetra-surface-hover)!important}
+.workspace-page .assistant-refined .assistant-message.assistant>small{color:var(--smetra-text-muted)!important}
+.workspace-page .assistant-refined .background-mode #assistant-delivery-hint{color:var(--smetra-text-muted)!important}
