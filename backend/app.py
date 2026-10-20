@@ -1057,14 +1057,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchone()
             return self.send_json(200, {"user": user_view(current, con),"payments":[dict(r) for r in con.execute('SELECT id,status FROM payments WHERE user_id=? ORDER BY created_at DESC LIMIT 3',(user['id'],))]})
         if path == "/api/admin/overview" and method == "GET":
+            # Keep this query portable: production uses PostgreSQL, while local
+            # development and tests use SQLite. Pass the timestamp instead of
+            # using unixepoch(), which is not available in PostgreSQL.
             stats = {
-                key: con.execute(sql).fetchone()[0]
-                for key, sql in {
-                    "users": "SELECT count(*) FROM users WHERE deleted_at IS NULL",
-                    "quotes": "SELECT count(*) FROM quotes",
-                    "subscriptions": "SELECT count(*) FROM users WHERE entitlement_until > unixepoch() AND deleted_at IS NULL",
-                    "revenue_kopecks": "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id WHERE b.is_test=0 AND p.status='succeeded' AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')",
-                }.items()
+                "users": con.execute(
+                    "SELECT count(*) FROM users WHERE deleted_at IS NULL"
+                ).fetchone()[0],
+                "quotes": con.execute("SELECT count(*) FROM quotes").fetchone()[0],
+                "subscriptions": con.execute(
+                    "SELECT count(*) FROM users WHERE entitlement_until > ? AND deleted_at IS NULL",
+                    (now(),),
+                ).fetchone()[0],
+                "revenue_kopecks": con.execute(
+                    "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id WHERE b.is_test=0 AND p.status='succeeded' AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')"
+                ).fetchone()[0],
             }
             users = [
                 dict(r)
