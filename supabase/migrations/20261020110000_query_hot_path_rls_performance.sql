@@ -63,6 +63,22 @@ BEGIN
             );
         END IF;
 
+        -- The existing file_text_chunks policy contained a tautology
+        -- (f.workspace_id = f.workspace_id). Bind the parent file to the
+        -- chunk's tenant so a mismatched/corrupt reference cannot cross workspaces.
+        IF policy_row.tablename = 'file_text_chunks' THEN
+            new_using := replace(
+                new_using,
+                'f.workspace_id = f.workspace_id',
+                'f.workspace_id = file_text_chunks.workspace_id'
+            );
+            new_check := replace(
+                new_check,
+                'f.workspace_id = f.workspace_id',
+                'f.workspace_id = file_text_chunks.workspace_id'
+            );
+        END IF;
+
         IF new_using IS NOT NULL THEN
             new_using := replace(
                 new_using,
