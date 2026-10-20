@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 /** Validated, cached presentation data for the existing native screens. */
 final class MobilePresentation {
     private static final String CACHE = "native_presentation_v1";
-    private static final int DEFAULT_BLUE = Color.rgb(130, 177, 255);
+    private static final int DEFAULT_BLUE = Color.rgb(218, 218, 218);
     final int version, accent;
     final String homeEyebrow, homeTitle, createLabel, captureLabel, loginTitle, loginSubtitle;
     final String raw;
@@ -65,11 +65,13 @@ final class MobilePresentation {
         if (raw == null || raw.isEmpty() || raw.length() > 8192) throw new IllegalArgumentException("Invalid presentation");
         JSONObject value = new JSONObject(raw);
         if (value.optInt("schema") != 1 || value.optInt("version") < 1) throw new IllegalArgumentException("Unsupported presentation");
-        String hex = value.optString("accent", "#96BEFF");
+        String hex = value.optString("accent", "#DADADA");
         if (!hex.matches("#[0-9A-Fa-f]{6}")) throw new IllegalArgumentException("Invalid accent");
         JSONObject home = value.getJSONObject("home"), login = value.getJSONObject("login");
         MobilePresentation fallback = defaults();
-        int accent = Color.parseColor(hex);
+        int parsedAccent = Color.parseColor(hex);
+        int gray = (Color.red(parsedAccent) * 299 + Color.green(parsedAccent) * 587 + Color.blue(parsedAccent) * 114) / 1000;
+        int accent = Color.rgb(gray, gray, gray);
         return new MobilePresentation(value.getInt("version"), accent,
             text(home, "eyebrow", fallback.homeEyebrow, 30),
             text(home, "title", fallback.homeTitle, 45),

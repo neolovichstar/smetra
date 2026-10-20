@@ -48,7 +48,7 @@
 .assistant-context button{display:grid;place-items:center;width:22px;height:22px;flex:none;border:0;border-radius:5px;background:#1b2b42;color:#dceaff;font-size:17px;line-height:1}
 .assistant-context button:hover{background:#294362}
 .assistant-composer form{display:flex;align-items:end;gap:8px;padding:7px;border:1px solid #35404e;border-radius:16px;background:#0c0f13;box-shadow:0 0 0 1px #7aaefa0b,0 -22px 45px #0007;transition:border-color .3s,box-shadow .3s}
-.assistant-composer form:focus-within{border-color:#7da9e6;box-shadow:0 0 0 3px #82b1ff12,0 -22px 45px #0007}
+.assistant-composer form:focus-within{border-color:#a3a3a3;box-shadow:0 0 0 3px #b8b8b812,0 -22px 45px #0007}
 .assistant-composer textarea{flex:1;resize:none;min-height:40px;max-height:180px;width:100%;padding:10px 11px;border:0!important;border-radius:10px;background:transparent!important;box-shadow:none!important;line-height:1.5;font-size:13px;color:#f2f5fa}
 .assistant-composer textarea::placeholder{color:#7f8997}
 .assistant-composer #assistant-send{width:40px;height:40px;min-height:40px;padding:0;border-radius:10px;font-size:20px;line-height:1}
@@ -61,7 +61,7 @@
 .assistant-workbar select{flex:1;min-width:150px;max-width:340px;min-height:37px;padding:7px 12px;border:1px solid #29323e;border-radius:8px;background:#080b0f;color:#dbe4f2;font-size:11px}
 .assistant-workbar .btn{min-height:37px;font-size:11px}
 .assistant-thread-action{width:36px;height:36px;min-width:36px;border:1px solid #29323e;border-radius:8px;background:#080b0f;color:#a7bad5;font-size:18px;cursor:pointer}
-.assistant-thread-action:hover:not(:disabled){border-color:#7da9e6;color:#fff}.assistant-thread-action:disabled{opacity:.35;cursor:default}
+.assistant-thread-action:hover:not(:disabled){border-color:#a3a3a3;color:#fff}.assistant-thread-action:disabled{opacity:.35;cursor:default}
 .assistant-thread-edit{display:flex;gap:7px;padding:10px 0}.assistant-thread-edit input{flex:1;min-width:0;padding:9px 12px;border:1px solid #37485f;border-radius:8px;background:#090d13;color:#fff}
 .assistant-knowledge{padding:19px 0 23px;border-bottom:1px solid #28313e;animation:chat-enter .3s ease both}
 .assistant-knowledge-head{display:flex;justify-content:space-between;gap:16px}.assistant-knowledge h2{margin:5px 0;font-size:23px;font-weight:600;letter-spacing:-.04em}.assistant-knowledge-head p{max-width:560px;margin:4px 0 15px;color:#9da8b7;font-size:12px;line-height:1.6}
