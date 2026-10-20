@@ -429,3 +429,51 @@
 @media(prefers-reduced-motion:reduce){
   .workspace-page *,.workspace-page *::before,.workspace-page *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* Eliminate residual hard-coded blue treatment from legacy workspace components.
+   Action and selection states stay neutral; destructive states retain their semantic warning color. */
+.workspace-page .main :is(
+  .admin-avatar,.admin-plan,.admin-state,.admin-tabs button span,.admin-empty>span,
+  .admin-refresh,.admin-row-action button,.admin-dialog-actions button,.admin-ticket-actions button,
+  .catalog-favorite-filter,.catalog-favorite-field,.catalog-star[aria-pressed="true"],
+  .support-topics button[aria-pressed="true"],.assistant-context button,.assistant-thread-action,
+  .assistant-copy,.assistant-fork,.assistant-upgrade,.assistant-jobbar button,.assistant-job button,
+  .assistant-delivery-hint,.assistant-edit-diff summary,.assistant-diff-row>div>span,
+  .assistant-diff-total strong,.construction-hint code,.construction-price-select,
+  .construction-object-right b,.construction-price-diff-head span,.construction-price-diff-row b,
+  .construction-upload,.construction-fact-open,.construction-price-tools
+) {
+  color: var(--smetra-text) !important;
+}
+.workspace-page .main :is(
+  .admin-avatar,.admin-plan,.admin-state,.admin-tabs button span,.admin-empty>span,
+  .admin-refresh,.admin-row-action button,.admin-dialog-actions button,.admin-ticket-actions button,
+  .catalog-favorite-filter,.catalog-favorite-field,.catalog-star[aria-pressed="true"],
+  .support-topics button[aria-pressed="true"],.assistant-context button,.assistant-thread-action,
+  .assistant-copy,.assistant-fork,.assistant-upgrade,.assistant-jobbar button,.assistant-job button,
+  .construction-hint code,.construction-price-select,.construction-upload,.construction-fact-open,
+  .construction-price-tools
+) {
+  border-color: var(--smetra-line) !important;
+  box-shadow: none !important;
+}
+.workspace-page .main :is(
+  .admin-avatar,.admin-plan,.admin-state,.admin-tabs button span,.admin-empty>span,
+  .admin-refresh,.admin-row-action button,.admin-dialog-actions button,.admin-ticket-actions button,
+  .catalog-favorite-filter,.catalog-favorite-field,.catalog-star[aria-pressed="true"],
+  .support-topics button[aria-pressed="true"],.assistant-context button,.assistant-thread-action,
+  .assistant-copy,.assistant-fork,.assistant-upgrade,.assistant-jobbar button,.assistant-job button,
+  .construction-hint code,.construction-price-select,.construction-upload,.construction-fact-open,
+  .construction-price-tools
+) {
+  background-color: var(--smetra-surface-raised) !important;
+}
+.workspace-page .main :is(.admin-avatar,.admin-plan,.admin-state,.admin-tabs button span,.admin-empty>span) {
+  border-radius: 8px;
+}
+.workspace-page .main :is(.admin-row-action button,.admin-refresh,.admin-dialog-actions button,.admin-ticket-actions button):hover,
+.workspace-page .main :is(.catalog-star,.assistant-thread-action,.assistant-copy,.assistant-fork,.construction-upload,.construction-fact-open):hover {
+  background: var(--smetra-surface-hover) !important;
+  color: var(--smetra-text) !important;
+}

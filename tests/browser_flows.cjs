@@ -31,7 +31,7 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("document.querySelector('.workspace-home .capture-panel').getBoundingClientRect().bottom <= document.querySelector('.workspace-home .dashboard-metrics').getBoundingClientRect().top"),true,'Dashboard metrics never overlap the composer');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-page')).getPropertyValue('--smetra-system').trim()"),'1','Shared UI foundation stylesheet is loaded');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-page')).getPropertyValue('--smetra-action').trim()"),'#e6e6e6','Workspace action color uses grayscale design tokens');
-  assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('.topline h1')).letterSpacing)>=-1.5"),true,'Section heading tracking remains readable');
+  assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('.dashboard-intro h1')).letterSpacing)>=-1.5"),true,'Section heading tracking remains readable');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#capture-text')).resize"),'none','Dashboard composer cannot be manually stretched');
   assert.equal(await evaluate("(()=>{const i=getComputedStyle(document.querySelector('#capture-text')),f=getComputedStyle(document.querySelector('#capture-form'));return i.borderTopWidth==='0px'&&i.outlineWidth==='0px'&&f.borderTopWidth==='1px'&&parseFloat(f.borderTopLeftRadius)>=16})()"),true,'Dashboard composer has one rounded outer surface and no nested input border');
 
