@@ -942,6 +942,106 @@
 
 /* Mobile dashboard composer: the input and send control occupy separate grid cells.
    Keep the action compact; never let its icon-only mobile variant cover the text. */
+/* Final interaction polish: consistent rhythm, quieter motion, and stronger hierarchy. */
+.workspace-page {
+  --motion-fast: 160ms;
+  --motion-normal: 240ms;
+  --ease-out: cubic-bezier(.22, .75, .2, 1);
+}
+.workspace-page :is(button, a, input, textarea, select, summary) {
+  transition-timing-function: var(--ease-out);
+}
+.workspace-page :is(.panel, .stat, .card, .record-line, .today-action, .quote, .workspace-modes, .capture-panel form, .dashboard-metrics) {
+  transition: border-color var(--motion-normal) var(--ease-out), background-color var(--motion-normal) var(--ease-out), box-shadow var(--motion-normal) var(--ease-out), transform var(--motion-normal) var(--ease-out);
+}
+.workspace-page .panel:hover,
+.workspace-page .stat:hover,
+.workspace-page .card:hover {
+  border-color: #3a3a3a;
+}
+.workspace-page .record-line,
+.workspace-page .today-action,
+.workspace-page .quote {
+  min-height: 56px;
+  padding-block: 12px;
+}
+.workspace-page :is(.record-line, .today-action, .quote) > :first-child {
+  min-width: 0;
+}
+.workspace-page :is(.record-line, .today-action, .quote) strong,
+.workspace-page :is(.record-line, .today-action, .quote) .record-title {
+  color: #eeeeee;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.workspace-page :is(.record-line, .today-action, .quote) small {
+  display: block;
+  margin-top: 4px;
+  color: #929292;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.workspace-page .btn,
+.workspace-page .icon-button,
+.workspace-page .workspace-modes button,
+.workspace-page .sidebar-group button,
+.workspace-page .nav-search {
+  transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
+}
+.workspace-page .btn:hover,
+.workspace-page .icon-button:hover,
+.workspace-page .nav-search:hover {
+  transform: translateY(-1px);
+}
+.workspace-page .btn:active,
+.workspace-page .icon-button:active,
+.workspace-page .workspace-modes button:active,
+.workspace-page .sidebar-group button:active {
+  transform: translateY(0) scale(.985);
+}
+.workspace-page .btn.primary {
+  min-width: 132px;
+  box-shadow: 0 1px 0 #fff8 inset, 0 8px 24px #fff0;
+}
+.workspace-page .btn.primary:hover {
+  box-shadow: 0 1px 0 #fff inset, 0 8px 24px #fff2;
+}
+.workspace-page .topline-actions,
+.workspace-page .form-actions,
+.workspace-page .attachment-actions,
+.workspace-page .quote-actions,
+.workspace-page .record-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-page .form-actions { justify-content: flex-end; margin-top: 18px; }
+.workspace-page .section-top { min-height: 42px; margin-bottom: 12px; }
+.workspace-page .section-top h2,
+.workspace-page .section-top h3 { line-height: 1.3; }
+.workspace-page .workspace-home .capture-panel form:focus-within {
+  border-color: #555;
+  box-shadow: 0 0 0 3px #fff1;
+}
+.workspace-page .workspace-home .capture-heading h2 { text-wrap: balance; }
+.workspace-page .main :is(h1, h2, h3, h4, p, button, label, th, td) { text-wrap: pretty; }
+.workspace-page :is(.empty, .empty-state) { border: 1px dashed #303030; border-radius: 12px; }
+.workspace-page .toast { box-shadow: 0 14px 40px #0009; }
+
+@media (max-width: 600px) {
+  .workspace-page .btn { min-height: 44px; }
+  .workspace-page .btn.small { min-height: 40px; padding-inline: 12px; }
+  .workspace-page .topline-actions,
+  .workspace-page .form-actions,
+  .workspace-page .attachment-actions { width: 100%; }
+  .workspace-page .topline-actions .btn,
+  .workspace-page .form-actions .btn { flex: 1 1 auto; }
+  .workspace-page .record-line,
+  .workspace-page .today-action,
+  .workspace-page .quote { min-height: 60px; gap: 10px; }
+}
+
 @media (max-width: 600px) {
   .workspace-page .workspace-home .capture-panel form {
     grid-template-columns: 36px minmax(0, 1fr) 44px;
