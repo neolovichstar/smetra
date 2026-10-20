@@ -166,6 +166,7 @@
 .workspace-page .desktop-menu-toggle span,
 .workspace-page .nav-toggle span { display: block; width: 16px; height: 1px; background: currentColor; }
 .workspace-page .desktop-menu-toggle { flex-direction: column; gap: 5px; }
+.workspace-page .nav-toggle { display: none; }
 
 /* Sidebar: uniform rows, hit areas and labels. */
 .workspace-page .app-shell { grid-template-columns: 248px minmax(0,1fr); min-height: calc(100dvh - 64px); }
@@ -694,7 +695,7 @@
   .workspace-page .main { padding-inline: 28px; }
   .workspace-page .workspace-home .capture-panel { min-height: 360px; }
   .workspace-page .workspace-home .dashboard-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: 16px; }
-  .workspace-page .workspace-home .dashboard-metric:nth-child(3) { border-left: 0; padding-left: 0; }
+  .workspace-page .workspace-home .dashboard-metric:nth-child(3) { border-top: 1px solid #292929; border-left: 0; padding: 14px 18px 0 0; }
   .workspace-page .workspace-home .dashboard-metric:nth-child(4) { border-top: 1px solid #292929; padding-top: 14px; }
   .workspace-page .workspace-home .dashboard-metric:nth-child(3),
   .workspace-page .workspace-home .dashboard-metric:nth-child(4) { padding-bottom: 0; }
@@ -704,6 +705,8 @@
   .workspace-page:not(.auth-mode) .app-nav { height: 60px; }
   .workspace-page:not(.auth-mode) .app-nav-inner { grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; padding-inline: 14px; }
   .workspace-page .app-nav-brand { gap: 7px; }
+  .workspace-page .desktop-menu-toggle { display: none; }
+  .workspace-page .nav-toggle { display: inline-flex; }
   .workspace-page .app-nav .brand { font-size: 21px; }
   .workspace-page .app-nav-caption { display: none; }
   .workspace-page .app-nav-actions { gap: 5px; }
