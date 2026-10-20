@@ -106,6 +106,8 @@ class QueryHotPathMigrationTests(unittest.TestCase):
         self.assertIn("( SELECT current_setting(", sql)
         self.assertIn("( SELECT smetra.runtime_user_id())", sql)
         self.assertIn("runtime_workspace_allowed(NULLIF(current_setting(", sql)
+        self.assertIn("f.workspace_id = file_text_chunks.workspace_id", sql)
+        self.assertIn("'f.workspace_id = f.workspace_id'", sql)
         self.assertIn("VALUES (38, extract(epoch FROM now())::BIGINT)", sql)
         self.assertNotIn("DROP POLICY", sql.upper())
         self.assertNotIn("DISABLE ROW LEVEL SECURITY", sql.upper())
