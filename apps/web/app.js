@@ -49,7 +49,10 @@ async function api(path, options = {}) {
       if(error.name==='AbortError')throw Error('Сервер отвечает слишком долго. Повторите попытку.');
       if(error instanceof TypeError)throw Error('Нет связи с сервером. Проверьте интернет и повторите попытку.');
       throw error;
-    }finally{if(timer!==null)clearTimeout(timer)}
+    }finally{
+      if(timer!==null)clearTimeout(timer);
+      if(method!=='GET'){apiCache.clear();apiCacheEpoch++;}
+    }
   })();
   if(share)apiRequests.set(key,request);
   try{return await request}finally{if(apiRequests.get(key)===request)apiRequests.delete(key)}
