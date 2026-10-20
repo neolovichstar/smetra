@@ -1748,99 +1748,143 @@ class Service:
         )
         return 201, {"item": values}
 
-    def action_center(self):
-        """Small, workspace-scoped list of work that needs a human decision."""
+    def action_center(self, workspace_settings=None):
+        """Workspace-scoped decision list, fetched in one database round-trip."""
         today = business_date().isoformat()
         month = today[:7] + "-01"
-        items = []
-        settings = json.loads(self.con.execute(
-            "SELECT settings FROM workspaces WHERE id=?", (self.wid,)
-        ).fetchone()[0])
+        if workspace_settings is None:
+            raw_settings = self.con.execute(
+                "SELECT settings FROM workspaces WHERE id=?", (self.wid,)
+            ).fetchone()
+            settings = json.loads(raw_settings["settings"]) if raw_settings else {}
+        else:
+            settings = workspace_settings if isinstance(workspace_settings, dict) else {}
         pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
         first_stage = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
+        stale_before = stamp() - 2 * 86400
 
-        def add(kind, row, title, action, detail="", due_date="", amount=0):
-            items.append(
-                dict(
-                    kind=kind,
-                    entity_id=row["id"],
-                    title=title,
-                    detail=detail,
-                    action=action,
-                    due_date=due_date,
-                    amount_kopecks=amount,
-                    currency=row["currency"] if "currency" in row.keys() else "RUB",
-                )
+        # Preserve the previous category order and each category's own limit.
+        # Combining the small lists avoids many sequential round-trips to Supabase.
+        rows = self.con.execute(
+            """
+            WITH
+            lead_action_rows AS (
+                SELECT 'lead' AS kind, id AS entity_id, 'Новая заявка' AS title,
+                       name AS detail, 'Открыть заявку' AS action, '' AS due_date,
+                       0 AS amount_kopecks, 'RUB' AS currency, 0 AS priority,
+                       CAST(created_at AS TEXT) AS sort_key, 0 AS sort_ascending
+                FROM leads
+                WHERE workspace_id=? AND status=?
+                ORDER BY created_at DESC LIMIT 5
+            ),
+            approved_quote_action_rows AS (
+                SELECT 'quote', q.id, 'Смета согласована', q.title, 'Создать проект',
+                       '', 0, q.currency, 1, CAST(q.approved_at AS TEXT), 0
+                FROM quotes q LEFT JOIN projects p ON p.quote_id=q.id
+                WHERE q.workspace_id=? AND q.approval_state='approved' AND p.id IS NULL
+                ORDER BY q.approved_at DESC LIMIT 5
+            ),
+            changes_quote_action_rows AS (
+                SELECT 'quote', id, 'Клиент запросил изменения', title, 'Открыть смету',
+                       '', 0, currency, 2, CAST(updated_at AS TEXT), 0
+                FROM quotes
+                WHERE workspace_id=? AND approval_state='changes_requested'
+                ORDER BY updated_at DESC LIMIT 5
+            ),
+            stale_quote_action_rows AS (
+                SELECT 'quote', id, 'Смета ждёт согласования', title, 'Открыть смету',
+                       '', 0, currency, 3, CAST(sent_at AS TEXT), 1
+                FROM quotes
+                WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=?
+                ORDER BY sent_at LIMIT 5
+            ),
+            task_action_rows AS (
+                SELECT 'task', id,
+                       CASE WHEN due_date=? THEN 'Срок задачи сегодня' ELSE 'Задача просрочена' END,
+                       name, 'Открыть задачу', due_date, 0, 'RUB', 4,
+                       CAST(due_date AS TEXT), 1
+                FROM tasks
+                WHERE workspace_id=? AND status!='done' AND due_date!='' AND due_date<=?
+                ORDER BY due_date LIMIT 5
+            ),
+            overdue_project_action_rows AS (
+                SELECT 'project', p.id, 'Ожидается оплата', p.name, 'Открыть проект',
+                       p.due_date,
+                       p.amount_kopecks-coalesce((
+                           SELECT sum(x.amount_kopecks) FROM project_payments x
+                           WHERE x.project_id=p.id AND x.workspace_id=?
+                       ),0),
+                       p.currency, 5, CAST(p.due_date AS TEXT), 1
+                FROM projects p
+                WHERE p.workspace_id=? AND p.status NOT IN ('completed','cancelled')
+                  AND p.due_date!='' AND p.due_date<?
+                  AND p.amount_kopecks>coalesce((
+                      SELECT sum(x.amount_kopecks) FROM project_payments x
+                      WHERE x.project_id=p.id AND x.workspace_id=?
+                  ),0)
+                ORDER BY p.due_date LIMIT 5
+            ),
+            today_project_action_rows AS (
+                SELECT 'project', id, 'Срок проекта сегодня', name, 'Открыть проект',
+                       due_date, 0, currency, 6, CAST(updated_at AS TEXT), 0
+                FROM projects
+                WHERE workspace_id=? AND status NOT IN ('completed','cancelled') AND due_date=?
+                ORDER BY updated_at DESC LIMIT 5
+            ),
+            viewed_quote_action_rows AS (
+                SELECT 'quote', id, 'Клиент вернулся к смете', title, 'Открыть смету',
+                       '', 0, currency, 7, CAST(first_viewed_at AS TEXT), 0
+                FROM quotes
+                WHERE workspace_id=? AND approval_state='viewed' AND view_count>=2
+                ORDER BY first_viewed_at DESC LIMIT 5
+            ),
+            action_rows AS (
+                SELECT * FROM lead_action_rows
+                UNION ALL SELECT * FROM approved_quote_action_rows
+                UNION ALL SELECT * FROM changes_quote_action_rows
+                UNION ALL SELECT * FROM stale_quote_action_rows
+                UNION ALL SELECT * FROM task_action_rows
+                UNION ALL SELECT * FROM overdue_project_action_rows
+                UNION ALL SELECT * FROM today_project_action_rows
+                UNION ALL SELECT * FROM viewed_quote_action_rows
             )
+            SELECT kind, entity_id, title, detail, action, due_date, amount_kopecks, currency
+            FROM action_rows
+            ORDER BY priority,
+                     CASE WHEN sort_ascending=1 THEN sort_key END ASC,
+                     CASE WHEN sort_ascending=0 THEN sort_key END DESC
+            LIMIT 8
+            """,
+            (
+                self.wid, first_stage,
+                self.wid,
+                self.wid,
+                self.wid, stale_before,
+                today, self.wid, today,
+                self.wid, self.wid, today, self.wid,
+                self.wid, today,
+                self.wid,
+            ),
+        ).fetchall()
 
-        for row in self.con.execute(
-            "SELECT id,name FROM leads WHERE workspace_id=? AND status=? "
-            "ORDER BY created_at DESC LIMIT 5",
-            (self.wid, first_stage),
-        ):
-            add("lead", row, "Новая заявка", "Открыть заявку", row["name"])
-        for row in self.con.execute(
-            "SELECT q.id,q.title,q.currency FROM quotes q LEFT JOIN projects p ON p.quote_id=q.id "
-            "WHERE q.workspace_id=? AND q.approval_state='approved' AND p.id IS NULL "
-            "ORDER BY q.approved_at DESC LIMIT 5",
-            (self.wid,),
-        ):
-            add("quote", row, "Смета согласована", "Создать проект", row["title"])
-        for row in self.con.execute(
-            "SELECT id,title,currency FROM quotes WHERE workspace_id=? AND approval_state='changes_requested' "
-            "ORDER BY updated_at DESC LIMIT 5",
-            (self.wid,),
-        ):
-            add("quote", row, "Клиент запросил изменения", "Открыть смету", row["title"])
-        for row in self.con.execute("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
-            add('quote',row,'Смета ждёт согласования','Открыть смету',row['client']+' · '+row['title'])
-        for row in self.con.execute(
-            "SELECT id,name,due_date FROM tasks WHERE workspace_id=? AND status!='done' "
-            "AND due_date!='' AND due_date<=? ORDER BY due_date LIMIT 5",
-            (self.wid, today),
-        ):
-            add("task", row, "Срок задачи сегодня" if row["due_date"] == today else "Задача просрочена", "Открыть задачу", row["name"], row["due_date"])
-        for row in self.con.execute(
-            "SELECT p.id,p.name,p.currency,p.due_date,p.amount_kopecks-"
-            "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
-            "WHERE x.project_id=p.id AND x.workspace_id=?),0) AS remaining "
-            "FROM projects p WHERE p.workspace_id=? AND p.status NOT IN ('completed','cancelled') "
-            "AND p.due_date!='' AND p.due_date<? AND p.amount_kopecks>"
-            "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
-            "WHERE x.project_id=p.id AND x.workspace_id=?),0) "
-            "ORDER BY p.due_date LIMIT 5",
-            (self.wid, self.wid, today, self.wid),
-        ):
-            add("project", row, "Ожидается оплата", "Открыть проект", row["name"], row["due_date"], row["remaining"])
-        for row in self.con.execute(
-            "SELECT id,name,due_date,currency FROM projects WHERE workspace_id=? "
-            "AND status NOT IN ('completed','cancelled') AND due_date=? "
-            "ORDER BY updated_at DESC LIMIT 5",
-            (self.wid, today),
-        ):
-            add("project", row, "Срок проекта сегодня", "Открыть проект", row["name"], today)
-        for row in self.con.execute(
-            "SELECT id,title,currency,view_count FROM quotes WHERE workspace_id=? "
-            "AND approval_state='viewed' AND view_count>=2 "
-            "ORDER BY first_viewed_at DESC LIMIT 5",
-            (self.wid,),
-        ):
-            add("quote", row, "Клиент вернулся к смете", "Открыть смету", row["title"])
-
-        active = self.con.execute(
-            "SELECT count(*) FROM projects WHERE workspace_id=? AND status NOT IN ('completed','cancelled')",
-            (self.wid,),
-        ).fetchone()[0]
-        waiting = self.con.execute(
-            "SELECT count(*) FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' "
-            "AND p.amount_kopecks>coalesce((SELECT sum(x.amount_kopecks) "
-            "FROM project_payments x WHERE x.project_id=p.id AND x.workspace_id=?),0)",
-            (self.wid, self.wid),
-        ).fetchone()[0]
-        approved = self.con.execute(
-            "SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?",
-            (self.wid, business_month_start()),
-        ).fetchone()[0]
+        # One scalar aggregate computes the summary counts; receipts are grouped
+        # separately because the response is keyed by currency.
+        summary = self.con.execute(
+            """
+            SELECT
+                (SELECT count(*) FROM projects
+                 WHERE workspace_id=? AND status NOT IN ('completed','cancelled')) AS active_projects,
+                (SELECT count(*) FROM projects p
+                 WHERE p.workspace_id=? AND p.status!='cancelled'
+                   AND p.amount_kopecks>coalesce((
+                       SELECT sum(x.amount_kopecks) FROM project_payments x
+                       WHERE x.project_id=p.id AND x.workspace_id=?
+                   ),0)) AS waiting_payments,
+                (SELECT count(*) FROM quotes
+                 WHERE workspace_id=? AND approved_at>=?) AS approved_this_month
+            """,
+            (self.wid, self.wid, self.wid, self.wid, business_month_start()),
+        ).fetchone()
         received = {
             row["currency"]: row["amount"]
             for row in self.con.execute(
@@ -1851,42 +1895,53 @@ class Service:
             )
         }
         return dict(
-            items=items[:8],
-            summary=dict(
-                active_projects=active,
-                waiting_payments=waiting,
-                approved_this_month=approved,
-                received_this_month=received,
-            ),
+            items=[dict(row) for row in rows],
+            summary={
+                "active_projects": summary["active_projects"],
+                "waiting_payments": summary["waiting_payments"],
+                "approved_this_month": summary["approved_this_month"],
+                "received_this_month": received,
+            },
         )
 
     def overview(self, limit=30):
+        # Consolidate three currency aggregates into one statement instead of
+        # paying for sequential database round-trips for every summary panel.
         project_totals = self.con.execute(
-            "SELECT currency,sum(amount_kopecks) AS revenue,sum(internal_cost) AS planned_cost,count(*) AS projects FROM projects WHERE workspace_id=? AND status!=? GROUP BY currency",
-            (self.wid, "cancelled"),
+            """
+            WITH
+            project_totals AS (
+                SELECT currency, sum(amount_kopecks) AS revenue,
+                       sum(internal_cost) AS planned_cost, count(*) AS projects
+                FROM projects
+                WHERE workspace_id=? AND status!=?
+                GROUP BY currency
+            ),
+            paid_totals AS (
+                SELECT p.currency, coalesce(sum(x.amount_kopecks),0) AS amount
+                FROM project_payments x JOIN projects p ON x.project_id=p.id
+                WHERE x.workspace_id=? AND p.workspace_id=?
+                GROUP BY p.currency
+            ),
+            expense_totals AS (
+                SELECT p.currency, coalesce(sum(x.amount_kopecks),0) AS amount
+                FROM expenses x JOIN projects p ON x.project_id=p.id
+                WHERE x.workspace_id=? AND p.workspace_id=?
+                GROUP BY p.currency
+            )
+            SELECT totals.currency, totals.revenue, totals.planned_cost, totals.projects,
+                   coalesce(paid.amount,0) AS paid, coalesce(costs.amount,0) AS actual_cost
+            FROM project_totals totals
+            LEFT JOIN paid_totals paid ON paid.currency=totals.currency
+            LEFT JOIN expense_totals costs ON costs.currency=totals.currency
+            ORDER BY totals.currency
+            """,
+            (self.wid, "cancelled", self.wid, self.wid, self.wid, self.wid),
         ).fetchall()
-        paid_by_currency = {}
-        costs_by_currency = {}
-        if project_totals:
-            paid_by_currency = {
-                row["currency"]: row["amount"]
-                for row in self.con.execute(
-                    "SELECT p.currency,coalesce(sum(x.amount_kopecks),0) AS amount FROM project_payments x JOIN projects p ON x.project_id=p.id WHERE x.workspace_id=? AND p.workspace_id=? GROUP BY p.currency",
-                    (self.wid, self.wid),
-                )
-            }
-            costs_by_currency = {
-                row["currency"]: row["amount"]
-                for row in self.con.execute(
-                    "SELECT p.currency,coalesce(sum(x.amount_kopecks),0) AS amount FROM expenses x JOIN projects p ON x.project_id=p.id WHERE x.workspace_id=? AND p.workspace_id=? GROUP BY p.currency",
-                    (self.wid, self.wid),
-                )
-            }
         currencies = []
         for row in project_totals:
-            currency = row["currency"]
-            paid = paid_by_currency.get(currency, 0)
-            costs = costs_by_currency.get(currency, 0)
+            paid = row["paid"]
+            costs = row["actual_cost"]
             currencies.append(
                 dict(
                     row,
@@ -2148,7 +2203,8 @@ class Service:
                 if quote["expires_at"] and quote["expires_at"] < stamp() and quote["approval_state"] in ("sent", "viewed", "changes_requested"):
                     quote["approval_state"] = "expired"
                 recent.append(quote)
-            return 200, {**context, "overview": overview, "actions": self.action_center(), "capabilities": capabilities, "quotes": recent}
+            actions = self.action_center(context.get("workspace", {}).get("settings", {}))
+            return 200, {**context, "overview": overview, "actions": actions, "capabilities": capabilities, "quotes": recent}
         if kind == "assistant":
             from backend.assistant import route
 
