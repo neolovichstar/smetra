@@ -66,13 +66,10 @@ fetch('/api/auth/providers').then(r=>r.json()).then(data=>{if(data.rustore_url&&
  const scene=document.querySelector('[data-motion-scene]');
  const finePointer=matchMedia('(hover: hover) and (pointer: fine)');
  if(scene&&!reducedMotion&&finePointer.matches){
-  const hero=scene.closest('.black-hero');
   let rect=null,frame=0,x=0,y=0;
   const paint=()=>{
    scene.style.setProperty('--scene-x',`${(x*10).toFixed(2)}px`);
    scene.style.setProperty('--scene-y',`${(y*10).toFixed(2)}px`);
-   hero?.style.setProperty('--hero-shift-x',`${(x*-3).toFixed(2)}px`);
-   hero?.style.setProperty('--hero-shift-y',`${(y*-3).toFixed(2)}px`);
    frame=0;
   };
   const reset=()=>{
