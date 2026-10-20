@@ -3,6 +3,7 @@
 const portalParams = new URLSearchParams(window.location.search);
 const portalQuote = portalParams.get('quote');
 const portalIntake = portalParams.get('intake');
+try { const referral=portalParams.get('ref'); if(referral&&referral.length<=80)sessionStorage.setItem('smetra.referral',referral); } catch {}
 if (portalQuote || portalIntake) {
   document.addEventListener('DOMContentLoaded', async () => {
     const host = document.querySelector('#public-quote');
