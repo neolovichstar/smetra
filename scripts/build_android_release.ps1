@@ -6,6 +6,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$androidGradleFile = Join-Path $repo 'apps\mobile\app\build.gradle'
+$androidGradleText = Get-Content -LiteralPath $androidGradleFile -Raw -Encoding UTF8
+$versionCodeMatch = [regex]::Match($androidGradleText, '(?m)^\s*versionCode\s+(\d+)\s*$')
+$versionNameMatch = [regex]::Match($androidGradleText, "(?m)^\s*versionName\s+'([^']+)'\s*$")
+if (-not $versionCodeMatch.Success -or -not $versionNameMatch.Success) {
+    throw 'Cannot read Android versionCode/versionName from app/build.gradle.'
+}
+$expectedVersionCode = [int]$versionCodeMatch.Groups[1].Value
+$expectedVersionName = $versionNameMatch.Groups[1].Value
 $localSigning = Join-Path $env:USERPROFILE '.smetra\android'
 $localManifest = Join-Path $localSigning 'signing.json'
 if (-not $env:SIGNING_STORE_FILE -and (Test-Path -LiteralPath $localManifest -PathType Leaf)) {
@@ -64,7 +73,7 @@ try {
     $badging = & $aapt dump badging $apk
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read APK manifest.' }
     $package = $badging | Where-Object { $_ -like 'package:*' } | Select-Object -First 1
-    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='33'" -or $package -notmatch "versionName='1\.7\.21'") {
+    if ($package -notmatch "name='ru\.smetra\.mobile'" -or $package -notmatch "versionCode='$expectedVersionCode'" -or $package -notmatch "versionName='$([regex]::Escape($expectedVersionName))'") {
         throw "Unexpected APK identity: $package"
     }
     $signature = & $apksigner verify --verbose --print-certs $apk 2>&1
@@ -76,13 +85,16 @@ try {
     if ($expected.Length -ne 64) { throw 'RUSTORE_CERT_SHA256 must contain a 64-digit SHA-256 fingerprint.' }
     if ($expected -ne $fingerprint) { throw 'Signing certificate differs from RUSTORE_CERT_SHA256. Do not publish this APK.' }
 
-    $destination = Join-Path $repo 'dist\smetra-mobile-1.7.21-release.apk'
+    $destination = Join-Path $repo "dist\smetra-mobile-$expectedVersionName-release.apk"
     New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
     Copy-Item -LiteralPath $apk -Destination $destination -Force
+    $fileSha256 = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
+    "$fileSha256  $(Split-Path -Leaf $destination)" | Set-Content -LiteralPath "$destination.sha256" -Encoding ASCII
     Write-Output "APK: $destination"
     Write-Output "Package: $package"
     Write-Output "Certificate SHA-256: $fingerprint"
-    Write-Output "File SHA-256: $((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash)"
+    Write-Output "File SHA-256: $fileSha256"
+    Write-Output "Checksum file: $destination.sha256"
 } finally {
     Pop-Location
 }
