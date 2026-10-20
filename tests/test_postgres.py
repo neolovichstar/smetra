@@ -11,6 +11,14 @@ class PostgresQueryTests(unittest.TestCase):
             "SELECT count(*) AS projects,'quotes ? 50%%' AS label FROM smetra.projects WHERE id=%s",
         )
 
+    def test_admin_subscription_count_uses_portable_timestamp_parameter(self):
+        sql = "SELECT count(*) FROM users WHERE entitlement_until > ? AND deleted_at IS NULL"
+        self.assertEqual(
+            translate(sql, "smetra", True),
+            "SELECT count(*) FROM smetra.users WHERE entitlement_until > %s AND deleted_at IS NULL",
+        )
+        self.assertNotIn("unixepoch()", sql.lower())
+
     def test_join_and_conflict_references(self):
         self.assertEqual(
             translate(
