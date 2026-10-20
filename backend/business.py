@@ -426,6 +426,16 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "024_push_foreign_key_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "025_query_hot_path_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
