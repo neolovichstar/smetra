@@ -17,9 +17,10 @@ async function api(path, options = {}) {
   const method=(options.method||'GET').toUpperCase();
   const owner=user;
   const share=method==='GET'&&Object.keys(options).length===0;
+  const cacheableRead=share&&!/^\/(public|auth|webhooks|cron|mobile)(\/|$)/.test(path);
   const key=JSON.stringify([user?.id||'',workspaceId||'',path]);
   if(method!=='GET'){apiRequests.clear();apiCache.clear();}
-  if(share){
+  if(cacheableRead){
     const cached=apiCache.get(key);
     if(cached&&cached.expiresAt>Date.now())return JSON.parse(cached.payload);
     if(cached)apiCache.delete(key);
@@ -34,7 +35,7 @@ async function api(path, options = {}) {
       let result;
       try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
       if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
-      if(share){
+      if(cacheableRead){
         const payload=JSON.stringify(result);
         if(payload.length<=256000){
           if(apiCache.size>=API_CACHE_MAX_ENTRIES&&!apiCache.has(key))apiCache.delete(apiCache.keys().next().value);
