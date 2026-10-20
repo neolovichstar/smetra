@@ -477,3 +477,17 @@
   background: var(--smetra-surface-hover) !important;
   color: var(--smetra-text) !important;
 }
+
+
+/* Win over the earlier compatibility rule that removed the assistant's entire outer border. */
+.workspace-page #content .assistant-composer #assistant-form {
+  border: 1px solid var(--smetra-line-strong) !important;
+  border-radius: 18px !important;
+  background: var(--smetra-input) !important;
+  box-shadow: none !important;
+}
+.workspace-page #content .assistant-composer #assistant-form:focus-within {
+  border-color: #777 !important;
+  background: var(--smetra-surface) !important;
+  box-shadow: 0 0 0 3px #80808016 !important;
+}
