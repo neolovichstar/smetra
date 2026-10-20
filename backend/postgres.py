@@ -150,6 +150,7 @@ class Connection:
         self.runtime = runtime
         self.scoped = False
         self.nested = False
+        self.workspace_lock_key = None
         database_url = os.environ["RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"]
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
@@ -169,6 +170,11 @@ class Connection:
                 "SELECT set_config('smetra.session_hash',%s,true), "
                 "set_config('smetra.workspace_id',%s,true)",
                 (session_hash, workspace_id),
+            )
+            self.workspace_lock_key = int.from_bytes(
+                hashlib.sha256((self.schema + ":workspace:" + workspace_id).encode("utf-8")).digest()[:8],
+                "big",
+                signed=True,
             )
             self.scoped = True
         except Exception:
@@ -200,8 +206,20 @@ class Connection:
                     self.nested = True
                 else:
                     self.raw.execute("BEGIN")
-                # Preserve SQLite's atomic read/check/write semantics across instances.
+                # Coordinate runtime writers with global auth/payment/webhook transactions,
+                # while allowing unrelated workspaces to write concurrently. Global (non-runtime)
+                # transactions take the exclusive schema lock; runtime transactions take it shared,
+                # then serialize only against writers for the same workspace.
                 self.raw.execute("SET LOCAL lock_timeout='15s'")
+                if self.runtime:
+                    self.raw.execute(
+                        "SELECT pg_advisory_xact_lock_shared(%s)", (self.lock_key,)
+                    )
+                    if self.workspace_lock_key is None:
+                        raise RuntimeError("Runtime write transaction has no workspace lock")
+                    return self.raw.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", (self.workspace_lock_key,)
+                    )
                 return self.raw.execute(
                     "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
                 )
