@@ -22,6 +22,8 @@ Current threat model, unresolved risks and verification status: `docs/THREAT_MOD
 - GitHub Actions in CI/deployment are pinned to immutable commit SHAs. CodeQL is configured for Python, JavaScript/TypeScript and Java/Kotlin; Dependabot is configured for Actions, Python and Gradle. Review first remote results; configuration alone does not prove scans passed.
 - Android CI attaches a versioned debug APK and checksum for QA. A separate manual signed-release workflow uses `android-release`, verifies the known certificate and creates only a draft GitHub Release. The owner must configure required reviewers and signing secrets first.
 
+- Gitleaks v3.0.0 is configured to scan the full Git history on pushes, pull requests, and a weekly schedule, with PR comments and SARIF artifacts disabled to reduce data exposure. The initial scan on the latest branch head is pending; findings must be validated and actual exposed credentials rotated, not merely deleted from the latest file.
+
 ## Before a paid release
 
 - Configure and test SMTP delivery, email verification, and password reset. Until then, `ALLOW_UNVERIFIED_SIGNUP=1` allows unverified email accounts so onboarding works; this is a deliberate temporary limitation.
