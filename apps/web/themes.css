@@ -62,7 +62,7 @@
   --stroke:#2d2d30;--soft:#222224;--surface-base:#0b0b0c;--surface-input:#171719;
   --surface-hover:#222224;--action:#e6e6e6;--action-hover:#fff;--accent:#e6e6e6;
   --accentText:#111;--focus:#a4a4a4;--cabinet-line:#2d2d30;--cabinet-blue:#dedede;
-  background:#0b0b0c;color:#f2f2f2;color-scheme:dark;
+  background:#000;color:#f2f2f2;color-scheme:dark;
 }
 :root[data-theme=light] .workspace-page {
   --bg:#f4f4f4;--paper:#fff;--panel:#fff;--ink:#181818;--text-primary:#181818;
