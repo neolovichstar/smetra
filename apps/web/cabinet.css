@@ -22,13 +22,13 @@
 .sidebar-scroll::-webkit-scrollbar{display:none}
 .sidebar-group{display:flex;flex-direction:column;padding:16px 0 17px;border-bottom:1px solid #1e1e1e}
 .sidebar-group:last-child{border:0}
-.sidebar-heading{padding:0 12px 9px;color:#6b6b6b;letter-spacing:.14em;font-size:10px;font-weight:700}
+.sidebar-heading{padding:0 12px 9px;color:#8b8b8b;letter-spacing:.14em;font-size:10px;font-weight:700}
 .workspace-page .sidebar-group button{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:37px;padding:8px 12px;border:0;border-radius:7px;background:transparent;color:#aaaaaa;font-size:12px;font-weight:500;text-align:left;transition:background .18s,color .18s}
 
 .workspace-page .sidebar-group button.active{background:#1c1c1c;color:#f1f1f1;box-shadow:inset 2px 0 var(--cabinet-accent)}
 .sidebar-accent{width:5px;height:5px;border-radius:50%;background:var(--accent)}
 .sidebar-foot{margin-top:auto;padding:13px 24px 19px;border-top:1px solid var(--cabinet-line)}
-.sidebar-foot>span{display:block;color:#6d6d6d;font-size:10px;letter-spacing:.12em;margin-bottom:8px}
+.sidebar-foot>span{display:block;color:#8f8f8f;font-size:10px;letter-spacing:.12em;margin-bottom:8px}
 .workspace-page .sidebar-foot button{width:100%;display:flex;align-items:center;justify-content:space-between;padding:7px 0;border:0;background:none;color:#b2b2b2;text-align:left;font-size:12px}
 .workspace-page .sidebar-foot button:hover{color:#fff}
 .workspace-page .main{width:100%;max-width:1600px;margin:0 auto;padding:42px clamp(28px,4.4vw,78px) 100px;background:#090909}
