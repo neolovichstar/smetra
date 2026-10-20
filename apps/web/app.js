@@ -12,7 +12,8 @@ const API_CACHE_TTL=5000;
 let apiCacheEpoch=0;
 const cloneApiValue=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 function clearApiCache(){apiCacheEpoch++;apiResponseCache.clear();apiRequests.clear();}
-function cacheableApiRead(path){const endpoint=String(path).split('?')[0];return !/^\/(?:me|auth|admin|public|billing|assistant|notifications|activity)(?:\/|$)/.test(endpoint)&&!/^\/files\/[^?]+\/metadata$/.test(endpoint)}
+const CACHEABLE_GET_ROUTES=new Set(['/dashboard','/workspace','/quotes','/clients','/catalog','/projects','/tasks','/leads','/overview','/receipts','/expenses','/documents','/files','/workspace/members','/custom-fields','/search']);
+function cacheableApiRead(path){return CACHEABLE_GET_ROUTES.has(String(path).split('?')[0])}
 async function api(path, options = {}) {
   const headers = {'Content-Type':'application/json',...options.headers};
   const workspaceId=sessionStorage.getItem('workspace_id');
