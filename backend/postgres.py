@@ -5,6 +5,7 @@ Supavisor transaction pooling needs neither session state nor prepared queries.
 """
 
 import hashlib
+from functools import lru_cache
 import os
 import re
 import sqlite3
@@ -109,6 +110,7 @@ def _pool_for(database_url, sslmode):
         return pool
 
 
+@lru_cache(maxsize=2048)
 def translate(sql, schema, parameters=False):
     """Translate our small SQL subset without touching quoted values."""
     ignore = sql.lstrip().upper().startswith("INSERT OR IGNORE")
