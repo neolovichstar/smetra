@@ -68,6 +68,7 @@ const assert = require('node:assert/strict');
     assert.equal(await evaluate("document.querySelector('.workspace-modes').getBoundingClientRect().top >= document.querySelector('.app-nav-brand').getBoundingClientRect().bottom"),true);
     assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44 && document.querySelector('#command-open').getBoundingClientRect().height >= 44"),true);
     assert.equal(await evaluate("document.querySelector('.capture-actions button').getBoundingClientRect().width >= 44"),true);
+    assert.equal(await evaluate("(()=>{const input=document.querySelector('#capture-text'),button=document.querySelector('.capture-actions button');if(!input||!button)return false;const a=input.getBoundingClientRect(),b=button.getBoundingClientRect();return a.width>=100&&a.right<=b.left+1&&b.width<=52&&getComputedStyle(input).visibility!=='hidden'})()"),true,'Mobile estimate input remains visible and does not overlap the compact send button');
     await click('#nav-toggle');assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'true');
     assert.equal(await evaluate("document.querySelector('#sidebar').getBoundingClientRect().top >= document.querySelector('.app-nav').getBoundingClientRect().bottom"),true);
     await wait(300);await shot('mobile-brand-menu-'+width);
