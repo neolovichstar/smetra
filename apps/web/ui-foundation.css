@@ -1,0 +1,431 @@
+/*
+  SMETRA / UI FOUNDATION
+  One shared visual contract for the authenticated workspace.
+  Page styles provide structure; this layer standardizes tokens, type, surfaces and states.
+*/
+:root {
+  --smetra-font: "Onest", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --smetra-gap-1:4px; --smetra-gap-2:8px; --smetra-gap-3:12px; --smetra-gap-4:16px;
+  --smetra-gap-5:20px; --smetra-gap-6:24px; --smetra-gap-8:32px;
+  --smetra-radius-sm:8px; --smetra-radius-md:12px; --smetra-radius-lg:16px; --smetra-radius-xl:20px;
+  --smetra-control-height:44px; --smetra-motion-fast:140ms; --smetra-motion-standard:180ms;
+}
+.workspace-page,:root[data-theme="dark"] .workspace-page {
+  --smetra-system:1;
+  --smetra-bg:#080808; --smetra-surface:#101010; --smetra-surface-raised:#151515; --smetra-surface-hover:#1c1c1c;
+  --smetra-input:#0d0d0d; --smetra-line:#2b2b2d; --smetra-line-strong:#414143;
+  --smetra-text:#f2f2f2; --smetra-text-muted:#b0b0b3; --smetra-text-subtle:#8c8c91;
+  --smetra-action:#e6e6e6; --smetra-action-text:#111111; --smetra-focus:#d2d2d2;
+  --smetra-danger:#f07979; --smetra-positive:#d1d1d1;
+  --bg:var(--smetra-bg); --paper:var(--smetra-surface); --panel:var(--smetra-surface);
+  --ink:var(--smetra-text); --muted:var(--smetra-text-muted); --line:var(--smetra-line); --stroke:var(--smetra-line);
+  --soft:#202020; --accent:var(--smetra-action); --accentText:var(--smetra-action-text); --danger:var(--smetra-danger);
+  --surface-base:var(--smetra-bg); --surface-input:var(--smetra-input); --surface-hover:var(--smetra-surface-hover);
+  --text-primary:var(--smetra-text); --text-secondary:var(--smetra-text-muted); --text-quiet:var(--smetra-text-subtle);
+  --action:var(--smetra-action); --action-hover:#fff; --focus:var(--smetra-focus);
+  --cabinet-muted:var(--smetra-text-muted); --cabinet-line:var(--smetra-line); --cabinet-blue:var(--smetra-action);
+  --chat-surface:#111; --chat-elevated:#191919; --chat-muted:#a5a5a5;
+  --composer-surface:#0d0d0d; --composer-text:var(--smetra-text); --composer-muted:var(--smetra-text-muted);
+  color-scheme:dark; background:var(--smetra-bg); color:var(--smetra-text);
+  font-family:var(--smetra-font); font-size:14px; line-height:1.55; font-synthesis:none; text-size-adjust:100%;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+:root[data-theme="light"] .workspace-page {
+  --smetra-bg:#f6f6f6; --smetra-surface:#fff; --smetra-surface-raised:#f1f1f1; --smetra-surface-hover:#ebebeb;
+  --smetra-input:#fbfbfb; --smetra-line:#dedede; --smetra-line-strong:#c8c8c8;
+  --smetra-text:#181818; --smetra-text-muted:#595959; --smetra-text-subtle:#707070;
+  --smetra-action:#181818; --smetra-action-text:#fff; --smetra-focus:#454545;
+  --smetra-danger:#b42332; --smetra-positive:#343434;
+  --bg:var(--smetra-bg); --paper:var(--smetra-surface); --panel:var(--smetra-surface);
+  --ink:var(--smetra-text); --muted:var(--smetra-text-muted); --line:var(--smetra-line); --stroke:var(--smetra-line);
+  --soft:#eee; --accent:var(--smetra-action); --accentText:var(--smetra-action-text); --danger:var(--smetra-danger);
+  --surface-base:var(--smetra-bg); --surface-input:var(--smetra-input); --surface-hover:var(--smetra-surface-hover);
+  --text-primary:var(--smetra-text); --text-secondary:var(--smetra-text-muted); --text-quiet:var(--smetra-text-subtle);
+  --action:var(--smetra-action); --action-hover:#333; --focus:var(--smetra-focus);
+  --cabinet-muted:var(--smetra-text-muted); --cabinet-line:var(--smetra-line); --cabinet-blue:var(--smetra-action);
+  --chat-surface:#f3f3f3; --chat-elevated:#e9e9e9; --chat-muted:#626262;
+  --composer-surface:#fbfbfb; --composer-text:var(--smetra-text); --composer-muted:var(--smetra-text-muted);
+  color-scheme:light; background:var(--smetra-bg); color:var(--smetra-text);
+}
+
+/* Readability and layout primitives */
+.workspace-page *,.workspace-page *::before,.workspace-page *::after{box-sizing:border-box}
+.workspace-page :where(button,input,select,textarea){font-family:inherit;font-kerning:normal;letter-spacing:normal}
+.workspace-page :where(p,li,dd,dt,label){overflow-wrap:break-word}
+.workspace-page .main{width:100%;min-width:0;max-width:1600px;margin-inline:auto;padding:clamp(24px,3vw,48px) clamp(20px,3.4vw,56px) 76px}
+.workspace-page .main[data-section="settings"],.workspace-page .main[data-section="billing"],.workspace-page .main[data-section="profile"]{max-width:1120px}
+.workspace-page .main :is(h1,h2,h3,h4){margin-top:0;color:var(--smetra-text);font-weight:600;line-height:1.32;letter-spacing:-.02em;text-wrap:pretty}
+.workspace-page .main h1,.workspace-page .topline h1,.workspace-page .dashboard-intro h1{font-size:clamp(28px,2.1vw,34px);line-height:1.25;letter-spacing:-.025em;font-weight:600}
+.workspace-page .main h2{font-size:clamp(20px,1.6vw,24px);line-height:1.35}
+.workspace-page .main h3{font-size:17px;line-height:1.4;letter-spacing:-.012em}
+.workspace-page .main :is(p,li,dd,dt){font-size:14px;line-height:1.65}
+.workspace-page .main p{margin-block:0 12px}
+.workspace-page :is(.eyebrow,.overline,.sidebar-heading,.app-nav-caption,.admin-kicker){font-size:11px;line-height:1.5;letter-spacing:.07em;text-transform:none}
+.workspace-page :is(.muted,.note,.helper-text,.record-description,.field .help,.field .hint){color:var(--smetra-text-muted);font-size:12px;line-height:1.55;letter-spacing:normal}
+.workspace-page :is(.record-meta,.record-line small,.activity-item small,.document-row small,.file-center-row small){color:var(--smetra-text-muted);font-size:12px;line-height:1.5}
+.workspace-page :is(.dashboard-metric strong,.section-finance .stat strong,.admin-metrics strong,.editor-total,.quote-summary strong,.construction-object-right b){font-variant-numeric:tabular-nums lining-nums}
+.workspace-page :is(.record-meta b,.money-row strong,.quote-row .record-meta b,.projects-row .record-meta b,.section-finance .stat strong){white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* Global navigation and sidebar */
+.workspace-page .app-nav{height:64px;min-height:64px;background:var(--smetra-bg);border-bottom:1px solid var(--smetra-line);color:var(--smetra-text)}
+.workspace-page .app-nav-inner{width:100%;height:100%;min-width:0;padding-inline:clamp(16px,2vw,28px);gap:20px}
+.workspace-page .app-nav-brand{min-width:0;gap:14px}
+.workspace-page .app-nav .brand{color:var(--smetra-text);font-family:var(--smetra-font);font-size:21px;font-weight:700;line-height:1;letter-spacing:-.045em}
+.workspace-page .app-nav .brand-mark{color:var(--smetra-text)!important}
+.workspace-page .app-nav-caption{color:var(--smetra-text-subtle);font-size:11px;letter-spacing:.01em}
+.workspace-page .workspace-modes{display:inline-flex;align-items:center;gap:3px;min-width:0;padding:4px;border:1px solid var(--smetra-line);border-radius:999px;background:var(--smetra-surface)}
+.workspace-page .workspace-modes button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:88px;min-height:36px;padding:8px 14px;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--smetra-text-muted);font-size:13px;font-weight:550;line-height:1.2;white-space:nowrap}
+.workspace-page .workspace-modes button[aria-pressed="true"]{background:var(--smetra-surface-raised);border-color:var(--smetra-line);color:var(--smetra-text)}
+.workspace-page .app-nav-actions{min-width:0;gap:12px}
+.workspace-page .nav-search{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-width:40px;min-height:40px;padding:8px 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--smetra-text-muted);font-size:12px}
+.workspace-page .nav-search:hover{background:var(--smetra-surface-hover);border-color:var(--smetra-line);color:var(--smetra-text)}
+.workspace-page .nav-search kbd{padding:3px 6px;border:1px solid var(--smetra-line);border-radius:5px;background:var(--smetra-surface);color:var(--smetra-text-subtle);font:inherit;font-size:10px}
+.workspace-page .nav-user{min-width:0;max-width:210px;overflow:hidden;color:var(--smetra-text);font-size:12px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
+.workspace-page .app-shell{grid-template-columns:232px minmax(0,1fr);min-width:0}
+.workspace-page .sidebar{width:auto;min-width:0;border-right:1px solid var(--smetra-line);background:var(--smetra-bg);color:var(--smetra-text)}
+.workspace-page .workspace-label{min-width:0;padding:20px 20px 16px}
+.workspace-page .workspace-label strong{color:var(--smetra-text);font-size:14px;font-weight:600;line-height:1.4}
+.workspace-page .sidebar-group{display:grid;gap:3px;padding:8px 12px}
+.workspace-page .sidebar-heading{margin:16px 10px 8px;color:var(--smetra-text-subtle);font-size:11px;letter-spacing:.04em}
+.workspace-page .sidebar-group button{display:flex;align-items:center;gap:11px;width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--smetra-text-muted);font-size:13px;font-weight:500;line-height:1.35;text-align:left}
+.workspace-page .sidebar-group button:hover{background:var(--smetra-surface);color:var(--smetra-text)}
+.workspace-page .sidebar-group button.active{background:var(--smetra-surface-raised);border-color:var(--smetra-line);box-shadow:inset 2px 0 var(--smetra-action);color:var(--smetra-text)}
+.workspace-page .sidebar-group button.active::after{background:var(--smetra-text)}
+.workspace-page .sidebar-group button :is(.icon,svg),.workspace-page .sidebar-group button::before{flex:0 0 auto}
+.workspace-page .sidebar-disclosure{min-height:44px;padding-inline:12px;color:var(--smetra-text-muted);font-size:12px}
+.workspace-page .sidebar-foot{padding:16px 20px max(18px,env(safe-area-inset-bottom));border-top:1px solid var(--smetra-line)}
+.workspace-page .desktop-menu-toggle,.workspace-page .nav-toggle{display:inline-flex;align-items:center;justify-content:center;width:40px;min-width:40px;height:40px;min-height:40px;border-radius:10px;color:var(--smetra-text-muted)}
+
+/* Buttons and icon controls */
+.workspace-page :is(.btn,.icon-button,.assistant-thread-action,.admin-refresh,.construction-upload,.construction-fact-open,.construction-price-tools){font-family:inherit;font-weight:550;letter-spacing:normal;transition:color var(--smetra-motion-fast) ease,background var(--smetra-motion-fast) ease,border-color var(--smetra-motion-fast) ease,box-shadow var(--smetra-motion-fast) ease}
+.workspace-page .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:10px 15px;border:1px solid var(--smetra-line-strong);border-radius:10px;background:transparent;color:var(--smetra-text);font-size:13px;font-weight:550;line-height:1.3;text-align:center;text-decoration:none;white-space:normal}
+.workspace-page .btn:hover:not(:disabled){background:var(--smetra-surface-hover);border-color:var(--smetra-line-strong);color:var(--smetra-text);box-shadow:none}
+.workspace-page .btn:active:not(:disabled){transform:translateY(1px)}
+.workspace-page .btn.primary,.workspace-page .btn.primary:hover:not(:disabled){background:var(--smetra-action);border-color:var(--smetra-action);color:var(--smetra-action-text);box-shadow:none}
+.workspace-page .btn.primary:active:not(:disabled){background:var(--smetra-action)}
+.workspace-page .btn.small{min-height:38px;padding:8px 12px;font-size:12px}
+.workspace-page :is(.icon-button,.assistant-options summary,.assistant-history summary){display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--smetra-text-muted)}
+.workspace-page :is(.icon-button,.assistant-options summary,.assistant-history summary):hover{border-color:var(--smetra-line);background:var(--smetra-surface-hover);color:var(--smetra-text)}
+.workspace-page .btn.danger,.workspace-page .danger,.workspace-page [data-danger="true"]{color:var(--smetra-danger)}
+.workspace-page :is(button,.btn,input,textarea,select):disabled{cursor:not-allowed;opacity:.52;transform:none}
+.workspace-page :is(button,a,input,textarea,select,[tabindex]):focus-visible{outline:2px solid var(--smetra-focus);outline-offset:2px}
+.workspace-page #auth :is(input,textarea,select):focus,.workspace-page #auth :is(input,textarea,select):focus-visible{border:0!important;outline:0!important;box-shadow:none!important}
+
+/* Form controls: a consistent field height and label rhythm. */
+.workspace-page .main :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),textarea,select),
+.workspace-page .main .field :is(input,textarea,select),.workspace-page .catalog-picker>input,
+.workspace-page .admin-search input,.workspace-page .admin-filter select,.workspace-page .file-editor-fields :is(input,select){
+  width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid var(--smetra-line-strong);border-radius:10px;
+  background:var(--smetra-input);color:var(--smetra-text);font-family:inherit;font-size:14px;font-weight:400;line-height:1.45;letter-spacing:normal;box-shadow:none
+}
+.workspace-page .main :is(input,textarea,select)::placeholder,.workspace-page :is(.admin-search input,.catalog-picker>input)::placeholder{color:var(--smetra-text-subtle);opacity:1}
+.workspace-page .main :is(input,textarea,select):focus,.workspace-page .main :is(input,textarea,select):focus-visible,
+.workspace-page .main .field :is(input,textarea,select):focus,.workspace-page .main .field :is(input,textarea,select):focus-visible,
+.workspace-page .admin-search input:focus,.workspace-page .admin-filter select:focus{
+  border-color:var(--smetra-line-strong);outline:2px solid color-mix(in srgb,var(--smetra-focus) 48%,transparent);outline-offset:1px;box-shadow:none
+}
+.workspace-page .main textarea{min-height:88px;max-height:min(45vh,320px);resize:none!important;overflow-wrap:anywhere}
+.workspace-page .main .field>label,.workspace-page .file-editor-fields label,.workspace-page .construction-price-controls label{display:block;margin-bottom:7px;color:var(--smetra-text-muted);font-size:13px;font-weight:500;line-height:1.45}
+.workspace-page .main .field,.workspace-page .main form .field{min-width:0;margin-bottom:16px}
+.workspace-page .main .field :is(.help,.hint,small){display:block;margin-top:6px;color:var(--smetra-text-muted);font-size:12px;line-height:1.5}
+.workspace-page #auth :is(input:not([type="checkbox"]):not([type="radio"]),textarea,select){border:0!important;outline:0!important;box-shadow:none!important;background:#080808!important;color:#f1f1f1!important}
+:root[data-theme="light"] .workspace-page #auth :is(input:not([type="checkbox"]):not([type="radio"]),textarea,select){background:#fff!important;color:#181818!important}
+
+/* Section headers, toolbars and reusable surfaces */
+.workspace-page .topline{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px 24px;margin-bottom:28px}
+.workspace-page .topline h1{margin:0 0 6px}
+.workspace-page .topline p{max-width:68ch;margin:0;color:var(--smetra-text-muted);font-size:14px;line-height:1.6}
+.workspace-page :is(.topline-actions,.form-actions,.attachment-actions,.quote-actions,.record-actions,.admin-controls){display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.workspace-page :is(.section-top,.construction-section-title,.admin-section-head,.file-preview-top,.file-editor-top,.file-editor-history-head){display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 18px}
+.workspace-page :is(.section-top,.admin-section-head){margin-bottom:14px}
+.workspace-page :is(.section-top h2,.section-top h3,.admin-section-head h2,.construction-section-title h2){margin:0;font-size:18px;line-height:1.35;font-weight:600}
+.workspace-page :is(.section-top p,.admin-section-head p){margin:5px 0 0;color:var(--smetra-text-muted);font-size:13px;line-height:1.55}
+.workspace-page :is(.filter-row,.catalog-toolbar,.editor-toolbar,.file-office-toolbar,.quote-review-toolbar){display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.workspace-page .workspace-section{min-width:0;margin-block:24px}
+.workspace-page .workspace-section+.workspace-section{padding-top:24px;border-top:1px solid var(--smetra-line)}
+.workspace-page .main :is(.panel,.stat,.table-wrap,.assistant-proposal,.assistant-context,.assistant-edit-diff,.file-editor-preview,.file-editor-history,.admin-ticket,.admin-dialog,.file-preview-dialog,.file-office-body){
+  border:1px solid var(--smetra-line);border-radius:var(--smetra-radius-lg);background:var(--smetra-surface);color:var(--smetra-text);box-shadow:none
+}
+.workspace-page .main :is(.panel,.assistant-proposal,.assistant-context,.assistant-edit-diff,.file-editor-preview,.file-editor-history,.admin-ticket){padding:18px}
+.workspace-page .main :is(.panel h2,.panel h3,.assistant-proposal h3,.admin-ticket h3){margin-top:0;color:var(--smetra-text)}
+.workspace-page .main :is(.panel p:last-child,.assistant-proposal p:last-child){margin-bottom:0}
+.workspace-page .empty,.workspace-page .main .empty{padding:28px 0 22px;color:var(--smetra-text-muted)}
+.workspace-page .empty h3{margin-bottom:6px;color:var(--smetra-text);font-size:17px}
+.workspace-page .empty p{max-width:60ch;margin:0;color:var(--smetra-text-muted);font-size:13px;line-height:1.6}
+.workspace-page :is(.pill,.badge,.status-chip,.file-type,.file-center-type){
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:24px;max-width:100%;padding:4px 8px;
+  border:1px solid var(--smetra-line);border-radius:7px;background:var(--smetra-surface-raised);color:var(--smetra-text-muted);
+  font-size:11px;font-weight:550;line-height:1.3;white-space:normal
+}
+.workspace-page :is(.pill,.badge,.status-chip).danger{border-color:color-mix(in srgb,var(--smetra-danger) 35%,var(--smetra-line));color:var(--smetra-danger)}
+.workspace-page ::selection{background:#7777;color:var(--smetra-text)}
+
+/* Record lists retain density without sacrificing clear baselines or readable metadata. */
+.workspace-page .main :is(.record-line,.quote,.today-action,.activity-item,.document-row,.money-row,.agenda-day,.clients-row,.projects-row,.tasks-row,.catalog-row,.file-center-row,.construction-object,.construction-row,.construction-table-row){min-width:0;border-color:var(--smetra-line)}
+.workspace-page .main :is(.record-line,.quote,.today-action,.activity-item,.document-row,.money-row,.agenda-day,.clients-row,.projects-row,.tasks-row,.catalog-row,.file-center-row){padding-block:14px}
+.workspace-page .main :is(.record-title,.record-line strong,.quote strong,.clients-row strong,.projects-row strong,.catalog-row strong,.document-row strong,.file-center-row strong){
+  min-width:0;color:var(--smetra-text);font-size:14px;font-weight:600;line-height:1.45;overflow-wrap:anywhere
+}
+.workspace-page .main :is(.record-line small,.quote small,.document-row small,.file-center-row small,.record-description){color:var(--smetra-text-muted);font-size:12px;line-height:1.5}
+.workspace-page .main :is(.record-meta,.record-actions,.quote-actions,.attachment-actions){min-width:0;gap:10px}
+.workspace-page .main :is(.record-meta b,.record-meta strong){font-size:13px;font-weight:600;color:var(--smetra-text)}
+.workspace-page .main :is(.record-line:hover,.quote:hover,.document-row:hover,.catalog-row:hover,.file-center-row:hover,.projects-row:hover,.clients-row:hover){background:color-mix(in srgb,var(--smetra-surface-hover) 52%,transparent)}
+.workspace-page .main :is(.record-title:hover strong,.record-title:hover,.contact-link:hover){color:var(--smetra-text)!important}
+.workspace-page .main :is(.record-meta .btn,.record-actions .btn,.attachment-actions .btn){white-space:nowrap}
+
+/* Tables remain horizontally scrollable inside their own region, never across the page. */
+.workspace-page .main :is(.table-wrap,.admin-table-scroll,.construction-table,.assistant-table-scroll,.file-office-content,.quote-table-scroll){
+  min-width:0;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:var(--smetra-line-strong) transparent
+}
+.workspace-page .main :is(table,.estimate-table,.admin-table,.file-office-table,.assistant-table-scroll table){font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums}
+.workspace-page .main :is(th,td){padding:11px 13px;border-color:var(--smetra-line);color:var(--smetra-text);text-align:left;vertical-align:middle;line-height:1.5;overflow-wrap:break-word}
+.workspace-page .main :is(th,.admin-table th,.file-office-table thead th){color:var(--smetra-text-muted);font-size:12px;font-weight:600;white-space:normal}
+.workspace-page .main :is(td,.admin-table td,.file-office-table td){font-size:13px}
+.workspace-page .main :is(thead,.table-heading,.construction-table-head){background:var(--smetra-surface-raised)}
+.workspace-page .main :is(.estimate-table,.admin-table,.file-office-table){border-collapse:separate;border-spacing:0}
+.workspace-page .main :is(.estimate-table th,.estimate-table td,.admin-table th,.admin-table td,.file-office-table th,.file-office-table td){border-bottom:1px solid var(--smetra-line)}
+.workspace-page .main :is(.estimate-table tr:last-child td,.admin-table tr:last-child td,.file-office-table tr:last-child td){border-bottom:0}
+
+/* Dashboard hierarchy, clean quick actions and a single professional composer surface */
+.workspace-page .workspace-home{width:min(100%,1120px);min-width:0;margin-inline:auto}
+.workspace-page .workspace-home .activation-intro{margin:0 0 24px;padding:0 0 22px;border-bottom:1px solid var(--smetra-line)}
+.workspace-page .workspace-home .activation-intro .overline{display:block;margin-bottom:7px;color:var(--smetra-text-muted);font-size:11px;line-height:1.5;letter-spacing:.1em}
+.workspace-page .workspace-home .activation-intro h2{margin:0 0 14px;color:var(--smetra-text);font-size:23px;font-weight:600;line-height:1.32;letter-spacing:-.025em}
+.workspace-page .workspace-home .activation-intro .row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.workspace-page .workspace-home .activation-intro .btn{min-height:44px;padding:11px 16px;border-radius:10px;font-size:13px;line-height:1.35}
+.workspace-page .workspace-home .activation-intro .note{margin:0;color:var(--smetra-text-muted);font-size:12px;line-height:1.55}
+.workspace-page .workspace-home .capture-panel{flex:0 0 auto!important;min-height:0!important;align-self:stretch;margin:0!important;padding:clamp(32px,6vh,58px) 0 28px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.workspace-page .workspace-home .capture-heading{margin-bottom:24px}
+.workspace-page .workspace-home .capture-heading h2{max-width:18ch;margin:0 auto;color:var(--smetra-text);font-size:clamp(26px,2.4vw,32px);font-weight:600;line-height:1.3;letter-spacing:-.025em;text-align:center;text-wrap:balance}
+.workspace-page .workspace-home .capture-heading p{margin:8px 0 0;color:var(--smetra-text-muted);font-size:13px;line-height:1.55;text-align:center}
+.workspace-page .workspace-home #capture-form{
+  display:grid!important;grid-template-columns:44px minmax(0,1fr) auto!important;grid-template-rows:auto auto;align-items:center;gap:6px 10px;
+  width:min(100%,860px)!important;max-width:860px;min-width:0;margin:0 auto;padding:9px!important;
+  border:1px solid var(--smetra-line-strong)!important;border-radius:18px!important;background:var(--smetra-input)!important;box-shadow:none!important;
+  transition:border-color var(--smetra-motion-standard) ease,background var(--smetra-motion-standard) ease,box-shadow var(--smetra-motion-standard) ease
+}
+.workspace-page .workspace-home #capture-form:focus-within{border-color:#777!important;background:var(--smetra-surface)!important;box-shadow:0 0 0 3px #80808016!important}
+.workspace-page .workspace-home #capture-form #capture-text,
+.workspace-page .workspace-home #capture-form #capture-text:focus,
+.workspace-page .workspace-home #capture-form #capture-text:focus-visible{
+  grid-column:2;grid-row:1;width:100%;min-width:0;min-height:52px;max-height:min(35vh,190px);margin:0;padding:12px 8px;
+  border:0!important;border-radius:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;
+  color:var(--smetra-text)!important;font-family:inherit;font-size:16px;font-weight:400;line-height:1.5;letter-spacing:normal;resize:none!important;overflow-wrap:anywhere
+}
+.workspace-page .workspace-home #capture-form #capture-text::placeholder{color:var(--smetra-text-muted)!important;opacity:1}
+.workspace-page .workspace-home #capture-form .capture-file{
+  grid-column:1;grid-row:1;display:inline-flex;align-items:center;justify-content:center;justify-self:center;width:44px;min-width:44px;height:44px;min-height:44px;
+  margin:0;padding:11px;border:1px solid var(--smetra-line);border-radius:12px;background:var(--smetra-surface-raised);color:var(--smetra-text)
+}
+.workspace-page .workspace-home #capture-form .capture-file:hover{border-color:var(--smetra-line-strong);background:var(--smetra-surface-hover)}
+.workspace-page .workspace-home #capture-form .capture-actions{grid-column:3;grid-row:1;display:flex;align-items:center;justify-content:flex-end;min-width:0;margin:0}
+.workspace-page .workspace-home #capture-form .capture-actions .btn{
+  display:inline-flex;align-items:center;justify-content:center;min-width:0;min-height:44px;height:44px;padding:11px 16px;border-radius:12px;
+  background:var(--smetra-action);color:var(--smetra-action-text);font-size:13px;font-weight:600;line-height:1.35;white-space:nowrap
+}
+.workspace-page .workspace-home #capture-form .capture-actions .btn:hover:not(:disabled){background:var(--smetra-action);border-color:var(--smetra-action);opacity:.9}
+.workspace-page .workspace-home #capture-form #capture-status{grid-column:1/-1;grid-row:2;min-width:0;margin:0;padding:4px 10px 0;color:var(--smetra-text-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.workspace-page .workspace-home #capture-form #capture-status:empty{display:none}
+.workspace-page .workspace-home #capture-form:not(:has(.capture-file)){grid-template-columns:minmax(0,1fr) auto!important}
+.workspace-page .workspace-home #capture-form:not(:has(.capture-file)) #capture-text{grid-column:1}
+.workspace-page .workspace-home #capture-form:not(:has(.capture-file)) .capture-actions{grid-column:2}
+.workspace-page .workspace-home .capture-shortcuts{display:flex;align-items:stretch;justify-content:center;flex-wrap:wrap;gap:8px;width:min(100%,820px);margin:14px auto 0}
+.workspace-page .workspace-home .capture-shortcuts .btn{min-height:42px;padding:9px 13px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--smetra-text-muted);font-size:12px;font-weight:500;line-height:1.4;white-space:normal}
+.workspace-page .workspace-home .capture-shortcuts .btn:hover{background:var(--smetra-surface-hover);border-color:var(--smetra-line);color:var(--smetra-text)}
+.workspace-page .workspace-home .dashboard-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px 24px;width:100%;max-width:100%;align-self:stretch;margin:16px 0 28px;padding:20px 0 0;border-top:1px solid var(--smetra-line);border-bottom:0}
+.workspace-page .workspace-home .dashboard-metric,.workspace-page .workspace-home .dashboard-metric+.dashboard-metric{min-width:0;padding:0;border:0}
+.workspace-page .workspace-home .dashboard-metric span{display:block;margin:0 0 6px;color:var(--smetra-text-muted);font-size:12px;line-height:1.45;letter-spacing:normal}
+.workspace-page .workspace-home .dashboard-metric strong{display:block;color:var(--smetra-text);font-size:21px;font-weight:600;line-height:1.35;letter-spacing:-.015em}
+
+/* Assistant: readable stream, aligned toolbar and exactly one composer border. */
+.workspace-page .assistant-studio,.workspace-page .assistant-page{width:100%;max-width:1100px;min-width:0;margin-inline:auto}
+.workspace-page .assistant-studio .assistant-header,.workspace-page .assistant-studio .assistant-workbar,.workspace-page .assistant-studio .assistant-thread-edit,.workspace-page .assistant-studio .assistant-composer,
+.workspace-page .assistant-page .assistant-header,.workspace-page .assistant-page .assistant-workbar,.workspace-page .assistant-page .assistant-thread,.workspace-page .assistant-page .assistant-composer{width:100%;min-width:0;max-width:920px;margin-inline:auto}
+.workspace-page .assistant-studio .assistant-header,.workspace-page .assistant-page .assistant-header{margin-bottom:20px}
+.workspace-page .assistant-studio .assistant-header h1,.workspace-page .assistant-page .assistant-header h1{margin:0;color:var(--smetra-text);font-size:clamp(26px,2vw,31px);line-height:1.3;font-weight:600;letter-spacing:-.025em}
+.workspace-page .assistant-studio .assistant-quota,.workspace-page .assistant-page .assistant-quota{color:var(--smetra-text-muted);font-size:12px;line-height:1.45}
+.workspace-page .assistant-studio .assistant-workbar,.workspace-page .assistant-page .assistant-workbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto 44px;align-items:center;gap:8px;margin:0 auto 16px;padding:0 0 12px;border-bottom:1px solid var(--smetra-line)}
+.workspace-page .assistant-studio .assistant-history,.workspace-page .assistant-page .assistant-history{grid-column:1;min-width:0}
+.workspace-page .assistant-studio .assistant-history summary,.workspace-page .assistant-page .assistant-history summary{
+  display:flex;align-items:center;gap:9px;width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid var(--smetra-line);
+  border-radius:10px;background:var(--smetra-surface);color:var(--smetra-text);font-size:13px;font-weight:550;line-height:1.35;text-align:left
+}
+.workspace-page .assistant-studio .assistant-current-title,.workspace-page .assistant-page .assistant-current-title{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-page .assistant-studio #assistant-new-thread,.workspace-page .assistant-page #assistant-new-thread,
+.workspace-page .assistant-studio #assistant-knowledge,.workspace-page .assistant-page #assistant-knowledge{min-width:0;min-height:44px;padding:10px 12px;border-radius:10px;font-size:12px;white-space:nowrap}
+.workspace-page .assistant-studio .assistant-options,.workspace-page .assistant-page .assistant-options{grid-column:4;min-width:44px}
+.workspace-page .assistant-studio .assistant-options summary,.workspace-page .assistant-page .assistant-options summary{width:44px;height:44px;min-width:44px;min-height:44px;padding:0}
+.workspace-page .assistant-studio .assistant-history-list,.workspace-page .assistant-studio .assistant-options-list,
+.workspace-page .assistant-page .assistant-history-list,.workspace-page .assistant-page .assistant-options-list{max-width:min(360px,calc(100vw - 28px));border:1px solid var(--smetra-line);border-radius:12px;background:var(--smetra-surface);color:var(--smetra-text);box-shadow:0 18px 50px #00000024}
+.workspace-page .assistant-studio .assistant-history-list button,.workspace-page .assistant-studio .assistant-options-list button,
+.workspace-page .assistant-page .assistant-history-list button,.workspace-page .assistant-page .assistant-options-list button{min-height:42px;color:var(--smetra-text-muted);font-size:13px;line-height:1.4}
+.workspace-page .assistant-studio .assistant-thread,.workspace-page .assistant-page .assistant-thread{min-width:0;max-width:920px;margin-inline:auto}
+.workspace-page .assistant-studio .assistant-welcome,.workspace-page .assistant-page .assistant-welcome{width:100%;max-width:760px;margin-inline:auto;padding:clamp(28px,6vh,64px) 0 32px;text-align:center}
+.workspace-page .assistant-studio .assistant-welcome h2,.workspace-page .assistant-page .assistant-welcome h2{margin:14px 0 8px;color:var(--smetra-text);font-size:clamp(24px,2vw,30px);line-height:1.3;letter-spacing:-.025em}
+.workspace-page .assistant-studio .assistant-welcome p,.workspace-page .assistant-page .assistant-welcome p{max-width:62ch;margin:0 auto 16px;color:var(--smetra-text-muted);font-size:14px;line-height:1.65}
+.workspace-page .assistant-studio .assistant-suggestions,.workspace-page .assistant-page .assistant-suggestions{display:flex;align-items:stretch;justify-content:center;flex-wrap:wrap;gap:8px}
+.workspace-page .assistant-studio .assistant-suggestions button,.workspace-page .assistant-page .assistant-suggestions button{
+  display:inline-flex;align-items:center;gap:9px;min-width:0;min-height:42px;padding:10px 12px;border:1px solid var(--smetra-line);border-radius:10px;
+  background:var(--smetra-surface);color:var(--smetra-text-muted);font-size:12px;line-height:1.4;text-align:left
+}
+.workspace-page .assistant-studio .assistant-suggestions button:hover,.workspace-page .assistant-page .assistant-suggestions button:hover{background:var(--smetra-surface-hover);color:var(--smetra-text);border-color:var(--smetra-line-strong);transform:none}
+.workspace-page .assistant-studio .assistant-message,.workspace-page .assistant-page .assistant-message{max-width:820px;min-width:0;margin-inline:auto}
+.workspace-page .assistant-studio .assistant-markdown,.workspace-page .assistant-page .assistant-markdown{color:var(--smetra-text);font-size:14px;line-height:1.75;letter-spacing:normal;overflow-wrap:anywhere}
+.workspace-page .assistant-studio .assistant-markdown :is(p,li),.workspace-page .assistant-page .assistant-markdown :is(p,li){font-size:14px;line-height:1.75}
+.workspace-page .assistant-studio .assistant-markdown :is(h2,h3,h4),.workspace-page .assistant-page .assistant-markdown :is(h2,h3,h4){margin:22px 0 9px;color:var(--smetra-text);font-weight:600;letter-spacing:-.015em;line-height:1.4}
+.workspace-page .assistant-studio .assistant-markdown a,.workspace-page .assistant-page .assistant-markdown a{color:var(--smetra-text);text-decoration-color:var(--smetra-text-subtle);text-underline-offset:3px}
+.workspace-page .assistant-studio .assistant-markdown blockquote,.workspace-page .assistant-page .assistant-markdown blockquote{margin:16px 0;padding:4px 0 4px 16px;border-left:2px solid var(--smetra-line-strong);color:var(--smetra-text-muted)}
+.workspace-page .assistant-studio .assistant-markdown :not(pre)>code,.workspace-page .assistant-page .assistant-markdown :not(pre)>code{padding:2px 5px;border:1px solid var(--smetra-line);border-radius:5px;background:var(--smetra-surface);color:var(--smetra-text);font-size:.92em}
+.workspace-page .assistant-studio .assistant-markdown pre,.workspace-page .assistant-page .assistant-markdown pre{max-width:100%;overflow:auto;border:1px solid var(--smetra-line);border-radius:10px;background:var(--smetra-surface)}
+.workspace-page .assistant-studio .assistant-message.user .assistant-markdown,.workspace-page .assistant-page .assistant-message.user .assistant-markdown{max-width:min(78ch,92%);padding:11px 15px;border:1px solid var(--smetra-line);border-radius:14px 14px 4px 14px;background:var(--smetra-surface-raised);color:var(--smetra-text)}
+.workspace-page .assistant-studio .assistant-composer,.workspace-page .assistant-page .assistant-composer{position:sticky;bottom:0;z-index:5;padding:22px 0 max(10px,env(safe-area-inset-bottom));background:var(--smetra-bg)}
+.workspace-page .assistant-studio .assistant-attachment-bar,.workspace-page .assistant-page .assistant-attachment-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 4px 8px}
+.workspace-page .assistant-studio .assistant-attachment-bar button,.workspace-page .assistant-page .assistant-attachment-bar button{min-height:36px;padding:7px 10px;border:1px solid var(--smetra-line);border-radius:8px;background:var(--smetra-surface);color:var(--smetra-text);font-size:12px;line-height:1.4}
+.workspace-page .assistant-studio #assistant-form,.workspace-page .assistant-page #assistant-form,.workspace-page .assistant-composer form{
+  display:grid!important;grid-template-columns:minmax(0,1fr) 48px;align-items:end;gap:8px;width:100%;min-width:0;margin:0;padding:8px!important;
+  border:1px solid var(--smetra-line-strong)!important;border-radius:18px!important;background:var(--smetra-input)!important;box-shadow:none!important;
+  transition:border-color var(--smetra-motion-standard) ease,background var(--smetra-motion-standard) ease,box-shadow var(--smetra-motion-standard) ease
+}
+.workspace-page .assistant-studio #assistant-form:focus-within,.workspace-page .assistant-page #assistant-form:focus-within,.workspace-page .assistant-composer form:focus-within{
+  border-color:#777!important;background:var(--smetra-surface)!important;box-shadow:0 0 0 3px #80808016!important
+}
+.workspace-page .assistant-studio #assistant-input,.workspace-page .assistant-page #assistant-input,.workspace-page .assistant-composer textarea,
+.workspace-page .assistant-studio #assistant-input:focus,.workspace-page .assistant-page #assistant-input:focus,.workspace-page .assistant-composer textarea:focus,
+.workspace-page .assistant-studio #assistant-input:focus-visible,.workspace-page .assistant-page #assistant-input:focus-visible,.workspace-page .assistant-composer textarea:focus-visible{
+  display:block;grid-column:1;width:100%;min-width:0;min-height:52px;max-height:min(35vh,180px);margin:0;padding:12px;
+  border:0!important;border-radius:0!important;outline:0!important;background:transparent!important;color:var(--smetra-text)!important;box-shadow:none!important;
+  font-family:inherit;font-size:16px;font-weight:400;line-height:1.5;letter-spacing:normal;resize:none!important;overflow-wrap:anywhere;caret-color:var(--smetra-text)
+}
+.workspace-page .assistant-studio :is(#assistant-input,.assistant-composer textarea)::placeholder,.workspace-page .assistant-page :is(#assistant-input,.assistant-composer textarea)::placeholder{color:var(--smetra-text-muted)!important;opacity:1}
+.workspace-page .assistant-studio #assistant-send,.workspace-page .assistant-page #assistant-send,.workspace-page .assistant-composer #assistant-send{
+  grid-column:2;grid-row:1;display:inline-flex;align-items:center;justify-content:center;width:48px;min-width:48px;height:48px;min-height:48px;margin:0;padding:0;
+  border:1px solid var(--smetra-action);border-radius:14px;background:var(--smetra-action);color:var(--smetra-action-text);font-size:0;line-height:1
+}
+.workspace-page .assistant-studio #assistant-send::before,.workspace-page .assistant-page #assistant-send::before,.workspace-page .assistant-composer #assistant-send::before{display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/arrow-up-right.svg') center/contain no-repeat;content:""}
+.workspace-page .assistant-studio #assistant-stop,.workspace-page .assistant-page #assistant-stop{grid-column:3;grid-row:1;min-width:48px;min-height:48px;margin:0;border-radius:14px}
+.workspace-page .assistant-studio #assistant-stop[hidden],.workspace-page .assistant-page #assistant-stop[hidden]{display:none!important}
+.workspace-page .assistant-studio #assistant-form:has(#assistant-stop:not([hidden])),.workspace-page .assistant-page #assistant-form:has(#assistant-stop:not([hidden])){grid-template-columns:minmax(0,1fr) 48px 48px}
+.workspace-page .assistant-studio .assistant-composer-foot,.workspace-page .assistant-page .assistant-composer-foot{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;margin:9px 4px 0;color:var(--smetra-text-subtle);font-size:11px;line-height:1.5}
+.workspace-page .assistant-studio .assistant-brand-dot,.workspace-page .assistant-studio .assistant-welcome-line,.workspace-page .assistant-refined .assistant-message.assistant>small::before{background:var(--smetra-text-muted)!important;box-shadow:none!important}
+
+/* Quote editor, construction, files, catalog, finance and admin use the same neutral component language. */
+.workspace-page .main :is(.editor-history,.editor-history-head,.editor-toolbar,.editor-summary,.quote-summary,.business-stats,.construction-summary,.construction-price-diff,.admin-metrics,.admin-controls,.admin-tabs,.admin-section,.file-preview-top,.file-editor-top){min-width:0;border-color:var(--smetra-line)}
+.workspace-page .main :is(.editor-item,.editor-position,.editor-positions,.catalog-detail,.catalog-description,.catalog-history,.construction-subform,.construction-price-diff,.construction-procurement,.construction-changes){min-width:0}
+.workspace-page .main :is(.editor-item,.catalog-history-row,.construction-object,.construction-row,.construction-table-row,.construction-price-diff-row,.construction-log-row,.construction-change-row,.construction-procurement-row){border-color:var(--smetra-line);color:var(--smetra-text)}
+.workspace-page .main :is(.construction-object:hover strong,.construction-object:hover b,.construction-object-right b,.construction-price-diff-head span,.construction-price-diff-row b,.construction-log-date,.construction-procurement-row b,.construction-change-row small,.construction-back button,.contact-link,.catalog-star[aria-pressed="true"],.admin-tabs button.active,.admin-refresh,.admin-row-action button,.admin-dialog-actions button,.admin-ticket-actions button,.support-topics button[aria-pressed="true"]){color:var(--smetra-text)!important}
+.workspace-page .main :is(.construction-fact-open,.construction-upload,.construction-price-tools,.construction-price-controls input,.construction-defect-row select,.construction-log-photos label,.construction-inline input,.construction-inline select,.construction-change-line input,.construction-change-line select){
+  border-color:var(--smetra-line-strong)!important;background:var(--smetra-surface)!important;color:var(--smetra-text)!important
+}
+.workspace-page .main :is(.construction-object:hover,.construction-row:hover,.construction-table-row:hover,.catalog-history-row:hover,.document-row:hover,.file-center-row:hover){background:var(--smetra-surface-hover)}
+.workspace-page .main :is(.construction-inline input:focus,.construction-inline select:focus,.construction-price-controls input:focus,.construction-change-line input:focus,.construction-change-line select:focus){outline:2px solid var(--smetra-focus)!important;outline-offset:1px}
+.workspace-page .main .admin-tabs button{min-height:42px;border-radius:9px;color:var(--smetra-text-muted);font-size:13px}
+.workspace-page .main .admin-tabs button.active{background:var(--smetra-surface-raised);box-shadow:inset 0 -2px var(--smetra-action)}
+.workspace-page .main .admin-metrics{gap:12px}
+.workspace-page .main .admin-metrics>div{min-width:0;padding:16px;border:1px solid var(--smetra-line);border-radius:12px;background:var(--smetra-surface)}
+.workspace-page .main .admin-metrics strong{color:var(--smetra-text);font-size:clamp(20px,2vw,27px);line-height:1.3}
+.workspace-page .main .admin-metrics :is(span,small){color:var(--smetra-text-muted);font-size:12px;line-height:1.45}
+.workspace-page .main .admin-dialog{border:1px solid var(--smetra-line-strong);border-radius:16px;background:var(--smetra-surface);color:var(--smetra-text)}
+.workspace-page .main :is(.file-preview-dialog,.file-editor-history #file-editor-history-preview){border-color:var(--smetra-line);background:var(--smetra-surface);color:var(--smetra-text)}
+.workspace-page .main :is(.file-preview-top,.file-office-toolbar,.file-editor-toolbar){background:var(--smetra-surface);border-color:var(--smetra-line)}
+.workspace-page .main .file-editor-input textarea{min-height:260px;max-height:none;height:min(62vh,620px);overflow:auto;resize:none!important;font-size:14px;line-height:1.65}
+.workspace-page .main :is(.file-office-toolbar input,.file-office-toolbar select){min-height:38px;font-size:13px}
+.workspace-page .main .file-office-table :is(th,td){padding:10px 12px;border-color:var(--smetra-line);color:var(--smetra-text)}
+.workspace-page .main .file-office-table thead th{background:var(--smetra-surface-raised)}
+.workspace-page .main :is(.assistant-markdown pre,.assistant-code){max-width:100%;border-color:var(--smetra-line);border-radius:10px;background:var(--smetra-surface)}
+.workspace-page .main .assistant-code header{min-height:40px;padding:8px 12px;border-bottom:1px solid var(--smetra-line);background:var(--smetra-surface-raised)}
+.workspace-page .main .assistant-code pre{max-width:100%;overflow:auto;padding:14px}
+.workspace-page .main :is(.workspace-section>.topline p,.workspace-section .empty p,.catalog-row .record-meta b>small,.section-finance .stat>span,.section-finance .stat small){color:var(--smetra-text-muted)!important}
+
+/* Responsive layouts are true rearrangements, not a scaled-down desktop. */
+@media(max-width:1100px){
+  .workspace-page .app-shell{grid-template-columns:210px minmax(0,1fr)}
+  .workspace-page .main{padding-inline:24px}
+  .workspace-page .assistant-studio,.workspace-page .assistant-page{max-width:100%}
+  .workspace-page .workspace-home .dashboard-metrics{gap:16px}
+}
+@media(max-width:900px){
+  .workspace-page .app-shell{grid-template-columns:196px minmax(0,1fr)}
+  .workspace-page .app-nav-caption{display:none}
+  .workspace-page .main{padding-inline:22px}
+  .workspace-page .main .admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .workspace-page .main .file-editor-layout{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:700px){
+  .workspace-page:not(.auth-mode) .app-nav{height:112px;min-height:112px}
+  .workspace-page:not(.auth-mode) .app-nav-inner{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:56px 48px;gap:0 10px;padding:0 14px 8px}
+  .workspace-page:not(.auth-mode) .app-nav-brand{grid-column:1;grid-row:1;gap:8px}
+  .workspace-page:not(.auth-mode) .app-nav .brand{font-size:20px}
+  .workspace-page:not(.auth-mode) .nav-toggle,.workspace-page:not(.auth-mode) .nav-search{width:44px;min-width:44px;height:44px;min-height:44px;padding:10px}
+  .workspace-page:not(.auth-mode) .nav-toggle{flex:0 0 44px}
+  .workspace-page:not(.auth-mode) .app-nav-actions{grid-column:2;grid-row:1;gap:4px}
+  .workspace-page:not(.auth-mode) .nav-search span,.workspace-page:not(.auth-mode) .nav-search kbd,.workspace-page:not(.auth-mode) #header-user,.workspace-page:not(.auth-mode) #theme{display:none}
+  .workspace-page:not(.auth-mode) .nav-search::before{display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/magnifying-glass.svg') center/contain no-repeat;content:""}
+  .workspace-page .workspace-modes{grid-column:1/-1;grid-row:2;justify-self:stretch;width:100%;margin:0;padding:3px;gap:3px;border-radius:13px}
+  .workspace-page .workspace-modes button{flex:1 1 0;min-width:0;min-height:40px;padding:8px 10px;font-size:12px}
+  .workspace-page:not(.auth-mode) .app-shell{display:block;min-height:calc(100dvh - 112px)}
+  .workspace-page:not(.auth-mode) .sidebar{position:fixed;top:112px;height:calc(100dvh - 112px - env(safe-area-inset-bottom));width:min(292px,88vw)}
+  .workspace-page .nav-backdrop{top:112px}
+  .workspace-page .main{width:100%;padding:22px 16px max(52px,env(safe-area-inset-bottom))}
+  .workspace-page .topline{align-items:flex-start;gap:12px;margin-bottom:22px}
+  .workspace-page .topline h1,.workspace-page .main h1{font-size:27px;line-height:1.28;letter-spacing:-.02em}
+  .workspace-page .topline p{font-size:13px;line-height:1.6}
+  .workspace-page .topline-actions{width:100%;gap:8px}
+  .workspace-page .btn,.workspace-page .btn.small{min-height:44px}
+  .workspace-page .workspace-home{width:100%}
+  .workspace-page .workspace-home .activation-intro{margin-bottom:18px;padding-bottom:18px}
+  .workspace-page .workspace-home .activation-intro h2{font-size:21px}
+  .workspace-page .workspace-home .activation-intro .row{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .workspace-page .workspace-home .activation-intro .btn{justify-content:flex-start;width:100%;min-height:44px}
+  .workspace-page .workspace-home .capture-panel{padding:28px 0 20px!important}
+  .workspace-page .workspace-home .capture-heading{margin-bottom:20px}
+  .workspace-page .workspace-home .capture-heading h2{max-width:18ch;font-size:clamp(25px,6vw,29px);line-height:1.32}
+  .workspace-page .workspace-home #capture-form{grid-template-columns:44px minmax(0,1fr) 44px!important;gap:5px;padding:7px!important;border-radius:16px!important}
+  .workspace-page .workspace-home #capture-form .capture-file{width:44px;min-width:44px;height:44px;min-height:44px;padding:11px}
+  .workspace-page .workspace-home #capture-form #capture-text{min-height:48px;padding:10px 3px;font-size:16px;line-height:1.5}
+  .workspace-page .workspace-home #capture-form .capture-actions .btn{width:44px;min-width:44px;height:44px;min-height:44px;padding:0;border-radius:12px;font-size:0}
+  .workspace-page .workspace-home #capture-form .capture-actions .btn::before{display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/arrow-up-right.svg') center/contain no-repeat;content:""}
+  .workspace-page .workspace-home #capture-form:not(:has(.capture-file)){grid-template-columns:minmax(0,1fr) 44px!important}
+  .workspace-page .workspace-home #capture-form:not(:has(.capture-file)) #capture-text{grid-column:1}
+  .workspace-page .workspace-home #capture-form:not(:has(.capture-file)) .capture-actions{grid-column:2}
+  .workspace-page .workspace-home .capture-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:12px}
+  .workspace-page .workspace-home .capture-shortcuts .btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:64px;padding:8px 4px;font-size:11px;line-height:1.35;text-align:center;overflow-wrap:anywhere}
+  .workspace-page .workspace-home .dashboard-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 16px;margin:18px 0 24px;padding-top:18px}
+  .workspace-page .workspace-home .dashboard-metric span{font-size:12px;line-height:1.45}
+  .workspace-page .workspace-home .dashboard-metric strong{font-size:20px}
+  .workspace-page .main :is(.panel,.assistant-proposal,.assistant-context,.assistant-edit-diff,.file-editor-preview,.file-editor-history,.admin-ticket){padding:14px}
+  .workspace-page .main :is(.record-line,.quote,.today-action,.activity-item,.document-row,.money-row,.agenda-day,.clients-row,.projects-row,.tasks-row,.catalog-row,.file-center-row){padding-block:12px}
+  .workspace-page .main :is(.record-title,.record-line strong,.quote strong,.clients-row strong,.projects-row strong,.catalog-row strong,.document-row strong,.file-center-row strong){font-size:13px}
+  .workspace-page .main .record-meta b{font-size:12px}
+  .workspace-page .main .admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .workspace-page .assistant-studio,.workspace-page .assistant-page{max-width:100%}
+  .workspace-page .assistant-studio .assistant-header,.workspace-page .assistant-page .assistant-header{margin-bottom:14px}
+  .workspace-page .assistant-studio .assistant-header h1,.workspace-page .assistant-page .assistant-header h1{font-size:26px}
+  .workspace-page .assistant-studio .assistant-workbar,.workspace-page .assistant-page .assistant-workbar{grid-template-columns:minmax(0,1fr) repeat(3,44px);grid-template-rows:auto auto;gap:4px;padding-bottom:10px}
+  .workspace-page .assistant-studio .assistant-history,.workspace-page .assistant-page .assistant-history{grid-column:1/-1;grid-row:1}
+  .workspace-page .assistant-studio #assistant-new-thread,.workspace-page .assistant-page #assistant-new-thread{grid-column:2;grid-row:2;width:44px;min-width:44px;height:44px;padding:0;font-size:0;justify-content:center}
+  .workspace-page .assistant-studio #assistant-knowledge,.workspace-page .assistant-page #assistant-knowledge{grid-column:3;grid-row:2;width:44px;min-width:44px;height:44px;padding:0;font-size:0;justify-content:center}
+  .workspace-page .assistant-studio .assistant-options,.workspace-page .assistant-page .assistant-options{grid-column:4;grid-row:2}
+  .workspace-page .assistant-studio .assistant-welcome,.workspace-page .assistant-page .assistant-welcome{padding:26px 0 22px}
+  .workspace-page .assistant-studio .assistant-welcome h2,.workspace-page .assistant-page .assistant-welcome h2{font-size:25px}
+  .workspace-page .assistant-studio .assistant-suggestions,.workspace-page .assistant-page .assistant-suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .workspace-page .assistant-studio .assistant-suggestions button,.workspace-page .assistant-page .assistant-suggestions button{min-height:54px;padding:9px;font-size:12px}
+  .workspace-page .assistant-studio .assistant-composer,.workspace-page .assistant-page .assistant-composer{padding:18px 0 max(10px,env(safe-area-inset-bottom))}
+  .workspace-page .assistant-studio #assistant-form,.workspace-page .assistant-page #assistant-form,.workspace-page .assistant-composer form{grid-template-columns:minmax(0,1fr) 48px;gap:6px;padding:7px!important;border-radius:16px!important}
+  .workspace-page .assistant-studio #assistant-input,.workspace-page .assistant-page #assistant-input,.workspace-page .assistant-composer textarea{min-height:50px;padding:11px 8px;font-size:16px;line-height:1.5}
+  .workspace-page .assistant-studio #assistant-send,.workspace-page .assistant-page #assistant-send,.workspace-page .assistant-composer #assistant-send{width:48px;min-width:48px;height:48px;min-height:48px;border-radius:13px}
+  .workspace-page .assistant-studio #assistant-form:has(#assistant-stop:not([hidden])),.workspace-page .assistant-page #assistant-form:has(#assistant-stop:not([hidden])){grid-template-columns:minmax(0,1fr) 48px 48px}
+  .workspace-page .assistant-studio .assistant-composer-foot,.workspace-page .assistant-page .assistant-composer-foot{font-size:11px}
+  .workspace-page .main .file-editor-input textarea{height:min(52vh,460px);min-height:220px}
+}
+@media(max-width:359px){
+  .workspace-page:not(.auth-mode) .app-nav-inner{padding-inline:10px;gap:6px}
+  .workspace-page:not(.auth-mode) .app-nav .brand{font-size:18px}
+  .workspace-page .main{padding-inline:12px}
+  .workspace-page .workspace-home .capture-shortcuts{gap:3px}
+  .workspace-page .workspace-home .capture-shortcuts .btn{font-size:10px;padding-inline:2px}
+  .workspace-page .assistant-studio .assistant-suggestions,.workspace-page .assistant-page .assistant-suggestions{grid-template-columns:minmax(0,1fr)}
+  .workspace-page .main :is(th,td){padding:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .workspace-page *,.workspace-page *::before,.workspace-page *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

@@ -93,16 +93,33 @@
       const summary = document.createElement('summary'); summary.textContent = titles[form.id] || 'Открыть форму';
       form.before(entry); entry.append(summary,form);
     });
-    root.querySelectorAll('#capture-text').forEach(input => {
-      if (input.dataset.autogrow) return;
+    const textareas = [...(root.matches?.('textarea') ? [root] : []), ...root.querySelectorAll('textarea')];
+    textareas.forEach(input => {
+      if (input.dataset.autogrow || input.id === 'assistant-input' ||
+          input.closest('.file-editor-input') || input.matches('[data-no-autosize]')) return;
       input.dataset.autogrow = 'true';
       const resize = () => {
+        const style = getComputedStyle(input);
+        const declaredMin = parseFloat(style.minHeight);
+        const declaredMax = parseFloat(style.maxHeight);
+        const minHeight = Number.isFinite(declaredMin) && declaredMin > 0 ? declaredMin : 44;
+        const fallbackMax = Math.min(320, Math.max(160, Math.round(window.innerHeight * .45)));
+        const maxHeight = Number.isFinite(declaredMax) && declaredMax > 0 && declaredMax < 10000 ? declaredMax : fallbackMax;
         input.style.height = 'auto';
-        input.style.height = `${Math.min(180,Math.max(44,input.scrollHeight))}px`;
-        input.style.overflowY = input.scrollHeight > 180 ? 'auto':'hidden';
+        input.style.height = Math.min(maxHeight, Math.max(minHeight, input.scrollHeight)) + 'px';
+        input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
       };
-      input.addEventListener('input',resize); resize();
+      input.addEventListener('input', resize);
+      input.addEventListener('change', resize);
+      input.__smetraAutoSize = resize;
+      resize();
     });
+    if (!window.__smetraAutoSizeResizeBound) {
+      window.__smetraAutoSizeResizeBound = true;
+      window.addEventListener('resize', () => {
+        document.querySelectorAll('textarea[data-autogrow="true"]').forEach(input => input.__smetraAutoSize?.());
+      }, {passive:true});
+    }
     root.querySelectorAll('.today-actions').forEach(section => {
       section.classList.toggle('is-empty', !!section.querySelector('.today-clear'));
     });

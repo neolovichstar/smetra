@@ -29,6 +29,12 @@ const assert = require('node:assert/strict');
   await until("document.querySelector('#capture-text')?.dataset.autogrow && document.querySelector('.sidebar-disclosure')");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-home .capture-panel')).backgroundColor"),'rgba(0, 0, 0, 0)','Dashboard composer stays on the canvas instead of a giant grey slab');
   assert.equal(await evaluate("document.querySelector('.workspace-home .capture-panel').getBoundingClientRect().bottom <= document.querySelector('.workspace-home .dashboard-metrics').getBoundingClientRect().top"),true,'Dashboard metrics never overlap the composer');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-page')).getPropertyValue('--smetra-system').trim()"),'1','Shared UI foundation stylesheet is loaded');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-page')).getPropertyValue('--smetra-action').trim()"),'#e6e6e6','Workspace action color uses grayscale design tokens');
+  assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('.topline h1')).letterSpacing)>=-1.5"),true,'Section heading tracking remains readable');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#capture-text')).resize"),'none','Dashboard composer cannot be manually stretched');
+  assert.equal(await evaluate("(()=>{const i=getComputedStyle(document.querySelector('#capture-text')),f=getComputedStyle(document.querySelector('#capture-form'));return i.borderTopWidth==='0px'&&i.outlineWidth==='0px'&&f.borderTopWidth==='1px'&&parseFloat(f.borderTopLeftRadius)>=16})()"),true,'Dashboard composer has one rounded outer surface and no nested input border');
+
   await click('#sidebar-collapse');
   assert.equal(await evaluate("document.querySelector('#sidebar-collapse').getAttribute('aria-expanded')"),'false');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar')).display"),'flex','Drawer stays mounted during closing');
@@ -57,7 +63,7 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.assistant-brand-dot')).backgroundColor"),'rgb(216, 216, 216)','Assistant brand marker follows the monochrome palette');
   assert.equal(await evaluate("(()=>{const h=document.querySelector('.assistant-history').getBoundingClientRect(),n=document.querySelector('#assistant-new-thread').getBoundingClientRect(),k=document.querySelector('#assistant-knowledge').getBoundingClientRect(),o=document.querySelector('.assistant-options summary').getBoundingClientRect();return h.right<=n.left+1&&n.right<=k.left+1&&k.right<=o.left+1})()"),true,'Assistant toolbar controls occupy separate aligned columns');
   await evaluate("document.querySelector('#assistant-form textarea').focus()");
-  assert.equal(await evaluate("{const s=getComputedStyle(document.querySelector('#assistant-form textarea')),f=getComputedStyle(document.querySelector('#assistant-form'));s.borderTopWidth==='0px'&&s.outlineWidth==='0px'&&s.boxShadow==='none'&&f.borderTopWidth==='0px'&&f.boxShadow==='none'}"),true,'Composer has no inner or outer focus border');
+  assert.equal(await evaluate("{const s=getComputedStyle(document.querySelector('#assistant-form textarea')),f=getComputedStyle(document.querySelector('#assistant-form'));s.borderTopWidth==='0px'&&s.outlineWidth==='0px'&&s.boxShadow==='none'&&f.borderTopWidth==='1px'&&parseFloat(f.borderTopLeftRadius)>=16&&f.boxShadow!=='none'}"),true,'Assistant composer has exactly one rounded outer focus surface');
   assert.equal(await evaluate("document.querySelector('[data-mode=assistant]').getAttribute('aria-pressed')"),'true');
   await wait(300);await shot('assistant-refined-desktop');
   assert.notEqual(await evaluate("getComputedStyle(document.querySelector('[data-prompt]'),'::before').maskImage"),'none');
@@ -68,6 +74,9 @@ const assert = require('node:assert/strict');
   for(const width of [320,390]){
     await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await wait(200);
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#capture-text')).resize"),'none','Mobile input has no manual resize grip');
+  assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('#capture-text')).fontSize)>=16"),true,'Mobile input text stays readable');
+
     assert.equal(await evaluate("document.querySelector('.workspace-modes').getBoundingClientRect().top >= document.querySelector('.app-nav-brand').getBoundingClientRect().bottom"),true);
     assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44 && document.querySelector('#command-open').getBoundingClientRect().height >= 44"),true);
     assert.equal(await evaluate("document.querySelector('.capture-actions button').getBoundingClientRect().width >= 44"),true);
