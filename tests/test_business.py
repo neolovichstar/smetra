@@ -7,6 +7,7 @@ import io
 import json
 import os
 import tempfile
+import time
 import threading
 import unittest
 import urllib.error
@@ -1035,6 +1036,13 @@ class BusinessFlows(unittest.TestCase):
         }, token)
         self.assertEqual(task_status, 201, task)
 
+        stale_quote = self.publish(token, self.quote(token, title="Stale customer work"))
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE quotes SET sent_at=? WHERE id=?",
+                (int(time.time()) - 3 * 86400, stale_quote["id"]),
+            )
+
         code, dashboard = self.call("/dashboard", token=token)
         self.assertEqual(code, 200, dashboard)
         actions = dashboard["actions"]
@@ -1042,6 +1050,8 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(actions["summary"]["active_projects"], 0)
         self.assertIn(quote["id"], [a["entity_id"] for a in actions["items"]])
         self.assertIn(task["item"]["id"], [a["entity_id"] for a in actions["items"]])
+        stale_action = next(a for a in actions["items"] if a["entity_id"] == stale_quote["id"])
+        self.assertEqual(stale_action["detail"], "Client · Stale customer work")
         self.assertNotIn("Private work", json.dumps(actions))
 
         code, project = self.call("/quotes/" + quote["id"] + "/project", "POST", {}, token)
