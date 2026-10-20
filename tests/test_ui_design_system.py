@@ -100,6 +100,10 @@ class UIDesignSystemTests(unittest.TestCase):
         self.assertNotIn("color:#707070", self.style)
         self.assertNotIn("color:#737373", self.style)
         self.assertNotIn("color:#747480", self.black)
+        self.assertNotIn("color:#757575", self.black)
+        self.assertNotIn("color:#6b6b6b", self.cabinet)
+        self.assertNotIn("color:#6d6d6d", self.cabinet)
+        self.assertNotIn("color:#737373", self.style)
 
     def test_release_gate_prompt_requires_verified_ten_out_of_ten(self):
         self.assertIn("10/10 по каждой области", self.prompt)
