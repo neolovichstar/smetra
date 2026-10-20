@@ -18,7 +18,7 @@ async function api(path, options = {}) {
   const method=(options.method||'GET').toUpperCase();
   const owner=user;
   const share=method==='GET'&&Object.keys(options).length===0;
-  const cacheableRead=share&&!/^\/(public|auth|webhooks|cron|mobile)(\/|$)/.test(path);
+  const cacheableRead=share&&!/^\/(public|auth|webhooks|cron|mobile|admin)(\/|$)/.test(path);
   const key=JSON.stringify([user?.id||'',workspaceId||'',path]);
   const cacheEpoch=apiCacheEpoch;
   if(method!=='GET'){apiRequests.clear();apiCache.clear();apiCacheEpoch++;}
