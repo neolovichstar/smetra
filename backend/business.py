@@ -308,6 +308,7 @@ def migrate(con):
     for table, additions in {
         "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'"},
         "assistant_jobs": {"kind": "TEXT NOT NULL DEFAULT 'chat'", "file_id": "TEXT REFERENCES files(id) ON DELETE CASCADE", "source_sha256": "TEXT NOT NULL DEFAULT ''"},
+        "ai_usage": {"draft_claimed_at": "INTEGER"},
     }.items():
         present = {row["name"] for row in con.execute("PRAGMA table_info("+table+")")}
         for name, definition in additions.items():
@@ -331,6 +332,7 @@ def migrate(con):
         "approved_by": "TEXT NOT NULL DEFAULT ''",
         "custom_fields": "TEXT NOT NULL DEFAULT '{}'",
         "itemized": "INTEGER NOT NULL DEFAULT 0",
+        "ai_generated": "INTEGER NOT NULL DEFAULT 0 CHECK(ai_generated IN (0,1))",
     }
     existing = {r["name"] for r in con.execute("PRAGMA table_info(quotes)")}
     with transaction(con):
@@ -423,6 +425,16 @@ def migrate(con):
     )
     con.executescript(
         (Path(__file__).parent / "migrations" / "023_query_performance_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "024_push_foreign_key_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "025_ai_draft_provenance.sql").read_text(
             encoding="utf-8"
         )
     )
@@ -594,7 +606,7 @@ class Service:
             if not version:
                 raise DomainError(404, "Предложение ещё не отправлено")
             result = json.loads(version["snapshot"])
-            for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by"):
+            for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "ai_generated", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by"):
                 result.pop(key, None)
             for item in result.get("items", []):
                 for key in ("cost_price", "internal_cost", "markup", "line_id"):
@@ -621,6 +633,7 @@ class Service:
                 "sent_at",
                 "approved_at",
                 "approved_by",
+                "ai_generated",
             )
             result = {k: row[k] for k in keys}
             result["custom_fields"] = json.loads(row["custom_fields"])
@@ -787,6 +800,32 @@ class Service:
         if count >= (10 if (owner["entitlement_until"] or 0) <= stamp() else 10000):
             raise DomainError(402, "Достигнут лимит смет текущего тарифа")
         values, items = self.quote_data(data)
+        ai_generated = 0
+        ai_draft_usage_id = data.get("ai_draft_usage_id")
+        if ai_draft_usage_id is not None:
+            ai_draft_usage_id = string(
+                ai_draft_usage_id, "AI-черновик", 80, True
+            )
+            claimed = self.con.execute(
+                "UPDATE ai_usage SET draft_claimed_at=? "
+                "WHERE id=? AND workspace_id=? AND user_id=? "
+                "AND action='estimate_draft' "
+                "AND status IN ('succeeded','usage_unknown') "
+                "AND draft_claimed_at IS NULL",
+                (
+                    stamp(),
+                    ai_draft_usage_id,
+                    self.wid,
+                    self.user["id"],
+                ),
+            )
+            if claimed.rowcount != 1:
+                raise DomainError(
+                    409,
+                    "AI-черновик уже использован или недоступен. "
+                    "Создайте новый черновик или сохраните смету вручную",
+                )
+            ai_generated = 1
         qid = identity()
         values.update(
             id=qid,
@@ -795,6 +834,7 @@ class Service:
             public_token=secrets.token_urlsafe(32),
             created_at=stamp(),
             updated_at=stamp(),
+            ai_generated=ai_generated,
         )
         self.insert("quotes", values)
         self.save_items(qid, items)
@@ -832,6 +872,7 @@ class Service:
             "approval_state",
             "status",
             "published_version",
+            "ai_generated",
         ):
             snapshot.pop(key, None)
         snapshot["version"] = version

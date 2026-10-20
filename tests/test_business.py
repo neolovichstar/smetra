@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -1464,6 +1465,62 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(
             self.call("/public/file?token=" + link + "&id=" + public_id)[0], 404
         )
+
+    def test_ai_draft_provenance_is_server_owned_workspace_bound_and_single_use(self):
+        token, user_id = self.account("ai-provenance-owner")
+        workspace_id = self.call("/workspace", token=token)[1]["workspace"]["id"]
+        with sqlite3.connect(os.environ["DB_PATH"]) as con:
+            draft_id = "ai-provenance-one-use"
+            con.execute(
+                "INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,created_at) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (
+                    draft_id, workspace_id, user_id, "estimate_draft",
+                    "openrouter/free", "succeeded",
+                    int(dt.datetime.now(dt.timezone.utc).timestamp()),
+                ),
+            )
+
+        payload = {
+            "title": "Черновик с ИИ",
+            "client": "Проверка",
+            "amount": 12500,
+            "ai_generated": 0,
+            "ai_draft_usage_id": draft_id,
+        }
+        outsider, _ = self.account("ai-provenance-outsider")
+        status, error = self.call("/quotes", "POST", payload, outsider)
+        self.assertEqual(status, 409, error)
+        self.assertEqual(self.call("/quotes", token=outsider)[1]["quotes"], [])
+
+        status, result = self.call("/quotes", "POST", payload, token)
+        self.assertEqual(status, 201, result)
+        self.assertEqual(result["quote"]["ai_generated"], 1)
+
+        # A consumed token cannot attribute another quote, even if a client
+        # bypasses the editor and submits the request directly.
+        before = self.call("/quotes", token=token)[1]["quotes"]
+        status, error = self.call(
+            "/quotes", "POST",
+            {**payload, "title": "Повторное использование токена"}, token,
+        )
+        self.assertEqual(status, 409, error)
+        self.assertEqual(len(self.call("/quotes", token=token)[1]["quotes"]), len(before))
+
+        # The marker is assigned only by a valid server-issued AI token.
+        status, manual = self.call(
+            "/quotes", "POST",
+            {"title": "Обычная смета", "client": "Проверка", "amount": 5000,
+             "ai_generated": 1},
+            token,
+        )
+        self.assertEqual(status, 201, manual)
+        self.assertEqual(manual["quote"]["ai_generated"], 0)
+        with sqlite3.connect(os.environ["DB_PATH"]) as con:
+            claimed_at = con.execute(
+                "SELECT draft_claimed_at FROM ai_usage WHERE id=?", (draft_id,)
+            ).fetchone()[0]
+        self.assertIsNotNone(claimed_at)
 
     def test_ai_disabled_is_explicit_and_does_not_create_quotes(self):
         token, _ = self.account("ai-disabled")
