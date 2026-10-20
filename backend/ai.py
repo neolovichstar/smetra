@@ -267,6 +267,9 @@ def _draft(service, data):
                 "description": string(value.get("description", ""), "Описание", 5000),
                 "terms": string(value.get("terms", ""), "Условия", 5000),
                 "items": value["items"],
+                # Opaque, one-use server capability. It authorizes provenance
+                # attribution only; all pricing remains server-validated.
+                "ai_draft_usage_id": usage_id,
             },
             "requires_review": True,
         }
