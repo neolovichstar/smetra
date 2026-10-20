@@ -50,6 +50,25 @@ class PostgresQueryTests(unittest.TestCase):
             ):
                 schema_name()
 
+    def test_connection_returns_warm_connection_to_pool(self):
+        from unittest.mock import Mock, patch
+        from backend.postgres import Connection
+
+        raw = Mock()
+        pool = Mock()
+        pool.getconn.return_value = raw
+        with (
+            patch.dict("os.environ", {"DATABASE_URL": "postgresql://localhost/smetra", "SMETRA_LOCAL_POSTGRES": "1"}),
+            patch("backend.postgres._connection_pool", return_value=pool),
+        ):
+            connection = Connection()
+            self.assertIs(connection.raw, raw)
+            connection.close()
+
+        pool.getconn.assert_called_once_with(timeout=5)
+        pool.putconn.assert_called_once_with(raw)
+        raw.close.assert_not_called()
+
     def test_rows_support_mapping_and_index_access(self):
         row = Row(id="abc", total=12)
         self.assertEqual(row[0], row["id"])
