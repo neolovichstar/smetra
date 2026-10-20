@@ -7,6 +7,9 @@ const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
 let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0, authRevision=0;
 try{sessionStorage.removeItem('mobile_token');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
+const apiCache=new Map();
+const API_CACHE_TTL_MS=1200;
+const API_CACHE_MAX_ENTRIES=64;
 async function api(path, options = {}) {
   const headers = {'Content-Type':'application/json',...options.headers};
   const workspaceId=sessionStorage.getItem('workspace_id');
@@ -15,8 +18,13 @@ async function api(path, options = {}) {
   const owner=user;
   const share=method==='GET'&&Object.keys(options).length===0;
   const key=JSON.stringify([user?.id||'',workspaceId||'',path]);
-  if(method!=='GET')apiRequests.clear();
-  if(share&&apiRequests.has(key))return apiRequests.get(key);
+  if(method!=='GET'){apiRequests.clear();apiCache.clear();}
+  if(share){
+    const cached=apiCache.get(key);
+    if(cached&&cached.expiresAt>Date.now())return JSON.parse(cached.payload);
+    if(cached)apiCache.delete(key);
+    if(apiRequests.has(key))return apiRequests.get(key);
+  }
   const request=(async()=>{
     const controller=options.signal?null:new AbortController();
     const slow=method!=='GET'&&/^\/(assistant|ai|files)(\/|$)/.test(path);
@@ -26,6 +34,13 @@ async function api(path, options = {}) {
       let result;
       try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
       if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
+      if(share){
+        const payload=JSON.stringify(result);
+        if(payload.length<=256000){
+          if(apiCache.size>=API_CACHE_MAX_ENTRIES&&!apiCache.has(key))apiCache.delete(apiCache.keys().next().value);
+          apiCache.set(key,{payload,expiresAt:Date.now()+API_CACHE_TTL_MS});
+        }
+      }
       return result;
     }catch(error){
       if(error.name==='AbortError')throw Error('Сервер отвечает слишком долго. Повторите попытку.');
@@ -47,7 +62,7 @@ $('#theme')?.addEventListener('click',theme);
 function view(html) { window.SmetraSelects?.close();window.SmetraQuoteEditor?.leave();window.SmetraDataExport?.cancel();const content=$('#content');content.dataset.section=tab;content.innerHTML=html;content.classList.remove('app-view-enter');const enter=()=>{if(content.isConnected)content.classList.add('app-view-enter')};if(typeof requestAnimationFrame==='function')requestAnimationFrame(enter);else enter(); }
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):document.body.classList.contains('sidebar-compact');const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncSidebarAccess()}
-function showAuth() { window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;apiRequests.clear();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
+function showAuth() { window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;apiRequests.clear();apiCache.clear();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
 async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
