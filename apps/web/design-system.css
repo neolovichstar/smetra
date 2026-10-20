@@ -386,7 +386,9 @@
 .workspace-page .workspace-home {
   display: flex;
   flex-direction: column;
+  width: min(100%,1040px);
   min-height: 0;
+  margin-inline: auto;
   gap: 0;
 }
 .workspace-page .workspace-home .dashboard-intro {
@@ -539,9 +541,9 @@
   order: 2;
   display: grid;
   grid-template-columns: repeat(4,minmax(0,1fr));
-  align-self: stretch;
+  align-self: center;
   gap: 0;
-  width: 100%;
+  width: min(100%,740px);
   margin: 0 0 30px;
   padding: 17px 20px;
   border: 1px solid #252525;
