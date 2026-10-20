@@ -70,6 +70,7 @@ jobs:
           node tests/browser_quote_editor.cjs
           node tests/browser_growth.cjs
           node tests/browser_pwa.cjs
+          node tests/browser_landing_motion.cjs
           node tests/browser_construction_prices.cjs
       - name: Assistant preview, undo and conversation context in mobile browser
         run: |
