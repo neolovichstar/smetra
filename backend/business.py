@@ -436,6 +436,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_tasks_open_due_index.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
