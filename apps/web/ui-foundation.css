@@ -648,3 +648,35 @@
 .workspace-page .editor-tool,.workspace-page .editor-row-tools button,.workspace-page .editor-recovery button,.workspace-page .editor-drag{color:var(--smetra-text-muted)}
 .workspace-page .editor-tool:hover,.workspace-page .editor-row-tools button:hover,.workspace-page .editor-recovery button:hover{color:var(--smetra-text);background:var(--smetra-surface-hover)}
 .workspace-page .editor-history [data-state=saved]{color:var(--smetra-text-muted)}
+
+
+/* Final narrow-screen correction: legacy ID selectors and flex-width rules outrank class-only defaults. */
+@media (min-width:701px) {
+  body.workspace-page #sidebar-collapse{display:inline-flex!important}
+  body.workspace-page #nav-toggle{display:none!important}
+}
+@media (max-width:700px) {
+  body.workspace-page #sidebar-collapse{display:none!important}
+  body.workspace-page #nav-toggle{display:inline-flex!important}
+  #content .editor-layout{display:flex!important;flex-direction:column!important;gap:0!important;min-width:0!important}
+  #content .editor-main,#content .editor-aside,#content .editor-positions{width:100%!important;max-width:none!important;min-width:0!important;flex:0 0 auto}
+  #content .editor-positions>.section-top{
+    display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-items:stretch!important;
+    width:100%!important;min-width:0!important;gap:12px!important
+  }
+  #content .editor-positions .catalog-picker{
+    display:block!important;width:100%!important;max-width:none!important;min-width:0!important;flex:0 0 auto!important
+  }
+  #content .editor-positions .catalog-picker>.row,
+  #content .editor-positions .catalog-picker .select-control{
+    display:block!important;width:100%!important;max-width:none!important;min-width:0!important
+  }
+  #content .editor-positions .catalog-picker .select-trigger{
+    display:flex!important;width:100%!important;max-width:none!important;min-width:0!important;height:auto!important;min-height:44px!important;
+    padding:10px 12px!important;white-space:normal!important;overflow:visible!important;align-items:center!important
+  }
+  #content .editor-positions .catalog-picker .select-trigger>span:first-child{
+    display:block!important;flex:1 1 auto!important;min-width:0!important;max-width:100%!important;
+    white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important;line-height:1.4!important
+  }
+}
