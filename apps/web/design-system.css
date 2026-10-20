@@ -536,7 +536,7 @@
 }
 .workspace-page .workspace-home .capture-shortcuts .btn:nth-child(1)::before { mask-image: url('/assets/icons/plus.svg'); }
 .workspace-page .workspace-home .capture-shortcuts .btn:nth-child(2)::before { mask-image: url('/assets/icons/book-open.svg'); }
-.workspace-page .workspace-home .capture-shortcuts .btn:nth-child(3)::before { mask-image: url('/assets/icons/sparkles.svg'); }
+.workspace-page .workspace-home .capture-shortcuts .btn:nth-child(3)::before { mask-image: url('/assets/icons/sparkle.svg'); }
 .workspace-page .workspace-home .dashboard-metrics {
   order: 2;
   display: grid;
