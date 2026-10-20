@@ -33,6 +33,19 @@ class PostgresQueryTests(unittest.TestCase):
             translate(sql, "smetra", True),
         )
 
+    def test_query_translation_cache_reuses_hot_sql_safely(self):
+        sql = "SELECT id FROM clients WHERE workspace_id=? AND id=?"
+        translate.cache_clear()
+        first = translate(sql, "smetra", True)
+        before = translate.cache_info()
+        second = translate(sql, "smetra", True)
+        after = translate.cache_info()
+        self.assertEqual(first, second)
+        self.assertEqual(first, "SELECT id FROM smetra.clients WHERE workspace_id=%s AND id=%s")
+        self.assertEqual(after.hits, before.hits + 1)
+        self.assertLessEqual(after.currsize, 2048)
+        translate.cache_clear()
+
     def test_only_smetra_schemas_allowed(self):
         for name in ("public", "smetra; DROP SCHEMA public", "smetra.other"):
             with (
