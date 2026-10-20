@@ -1468,10 +1468,8 @@ class BusinessFlows(unittest.TestCase):
 
     def test_ai_draft_provenance_is_server_owned_workspace_bound_and_single_use(self):
         token, user_id = self.account("ai-provenance-owner")
+        workspace_id = self.call("/workspace", token=token)[1]["workspace"]["id"]
         with sqlite3.connect(os.environ["DB_PATH"]) as con:
-            workspace_id = con.execute(
-                "SELECT id FROM workspaces WHERE owner_id=?", (user_id,)
-            ).fetchone()[0]
             draft_id = "ai-provenance-one-use"
             con.execute(
                 "INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,created_at) "
