@@ -68,3 +68,11 @@ Read-only проверка и безопасные изменения конфи
 
 - Добавлен `.github/CODEOWNERS` с владельцем проекта для исходников, миграций, mobile-кода и CI/CD.
 - API GitHub вернул пустой список repository rulesets; классическую branch protection подключение прочитать не смогло (403). Поэтому обязательный review владельца, запрет прямых push в `main` и required checks пока **не подтверждены**. В настройках GitHub нужно включить protection/ruleset для `main`: required PR review, Require review from Code Owners, запрет force-push/deletion и обязательные CI, CodeQL, Secret scanning checks.
+
+ 
+## 20 October 2026 — performance branch and newly found RLS issue
+
+- Draft PR #12 adds bounded PostgreSQL connection pooling, query-hot-path indexes, RLS init-plan rewrites, short-lived isolated GET caching, compact UI and a motion-designed landing. The PostgreSQL migration has explicit 5-second lock and 30-second statement timeouts; the SQLite migration is idempotent.
+- A live read-only query confirmed `smetra.file_text_chunks` currently has `f.workspace_id = f.workspace_id` in the parent-file EXISTS condition. The migration now corrects it to compare with `file_text_chunks.workspace_id`. Until that migration is reviewed/applied and the live policy is re-verified, this remains an **open production tenant-isolation finding**.
+- Preview `/health` returned 500 because the endpoint opened the database even where Preview deliberately has no database credentials. Code now makes `/health` a lightweight liveness probe and `/ready` a database readiness check. The current preview confirmed `/health` returns HTTP 200. The current commit’s full CI/CodeQL is not yet green; check linked Actions before merge.
+- No measured p95 / throughput benchmark has been run yet, so do not claim a numeric speedup. Production DDL and production deployments remain unchanged.
