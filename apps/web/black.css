@@ -199,3 +199,7 @@ html{background:#000;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-
  .motion-sweep{display:none}
  .motion-scene,.motion-scene img.black-art{transform:none!important;will-change:auto}
 }
+
+.motion-scene{transform:translate3d(var(--scene-x,0px),var(--scene-y,0px),0);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.black-hero::before{transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+@media(prefers-reduced-motion:reduce){.motion-scene{transition:none}}
