@@ -469,10 +469,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
 
     def static(self, path):
+        # Liveness must not depend on PostgreSQL: Vercel may probe a Preview
+        # that intentionally has no production DB credentials. Keep DB checks
+        # on a separate readiness endpoint so probes do not create DB traffic.
         if path == "/health":
-            with db() as con:
-                con.execute("SELECT 1")
             return self.send_json(200, {"ok": True})
+        if path == "/ready":
+            try:
+                with db() as con:
+                    con.execute("SELECT 1")
+            except Exception:
+                # Readiness failure is expected for an isolated Preview without a DB.
+                # Return dependency status instead of a generic 500 or leaking details.
+                return self.send_json(503, {"ok": False, "database": False})
+            return self.send_json(200, {"ok": True, "database": True})
         public = {
             "/": ("index.html", "text/html"),
             "/app": ("app.html", "text/html"),

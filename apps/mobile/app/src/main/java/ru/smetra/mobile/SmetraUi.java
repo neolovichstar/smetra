@@ -2,6 +2,7 @@ package ru.smetra.mobile;
 
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Dialog;
 import android.content.res.ColorStateList;
 import android.graphics.*;
@@ -11,6 +12,7 @@ import android.graphics.drawable.RippleDrawable;
 import android.view.*;
 import android.view.animation.PathInterpolator;
 import android.widget.*;
+import android.util.LruCache;
 
 /** Small native design system. All geometry is in dp; text respects the device font scale. */
 final class SmetraUi {
@@ -19,16 +21,22 @@ final class SmetraUi {
     static int BLUE=Color.rgb(150,190,255);
     static final int GREEN=Color.rgb(137,224,191), AMBER=Color.rgb(241,203,140), RED=Color.rgb(255,158,167);
     static final PathInterpolator EASE=new PathInterpolator(.2f,.8f,.2f,1f);
+    private static final LruCache<String, Bitmap> GLYPH_BITMAPS = new LruCache<String, Bitmap>(512) {
+        @Override protected int sizeOf(String key, Bitmap value) { return Math.max(1, value.getByteCount() / 1024); }
+    };
     final Activity activity;
     final Typeface regular, medium, bold;
+    private final boolean lowRamDevice;
     SmetraUi(Activity activity) {
         this.activity=activity;
+        ActivityManager manager=(ActivityManager)activity.getSystemService(Activity.ACTIVITY_SERVICE);
+        lowRamDevice=manager!=null&&manager.isLowRamDevice();
         regular=Typeface.createFromAsset(activity.getAssets(),"fonts/manrope-400.ttf");
         medium=Typeface.createFromAsset(activity.getAssets(),"fonts/manrope-600.ttf");
         bold=Typeface.createFromAsset(activity.getAssets(),"fonts/manrope-800.ttf");
     }
     int dp(float value){return Math.round(value*activity.getResources().getDisplayMetrics().density);}
-    boolean motion(){return ValueAnimator.areAnimatorsEnabled();}
+    boolean motion(){return !lowRamDevice&&ValueAnimator.areAnimatorsEnabled();}
     LinearLayout column(){LinearLayout view=new LinearLayout(activity);view.setOrientation(LinearLayout.VERTICAL);return view;}
     LinearLayout row(){LinearLayout view=new LinearLayout(activity);view.setGravity(Gravity.CENTER_VERTICAL);return view;}
     LinearLayout.LayoutParams match(){return new LinearLayout.LayoutParams(-1,-2);}
@@ -49,6 +57,9 @@ final class SmetraUi {
     void ripple(View view,int color,int radius,int border){view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22c4dcff),shape(color,radius,border),shape(Color.WHITE,radius,0)));}
     void tap(View view,Runnable action){
         view.setFocusable(true);view.setOnClickListener(v->{v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);action.run();});
+        // Low-RAM devices and users who disable system animations keep the ripple and haptic feedback,
+        // but skip allocating four animators for every clickable row and button.
+        if(!motion()){view.setStateListAnimator(null);return;}
         android.animation.StateListAnimator states=new android.animation.StateListAnimator();
         android.animation.AnimatorSet press=new android.animation.AnimatorSet();
         press.playTogether(android.animation.ObjectAnimator.ofFloat(view,"scaleX",.98f),android.animation.ObjectAnimator.ofFloat(view,"scaleY",.98f));press.setDuration(motion()?100:0);
@@ -61,12 +72,10 @@ final class SmetraUi {
         view.setTextColor(primary?BG:INK);view.setMinHeight(dp(48));view.setMinimumHeight(dp(48));view.setPadding(dp(14),dp(12),dp(14),dp(12));
         view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,10,primary?0xffb9d3ff:LINE);tap(view,action);
         String icon=actionIcon(title);if(icon!=null){
-            int size=dp(18);Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
-            Icon glyph=new Icon(icon,primary?BG:INK);glyph.layout(0,0,size,size);glyph.draw(new Canvas(bitmap));
-            BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),bitmap);drawable.setBounds(0,0,size,size);
+            int size=dp(18);BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),glyphBitmap(icon,primary?BG:INK,size));drawable.setBounds(0,0,size,size);
             view.setCompoundDrawablesRelative(drawable,null,null,null);view.setCompoundDrawablePadding(dp(8));
         }
-        LinearLayout.LayoutParams params=match();params.topMargin=dp(8);view.setLayoutParams(params);return view;
+        LinearLayout.LayoutParams params=match();params.topMargin=dp(6);view.setLayoutParams(params);return view;
     }
     private String actionIcon(String title){
         if(title.startsWith("Создать")||title.startsWith("Добавить")||title.startsWith("Новый")||title.startsWith("Новая"))return "plus";
@@ -81,7 +90,7 @@ final class SmetraUi {
         return null;
     }
     LinearLayout card(LinearLayout parent){
-        LinearLayout section=column();section.setPadding(0,dp(16),0,dp(16));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
+        LinearLayout section=column();section.setPadding(0,dp(12),0,dp(12));LinearLayout.LayoutParams params=match();parent.addView(section,params);divider(parent);return section;
     }
     void enter(View view){enter(view,0);}
     void enter(View view,int delay){if(!motion())return;view.setAlpha(0);view.setTranslationY(dp(10));view.animate().alpha(1).translationY(0).setStartDelay(delay).setDuration(280).setInterpolator(EASE).start();}
@@ -108,15 +117,22 @@ final class SmetraUi {
         button.setLayoutParams(new LinearLayout.LayoutParams(dp(48),dp(48)));glyph(button,icon,primary?BG:INK);
         button.setOnLongClickListener(v->{Toast.makeText(activity,description,Toast.LENGTH_SHORT).show();return true;});return button;
     }
+    private Bitmap glyphBitmap(String icon,int color,int size){
+        String key=icon+"|"+color+"|"+size;
+        Bitmap cached=GLYPH_BITMAPS.get(key);
+        if(cached!=null&&!cached.isRecycled())return cached;
+        Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
+        Icon glyph=new Icon(icon,color);glyph.layout(0,0,size,size);glyph.draw(new Canvas(bitmap));
+        GLYPH_BITMAPS.put(key,bitmap);
+        return bitmap;
+    }
     void glyph(Button button,String icon,int color){
-        int size=dp(24);Bitmap bitmap=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
-        Icon view=new Icon(icon,color);view.layout(0,0,size,size);view.draw(new Canvas(bitmap));
-        BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),bitmap);drawable.setBounds(0,0,size,size);
+        int size=dp(24);BitmapDrawable drawable=new BitmapDrawable(activity.getResources(),glyphBitmap(icon,color,size));drawable.setBounds(0,0,size,size);
         button.setCompoundDrawablesRelative(drawable,null,null,null);button.setCompoundDrawablePadding(0);
     }
     TextView badge(String text,int color){TextView view=label(text,11,color,true);view.setPadding(0,dp(3),0,dp(3));view.setBackgroundColor(Color.TRANSPARENT);view.setLayoutParams(new LinearLayout.LayoutParams(-2,-2));return view;}
     EditText field(LinearLayout parent,String label,int type){
-        space(parent,16);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,8);
+        space(parent,12);TextView title=label(label,12,MUTED,false);parent.addView(title);space(parent,6);
         EditText field=new EditText(activity);field.setTextSize(16);field.setTypeface(regular);field.setTextColor(INK);field.setHintTextColor(0xff69768a);
         field.setInputType(type);field.setSingleLine(type!=1);field.setMinHeight(dp(type==1?96:48));field.setGravity(type==1?Gravity.TOP|Gravity.START:Gravity.CENTER_VERTICAL|Gravity.START);
         field.setPadding(dp(14),dp(12),dp(14),dp(12));field.setBackground(shape(SURFACE,10,0));field.setSelectAllOnFocus(false);
@@ -133,11 +149,11 @@ final class SmetraUi {
         box.setMinimumWidth(dp(48));box.setMinimumHeight(dp(48));tap(box,action);return box;
     }
     void section(LinearLayout parent,String title,String detail){
-        space(parent,24);LinearLayout heading=row();heading.addView(label(title,17,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+        space(parent,20);LinearLayout heading=row();heading.addView(label(title,17,INK,true),new LinearLayout.LayoutParams(0,-2,1));
         if(detail!=null)heading.addView(label(detail,12,MUTED,false));parent.addView(heading);space(parent,2);
     }
     void empty(LinearLayout parent,String icon,String title,String description){
-        LinearLayout card=card(parent);card.setGravity(Gravity.CENTER);card.setPadding(dp(24),dp(30),dp(24),dp(30));
+        LinearLayout card=card(parent);card.setGravity(Gravity.CENTER);card.setPadding(dp(20),dp(24),dp(20),dp(24));
         Icon glyph=new Icon(icon,BLUE);card.addView(glyph,new LinearLayout.LayoutParams(dp(36),dp(36)));space(card,18);
         TextView name=label(title,17,INK,true);name.setGravity(Gravity.CENTER);card.addView(name);space(card,8);
         TextView copy=label(description,13,MUTED,false);copy.setGravity(Gravity.CENTER);card.addView(copy);

@@ -7,6 +7,7 @@ import io
 import json
 import os
 import tempfile
+import time
 import threading
 import unittest
 import urllib.error
@@ -1019,6 +1020,16 @@ class BusinessFlows(unittest.TestCase):
             statements.clear()
             Service(handler, con, self.base).handle("GET", "/api/dashboard", {})
             self.assertFalse(any("quote_items" in sql for sql in statements))
+            self.assertEqual(
+                sum("lead_action_rows" in sql for sql in statements),
+                1,
+                "Dashboard action categories should be fetched in one database round-trip",
+            )
+            self.assertEqual(
+                sum("paid_totals" in sql and "expense_totals" in sql for sql in statements),
+                1,
+                "Dashboard currency totals should share one database round-trip",
+            )
 
     def test_today_lists_real_followups_without_other_workspace_data(self):
         token, _ = self.account("today-owner")
@@ -1035,6 +1046,13 @@ class BusinessFlows(unittest.TestCase):
         }, token)
         self.assertEqual(task_status, 201, task)
 
+        stale_quote = self.publish(token, self.quote(token, title="Stale customer work"))
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE quotes SET sent_at=? WHERE id=?",
+                (int(time.time()) - 3 * 86400, stale_quote["id"]),
+            )
+
         code, dashboard = self.call("/dashboard", token=token)
         self.assertEqual(code, 200, dashboard)
         actions = dashboard["actions"]
@@ -1042,6 +1060,8 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(actions["summary"]["active_projects"], 0)
         self.assertIn(quote["id"], [a["entity_id"] for a in actions["items"]])
         self.assertIn(task["item"]["id"], [a["entity_id"] for a in actions["items"]])
+        stale_action = next(a for a in actions["items"] if a["entity_id"] == stale_quote["id"])
+        self.assertEqual(stale_action["detail"], "Client · Stale customer work")
         self.assertNotIn("Private work", json.dumps(actions))
 
         code, project = self.call("/quotes/" + quote["id"] + "/project", "POST", {}, token)

@@ -5,13 +5,16 @@ Supavisor transaction pooling needs neither session state nor prepared queries.
 """
 
 import hashlib
+from functools import lru_cache
 import os
 import re
 import sqlite3
+import threading
 import urllib.parse
 from decimal import Decimal
 
 import psycopg
+from psycopg_pool import ConnectionPool
 
 TABLES = frozenset(
     "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits".split()
@@ -61,9 +64,53 @@ def schema_name():
     name = os.getenv("SMETRA_DB_SCHEMA", "smetra")
     if not re.fullmatch(r"smetra(?:_[a-z0-9_]+)?", name):
         raise ValueError("Invalid Smetra database schema")
+    # Defense in depth: preview builds must never use the production schema,
+    # even if a production database URL is accidentally reintroduced in Vercel.
+    if os.getenv("VERCEL_ENV", "").lower() == "preview" and name == "smetra":
+        raise ValueError(
+            "Preview deployment must use an isolated SMETRA_DB_SCHEMA, not production schema 'smetra'"
+        )
     return name
 
 
+# One small bounded pool per configured database URL. Vercel can reuse warm
+# Python workers, avoiding a fresh TLS handshake for every HTTP request.
+_POOL_LOCK = threading.Lock()
+_POOLS = {}
+
+
+def _pool_for(database_url, sslmode):
+    key = (hashlib.sha256(database_url.encode("utf-8")).hexdigest(), sslmode)
+    with _POOL_LOCK:
+        pool = _POOLS.get(key)
+        if pool is None:
+            pool = ConnectionPool(
+                conninfo=database_url,
+                min_size=1,
+                max_size=4,
+                max_waiting=12,
+                timeout=4.0,
+                max_lifetime=240.0,
+                max_idle=30.0,
+                reconnect_timeout=15.0,
+                num_workers=1,
+                check=ConnectionPool.check_connection,
+                close_returns=True,
+                kwargs={
+                    "sslmode": sslmode,
+                    "connect_timeout": 5,
+                    "prepare_threshold": None,
+                    "autocommit": True,
+                    "row_factory": row_factory,
+                },
+                open=False,
+            )
+            pool.open(wait=True, timeout=5.0)
+            _POOLS[key] = pool
+        return pool
+
+
+@lru_cache(maxsize=2048)
 def translate(sql, schema, parameters=False):
     """Translate our small SQL subset without touching quoted values."""
     ignore = sql.lstrip().upper().startswith("INSERT OR IGNORE")
@@ -103,17 +150,12 @@ class Connection:
         self.runtime = runtime
         self.scoped = False
         self.nested = False
+        self.workspace_lock_key = None
         database_url = os.environ["RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"]
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
-        self.raw = psycopg.connect(
-            database_url,
-            sslmode="disable" if local_test else "require",
-            connect_timeout=15,
-            prepare_threshold=None,
-            autocommit=True,
-            row_factory=row_factory,
-        )
+        sslmode = "disable" if local_test else "require"
+        self.raw = _pool_for(database_url, sslmode).getconn(timeout=4.0)
         self.lock_key = int.from_bytes(
             hashlib.sha256(self.schema.encode()).digest()[:8], "big", signed=True
         )
@@ -128,6 +170,11 @@ class Connection:
                 "SELECT set_config('smetra.session_hash',%s,true), "
                 "set_config('smetra.workspace_id',%s,true)",
                 (session_hash, workspace_id),
+            )
+            self.workspace_lock_key = int.from_bytes(
+                hashlib.sha256((self.schema + ":workspace:" + workspace_id).encode("utf-8")).digest()[:8],
+                "big",
+                signed=True,
             )
             self.scoped = True
         except Exception:
@@ -159,8 +206,20 @@ class Connection:
                     self.nested = True
                 else:
                     self.raw.execute("BEGIN")
-                # Preserve SQLite's atomic read/check/write semantics across instances.
+                # Coordinate runtime writers with global auth/payment/webhook transactions,
+                # while allowing unrelated workspaces to write concurrently. Global (non-runtime)
+                # transactions take the exclusive schema lock; runtime transactions take it shared,
+                # then serialize only against writers for the same workspace.
                 self.raw.execute("SET LOCAL lock_timeout='15s'")
+                if self.runtime:
+                    self.raw.execute(
+                        "SELECT pg_advisory_xact_lock_shared(%s)", (self.lock_key,)
+                    )
+                    if self.workspace_lock_key is None:
+                        raise RuntimeError("Runtime write transaction has no workspace lock")
+                    return self.raw.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", (self.workspace_lock_key,)
+                    )
                 return self.raw.execute(
                     "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
                 )

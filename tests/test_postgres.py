@@ -33,6 +33,19 @@ class PostgresQueryTests(unittest.TestCase):
             translate(sql, "smetra", True),
         )
 
+    def test_query_translation_cache_reuses_hot_sql_safely(self):
+        sql = "SELECT id FROM clients WHERE workspace_id=? AND id=?"
+        translate.cache_clear()
+        first = translate(sql, "smetra", True)
+        before = translate.cache_info()
+        second = translate(sql, "smetra", True)
+        after = translate.cache_info()
+        self.assertEqual(first, second)
+        self.assertEqual(first, "SELECT id FROM smetra.clients WHERE workspace_id=%s AND id=%s")
+        self.assertEqual(after.hits, before.hits + 1)
+        self.assertLessEqual(after.currsize, 2048)
+        translate.cache_clear()
+
     def test_only_smetra_schemas_allowed(self):
         for name in ("public", "smetra; DROP SCHEMA public", "smetra.other"):
             with (
@@ -41,6 +54,24 @@ class PostgresQueryTests(unittest.TestCase):
                 self.assertRaises(ValueError),
             ):
                 schema_name()
+
+    def test_preview_environment_cannot_select_production_schema(self):
+        with (
+            patch.dict("os.environ", {"VERCEL_ENV": "preview", "SMETRA_DB_SCHEMA": "smetra"}),
+            self.assertRaisesRegex(ValueError, "Preview deployment must use an isolated"),
+        ):
+            schema_name()
+
+    def test_preview_environment_can_select_an_isolated_qa_schema(self):
+        with patch.dict(
+            "os.environ",
+            {"VERCEL_ENV": "preview", "SMETRA_DB_SCHEMA": "smetra_qa_20260928"},
+        ):
+            self.assertEqual(schema_name(), "smetra_qa_20260928")
+
+    def test_production_environment_can_select_production_schema(self):
+        with patch.dict("os.environ", {"VERCEL_ENV": "production", "SMETRA_DB_SCHEMA": "smetra"}):
+            self.assertEqual(schema_name(), "smetra")
 
     def test_rows_support_mapping_and_index_access(self):
         row = Row(id="abc", total=12)
