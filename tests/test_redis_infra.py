@@ -31,6 +31,20 @@ class FakeClient:
 
 
 class RedisInfraTests(unittest.TestCase):
+    def test_explicit_upstash_credentials_take_precedence_over_legacy_integration(self):
+        with patch.dict(os.environ, {
+            "REDIS_ENABLED": "1",
+            "REDIS_KV_REST_API_URL": "https://legacy.invalid",
+            "REDIS_KV_REST_API_TOKEN": "legacy-token",
+            "UPSTASH_REDIS_REST_URL": "https://special-elk-165355.upstash.io",
+            "UPSTASH_REDIS_REST_TOKEN": "new-upstash-token",
+        }, clear=True):
+            self.assertTrue(redis_infra.enabled())
+            self.assertEqual(
+                redis_infra.credentials(),
+                ("https://special-elk-165355.upstash.io", "new-upstash-token"),
+            )
+
     def test_keys_are_environment_scoped_and_never_contain_pii(self):
         with patch.dict(os.environ, {"REDIS_ENV": "preview"}):
             preview = redis_infra.key("ratelimit", "person@example.test")

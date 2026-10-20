@@ -22,12 +22,18 @@ _CLIENT_CONFIG = None
 _CIRCUIT_UNTIL = 0.0
 
 
+def credentials():
+    """Prefer the explicitly configured Upstash database over legacy Vercel integration values."""
+    url = os.getenv("UPSTASH_REDIS_REST_URL") or os.getenv("REDIS_KV_REST_API_URL")
+    token = os.getenv("UPSTASH_REDIS_REST_TOKEN") or os.getenv("REDIS_KV_REST_API_TOKEN")
+    return url, token
+
+
 def enabled():
     flag = os.getenv("REDIS_ENABLED", "auto").lower()
     if flag in ("0", "false", "off"):
         return False
-    url = os.getenv("REDIS_KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
-    token = os.getenv("REDIS_KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    url, token = credentials()
     if flag in ("1", "true", "on") and (not url or not token):
         raise RedisUnavailable("Redis credentials are not configured")
     return bool(url and token)
@@ -105,8 +111,7 @@ def provider():
         return None
     if time.monotonic() < _CIRCUIT_UNTIL:
         raise RedisUnavailable("Redis circuit is open")
-    url = os.getenv("REDIS_KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
-    token = os.getenv("REDIS_KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    url, token = credentials()
     config = (url, token)
     if _CLIENT is None or _CLIENT_CONFIG != config:
         if not url.startswith("https://"):
