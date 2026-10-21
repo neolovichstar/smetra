@@ -3,6 +3,24 @@
 function assistantInline(source){return window.SmetraMarkdown.inline(source)}
 function assistantMarkdown(source){return window.SmetraMarkdown.render(source)}
 
+// Clipboard API can be unavailable because of browser permissions or a non-secure context.
+// Use a temporary selected textarea as a fallback rather than making copy silently fail.
+window.SmetraCopyText=async value=>{
+  const text=String(value??'');
+  if(navigator.clipboard?.writeText){
+    try{await navigator.clipboard.writeText(text);return true}catch{}
+  }
+  const field=document.createElement('textarea');
+  field.value=text;field.setAttribute('readonly','');field.setAttribute('aria-hidden','true');
+  Object.assign(field.style,{position:'fixed',left:'0',top:'0',width:'1px',height:'1px',padding:'0',border:'0',opacity:'0',pointerEvents:'none'});
+  document.body.append(field);
+  let copied=false;
+  try{field.focus({preventScroll:true});field.select();field.setSelectionRange(0,field.value.length);copied=document.execCommand('copy')}
+  finally{field.remove()}
+  if(!copied)throw Error('Clipboard access denied');
+  return true;
+};
+
 // Local CommonMark renderer. Model/user HTML stays text; remote images never load.
 (() => {
   const md=window.markdownit({html:false,breaks:false,linkify:true,typographer:false});
@@ -51,6 +69,6 @@ function assistantMarkdown(source){return window.SmetraMarkdown.render(source)}
     const label=button.textContent;button.disabled=true;
     try{await navigator.clipboard.writeText(code.textContent);button.textContent='Скопировано';setTimeout(()=>{button.textContent=label},1600)}
     catch{window.notify?.('Не удалось скопировать. Выделите код и скопируйте вручную.')}
-    finally{button.disabled=false}
+    finally{button.disabled=false;button.focus({preventScroll:true})}
   });
 })();

@@ -32,10 +32,13 @@
   sessionStorage.setItem(key,String(Date.now()));
   // Keep the user's draft and working page intact. Never interrupt with a modal.
   const old=document.querySelector('.contextual-upgrade');old?.remove();
+  track('paywall_viewed',source);
+  // The assistant already has an inline quota link; don't push its transcript down with a banner.
+  if(tab==='assistant')return;
   const notice=document.createElement('section');notice.className='contextual-upgrade';notice.setAttribute('role','status');
   notice.innerHTML='<div><strong>Продолжите работу в Про</strong><p>Больше смет и помощи ассистента. Ваши данные и черновик сохранятся.</p></div><button class="btn primary" type="button">Посмотреть Про</button><button class="icon-button" type="button" aria-label="Закрыть предложение">×</button>';
   document.querySelector('#content')?.prepend(notice);
-  notice.querySelector('.icon-button').onclick=()=>notice.remove();notice.querySelector('.primary').onclick=()=>{document.querySelector('#local-draft')?.click();sessionStorage.setItem('smetra.checkout.return.'+user.id,tab);sessionStorage.setItem('smetra.paywall.source',source);track('upgrade_clicked',source);tab='billing';location.hash='billing';render()};track('paywall_viewed',source);
+  notice.querySelector('.icon-button').onclick=()=>notice.remove();notice.querySelector('.primary').onclick=()=>{document.querySelector('#local-draft')?.click();sessionStorage.setItem('smetra.checkout.return.'+user.id,tab);sessionStorage.setItem('smetra.paywall.source',source);track('upgrade_clicked',source);tab='billing';location.hash='billing';render()};
  }
  async function billing(active){
   const owner=user,revision=sessionRevision(),[b,space]=await Promise.all([api('/billing'),api('/workspace')]);if(!active()||sessionRevision()!==revision)return;

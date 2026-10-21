@@ -36,6 +36,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const thread=activeConversation?await api('/assistant/conversations/'+encodeURIComponent(activeConversation)):data;
   if(!active())return;
   const currentTitle=threadIndex.items.find(item=>item.id===activeConversation)?.title||'Общий диалог';
+  document.querySelector('.contextual-upgrade')?.remove();
   view(`<section class="assistant-page assistant-refined assistant-studio">
     <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
     <div class="assistant-workbar">
@@ -190,13 +191,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     quotaLabel.title=`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
     upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
     if(value.remaining<1&&value.plan!=='pro'){upgrade.onclick=()=>sessionStorage.setItem('smetra.paywall.source','ai_limit');Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
-    const blocked=working||fileBlocking||!data.available||value.remaining<1;
+    const quotaBlocked=value.remaining<1&&value.plan!=='pro';
+    const blocked=working||fileBlocking||!data.available||quotaBlocked;
     send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
-    backgroundButton.disabled=blocked||!backgroundEnabled;
-    input.disabled=working||!data.available||value.remaining<1;
+    backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
+    send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
+    backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
+    input.disabled=working||!data.available;
+    input.title=quotaBlocked?'Черновик можно редактировать; отправка откроется после обновления лимита или перехода на Про.':'';
     setThreadBusy(working||threadBusy);
   };
-  const copyText=async(text,button)=>{if(button.disabled)return;const original=button.textContent;button.disabled=true;try{await navigator.clipboard.writeText(text);button.textContent='Скопировано';setTimeout(()=>{button.textContent=original},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false}};
+  const copyText=async(text,button)=>{if(button.disabled)return;const original=button.textContent;button.disabled=true;try{if(typeof window.SmetraCopyText==='function')await window.SmetraCopyText(text);else await navigator.clipboard.writeText(text);button.textContent='Скопировано';setTimeout(()=>{button.textContent=original},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false;button.focus({preventScroll:true})}};
   const nearBottom=()=>content.scrollHeight-content.scrollTop-content.clientHeight<100;
   const scrollBottom=()=>{content.scrollTop=content.scrollHeight};
   const addMessage=(role,text,messageId)=>{
@@ -260,7 +265,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       result.jobs.filter(job=>['queued','running','retry'].includes(job.status)||Date.now()/1000-job.updated_at<86400).slice(0,5).forEach(job=>{
         const row=document.createElement('div');row.className='assistant-job';row.dataset.status=job.status;
         const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
-        title.textContent=job.prompt;detail.textContent=job.error||job.progress||labels[job.status];detail.setAttribute('role','status');description.append(title,detail);row.append(description);
+        title.textContent=job.prompt;
+        const stalled=job.status==='queued'&&Date.now()/1000-Number(job.updated_at||job.created_at||0)>90;
+        detail.textContent=job.error||(stalled?'Долго ожидает запуска. Задача сохранена, но обработчик ещё не забрал её.':job.progress||labels[job.status]);
+        if(stalled)row.dataset.stalled='true';
+        detail.setAttribute('role','status');description.append(title,detail);row.append(description);
         const active=['queued','running','retry'].includes(job.status);
         if(active||job.status==='completed'){
           const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':['file_index','file_ocr'].includes(job.kind)?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
@@ -279,8 +288,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     backgroundButton.setAttribute('aria-pressed',String(backgroundMode));
     composer.classList.toggle('background-mode',backgroundMode);
     send.setAttribute('aria-label',backgroundMode?'Отправить задачу в фон':'Отправить сообщение');
-    send.title=backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
-    document.querySelector('#assistant-delivery-hint').textContent=backgroundMode?'Ответ сохранится в диалоге. Можно закрыть страницу.':'Enter — отправить · Shift+Enter — новая строка';
+    const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
+    send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
+    document.querySelector('#assistant-delivery-hint').textContent=quotaBlocked?'Лимит исчерпан — фон также расходует сообщения.':backgroundMode?'Ответ сохранится в диалоге. Можно закрыть страницу.':'Enter — отправить · Shift+Enter — новая строка';
   };
   backgroundButton.onclick=()=>{
     if(!backgroundEnabled||working||fileBlocking)return;
@@ -333,7 +343,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   data.actions.forEach(addAction);
   (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true,action.document_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
-  else if(quota.remaining<1)status.textContent='Лимит сообщений на этот месяц исчерпан.';
+  else if(quota.remaining<1)status.textContent='Лимит исчерпан: обычные и фоновые сообщения используют общий месячный лимит. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota)});resize();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
@@ -372,6 +382,6 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(error.name==='AbortError'){assistantMessage.item.classList.remove('streaming');if(!generated){assistantMessage.item.remove();userMessage.item.remove()}status.textContent='Ответ остановлен.'}
       else{userMessage.item.remove();assistantMessage.item.remove();status.textContent=error.message}
       try{renderQuota((await api('/assistant')).quota)}catch{}
-    }finally{working=false;requestController=null;stop.hidden=true;renderQuota(quota);input.disabled=!data.available||quota.remaining<1;if(!input.disabled)input.focus()}
+    }finally{working=false;requestController=null;stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus()}
   };
 };
