@@ -1196,7 +1196,16 @@
  .workspace-page.sidebar-compact .sidebar-foot #logout{flex-basis:40px!important;width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important}
 }
 @media(max-width:800px){
- .workspace-page .sidebar{top:74px!important;height:calc(100dvh - 74px)!important;width:min(280px,86vw)!important;max-width:86vw!important}
+ /* ID-level specificity wins over the legacy mobile drawer rule in cabinet.css. */
+ body.workspace-page #sidebar{
+  position:fixed!important;
+  top:74px!important;
+  bottom:0!important;
+  height:auto!important;
+  max-height:none!important;
+  width:min(280px,86vw)!important;
+  max-width:86vw!important;
+ }
  .workspace-page .workspace-label{min-height:60px}
  .workspace-page .sidebar-group button{min-height:42px!important;height:42px}
 }
