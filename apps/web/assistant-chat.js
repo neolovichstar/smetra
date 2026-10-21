@@ -1,5 +1,15 @@
 'use strict';
 
+/* Recalculate the active composer when the viewport changes, not only on typing. */
+function resizeAssistantComposer(input){
+  if(!input?.isConnected)return;
+  input.style.height='auto';
+  input.style.height=Math.min(input.scrollHeight,180)+'px';
+}
+const resizeActiveAssistantComposer=()=>resizeAssistantComposer(document.querySelector('#assistant-input'));
+window.addEventListener('resize',resizeActiveAssistantComposer,{passive:true});
+window.visualViewport?.addEventListener('resize',resizeActiveAssistantComposer,{passive:true});
+
 window.SmetraAssistantContext=function(value){
   if(!value||!['clients','quotes','projects','files','documents'].includes(value.entity)||typeof value.id!=='string')return;
   sessionStorage.setItem('smetra.assistant.context',JSON.stringify({entity:value.entity,id:value.id,label:String(value.label||'').slice(0,120),workspace_id:value.workspace_id||''}));
@@ -162,7 +172,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const saveDraft=()=>{try{if(input.value)sessionStorage.setItem(draftSlot(),input.value.slice(0,3000));else sessionStorage.removeItem(draftSlot())}catch{}};
   const clearSentDraft=prompt=>{try{if((sessionStorage.getItem(draftSlot())||'').trim()===prompt)sessionStorage.removeItem(draftSlot())}catch{}};
   try{input.value=sessionStorage.getItem(draftSlot())||''}catch{}
-  try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
+  try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();resizeAssistantComposer(input)}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
   saveDraft();
   document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
   const fileInput=document.querySelector('#assistant-attach-input');
@@ -388,7 +398,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true,action.document_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит исчерпан: обычные и фоновые сообщения используют общий месячный лимит. Черновик можно редактировать.';
-  const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
+  const resize=()=>resizeAssistantComposer(input);
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota)});resize();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{

@@ -28,6 +28,8 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  await until("document.querySelector('.assistant-welcome h2')");
  for(const width of [320,390,768,1440]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
+  const composerMetrics=await evaluate("(()=>{const field=document.querySelector('#assistant-input');return {scrollHeight:field.scrollHeight,clientHeight:field.clientHeight,boxHeight:field.getBoundingClientRect().height,inlineHeight:field.style.height}})()");
+  assert.ok(composerMetrics.scrollHeight<=composerMetrics.clientHeight+1,'Assistant composer displays all wrapped placeholder/input lines at '+width+'px: '+JSON.stringify(composerMetrics));
   const alignment=await evaluate("(()=>{const root=document.querySelector('.assistant-welcome'),bounds=root.getBoundingClientRect(),center=bounds.left+bounds.width/2;return [...root.querySelectorAll('.assistant-welcome-line,h2,p,.assistant-suggestions')].map(node=>{const r=node.getBoundingClientRect();return {delta:Math.abs(r.left+r.width/2-center),align:getComputedStyle(node).textAlign}})})()");
   assert.ok(alignment.every(node=>node.delta<1),'Welcome centered at '+width);assert.equal(alignment[1].align,'center');assert.equal(alignment[2].align,'center');
   if(width<701){

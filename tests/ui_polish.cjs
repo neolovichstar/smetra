@@ -5,6 +5,8 @@ const html = fs.readFileSync('apps/web/app.html', 'utf8');
 const css = fs.readFileSync('apps/web/workspace-polish.css', 'utf8');
 const server = fs.readFileSync('backend/app.py', 'utf8');
 const appJs = fs.readFileSync('apps/web/app.js', 'utf8');
+const featureLoader = fs.readFileSync('apps/web/features.js', 'utf8');
+const assistantChat = fs.readFileSync('apps/web/assistant-chat.js', 'utf8');
 const workspaceJs = fs.readFileSync('apps/web/workspace.js', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
@@ -50,6 +52,15 @@ assert.match(css, /#content \.editor-layout > \.editor-main\s*\{[\s\S]*?display:
   'estimate editor groups use deliberate and stable vertical separation');
 assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?body\.workspace-page #content \.editor-layout\s*\{\s*gap:\s*14px !important/,
   'mobile estimate editor preserves the inter-section gap after switching to a vertical layout');
+
+assert.match(html, /src="\/features\.js\?v=20261021-assistant-resize-v1"/,
+  'feature loader cache key changes with responsive composer behavior');
+assert.match(featureLoader, /\/assistant-chat\.js\?v=20261021-composer-resize-v1/,
+  'assistant chat module is cache-busted when composer resize behavior changes');
+assert.match(assistantChat, /window\.addEventListener\('resize',resizeActiveAssistantComposer/,
+  'assistant composer recalculates after window resizing');
+assert.match(assistantChat, /visualViewport\?\.addEventListener\('resize',resizeActiveAssistantComposer/,
+  'assistant composer recalculates after mobile visual viewport resizing');
 
 assert.match(css, /#assistant-new-thread::before,[\s\S]*?#assistant-knowledge::before\s*\{[\s\S]*?content:none!important[\s\S]*?mask:none!important[\s\S]*?-webkit-mask:none!important/,
   'legacy assistant pseudo-icons are suppressed so each action has one inline SVG');

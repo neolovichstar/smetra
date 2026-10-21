@@ -3,7 +3,7 @@
   const pending=new Map();
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js','/ai-workspace.js']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js?v=20261021-composer-resize-v1','/ai-workspace.js']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,files:['/construction.js']},
