@@ -226,7 +226,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     item.append(label,body);
     if(role==='assistant'){
       const toolbar=document.createElement('div');toolbar.className='assistant-message-actions';toolbar.setAttribute('role','group');toolbar.setAttribute('aria-label','Действия с ответом');
-      const copy=messageButton('copy','Скопировать ответ');copy.onclick=()=>copyText(body.dataset.source,copy);toolbar.append(copy);
+      const copy=messageButton('copy','Скопировать ответ');copy.classList.add('assistant-copy');copy.onclick=()=>copyText(body.dataset.source,copy);toolbar.append(copy);
       const previous=messages.lastElementChild;
       const previousPrompt=previous?.classList.contains('user')?previous.querySelector('.assistant-markdown')?.dataset.source||'':'';
       const regenerate=messageButton('refresh','Перегенерировать ответ');regenerate.classList.add('assistant-regenerate');regenerate.dataset.prompt=previousPrompt;regenerate.disabled=!previousPrompt||!data.available||(quota.remaining<1&&quota.plan!=='pro');
