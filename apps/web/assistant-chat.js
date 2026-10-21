@@ -76,10 +76,13 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   backgroundButton.title='Сохранить задачу на сервере и открыть ответ позже';
   let backgroundEnabled=false,backgroundMode=false;
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
-  jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));actions.after(jobList);
+  jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));
   const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
   composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
-  document.querySelector('#assistant-form').append(composeTools);
+  const assistantForm=document.querySelector('#assistant-form');
+  assistantForm.append(composeTools);
+  // Background jobs belong to the composer surface directly above the message field.
+  assistantForm.insertBefore(jobList,input);
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const quotaLabel=document.querySelector('#assistant-quota');
