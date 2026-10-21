@@ -122,6 +122,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     menu.addEventListener('keydown',event=>{if(event.key==='Escape'){menu.open=false;menu.querySelector('summary').focus();event.stopPropagation()}});
     menu.addEventListener('focusout',()=>{setTimeout(()=>{if(menu.isConnected&&!menu.contains(document.activeElement))menu.open=false},0)});
   });
+  const toolrail=document.querySelector('.assistant-studio'),toolrailToggle=document.querySelector('#assistant-toolrail-toggle');
+  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';toolrailToggle.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
   document.querySelector('.assistant-page').addEventListener('click',event=>{
     if(!event.target.closest('.assistant-workbar'))document.querySelectorAll('.assistant-workbar details').forEach(menu=>{menu.open=false});
   });
@@ -282,6 +284,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   renderQuota(quota);
   let jobRequest=null,jobPollTimer=null,jobLoadSeq=0;
+  const dismissedJobsKey='smetra.assistant.dismissedJobs:'+user.id+':'+currentWorkspace;
+  const dismissedJobIds=new Set();
+  try{for(const id of JSON.parse(sessionStorage.getItem(dismissedJobsKey)||'[]'))dismissedJobIds.add(String(id))}catch{}
+  const rememberDismissedJob=id=>{dismissedJobIds.add(String(id));try{sessionStorage.setItem(dismissedJobsKey,JSON.stringify([...dismissedJobIds].slice(-100)))}catch{}};
   const refreshJobs=async()=>{
     clearTimeout(jobPollTimer);const sequence=++jobLoadSeq;
     if(!jobList.isConnected)return;
@@ -295,7 +301,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       renderQuota(quota);
       jobList.replaceChildren();
       const labels={queued:'В очереди',running:'В работе',retry:'Повторю позже',completed:'Готово',failed:'Не удалось завершить',cancelled:'Отменено'};
-      result.jobs.filter(job=>['queued','running','retry'].includes(job.status)||Date.now()/1000-job.updated_at<86400).slice(0,5).forEach(job=>{
+      const now=Date.now()/1000;
+      result.jobs.filter(job=>{
+        if(!job?.id||dismissedJobIds.has(String(job.id))||job.status==='cancelled')return false;
+        if(['queued','running','retry'].includes(job.status))return true;
+        return ['completed','failed'].includes(job.status)&&now-Number(job.updated_at||job.created_at||0)<86400;
+      }).slice(0,5).forEach(job=>{
         const row=document.createElement('div');row.className='assistant-job';row.dataset.status=job.status;
         const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
         title.textContent=job.prompt;
@@ -307,7 +318,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(active||job.status==='completed'){
           const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':['file_index','file_ocr'].includes(job.kind)?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
           button.onclick=async()=>{button.disabled=true;try{
-            if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});renderQuota(cancelled.quota);refreshJobs();refreshFile()}
+            if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});rememberDismissedJob(job.id);row.classList.add('assistant-job-removing');row.setAttribute('aria-hidden','true');row.remove();renderQuota(cancelled.quota);refreshJobs();refreshFile()}
             else if(['file_index','file_ocr'].includes(job.kind)){window.SmetraAssistantContext({entity:'files',id:job.file_id,workspace_id:currentWorkspace,label:job.prompt.replace(/^(Подготовка|Распознавание) · /,'')});window.SmetraAssistant()}
             else{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',job.conversation_id||'');window.SmetraAssistant()}
           }catch(error){button.disabled=false;notify(error.message)}};row.append(button);
