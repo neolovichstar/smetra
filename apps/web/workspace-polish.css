@@ -354,3 +354,9 @@
   mask:none!important;
   -webkit-mask:none!important;
 }
+
+/* First-run onboarding already owns the primary heading and create-quote action.
+   Keep quick capture below it, but remove the repeated dashboard call-to-action. */
+.workspace-page .workspace-home:has(> .activation-intro) > .dashboard-intro {
+  display: none;
+}

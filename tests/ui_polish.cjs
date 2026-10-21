@@ -11,7 +11,7 @@ const workspaceJs = fs.readFileSync('apps/web/workspace.js', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
-const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v4-composer-flex');
+const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v5-first-run');
 assert.match(html, /src="\/app\.js\?v=20261021-nav-v5"/,
   'navigation script cache key changes with shipped navigation behavior');
 assert.match(html, /src="\/workspace\.js\?v=20261021-dialog-a11y-v1"/,
@@ -61,6 +61,9 @@ assert.match(assistantChat, /window\.addEventListener\('resize',resizeActiveAssi
   'assistant composer recalculates after window resizing');
 assert.match(assistantChat, /visualViewport\?\.addEventListener\('resize',resizeActiveAssistantComposer|visualViewport\.addEventListener\('resize',resizeActiveAssistantComposer/,
   'assistant composer recalculates after mobile visual viewport resizing');
+
+assert.match(css, /\.workspace-home:has\(> \.activation-intro\) > \.dashboard-intro\s*\{\s*display:\s*none;/,
+  'first-run onboarding does not repeat the dashboard title and create-estimate CTA');
 
 assert.match(css, /\.assistant-refined \.assistant-composer textarea\s*\{\s*flex:\s*0 0 auto;/,
   'assistant textarea cannot be flex-shrunk below the height calculated for wrapped text');
