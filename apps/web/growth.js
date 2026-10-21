@@ -53,7 +53,6 @@
   const recent=b.payments[0];
   const paymentNames={pending:'Ожидает оплаты',succeeded:'Оплачено',canceled:'Отменено',refunded:'Возврат'};
   const monthlyPrice=pricing.plans.pro_month.amount_kopecks;
-  const annualPrice=pricing.plans.pro_year.amount_kopecks;
   const annualSaving=pricing.annual_saving_kopecks;
   const annualSavingPct=Math.round(annualSaving/(monthlyPrice*12)*100);
   const monthlyPurchaseBonus=Number(pricing.purchase_bonus?.pro_month||0);
