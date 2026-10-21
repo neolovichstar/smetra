@@ -40,10 +40,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
       if(route==='assistant'){
         assert.equal(await evaluate(`(()=>{const content=document.querySelector('.assistant-content'),composer=document.querySelector('.assistant-composer');return content.getBoundingClientRect().bottom<=composer.getBoundingClientRect().top+1&&composer.getBoundingClientRect().bottom<=innerHeight+1})()`),true,'Assistant composer overlaps content or viewport at '+width);
         await evaluate("document.querySelector('.assistant-content').scrollTop=document.querySelector('.assistant-content').scrollHeight");
-        assert.equal(await evaluate(`(()=>{const job=document.querySelector('.assistant-job'),content=document.querySelector('.assistant-content');return !job||job.getBoundingClientRect().bottom<=content.getBoundingClientRect().bottom+1})()`),true,'Last background job must remain readable at '+width);
+        assert.equal(await evaluate(`(()=>{const job=document.querySelector('.assistant-job'),form=document.querySelector('#assistant-form'),composer=document.querySelector('.assistant-composer');return !job||(form.contains(job)&&job.getBoundingClientRect().top>=composer.getBoundingClientRect().top&&job.getBoundingClientRect().bottom<=form.getBoundingClientRect().bottom+1)})()`),true,'Background jobs must stay attached to the composer and visible at '+width);
       }
       if([390,1440].includes(width))fs.writeFileSync(`data/qa/section-${route}-${width}.png`,Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
     }
+    if(route==='quotes')assert.equal(await evaluate(`(()=>{const sheet=document.querySelector('.quotes-document'),heading=document.querySelector('#quotes-register-title'),search=document.querySelector('#workspace-search'),list=document.querySelector('#records');return !!sheet&&!!heading&&!!search&&!!list&&list.classList.contains('quotes-document-list')})()`),true,'Quotes page must render as a document register');
     if(route==='clients')assert.equal(await evaluate("!!document.querySelector('.contact-group .contact-monogram')"),true);
     if(route==='construction'){
       await send('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
