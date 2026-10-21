@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const html = fs.readFileSync('apps/web/app.html', 'utf8');
 const css = fs.readFileSync('apps/web/workspace-polish.css', 'utf8');
 const server = fs.readFileSync('backend/app.py', 'utf8');
+const appJs = fs.readFileSync('apps/web/app.js', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
@@ -13,6 +14,17 @@ assert.ok(polishLink > foundationLink, 'polish layer loads after the existing UI
 
 assert.match(server, /"\/workspace-polish\.css":\s*\("workspace-polish\.css",\s*"text\/css"\)/,
   'server serves the new stylesheet through the explicit static allowlist');
+
+assert.match(html, /id="command-open"[^>]*aria-label="Найти в Сметре"/,
+  'icon-only command search exposes a stable accessible name');
+assert.match(html, /id="command-open"[^>]*aria-keyshortcuts="Control\+K Meta\+K"/,
+  'command search advertises supported keyboard shortcuts');
+assert.match(html, /<nav class="sidebar-scroll" aria-label="Разделы рабочего пространства">/,
+  'workspace sections are exposed as a named navigation landmark');
+assert.match(appJs, /setAttribute\('aria-current','page'\)/,
+  'the active workspace destination is communicated to assistive technology');
+assert.match(appJs, /removeAttribute\('aria-current'\)/,
+  'stale current-page state is removed when navigating between sections');
 
 for (const selector of [
   '.workspace-page .main',

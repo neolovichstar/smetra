@@ -167,7 +167,16 @@ async function render() {
   const owner=user,section=tab,mine=++renderRevision;
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
-  $('#sidebar-profile')?.classList.toggle('active',tab==='profile');
+  for(const b of document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')){
+    if(b.dataset.tab===tab)b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+  }
+  const profileButton=$('#sidebar-profile');
+  profileButton?.classList.toggle('active',tab==='profile');
+  if(profileButton){
+    if(tab==='profile')profileButton.setAttribute('aria-current','page');
+    else profileButton.removeAttribute('aria-current');
+  }
   const loadingTimer=setTimeout(()=>{if(active())view(loadingView(section))},80);
   try {
     const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth'})[section];

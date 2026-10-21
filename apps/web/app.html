@@ -39,7 +39,7 @@
       </div>
       <nav class="workspace-modes" aria-label="Режим работы"><button type="button" data-mode="dashboard" aria-pressed="true">Сметы</button><button type="button" data-mode="assistant" aria-pressed="false">Ассистент</button></nav>
       <div class="app-nav-actions">
-        <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
+        <button class="nav-search" id="command-open" type="button" aria-label="Найти в Сметре" aria-keyshortcuts="Control+K Meta+K"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
         <span id="header-user" class="nav-user"></span>
         <button class="btn small" id="theme" type="button">Тема</button>
       </div>
@@ -93,12 +93,12 @@
         <span class="workspace-label-copy"><strong id="workspace-name">Сметра</strong><small>Рабочее пространство</small></span>
         <svg class="workspace-label-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
       </div>
-      <div class="sidebar-scroll">
+      <nav class="sidebar-scroll" aria-label="Разделы рабочего пространства">
         <div class="sidebar-group"><span class="sidebar-heading">Основное</span><button data-tab="dashboard" class="active">Сегодня</button><button data-tab="assistant">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="projects">Проекты</button><button data-tab="clients">Клиенты</button></div>
         <div class="sidebar-group"><span class="sidebar-heading">Работа</span><button data-tab="construction">Объекты и замеры</button><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="finance">Платежи</button></div>
         <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button></div>
         <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
-      </div>
+      </nav>
       <div class="sidebar-foot">
         <button id="sidebar-profile" class="sidebar-profile-trigger" data-tab="profile" type="button" aria-label="Открыть профиль">
           <span id="sidebar-avatar" class="sidebar-avatar" aria-hidden="true">С</span>
