@@ -822,3 +822,127 @@
 @media(max-width:700px){
  .workspace-page .assistant-studio{min-height:0!important;height:calc(100dvh - 154px);max-height:calc(100dvh - 154px)}
 }
+
+
+/* Visual regression fix: keep the assistant's secondary rail to the LEFT of its workspace. */
+.workspace-page .assistant-studio{
+  grid-template-columns:232px minmax(0,1fr)!important;
+  grid-template-rows:minmax(0,1fr);
+}
+.workspace-page .assistant-studio.assistant-tools-collapsed{
+  grid-template-columns:58px minmax(0,1fr)!important;
+}
+.workspace-page .assistant-studio>.assistant-toolrail{
+  grid-column:1!important;
+  grid-row:1;
+  border-left:0!important;
+  border-right:1px solid var(--smetra-line)!important;
+  padding:5px 12px 12px 9px!important;
+}
+.workspace-page .assistant-studio>.assistant-main-column{
+  grid-column:2!important;
+  grid-row:1;
+  padding-right:0!important;
+  padding-left:clamp(14px,2vw,26px)!important;
+}
+.workspace-page .assistant-studio .assistant-history-list,
+.workspace-page .assistant-studio .assistant-options-list{
+  left:calc(100% + 10px)!important;
+  right:auto!important;
+}
+.workspace-page .assistant-studio.assistant-tools-collapsed .assistant-history-list,
+.workspace-page .assistant-studio.assistant-tools-collapsed .assistant-options-list{
+  left:calc(100% + 8px)!important;
+  right:auto!important;
+}
+.workspace-page .assistant-studio .assistant-toolrail-toggle{margin-left:0!important;margin-right:auto!important}
+.workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail-toggle{margin-inline:auto!important}
+
+@media(max-width:900px) and (min-width:701px){
+  .workspace-page .assistant-studio{grid-template-columns:204px minmax(0,1fr)!important}
+  .workspace-page .assistant-studio.assistant-tools-collapsed{grid-template-columns:56px minmax(0,1fr)!important}
+}
+@media(max-width:700px){
+  .workspace-page .assistant-studio,
+  .workspace-page .assistant-studio.assistant-tools-collapsed{
+    grid-template-columns:52px minmax(0,1fr)!important;
+  }
+  .workspace-page .assistant-studio>.assistant-toolrail{padding:5px 2px 8px!important}
+  .workspace-page .assistant-studio>.assistant-main-column{padding-left:10px!important}
+}
+
+/* Make sidebar icons single-source, pixel-sized elements, never inherited giant SVGs. */
+.workspace-page .sidebar-group button::before{content:none!important;display:none!important}
+.workspace-page .sidebar-group button>.sidebar-item-icon{
+  display:block!important;
+  position:static!important;
+  flex:0 0 19px!important;
+  width:19px!important;
+  min-width:19px!important;
+  max-width:19px!important;
+  height:19px!important;
+  min-height:19px!important;
+  max-height:19px!important;
+  overflow:visible;
+  transform:none!important;
+  opacity:1!important;
+}
+.workspace-page .sidebar-group button>.sidebar-item-label{
+  flex:1 1 auto;
+  width:auto;
+  min-width:0;
+  font-size:inherit;
+  font-weight:inherit;
+  line-height:inherit;
+}
+.workspace-page.sidebar-compact .sidebar-group button>.sidebar-item-label{width:0!important;max-width:0!important;flex:0 1 0!important}
+.workspace-page .sidebar-foot #logout{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:9px!important;
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  padding:9px 10px;
+  overflow:hidden;
+  border-radius:9px;
+  font-size:12px;
+  line-height:1.35;
+}
+.workspace-page .sidebar-foot #logout>.sidebar-logout-icon{
+  display:block!important;
+  flex:0 0 18px!important;
+  width:18px!important;
+  min-width:18px!important;
+  max-width:18px!important;
+  height:18px!important;
+  min-height:18px!important;
+  max-height:18px!important;
+  overflow:visible;
+}
+.workspace-page .sidebar-foot #logout>.sidebar-logout-label{
+  display:block;
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  line-height:1.35;
+}
+.workspace-page.sidebar-compact .sidebar-foot #logout{
+  display:grid!important;
+  place-items:center!important;
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  max-height:44px!important;
+  padding:0!important;
+}
+.workspace-page.sidebar-compact .sidebar-foot #logout>.sidebar-logout-icon{
+  width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;
+}
+.workspace-page.sidebar-compact .sidebar-foot #logout>.sidebar-logout-label{display:none!important}
