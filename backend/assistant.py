@@ -870,7 +870,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         {"role": "user", "content": prompt},
     ]
     actions, answer, remembered = [], "", False
-    for turn in range(3):
+    for turn in range(2):
         if on_commit and on_status:
             on_status("Формулирую ответ…")
         response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
