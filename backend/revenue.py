@@ -13,6 +13,8 @@ import uuid
 
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
+# One-time assistant credits granted only after a provider-confirmed live payment.
+PURCHASE_BONUS_MESSAGES = {'pro_month': 25, 'pro_year': 150}
 
 
 def now():
@@ -74,6 +76,7 @@ def pricing(con, user):
         'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
         'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366}},
         'annual_saving_kopecks': prices['month']*12-prices['year'],
+        'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
         'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
 
@@ -109,8 +112,8 @@ def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None):
     option = offer['plans'][plan]
     if expected_amount is not None and expected_amount != option['amount_kopecks']:
         raise ValueError('Displayed price changed before checkout')
-    con.execute('INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
-                (str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'], option['duration_days'], offer['experiment']+':'+offer['variant'], source(origin), int(is_test), now()))
+    con.execute('INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
+                (str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'], option['duration_days'], offer['experiment']+':'+offer['variant'], source(origin), int(is_test), now(), offer['purchase_bonus'][plan]))
     return con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
 
 
