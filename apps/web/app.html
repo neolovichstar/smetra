@@ -87,14 +87,26 @@
   <div id="nav-backdrop" class="nav-backdrop hidden"></div>
   <div id="shell" class="app-shell hidden">
     <aside id="sidebar" class="sidebar" aria-label="Рабочие разделы">
-      <div class="workspace-label"><span class="eyebrow">ВАШЕ ПРОСТРАНСТВО</span><strong id="workspace-name">Сметра</strong><span class="workspace-label-mark" aria-hidden="true">↗</span></div>
-      <div class="sidebar-scroll">
-        <div class="sidebar-group"><span class="sidebar-heading">ОСНОВНОЕ</span><button data-tab="dashboard" class="active">Сегодня</button><button data-tab="clients">Клиенты</button><button data-tab="quotes">Сметы</button><button data-tab="projects">Проекты</button><button data-tab="construction">Объекты и замеры</button></div>
-        <div class="sidebar-group"><span class="sidebar-heading">ПРОЦЕСС</span><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="assistant">Ассистент <span class="sidebar-accent" aria-hidden="true"></span></button></div>
-        <div class="sidebar-group"><span class="sidebar-heading">РЕСУРСЫ</span><button data-tab="finance">Платежи</button><button data-tab="catalog">Расценки</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button></div>
-        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">АККАУНТ</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="profile">Профиль</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
+      <div class="workspace-label">
+        <span class="workspace-icon" aria-hidden="true">с</span>
+        <span class="workspace-label-copy"><strong id="workspace-name">Сметра</strong><small>Рабочее пространство</small></span>
+        <svg class="workspace-label-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
       </div>
-      <div class="sidebar-foot"><span>СМЕТРА / РАБОТА ЯСНЕЕ</span><button id="logout" type="button">Выйти <span aria-hidden="true">↗</span></button></div>
+      <div class="sidebar-scroll">
+        <div class="sidebar-group"><span class="sidebar-heading">Основное</span><button data-tab="dashboard" class="active">Сегодня</button><button data-tab="assistant">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="projects">Проекты</button><button data-tab="clients">Клиенты</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Работа</span><button data-tab="construction">Объекты и замеры</button><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="finance">Платежи</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button></div>
+        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
+      </div>
+      <div class="sidebar-foot">
+        <button id="sidebar-profile" class="sidebar-profile-trigger" data-tab="profile" type="button" aria-label="Открыть профиль">
+          <span id="sidebar-avatar" class="sidebar-avatar" aria-hidden="true">С</span>
+          <span class="sidebar-profile-copy"><strong id="sidebar-profile-name">Аккаунт</strong><small>Настройки аккаунта</small></span>
+        </button>
+        <button id="logout" type="button" aria-label="Выйти из аккаунта" title="Выйти из аккаунта">
+          <svg class="sidebar-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
+        </button>
+      </div>
     </aside>
     <main class="main" id="content" tabindex="-1"></main>
   </div>
