@@ -5,12 +5,15 @@ const html = fs.readFileSync('apps/web/app.html', 'utf8');
 const css = fs.readFileSync('apps/web/workspace-polish.css', 'utf8');
 const server = fs.readFileSync('backend/app.py', 'utf8');
 const appJs = fs.readFileSync('apps/web/app.js', 'utf8');
+const workspaceJs = fs.readFileSync('apps/web/workspace.js', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
 const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v1');
 assert.match(html, /src="\/app\.js\?v=20261021-nav-v5"/,
   'navigation script cache key changes with shipped navigation behavior');
+assert.match(html, /src="\/workspace\.js\?v=20261021-dialog-a11y-v1"/,
+  'workspace script cache key changes with dialog accessibility behavior');
 assert.ok(foundationLink >= 0, 'shared UI foundation is linked');
 assert.ok(polishLink > foundationLink, 'polish layer loads after the existing UI layers');
 
@@ -27,6 +30,10 @@ assert.match(appJs, /setAttribute\('aria-current','page'\)/,
   'the active workspace destination is communicated to assistive technology');
 assert.match(appJs, /removeAttribute\('aria-current'\)/,
   'stale current-page state is removed when navigating between sections');
+assert.match(workspaceJs, /setAttribute\('aria-labelledby','workspace-dialog-title'\)|setAttribute\('aria-labelledby',dialogTitle\.id\)/,
+  'shared dialogs provide an accessible name from their visible heading');
+assert.match(workspaceJs, /setAttribute\('aria-describedby','workspace-dialog-description'\)|setAttribute\('aria-describedby',dialogDescription\.id\)/,
+  'shared dialogs expose their supporting description to assistive technology');
 
 for (const selector of [
   '.workspace-page .main',

@@ -40,9 +40,14 @@ window.Workspace = (() => {
   };
   function closeModal(){if(!modal?.open)return;modal.classList.add('is-closing');clearTimeout(modalTimer);modalTimer=setTimeout(()=>{modal.close();modal.classList.remove('is-closing');document.body.classList.remove('modal-open')},matchMedia('(prefers-reduced-motion: reduce)').matches?0:200)}
   function openModal(title,subtitle,content){
-    if(!modal){modal=document.createElement('dialog');modal.id='workspace-dialog';modal.className='experience-dialog workspace-dialog';document.body.append(modal);modal.addEventListener('cancel',ev=>{ev.preventDefault();closeModal()});modal.addEventListener('click',ev=>{if(ev.target===modal){const r=modal.getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)closeModal()}});modal.addEventListener('close',()=>{if(!modal.open){document.body.classList.remove('modal-open');modal.replaceChildren()}})}
+    if(!modal){modal=document.createElement('dialog');modal.id='workspace-dialog';modal.className='experience-dialog workspace-dialog';document.body.append(modal);modal.addEventListener('cancel',ev=>{ev.preventDefault();closeModal()});modal.addEventListener('click',ev=>{if(ev.target===modal){const r=modal.getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)closeModal()}});modal.addEventListener('close',()=>{if(!modal.open){document.body.classList.remove('modal-open');modal.replaceChildren();modal.removeAttribute('aria-labelledby');modal.removeAttribute('aria-describedby')}})}
     clearTimeout(modalTimer);modal.classList.remove('is-closing');
     modal.innerHTML=`<div class="modal-topbar"><span>СМЕТРА / РАБОЧЕЕ ПРОСТРАНСТВО</span><button class="icon-button" data-close aria-label="Закрыть"><img class="icon" src="/assets/icons/x.svg" alt=""></button></div><div class="dialog-heading"><div><h2>${e(title)}</h2><p>${e(subtitle)}</p></div></div>${content}`;
+    const dialogTitle=modal.querySelector('.dialog-heading h2');
+    const dialogDescription=modal.querySelector('.dialog-heading p');
+    if(dialogTitle){dialogTitle.id='workspace-dialog-title';modal.setAttribute('aria-labelledby',dialogTitle.id)}
+    if(dialogDescription?.textContent.trim()){dialogDescription.id='workspace-dialog-description';modal.setAttribute('aria-describedby',dialogDescription.id)}
+    else modal.removeAttribute('aria-describedby');
     modal.querySelector('[data-close]').onclick=closeModal;
     if(!modal.open)modal.showModal();document.body.classList.add('modal-open');
     return modal;
