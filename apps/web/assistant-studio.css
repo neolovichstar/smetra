@@ -103,10 +103,10 @@
  .assistant-studio .assistant-history{flex:1;min-width:120px}
  .workspace-page .assistant-studio .assistant-workbar>.btn{min-height:44px;padding-inline:8px;font-size:11px}
  .workspace-page .assistant-studio #assistant-new-thread{width:44px;font-size:0;gap:0;padding:0;justify-content:center}
- .assistant-studio #assistant-new-thread::before{content:'';display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/plus.svg') center/contain no-repeat}
- .assistant-studio #assistant-new-thread>svg{display:none}
+ 
+
  .assistant-studio #assistant-knowledge{font-size:0!important;width:44px;justify-content:center;gap:0!important}
- .assistant-studio #assistant-knowledge::before{content:'';display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/book-open.svg') center/contain no-repeat}
+ 
  .assistant-studio .assistant-options summary{width:44px;height:44px}
  .assistant-studio .assistant-history-list{min-width:210px;width:min(300px,calc(100vw - 48px))}
  .assistant-studio .assistant-options-list{min-width:200px;width:200px}

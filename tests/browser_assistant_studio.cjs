@@ -34,18 +34,14 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
    const vertical=await evaluate("(()=>{const items=[...document.querySelectorAll('.assistant-suggestions button')],last=items[items.length-1],composer=document.querySelector('.assistant-composer');if(!last||!composer)return null;const a=last.getBoundingClientRect(),b=composer.getBoundingClientRect();return {lastBottom:Math.round(a.bottom),composerTop:Math.round(b.top),gap:Math.round(b.top-a.bottom)}})()");
    assert.ok(vertical&&vertical.gap>=0,'Last welcome suggestion must remain above the sticky composer at '+width+'px: '+JSON.stringify(vertical));
   }
+  const assistantIcons=await evaluate("(()=>{const read=id=>{const button=document.querySelector(id),svg=button?.querySelector('svg'),pseudo=getComputedStyle(button,'::before');return {svg:svg?getComputedStyle(svg).display:'missing',mask:pseudo.maskImage}};return {newThread:read('#assistant-new-thread'),knowledge:read('#assistant-knowledge')}})()");
+  for(const [label,icon] of Object.entries(assistantIcons)){
+    assert.notEqual(icon.svg,'none','Assistant '+label+' keeps its inline SVG icon at '+width+'px');
+    assert.equal(icon.mask.includes('plus.svg')||icon.mask.includes('book-open.svg'),false,'Assistant '+label+' has no duplicate CSS icon at '+width+'px');
+  }
   const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
-  if(width<701){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Mobile menu toggle shown at '+width);
-    const iconState=await evaluate("(()=>{const b=document.querySelector('#assistant-new-thread'),svg=b.querySelector('svg'),before=getComputedStyle(b,'::before');return {svg:svg?getComputedStyle(svg).display:'missing',content:before.content,mask:before.maskImage}})()");
-    assert.equal(iconState.svg,'none','Mobile new-dialog button hides its inline SVG when using the CSS icon');
-    assert.notEqual(iconState.content,'none','Mobile new-dialog CSS icon is present');
-    assert.notEqual(iconState.mask,'none','Mobile new-dialog CSS icon uses the plus SVG asset');
-   }
-  else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width);
-    const iconState=await evaluate("(()=>{const b=document.querySelector('#assistant-new-thread'),svg=b.querySelector('svg'),before=getComputedStyle(b,'::before');return {svg:svg?getComputedStyle(svg).display:'missing',mask:before.maskImage}})()");
-    assert.notEqual(iconState.svg,'none','Desktop new-dialog button keeps its inline SVG icon');
-    assert.equal(iconState.mask.includes('plus.svg'),false,'Desktop new-dialog button does not add a redundant plus-mask icon');
-   }
+  if(width<701){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Mobile menu toggle shown at '+width)}
+  else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width)}
   const overflow=await evaluate("(()=>{const vw=innerWidth;const offenders=[...document.querySelectorAll('body *')].map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,id:el.id,cls:typeof el.className==='string'?el.className:'',left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scroll:el.scrollWidth,client:el.clientWidth}}).filter(x=>x.width>0&&(x.left < -1||x.right>vw+1)).sort((a,b)=>(b.right-vw)-(a.right-vw)).slice(0,10);return {vw,doc:document.documentElement.scrollWidth,offenders}})()");
   assert.equal(overflow.doc<=overflow.vw,true,'No horizontal overflow at '+width+': '+JSON.stringify(overflow));
   await screenshot('welcome-aligned-'+width);
