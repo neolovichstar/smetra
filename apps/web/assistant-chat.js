@@ -7,8 +7,10 @@ function resizeAssistantComposer(input){
   input.style.height=Math.min(input.scrollHeight,180)+'px';
 }
 const resizeActiveAssistantComposer=()=>resizeAssistantComposer(document.querySelector('#assistant-input'));
-window.addEventListener('resize',resizeActiveAssistantComposer,{passive:true});
-window.visualViewport?.addEventListener('resize',resizeActiveAssistantComposer,{passive:true});
+if(typeof window.addEventListener==='function'){
+  window.addEventListener('resize',resizeActiveAssistantComposer,{passive:true});
+  if(typeof window.visualViewport?.addEventListener==='function')window.visualViewport.addEventListener('resize',resizeActiveAssistantComposer,{passive:true});
+}
 
 window.SmetraAssistantContext=function(value){
   if(!value||!['clients','quotes','projects','files','documents'].includes(value.entity)||typeof value.id!=='string')return;
