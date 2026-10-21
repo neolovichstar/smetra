@@ -806,3 +806,10 @@
  .workspace-page .section-quotes .quotes-document-count strong{font-size:25px}
 }
 @media(prefers-reduced-motion:reduce){.workspace-page .section-quotes .quotes-document-row{transition:none}}
+
+@media(max-width:700px){
+ .workspace-page .assistant-refined #assistant-form>.assistant-jobs{max-height:min(13dvh,100px);margin-bottom:0;padding-bottom:2px}
+ .workspace-page .assistant-refined #assistant-form .assistant-job{gap:8px;padding:6px 2px}
+ .workspace-page .assistant-refined #assistant-form .assistant-job strong{-webkit-line-clamp:1}
+ .workspace-page .assistant-refined #assistant-form .assistant-job button{max-width:104px;padding-inline:7px;font-size:10px}
+}
