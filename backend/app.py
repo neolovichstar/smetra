@@ -1299,17 +1299,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (status, status, now(), local["id"]),
                     )
                     if status == "succeeded":
-                        terms = con.execute('SELECT duration_days FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
+                        terms = con.execute('SELECT duration_days,bonus_ai_messages,is_test FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
                         prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
+                        grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
+                        entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
                         con.execute(
-                            "UPDATE users SET entitlement_until=max(coalesce(entitlement_until,0),?)+?,plan=? WHERE id=?",
-                            (
-                                now(),
-                                (terms['duration_days'] if terms else PLANS[local["plan"]][1]) * 86400,
-                                "pro",
-                                local["user_id"],
-                            ),
+                            "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
+                            (entitlement_until, "pro", local["user_id"]),
                         )
+                        # Gift credits are issued only for a provider-confirmed live payment.
+                        # The amount and expiry are fixed in the original payment intent.
+                        bonus = int(terms['bonus_ai_messages'] or 0) if terms else 0
+                        if terms and not terms['is_test'] and bonus > 0:
+                            con.execute(
+                                "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
+                                (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
+                            )
                         newly_succeeded = True
                     if status in ('succeeded','canceled'):
                         revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
@@ -1388,6 +1393,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
+                    # Any unused gift credits attached to a fully refunded purchase are revoked.
+                    con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
                     event(con, payment["user_id"], "payment_refunded")
                     terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:
