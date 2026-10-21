@@ -228,3 +228,98 @@
 .public-branding{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;margin:32px 0 12px;font-size:12px;color:var(--muted)}
 .public-branding a{color:var(--text);text-decoration:none}
 .public-branding a:hover{color:var(--accent)}
+
+
+/* Assistant workspace: use the available width and keep document scrolling locked. */
+.workspace-page:has(.assistant-studio) {
+  block-size:100dvh;
+  min-block-size:0;
+  overflow:hidden;
+}
+.workspace-page:has(.assistant-studio) .app-shell {
+  block-size:calc(100dvh - 60px);
+  min-block-size:0;
+  overflow:hidden;
+  grid-template-rows:minmax(0,1fr);
+}
+.workspace-page:has(.assistant-studio) .main {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  width:100%;
+  max-width:none;
+  height:100%;
+  max-height:100%;
+  min-width:0;
+  min-height:0;
+  margin:0;
+  overflow:hidden;
+  padding:clamp(12px,1.7vw,22px) clamp(18px,2.8vw,48px) max(10px,env(safe-area-inset-bottom));
+}
+.workspace-page .assistant-studio {
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  width:100%;
+  max-width:none;
+  height:100%;
+  max-height:100%;
+  min-height:0;
+  margin:0;
+  overflow:hidden;
+}
+.workspace-page .assistant-studio>.assistant-content {
+  flex:1 1 0;
+  min-height:0;
+  min-width:0;
+  width:100%;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scroll-behavior:smooth;
+  scrollbar-width:thin;
+  scrollbar-color:#393939 transparent;
+}
+.workspace-page .assistant-studio .assistant-message.assistant .assistant-markdown {
+  width:100%;
+  max-width:none;
+}
+.workspace-page .assistant-studio .assistant-composer {
+  flex:0 0 auto;
+  width:100%;
+  max-width:none;
+  margin-top:0;
+  padding-top:12px;
+  padding-bottom:0;
+}
+.workspace-page .assistant-studio .assistant-job[data-stalled="true"] {
+  border-left:2px solid #777;
+  padding-left:10px;
+}
+.workspace-page .assistant-studio .assistant-job[data-stalled="true"] span {
+  color:var(--text-secondary);
+}
+@media(max-width:700px) {
+  .workspace-page:has(.assistant-studio) .app-shell {
+    block-size:calc(100dvh - 112px);
+  }
+  .workspace-page:has(.assistant-studio) .main {
+    padding:10px 12px max(10px,env(safe-area-inset-bottom));
+  }
+  .workspace-page .assistant-studio {
+    height:100%;
+    min-height:0;
+  }
+  .workspace-page .assistant-studio .assistant-header {
+    padding-bottom:10px;
+  }
+  .workspace-page .assistant-studio .assistant-workbar {
+    flex-wrap:wrap;
+  }
+  .workspace-page .assistant-studio .assistant-quota {
+    max-width:44%;
+  }
+  .workspace-page .assistant-studio>.assistant-content {
+    overscroll-behavior-y:contain;
+  }
+}
