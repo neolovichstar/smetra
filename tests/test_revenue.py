@@ -52,7 +52,6 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(self.con.execute('SELECT count(*) FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()[0],1,'duplicate payment confirmation cannot duplicate the bonus')
 
         service=SimpleNamespace(con=self.con,user=self.con.execute('SELECT * FROM users WHERE id=?',(self.user['id'],)).fetchone())
-        period=__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%Y-%m')
         quota_key=assistant.quota(service)['key']
         self.con.execute('INSERT INTO rate_limits(key,count,started) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count',(quota_key,100,revenue.now()))
         before=assistant.quota(service)
