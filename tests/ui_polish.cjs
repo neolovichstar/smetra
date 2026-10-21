@@ -1,0 +1,37 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+const html = fs.readFileSync('apps/web/app.html', 'utf8');
+const css = fs.readFileSync('apps/web/workspace-polish.css', 'utf8');
+const server = fs.readFileSync('backend/app.py', 'utf8');
+const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+
+const foundationLink = html.indexOf('/ui-foundation.css');
+const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v1');
+assert.ok(foundationLink >= 0, 'shared UI foundation is linked');
+assert.ok(polishLink > foundationLink, 'polish layer loads after the existing UI layers');
+
+assert.match(server, /"\/workspace-polish\.css":\s*\("workspace-polish\.css",\s*"text\/css"\)/,
+  'server serves the new stylesheet through the explicit static allowlist');
+
+for (const selector of [
+  '.workspace-page .main',
+  '.workspace-page .main .field',
+  '.workspace-page .main th',
+  '.workspace-page .main td',
+  '.workspace-page .main .panel',
+  '.workspace-page .main .toolbar',
+]) {
+  assert.ok(css.includes(selector), 'shared polish covers ' + selector);
+}
+
+assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/,
+  'animations respect reduced-motion preferences');
+assert.match(css, /max-width:\s*800px[\s\S]*?#sidebar\s*\{\s*top:\s*64px/,
+  'tablet drawer aligns with the single-row header');
+assert.match(css, /max-width:\s*700px[\s\S]*?#sidebar\s*\{\s*top:\s*112px/,
+  'phone drawer aligns with the two-row header');
+assert.match(workflow, /node tests\/ui_polish\.cjs/,
+  'the UI polish contract runs in CI');
+
+console.log('UI polish contract PASS');
