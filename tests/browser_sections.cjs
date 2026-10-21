@@ -47,7 +47,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     }
     if(route==='quotes')assert.equal(await evaluate(`(()=>{const sheet=document.querySelector('.quotes-document'),heading=document.querySelector('#quotes-register-title'),search=document.querySelector('#workspace-search'),list=document.querySelector('#records');return !!sheet&&!!heading&&!!search&&!!list&&list.classList.contains('quotes-document-list')})()`),true,'Quotes page must render as a document register');
     if(route==='assistant'){
-      assert.equal(await evaluate("(()=>{const rail=document.querySelector('.assistant-toolrail'),workbar=document.querySelector('#assistant-workbar'),toggle=document.querySelector('#assistant-toolrail-toggle');return !!rail&&!!workbar&&!!toggle&&rail.contains(workbar)})()"),true,'Conversation controls must live in the right sub-sidebar');
+      assert.equal(await evaluate("(()=>{const rail=document.querySelector('.assistant-toolrail'),workbar=document.querySelector('#assistant-workbar'),toggle=document.querySelector('#assistant-toolrail-toggle'),main=document.querySelector('.assistant-main-column');return !!rail&&!!workbar&&!!toggle&&!!main&&rail.contains(workbar)&&rail.getBoundingClientRect().right<=main.getBoundingClientRect().left+1})()"),true,'Conversation controls must live in the left sub-sidebar');
       await evaluate("document.querySelector('#assistant-toolrail-toggle').click()");
       assert.equal(await evaluate("document.querySelector('.assistant-studio').classList.contains('assistant-tools-collapsed')"),true,'Right sub-sidebar should collapse to an icon rail');
       await evaluate("document.querySelector('#assistant-toolrail-toggle').click()");
@@ -56,6 +56,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     }
     if(route==='assistant'&&await evaluate("matchMedia('(min-width:801px)').matches")){
       assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-item-icon').length>=10"),true,'Main sidebar should use SVG icons');
+      assert.equal(await evaluate("Array.from(document.querySelectorAll('#sidebar [data-tab]')).every(b=>b.querySelectorAll('svg').length===1&&b.querySelectorAll('.sidebar-item-icon').length===1)"),true,'Each main navigation item must have exactly one SVG icon');
+      assert.equal(await evaluate("(()=>{const s=document.querySelector('#logout svg');return !!s&&s.getBoundingClientRect().width<=20&&s.getBoundingClientRect().height<=20})()"),true,'Logout SVG must stay at icon size');
       await evaluate("document.querySelector('#sidebar-collapse').click()");
       assert.equal(await evaluate("document.body.classList.contains('sidebar-compact')"),true,'Main sidebar should collapse to icon rail');
       await evaluate("document.querySelector('#sidebar-collapse').click()");
