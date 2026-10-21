@@ -40,7 +40,7 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar')).display"),'flex','Collapsed sidebar stays mounted as an icon rail');
   assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,'Visible icon rail remains keyboard accessible');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('#sidebar')).transitionDuration)>0"),true,'Sidebar collapse animates');
-  await until("document.body.classList.contains('sidebar-compact')");
+  await until("document.body.classList.contains('sidebar-compact')&&parseFloat(getComputedStyle(document.querySelector('.app-shell')).gridTemplateColumns.split(' ')[0])<=70");
   assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-item-icon').length>=10"),true,'Navigation labels collapse while SVG icons remain');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('.app-shell')).gridTemplateColumns.split(' ')[0])<=70"),true,'Main content expands into the available width');
   await click('#sidebar-collapse');
