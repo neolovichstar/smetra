@@ -74,8 +74,15 @@ def route(service, method, parts, data):
             if row['status'] == 'completed':
                 result['result'] = json.loads(row['result'])
             return 200, {'job': result, 'quota': assistant.public_quota(service)}
-        with transaction(service.con):
-            row = service.con.execute('SELECT * FROM assistant_jobs WHERE id=? AND workspace_id=? AND user_id=?', (parts[0], *args)).fetchone()
+        with transaction(
+            service.con,
+            lock_scopes=(f"workspace:{service.wid}", f"user:{service.user['id']}"),
+        ):
+            row = service.con.execute(
+                'SELECT * FROM assistant_jobs WHERE id=? AND workspace_id=? AND user_id=?'
+                + (" FOR UPDATE" if getattr(service.con, "is_postgres", False) else ""),
+                (parts[0], *args),
+            ).fetchone()
             if not row:
                 raise DomainError(404, 'Задача не найдена')
             if method == 'DELETE' and row['status'] in ACTIVE:
@@ -108,7 +115,10 @@ def route(service, method, parts, data):
     file_processing.ensure_ready(service, context)
     request_hash = hashlib.sha256(packed([prompt, context, thread_id]).encode()).hexdigest()
     service.h.throttle('assistant:' + service.user['id'], 12, 60)
-    with transaction(service.con):
+    with transaction(
+        service.con,
+        lock_scopes=(f"workspace:{service.wid}", f"user:{service.user['id']}"),
+    ):
         existing = service.con.execute('SELECT * FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND request_key=?', (*args, key)).fetchone()
         if existing:
             if existing['request_hash'] != request_hash:
@@ -131,11 +141,14 @@ def route(service, method, parts, data):
 
 def claim(con):
     now = stamp()
-    with transaction(con):
-        row = con.execute(
-            "SELECT * FROM assistant_jobs WHERE (status IN ('queued','retry') AND next_attempt_at<=?) OR (status='running' AND lease_until<=?) ORDER BY created_at,id LIMIT 1",
-            (now, now),
-        ).fetchone()
+    with transaction(con, lock_scopes=("assistant-queue",)):
+        query = (
+            "SELECT * FROM assistant_jobs WHERE (status IN ('queued','retry') AND next_attempt_at<=?) "
+            "OR (status='running' AND lease_until<=?) ORDER BY created_at,id LIMIT 1"
+        )
+        if getattr(con, "is_postgres", False):
+            query += " FOR UPDATE SKIP LOCKED"
+        row = con.execute(query, (now, now)).fetchone()
         if not row:
             return None
         if row['cancel_requested'] or row['attempts'] >= 3 or row['created_at'] < now - 3600:
@@ -152,8 +165,15 @@ def claim(con):
 
 
 def fail(con, job, error):
-    with transaction(con):
-        row = con.execute('SELECT * FROM assistant_jobs WHERE id=? AND status=\'running\' AND lease_token=?', (job['id'], job['lease_token'])).fetchone()
+    with transaction(
+        con,
+        lock_scopes=(f"workspace:{job['workspace_id']}", f"user:{job['user_id']}"),
+    ):
+        row = con.execute(
+            'SELECT * FROM assistant_jobs WHERE id=? AND status=\'running\' AND lease_token=?'
+            + (" FOR UPDATE" if getattr(con, "is_postgres", False) else ""),
+            (job['id'], job['lease_token']),
+        ).fetchone()
         if not row:
             return
         cancelled = bool(row['cancel_requested'])
@@ -189,6 +209,9 @@ def run_one(handler, con, origin):
             runtime = Connection(runtime=True)
             service.con = service.runtime_connection = runtime
             runtime.scope(job['session_hash'], job['workspace_id'])
+            runtime.set_transaction_lock_scopes(
+                (f"workspace:{job['workspace_id']}", f"user:{job['user_id']}")
+            )
         if job['conversation_id']:
             from backend.ai_workspace import conversation
 

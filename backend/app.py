@@ -737,23 +737,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchone()
             if not row:
                 raise ApiError(400, "Ссылка устарела или уже использована")
-            con.execute("BEGIN IMMEDIATE")
-            try:
-                changed = con.execute(
-                    "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
-                    (now(), row["id"]),
-                )
-                if changed.rowcount != 1:
-                    raise ApiError(409, "Ссылка уже использована")
-                con.execute(
-                    "UPDATE users SET email_verified_at=? WHERE id=?",
-                    (now(), row["user_id"]),
-                )
-                event(con, row["user_id"], "email_verified")
-                con.execute("COMMIT")
-            except Exception:
-                con.execute("ROLLBACK")
-                raise
+            with business.transaction_lock_scope(con, (f"user:{row['user_id']}",)):
+                con.execute("BEGIN IMMEDIATE")
+                try:
+                    changed = con.execute(
+                        "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
+                        (now(), row["id"]),
+                    )
+                    if changed.rowcount != 1:
+                        raise ApiError(409, "Ссылка уже использована")
+                    con.execute(
+                        "UPDATE users SET email_verified_at=? WHERE id=?",
+                        (now(), row["user_id"]),
+                    )
+                    event(con, row["user_id"], "email_verified")
+                    con.execute("COMMIT")
+                except Exception:
+                    con.execute("ROLLBACK")
+                    raise
             return self.send_json(200, {"ok": True})
         if path == "/api/auth/reset/request" and method == "POST":
             self.throttle("reset:" + self.client_address[0], 5, 3600)
@@ -785,24 +786,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ).fetchone()
             if not row:
                 raise ApiError(400, "Ссылка устарела или уже использована")
-            con.execute("BEGIN IMMEDIATE")
-            try:
-                changed = con.execute(
-                    "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
-                    (now(), row["id"]),
-                )
-                if changed.rowcount != 1:
-                    raise ApiError(409, "Ссылка уже использована")
-                con.execute(
-                    "UPDATE users SET password_hash=?,email_verified_at=coalesce(email_verified_at,?) WHERE id=?",
-                    (hash_password(password), now(), row["user_id"]),
-                )
-                con.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))
-                audit(con, row["user_id"], "auth.password_reset", row["user_id"])
-                con.execute("COMMIT")
-            except Exception:
-                con.execute("ROLLBACK")
-                raise
+            with business.transaction_lock_scope(con, (f"user:{row['user_id']}",)):
+                con.execute("BEGIN IMMEDIATE")
+                try:
+                    changed = con.execute(
+                        "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
+                        (now(), row["id"]),
+                    )
+                    if changed.rowcount != 1:
+                        raise ApiError(409, "Ссылка уже использована")
+                    con.execute(
+                        "UPDATE users SET password_hash=?,email_verified_at=coalesce(email_verified_at,?) WHERE id=?",
+                        (hash_password(password), now(), row["user_id"]),
+                    )
+                    con.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))
+                    audit(con, row["user_id"], "auth.password_reset", row["user_id"])
+                    con.execute("COMMIT")
+                except Exception:
+                    con.execute("ROLLBACK")
+                    raise
             return self.send_json(200, {"ok": True})
         if path == "/api/webhooks/yookassa" and method == "POST":
             if yookassa_mode() == "off":
@@ -911,39 +913,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     (user["id"],),
                 )
             ]
-            con.execute("BEGIN IMMEDIATE")
-            try:
-                con.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
-                con.execute("DELETE FROM quotes WHERE user_id=?", (user["id"],))
-                con.execute("DELETE FROM workspaces WHERE owner_id=?", (user["id"],))
-                con.execute(
-                    "DELETE FROM workspace_members WHERE user_id=?", (user["id"],)
-                )
-                con.execute("DELETE FROM support WHERE user_id=?", (user["id"],))
-                con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
-                con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
-                con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
-                con.execute("DELETE FROM pricing_assignments WHERE user_id=?", (user['id'],))
-                con.execute("DELETE FROM referral_rewards WHERE inviter_id=? OR invitee_id=?", (user['id'],user['id']))
-                con.execute("DELETE FROM referral_links WHERE user_id=?", (user['id'],))
-                con.execute("UPDATE growth_events SET user_id=NULL WHERE user_id=?", (user['id'],))
-                con.execute(
-                    "UPDATE events SET user_id=NULL WHERE user_id=?", (user["id"],)
-                )
-                con.execute(
-                    "UPDATE users SET email=?,name='Удалённый аккаунт',password_hash=?,blocked=1,role='user',deleted_at=? WHERE id=?",
-                    (
-                        "deleted-" + user["id"] + "@invalid.local",
-                        hash_password(secrets.token_urlsafe(32)),
-                        now(),
-                        user["id"],
-                    ),
-                )
-                audit(con, None, "account.deleted", user["id"])
-                con.execute("COMMIT")
-            except Exception:
-                con.execute("ROLLBACK")
-                raise
+            workspace_lock_rows = con.execute(
+                "SELECT workspace_id AS id FROM workspace_members WHERE user_id=? "
+                "UNION SELECT id FROM workspaces WHERE owner_id=?",
+                (user["id"], user["id"]),
+            ).fetchall()
+            lock_scopes = [f"user:{user['id']}"] + [
+                f"workspace:{workspace_row['id']}" for workspace_row in workspace_lock_rows
+            ]
+            with business.transaction_lock_scope(con, lock_scopes):
+                con.execute("BEGIN IMMEDIATE")
+                try:
+                    con.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM quotes WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM workspaces WHERE owner_id=?", (user["id"],))
+                    con.execute(
+                        "DELETE FROM workspace_members WHERE user_id=?", (user["id"],)
+                    )
+                    con.execute("DELETE FROM support WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM pricing_assignments WHERE user_id=?", (user['id'],))
+                    con.execute("DELETE FROM referral_rewards WHERE inviter_id=? OR invitee_id=?", (user['id'],user['id']))
+                    con.execute("DELETE FROM referral_links WHERE user_id=?", (user['id'],))
+                    con.execute("UPDATE growth_events SET user_id=NULL WHERE user_id=?", (user['id'],))
+                    con.execute(
+                        "UPDATE events SET user_id=NULL WHERE user_id=?", (user["id"],)
+                    )
+                    con.execute(
+                        "UPDATE users SET email=?,name='Удалённый аккаунт',password_hash=?,blocked=1,role='user',deleted_at=? WHERE id=?",
+                        (
+                            "deleted-" + user["id"] + "@invalid.local",
+                            hash_password(secrets.token_urlsafe(32)),
+                            now(),
+                            user["id"],
+                        ),
+                    )
+                    audit(con, None, "account.deleted", user["id"])
+                    con.execute("COMMIT")
+                except Exception:
+                    con.execute("ROLLBACK")
+                    raise
             try:
                 from backend.attachments import directory
             except ModuleNotFoundError:
@@ -1292,7 +1303,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if status == "succeeded" and remote.get("paid") is not True:
             raise ApiError(409, "Платёж не подтверждён как оплаченный")
         newly_succeeded = False
-        with _LOCK:
+        with _LOCK, business.transaction_lock_scope(
+            con, (f"user:{local['user_id']}",)
+        ):
             con.execute("BEGIN IMMEDIATE")
             try:
                 current = con.execute(
@@ -1361,7 +1374,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise ApiError(
                 409, "Частичный или несоответствующий возврат требует ручной обработки"
             )
-        with _LOCK:
+        with _LOCK, business.transaction_lock_scope(
+            con, (f"user:{payment['user_id']}",)
+        ):
             con.execute("BEGIN IMMEDIATE")
             try:
                 existing = con.execute(

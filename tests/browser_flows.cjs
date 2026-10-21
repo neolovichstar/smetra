@@ -103,6 +103,36 @@ const assert = require('node:assert/strict');
     assert.equal(await evaluate("document.querySelector('.assistant-history').open"),false);
     await click('[data-mode=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
   }
+  // Tablet navigation must switch controls at the same 800px breakpoint as the drawer.
+  for (const width of [720, 800]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
+    await wait(250);
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display !== 'none'"),true,
+      'Tablet widths expose the drawer toggle');
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display === 'none'"),true,
+      'Tablet widths hide the desktop collapse toggle');
+    assert.equal(await evaluate("document.querySelector('#sidebar').inert"),true,
+      'Closed tablet drawer is removed from keyboard navigation');
+    await click('#nav-toggle');
+    assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'true');
+    assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,
+      'Opening the tablet drawer restores keyboard access');
+    assert.equal(await evaluate("Math.abs(document.querySelector('#nav-backdrop').getBoundingClientRect().top-document.querySelector('.app-nav').getBoundingClientRect().bottom)<=1"),true,
+      'Tablet backdrop starts exactly beneath the header');
+    await click('#nav-backdrop');
+    await until("document.querySelector('#sidebar').inert");
+  }
+  await send('Emulation.setDeviceMetricsOverride',{width:801,height:900,deviceScaleFactor:1,mobile:false});
+  await wait(250);
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display !== 'none'"),true,
+    'Desktop collapse toggle returns above the tablet breakpoint');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display === 'none'"),true,
+    'Drawer toggle is hidden when the desktop sidebar is active');
+  assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,
+    'Desktop sidebar remains keyboard accessible');
+  // Preserve the original mobile context for the reduced-motion drawer check below.
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await wait(250);
   await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await click('#nav-toggle');await click('#nav-backdrop');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar')).transitionDuration"),'0s');

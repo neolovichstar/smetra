@@ -169,6 +169,39 @@ class Connection:
         self.lock_key = int.from_bytes(
             hashlib.sha256(self.schema.encode()).digest()[:8], "big", signed=True
         )
+        self.lock_scopes = ()
+
+    def set_transaction_lock_scopes(self, scopes):
+        """Temporarily select the logical resources this transaction must serialize."""
+        previous = self.lock_scopes
+        if scopes is None:
+            self.lock_scopes = ()
+            return previous
+        if isinstance(scopes, str):
+            scopes = (scopes,)
+        normalized = set()
+        for scope in scopes:
+            if scope is None:
+                continue
+            value = str(scope).strip()
+            if value:
+                normalized.add(value)
+        self.lock_scopes = tuple(sorted(normalized))
+        return previous
+
+    def _transaction_lock_keys(self):
+        if not self.lock_scopes:
+            return (self.lock_key,)
+        return tuple(sorted({
+            int.from_bytes(
+                hashlib.sha256(
+                    f"smetra:transaction:{self.schema}:{scope}".encode()
+                ).digest()[:8],
+                "big",
+                signed=True,
+            )
+            for scope in self.lock_scopes
+        }))
 
     def scope(self, session_hash, workspace_id):
         """Keep untrusted request context transaction-local for the RLS policies."""
@@ -234,9 +267,22 @@ class Connection:
                     self.raw.execute("BEGIN")
                 # Preserve SQLite's atomic read/check/write semantics across instances.
                 self.raw.execute("SET LOCAL lock_timeout='15s'")
-                return self.raw.execute(
-                    "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
+                if not self.lock_scopes:
+                    # Legacy callers hold the exclusive gate until they are migrated.
+                    return self.raw.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
+                    )
+                # Scoped transactions share the gate with one another, but remain
+                # mutually exclusive with legacy global transactions.
+                self.raw.execute(
+                    "SELECT pg_advisory_xact_lock_shared(%s)", (self.lock_key,)
                 )
+                result = None
+                for lock_key in self._transaction_lock_keys():
+                    result = self.raw.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", (lock_key,)
+                    )
+                return result
             if self.runtime and command in ("COMMIT", "ROLLBACK"):
                 if not self.nested:
                     raise RuntimeError("Runtime transaction boundary is managed by the request")

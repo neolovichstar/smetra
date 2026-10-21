@@ -35,7 +35,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
    assert.ok(vertical&&vertical.gap>=0,'Last welcome suggestion must remain above the sticky composer at '+width+'px: '+JSON.stringify(vertical));
   }
   const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
-  if(width<701){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Mobile menu toggle shown at '+width)}
+  if(width<=800){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Drawer menu toggle shown at '+width)}
   else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width)}
   const overflow=await evaluate("(()=>{const vw=innerWidth;const offenders=[...document.querySelectorAll('body *')].map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,id:el.id,cls:typeof el.className==='string'?el.className:'',left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scroll:el.scrollWidth,client:el.clientWidth}}).filter(x=>x.width>0&&(x.left < -1||x.right>vw+1)).sort((a,b)=>(b.right-vw)-(a.right-vw)).slice(0,10);return {vw,doc:document.documentElement.scrollWidth,offenders}})()");
   assert.equal(overflow.doc<=overflow.vw,true,'No horizontal overflow at '+width+': '+JSON.stringify(overflow));

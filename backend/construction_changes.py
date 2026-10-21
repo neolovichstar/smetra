@@ -127,12 +127,26 @@ def public(service, method, path, query):
     service.h.throttle("public-change:" + service.h.client_address[0], 90, 60)
     data = service.h.body() if method == "POST" else {}
     token = string(data.get("token", query.get("token", [""])[0]), "Ссылка", 100, True)
-    with transaction(service.con):
+    candidate = service.con.execute(
+        "SELECT id,workspace_id FROM construction_changes "
+        "WHERE public_token=? AND status!='draft'",
+        (token,),
+    ).fetchone()
+    if not candidate:
+        raise DomainError(404, "Допработы не найдены")
+    lock_scope = (
+        f"workspace:{candidate['workspace_id']}"
+        if candidate["workspace_id"]
+        else f"construction-change:{candidate['id']}"
+    )
+    with transaction(service.con, lock_scopes=(lock_scope,)):
         row = service.con.execute(
             "SELECT * FROM construction_changes WHERE public_token=? AND status!='draft'", (token,),
         ).fetchone()
         if not row:
             raise DomainError(404, "Допработы не найдены")
+        if row["workspace_id"] != candidate["workspace_id"]:
+            raise DomainError(409, "Допработы изменились. Обновите ссылку")
         if method == "GET" and path == "/api/public/change":
             return 200, {"change": view(row, public=True)}
         if method == "POST" and path == "/api/public/change/respond":
