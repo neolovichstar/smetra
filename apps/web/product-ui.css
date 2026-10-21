@@ -890,3 +890,11 @@
 @media(prefers-reduced-motion:reduce) {
   .workspace-page .assistant-refined .assistant-message-action { transition:none; }
 }
+
+
+/* The fullscreen flex layout must not visually stick the composer over the transcript. */
+.workspace-page:has(.assistant-studio) .assistant-studio .assistant-composer {
+  position:static!important;
+  inset:auto!important;
+  transform:none!important;
+}
