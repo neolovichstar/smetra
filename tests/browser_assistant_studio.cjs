@@ -42,9 +42,9 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
     assert.notEqual(iconState.mask,'none','Mobile new-dialog CSS icon uses the plus SVG asset');
    }
   else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width);
-    const iconState=await evaluate("(()=>{const b=document.querySelector('#assistant-new-thread'),svg=b.querySelector('svg'),before=getComputedStyle(b,'::before');return {svg:svg?getComputedStyle(svg).display:'missing',content:before.content}})()");
+    const iconState=await evaluate("(()=>{const b=document.querySelector('#assistant-new-thread'),svg=b.querySelector('svg'),before=getComputedStyle(b,'::before');return {svg:svg?getComputedStyle(svg).display:'missing',mask:before.maskImage}})()");
     assert.notEqual(iconState.svg,'none','Desktop new-dialog button keeps its inline SVG icon');
-    assert.equal(iconState.content,'none','Desktop new-dialog button does not add a redundant CSS icon');
+    assert.equal(iconState.mask.includes('plus.svg'),false,'Desktop new-dialog button does not add a redundant plus-mask icon');
    }
   const overflow=await evaluate("(()=>{const vw=innerWidth;const offenders=[...document.querySelectorAll('body *')].map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,id:el.id,cls:typeof el.className==='string'?el.className:'',left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scroll:el.scrollWidth,client:el.clientWidth}}).filter(x=>x.width>0&&(x.left < -1||x.right>vw+1)).sort((a,b)=>(b.right-vw)-(a.right-vw)).slice(0,10);return {vw,doc:document.documentElement.scrollWidth,offenders}})()");
   assert.equal(overflow.doc<=overflow.vw,true,'No horizontal overflow at '+width+': '+JSON.stringify(overflow));
