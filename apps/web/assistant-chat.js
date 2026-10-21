@@ -232,7 +232,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const regenerate=messageButton('refresh','Перегенерировать ответ');regenerate.classList.add('assistant-regenerate');regenerate.dataset.prompt=previousPrompt;regenerate.disabled=!previousPrompt||!data.available||(quota.remaining<1&&quota.plan!=='pro');
       regenerate.onclick=()=>{const prompt=regenerate.dataset.prompt;if(!prompt||working||threadBusy||!data.available||quota.remaining<1&&quota.plan!=='pro')return;input.value=prompt;saveDraft();resize();renderQuota(quota);document.querySelector('#assistant-form').requestSubmit()};
       toolbar.append(regenerate);
-      const key=feedbackKey(messageId,text);
+      const key=feedbackKey(messageId,previousPrompt||text);
       let vote='';try{vote=localStorage.getItem(key)||''}catch{}
       const applyVote=value=>{vote=vote===value?'':value;up.setAttribute('aria-pressed',String(vote==='up'));down.setAttribute('aria-pressed',String(vote==='down'));try{if(vote)localStorage.setItem(key,vote);else localStorage.removeItem(key)}catch{}};
       const up=messageButton('up','Полезный ответ');up.setAttribute('aria-pressed',String(vote==='up'));up.onclick=()=>applyVote('up');toolbar.append(up);
