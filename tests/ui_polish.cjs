@@ -12,8 +12,8 @@ const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
 const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v5-first-run');
-assert.match(html, /src="\/app\.js\?v=20261021-nav-v5"/,
-  'navigation script cache key changes with shipped navigation behavior');
+assert.match(html, /src="\/app\.js\?v=20261021-nav-v6-toast-route"/,
+  'navigation script cache key changes with route-aware toast behavior');
 assert.match(html, /src="\/workspace\.js\?v=20261021-dialog-a11y-v1"/,
   'workspace script cache key changes with dialog accessibility behavior');
 assert.ok(foundationLink >= 0, 'shared UI foundation is linked');
