@@ -92,7 +92,7 @@ const assert = require('node:assert/strict');
     await until("getComputedStyle(document.querySelector('#nav-backdrop')).visibility==='hidden'&&document.querySelector('#sidebar').getBoundingClientRect().right<=0");await shot('mobile-brand-dashboard-'+width);
     await click('[data-mode=assistant]');await until("document.querySelector('.assistant-refined')");
     assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-thread-select')).display"),'none');
-    assert.equal(await evaluate("document.querySelector('.assistant-history').getBoundingClientRect().width>200"),true,'Mobile conversation history gets a usable full-width control');
+    assert.equal(await evaluate("(()=>{const h=document.querySelector('.assistant-history'),r=h.getBoundingClientRect();return r.width>=40&&r.width<=55&&!!h.querySelector('.assistant-history-icon svg')})()"),true,'Mobile conversation history stays as a compact SVG icon in the right rail');
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
     assert.equal(await evaluate("!!document.querySelector('#assistant-form .assistant-compose-tools #assistant-attach')"),true);
     await wait(300);await shot('assistant-refined-'+width);
