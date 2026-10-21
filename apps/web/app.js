@@ -103,6 +103,8 @@ function enhanceSidebarNavigation(){
  });
  const brand=$('#workspace-name')?.parentElement;
  if(brand&&!brand.querySelector('.sidebar-mini-mark')){const mark=document.createElement('span');mark.className='sidebar-mini-mark';mark.setAttribute('aria-hidden','true');mark.textContent='с';brand.append(mark)}
+ const logout=$('#logout');
+ if(logout&&!logout.querySelector('.sidebar-logout-icon')){logout.innerHTML='<svg class="sidebar-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg><span class="sidebar-logout-label">Выйти</span>';logout.title='Выйти из аккаунта'}
 }
 function syncSidebarCollapseButton(){
  const button=$('#sidebar-collapse');if(!button)return;
