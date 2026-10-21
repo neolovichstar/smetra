@@ -326,3 +326,11 @@
     overscroll-behavior-y:contain;
   }
 }
+
+
+/* Keep viewport-sized assistant boxes inside the viewport including their padding. */
+.workspace-page:has(.assistant-studio) .app-shell,
+.workspace-page:has(.assistant-studio) .main,
+.workspace-page .assistant-studio {
+  box-sizing:border-box;
+}
