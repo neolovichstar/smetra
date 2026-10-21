@@ -74,7 +74,7 @@ def available():
 
 def quota(service):
     """Monthly allowance plus purchase credits, shared by every workspace and instance."""
-    now = dt.datetime.now(timezone.utc)
+    now = dt.datetime.now(dt.timezone.utc)
     period = now.strftime("%Y-%m")
     next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp()
