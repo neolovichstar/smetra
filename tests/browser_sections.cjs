@@ -18,9 +18,9 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await until("document.querySelector('#auth-form')?.onsubmit");
   await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
   await until("document.querySelector('.workspace-home')");
-  await until("document.querySelector('link[rel=\\\"prefetch\\\"][href$=\\\"/assistant-chat.js\\\"]')");
+  await until("Array.from(document.querySelectorAll('link[rel=\\\"prefetch\\\"][href]')).some(link=>new URL(link.href).pathname.endsWith('/assistant-chat.js'))");
   for(const file of ['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js']){
-    const state=await evaluate(`(()=>({executed:!!document.querySelector('script[src$=${JSON.stringify('/'+file)}]'),prefetched:!!document.querySelector('link[rel="prefetch"][href$=${JSON.stringify('/'+file)}]')}))()`);
+    const state=await evaluate(`(()=>{const pathname=url=>{try{return new URL(url,location.href).pathname}catch{return ''}};return {executed:[...document.querySelectorAll('script[src]')].some(node=>pathname(node.src).endsWith(${JSON.stringify('/'+file)})),prefetched:[...document.querySelectorAll('link[rel="prefetch"][href]')].some(node=>pathname(node.href).endsWith(${JSON.stringify('/'+file)}))}})()`);
     assert.equal(state.executed,false,'Initial screen must not execute '+file);
     if(['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js'].includes(file))assert.equal(state.prefetched,true,'Idle-prefetch should warm '+file+' without executing it');
   }
