@@ -285,6 +285,9 @@
   max-width:none;
 }
 .workspace-page .assistant-studio .assistant-composer {
+  position:relative;
+  bottom:auto;
+  z-index:1;
   flex:0 0 auto;
   width:100%;
   max-width:none;
@@ -322,4 +325,19 @@
   .workspace-page .assistant-studio>.assistant-content {
     overscroll-behavior-y:contain;
   }
+}
+
+
+/* Keep viewport-sized assistant boxes inside the viewport including their padding. */
+.workspace-page:has(.assistant-studio) .app-shell,
+.workspace-page:has(.assistant-studio) .main,
+.workspace-page .assistant-studio {
+  box-sizing:border-box;
+}
+
+/* Override legacy minimum heights: the transcript yields space to the composer. */
+.workspace-page:has(.assistant-studio) .assistant-refined {
+  min-height:0!important;
+  height:100%;
+  flex:1 1 0%;
 }

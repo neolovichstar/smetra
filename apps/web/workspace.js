@@ -80,7 +80,20 @@ window.Workspace = (() => {
     }else if(section==='quotes'){
       const result=await api('/quotes');if(!active())return true;
       quotes=result.quotes;
-      html=mainTitle('Сметы','',button('Создать смету','quote-new','','primary'))+`<section class="panel"><div class="toolbar"><input type="search" id="workspace-search" placeholder="Название или клиент" aria-label="Поиск смет"></div><div id="records">${quoteRows(quotes)}</div>${quotes.length===30?button('Показать ещё','more-quotes'):''}</section>`;
+      html=`<section class="quotes-register" aria-labelledby="quotes-register-title">
+        <div class="quotes-register-topline"><span class="quotes-register-brand"><span aria-hidden="true"></span>СМЕТРА <i>/</i> РЕЕСТР ДОКУМЕНТОВ</span>${button('Создать смету','quote-new','','primary')}</div>
+        <section class="quotes-document">
+          <header class="quotes-document-heading">
+            <div><span class="quotes-document-kicker">РАБОЧЕЕ ПРОСТРАНСТВО · СМЕТЫ</span><h1 id="quotes-register-title">Реестр смет</h1><p>Документы, клиентские версии и суммы в едином списке.</p></div>
+            <div class="quotes-document-count"><strong id="quotes-visible-count">${quotes.length}</strong><span>в списке</span></div>
+          </header>
+          <div class="quotes-document-toolbar"><label for="workspace-search">Поиск по реестру</label><input type="search" id="workspace-search" placeholder="Название сметы или клиент" aria-label="Поиск смет"><span>Поиск обновляется автоматически</span></div>
+          <div class="quotes-document-columns" aria-hidden="true"><span>Документ</span><span>Клиент</span><span>Статус</span><span>Сумма</span><span></span></div>
+          <div id="records" class="quotes-document-list" role="list">${quoteRows(quotes,true)}</div>
+          ${quotes.length===30?button('Показать ещё','more-quotes'):''}
+          <footer class="quotes-document-footer"><span>СМЕТРА / УЧЁТ ДОКУМЕНТОВ</span><span>Показано: <strong id="quotes-footer-count">${quotes.length}</strong></span></footer>
+        </section>
+      </section>`;
     }else if(['clients','catalog','projects','tasks','leads'].includes(section)){
       const result=await api('/'+section);if(!active())return true;
       html=mainTitle(names[section],{clients:'Контакты и вся история работы.',catalog:'Единая цена для новых смет. Изменения сохраняются в истории.',projects:'Согласованные условия превращаются в работу.',tasks:'Небольшие шаги к завершённой работе.',leads:'От знакомства до нового заказа.'}[section],add+(section==='leads'&&roleCanWrite()?button('Ссылка для заявки','intake-link'):''))+`<section class="panel"><div class="toolbar"><input id="workspace-search" type="search" aria-label="Поиск" placeholder="${section==='catalog'?'Название, категория или артикул':'Найти по названию'}">${section==='catalog'?`<select id="catalog-category" aria-label="Категория">${option([['','Все категории'],...(result.categories||[]).map(value=>[value,value])],'')}</select><label class="catalog-favorite-filter"><input id="catalog-favorites" type="checkbox"> Избранное</label><label class="catalog-favorite-filter"><input id="catalog-recent" type="checkbox"> Недавние</label>`:''}${['clients','catalog'].includes(section)?button(section==='catalog'?'Импорт':'Импорт CSV','import',section)+button('Экспорт CSV','export',section):''}</div><div id="records">${section==='leads'?kanban(result.items):entityRows(section,result.items)}</div>${result.items.length===50?button('Показать ещё','more-entities',section):''}</section>`;
@@ -140,7 +153,16 @@ window.Workspace = (() => {
     submitForm(form,async values=>{const body={name:values.name,metadata_etag:file.metadata_etag};if(values.target&&values.target!==selected){[body.target,body.target_id]=values.target.split(':')}await api('/files/'+encodeURIComponent(id)+'/metadata',{method:'PATCH',body:JSON.stringify(body)});closeModal();notify('Данные файла сохранены');await render('files')});
   }
   function activityList(items){return items.length?`<div class="activity-list">${items.map(a=>`<div class="activity-item"><span class="activity-dot"></span><div><strong>${e(a.action)}</strong><small>${e(a.actor||'Сметра')} · ${date(a.created_at)}</small>${a.detail?`<p>${e(a.detail)}</p>`:''}</div></div>`).join('')}</div>`:empty('История начинается здесь','События появятся после первого действия.')}
-  function quoteRows(items){return items.length?items.map(q=>`<div class="record-line quote-row"><button class="record-title" data-work="quote" data-id="${q.id}"><span class="quote-file-icon" aria-hidden="true"></span><span><strong>${e(q.title)}</strong><small>${e(q.client)} · ${q.published_version?'v'+q.published_version:'Новая смета'}</small></span></button><div class="record-meta">${status(q.approval_state)}<b>${money(q.amount_kopecks,q.currency)}</b>${button('Открыть ↗','quote',q.id)}</div></div>`).join(''):empty('Первый расчёт — начало работы','Создайте смету, добавьте позиции и отправьте ссылку клиенту.')}
+  function quoteRows(items,documentView=false){
+    if(!items.length)return empty('Первый расчёт — начало работы','Создайте смету, добавьте позиции и отправьте ссылку клиенту.');
+    return items.map(q=>documentView?`<article class="quotes-document-row" role="listitem">
+      <button type="button" class="quotes-document-name" data-work="quote" data-id="${e(q.id)}"><span class="quote-file-icon" aria-hidden="true"></span><span class="quotes-document-copy"><strong>${e(q.title||'Смета без названия')}</strong><small>${q.published_version?'Версия '+e(q.published_version):'Черновик · не опубликована'}</small></span></button>
+      <div class="quotes-document-client"><span class="quotes-mobile-label">КЛИЕНТ</span><span>${e(q.client||'Клиент не указан')}</span></div>
+      <div class="quotes-document-status">${status(q.approval_state)}</div>
+      <div class="quotes-document-amount"><span class="quotes-mobile-label">СУММА</span><strong>${money(q.amount_kopecks,q.currency)}</strong></div>
+      <div class="quotes-document-action">${button('Открыть ↗','quote',q.id)}</div>
+    </article>`:`<div class="record-line quote-row"><button class="record-title" data-work="quote" data-id="${e(q.id)}"><span class="quote-file-icon" aria-hidden="true"></span><span><strong>${e(q.title)}</strong><small>${e(q.client)} · ${q.published_version?'v'+q.published_version:'Новая смета'}</small></span></button><div class="record-meta">${status(q.approval_state)}<b>${money(q.amount_kopecks,q.currency)}</b>${button('Открыть ↗','quote',q.id)}</div></div>`).join('');
+  }
   function entityRows(kind,items){
     const emptyStates={clients:['Ваши клиенты — здесь','Добавьте контакт, чтобы связать с ним сметы и проекты.'],catalog:['Начните со своих расценок','Добавьте работу или импортируйте прайс.'],projects:['Первый проект впереди','Создайте проект из согласованной сметы.'],tasks:['Всё под контролем','Добавьте задачу и назначьте срок.']};
     if(!items.length)return empty(...(emptyStates[kind]||['Пока нет записей','Добавьте первую запись.']));
@@ -183,7 +205,7 @@ window.Workspace = (() => {
       return;
     }
     let timer;
-    document.querySelector('#workspace-search')?.addEventListener('input',ev=>{clearTimeout(timer);const value=ev.target.value;timer=setTimeout(async()=>{if(mine!==generation)return;try{const result=await api('/'+section+'?q='+encodeURIComponent(value));if(mine!==generation||current!==section||document.querySelector('#workspace-search')?.value!==value)return;const list=result.quotes||result.items;window.Workspace.records=list;if(section==='quotes')quotes=list;document.querySelector('#records').innerHTML=section==='quotes'?quoteRows(list):section==='leads'?kanban(list):entityRows(section,list);const more=document.querySelector('[data-work^=more-]');if(more)more.classList.toggle('hidden',list.length<(section==='quotes'?30:50))}catch(err){if(mine===generation)notify(err.message)}},220)});
+    document.querySelector('#workspace-search')?.addEventListener('input',ev=>{clearTimeout(timer);const value=ev.target.value;timer=setTimeout(async()=>{if(mine!==generation)return;try{const result=await api('/'+section+'?q='+encodeURIComponent(value));if(mine!==generation||current!==section||document.querySelector('#workspace-search')?.value!==value)return;const list=result.quotes||result.items;window.Workspace.records=list;if(section==='quotes')quotes=list;document.querySelector('#records').innerHTML=section==='quotes'?quoteRows(list,true):section==='leads'?kanban(list):entityRows(section,list);if(section==='quotes'){const count=document.querySelector('#quotes-visible-count'),footer=document.querySelector('#quotes-footer-count');if(count)count.textContent=String(list.length);if(footer)footer.textContent=String(list.length)}const more=document.querySelector('[data-work^=more-]');if(more)more.classList.toggle('hidden',list.length<(section==='quotes'?30:50))}catch(err){if(mine===generation)notify(err.message)}},220)});
     document.querySelectorAll('[draggable]').forEach(el=>el.ondragstart=ev=>ev.dataTransfer.setData('text/plain',el.dataset.id));
     document.querySelectorAll('[data-stage]').forEach(el=>{el.ondragover=ev=>ev.preventDefault();el.ondrop=async ev=>{ev.preventDefault();const id=ev.dataTransfer.getData('text/plain');const item=window.Workspace.records.find(i=>i.id===id);if(!item)return;try{await api('/leads/'+id,{method:'PATCH',body:JSON.stringify({...item,status:el.dataset.stage})});await render('leads')}catch(err){notify(err.message)}}});
     const switcher=document.querySelector('#f-workspace');if(switcher)switcher.onchange=async()=>{sessionStorage.setItem('workspace_id',switcher.value);sessionStorage.removeItem('smetra.assistant.context');workspace=null;await render(current)};
@@ -227,7 +249,7 @@ window.Workspace = (() => {
     if(a==='read-notifications'){await api('/notifications',{method:'POST'});return render('notifications')}
     if(a==='more-quotes'||a==='more-entities'){
       const kind=a==='more-quotes'?'quotes':id;const existing=kind==='quotes'?quotes:window.Workspace.records;
-      const q=document.querySelector('#workspace-search')?.value||'';const filters=kind==='catalog'?catalogQuery():'q='+encodeURIComponent(q);const result=await api('/'+kind+'?offset='+existing.length+'&'+filters);const next=result.quotes||result.items;existing.push(...next);document.querySelector('#records').innerHTML=kind==='quotes'?quoteRows(existing):kind==='leads'?kanban(existing):entityRows(kind,existing);if(next.length<(kind==='quotes'?30:50))b.disabled=true;return;
+      const q=document.querySelector('#workspace-search')?.value||'';const filters=kind==='catalog'?catalogQuery():'q='+encodeURIComponent(q);const result=await api('/'+kind+'?offset='+existing.length+'&'+filters);const next=result.quotes||result.items;existing.push(...next);document.querySelector('#records').innerHTML=kind==='quotes'?quoteRows(existing,true):kind==='leads'?kanban(existing):entityRows(kind,existing);if(kind==='quotes'){const count=document.querySelector('#quotes-visible-count'),footer=document.querySelector('#quotes-footer-count');if(count)count.textContent=String(existing.length);if(footer)footer.textContent=String(existing.length)}if(next.length<(kind==='quotes'?30:50))b.disabled=true;return;
     }
     if(a==='document')return documentForm();
     if(a==='download-document')return download('/documents/'+id+'/pdf','smetra-'+id+'.pdf');

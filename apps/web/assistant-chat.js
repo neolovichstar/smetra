@@ -76,10 +76,13 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   backgroundButton.title='Сохранить задачу на сервере и открыть ответ позже';
   let backgroundEnabled=false,backgroundMode=false;
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
-  jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));actions.after(jobList);
+  jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));
   const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
   composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
-  document.querySelector('#assistant-form').append(composeTools);
+  const assistantForm=document.querySelector('#assistant-form');
+  assistantForm.append(composeTools);
+  // Background jobs belong to the composer surface directly above the message field.
+  assistantForm.insertBefore(jobList,input);
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const quotaLabel=document.querySelector('#assistant-quota');
@@ -193,6 +196,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(value.remaining<1&&value.plan!=='pro'){upgrade.onclick=()=>sessionStorage.setItem('smetra.paywall.source','ai_limit');Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
     const quotaBlocked=value.remaining<1&&value.plan!=='pro';
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
+    document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
     send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
@@ -201,9 +205,18 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     input.title=quotaBlocked?'Черновик можно редактировать; отправка откроется после обновления лимита или перехода на Про.':'';
     setThreadBusy(working||threadBusy);
   };
-  const copyText=async(text,button)=>{if(button.disabled)return;const original=button.textContent;button.disabled=true;try{if(typeof window.SmetraCopyText==='function')await window.SmetraCopyText(text);else await navigator.clipboard.writeText(text);button.textContent='Скопировано';setTimeout(()=>{button.textContent=original},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false;button.focus({preventScroll:true})}};
+  const copyText=async(text,button)=>{if(button.disabled)return;const original=button.getAttribute('aria-label')||'Скопировать ответ';button.disabled=true;try{if(typeof window.SmetraCopyText==='function')await window.SmetraCopyText(text);else await navigator.clipboard.writeText(text);button.classList.add('is-copied');button.dataset.copied='true';button.title='Скопировано';button.setAttribute('aria-label','Скопировано');setTimeout(()=>{if(!button.isConnected)return;button.classList.remove('is-copied');delete button.dataset.copied;button.title=original;button.setAttribute('aria-label',original)},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false;button.focus({preventScroll:true})}};
   const nearBottom=()=>content.scrollHeight-content.scrollTop-content.clientHeight<100;
   const scrollBottom=()=>{content.scrollTop=content.scrollHeight};
+  const messageIcons={
+    copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>',
+    refresh:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 0 0-12-4L4 11"/><path d="M4 17v-5h5"/><path d="M5 12a7 7 0 0 0 12 4l3-3"/></svg>',
+    up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z"/><path d="M7 10l5-7a3 3 0 0 1 2 3l-1 4h6a3 3 0 0 1 3 4l-2 6a2 2 0 0 1-2 1H7"/></svg>',
+    down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2z"/><path d="M7 14l5 7a3 3 0 0 0 2-3l-1-4h6a3 3 0 0 0 3-4l-2-6a2 2 0 0 0-2-1H7"/></svg>',
+    branch:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M6 7.5v5a6.5 6.5 0 0 0 6.5 6.5H15.5M15.5 5H12a6 6 0 0 0-6 6"/></svg>'
+  };
+  const messageButton=(name,label)=>{const button=document.createElement('button');button.type='button';button.className='assistant-message-action assistant-action-'+name;button.title=label;button.setAttribute('aria-label',label);button.innerHTML=messageIcons[name];return button};
+  const feedbackKey=(messageId,text)=>{const hash=Array.from(String(text)).reduce((value,char)=>Math.imul(value,31)+char.charCodeAt(0)>>>0,2166136261).toString(36);return 'smetra.assistant.feedback:'+user.id+':'+(activeConversation||'general')+':'+(messageId||hash)};
   const addMessage=(role,text,messageId)=>{
     const item=document.createElement('article');item.className='assistant-message '+role;
     const label=document.createElement('small');label.textContent=role==='user'?'ВЫ':'СМЕТРА';
@@ -212,18 +225,27 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     body.innerHTML=role==='user'?`<p>${escapeHtml(text).replace(/\n/g,'<br>')}</p>`:assistantMarkdown(text);
     item.append(label,body);
     if(role==='assistant'){
-      const copy=document.createElement('button');copy.type='button';copy.className='assistant-copy';copy.textContent='Копировать';copy.setAttribute('aria-label','Скопировать ответ');copy.onclick=()=>copyText(body.dataset.source,copy);
-      item.append(copy);
-    }
-    if(activeConversation&&messageId){
-      const fork=document.createElement('button');fork.type='button';fork.className='assistant-fork';fork.textContent='Новая ветка';
-      fork.title='Продолжить диалог с этого сообщения отдельно';
-      fork.onclick=async()=>{if(fork.disabled||!active()||working||threadBusy)return;fork.disabled=true;try{
-        const result=await api('/assistant/conversations/'+encodeURIComponent(activeConversation)+'/fork',{method:'POST',body:JSON.stringify({message_id:messageId})});
-        if(!active())return;
-        sessionStorage.setItem('smetra.assistant.conversation',result.conversation.id);await window.SmetraAssistant();
-      }catch(error){if(active()){fork.disabled=false;notify(error.message)}}};
-      item.append(fork);
+      const toolbar=document.createElement('div');toolbar.className='assistant-message-actions';toolbar.setAttribute('role','group');toolbar.setAttribute('aria-label','Действия с ответом');
+      const copy=messageButton('copy','Скопировать ответ');copy.classList.add('assistant-copy');copy.onclick=()=>copyText(body.dataset.source,copy);toolbar.append(copy);
+      const previous=messages.lastElementChild;
+      const previousPrompt=previous?.classList.contains('user')?previous.querySelector('.assistant-markdown')?.dataset.source||'':'';
+      const regenerate=messageButton('refresh','Перегенерировать ответ');regenerate.classList.add('assistant-regenerate');regenerate.dataset.prompt=previousPrompt;regenerate.disabled=!previousPrompt||!data.available||(quota.remaining<1&&quota.plan!=='pro');
+      regenerate.onclick=()=>{const prompt=regenerate.dataset.prompt;if(!prompt||working||threadBusy||!data.available||quota.remaining<1&&quota.plan!=='pro')return;input.value=prompt;saveDraft();resize();renderQuota(quota);document.querySelector('#assistant-form').requestSubmit()};
+      toolbar.append(regenerate);
+      const key=feedbackKey(messageId,previousPrompt||text);
+      let vote='';try{vote=localStorage.getItem(key)||''}catch{}
+      const applyVote=value=>{vote=vote===value?'':value;up.setAttribute('aria-pressed',String(vote==='up'));down.setAttribute('aria-pressed',String(vote==='down'));try{if(vote)localStorage.setItem(key,vote);else localStorage.removeItem(key)}catch{}};
+      const up=messageButton('up','Полезный ответ');up.setAttribute('aria-pressed',String(vote==='up'));up.onclick=()=>applyVote('up');toolbar.append(up);
+      const down=messageButton('down','Неполезный ответ');down.setAttribute('aria-pressed',String(vote==='down'));down.onclick=()=>applyVote('down');toolbar.append(down);
+      if(activeConversation&&messageId){
+        const fork=messageButton('branch','Продолжить диалог с этого сообщения отдельно');fork.classList.add('assistant-fork');fork.onclick=async()=>{if(fork.disabled||!active()||working||threadBusy)return;fork.disabled=true;try{
+          const result=await api('/assistant/conversations/'+encodeURIComponent(activeConversation)+'/fork',{method:'POST',body:JSON.stringify({message_id:messageId})});
+          if(!active())return;
+          sessionStorage.setItem('smetra.assistant.conversation',result.conversation.id);await window.SmetraAssistant();
+        }catch(error){if(active()){fork.disabled=false;notify(error.message)}}};
+        toolbar.append(fork);
+      }
+      item.append(toolbar);
     }
     messages.append(item);return {item,body};
   };

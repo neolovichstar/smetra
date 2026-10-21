@@ -714,3 +714,187 @@
  .workspace-page .sidebar,.workspace-page .nav-backdrop,.workspace-page .app-shell{transition:none!important}
  .assistant-refined *, .assistant-refined *::before{animation:none!important;transition:none!important}
 }
+
+
+/* Background queue belongs to the input composer, not the transcript. */
+.workspace-page .assistant-refined #assistant-form>.assistant-jobs{display:block;width:100%;min-width:0;max-height:min(23dvh,176px);margin:0 0 2px;padding:0 2px 8px;overflow:auto;overscroll-behavior:contain;border-bottom:1px solid var(--stroke);scrollbar-width:thin;scrollbar-color:#444 transparent}
+.workspace-page .assistant-refined #assistant-form>.assistant-jobs:empty{display:none}
+.workspace-page .assistant-refined #assistant-form .assistant-job{display:grid;grid-template-columns:7px minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #ffffff0c}
+.workspace-page .assistant-refined #assistant-form .assistant-job:last-child{border-bottom:0}
+.workspace-page .assistant-refined #assistant-form .assistant-job>div{min-width:0}
+.workspace-page .assistant-refined #assistant-form .assistant-job strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.45}
+.workspace-page .assistant-refined #assistant-form .assistant-job span{margin-top:3px;line-height:1.45;overflow-wrap:anywhere}
+.workspace-page .assistant-refined #assistant-form .assistant-job button{max-width:124px;min-width:0;padding-inline:10px;text-align:center}
+
+/* Quotes index: a quiet document register with aligned columns and a consistent dark surface. */
+.workspace-page .section-quotes{color:#ededed}
+.workspace-page .section-quotes .quotes-register{width:100%;max-width:1180px;margin:0 auto;color:#ededed;font-variant-numeric:tabular-nums}
+.workspace-page .section-quotes .quotes-register-topline{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px}
+.workspace-page .section-quotes .quotes-register-brand{display:flex;align-items:center;gap:9px;color:#a5a5a5;font-size:10px;font-weight:650;letter-spacing:.12em}
+.workspace-page .section-quotes .quotes-register-brand>span{width:8px;height:8px;border:1px solid #bdbdbd;border-radius:2px;transform:rotate(45deg)}
+.workspace-page .section-quotes .quotes-register-brand i{color:#565656;font-style:normal}
+.workspace-page .section-quotes .quotes-document{overflow:hidden;border:1px solid #303030;border-radius:16px;background:#090909;box-shadow:0 18px 48px #0003}
+.workspace-page .section-quotes .quotes-document-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:clamp(22px,3vw,38px);border-bottom:1px solid #2a2a2a;background:linear-gradient(130deg,#111 0%,#090909 62%)}
+.workspace-page .section-quotes .quotes-document-kicker{display:block;margin-bottom:12px;color:#919191;font-size:10px;font-weight:600;letter-spacing:.11em}
+.workspace-page .section-quotes .quotes-document-heading h1{margin:0;color:#f4f4f4;font-size:clamp(28px,3vw,40px);line-height:1.12;font-weight:550;letter-spacing:-.055em}
+.workspace-page .section-quotes .quotes-document-heading p{max-width:500px;margin:10px 0 0;color:#a0a0a0;font-size:13px;line-height:1.65}
+.workspace-page .section-quotes .quotes-document-count{display:grid;gap:3px;flex:none;min-width:90px;padding-left:18px;border-left:1px solid #353535}
+.workspace-page .section-quotes .quotes-document-count strong{color:#f2f2f2;font-size:30px;line-height:1;font-weight:500;letter-spacing:-.05em}
+.workspace-page .section-quotes .quotes-document-count span{color:#929292;font-size:10px}
+.workspace-page .section-quotes .quotes-document-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 18px;padding:20px clamp(16px,2.5vw,30px);border-bottom:1px solid #292929}
+.workspace-page .section-quotes .quotes-document-toolbar label{grid-column:1/-1;color:#a0a0a0;font-size:11px;font-weight:550}
+.workspace-page .section-quotes .quotes-document-toolbar input{width:100%;max-width:none;min-width:0;min-height:46px;padding:12px 14px;border:1px solid #343434!important;border-radius:8px;outline:none;background:#101010!important;color:#f2f2f2!important;font-size:13px}
+.workspace-page .section-quotes .quotes-document-toolbar input::placeholder{color:#777}
+.workspace-page .section-quotes .quotes-document-toolbar input:focus{border-color:#777!important;box-shadow:0 0 0 3px #ffffff0b!important}
+.workspace-page .section-quotes .quotes-document-toolbar>span{color:#777;font-size:10px;text-align:right}
+.workspace-page .section-quotes .quotes-document-columns,.workspace-page .section-quotes .quotes-document-row{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(130px,1fr) minmax(140px,.9fr) minmax(120px,.8fr) 100px;align-items:center;gap:16px;padding-inline:clamp(16px,2.5vw,30px)}
+.workspace-page .section-quotes .quotes-document-columns{min-height:44px;border-bottom:1px solid #2b2b2b;background:#0d0d0d;color:#7f7f7f;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
+.workspace-page .section-quotes .quotes-document-columns>span:nth-child(n+3){text-align:right}
+.workspace-page .section-quotes .quotes-document-row{min-height:88px;padding-block:15px;border-bottom:1px solid #252525;transition:background-color .16s ease}
+.workspace-page .section-quotes .quotes-document-row:last-child{border-bottom:0}
+.workspace-page .section-quotes .quotes-document-row:hover{background:#ffffff04}
+.workspace-page .section-quotes .quotes-document-name{display:flex;align-items:center;gap:14px;width:100%;min-width:0;min-height:54px;padding:0;border:0;border-radius:8px;background:transparent;color:#f0f0f0;text-align:left}
+.workspace-page .section-quotes .quotes-document-name:hover .quotes-document-copy strong{color:#fff;text-decoration:underline;text-decoration-color:#6c6c6c;text-underline-offset:4px}
+.workspace-page .section-quotes .quotes-document-name .quote-file-icon{width:30px;height:36px;padding:7px;border:1px solid #393939;border-radius:7px;background:#bdbdbd;box-sizing:border-box}
+.workspace-page .section-quotes .quotes-document-copy{display:grid;gap:5px;min-width:0}
+.workspace-page .section-quotes .quotes-document-copy strong{color:#eaeaea;font-size:13px;font-weight:550;line-height:1.45;overflow-wrap:anywhere}
+.workspace-page .section-quotes .quotes-document-copy small{color:#858585;font-size:10px;line-height:1.45}
+.workspace-page .section-quotes .quotes-document-client{min-width:0;color:#b9b9b9;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.workspace-page .section-quotes .quotes-document-status{display:grid;justify-items:end;gap:5px;min-width:0}
+.workspace-page .section-quotes .quotes-document-status .pill{max-width:100%;padding:6px 8px;border:1px solid #353535;border-radius:6px;background:#121212;color:#cecece;font-size:10px;line-height:1.25;text-align:center;white-space:normal}
+.workspace-page .section-quotes .quotes-document-amount{min-width:0;text-align:right}
+.workspace-page .section-quotes .quotes-document-amount strong{color:#f1f1f1;font-size:14px;font-weight:550;white-space:nowrap}
+.workspace-page .section-quotes .quotes-document-action{justify-self:end}
+.workspace-page .section-quotes .quotes-document-action .btn{min-height:38px;padding:8px 10px;border:1px solid #393939;border-radius:8px;background:#101010;color:#dadada;white-space:nowrap;font-size:11px}
+.workspace-page .section-quotes .quotes-document-action .btn:hover{border-color:#777;background:#191919;transform:none}
+.workspace-page .section-quotes .quotes-mobile-label{display:none}
+.workspace-page .section-quotes .quotes-document-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px clamp(16px,2.5vw,30px);border-top:1px solid #292929;background:#0b0b0b;color:#757575;font-size:9px;letter-spacing:.06em}
+.workspace-page .section-quotes .quotes-document-footer strong{color:#bdbdbd;font-weight:600}
+.workspace-page .section-quotes .quotes-document>button[data-work="more-quotes"]{margin:18px clamp(16px,2.5vw,30px)}
+.workspace-page .section-quotes .quotes-document-list:empty{display:none}
+.workspace-page .section-quotes .quotes-document-list>.empty{padding:38px 20px;text-align:center}
+.workspace-page .section-quotes .quotes-document-list>.empty::before{display:none}
+@media(max-width:980px){
+ .workspace-page .section-quotes .quotes-document-columns,.workspace-page .section-quotes .quotes-document-row{grid-template-columns:minmax(0,1.7fr) minmax(100px,.85fr) minmax(122px,.9fr) minmax(110px,.75fr) 88px;gap:10px;padding-inline:18px}
+ .workspace-page .section-quotes .quotes-document-name{gap:10px}
+ .workspace-page .section-quotes .quotes-document-name .quote-file-icon{width:26px;height:32px}
+ .workspace-page .section-quotes .quotes-document-action .btn{padding-inline:8px;font-size:10px}
+}
+@media(max-width:760px){
+ .workspace-page .section-quotes .quotes-document-heading{padding:22px 18px;gap:16px}
+ .workspace-page .section-quotes .quotes-document-toolbar{grid-template-columns:minmax(0,1fr);padding:16px}
+ .workspace-page .section-quotes .quotes-document-toolbar>span{text-align:left}
+ .workspace-page .section-quotes .quotes-document-columns{display:none}
+ .workspace-page .section-quotes .quotes-document-row{grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;min-height:0;padding:16px}
+ .workspace-page .section-quotes .quotes-document-name{grid-column:1/-1}
+ .workspace-page .section-quotes .quotes-document-client{grid-column:1;font-size:11px}
+ .workspace-page .section-quotes .quotes-document-client::before{content:'КЛИЕНТ';display:block;margin-bottom:4px;color:#747474;font-size:8px;font-weight:600;letter-spacing:.08em}
+ .workspace-page .section-quotes .quotes-document-status{grid-column:2;grid-row:2;justify-items:end}
+ .workspace-page .section-quotes .quotes-document-amount{grid-column:1;grid-row:3;text-align:left;display:grid;gap:4px}
+ .workspace-page .section-quotes .quotes-document-action{grid-column:2;grid-row:3;align-self:end}
+ .workspace-page .section-quotes .quotes-mobile-label{display:block;margin-bottom:3px;color:#747474;font-size:8px;font-weight:600;letter-spacing:.08em}
+ .workspace-page .section-quotes .quotes-document-amount strong{font-size:15px}
+ .workspace-page .section-quotes .quotes-document-footer{padding:12px 16px;font-size:8px}
+}
+@media(max-width:390px){
+ .workspace-page .section-quotes .quotes-register-topline{align-items:flex-start}
+ .workspace-page .section-quotes .quotes-register-brand{max-width:170px;flex-wrap:wrap;line-height:1.6}
+ .workspace-page .section-quotes .quotes-register-topline>.btn{min-height:40px;padding:8px 10px;font-size:10px}
+ .workspace-page .section-quotes .quotes-document-heading{padding:20px 16px}
+ .workspace-page .section-quotes .quotes-document-heading p{font-size:12px}
+ .workspace-page .section-quotes .quotes-document-count{min-width:60px;padding-left:12px}
+ .workspace-page .section-quotes .quotes-document-count strong{font-size:25px}
+}
+@media(prefers-reduced-motion:reduce){.workspace-page .section-quotes .quotes-document-row{transition:none}}
+
+@media(max-width:700px){
+ .workspace-page .assistant-refined #assistant-form>.assistant-jobs{max-height:min(13dvh,100px);margin-bottom:0;padding-bottom:2px}
+ .workspace-page .assistant-refined #assistant-form .assistant-job{gap:8px;padding:6px 2px}
+ .workspace-page .assistant-refined #assistant-form .assistant-job strong{-webkit-line-clamp:1}
+ .workspace-page .assistant-refined #assistant-form .assistant-job button{max-width:104px;padding-inline:7px;font-size:10px}
+}
+
+/* Compact, monochrome actions under each assistant answer. */
+.workspace-page .assistant-refined .assistant-message-actions {
+  display:flex;
+  align-items:center;
+  gap:3px;
+  min-height:34px;
+  margin:8px 0 0 -5px;
+  color:#8c8c8c;
+}
+.workspace-page .assistant-refined .assistant-message-action {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+  margin:0;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:#858585;
+  cursor:pointer;
+  transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+}
+.workspace-page .assistant-refined .assistant-message-actions .assistant-copy{margin:0;padding:0}
+.workspace-page .assistant-refined .assistant-message-action svg {
+  display:block;
+  width:16px;
+  height:16px;
+  flex:none;
+}
+.workspace-page .assistant-refined .assistant-message-action:hover:not(:disabled) {
+  border-color:#303030;
+  background:#ffffff07;
+  color:#e1e1e1;
+}
+.workspace-page .assistant-refined .assistant-message-action:focus-visible {
+  outline:2px solid #a0a0a0;
+  outline-offset:2px;
+}
+.workspace-page .assistant-refined .assistant-message-action[aria-pressed="true"] {
+  border-color:#414141;
+  background:#ffffff0d;
+  color:#ededed;
+}
+.workspace-page .assistant-refined .assistant-message-action:disabled {
+  opacity:.32;
+  cursor:default;
+}
+.workspace-page .assistant-refined .assistant-message-action.is-copied {
+  color:#d9d9d9;
+}
+.workspace-page .assistant-refined .assistant-message-action[data-copied="true"] svg { display:none; }
+.workspace-page .assistant-refined .assistant-message-action[data-copied="true"]::after {
+  content:"✓";
+  font-size:16px;
+  line-height:1;
+}
+.workspace-page .assistant-refined .assistant-message-actions .assistant-fork {
+  margin:0 0 0 2px;
+  color:#858585;
+}
+.workspace-page .assistant-refined .assistant-message.streaming .assistant-message-actions {
+  visibility:hidden;
+}
+@media(max-width:700px) {
+  .workspace-page .assistant-refined .assistant-message-actions { margin-top:5px; min-height:32px; }
+  .workspace-page .assistant-refined .assistant-message-action { width:32px; height:32px; min-width:32px; min-height:32px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .workspace-page .assistant-refined .assistant-message-action { transition:none; }
+}
+
+
+/* The fullscreen flex layout must not visually stick the composer over the transcript. */
+.workspace-page:has(.assistant-studio) .assistant-studio .assistant-composer {
+  position:static!important;
+  inset:auto!important;
+  transform:none!important;
+}
