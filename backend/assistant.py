@@ -73,32 +73,48 @@ def available():
 
 
 def quota(service):
-    """Monthly per-account allowance, shared by every workspace and instance."""
-    now = dt.datetime.now(dt.timezone.utc)
+    """Monthly allowance plus purchase credits, shared by every workspace and instance."""
+    now = dt.datetime.now(timezone.utc)
     period = now.strftime("%Y-%m")
     next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp()
-    limit = 100 if paid else 3
+    base_limit = 100 if paid else 3
     from backend.revenue import referral_bonus
-    limit += referral_bonus(service.con,service.user['id'],period)
+    referral_limit = referral_bonus(service.con, service.user["id"], period)
     key = hashlib.sha256(
         f"assistant:month:{period}:{service.user['id']}".encode()
     ).hexdigest()
     row = service.con.execute("SELECT count FROM rate_limits WHERE key=?", (key,)).fetchone()
     used = row["count"] if row else 0
+    bonus_remaining = 0
+    bonus_used = 0
+    if paid:
+        credits = service.con.execute(
+            "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_bonus_grants WHERE user_id=? AND expires_at>? AND remaining>0",
+            (service.user["id"], stamp()),
+        ).fetchone()
+        bonus_remaining = int(credits["remaining"] or 0)
+        usage = service.con.execute(
+            "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (key,)
+        ).fetchone()
+        bonus_used = int(usage["count"] or 0) if usage else 0
+    limit = base_limit + referral_limit + bonus_remaining + bonus_used
     return {
         "plan": "pro" if paid else "free",
         "period": period,
         "limit": limit,
         "used": used,
         "remaining": max(0, limit - used),
+        "purchase_bonus_remaining": bonus_remaining,
         "resets_at": int(next_month.timestamp()),
+        "base_limit": base_limit,
+        "referral_limit": referral_limit,
         "key": key,
     }
 
 
 def public_quota(service):
-    return {key: value for key, value in quota(service).items() if key != "key"}
+    return {key: value for key, value in quota(service).items() if key not in {"key", "base_limit", "referral_limit"}}
 
 
 def verified_context(service, value):
@@ -122,21 +138,59 @@ def reserve(service):
 
 def reserve_in_transaction(service):
     current = quota(service)
-    row = service.con.execute(
-        "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
-        "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1 RETURNING count",
-        (current["key"], stamp()),
-    ).fetchone()
-    if row["count"] > current["limit"]:
+    if current["remaining"] <= 0:
         raise DomainError(429, "Лимит сообщений ассистенту на этот месяц исчерпан")
-    return current["key"]
+    key = current["key"]
+    base_allowance = current["base_limit"] + current["referral_limit"]
+    if current["used"] < base_allowance:
+        service.con.execute(
+            "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
+            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
+            (key, stamp()),
+        )
+        return {"key": key, "bonus_grant_id": None}
+
+    grant = service.con.execute(
+        "SELECT id FROM assistant_bonus_grants WHERE user_id=? AND remaining>0 AND expires_at>? ORDER BY expires_at,created_at,id LIMIT 1",
+        (service.user["id"], stamp()),
+    ).fetchone()
+    if not grant:
+        raise DomainError(429, "Лимит сообщений ассистенту на этот месяц исчерпан")
+    service.con.execute(
+        "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
+        "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
+        (key, stamp()),
+    )
+    updated = service.con.execute(
+        "UPDATE assistant_bonus_grants SET remaining=remaining-1 WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
+        (grant["id"], stamp()),
+    ).fetchone()
+    if not updated:
+        raise DomainError(429, "Бонусные сообщения уже использованы. Обновите страницу.")
+    service.con.execute(
+        "INSERT INTO assistant_bonus_usage(quota_key,user_id,count,updated_at) VALUES(?,?,1,?) "
+        "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_bonus_usage.count+1,updated_at=excluded.updated_at",
+        (key, service.user["id"], stamp()),
+    )
+    return {"key": key, "bonus_grant_id": grant["id"]}
 
 
-def release(service, key):
+def release(service, reservation):
+    key = reservation["key"] if isinstance(reservation, dict) else reservation
+    bonus_grant_id = reservation.get("bonus_grant_id") if isinstance(reservation, dict) else None
     with transaction(service.con):
         service.con.execute(
             "UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0", (key,)
         )
+        if bonus_grant_id:
+            service.con.execute(
+                "UPDATE assistant_bonus_grants SET remaining=remaining+1 WHERE id=? AND remaining<amount",
+                (bonus_grant_id,),
+            )
+            service.con.execute(
+                "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
+                (stamp(), key),
+            )
 
 
 def function(name, description, properties, required=()):
