@@ -818,3 +818,7 @@
  .workspace-page .app-shell,.workspace-page .sidebar,.workspace-page .sidebar-group button,.workspace-page .sidebar-item-label,.workspace-page .assistant-studio,.workspace-page .assistant-studio .assistant-toolrail,.workspace-page .assistant-studio .assistant-toolrail-toggle,.workspace-page .assistant-studio .assistant-tool-label{transition:none!important}
  .workspace-page .assistant-studio .assistant-history-list,.workspace-page .assistant-studio .assistant-options-list{animation:none}
 }
+
+@media(max-width:700px){
+ .workspace-page .assistant-studio{min-height:0!important;height:calc(100dvh - 154px);max-height:calc(100dvh - 154px)}
+}
