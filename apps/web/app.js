@@ -94,17 +94,31 @@ const sidebarIcons={
 function enhanceSidebarNavigation(){
  const sidebar=$('#sidebar');if(!sidebar)return;
  sidebar.querySelectorAll('[data-tab]').forEach(button=>{
-  if(button.querySelector('.sidebar-item-icon'))return;
-  const label=[...button.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent).join(' ').trim();
-  [...button.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).forEach(node=>node.remove());
-  const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');icon.setAttribute('aria-hidden','true');icon.classList.add('sidebar-item-icon');icon.innerHTML=sidebarIcons[button.dataset.tab]||sidebarIcons.documents;
-  const text=document.createElement('span');text.className='sidebar-item-label';text.textContent=label||button.dataset.tab;
-  button.prepend(text);button.prepend(icon);button.dataset.navLabel=label||button.dataset.tab;button.title=button.dataset.navLabel;
+  const label=(button.dataset.navLabel||button.querySelector('.sidebar-item-label')?.textContent||[...button.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent).join(' ')).trim()||button.dataset.tab;
+  const accent=button.querySelector('.sidebar-accent');
+  const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','19');icon.setAttribute('height','19');
+  icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');
+  icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');icon.setAttribute('aria-hidden','true');
+  icon.classList.add('sidebar-item-icon');icon.innerHTML=sidebarIcons[button.dataset.tab]||sidebarIcons.documents;
+  const text=document.createElement('span');text.className='sidebar-item-label';text.textContent=label;
+  // Rebuild the content instead of prepending to unknown old markup: this prevents duplicate SVGs.
+  button.replaceChildren(icon,text);
+  if(accent)button.append(accent);
+  button.dataset.navLabel=label;button.title=label;
  });
  const brand=$('#workspace-name')?.parentElement;
  if(brand&&!brand.querySelector('.sidebar-mini-mark')){const mark=document.createElement('span');mark.className='sidebar-mini-mark';mark.setAttribute('aria-hidden','true');mark.textContent='с';brand.append(mark)}
  const logout=$('#logout');
- if(logout&&!logout.querySelector('.sidebar-logout-icon')){logout.innerHTML='<svg class="sidebar-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg><span class="sidebar-logout-label">Выйти</span>';logout.title='Выйти из аккаунта'}
+ if(logout){
+  let icon=logout.querySelector('.sidebar-logout-icon');
+  if(!icon){icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('sidebar-logout-icon');icon.innerHTML='<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>'}
+  icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','18');icon.setAttribute('height','18');
+  icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');
+  icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');icon.setAttribute('aria-hidden','true');
+  const label=document.createElement('span');label.className='sidebar-logout-label';label.textContent='Выйти';
+  logout.replaceChildren(icon,label);logout.title='Выйти из аккаунта';
+ }
 }
 function syncSidebarCollapseButton(){
  const button=$('#sidebar-collapse');if(!button)return;
