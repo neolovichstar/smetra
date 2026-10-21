@@ -272,7 +272,6 @@ class Connection:
                 hasattr(row, "__len__") and len(row) == width for row in rows
             ):
                 batch_size = max(1, 60_000 // width)
-                result = None
                 for offset in range(0, len(rows), batch_size):
                     batch = rows[offset : offset + batch_size]
                     statement = (
