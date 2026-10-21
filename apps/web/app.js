@@ -112,11 +112,12 @@ function enhanceSidebarNavigation(){
  // Defense in depth: a later legacy script must not be able to append a second navigation icon.
  const removeDuplicates=()=>{
   sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(button=>{
-   const canonical=button.querySelector(':scope > svg.sidebar-item-icon');
+   const canonical=[...button.children].find(node=>node.matches('svg.sidebar-item-icon'));
    if(!canonical){normalizeButton(button);return}
-   button.querySelectorAll('svg').forEach(svg=>{if(svg!==canonical)svg.remove()});
-   button.querySelectorAll(':scope > :not(.sidebar-item-icon):not(.sidebar-item-label):not(.sidebar-accent)').forEach(node=>node.remove());
-   button.querySelectorAll(':scope > .sidebar-item-icon').forEach((svg,index)=>{if(index>0)svg.remove()});
+   [...button.querySelectorAll('svg')].forEach(svg=>{if(svg!==canonical)svg.remove()});
+   [...button.children].filter(node=>!['sidebar-item-icon','sidebar-item-label','sidebar-accent'].some(name=>node.classList.contains(name))).forEach(node=>node.remove());
+   let kept=false;
+   [...button.children].filter(node=>node.classList.contains('sidebar-item-icon')).forEach(svg=>{if(kept)svg.remove();else kept=true});
   });
  };
  if(!sidebar.dataset.iconObserver){
@@ -231,6 +232,7 @@ if($('#auth')){
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
    document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();return renderNavigation()});
+  $('#sidebar-profile').onclick=()=>{if(tab==='profile'){closeNavigation();return}tab='profile';location.hash=tab;closeNavigation();return renderNavigation()};
   $('#nav-backdrop').classList.remove('hidden');
   $('#nav-toggle').onclick=()=>{const open=!document.body.classList.contains('nav-open');document.body.classList.toggle('nav-open',open);$('#nav-toggle').setAttribute('aria-expanded',String(open));$('#nav-toggle').setAttribute('aria-label',open?'Закрыть разделы':'Открыть разделы');syncSidebarAccess()};
   try{document.body.classList.toggle('sidebar-compact',localStorage.getItem('smetra.sidebar-compact')==='true'&&!matchMedia('(max-width:800px)').matches)}catch{}
