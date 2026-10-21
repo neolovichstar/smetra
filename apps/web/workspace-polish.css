@@ -318,6 +318,26 @@
   }
 }
 
+
+/* Keep the estimate editor's sections visually distinct without fragmenting the form. */
+.workspace-page #content .editor-layout > .editor-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  align-content: start;
+}
+
+@media (max-width: 700px) {
+  body.workspace-page #content .editor-layout {
+    gap: 14px !important;
+  }
+
+  body.workspace-page #content .editor-layout > .editor-main {
+    gap: 12px;
+  }
+}
+
 /* The toolbar SVGs are canonical. Suppress any legacy pseudo-icons from older assistant skins. */
 .workspace-page :is(.assistant-studio,.assistant-refined) .assistant-workbar #assistant-new-thread::before,
 .workspace-page :is(.assistant-studio,.assistant-refined) .assistant-workbar #assistant-knowledge::before {

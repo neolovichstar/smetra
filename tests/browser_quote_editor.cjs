@@ -46,6 +46,10 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  for(const width of [320,390,768,1440]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:width<768});await sleep(150);
   assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'No editor overflow at '+width);
+   const panelSpacing=await evaluate("(()=>{const basics=document.querySelector('.editor-basics').getBoundingClientRect(),positions=document.querySelector('.editor-positions').getBoundingClientRect(),main=document.querySelector('.editor-main'),layout=document.querySelector('.editor-layout');return {between:Math.round(positions.top-basics.bottom),mainRowGap:parseFloat(getComputedStyle(main).rowGap),layoutRowGap:parseFloat(getComputedStyle(layout).rowGap)}})()");
+   assert.ok(panelSpacing.between>=10,'Estimate sections have a visible gap at '+width+'px: '+JSON.stringify(panelSpacing));
+   assert.ok(panelSpacing.mainRowGap>=12,'Main editor sections keep their vertical rhythm at '+width+'px: '+JSON.stringify(panelSpacing));
+   if(width<=700)assert.ok(panelSpacing.layoutRowGap>=12,'Mobile editor separates main content from the total panel at '+width+'px: '+JSON.stringify(panelSpacing));
   fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/quote-editor-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
   await click('#f-currency + .select-trigger');await sleep(200);assert.equal(await evaluate("{const r=document.querySelector('.select-menu:not(.select-menu-closing)').getBoundingClientRect();r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight}"),true,'Menu inside viewport at '+width);
   fs.writeFileSync('data/qa/quote-editor-menu-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));await evaluate('SmetraSelects.close()');await sleep(180);

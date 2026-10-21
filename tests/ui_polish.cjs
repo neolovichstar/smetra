@@ -9,7 +9,7 @@ const workspaceJs = fs.readFileSync('apps/web/workspace.js', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
-const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v2-assistant-icons');
+const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v3-editor-spacing');
 assert.match(html, /src="\/app\.js\?v=20261021-nav-v5"/,
   'navigation script cache key changes with shipped navigation behavior');
 assert.match(html, /src="\/workspace\.js\?v=20261021-dialog-a11y-v1"/,
@@ -45,6 +45,11 @@ for (const selector of [
 ]) {
   assert.ok(css.includes(selector), 'shared polish covers ' + selector);
 }
+
+assert.match(css, /#content \.editor-layout > \.editor-main\s*\{[\s\S]*?display:\s*grid[\s\S]*?gap:\s*14px/,
+  'estimate editor groups use deliberate and stable vertical separation');
+assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?body\.workspace-page #content \.editor-layout\s*\{\s*gap:\s*14px !important/,
+  'mobile estimate editor preserves the inter-section gap after switching to a vertical layout');
 
 assert.match(css, /#assistant-new-thread::before,[\s\S]*?#assistant-knowledge::before\s*\{[\s\S]*?content:none!important[\s\S]*?mask:none!important[\s\S]*?-webkit-mask:none!important/,
   'legacy assistant pseudo-icons are suppressed so each action has one inline SVG');
