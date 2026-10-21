@@ -338,6 +338,13 @@
   }
 }
 
+
+/* The composer form is a vertical flex column. Keep its textarea at the measured
+   inline height; the legacy flex:1 rule otherwise shrinks wrapped text to 44px. */
+.workspace-page .assistant-refined .assistant-composer textarea {
+  flex: 0 0 auto;
+}
+
 /* The toolbar SVGs are canonical. Suppress any legacy pseudo-icons from older assistant skins. */
 .workspace-page :is(.assistant-studio,.assistant-refined) .assistant-workbar #assistant-new-thread::before,
 .workspace-page :is(.assistant-studio,.assistant-refined) .assistant-workbar #assistant-knowledge::before {
