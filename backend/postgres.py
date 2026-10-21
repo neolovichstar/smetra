@@ -39,6 +39,11 @@ TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
+_SIMPLE_INSERT_VALUES = re.compile(
+    r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
+    r"(?P<values>\(\s*\?\s*(?:,\s*\?\s*)*\))\s*;?\s*",
+    re.I | re.S,
+)
 _POOL_LOCK = threading.Lock()
 _POOLS = {}
 
@@ -253,9 +258,35 @@ class Connection:
             raise sqlite3.IntegrityError(type(error).__name__) from None
 
     def executemany(self, sql, rows):
-        # Do not use pipeline mode with the transaction pooler.
+        """Batch simple INSERTs to reduce network round-trips through Supavisor.
+
+        Keep the conservative row-by-row path for other SQL forms, since their
+        conflict handling, RETURNING semantics, or placeholders may differ.
+        Bound each statement below PostgreSQL's extended-protocol parameter cap.
+        """
+        match = _SIMPLE_INSERT_VALUES.fullmatch(sql)
+        if match and isinstance(rows, (list, tuple)) and rows:
+            template = match.group("values")
+            width = template.count("?")
+            if width and all(
+                hasattr(row, "__len__") and len(row) == width for row in rows
+            ):
+                batch_size = max(1, 60_000 // width)
+                result = None
+                for offset in range(0, len(rows), batch_size):
+                    batch = rows[offset : offset + batch_size]
+                    statement = (
+                        f"{match.group('prefix')} "
+                        + ",".join(template for _ in batch)
+                    )
+                    parameters = tuple(value for row in batch for value in row)
+                    result = self.execute(statement, parameters)
+                return result
+
+        result = None
         for row in rows:
-            self.execute(sql, row)
+            result = self.execute(sql, row)
+        return result
 
     def __enter__(self):
         return self

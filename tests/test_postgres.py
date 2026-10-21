@@ -73,3 +73,29 @@ class PostgresQueryTests(unittest.TestCase):
         row = Row(id="abc", total=12)
         self.assertEqual(row[0], row["id"])
         self.assertEqual(dict(row), {"id": "abc", "total": 12})
+
+    def test_simple_insert_executemany_batches_network_round_trips(self):
+        from backend.postgres import Connection
+
+        con = Connection.__new__(Connection)
+        rows = [(f"id-{i}", "quote-1", i, "{}") for i in range(200)]
+        with patch.object(Connection, "execute", autospec=True, return_value="cursor") as execute:
+            result = con.executemany("INSERT INTO quote_items VALUES(?,?,?,?)", rows)
+
+        self.assertEqual(result, "cursor")
+        execute.assert_called_once()
+        sql, parameters = execute.call_args.args[1:]
+        self.assertEqual(sql.count("?"), 200 * 4)
+        self.assertEqual(sql.count("("), 200)
+        self.assertEqual(parameters, tuple(value for row in rows for value in row))
+
+    def test_executemany_keeps_fallback_for_non_simple_insert(self):
+        from backend.postgres import Connection
+
+        con = Connection.__new__(Connection)
+        rows = [(1, "a"), (2, "b")]
+        with patch.object(Connection, "execute", autospec=True, side_effect=lambda _self, sql, params: (sql, params)) as execute:
+            result = con.executemany("UPDATE rate_limits SET count=? WHERE key=?", rows)
+
+        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(result, ("UPDATE rate_limits SET count=? WHERE key=?", rows[-1]))

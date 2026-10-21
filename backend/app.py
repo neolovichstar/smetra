@@ -35,6 +35,7 @@ ORIGIN = os.getenv("PUBLIC_ORIGIN", "https://" + os.environ['VERCEL_URL'] if os.
 COOKIE_SECURE = ORIGIN.startswith("https://")
 _LOCK = threading.RLock()
 RATE = {}
+REQUIRED_CLOUD_SCHEMA_VERSION = 39
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
 
 
@@ -82,13 +83,17 @@ def db():
 def migrate():
     if os.getenv("DATABASE_URL"):
         # Cloud schema changes are explicit, versioned Supabase migrations.
+        # Keep startup gated on the newest required migration: checking an older
+        # version can let code boot against a partially migrated production DB.
         with db() as con:
             version = con.execute(
-                "SELECT version FROM schema_migrations WHERE version=28"
+                "SELECT version FROM schema_migrations WHERE version=?",
+                (REQUIRED_CLOUD_SCHEMA_VERSION,),
             ).fetchone()
             if not version:
                 raise RuntimeError(
-                    "Apply the Smetra PostgreSQL migration before starting"
+                    "Apply Smetra PostgreSQL migrations through version "
+                    f"{REQUIRED_CLOUD_SCHEMA_VERSION} before starting"
                 )
         return
     with db() as con:
