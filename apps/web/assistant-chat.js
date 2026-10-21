@@ -201,7 +201,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     input.title=quotaBlocked?'Черновик можно редактировать; отправка откроется после обновления лимита или перехода на Про.':'';
     setThreadBusy(working||threadBusy);
   };
-  const copyText=async(text,button)=>{if(button.disabled)return;const original=button.textContent;button.disabled=true;try{await window.SmetraCopyText(text);button.textContent='Скопировано';setTimeout(()=>{button.textContent=original},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false;button.focus({preventScroll:true})}};
+  const copyText=async(text,button)=>{if(button.disabled)return;const original=button.textContent;button.disabled=true;try{if(typeof window.SmetraCopyText==='function')await window.SmetraCopyText(text);else await navigator.clipboard.writeText(text);button.textContent='Скопировано';setTimeout(()=>{button.textContent=original},1600)}catch{notify('Не удалось скопировать. Выделите текст и скопируйте вручную.')}finally{button.disabled=false;button.focus({preventScroll:true})}};
   const nearBottom=()=>content.scrollHeight-content.scrollTop-content.clientHeight<100;
   const scrollBottom=()=>{content.scrollTop=content.scrollHeight};
   const addMessage=(role,text,messageId)=>{
