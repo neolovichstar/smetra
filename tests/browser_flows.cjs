@@ -118,7 +118,7 @@ const assert = require('node:assert/strict');
   await until("!document.querySelector('#workspace-dialog')?.open && document.querySelector('#records')?.textContent.includes('Тестовый клиент')");
   await click('[data-work=import]');await until("document.querySelector('#workspace-dialog')?.open && document.querySelector('.dialog-heading h2')?.textContent==='Импорт клиентов'");
   assert.equal(await evaluate("document.querySelector('#workspace-dialog').getAttribute('aria-labelledby')"),'workspace-dialog-title','Modal title is announced by screen readers');
-  assert.equal(await evaluate("document.querySelector('#workspace-dialog [aria-labelledby=workspace-dialog-title]')?.textContent"),'Импорт клиентов','Dialog accessible name resolves to its visible title');
+  assert.equal(await evaluate("document.querySelector('#workspace-dialog h2#workspace-dialog-title')?.textContent"),'Импорт клиентов','Dialog accessible name resolves to its visible title');
   assert.equal(await evaluate("document.querySelector('#workspace-dialog').getAttribute('aria-describedby')"),'workspace-dialog-description','Modal supporting text is linked to the dialog');await click('#workspace-dialog [data-cancel]');await until("!document.querySelector('#workspace-dialog')?.open");
   await click('[data-tab=catalog]');await until("document.querySelector('#catalog-category')");await click('[data-work=new]');await until("document.querySelector('#f-price')");
   await fill('#f-name','Покраска стен');await fill('#f-price','1200');await fill('#f-category','Отделка');await click('#entity-form [type=submit]');
