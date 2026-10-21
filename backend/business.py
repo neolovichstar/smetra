@@ -306,6 +306,9 @@ def migrate(con):
     con.executescript(
         (Path(__file__).parent / "migrations" / "017_assistant_jobs.sql").read_text(encoding="utf-8")
     )
+    assistant_job_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_jobs)")}
+    if "bonus_grant_id" not in assistant_job_columns:
+        con.execute("ALTER TABLE assistant_jobs ADD COLUMN bonus_grant_id TEXT REFERENCES assistant_bonus_grants(id)")
     con.executescript(
         (Path(__file__).parent / "migrations" / "018_creation_requests.sql").read_text(encoding="utf-8")
     )
