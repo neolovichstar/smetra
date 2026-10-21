@@ -915,6 +915,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         if actions:
             answer = "Подготовил изменения. Проверьте детали и нажмите «Применить»."
             break
+        if remembered:
+            answer = "Запомнил. Буду учитывать это в дальнейших ответах."
+            break
     if not answer:
         answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
     with transaction(service.con):
