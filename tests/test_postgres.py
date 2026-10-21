@@ -82,7 +82,7 @@ class PostgresQueryTests(unittest.TestCase):
         with patch.object(Connection, "execute", autospec=True, return_value="cursor") as execute:
             result = con.executemany("INSERT INTO quote_items VALUES(?,?,?,?)", rows)
 
-        self.assertEqual(result, "cursor")
+        self.assertIsNone(result)
         execute.assert_called_once()
         sql, parameters = execute.call_args.args[1:]
         self.assertEqual(sql.count("?"), 200 * 4)
@@ -98,4 +98,4 @@ class PostgresQueryTests(unittest.TestCase):
             result = con.executemany("UPDATE rate_limits SET count=? WHERE key=?", rows)
 
         self.assertEqual(execute.call_count, 2)
-        self.assertEqual(result, ("UPDATE rate_limits SET count=? WHERE key=?", rows[-1]))
+        self.assertIsNone(result)

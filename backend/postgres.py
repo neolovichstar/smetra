@@ -280,13 +280,11 @@ class Connection:
                         + ",".join(template for _ in batch)
                     )
                     parameters = tuple(value for row in batch for value in row)
-                    result = self.execute(statement, parameters)
-                return result
+                    self.execute(statement, parameters)
+                return
 
-        result = None
         for row in rows:
-            result = self.execute(sql, row)
-        return result
+            self.execute(sql, row)
 
     def __enter__(self):
         return self
