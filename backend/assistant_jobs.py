@@ -43,6 +43,17 @@ def refund(con, row):
     ).fetchone()
     if changed:
         con.execute('UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0', (row['quota_key'],))
+        grant_id = row['bonus_grant_id'] if 'bonus_grant_id' in row.keys() else None
+        if grant_id:
+            restored = con.execute(
+                'UPDATE assistant_bonus_grants SET remaining=remaining+1 WHERE id=? AND remaining<amount AND expires_at>? RETURNING id',
+                (grant_id, stamp()),
+            ).fetchone()
+            if restored:
+                con.execute(
+                    'UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0',
+                    (stamp(), row['quota_key']),
+                )
 
 
 def route(service, method, parts, data):
@@ -106,11 +117,13 @@ def route(service, method, parts, data):
         count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='chat' AND status IN ('queued','running','retry')", args).fetchone()['n']
         if count >= 2:
             raise DomainError(429, 'Дождитесь завершения текущих фоновых задач')
-        quota_key = assistant.reserve_in_transaction(service)
+        reservation = assistant.reserve_in_transaction(service)
+        quota_key = reservation['key'] if isinstance(reservation, dict) else reservation
+        bonus_grant_id = reservation.get('bonus_grant_id') if isinstance(reservation, dict) else None
         job_id, now = identity(), stamp()
         service.con.execute(
-            'INSERT INTO assistant_jobs(id,workspace_id,user_id,conversation_id,session_hash,request_key,request_hash,prompt,context,quota_key,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            (job_id, *args, thread_id, service.h.session_token_hash, key, request_hash, prompt, packed(context), quota_key, now, now, now),
+            'INSERT INTO assistant_jobs(id,workspace_id,user_id,conversation_id,session_hash,request_key,request_hash,prompt,context,quota_key,bonus_grant_id,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            (job_id, *args, thread_id, service.h.session_token_hash, key, request_hash, prompt, packed(context), quota_key, bonus_grant_id, now, now, now),
         )
         row = service.con.execute('SELECT * FROM assistant_jobs WHERE id=?', (job_id,)).fetchone()
     return 202, {'job': public(row), 'quota': assistant.public_quota(service)}
