@@ -334,3 +334,10 @@
 .workspace-page .assistant-studio {
   box-sizing:border-box;
 }
+
+/* Override legacy minimum heights: the transcript yields space to the composer. */
+.workspace-page:has(.assistant-studio) .assistant-refined {
+  min-height:0!important;
+  height:100%;
+  flex:1 1 0%;
+}
