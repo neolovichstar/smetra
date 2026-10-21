@@ -9,7 +9,7 @@ const workspaceJs = fs.readFileSync('apps/web/workspace.js', 'utf8');
 const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
-const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v1');
+const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v2-assistant-icons');
 assert.match(html, /src="\/app\.js\?v=20261021-nav-v5"/,
   'navigation script cache key changes with shipped navigation behavior');
 assert.match(html, /src="\/workspace\.js\?v=20261021-dialog-a11y-v1"/,
@@ -45,6 +45,9 @@ for (const selector of [
 ]) {
   assert.ok(css.includes(selector), 'shared polish covers ' + selector);
 }
+
+assert.match(css, /#assistant-new-thread::before,[\s\S]*?#assistant-knowledge::before\s*\{[\s\S]*?content:none!important[\s\S]*?mask:none!important[\s\S]*?-webkit-mask:none!important/,
+  'legacy assistant pseudo-icons are suppressed so each action has one inline SVG');
 
 assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/,
   'animations respect reduced-motion preferences');

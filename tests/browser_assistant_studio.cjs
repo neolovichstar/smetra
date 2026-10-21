@@ -37,7 +37,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
   const assistantIcons=await evaluate("(()=>{const read=id=>{const button=document.querySelector(id),svg=button?.querySelector('svg'),pseudo=getComputedStyle(button,'::before');return {svg:svg?getComputedStyle(svg).display:'missing',mask:pseudo.maskImage}};return {newThread:read('#assistant-new-thread'),knowledge:read('#assistant-knowledge')}})()");
   for(const [label,icon] of Object.entries(assistantIcons)){
     assert.notEqual(icon.svg,'none','Assistant '+label+' keeps its inline SVG icon at '+width+'px');
-    assert.equal(icon.mask.includes('plus.svg')||icon.mask.includes('book-open.svg'),false,'Assistant '+label+' has no duplicate CSS icon at '+width+'px');
+    assert.equal(icon.mask.includes('plus.svg')||icon.mask.includes('book-open.svg'),false,'Assistant '+label+' has no duplicate CSS icon at '+width+'px: '+JSON.stringify(assistantIcons));
   }
   const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
   if(width<701){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Mobile menu toggle shown at '+width)}
