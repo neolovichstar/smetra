@@ -7,7 +7,7 @@ function assistantMarkdown(source){return window.SmetraMarkdown.render(source)}
 // Use a temporary selected textarea as a fallback rather than making copy silently fail.
 window.SmetraCopyText=async value=>{
   const text=String(value??'');
-  if(navigator.clipboard?.writeText&&window.isSecureContext){
+  if(navigator.clipboard?.writeText){
     try{await navigator.clipboard.writeText(text);return true}catch{}
   }
   const field=document.createElement('textarea');
