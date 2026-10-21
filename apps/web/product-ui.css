@@ -813,3 +813,79 @@
  .workspace-page .assistant-refined #assistant-form .assistant-job strong{-webkit-line-clamp:1}
  .workspace-page .assistant-refined #assistant-form .assistant-job button{max-width:104px;padding-inline:7px;font-size:10px}
 }
+
+/* Compact, monochrome actions under each assistant answer. */
+.workspace-page .assistant-refined .assistant-message-actions {
+  display:flex;
+  align-items:center;
+  gap:3px;
+  min-height:34px;
+  margin:8px 0 0 -5px;
+  color:#8c8c8c;
+}
+.workspace-page .assistant-refined .assistant-message-action {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+  margin:0;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:#858585;
+  cursor:pointer;
+  transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+}
+.workspace-page .assistant-refined .assistant-message-action svg {
+  display:block;
+  width:16px;
+  height:16px;
+  flex:none;
+}
+.workspace-page .assistant-refined .assistant-message-action:hover:not(:disabled) {
+  border-color:#303030;
+  background:#ffffff07;
+  color:#e1e1e1;
+}
+.workspace-page .assistant-refined .assistant-message-action:focus-visible {
+  outline:2px solid #a0a0a0;
+  outline-offset:2px;
+}
+.workspace-page .assistant-refined .assistant-message-action[aria-pressed="true"] {
+  border-color:#414141;
+  background:#ffffff0d;
+  color:#ededed;
+}
+.workspace-page .assistant-refined .assistant-message-action:disabled {
+  opacity:.32;
+  cursor:default;
+}
+.workspace-page .assistant-refined .assistant-message-action.is-copied {
+  color:#d9d9d9;
+}
+.workspace-page .assistant-refined .assistant-message-action[data-copied="true"] svg { display:none; }
+.workspace-page .assistant-refined .assistant-message-action[data-copied="true"]::after {
+  content:"✓";
+  font-size:16px;
+  line-height:1;
+}
+.workspace-page .assistant-refined .assistant-message-actions .assistant-fork {
+  margin:0 0 0 2px;
+  color:#858585;
+}
+.workspace-page .assistant-refined .assistant-message.streaming .assistant-message-actions {
+  visibility:hidden;
+}
+@media(max-width:700px) {
+  .workspace-page .assistant-refined .assistant-message-actions { margin-top:5px; min-height:32px; }
+  .workspace-page .assistant-refined .assistant-message-action { width:32px; height:32px; min-width:32px; min-height:32px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .workspace-page .assistant-refined .assistant-message-action { transition:none; }
+}
