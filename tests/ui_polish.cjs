@@ -9,6 +9,8 @@ const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
 
 const foundationLink = html.indexOf('/ui-foundation.css');
 const polishLink = html.indexOf('/workspace-polish.css?v=20261021-polish-v1');
+assert.match(html, /src="\/app\.js\?v=20261021-nav-v5"/,
+  'navigation script cache key changes with shipped navigation behavior');
 assert.ok(foundationLink >= 0, 'shared UI foundation is linked');
 assert.ok(polishLink > foundationLink, 'polish layer loads after the existing UI layers');
 
