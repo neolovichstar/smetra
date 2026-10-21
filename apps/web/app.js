@@ -70,7 +70,7 @@ function loadingView(section){
 function view(html) { window.Workspace?.cancelLoading?.();window.SmetraSelects?.close();window.SmetraQuoteEditor?.leave();window.SmetraDataExport?.cancel();const content=$('#content');content.dataset.section=tab;content.setAttribute('aria-busy','false');content.innerHTML=html;content.classList.remove('app-view-enter'); }
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):false;const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 const sidebarIcons={
- dashboard:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+ dashboard:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/>',
  clients:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
  quotes:'<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/>',
  projects:'<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
@@ -93,31 +93,44 @@ const sidebarIcons={
 };
 function enhanceSidebarNavigation(){
  const sidebar=$('#sidebar');if(!sidebar)return;
- sidebar.querySelectorAll('[data-tab]').forEach(button=>{
+ const makeSvg=(className,paths)=>{
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('width','18');svg.setAttribute('height','18');
+  svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.7');
+  svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');
+  svg.classList.add(className);svg.innerHTML=paths;return svg;
+ };
+ const normalizeButton=button=>{
   const label=(button.dataset.navLabel||button.querySelector('.sidebar-item-label')?.textContent||[...button.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent).join(' ')).trim()||button.dataset.tab;
-  const accent=button.querySelector('.sidebar-accent');
-  const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','19');icon.setAttribute('height','19');
-  icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');
-  icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');icon.setAttribute('aria-hidden','true');
-  icon.classList.add('sidebar-item-icon');icon.innerHTML=sidebarIcons[button.dataset.tab]||sidebarIcons.documents;
+  const icon=makeSvg('sidebar-item-icon',sidebarIcons[button.dataset.tab]||sidebarIcons.documents);
   const text=document.createElement('span');text.className='sidebar-item-label';text.textContent=label;
-  // Rebuild the content instead of prepending to unknown old markup: this prevents duplicate SVGs.
+  // Replace every legacy child in one operation. The nav item has one canonical SVG, never an appended second icon.
   button.replaceChildren(icon,text);
-  if(accent)button.append(accent);
   button.dataset.navLabel=label;button.title=label;
- });
- const brand=$('#workspace-name')?.parentElement;
- if(brand&&!brand.querySelector('.sidebar-mini-mark')){const mark=document.createElement('span');mark.className='sidebar-mini-mark';mark.setAttribute('aria-hidden','true');mark.textContent='с';brand.append(mark)}
+ };
+ sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(normalizeButton);
+ // Defense in depth: a later legacy script must not be able to append a second navigation icon.
+ const removeDuplicates=()=>{
+  sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(button=>{
+   const canonical=[...button.children].find(node=>node.matches('svg.sidebar-item-icon'));
+   if(!canonical){normalizeButton(button);return}
+   [...button.querySelectorAll('svg')].forEach(svg=>{if(svg!==canonical)svg.remove()});
+   [...button.children].filter(node=>!['sidebar-item-icon','sidebar-item-label','sidebar-accent'].some(name=>node.classList.contains(name))).forEach(node=>node.remove());
+   let kept=false;
+   [...button.children].filter(node=>node.classList.contains('sidebar-item-icon')).forEach(svg=>{if(kept)svg.remove();else kept=true});
+  });
+ };
+ if(!sidebar.dataset.iconObserver){
+  const observer=new MutationObserver(removeDuplicates);
+  observer.observe(sidebar,{subtree:true,childList:true});
+  sidebar.dataset.iconObserver='true';
+ }
  const logout=$('#logout');
  if(logout){
-  let icon=logout.querySelector('.sidebar-logout-icon');
-  if(!icon){icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.classList.add('sidebar-logout-icon');icon.innerHTML='<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>'}
-  icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','18');icon.setAttribute('height','18');
-  icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');
-  icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');icon.setAttribute('aria-hidden','true');
-  const label=document.createElement('span');label.className='sidebar-logout-label';label.textContent='Выйти';
-  logout.replaceChildren(icon,label);logout.title='Выйти из аккаунта';
+  const icon=makeSvg('sidebar-logout-icon','<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>');
+  logout.replaceChildren(icon);
+  logout.title='Выйти из аккаунта';
+  logout.setAttribute('aria-label','Выйти из аккаунта');
  }
 }
 function syncSidebarCollapseButton(){
@@ -126,9 +139,21 @@ function syncSidebarCollapseButton(){
  button.setAttribute('aria-expanded',String(!collapsed));button.setAttribute('aria-label',collapsed?'Развернуть меню':'Свернуть меню');button.title=collapsed?'Развернуть меню':'Свернуть меню';
  button.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';
 }
-function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncSidebarAccess()}
+function syncMobileSidebarGeometry(){
+ const sidebar=$('#sidebar'),header=document.querySelector('.app-nav');
+ if(!sidebar||!header)return;
+ if(matchMedia('(max-width:800px)').matches){
+  const top=Math.max(0,Math.round(header.getBoundingClientRect().bottom));
+  // The legacy stylesheets have several historical mobile offsets. Align the drawer to the actual header.
+  sidebar.style.setProperty('top',top+'px','important');
+  sidebar.style.setProperty('height','calc(100dvh - '+top+'px)','important');
+ }else{
+  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');
+ }
+}
+function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
 function showAuth() { window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
-async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
+async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');if(profileName)profileName.textContent=user.name;if(avatar)avatar.textContent=(user.name||'С').trim().slice(0,1).toLocaleUpperCase('ru-RU');$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
 function quoteCard(q) {
@@ -142,6 +167,7 @@ async function render() {
   const owner=user,section=tab,mine=++renderRevision;
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
+  $('#sidebar-profile')?.classList.toggle('active',tab==='profile');
   const loadingTimer=setTimeout(()=>{if(active())view(loadingView(section))},80);
   try {
     const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth'})[section];
@@ -218,12 +244,15 @@ if($('#auth')){
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
    document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();return renderNavigation()});
+  $('#sidebar-profile').onclick=()=>{if(tab==='profile'){closeNavigation();return}tab='profile';location.hash=tab;closeNavigation();return renderNavigation()};
   $('#nav-backdrop').classList.remove('hidden');
-  $('#nav-toggle').onclick=()=>{const open=!document.body.classList.contains('nav-open');document.body.classList.toggle('nav-open',open);$('#nav-toggle').setAttribute('aria-expanded',String(open));$('#nav-toggle').setAttribute('aria-label',open?'Закрыть разделы':'Открыть разделы');syncSidebarAccess()};
+  $('#nav-toggle').onclick=()=>{syncMobileSidebarGeometry();const open=!document.body.classList.contains('nav-open');document.body.classList.toggle('nav-open',open);$('#nav-toggle').setAttribute('aria-expanded',String(open));$('#nav-toggle').setAttribute('aria-label',open?'Закрыть разделы':'Открыть разделы');syncSidebarAccess()};
   try{document.body.classList.toggle('sidebar-compact',localStorage.getItem('smetra.sidebar-compact')==='true'&&!matchMedia('(max-width:800px)').matches)}catch{}
   enhanceSidebarNavigation();syncSidebarCollapseButton();
   $('#sidebar-collapse').onclick=()=>{if(matchMedia('(max-width:800px)').matches)return;const compact=document.body.classList.toggle('sidebar-compact');try{localStorage.setItem('smetra.sidebar-compact',String(compact))}catch{}syncSidebarCollapseButton();syncSidebarAccess()};
-  matchMedia('(max-width:800px)').addEventListener('change',()=>{closeNavigation();syncSidebarCollapseButton()});syncSidebarAccess();
+  matchMedia('(max-width:800px)').addEventListener('change',()=>{closeNavigation();syncSidebarCollapseButton()});
+  window.addEventListener('resize',syncMobileSidebarGeometry,{passive:true});
+  syncMobileSidebarGeometry();syncSidebarAccess();
   $('#nav-backdrop').onclick=closeNavigation;
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('nav-open')){closeNavigation();$('#nav-toggle').focus()}});
   $('#logout').onclick=async()=>{const button=$('#logout');if(button.disabled)return;button.disabled=true;const attempt=++authRevision;try{await api('/auth/logout',{method:'POST'})}catch{}finally{button.disabled=false}if(attempt!==authRevision)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()};

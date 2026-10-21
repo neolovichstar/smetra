@@ -49,15 +49,17 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     if(route==='assistant'){
       assert.equal(await evaluate("(()=>{const rail=document.querySelector('.assistant-toolrail'),workbar=document.querySelector('#assistant-workbar'),toggle=document.querySelector('#assistant-toolrail-toggle'),main=document.querySelector('.assistant-main-column');return !!rail&&!!workbar&&!!toggle&&!!main&&rail.contains(workbar)&&rail.getBoundingClientRect().right<=main.getBoundingClientRect().left+1})()"),true,'Conversation controls must live in the left sub-sidebar');
       await evaluate("document.querySelector('#assistant-toolrail-toggle').click()");
-      assert.equal(await evaluate("document.querySelector('.assistant-studio').classList.contains('assistant-tools-collapsed')"),true,'Right sub-sidebar should collapse to an icon rail');
+      assert.equal(await evaluate("document.querySelector('.assistant-studio').classList.contains('assistant-tools-collapsed')"),true,'Left sub-sidebar should collapse to an icon rail');
       await evaluate("document.querySelector('#assistant-toolrail-toggle').click()");
-      assert.equal(await evaluate("document.querySelector('#assistant-toolrail-toggle').getAttribute('aria-expanded')"),'true','Right sub-sidebar toggle must restore full width');
+      assert.equal(await evaluate("document.querySelector('#assistant-toolrail-toggle').getAttribute('aria-expanded')"),'true','Left sub-sidebar toggle must restore full width');
       assert.equal(await evaluate("(()=>{const m=document.querySelector('.assistant-message.assistant');return !m||['copy','refresh','up','down'].every(k=>!!m.querySelector('.assistant-action-'+k+' svg'))})()"),true,'AI answer actions use SVG icons');
     }
     if(route==='assistant'&&await evaluate("matchMedia('(min-width:801px)').matches")){
-      assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-item-icon').length>=10"),true,'Main sidebar should use SVG icons');
-      assert.equal(await evaluate("Array.from(document.querySelectorAll('#sidebar [data-tab]')).every(b=>b.querySelectorAll('svg').length===1&&b.querySelectorAll('.sidebar-item-icon').length===1)"),true,'Each main navigation item must have exactly one SVG icon');
-      assert.equal(await evaluate("(()=>{const s=document.querySelector('#logout svg');return !!s&&s.getBoundingClientRect().width<=20&&s.getBoundingClientRect().height<=20})()"),true,'Logout SVG must stay at icon size');
+      assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-group button[data-tab] .sidebar-item-icon').length>=15"),true,'Main navigation should use a complete set of SVG icons');
+      assert.equal(await evaluate("Array.from(document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')).every(b=>b.querySelectorAll('svg').length===1&&b.querySelectorAll('.sidebar-item-icon').length===1)"),true,'Each main navigation item must have exactly one SVG icon');
+      await evaluate("(()=>{const b=document.querySelector('#sidebar .sidebar-group button[data-tab]');const extra=document.createElementNS('http://www.w3.org/2000/svg','svg');extra.classList.add('legacy-sidebar-icon');b.append(extra)})()");
+      await until("document.querySelector('#sidebar .sidebar-group button[data-tab]').querySelectorAll('svg').length===1");
+      assert.equal(await evaluate("(()=>{const s=document.querySelector('#logout svg'),p=document.querySelector('#sidebar-profile'),a=document.querySelector('#sidebar-avatar'),sidebar=document.querySelector('#sidebar');return !!s&&s.getBoundingClientRect().width<=20&&s.getBoundingClientRect().height<=20&&!!p&&!!a&&parseFloat(getComputedStyle(sidebar).width)>=240})()"),true,'ChatGPT-like sidebar keeps its profile row and bounded logout SVG');
       await evaluate("document.querySelector('#sidebar-collapse').click()");
       assert.equal(await evaluate("document.body.classList.contains('sidebar-compact')"),true,'Main sidebar should collapse to icon rail');
       await evaluate("document.querySelector('#sidebar-collapse').click()");
