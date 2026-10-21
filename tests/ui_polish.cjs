@@ -62,6 +62,11 @@ assert.match(assistantChat, /window\.addEventListener\('resize',resizeActiveAssi
 assert.match(assistantChat, /visualViewport\?\.addEventListener\('resize',resizeActiveAssistantComposer|visualViewport\.addEventListener\('resize',resizeActiveAssistantComposer/,
   'assistant composer recalculates after mobile visual viewport resizing');
 
+assert.match(appJs, /function dismissToast\(\)[\s\S]*?el\.classList\.add\('hidden'\)/,
+  'toast helper can clear stale notifications when changing sections');
+assert.match(appJs, /if\(lastRenderedTab!==null&&lastRenderedTab!==tab\)dismissToast\(\)/,
+  'route changes dismiss the previous page toast so it cannot cover the new page');
+
 assert.match(css, /\.workspace-home:has\(> \.activation-intro\) > \.dashboard-intro\s*\{\s*display:\s*none;/,
   'first-run onboarding does not repeat the dashboard title and create-estimate CTA');
 

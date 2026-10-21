@@ -4,7 +4,7 @@ const rubFormatter=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB
 const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
-let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0, authRevision=0;
+let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0, authRevision=0, lastRenderedTab=null;
 try{sessionStorage.removeItem('mobile_token');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 const apiResponseCache=new Map();
@@ -55,6 +55,7 @@ async function api(path, options = {}) {
   try{return await request}finally{if(apiRequests.get(key)===request)apiRequests.delete(key)}
 }
 function notify(message) { const el=$('#toast'); if(!el){alert(message);return;} el.textContent=message;el.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.add('hidden'),4500); }
+function dismissToast(){const el=$('#toast');if(!el)return;clearTimeout(toastTimer);el.classList.add('hidden');el.textContent='';}
 function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';button.innerHTML='<img class="icon" src="/assets/icons/'+(dark?'sun':'moon')+'.svg" alt="">'+(id==='theme-alt'?label:'');button.setAttribute('aria-label',label);button.title=label;} }
 function theme() { const dark=document.body.classList.toggle('dark');document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('smetra_theme',dark?'dark':'light');}catch{} syncThemeLabel(); }
 let savedTheme;try{savedTheme=localStorage.getItem('smetra_theme');}catch{}
@@ -162,6 +163,8 @@ function quoteCard(q) {
 }
 function quoteList() { return quotes.length?quotes.map(quoteCard).join(''):'<div class="empty"><h3>Здесь пока пусто</h3><p>Создайте первое предложение, чтобы отправить клиенту точную стоимость.</p></div>'; }
 async function render() {
+  if(lastRenderedTab!==null&&lastRenderedTab!==tab)dismissToast();
+  lastRenderedTab=tab;
   window.SmetraQuoteEditor?.leave();
   if(!user)return;
   const owner=user,section=tab,mine=++renderRevision;
