@@ -7,9 +7,10 @@ import unittest
 import urllib.request
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend import business, revenue
+from backend import assistant, business, revenue
 from backend.app import Handler
 import test_flows as flow_fixtures
 
@@ -41,6 +42,50 @@ class RevenueTests(unittest.TestCase):
             handler.apply_payment(self.con,local,remote)
             handler.apply_payment(self.con,local,remote)
         return local,remote
+
+    def test_subscription_purchase_gifts_are_issued_once_spent_and_revoked_on_refund(self):
+        key='monthly_bonus_checkout'
+        local,remote=self.purchase(self.user,key=key,plan='pro_month')
+        grant=self.con.execute('SELECT * FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()
+        self.assertIsNotNone(grant)
+        self.assertEqual((grant['amount'],grant['remaining']),(50,50))
+        self.assertEqual(self.con.execute('SELECT count(*) FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()[0],1,'duplicate payment confirmation cannot duplicate the bonus')
+
+        service=SimpleNamespace(con=self.con,user=self.con.execute('SELECT * FROM users WHERE id=?',(self.user['id'],)).fetchone())
+        quota_key=assistant.quota(service)['key']
+        self.con.execute('INSERT INTO rate_limits(key,count,started) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count',(quota_key,100,revenue.now()))
+        before=assistant.quota(service)
+        self.assertEqual(before['purchase_bonus_remaining'],50)
+        self.assertEqual(before['remaining'],50)
+        reservation=assistant.reserve(service)
+        self.assertEqual(reservation['bonus_grant_id'],grant['id'])
+        spent=assistant.quota(service)
+        self.assertEqual(spent['purchase_bonus_remaining'],49)
+        self.assertEqual(spent['remaining'],49)
+        assistant.release(service,reservation)
+        restored=assistant.quota(service)
+        self.assertEqual(restored['purchase_bonus_remaining'],50,'failed assistant requests return the reserved bonus credit')
+        self.assertEqual(restored['remaining'],50)
+
+        # A later request spends exactly one gift credit. A full refund removes only the unused balance.
+        reservation=assistant.reserve(service)
+        self.assertEqual(reservation['bonus_grant_id'],grant['id'])
+        used=assistant.quota(service)
+        self.assertEqual(used['purchase_bonus_remaining'],49)
+        handler=object.__new__(Handler)
+        handler.apply_refund(self.con,{'id':'refund-'+key,'payment_id':remote['id'],'status':'succeeded','amount':remote['amount']})
+        revoked=self.con.execute('SELECT remaining FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()
+        self.assertEqual(revoked['remaining'],0)
+        self.assertEqual(assistant.quota(service)['remaining'],0,'unused purchase credits are revoked on a full refund')
+
+        annual=self.account('annual-bonus')
+        annual_payment,_=self.purchase(annual,key='annual_bonus_checkout',plan='pro_year')
+        annual_gift=self.con.execute('SELECT amount,remaining FROM assistant_bonus_grants WHERE payment_id=?',(annual_payment['id'],)).fetchone()
+        self.assertEqual((annual_gift['amount'],annual_gift['remaining']),(300,300))
+
+        tester=self.account('test-bonus')
+        test_payment,_=self.purchase(tester,key='test_bonus_checkout',test=True,plan='pro_year')
+        self.assertIsNone(self.con.execute('SELECT id FROM assistant_bonus_grants WHERE payment_id=?',(test_payment['id'],)).fetchone(),'test checkouts do not mint purchase bonuses')
 
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}

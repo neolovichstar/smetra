@@ -56,6 +56,26 @@ async function setup(enabled=true){
   const original=w.api;w.api=(path,options={})=>path==='/assistant/jobs'&&!options.method?Promise.resolve({enabled:true,jobs:[{id:'qa',kind:'chat',prompt:'Estimate',status:'completed',updated_at:Date.now()/1000}]}):original(path,options);
   await w.SmetraAssistant();await tick();const button=doc.querySelector('.assistant-job button');assert.ok(button);assert.equal(button.disabled,false);
  });
+ await test('cancelled background jobs disappear and stay dismissed after refresh',async({w,doc})=>{
+  const original=w.api,now=Date.now()/1000;let deletes=0;
+  const jobs=[
+   {id:'cancelled-old',kind:'chat',prompt:'This was already cancelled',status:'cancelled',updated_at:now},
+   {id:'active-job',kind:'chat',prompt:'Remove this job',status:'queued',updated_at:now}
+  ];
+  w.api=async(path,options={})=>{
+   if(path==='/assistant/jobs'&&!options.method)return {enabled:true,jobs};
+   if(path==='/assistant/jobs/active-job'&&options.method==='DELETE'){deletes++;return {quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}}}
+   return original(path,options);
+  };
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelectorAll('.assistant-job').length,1,'cancelled records must never be rendered');
+  assert.match(doc.querySelector('.assistant-job').textContent,/Remove this job/);
+  doc.querySelector('.assistant-job button').click();await tick();await tick();
+  assert.equal(deletes,1);assert.equal(doc.querySelector('.assistant-job'),null,'task should be removed immediately after successful cancellation');
+  assert.ok(JSON.parse(w.sessionStorage.getItem('smetra.assistant.dismissedJobs:qa:qa-workspace')).includes('active-job'));
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelector('.assistant-job'),null,'dismissed task must not reappear from a stale queue response');
+ });
  await test('normal send still streams Markdown without queueing',async({w,doc,requests})=>{
   let sent;
   w.fetch=async(path,options)=>{sent={path,options};return {ok:true,body:new ReadableStream({start(controller){

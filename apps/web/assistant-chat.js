@@ -37,30 +37,41 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(!active())return;
   const currentTitle=threadIndex.items.find(item=>item.id===activeConversation)?.title||'Общий диалог';
   document.querySelector('.contextual-upgrade')?.remove();
-  view(`<section class="assistant-page assistant-refined assistant-studio">
-    <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
-    <div class="assistant-workbar">
-      <details class="assistant-history"><summary><span class="assistant-history-icon" aria-hidden="true"></span><span class="assistant-current-title">${escapeHtml(currentTitle)}</span><span class="assistant-chevron" aria-hidden="true"></span></summary>
-        <div class="assistant-history-list"><span class="assistant-history-label">Ваши диалоги</span>
-          <button type="button" data-conversation="" aria-pressed="${!activeConversation}">Общий диалог</button>
-          ${threadIndex.items.map(item=>`<button type="button" data-conversation="${escapeHtml(item.id)}" aria-pressed="${item.id===activeConversation}"><span>${escapeHtml(item.title)}</span>${item.pinned?'<span class="assistant-pinned" aria-label="Закреплён"></span>':''}</button>`).join('')}
-        </div>
-      </details>
-      <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
-      <button class="btn small" id="assistant-new-thread" type="button" aria-label="Новый диалог">Новый диалог</button>
-      <button class="btn small" id="assistant-knowledge" type="button" aria-label="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel">Знания</button>
-      <details class="assistant-options"><summary aria-label="Действия с диалогом" title="Действия с диалогом"><span aria-hidden="true"></span></summary><div class="assistant-options-list">
-        <button class="assistant-thread-action" id="assistant-rename" type="button">Переименовать</button>
-        <button class="assistant-thread-action" id="assistant-pin" type="button">${threadIndex.items.find(item=>item.id===activeConversation)?.pinned?'Открепить':'Закрепить'}</button>
-        <button class="assistant-thread-action" id="assistant-delete" type="button">${activeConversation?'Удалить диалог':'Очистить диалог'}</button>
-      </div></details>
+  const collapsedTools=(()=>{try{return localStorage.getItem('smetra.assistant.tools-collapsed')==='true'}catch{return false}})();
+  view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}">
+    <div class="assistant-main-column">
+      <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
+      <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><label class="visually-hidden" for="assistant-thread-name">Название диалога</label><input id="assistant-thread-name" maxlength="120" required aria-label="Название диалога"><button class="btn small primary" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
+      <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
+      <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
+      <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
+        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
+        <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
+      </div>
     </div>
-    <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><label class="visually-hidden" for="assistant-thread-name">Название диалога</label><input id="assistant-thread-name" maxlength="120" required aria-label="Название диалога"><button class="btn small primary" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
-    <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog><div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
-    <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
-      <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
-      <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
-    </div></section>`);
+    <aside class="assistant-toolrail" aria-label="Инструменты диалога">
+      <button class="assistant-toolrail-toggle" id="assistant-toolrail-toggle" type="button" aria-expanded="${!collapsedTools}" aria-controls="assistant-workbar" aria-label="${collapsedTools?'Развернуть панель диалога':'Свернуть панель диалога'}" title="${collapsedTools?'Развернуть панель':'Свернуть панель'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="${collapsedTools?'M15 8l-4 4 4 4':'M9 8l4 4-4 4'}"/><path d="M7 4v16"/></svg></button>
+      <div class="assistant-toolrail-heading"><span class="assistant-toolrail-heading-label">ДИАЛОГ</span></div>
+      <div class="assistant-toolrail-body">
+        <div class="assistant-workbar" id="assistant-workbar">
+          <button class="btn small assistant-tool-new" id="assistant-new-thread" type="button" aria-label="Новый диалог" title="Новый диалог"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="assistant-tool-label">Новый диалог</span></button>
+          <details class="assistant-history"><summary aria-label="Диалоги" title="Диалоги"><span class="assistant-history-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 5.5V21M8 7h8M8 11h8"/></svg></span><span class="assistant-current-title assistant-tool-label">${escapeHtml(currentTitle)}</span><svg class="assistant-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+            <div class="assistant-history-list"><span class="assistant-history-label">Ваши диалоги</span>
+              <button type="button" data-conversation="" aria-pressed="${!activeConversation}">Общий диалог</button>
+              ${threadIndex.items.map(item=>`<button type="button" data-conversation="${escapeHtml(item.id)}" aria-pressed="${item.id===activeConversation}"><span>${escapeHtml(item.title)}</span>${item.pinned?'<span class="assistant-pinned" aria-label="Закреплён"></span>':''}</button>`).join('')}
+            </div>
+          </details>
+          <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
+          <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="База знаний" title="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 4.5V22M8 6h8M8 10h8"/></svg><span class="assistant-tool-label">Знания</span></button>
+          <details class="assistant-options"><summary aria-label="Дополнительные действия" title="Дополнительные действия"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="assistant-options-list">
+            <button class="assistant-thread-action" id="assistant-rename" type="button">Переименовать</button>
+            <button class="assistant-thread-action" id="assistant-pin" type="button">${threadIndex.items.find(item=>item.id===activeConversation)?.pinned?'Открепить':'Закрепить'}</button>
+            <button class="assistant-thread-action" id="assistant-delete" type="button">${activeConversation?'Удалить диалог':'Очистить диалог'}</button>
+          </div></details>
+        </div>
+      </div>
+    </aside>
+  </section>`);
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
@@ -111,6 +122,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     menu.addEventListener('keydown',event=>{if(event.key==='Escape'){menu.open=false;menu.querySelector('summary').focus();event.stopPropagation()}});
     menu.addEventListener('focusout',()=>{setTimeout(()=>{if(menu.isConnected&&!menu.contains(document.activeElement))menu.open=false},0)});
   });
+  const toolrail=document.querySelector('.assistant-studio'),toolrailToggle=document.querySelector('#assistant-toolrail-toggle');
+  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';toolrailToggle.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
   document.querySelector('.assistant-page').addEventListener('click',event=>{
     if(!event.target.closest('.assistant-workbar'))document.querySelectorAll('.assistant-workbar details').forEach(menu=>{menu.open=false});
   });
@@ -271,6 +284,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   renderQuota(quota);
   let jobRequest=null,jobPollTimer=null,jobLoadSeq=0;
+  const dismissedJobsKey='smetra.assistant.dismissedJobs:'+user.id+':'+currentWorkspace;
+  const dismissedJobIds=new Set();
+  try{for(const id of JSON.parse(sessionStorage.getItem(dismissedJobsKey)||'[]'))dismissedJobIds.add(String(id))}catch{}
+  const rememberDismissedJob=id=>{dismissedJobIds.add(String(id));try{sessionStorage.setItem(dismissedJobsKey,JSON.stringify([...dismissedJobIds].slice(-100)))}catch{}};
   const refreshJobs=async()=>{
     clearTimeout(jobPollTimer);const sequence=++jobLoadSeq;
     if(!jobList.isConnected)return;
@@ -284,7 +301,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       renderQuota(quota);
       jobList.replaceChildren();
       const labels={queued:'В очереди',running:'В работе',retry:'Повторю позже',completed:'Готово',failed:'Не удалось завершить',cancelled:'Отменено'};
-      result.jobs.filter(job=>['queued','running','retry'].includes(job.status)||Date.now()/1000-job.updated_at<86400).slice(0,5).forEach(job=>{
+      const now=Date.now()/1000;
+      result.jobs.filter(job=>{
+        if(!job?.id||dismissedJobIds.has(String(job.id))||job.status==='cancelled')return false;
+        if(['queued','running','retry'].includes(job.status))return true;
+        return ['completed','failed'].includes(job.status)&&now-Number(job.updated_at||job.created_at||0)<86400;
+      }).slice(0,5).forEach(job=>{
         const row=document.createElement('div');row.className='assistant-job';row.dataset.status=job.status;
         const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
         title.textContent=job.prompt;
@@ -296,7 +318,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(active||job.status==='completed'){
           const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':['file_index','file_ocr'].includes(job.kind)?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
           button.onclick=async()=>{button.disabled=true;try{
-            if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});renderQuota(cancelled.quota);refreshJobs();refreshFile()}
+            if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});rememberDismissedJob(job.id);row.classList.add('assistant-job-removing');row.setAttribute('aria-hidden','true');row.remove();renderQuota(cancelled.quota);refreshJobs();refreshFile()}
             else if(['file_index','file_ocr'].includes(job.kind)){window.SmetraAssistantContext({entity:'files',id:job.file_id,workspace_id:currentWorkspace,label:job.prompt.replace(/^(Подготовка|Распознавание) · /,'')});window.SmetraAssistant()}
             else{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',job.conversation_id||'');window.SmetraAssistant()}
           }catch(error){button.disabled=false;notify(error.message)}};row.append(button);
