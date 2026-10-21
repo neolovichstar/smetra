@@ -48,7 +48,7 @@ class RevenueTests(unittest.TestCase):
         local,remote=self.purchase(self.user,key=key,plan='pro_month')
         grant=self.con.execute('SELECT * FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()
         self.assertIsNotNone(grant)
-        self.assertEqual((grant['amount'],grant['remaining']),(25,25))
+        self.assertEqual((grant['amount'],grant['remaining']),(50,50))
         self.assertEqual(self.con.execute('SELECT count(*) FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()[0],1,'duplicate payment confirmation cannot duplicate the bonus')
 
         service=SimpleNamespace(con=self.con,user=self.con.execute('SELECT * FROM users WHERE id=?',(self.user['id'],)).fetchone())
@@ -81,7 +81,7 @@ class RevenueTests(unittest.TestCase):
         annual=self.account('annual-bonus')
         annual_payment,_=self.purchase(annual,key='annual_bonus_checkout',plan='pro_year')
         annual_gift=self.con.execute('SELECT amount,remaining FROM assistant_bonus_grants WHERE payment_id=?',(annual_payment['id'],)).fetchone()
-        self.assertEqual((annual_gift['amount'],annual_gift['remaining']),(150,150))
+        self.assertEqual((annual_gift['amount'],annual_gift['remaining']),(300,300))
 
         tester=self.account('test-bonus')
         test_payment,_=self.purchase(tester,key='test_bonus_checkout',test=True,plan='pro_year')
