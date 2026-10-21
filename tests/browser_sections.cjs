@@ -45,6 +45,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
       if([390,1440].includes(width))fs.writeFileSync(`data/qa/section-${route}-${width}.png`,Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
     }
     if(route==='quotes')assert.equal(await evaluate(`(()=>{const sheet=document.querySelector('.quotes-document'),heading=document.querySelector('#quotes-register-title'),search=document.querySelector('#workspace-search'),list=document.querySelector('#records');return !!sheet&&!!heading&&!!search&&!!list&&list.classList.contains('quotes-document-list')})()`),true,'Quotes page must render as a document register');
+    if(route==='assistant')assert.equal(await evaluate("(()=>{const m=document.querySelector('.assistant-message.assistant');return !m||['copy','refresh','up','down'].every(k=>!!m.querySelector('.assistant-action-'+k+' svg'))})()"),true,'AI answer actions use SVG icons');
     if(route==='clients')assert.equal(await evaluate("!!document.querySelector('.contact-group .contact-monogram')"),true);
     if(route==='construction'){
       await send('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
