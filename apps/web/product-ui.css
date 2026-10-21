@@ -842,6 +842,7 @@
   cursor:pointer;
   transition:background-color .15s ease,border-color .15s ease,color .15s ease;
 }
+.workspace-page .assistant-refined .assistant-message-actions .assistant-copy{margin:0;padding:0}
 .workspace-page .assistant-refined .assistant-message-action svg {
   display:block;
   width:16px;
