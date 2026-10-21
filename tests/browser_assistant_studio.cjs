@@ -42,6 +42,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
   await screenshot('welcome-aligned-'+width);
  }
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ await new Promise(resolve=>setTimeout(resolve,260)); // let the responsive grid transition settle before measuring geometry
  const geometry=await evaluate("(()=>{const form=document.querySelector('#assistant-form'),input=document.querySelector('#assistant-input'),tools=document.querySelector('.assistant-compose-tools'),attach=document.querySelector('#assistant-attach'),send=document.querySelector('#assistant-send');const f=form.getBoundingClientRect(),i=input.getBoundingClientRect(),t=tools.getBoundingClientRect(),a=attach.getBoundingClientRect(),s=send.getBoundingClientRect();return {width:innerWidth,form:{left:Math.round(f.left),right:Math.round(f.right),width:Math.round(f.width)},input:{left:Math.round(i.left),right:Math.round(i.right),width:Math.round(i.width)},tools:{left:Math.round(t.left),right:Math.round(t.right),width:Math.round(t.width)},attach:{left:Math.round(a.left),right:Math.round(a.right)},send:{left:Math.round(s.left),right:Math.round(s.right)},hasSelectWrapper:!!document.querySelector('#assistant-thread-select')?.closest('.select-control')}})()");
  assert.equal(geometry.hasSelectWrapper,false,'Hidden conversation select stays hidden and unenhanced');
  assert.equal(geometry.form.left>=0&&geometry.form.right<=geometry.width+1,true,'Composer surface fits viewport: '+JSON.stringify(geometry));
