@@ -1367,6 +1367,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise ApiError(409, "Платёж получен не от выбранного магазина")
 
     def apply_payment(self, con, local, remote):
+        if local.get("plan") == "lead_tokens_150":
+            return self.apply_lead_token_payment(con, local, remote)
         self.verify_yookassa_shop(remote)
         terms = con.execute(
             "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
@@ -1567,6 +1569,72 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 local["user_id"],
                 "pro_subscription_started",
                 {"source": "yookassa", "plan": local["plan"]},
+            )
+
+    def apply_lead_token_payment(self, con, local, remote):
+        """Credit lead tokens only after authoritative provider confirmation; idempotent by payment transition."""
+        self.verify_yookassa_shop(remote)
+        terms = con.execute(
+            "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
+        ).fetchone()
+        if (
+            not terms
+            or terms["plan"] != "lead_tokens_150"
+            or int(terms["amount_kopecks"]) != 15000
+            or terms["workspace_id"] is not None
+            or remote.get("id") != local["provider_id"]
+            or remote.get("amount", {}).get("currency") != "RUB"
+            or remote.get("amount", {}).get("value") != "150.00"
+            or remote.get("metadata", {}).get("user_id") != local["user_id"]
+            or remote.get("metadata", {}).get("plan") != "lead_tokens_150"
+            or (remote.get("metadata", {}).get("workspace_id") or None) is not None
+        ):
+            raise ApiError(409, "Данные покупки токенов не совпали")
+        status = remote.get("status")
+        if status not in ("pending", "succeeded", "canceled"):
+            return
+        if status == "succeeded" and remote.get("paid") is not True:
+            raise ApiError(409, "Платёж не подтверждён как оплаченный")
+        newly_succeeded = False
+        with _LOCK, business.transaction_lock_scope(con, (f"user:{local['user_id']}",)):
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                current = con.execute(
+                    "SELECT status FROM payments WHERE id=?", (local["id"],)
+                ).fetchone()
+                if not current:
+                    raise ApiError(404, "Платёж не найден")
+                if current["status"] == "pending" and current["status"] != status:
+                    con.execute(
+                        "UPDATE payments SET status=?,activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
+                        (status, status, now(), local["id"]),
+                    )
+                    if status == "succeeded" and not terms["is_test"]:
+                        changed = con.execute(
+                            "UPDATE users SET lead_token_balance=lead_token_balance+150,lead_token_balance_updated_at=? WHERE id=? AND deleted_at IS NULL AND blocked=0",
+                            (now(), local["user_id"]),
+                        )
+                        if changed.rowcount != 1:
+                            raise ApiError(404, "Профиль покупателя не найден")
+                        balance = con.execute(
+                            "SELECT lead_token_balance FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()["lead_token_balance"]
+                        con.execute(
+                            "INSERT INTO lead_token_ledger(id,user_id,delta_tokens,balance_after,entry_type,source,source_id,idempotency_key,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING",
+                            (uid(), local["user_id"], 150, balance, "topup", "yookassa", local["id"], "payment:"+local["id"], now()),
+                        )
+                    newly_succeeded = status == "succeeded"
+                    revenue.payment_event(con, local, status, False)
+                    event(con, local["user_id"], "payment_"+status)
+                    audit(con, None, "payment."+status, local["id"])
+                con.execute("COMMIT")
+            except Exception:
+                con.execute("ROLLBACK")
+                raise
+        if newly_succeeded and not terms["is_test"]:
+            mytracker.track_custom_event(
+                local["user_id"], "lead_tokens_purchased",
+                {"source":"yookassa","tokens":150,"amount_kopecks":15000}
             )
 
     def apply_refund(self, con, remote):
