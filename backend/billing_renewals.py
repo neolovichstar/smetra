@@ -246,7 +246,9 @@ def _resolve_existing(handler, con, item):
     if remote.get("status") == "canceled":
         _mark_attempt(con, attempt["id"], "failed", "payment_canceled", 86400, sub["id"])
         return "failed"
-    _mark_attempt(con, attempt["id"], "needs_action", "payment_pending", 86400, sub["id"])
+    # Keep a pending provider payment on the same attempt/key; never create a
+    # second off-session charge while the first charge is still unresolved.
+    _mark_attempt(con, attempt["id"], "pending", "payment_pending", 86400, sub["id"])
     return "pending"
 
 
