@@ -1,4 +1,4 @@
-/* Local, MIT-licensed Phosphor icons. Captions and accessible names stay intact. */
+/* Smetra outline icon system. Captions and accessible names stay intact. */
 (() => {
   'use strict';
   const navigation = {
@@ -9,7 +9,7 @@
     support:'lifebuoy', profile:'users', settings:'gear', admin:'shield-check'
   };
   const explicit = {
-    'assistant-send':'arrow-up-right', 'assistant-rename':'pencil-simple',
+    'assistant-send':'arrow-up', 'assistant-rename':'pencil-simple',
     'assistant-pin':'push-pin', 'assistant-delete':'trash',
     'assistant-context-remove':'x', 'assistant-knowledge':'book-open',
     'logout':'sign-out'
