@@ -317,7 +317,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
     const hasPrompt=Boolean(input.value.trim());
-    send.disabled=hasPrompt?(blocked||(backgroundMode&&!backgroundEnabled)):(working||threadBusy||!data.available);
+    send.disabled=hasPrompt?(blocked||(backgroundMode&&!backgroundEnabled)):(working||threadBusy||fileBlocking||!data.available);
     syncComposerAction();
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
