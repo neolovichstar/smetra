@@ -436,7 +436,7 @@ public class MainActivity extends Activity {
         Button button=assistantSendButton;EditText prompt=assistantPrompt;
         if(button==null||prompt==null)return;
         boolean hasText=!prompt.getText().toString().trim().isEmpty();
-        boolean enabled=hasText?(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked&&!assistantStreaming):!assistantStreaming;
+        boolean enabled=hasText?(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked&&!assistantStreaming):(!assistantStreaming&&assistantAvailable);
         ui.setGlyphButtonAppearance(button,hasText?"send":"mic",hasText,hasText?"Отправить сообщение":"Надиктовать сообщение");
         button.setEnabled(enabled);button.setAlpha(enabled?1f:.43f);button.setTag("assistant-send");
     }

@@ -562,6 +562,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/design-system.css"] = ("design-system.css", "text/css")
         public["/ui-foundation.css"] = ("ui-foundation.css", "text/css")
         public["/quote-editor.css"] = ("quote-editor.css", "text/css")
+        public["/visual-refresh.css"] = ("visual-refresh.css", "text/css")
         for name in (
             "reference-hero",
             "reference-sphere",
@@ -611,6 +612,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "trash",
             "users",
             "wallet",
+            "microphone",
         ):
             icon = f"assets/icons/{name}.svg"
             public["/" + icon] = (icon, "image/svg+xml")
