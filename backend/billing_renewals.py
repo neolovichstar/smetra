@@ -323,7 +323,7 @@ def _charge(handler, con, item):
     if remote.get("status") == "canceled":
         _mark_attempt(con, attempt["id"], "failed", "payment_canceled", 86400, sub["id"])
         return "failed"
-    _mark_attempt(con, attempt["id"], "needs_action", "payment_pending", 86400, sub["id"])
+    _mark_attempt(con, attempt["id"], "pending", "payment_pending", 86400, sub["id"])
     return "pending"
 
 
