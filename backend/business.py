@@ -1796,7 +1796,7 @@ class Service:
             values.update(
                 stage_id=stage,
                 payment_date=date_value(
-                    data.get("payment_date", dt.date.today().isoformat())
+                    data.get("payment_date", business_date().isoformat())
                 ),
                 method=choice(
                     data.get("method", "bank_transfer"),
@@ -1808,7 +1808,7 @@ class Service:
             values.update(
                 category=string(data.get("category", ""), "Категория", 100, True),
                 expense_date=date_value(
-                    data.get("expense_date", dt.date.today().isoformat())
+                    data.get("expense_date", business_date().isoformat())
                 ),
             )
         self.insert(table, values)
