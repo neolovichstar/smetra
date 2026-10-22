@@ -49,14 +49,29 @@ def packed(value):
 
 
 @contextmanager
-def transaction(con):
-    con.execute("BEGIN IMMEDIATE")
+def transaction_lock_scope(con, scopes=None):
+    """Set scoped PostgreSQL locks for one transaction without changing SQLite behavior."""
+    setter = getattr(con, "set_transaction_lock_scopes", None)
+    if scopes is None or not callable(setter):
+        yield
+        return
+    previous = setter(scopes)
     try:
         yield
-        con.execute("COMMIT")
-    except Exception:
-        con.execute("ROLLBACK")
-        raise
+    finally:
+        setter(previous)
+
+
+@contextmanager
+def transaction(con, lock_scopes=None):
+    with transaction_lock_scope(con, lock_scopes):
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
 
 
 def string(value, label, maximum=3000, required=False):
@@ -545,6 +560,9 @@ class Service:
             else ("owner", "admin", "manager", "member")
         ):
             raise DomainError(403, "Недостаточно прав в рабочем пространстве")
+        setter = getattr(self.con, "set_transaction_lock_scopes", None)
+        if callable(setter) and self.user and self.wid:
+            setter((f"workspace:{self.wid}", f"user:{self.user['id']}"))
 
     def get(self, table, record_id):
         if not isinstance(record_id, str) or not 1 <= len(record_id) <= 100:
@@ -922,13 +940,27 @@ class Service:
         data = self.h.body() if method == "POST" else {}
         token = data.get("token", query.get("token", [""])[0])
         token = string(token, "Ссылка", 100, True)
-        with transaction(self.con):
+        candidate = self.con.execute(
+            "SELECT q.id,q.workspace_id FROM quotes q JOIN users u ON u.id=q.user_id "
+            "WHERE q.public_token=? AND u.blocked=0 AND u.deleted_at IS NULL",
+            (token,),
+        ).fetchone()
+        if not candidate:
+            raise DomainError(404, "Предложение не найдено")
+        lock_scope = (
+            f"workspace:{candidate['workspace_id']}"
+            if candidate["workspace_id"]
+            else f"quote:{candidate['id']}"
+        )
+        with transaction(self.con, lock_scopes=(lock_scope,)):
             row = self.con.execute(
                 "SELECT q.*,u.name AS author FROM quotes q JOIN users u ON u.id=q.user_id WHERE q.public_token=? AND u.blocked=0 AND u.deleted_at IS NULL",
                 (token,),
             ).fetchone()
             if not row or not row["published_version"]:
                 raise DomainError(404, "Предложение не найдено")
+            if row["workspace_id"] != candidate["workspace_id"]:
+                raise DomainError(409, "Предложение изменилось. Обновите ссылку")
             self.wid = row["workspace_id"]
             public_quote = self.quote_view(row, True)
             if method == "GET" and path in ("/api/public/file", "/api/public/document"):
@@ -1152,10 +1184,18 @@ class Service:
         self.wid = form["workspace_id"]
         now = stamp()
         client_id, lead_id, request_id = identity(), identity(), identity()
-        settings = json.loads(form["settings"])
-        pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
-        status = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
-        with transaction(self.con):
+        with transaction(self.con, lock_scopes=(f"workspace:{self.wid}",)):
+            form = self.con.execute(
+                "SELECT f.*,w.name AS workspace_name,w.settings FROM intake_forms f "
+                "JOIN workspaces w ON w.id=f.workspace_id JOIN users u ON u.id=w.owner_id "
+                "WHERE f.token=? AND f.enabled=1 AND u.blocked=0 AND u.deleted_at IS NULL",
+                (token,),
+            ).fetchone()
+            if not form or form["workspace_id"] != self.wid:
+                raise DomainError(404, "Форма заявки не найдена")
+            settings = json.loads(form["settings"])
+            pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
+            status = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
             self.insert("clients", dict(
                 id=client_id, workspace_id=self.wid, name=name, type="person", company="",
                 email=email, phone=phone, telegram="", notes="", tags="[]",
@@ -2162,7 +2202,10 @@ class Service:
                     from ai import draft
                 return draft(self, data)
             self.h.throttle("write:" + self.user["id"], 120, 60)
-            with transaction(self.con):
+            with transaction(
+                self.con,
+                lock_scopes=(f"workspace:{self.wid}", f"user:{self.user['id']}"),
+            ):
                 return self.route(method, kind, rest, query, data)
         return self.route(method, kind, rest, query, data)
 

@@ -132,6 +132,15 @@
     const buttons=[...(root.matches?.('button,a.btn')?[root]:[]),...root.querySelectorAll('button, a.btn')];
     buttons.forEach(button => {
       if (button.matches('.select-trigger,.select-option')) return;
+      // An authored SVG/image is the canonical icon. Do not also decorate this
+      // control with the automatic ::before icon, even if a legacy attribute remains.
+      const authoredIcon=button.querySelector(':scope > svg, :scope > img.icon, :scope > .icon');
+      if(authoredIcon){
+        button.removeAttribute('data-ui-icon');
+        button.removeAttribute('data-ui-icon-only');
+        button.style.removeProperty('--ui-icon');
+        return;
+      }
       if (button.dataset.uiIcon) {
         if (/^[a-z-]+$/.test(button.dataset.uiIcon)) button.style.setProperty('--ui-icon', `url('/assets/icons/${button.dataset.uiIcon}.svg')`);
         return;

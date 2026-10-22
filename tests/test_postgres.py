@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from backend.postgres import translate, schema_name, Row
+from backend.postgres import Connection, Row, schema_name, translate
 
 
 class PostgresQueryTests(unittest.TestCase):
@@ -73,3 +73,99 @@ class PostgresQueryTests(unittest.TestCase):
         row = Row(id="abc", total=12)
         self.assertEqual(row[0], row["id"])
         self.assertEqual(dict(row), {"id": "abc", "total": 12})
+
+    def test_simple_insert_executemany_batches_network_round_trips(self):
+        from backend.postgres import Connection
+
+        con = Connection.__new__(Connection)
+        rows = [(f"id-{i}", "quote-1", i, "{}") for i in range(200)]
+        with patch.object(Connection, "execute", autospec=True, return_value="cursor") as execute:
+            result = con.executemany("INSERT INTO quote_items VALUES(?,?,?,?)", rows)
+
+        self.assertIsNone(result)
+        execute.assert_called_once()
+        sql, parameters = execute.call_args.args[1:]
+        self.assertEqual(sql.count("?"), 200 * 4)
+        self.assertEqual(sql.count("("), 200)
+        self.assertEqual(parameters, tuple(value for row in rows for value in row))
+
+    def test_executemany_keeps_fallback_for_non_simple_insert(self):
+        from backend.postgres import Connection
+
+        con = Connection.__new__(Connection)
+        rows = [(1, "a"), (2, "b")]
+        with patch.object(Connection, "execute", autospec=True, side_effect=lambda _self, sql, params: (sql, params)) as execute:
+            result = con.executemany("UPDATE rate_limits SET count=? WHERE key=?", rows)
+
+        self.assertEqual(execute.call_count, 2)
+        self.assertIsNone(result)
+
+    def test_scoped_advisory_locks_serialize_only_shared_resources(self):
+        connection = Connection.__new__(Connection)
+        connection.schema = "smetra"
+        connection.lock_key = 123
+        connection.lock_scopes = ()
+
+        connection.set_transaction_lock_scopes(("workspace:w1", "user:u1"))
+        both = set(connection._transaction_lock_keys())
+
+        connection.set_transaction_lock_scopes(("workspace:w2", "user:u1"))
+        self.assertEqual(len(both.intersection(connection._transaction_lock_keys())), 1)
+
+        connection.set_transaction_lock_scopes(("workspace:w1", "user:u2"))
+        self.assertEqual(len(both.intersection(connection._transaction_lock_keys())), 1)
+
+        connection.set_transaction_lock_scopes(("workspace:w2", "user:u2"))
+        self.assertEqual(both.intersection(connection._transaction_lock_keys()), set())
+
+        connection.set_transaction_lock_scopes(None)
+        self.assertEqual(connection._transaction_lock_keys(), (connection.lock_key,))
+
+    def test_begin_immediate_acquires_scoped_locks_in_stable_order(self):
+        from unittest.mock import Mock
+
+        connection = Connection.__new__(Connection)
+        connection.schema = "smetra"
+        connection.runtime = False
+        connection.nested = False
+        connection.scoped = False
+        connection.raw = Mock()
+        connection.lock_key = 123
+        connection.lock_scopes = ("workspace:w1", "user:u1")
+
+        connection.execute("BEGIN IMMEDIATE")
+
+        calls = [
+            (call.args[0], call.args[1])
+            for call in connection.raw.execute.call_args_list
+            if len(call.args) >= 2
+        ]
+        self.assertEqual(calls[0], (
+            "SELECT pg_advisory_xact_lock_shared(%s)", (connection.lock_key,)
+        ))
+        acquired = [
+            params[0] for sql, params in calls
+            if sql == "SELECT pg_advisory_xact_lock(%s)"
+        ]
+        self.assertEqual(acquired, list(connection._transaction_lock_keys()))
+
+    def test_legacy_transactions_keep_exclusive_schema_gate(self):
+        from unittest.mock import Mock
+
+        connection = Connection.__new__(Connection)
+        connection.runtime = False
+        connection.nested = False
+        connection.scoped = False
+        connection.raw = Mock()
+        connection.lock_key = 987
+        connection.lock_scopes = ()
+
+        connection.execute("BEGIN IMMEDIATE")
+
+        connection.raw.execute.assert_any_call(
+            "SELECT pg_advisory_xact_lock(%s)", (connection.lock_key,)
+        )
+        self.assertFalse(any(
+            call.args and call.args[0] == "SELECT pg_advisory_xact_lock_shared(%s)"
+            for call in connection.raw.execute.call_args_list
+        ))

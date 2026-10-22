@@ -27,6 +27,9 @@ const assert = require('node:assert/strict');
   await fill('#name','Проверка продукта');await fill('#email','browser-'+Date.now()+'@test.invalid');await fill('#password','long secure password');await click('#auth-submit');
   await until("document.querySelector('[data-work=quote-new]')");
   await until("document.querySelector('#capture-text')?.dataset.autogrow && document.querySelector('.sidebar-disclosure')");
+  const navIconAudit=await evaluate("(()=>[...document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')].map(button=>({tab:button.dataset.tab,svg:button.querySelectorAll(':scope > svg').length,dataIcon:button.getAttribute('data-ui-icon'),before:getComputedStyle(button,'::before').content})))()");
+  assert.ok(navIconAudit.length>=10,'Primary navigation items are present');
+  assert.ok(navIconAudit.every(item=>item.svg===1&&item.dataIcon===null&&item.before==='none'),'Each primary navigation item has exactly one canonical SVG and no generated icon: '+JSON.stringify(navIconAudit));
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-home .capture-panel')).backgroundColor"),'rgba(0, 0, 0, 0)','Dashboard composer stays on the canvas instead of a giant grey slab');
   assert.equal(await evaluate("document.querySelector('.workspace-home .capture-panel').getBoundingClientRect().bottom <= document.querySelector('.workspace-home .dashboard-metrics').getBoundingClientRect().top"),true,'Dashboard metrics never overlap the composer');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-page')).getPropertyValue('--smetra-system').trim()"),'1','Shared UI foundation stylesheet is loaded');
@@ -103,6 +106,36 @@ const assert = require('node:assert/strict');
     assert.equal(await evaluate("document.querySelector('.assistant-history').open"),false);
     await click('[data-mode=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
   }
+  // Tablet navigation must switch controls at the same 800px breakpoint as the drawer.
+  for (const width of [720, 800]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
+    await wait(250);
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display !== 'none'"),true,
+      'Tablet widths expose the drawer toggle');
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display === 'none'"),true,
+      'Tablet widths hide the desktop collapse toggle');
+    assert.equal(await evaluate("document.querySelector('#sidebar').inert"),true,
+      'Closed tablet drawer is removed from keyboard navigation');
+    await click('#nav-toggle');
+    assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'true');
+    assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,
+      'Opening the tablet drawer restores keyboard access');
+    assert.equal(await evaluate("Math.abs(document.querySelector('#nav-backdrop').getBoundingClientRect().top-document.querySelector('.app-nav').getBoundingClientRect().bottom)<=1"),true,
+      'Tablet backdrop starts exactly beneath the header');
+    await click('#nav-backdrop');
+    await until("document.querySelector('#sidebar').inert");
+  }
+  await send('Emulation.setDeviceMetricsOverride',{width:801,height:900,deviceScaleFactor:1,mobile:false});
+  await wait(250);
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display !== 'none'"),true,
+    'Desktop collapse toggle returns above the tablet breakpoint');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display === 'none'"),true,
+    'Drawer toggle is hidden when the desktop sidebar is active');
+  assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,
+    'Desktop sidebar remains keyboard accessible');
+  // Preserve the original mobile context for the reduced-motion drawer check below.
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await wait(250);
   await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await click('#nav-toggle');await click('#nav-backdrop');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar')).transitionDuration"),'0s');

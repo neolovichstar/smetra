@@ -39,6 +39,11 @@ TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
+_SIMPLE_INSERT_VALUES = re.compile(
+    r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
+    r"(?P<values>\(\s*\?\s*(?:,\s*\?\s*)*\))\s*;?\s*",
+    re.I | re.S,
+)
 _POOL_LOCK = threading.Lock()
 _POOLS = {}
 
@@ -164,6 +169,39 @@ class Connection:
         self.lock_key = int.from_bytes(
             hashlib.sha256(self.schema.encode()).digest()[:8], "big", signed=True
         )
+        self.lock_scopes = ()
+
+    def set_transaction_lock_scopes(self, scopes):
+        """Temporarily select the logical resources this transaction must serialize."""
+        previous = self.lock_scopes
+        if scopes is None:
+            self.lock_scopes = ()
+            return previous
+        if isinstance(scopes, str):
+            scopes = (scopes,)
+        normalized = set()
+        for scope in scopes:
+            if scope is None:
+                continue
+            value = str(scope).strip()
+            if value:
+                normalized.add(value)
+        self.lock_scopes = tuple(sorted(normalized))
+        return previous
+
+    def _transaction_lock_keys(self):
+        if not self.lock_scopes:
+            return (self.lock_key,)
+        return tuple(sorted({
+            int.from_bytes(
+                hashlib.sha256(
+                    f"smetra:transaction:{self.schema}:{scope}".encode()
+                ).digest()[:8],
+                "big",
+                signed=True,
+            )
+            for scope in self.lock_scopes
+        }))
 
     def scope(self, session_hash, workspace_id):
         """Keep untrusted request context transaction-local for the RLS policies."""
@@ -229,9 +267,22 @@ class Connection:
                     self.raw.execute("BEGIN")
                 # Preserve SQLite's atomic read/check/write semantics across instances.
                 self.raw.execute("SET LOCAL lock_timeout='15s'")
-                return self.raw.execute(
-                    "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
+                if not self.lock_scopes:
+                    # Legacy callers hold the exclusive gate until they are migrated.
+                    return self.raw.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", (self.lock_key,)
+                    )
+                # Scoped transactions share the gate with one another, but remain
+                # mutually exclusive with legacy global transactions.
+                self.raw.execute(
+                    "SELECT pg_advisory_xact_lock_shared(%s)", (self.lock_key,)
                 )
+                result = None
+                for lock_key in self._transaction_lock_keys():
+                    result = self.raw.execute(
+                        "SELECT pg_advisory_xact_lock(%s)", (lock_key,)
+                    )
+                return result
             if self.runtime and command in ("COMMIT", "ROLLBACK"):
                 if not self.nested:
                     raise RuntimeError("Runtime transaction boundary is managed by the request")
@@ -253,7 +304,30 @@ class Connection:
             raise sqlite3.IntegrityError(type(error).__name__) from None
 
     def executemany(self, sql, rows):
-        # Do not use pipeline mode with the transaction pooler.
+        """Batch simple INSERTs to reduce network round-trips through Supavisor.
+
+        Keep the conservative row-by-row path for other SQL forms, since their
+        conflict handling, RETURNING semantics, or placeholders may differ.
+        Bound each statement below PostgreSQL's extended-protocol parameter cap.
+        """
+        match = _SIMPLE_INSERT_VALUES.fullmatch(sql)
+        if match and isinstance(rows, (list, tuple)) and rows:
+            template = match.group("values")
+            width = template.count("?")
+            if width and all(
+                hasattr(row, "__len__") and len(row) == width for row in rows
+            ):
+                batch_size = max(1, 60_000 // width)
+                for offset in range(0, len(rows), batch_size):
+                    batch = rows[offset : offset + batch_size]
+                    statement = (
+                        f"{match.group('prefix')} "
+                        + ",".join(template for _ in batch)
+                    )
+                    parameters = tuple(value for row in batch for value in row)
+                    self.execute(statement, parameters)
+                return
+
         for row in rows:
             self.execute(sql, row)
 
