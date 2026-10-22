@@ -56,7 +56,7 @@
       toggle.onclick = () => {
         const opening=items.hidden || toggle.getAttribute('aria-expanded')==='false';
         toggle.setAttribute('aria-expanded',String(opening));
-        clearTimeout(closeTimer);
+        clearTimeout(closeTimer);items._closeTimer=null;
         if(opening){
           items.hidden=false;items.classList.remove('is-closing');
           requestAnimationFrame(()=>items.classList.add('is-open'));
@@ -66,7 +66,8 @@
             if(toggle.getAttribute('aria-expanded')==='false'){
               items.hidden=true;items.classList.remove('is-closing');
             }
-          },220);
+            items._closeTimer=null;
+          },220);items._closeTimer=closeTimer;
         }
       };
     });
@@ -76,12 +77,13 @@
     document.querySelectorAll('[data-mode]').forEach(control => {
       control.setAttribute('aria-pressed',String(control.dataset.mode === (active?.dataset.tab === 'assistant'?'assistant':'dashboard')));
     });
-    const items = active?.closest('.sidebar-group-items');
-    if (items?.hidden) {
+    const items=active?.closest('.sidebar-group-items');
+    if(items){
+      clearTimeout(items._closeTimer);items._closeTimer=null;
+      const wasHidden=items.hidden||items.classList.contains('is-closing');
       items.hidden=false;items.classList.remove('is-closing');
-      const disclosure=items.previousElementSibling;
-      disclosure?.setAttribute('aria-expanded','true');
-      requestAnimationFrame(()=>items.classList.add('is-open'));
+      items.previousElementSibling?.setAttribute('aria-expanded','true');
+      if(wasHidden)requestAnimationFrame(()=>items.classList.add('is-open'));
     }
   }
   document.querySelectorAll('[data-mode]').forEach(control => {
