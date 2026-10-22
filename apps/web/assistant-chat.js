@@ -40,7 +40,6 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}">
     <div class="assistant-main-column">
       <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
-      <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><label class="visually-hidden" for="assistant-thread-name">Название диалога</label><input id="assistant-thread-name" maxlength="120" required aria-label="Название диалога"><button class="btn small primary" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
