@@ -14,7 +14,7 @@ import uuid
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300}
+PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_team_month': 0, 'smart_supplier_month': 0, 'lead_tokens_150': 0}
 
 
 def now():
@@ -71,14 +71,22 @@ def pricing(con, user):
         # Removing a live cohort cannot silently charge that user another price.
         raise ValueError('Assigned pricing variant is no longer configured')
     prices = variants[assigned['variant']]
+    team_month = integer_env('PRO_TEAM_MONTH_PRICE_KOPECKS', 249000, 100)
+    supplier_month = integer_env('SMART_SUPPLIER_MONTH_PRICE_KOPECKS', 20000, 100)
     launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
-    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': {
+    plans = {
         'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366}},
+        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366},
+        'pro_team_month': {'amount_kopecks': team_month, 'duration_days': 31},
+        'smart_supplier_month': {'amount_kopecks': supplier_month, 'duration_days': 31},
+        'lead_tokens_150': {'amount_kopecks': 15000, 'duration_days': 31},
+    }
+    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': plans,
         'annual_saving_kopecks': prices['month']*12-prices['year'],
         'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
         'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
+
 
 
 def record(con, uid, name, origin='', variant='', key=None):
@@ -102,19 +110,51 @@ def activate(con, uid, name, quote_id):
         con.execute('UPDATE referral_rewards SET rewarded_at=?,period=? WHERE invitee_id=? AND rewarded_at IS NULL', (now(), period, uid))
 
 
-def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None):
-    previous = con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
+def prepare_intent(
+    con, user, key, plan, origin, is_test, expected_amount=None,
+    workspace_id=None, auto_renew_requested=False, renewal_consent_version=None,
+):
+    previous = con.execute(
+        'SELECT * FROM billing_intents WHERE user_id=? AND request_key=?',
+        (user['id'], key),
+    ).fetchone()
     if previous:
-        if previous['plan'] != plan or previous['is_test'] != int(is_test) or (expected_amount is not None and previous['amount_kopecks'] != expected_amount):
-            raise ValueError('Checkout key belongs to another plan or shop mode')
+        if (
+            previous['plan'] != plan
+            or previous['is_test'] != int(is_test)
+            or (expected_amount is not None and previous['amount_kopecks'] != expected_amount)
+            or previous['workspace_id'] != workspace_id
+            or bool(previous['auto_renew_requested']) != bool(auto_renew_requested)
+            or previous['renewal_consent_version'] != (renewal_consent_version if auto_renew_requested else None)
+        ):
+            raise ValueError('Checkout key belongs to another plan, scope, or renewal choice')
         return previous
     offer = pricing(con, user)
-    option = offer['plans'][plan]
+    option = offer['plans'].get(plan)
+    if not option:
+        raise ValueError('Unknown pricing plan')
     if expected_amount is not None and expected_amount != option['amount_kopecks']:
         raise ValueError('Displayed price changed before checkout')
-    con.execute('INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
-                (str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'], option['duration_days'], offer['experiment']+':'+offer['variant'], source(origin), int(is_test), now(), offer['purchase_bonus'][plan]))
-    return con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
+    if auto_renew_requested and (
+        not isinstance(renewal_consent_version, str) or not renewal_consent_version.strip()
+    ):
+        raise ValueError('Renewal consent version is required')
+    consent_at = now() if auto_renew_requested else None
+    con.execute(
+        'INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages,workspace_id,auto_renew_requested,renewal_consent_at,renewal_consent_version) '
+        'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
+        (
+            str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'],
+            option['duration_days'], offer['experiment']+':'+offer['variant'],
+            source(origin), int(is_test), now(), offer['purchase_bonus'][plan],
+            workspace_id, int(bool(auto_renew_requested)), consent_at,
+            renewal_consent_version if auto_renew_requested else None,
+        ),
+    )
+    return con.execute(
+        'SELECT * FROM billing_intents WHERE user_id=? AND request_key=?',
+        (user['id'], key),
+    ).fetchone()
 
 
 def payment_event(con, local, status, was_active=False):

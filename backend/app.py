@@ -37,8 +37,8 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 39
-PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
+REQUIRED_CLOUD_SCHEMA_VERSION = 44
+PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366), "pro_team_month": (249000, 31), "smart_supplier_month": (20000, 31), "lead_tokens_150": (15000, 31)}
 
 
 def yookassa_mode(user=None):
@@ -212,6 +212,7 @@ def user_view(user, con):
         "role": user["role"],
         "plan": user["plan"] if expiry > now() else "free",
         "entitlement_until": expiry,
+        "lead_token_balance": int(user["lead_token_balance"] or 0),
         "email_verified": user["email_verified_at"] is not None,
         "quote_count": con.execute(
             "SELECT count(*) FROM quotes WHERE user_id=?", (user["id"],)
@@ -429,10 +430,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
-                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
+                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/billing"):
                         raise ApiError(404, "Не найдено")
                     if path == "/api/cron/assistant":
                         from backend.assistant_jobs import authenticate
@@ -650,6 +651,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_batch(con))
+        if path == "/api/cron/billing" and method == "GET":
+            try:
+                from backend import billing_renewals
+            except ModuleNotFoundError:
+                import billing_renewals
+            return self.send_json(200, billing_renewals.run(self, con))
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
@@ -864,6 +871,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Неизвестное событие")
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
+        if path.startswith("/api/marketplace/"):
+            try:
+                from backend import marketplace
+            except ModuleNotFoundError:
+                import marketplace
+            return marketplace.handle(self, con, user, method, path, query)
         if path == "/api/me" and method == "GET":
             revenue.visit(con, user)
             return self.send_json(200, {"user": user_view(user, con)})
@@ -994,6 +1007,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 (uid(), user["id"], message, "open", now()),
             )
             return self.send_json(201, {"ok": True})
+        if path == "/api/billing/subscriptions" and method == "GET":
+            rows = con.execute(
+                "SELECT s.id,s.product_code,s.amount_kopecks,s.currency,s.status,s.auto_renew,"
+                "s.current_period_start,s.current_period_end,s.next_charge_at,s.cancel_at_period_end,"
+                "COALESCE(s.workspace_id,(SELECT i.workspace_id FROM billing_intents i "
+                "WHERE i.subscription_id=s.id AND i.workspace_id IS NOT NULL ORDER BY i.created_at DESC LIMIT 1)) AS workspace_id,"
+                "w.name AS workspace_name "
+                "FROM billing_subscriptions s LEFT JOIN workspaces w ON w.id=COALESCE(s.workspace_id,"
+                "(SELECT i.workspace_id FROM billing_intents i WHERE i.subscription_id=s.id AND i.workspace_id IS NOT NULL ORDER BY i.created_at DESC LIMIT 1)) "
+                "WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 50",
+                (user["id"],),
+            ).fetchall()
+            # Never send payment_method_id or renewal consent metadata to the client.
+            return self.send_json(200, {"items": [dict(row) for row in rows]})
         if path == "/api/billing" and method == "GET":
             offer=revenue.pricing(con,user)
             payments = con.execute(
@@ -1021,12 +1048,49 @@ class Handler(http.server.BaseHTTPRequestHandler):
             key = self.headers.get("Idempotency-Key", "")
             if not isinstance(plan, str) or plan not in PLANS or not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
                 raise ApiError(400, "Неверный тариф или ключ запроса")
-            expected_amount = data.get('expected_amount_kopecks')
-            if 'expected_amount_kopecks' in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
+            expected_amount = data.get("expected_amount_kopecks")
+            if "expected_amount_kopecks" in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
                 raise ApiError(400, "Некорректная сумма выбранного тарифа")
             mode = yookassa_mode(user)
             if mode == "off":
                 raise ApiError(503, "Оплата пока недоступна")
+
+            auto_renew_requested = data.get("auto_renew", False)
+            if type(auto_renew_requested) is not bool:
+                raise ApiError(400, "Некорректная настройка автопродления")
+            consent_version = None
+            if auto_renew_requested:
+                if plan == "lead_tokens_150":
+                    raise ApiError(400, "Покупка токенов не является подпиской и не продлевается автоматически")
+                recurring_enabled = os.getenv("YOOKASSA_RECURRING_ENABLED", "").lower() in ("1", "true", "yes")
+                if mode != "live" or not recurring_enabled:
+                    raise ApiError(409, "Автопродление пока недоступно для этого магазина")
+                if data.get("recurring_consent") is not True or data.get("consent_version") != "smetra-recurring-v1":
+                    raise ApiError(400, "Для автопродления нужно отдельно подтвердить условия регулярных списаний")
+                consent_version = "smetra-recurring-v1"
+
+            workspace_id = None
+            if plan == "lead_tokens_150":
+                team_access = con.execute(
+                    "SELECT 1 FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+                    "WHERE m.user_id=? AND w.plan='pro_team' AND w.subscription_status='active' AND w.entitlement_until>? LIMIT 1",
+                    (user["id"], now()),
+                ).fetchone()
+                solo_access = user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
+                if not solo_access and not team_access:
+                    raise ApiError(403, "Токены биржи можно купить при активном PRO Solo или PRO Team")
+            if plan in ("pro_team_month", "smart_supplier_month"):
+                if plan == "smart_supplier_month" and not (
+                    user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
+                ):
+                    raise ApiError(403, "Модуль «Умный Снабженец» доступен только при активном PRO Solo")
+                workspace_id = business.ensure_workspace(con, user)
+                workspace = con.execute(
+                    "SELECT id,owner_id FROM workspaces WHERE id=?", (workspace_id,)
+                ).fetchone()
+                if not workspace or workspace["owner_id"] != user["id"]:
+                    raise ApiError(409, "Не удалось подтвердить рабочее пространство")
+
             previous = con.execute(
                 "SELECT * FROM payments WHERE user_id=? AND idempotency_key=?",
                 (user["id"], key),
@@ -1034,21 +1098,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if previous:
                 if previous["plan"] != plan:
                     raise ApiError(409, "Ключ уже использован для другого тарифа")
-                if expected_amount is not None and expected_amount != previous['amount_kopecks']:
+                if expected_amount is not None and expected_amount != previous["amount_kopecks"]:
                     raise ApiError(409, "Стоимость выбранной оплаты изменилась. Обновите тариф.")
-                captured = con.execute('SELECT is_test FROM billing_intents WHERE payment_id=?', (previous['id'],)).fetchone()
-                if captured and captured['is_test'] != int(mode == 'test'):
-                    raise ApiError(409, "Режим магазина изменился. Начните новую оплату.")
-                refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous['id'],)).fetchone()
+                captured = con.execute(
+                    "SELECT is_test,workspace_id,auto_renew_requested,renewal_consent_version FROM billing_intents WHERE payment_id=?",
+                    (previous["id"],),
+                ).fetchone()
+                if captured and (
+                    captured["is_test"] != int(mode == "test")
+                    or captured["workspace_id"] != workspace_id
+                    or bool(captured["auto_renew_requested"]) != auto_renew_requested
+                    or captured["renewal_consent_version"] != consent_version
+                ):
+                    raise ApiError(409, "Условия оплаты изменились. Начните новый checkout.")
+                refunded = con.execute(
+                    "SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'",
+                    (previous["id"],),
+                ).fetchone()
                 return self.send_json(
                     200,
-                    {"url": previous["confirmation_url"], "status": 'refunded' if refunded else previous["status"]},
+                    {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"]},
                 )
+
             try:
-                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount)
+                intent = revenue.prepare_intent(
+                    con, user, key, plan, data.get("source"), mode == "test",
+                    expected_amount, workspace_id=workspace_id,
+                    auto_renew_requested=auto_renew_requested,
+                    renewal_consent_version=consent_version,
+                )
             except ValueError:
-                raise ApiError(409,'Условия оплаты изменились. Обновите страницу тарифа.') from None
-            amount = intent['amount_kopecks']
+                raise ApiError(409, "Условия оплаты изменились. Обновите тариф.") from None
+            amount = intent["amount_kopecks"]
+            descriptions = {
+                "pro_month": "Сметра PRO Solo — 31 день",
+                "pro_year": "Сметра PRO Solo — 366 дней",
+                "pro_team_month": "Сметра PRO Team — 31 день, до 6 участников",
+                "smart_supplier_month": "Сметра «Умный Снабженец» — 31 день",
+                "lead_tokens_150": "Сметра — 150 токенов для открытия одного лида",
+            }
+            metadata = {"user_id": user["id"], "plan": plan}
+            if workspace_id:
+                metadata["workspace_id"] = workspace_id
             request = {
                 "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
                 "capture": True,
@@ -1056,29 +1147,72 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "type": "redirect",
                     "return_url": ORIGIN + "/app?payment=return",
                 },
-                "description": "Доступ Сметра Про на " + str(intent['duration_days']) + " дней",
-                "metadata": {"user_id": user["id"], "plan": plan},
+                "description": descriptions[plan],
+                "metadata": metadata,
             }
-            # YooKassa keys belong to the shop, rather than a browser/account,
-            # and must be at most 64 characters. Keep retries deterministic.
-            provider_key = hashlib.sha256(("checkout:v1:"+user["id"]+":"+key).encode()).hexdigest()
+            if auto_renew_requested:
+                # Requires a separately acknowledged consent and explicit production feature flag.
+                request["save_payment_method"] = True
+            provider_key = hashlib.sha256(("checkout:v1:" + user["id"] + ":" + key).encode()).hexdigest()
             try:
                 result = self.provider_call("/payments", "POST", request, provider_key)
             except ApiError:
-                revenue.record(con,user['id'],'checkout_failed',intent['source'],intent['variant'],'checkout-failed:'+intent['id'])
+                revenue.record(
+                    con, user["id"], "checkout_failed", intent["source"], intent["variant"],
+                    "checkout-failed:" + intent["id"],
+                )
                 raise
             self.verify_yookassa_shop(result)
             if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
                 raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
-            if not result.get("id") or not result.get("confirmation", {}).get(
-                "confirmation_url", ""
-            ).startswith("https://"):
-                raise ApiError(502, "Платежный сервис вернул неполный ответ")
+            if not result.get("id") or not result.get("confirmation", {}).get("confirmation_url", "").startswith("https://"):
+                raise ApiError(502, "Платёжный сервис вернул неполный ответ")
             try:
-                saved, created = revenue.persist_checkout(con,user,key,plan,intent,result)
+                saved, created = revenue.persist_checkout(con, user, key, plan, intent, result)
             except ValueError:
-                raise ApiError(409,"Conflicting checkout") from None
-            return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"]})
+                raise ApiError(409, "Конфликт повторного checkout") from None
+            return self.send_json(
+                201 if created else 200,
+                {"url": saved["confirmation_url"], "status": saved["status"],
+                 "auto_renew_requested": auto_renew_requested},
+            )
+        parts = path.strip("/").split("/")
+        if len(parts) == 5 and parts[:3] == ["api", "billing", "subscriptions"] and parts[4] == "cancel-renewal" and method == "POST":
+            subscription_id = parts[3]
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", subscription_id):
+                raise ApiError(400, "Некорректный идентификатор подписки")
+            self.throttle("cancel-renewal:" + user["id"], 10, 60)
+            with _LOCK, business.transaction_lock_scope(con, (f"user:{user['id']}", f"subscription:{subscription_id}")):
+                con.execute("BEGIN IMMEDIATE")
+                try:
+                    subscription = con.execute(
+                        "SELECT id,status,auto_renew,current_period_end FROM billing_subscriptions WHERE id=? AND user_id=?",
+                        (subscription_id, user["id"]),
+                    ).fetchone()
+                    if not subscription:
+                        raise ApiError(404, "Подписка не найдена")
+                    if subscription["auto_renew"] or subscription["status"] in ("active", "past_due"):
+                        con.execute(
+                            "UPDATE billing_subscriptions SET auto_renew=FALSE,cancel_at_period_end=TRUE,"
+                            "status='cancel_at_period_end',provider_payment_method_id=NULL,next_charge_at=NULL,"
+                            "updated_at=? WHERE id=? AND user_id=?",
+                            (now(), subscription_id, user["id"]),
+                        )
+                        con.execute(
+                            "UPDATE billing_renewal_attempts SET status='canceled',finished_at=?,last_error_code='user_cancelled' "
+                            "WHERE subscription_id=? AND status='prepared' AND provider_payment_id IS NULL",
+                            (now(), subscription_id),
+                        )
+                    con.execute("COMMIT")
+                except Exception:
+                    con.execute("ROLLBACK")
+                    raise
+            return self.send_json(200, {
+                "ok": True,
+                "auto_renew": False,
+                "access_until": int(subscription["current_period_end"] or 0),
+                "message": "Автопродление отменено; оплаченный период сохраняется до даты окончания.",
+            })
         if path == "/api/billing/sync" and method == "POST":
             self.throttle("sync:" + user["id"], 5, 60)
             rows = con.execute(
@@ -1306,14 +1440,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise ApiError(409, "Платёж получен не от выбранного магазина")
 
     def apply_payment(self, con, local, remote):
+        if local["plan"] == "lead_tokens_150":
+            return self.apply_lead_token_payment(con, local, remote)
         self.verify_yookassa_shop(remote)
+        terms = con.execute(
+            "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
+        ).fetchone()
+        metadata = remote.get("metadata", {})
+        target_workspace_id = terms["workspace_id"] if terms else None
         if (
             remote.get("id") != local["provider_id"]
             or remote.get("amount", {}).get("currency") != "RUB"
-            or remote.get("amount", {}).get("value")
-            != f"{local['amount_kopecks'] / 100:.2f}"
-            or remote.get("metadata", {}).get("user_id") != local["user_id"]
-            or remote.get("metadata", {}).get("plan") != local["plan"]
+            or remote.get("amount", {}).get("value") != f"{local['amount_kopecks'] / 100:.2f}"
+            or metadata.get("user_id") != local["user_id"]
+            or metadata.get("plan") != local["plan"]
+            or (metadata.get("workspace_id") or None) != target_workspace_id
         ):
             raise ApiError(409, "Данные платежа не совпали")
         status = remote.get("status")
@@ -1321,54 +1462,266 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if status == "succeeded" and remote.get("paid") is not True:
             raise ApiError(409, "Платёж не подтверждён как оплаченный")
+
         newly_succeeded = False
-        with _LOCK, business.transaction_lock_scope(
-            con, (f"user:{local['user_id']}",)
-        ):
+        scopes = [f"user:{local['user_id']}"]
+        if target_workspace_id:
+            scopes.append(f"workspace:{target_workspace_id}")
+        with _LOCK, business.transaction_lock_scope(con, scopes):
             con.execute("BEGIN IMMEDIATE")
             try:
                 current = con.execute(
                     "SELECT status FROM payments WHERE id=?", (local["id"],)
                 ).fetchone()
+                if not current:
+                    raise ApiError(404, "Платёж не найден")
                 if current["status"] != status and current["status"] == "pending":
                     con.execute(
                         "UPDATE payments SET status=?, activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
                         (status, status, now(), local["id"]),
                     )
                     if status == "succeeded":
-                        terms = con.execute('SELECT duration_days,bonus_ai_messages,is_test FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
-                        prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
-                        grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
-                        entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
-                        con.execute(
-                            "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                            (entitlement_until, "pro", local["user_id"]),
+                        terms = con.execute(
+                            "SELECT * FROM billing_intents WHERE payment_id=?",
+                            (local["id"],),
+                        ).fetchone()
+                        prior_user = con.execute(
+                            "SELECT entitlement_until FROM users WHERE id=?",
+                            (local["user_id"],),
+                        ).fetchone()
+                        if not prior_user:
+                            raise ApiError(404, "Пользователь платежа не найден")
+                        grant_days = int(terms["duration_days"]) if terms else PLANS[local["plan"]][1]
+                        period_start = max(int(prior_user["entitlement_until"] or 0), now())
+                        product_code = {
+                            "pro_month": "pro_solo_month",
+                            "pro_year": "pro_solo_year",
+                            "pro_team_month": "pro_team_month",
+                            "smart_supplier_month": "smart_supplier_month",
+                        }.get(local["plan"])
+                        if not product_code:
+                            raise ApiError(409, "Неизвестный оплаченный тариф")
+
+                        if local["plan"] in ("pro_month", "pro_year"):
+                            entitlement_until = period_start + grant_days * 86400
+                            con.execute(
+                                "UPDATE users SET entitlement_until=?,plan='pro' WHERE id=?",
+                                (entitlement_until, local["user_id"]),
+                            )
+                            subscription_period_start = period_start
+                        elif local["plan"] == "pro_team_month":
+                            workspace_id = terms["workspace_id"] if terms else None
+                            workspace = con.execute(
+                                "SELECT id,owner_id,entitlement_until FROM workspaces WHERE id=?",
+                                (workspace_id,),
+                            ).fetchone() if workspace_id else None
+                            if not workspace or workspace["owner_id"] != local["user_id"]:
+                                raise ApiError(409, "Рабочее пространство оплаты не подтверждено")
+                            subscription_period_start = max(int(workspace["entitlement_until"] or 0), now())
+                            entitlement_until = subscription_period_start + grant_days * 86400
+                            con.execute(
+                                "UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=6 WHERE id=?",
+                                (entitlement_until, workspace_id),
+                            )
+                        else:
+                            workspace_id = terms["workspace_id"] if terms else None
+                            workspace = con.execute(
+                                "SELECT id,owner_id,smart_supplier_until FROM workspaces WHERE id=?",
+                                (workspace_id,),
+                            ).fetchone() if workspace_id else None
+                            if not workspace or workspace["owner_id"] != local["user_id"]:
+                                raise ApiError(409, "Рабочее пространство модуля снабжения не подтверждено")
+                            subscription_period_start = max(int(workspace["smart_supplier_until"] or 0), now())
+                            entitlement_until = subscription_period_start + grant_days * 86400
+                            con.execute(
+                                "UPDATE workspaces SET smart_supplier_enabled=TRUE,smart_supplier_until=? WHERE id=?",
+                                (entitlement_until, workspace_id),
+                            )
+
+                        saved_method = remote.get("payment_method")
+                        fresh_method_id = (
+                            saved_method.get("id")
+                            if isinstance(saved_method, dict) and saved_method.get("saved") is True
+                            and isinstance(saved_method.get("id"), str) and saved_method.get("id")
+                            else None
                         )
-                        # Gift credits are issued only for a provider-confirmed live payment.
-                        # The amount and expiry are fixed in the original payment intent.
-                        bonus = int(terms['bonus_ai_messages'] or 0) if terms else 0
-                        if terms and not terms['is_test'] and bonus > 0:
+                        renewal_requested = bool(terms and terms["auto_renew_requested"])
+                        renewal_allowed = (
+                            renewal_requested
+                            and os.getenv("YOOKASSA_RECURRING_ENABLED", "").lower() in ("1", "true", "yes")
+                            and remote.get("test") is False
+                            and fresh_method_id is not None
+                            and terms["renewal_consent_at"] is not None
+                            and bool(terms["renewal_consent_version"])
+                        )
+
+                        sub_id = terms["subscription_id"] if terms else None
+                        existing_sub = None
+                        if sub_id:
+                            existing_sub = con.execute(
+                                "SELECT * FROM billing_subscriptions WHERE id=? AND user_id=? AND product_code=?",
+                                (sub_id, local["user_id"], product_code),
+                            ).fetchone()
+                        if not existing_sub:
+                            if product_code == "pro_team_month":
+                                existing_sub = con.execute(
+                                    "SELECT * FROM billing_subscriptions WHERE user_id=? AND workspace_id=? AND product_code=? AND status IN ('active','past_due','cancel_at_period_end') ORDER BY updated_at DESC LIMIT 1",
+                                    (local["user_id"], target_workspace_id, product_code),
+                                ).fetchone()
+                            else:
+                                existing_sub = con.execute(
+                                    "SELECT * FROM billing_subscriptions WHERE user_id=? AND workspace_id IS NULL AND product_code=? AND status IN ('active','past_due','cancel_at_period_end') ORDER BY updated_at DESC LIMIT 1",
+                                    (local["user_id"], product_code),
+                                ).fetchone()
+
+                        subscription_method_id = fresh_method_id
+                        consent_at = terms["renewal_consent_at"] if terms else None
+                        consent_version = terms["renewal_consent_version"] if terms else None
+                        auto_renew = bool(renewal_allowed)
+                        if existing_sub and existing_sub["auto_renew"]:
+                            auto_renew = True
+                            subscription_method_id = subscription_method_id or existing_sub["provider_payment_method_id"]
+                            consent_at = consent_at or existing_sub["renewal_consent_at"]
+                            consent_version = consent_version or existing_sub["renewal_consent_version"]
+                        subscription_method_id = subscription_method_id or (
+                            existing_sub["provider_payment_method_id"] if existing_sub else None
+                        )
+                        if not auto_renew and not (existing_sub and existing_sub["auto_renew"]):
+                            subscription_method_id = None
+                            consent_at = None
+                            consent_version = None
+                        next_charge_at = entitlement_until if auto_renew else None
+                        subscription_workspace_id = target_workspace_id if product_code == "pro_team_month" else None
+                        if existing_sub:
+                            subscription_id = existing_sub["id"]
+                            con.execute(
+                                "UPDATE billing_subscriptions SET amount_kopecks=?,status='active',auto_renew=?,renewal_consent_at=?,renewal_consent_version=?,provider_payment_method_id=?,current_period_start=?,current_period_end=?,next_charge_at=?,cancel_at_period_end=FALSE,canceled_at=NULL,last_payment_id=?,updated_at=? WHERE id=?",
+                                (local["amount_kopecks"], bool(auto_renew), consent_at, consent_version,
+                                 subscription_method_id, subscription_period_start, entitlement_until,
+                                 next_charge_at, local["id"], now(), subscription_id),
+                            )
+                        else:
+                            subscription_id = uid()
+                            con.execute(
+                                "INSERT INTO billing_subscriptions(id,user_id,workspace_id,product_code,provider,provider_payment_method_id,amount_kopecks,status,auto_renew,renewal_consent_at,renewal_consent_version,current_period_start,current_period_end,next_charge_at,last_payment_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (subscription_id, local["user_id"], subscription_workspace_id,
+                                 product_code, "yookassa", subscription_method_id, local["amount_kopecks"],
+                                 "active", bool(auto_renew), consent_at, consent_version,
+                                 subscription_period_start, entitlement_until, next_charge_at,
+                                 local["id"], now(), now()),
+                            )
+                        if terms:
+                            con.execute(
+                                "UPDATE billing_intents SET subscription_id=? WHERE id=?",
+                                (subscription_id, terms["id"]),
+                            )
+
+                        # Gift credits remain limited to Solo purchases and provider-confirmed live payments.
+                        bonus = int(terms["bonus_ai_messages"] or 0) if terms else 0
+                        if terms and not terms["is_test"] and bonus > 0 and local["plan"] in ("pro_month", "pro_year"):
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
-                                (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
+                                (uid(), local["user_id"], local["id"], bonus, bonus, entitlement_until, now()),
                             )
                         newly_succeeded = True
-                    if status in ('succeeded','canceled'):
-                        revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
+                        revenue.payment_event(
+                            con, local, status,
+                            status == "succeeded" and int(prior_user["entitlement_until"] or 0) > now(),
+                        )
+                    elif status == "canceled":
+                        revenue.payment_event(con, local, status, False)
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
                 con.execute("COMMIT")
             except Exception:
                 con.execute("ROLLBACK")
                 raise
-        # Advertising attribution must never participate in the payment DB transaction.
-        # This fires only for the first pending -> succeeded transition, so duplicate
-        # YooKassa webhooks do not duplicate the conversion.
+        # Keep durable renewal-attempt state aligned when the provider webhook or
+        # the user-triggered payment sync resolves an off-session charge.
+        try:
+            if status in ("succeeded", "canceled"):
+                con.execute(
+                    "UPDATE billing_renewal_attempts SET status=?,finished_at=?,last_error_code=? "
+                    "WHERE payment_id=? AND status IN ('prepared','pending','needs_action')",
+                    ("succeeded" if status == "succeeded" else "canceled", now(),
+                     None if status == "succeeded" else "payment_canceled", local["id"]),
+                )
+        except Exception:
+            # Payment entitlement was already committed; renewal diagnostics can be repaired later.
+            print(json.dumps({"renewal_attempt_update": "deferred", "payment_id": local["id"]}), flush=True)
+
+        # Attribution is best-effort and never part of the payment transaction.
         if newly_succeeded:
             mytracker.track_custom_event(
                 local["user_id"],
                 "pro_subscription_started",
                 {"source": "yookassa", "plan": local["plan"]},
+            )
+
+    def apply_lead_token_payment(self, con, local, remote):
+        """Credit lead tokens only after authoritative provider confirmation; idempotent by payment transition."""
+        self.verify_yookassa_shop(remote)
+        terms = con.execute(
+            "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
+        ).fetchone()
+        if (
+            not terms
+            or terms["plan"] != "lead_tokens_150"
+            or int(terms["amount_kopecks"]) != 15000
+            or terms["workspace_id"] is not None
+            or remote.get("id") != local["provider_id"]
+            or remote.get("amount", {}).get("currency") != "RUB"
+            or remote.get("amount", {}).get("value") != "150.00"
+            or remote.get("metadata", {}).get("user_id") != local["user_id"]
+            or remote.get("metadata", {}).get("plan") != "lead_tokens_150"
+            or (remote.get("metadata", {}).get("workspace_id") or None) is not None
+        ):
+            raise ApiError(409, "Данные покупки токенов не совпали")
+        status = remote.get("status")
+        if status not in ("pending", "succeeded", "canceled"):
+            return
+        if status == "succeeded" and remote.get("paid") is not True:
+            raise ApiError(409, "Платёж не подтверждён как оплаченный")
+        newly_succeeded = False
+        with _LOCK, business.transaction_lock_scope(con, (f"user:{local['user_id']}",)):
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                current = con.execute(
+                    "SELECT status FROM payments WHERE id=?", (local["id"],)
+                ).fetchone()
+                if not current:
+                    raise ApiError(404, "Платёж не найден")
+                if current["status"] == "pending" and current["status"] != status:
+                    con.execute(
+                        "UPDATE payments SET status=?,activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
+                        (status, status, now(), local["id"]),
+                    )
+                    if status == "succeeded" and not terms["is_test"]:
+                        changed = con.execute(
+                            "UPDATE users SET lead_token_balance=lead_token_balance+150,lead_token_balance_updated_at=? WHERE id=? AND deleted_at IS NULL AND blocked=0",
+                            (now(), local["user_id"]),
+                        )
+                        if changed.rowcount != 1:
+                            raise ApiError(404, "Профиль покупателя не найден")
+                        balance = con.execute(
+                            "SELECT lead_token_balance FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()["lead_token_balance"]
+                        con.execute(
+                            "INSERT INTO lead_token_ledger(id,user_id,delta_tokens,balance_after,entry_type,source,source_id,idempotency_key,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING",
+                            (uid(), local["user_id"], 150, balance, "topup", "yookassa", local["id"], "payment:"+local["id"], now()),
+                        )
+                    newly_succeeded = status == "succeeded"
+                    revenue.payment_event(con, local, status, False)
+                    event(con, local["user_id"], "payment_"+status)
+                    audit(con, None, "payment."+status, local["id"])
+                con.execute("COMMIT")
+            except Exception:
+                con.execute("ROLLBACK")
+                raise
+        if newly_succeeded and not terms["is_test"]:
+            mytracker.track_custom_event(
+                local["user_id"], "lead_tokens_purchased",
+                {"source":"yookassa","tokens":150,"amount_kopecks":15000}
             )
 
     def apply_refund(self, con, remote):
@@ -1417,6 +1770,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     grants = con.execute(
                         """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
                         WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
+                        AND p.plan IN ('pro_month','pro_year')
                         AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                         ORDER BY p.activated_at,p.created_at,p.id""",
                         (payment["user_id"],),
@@ -1432,10 +1786,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
-                    # Any unused gift credits attached to a fully refunded purchase are revoked.
+                    # Revoke unused purchased AI credits on full refund.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    terms=con.execute(
+                        'SELECT is_test,source,variant,plan,workspace_id,subscription_id FROM billing_intents WHERE payment_id=?',
+                        (payment['id'],),
+                    ).fetchone()
+
+                    if terms and terms['plan'] == 'lead_tokens_150':
+                        # Remove any unspent part of the refunded token pack. Spent credits are
+                        # accounted for in the immutable ledger and require manual fraud review.
+                        balance_row=con.execute(
+                            'SELECT lead_token_balance FROM users WHERE id=?', (payment['user_id'],)
+                        ).fetchone()
+                        available=int(balance_row['lead_token_balance'] or 0) if balance_row else 0
+                        revoke=min(150,available)
+                        if revoke:
+                            balance_after=available-revoke
+                            con.execute(
+                                'UPDATE users SET lead_token_balance=?,lead_token_balance_updated_at=? WHERE id=?',
+                                (balance_after,now(),payment['user_id']),
+                            )
+                            con.execute(
+                                'INSERT INTO lead_token_ledger(id,user_id,delta_tokens,balance_after,entry_type,source,source_id,idempotency_key,created_at) '
+                                'VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING',
+                                (uid(),payment['user_id'],-revoke,balance_after,'refund','yookassa',payment['id'],'refund:'+refund_id,now()),
+                            )
+
+                    subscription=con.execute(
+                        'SELECT * FROM billing_subscriptions WHERE last_payment_id=?',
+                        (payment['id'],),
+                    ).fetchone()
+                    if subscription:
+                        # A later successful renewal changes last_payment_id, so refunding
+                        # an older charge cannot disable newer paid access.
+                        con.execute(
+                            "UPDATE billing_subscriptions SET status='canceled',auto_renew=FALSE,provider_payment_method_id=NULL,next_charge_at=NULL,cancel_at_period_end=FALSE,canceled_at=?,current_period_end=?,updated_at=? WHERE id=? AND last_payment_id=?",
+                            (now(),now(),now(),subscription['id'],payment['id']),
+                        )
+                        if subscription['product_code'] == 'pro_team_month' and subscription['workspace_id']:
+                            con.execute(
+                                "UPDATE workspaces SET plan='free',subscription_status='canceled',entitlement_until=?,seat_limit=1 WHERE id=?",
+                                (now(),subscription['workspace_id']),
+                            )
+                        elif subscription['product_code'] == 'smart_supplier_month' and terms and terms['workspace_id']:
+                            con.execute(
+                                "UPDATE workspaces SET smart_supplier_enabled=FALSE,smart_supplier_until=? WHERE id=?",
+                                (now(),terms['workspace_id']),
+                            )
+
                     event(con, payment["user_id"], "payment_refunded")
-                    terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:
                         revenue.record(con,payment['user_id'],'subscription_cancelled',terms['source'],terms['variant'],'refund:'+refund_id)
                     audit(con, None, "payment.refunded", payment["id"])

@@ -5,6 +5,7 @@ import base64
 import hashlib
 import os
 import time
+import secrets
 import urllib.error
 import urllib.request
 import datetime as dt
@@ -73,12 +74,23 @@ def available():
 
 
 def quota(service):
-    """Monthly allowance plus purchase credits, shared by every workspace and instance."""
-    now = dt.datetime.now(dt.timezone.utc)
-    period = now.strftime("%Y-%m")
-    next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
-    paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp()
-    base_limit = 100 if paid else 3
+    """Monthly included allowance plus separately tracked purchased and ad-earned credits."""
+    now_dt = dt.datetime.now(dt.timezone.utc)
+    period = now_dt.strftime("%Y-%m")
+    next_month = (now_dt.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    now_ts = stamp()
+    solo_paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > now_ts
+    team_row = service.con.execute(
+        "SELECT 1 FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+        "WHERE w.id=? AND m.user_id=? AND w.plan='pro_team' "
+        "AND w.subscription_status='active' AND w.entitlement_until>? LIMIT 1",
+        (service.wid, service.user["id"], now_ts),
+    ).fetchone()
+    team_paid = bool(team_row)
+    paid = solo_paid or team_paid
+    plan_name = "pro" if solo_paid else ("pro_team" if team_paid else "free")
+    # Free AI calls are earned only through the rewarded-ad flow (or explicit referral credits).
+    base_limit = 100 if paid else 0
     from backend.revenue import referral_bonus
     referral_limit = referral_bonus(service.con, service.user["id"], period)
     key = hashlib.sha256(
@@ -90,28 +102,39 @@ def quota(service):
     bonus_used = 0
     if paid:
         credits = service.con.execute(
-            "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_bonus_grants WHERE user_id=? AND expires_at>? AND remaining>0",
-            (service.user["id"], stamp()),
+            "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_bonus_grants "
+            "WHERE user_id=? AND expires_at>? AND remaining>0",
+            (service.user["id"], now_ts),
         ).fetchone()
         bonus_remaining = int(credits["remaining"] or 0)
         usage = service.con.execute(
             "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (key,)
         ).fetchone()
         bonus_used = int(usage["count"] or 0) if usage else 0
-    limit = base_limit + referral_limit + bonus_remaining + bonus_used
+    ad_credits = service.con.execute(
+        "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_ad_reward_credits "
+        "WHERE user_id=? AND expires_at>? AND remaining>0",
+        (service.user["id"], now_ts),
+    ).fetchone()
+    ad_remaining = int(ad_credits["remaining"] or 0)
+    ad_usage_row = service.con.execute(
+        "SELECT count FROM assistant_ad_reward_usage WHERE quota_key=?", (key,)
+    ).fetchone()
+    ad_used = int(ad_usage_row["count"] or 0) if ad_usage_row else 0
+    limit = base_limit + referral_limit + bonus_remaining + bonus_used + ad_remaining + ad_used
     return {
-        "plan": "pro" if paid else "free",
+        "plan": plan_name,
         "period": period,
         "limit": limit,
         "used": used,
         "remaining": max(0, limit - used),
         "purchase_bonus_remaining": bonus_remaining,
+        "ad_reward_remaining": ad_remaining,
         "resets_at": int(next_month.timestamp()),
         "base_limit": base_limit,
         "referral_limit": referral_limit,
         "key": key,
     }
-
 
 def public_quota(service):
     return {key: value for key, value in quota(service).items() if key not in {"key", "base_limit", "referral_limit"}}
@@ -139,7 +162,7 @@ def reserve(service):
 def reserve_in_transaction(service):
     current = quota(service)
     if current["remaining"] <= 0:
-        raise DomainError(429, "Лимит сообщений ассистенту на этот месяц исчерпан")
+        raise DomainError(429, "Лимит сообщений ассистенту исчерпан. Посмотрите rewarded-видео, чтобы получить ещё 3 запроса.")
     key = current["key"]
     base_allowance = current["base_limit"] + current["referral_limit"]
     if current["used"] < base_allowance:
@@ -148,50 +171,90 @@ def reserve_in_transaction(service):
             "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
             (key, stamp()),
         )
-        return {"key": key, "bonus_grant_id": None}
+        return {"key": key, "bonus_grant_id": None, "ad_reward_id": None}
 
     grant = service.con.execute(
-        "SELECT id FROM assistant_bonus_grants WHERE user_id=? AND remaining>0 AND expires_at>? ORDER BY expires_at,created_at,id LIMIT 1",
+        "SELECT id FROM assistant_bonus_grants WHERE user_id=? AND remaining>0 AND expires_at>? "
+        "ORDER BY expires_at,created_at,id LIMIT 1",
         (service.user["id"], stamp()),
     ).fetchone()
-    if not grant:
-        raise DomainError(429, "Лимит сообщений ассистенту на этот месяц исчерпан")
+    if grant:
+        service.con.execute(
+            "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
+            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
+            (key, stamp()),
+        )
+        updated = service.con.execute(
+            "UPDATE assistant_bonus_grants SET remaining=remaining-1 "
+            "WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
+            (grant["id"], stamp()),
+        ).fetchone()
+        if not updated:
+            raise DomainError(429, "Бонусные сообщения уже использованы. Обновите страницу.")
+        service.con.execute(
+            "INSERT INTO assistant_bonus_usage(quota_key,user_id,count,updated_at) VALUES(?,?,1,?) "
+            "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_bonus_usage.count+1,updated_at=excluded.updated_at",
+            (key, service.user["id"], stamp()),
+        )
+        return {"key": key, "bonus_grant_id": grant["id"], "ad_reward_id": None}
+
+    ad_credit = service.con.execute(
+        "SELECT id FROM assistant_ad_reward_credits WHERE user_id=? AND remaining>0 AND expires_at>? "
+        "ORDER BY expires_at,created_at,id LIMIT 1",
+        (service.user["id"], stamp()),
+    ).fetchone()
+    if not ad_credit:
+        raise DomainError(429, "Посмотрите rewarded-видео, чтобы получить ещё 3 запроса.")
+    updated = service.con.execute(
+        "UPDATE assistant_ad_reward_credits SET remaining=remaining-1 "
+        "WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
+        (ad_credit["id"], stamp()),
+    ).fetchone()
+    if not updated:
+        raise DomainError(429, "Бонус за рекламу уже использован. Обновите страницу.")
     service.con.execute(
         "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
         "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
         (key, stamp()),
     )
-    updated = service.con.execute(
-        "UPDATE assistant_bonus_grants SET remaining=remaining-1 WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
-        (grant["id"], stamp()),
-    ).fetchone()
-    if not updated:
-        raise DomainError(429, "Бонусные сообщения уже использованы. Обновите страницу.")
     service.con.execute(
-        "INSERT INTO assistant_bonus_usage(quota_key,user_id,count,updated_at) VALUES(?,?,1,?) "
-        "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_bonus_usage.count+1,updated_at=excluded.updated_at",
+        "INSERT INTO assistant_ad_reward_usage(quota_key,user_id,count,updated_at) VALUES(?,?,1,?) "
+        "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_ad_reward_usage.count+1,updated_at=excluded.updated_at",
         (key, service.user["id"], stamp()),
     )
-    return {"key": key, "bonus_grant_id": grant["id"]}
-
+    return {"key": key, "bonus_grant_id": None, "ad_reward_id": ad_credit["id"]}
 
 def release(service, reservation):
     key = reservation["key"] if isinstance(reservation, dict) else reservation
     bonus_grant_id = reservation.get("bonus_grant_id") if isinstance(reservation, dict) else None
+    ad_reward_id = reservation.get("ad_reward_id") if isinstance(reservation, dict) else None
     with transaction(service.con):
         service.con.execute(
             "UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0", (key,)
         )
         if bonus_grant_id:
-            service.con.execute(
-                "UPDATE assistant_bonus_grants SET remaining=remaining+1 WHERE id=? AND remaining<amount",
+            restored = service.con.execute(
+                "UPDATE assistant_bonus_grants SET remaining=remaining+1 "
+                "WHERE id=? AND remaining<amount RETURNING id",
                 (bonus_grant_id,),
-            )
-            service.con.execute(
-                "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
-                (stamp(), key),
-            )
-
+            ).fetchone()
+            if restored:
+                service.con.execute(
+                    "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
+                    (stamp(), key),
+                )
+        if ad_reward_id:
+            restored = service.con.execute(
+                "UPDATE assistant_ad_reward_credits SET remaining=remaining+1 "
+                "WHERE id=? AND remaining<amount RETURNING id",
+                (ad_reward_id,),
+            ).fetchone()
+            if restored:
+                service.con.execute(
+                    "UPDATE assistant_ad_reward_usage SET count=count-1,updated_at=? "
+                    "WHERE quota_key=? AND count>0",
+                    (stamp(), key),
+                )
 
 def function(name, description, properties, required=()):
     return {
@@ -1053,6 +1116,94 @@ class ChatStream:
 
 
 def route(service, method, parts, data):
+    # Reward claims are bound to a short-lived, single-use server nonce. The mobile
+    # client must call complete only from Yandex's earned-reward callback.
+    if parts == ["rewarded-ad", "start"] and method == "POST":
+        service.h.throttle("assistant-ad-start:" + service.user["id"], 20, 86400)
+        if quota(service)["plan"] != "free":
+            raise DomainError(409, "На платном тарифе рекламные награды не требуются")
+        now_ts = stamp()
+        now_utc = dt.datetime.now(dt.timezone.utc)
+        midnight = int(now_utc.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        attempt_id = identity()
+        nonce = secrets.token_urlsafe(32)
+        with transaction(service.con):
+            daily = service.con.execute(
+                "SELECT count(*) AS n FROM assistant_ad_attempts WHERE user_id=? AND created_at>=?",
+                (service.user["id"], midnight),
+            ).fetchone()
+            if int(daily["n"] or 0) >= 20:
+                raise DomainError(429, "Достигнут дневной лимит рекламных наград")
+            service.con.execute(
+                "INSERT INTO assistant_ad_attempts(id,user_id,nonce_hash,status,created_at,expires_at) "
+                "VALUES(?,?,?,'issued',?,?)",
+                (attempt_id, service.user["id"], hashlib.sha256(nonce.encode()).hexdigest(), now_ts, now_ts + 900),
+            )
+        return 201, {
+            "attempt_id": attempt_id,
+            "nonce": nonce,
+            "expires_at": now_ts + 900,
+            "reward_tokens": 3,
+            "note": "Вызывайте complete только из callback начисления награды рекламного SDK.",
+        }
+
+    if parts == ["rewarded-ad", "complete"] and method == "POST":
+        attempt_id = string(data.get("attempt_id", ""), "Попытка рекламы", 80, True)
+        nonce = string(data.get("nonce", ""), "Ключ попытки", 100, True)
+        nonce_hash = hashlib.sha256(nonce.encode()).hexdigest()
+        now_ts = stamp()
+        now_utc = dt.datetime.now(dt.timezone.utc)
+        reward_date = now_utc.date().isoformat()
+        with transaction(service.con):
+            attempt = service.con.execute(
+                "SELECT * FROM assistant_ad_attempts WHERE id=? AND user_id=?",
+                (attempt_id, service.user["id"]),
+            ).fetchone()
+            if not attempt:
+                raise DomainError(404, "Попытка рекламного просмотра не найдена")
+            if not secrets.compare_digest(attempt["nonce_hash"], nonce_hash):
+                raise DomainError(403, "Неверный ключ попытки")
+            existing = service.con.execute(
+                "SELECT id,remaining,expires_at FROM assistant_ad_reward_credits WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+            if attempt["status"] == "completed" and existing:
+                remaining = service.con.execute(
+                    "SELECT coalesce(sum(remaining),0) AS n FROM assistant_ad_reward_credits WHERE user_id=? AND expires_at>?",
+                    (service.user["id"], now_ts),
+                ).fetchone()["n"]
+                return 200, {"ok": True, "duplicate": True, "awarded_tokens": 3, "ad_reward_remaining": int(remaining or 0)}
+            if attempt["status"] != "issued":
+                raise DomainError(409, "Эта попытка рекламного просмотра уже закрыта")
+            if int(attempt["expires_at"]) <= now_ts:
+                service.con.execute(
+                    "UPDATE assistant_ad_attempts SET status='expired' WHERE id=? AND status='issued'",
+                    (attempt_id,),
+                )
+                return 410, {"error": "Время подтверждения просмотра истекло. Запустите рекламу заново."}
+            changed = service.con.execute(
+                "UPDATE assistant_ad_attempts SET status='completed',completed_at=? "
+                "WHERE id=? AND user_id=? AND status='issued' AND expires_at>? RETURNING id",
+                (now_ts, attempt_id, service.user["id"], now_ts),
+            ).fetchone()
+            if not changed:
+                raise DomainError(409, "Попытку рекламного просмотра уже обработали")
+            credit_id = identity()
+            service.con.execute(
+                "INSERT INTO assistant_ad_reward_credits(id,user_id,attempt_id,reward_date,amount,remaining,created_at,expires_at) "
+                "VALUES(?,?,?, ?,3,3,?,?) ON CONFLICT(attempt_id) DO NOTHING",
+                (credit_id, service.user["id"], attempt_id, reward_date, now_ts, now_ts + 30 * 86400),
+            )
+            remaining = service.con.execute(
+                "SELECT coalesce(sum(remaining),0) AS n FROM assistant_ad_reward_credits WHERE user_id=? AND expires_at>?",
+                (service.user["id"], now_ts),
+            ).fetchone()["n"]
+        return 200, {
+            "ok": True, "duplicate": False, "awarded_tokens": 3,
+            "ad_reward_remaining": int(remaining or 0),
+            "expires_in_days": 30,
+        }
+
     if method == "GET" and len(parts) == 3 and parts[0] == "actions" and parts[2] == "preview.pdf":
         from backend.assistant_resources import document_preview
 
