@@ -33,6 +33,10 @@ TABLES = TABLES | frozenset("file_versions".split())
 TABLES = TABLES | frozenset("construction_price_batches".split())
 TABLES = TABLES | frozenset("quote_creation_requests".split())
 TABLES = TABLES | frozenset(["assistant_jobs"])
+TABLES = TABLES | frozenset(
+    "billing_subscriptions subscription_events marketplace_leads marketplace_lead_contacts "
+    "lead_purchases lead_token_ledger affiliate_clicks".split()
+)
 TABLES = TABLES | frozenset(["creation_requests"])
 TABLES = TABLES | frozenset("push_devices push_outbox push_deliveries".split())
 TABLES = TABLES | frozenset(
