@@ -6,6 +6,7 @@ import hashlib
 import os
 import time
 import secrets
+import re
 import urllib.error
 import urllib.request
 import datetime as dt
@@ -484,19 +485,103 @@ def tools():
     return result
 
 
+def configured_model():
+    """Use a server-configured OpenRouter model; never accept model IDs from the client."""
+    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free").strip()
+    if (
+        not model
+        or len(model) > 160
+        or not re.fullmatch(r"[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+)?", model)
+    ):
+        raise DomainError(503, "В настройках OpenRouter указана некорректная модель")
+    return model
+
+
+def _response_cache_location(payload):
+    """Return an Upstash cache location, or disable caching if Redis is unavailable."""
+    try:
+        from backend import redis_infra
+        digest = hashlib.sha256(packed(payload).encode()).hexdigest()
+        client = redis_infra.provider()
+        if client is None:
+            return None, None
+        return client, redis_infra.key("llm-response-v1", payload["model"], digest)
+    except Exception:
+        # Cache is strictly an optimization; its outage never blocks the assistant.
+        return None, None
+
+
+def _cached_response(payload):
+    client, cache_key = _response_cache_location(payload)
+    if client is None or cache_key is None:
+        return None
+    try:
+        raw = client.get(cache_key)
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        value = json.loads(raw) if isinstance(raw, str) else raw
+        if (
+            isinstance(value, dict)
+            and isinstance(value.get("content"), str)
+            and 0 < len(value["content"]) <= 12000
+            and value.get("tool_calls") == []
+        ):
+            # Count cache hits as zero provider tokens while preserving the usage schema.
+            return {
+                "content": value["content"],
+                "tool_calls": [],
+                "_usage": {"prompt_tokens": 0, "completion_tokens": 0},
+                "_cache_hit": True,
+            }
+    except Exception:
+        return None
+    return None
+
+
+def _store_cached_response(payload, answer):
+    # Never cache tool calls: doing so could replay stale or cross-request mutations.
+    if (
+        not isinstance(answer, dict)
+        or answer.get("tool_calls")
+        or not isinstance(answer.get("content"), str)
+        or not answer["content"]
+        or len(answer["content"]) > 12000
+    ):
+        return
+    client, cache_key = _response_cache_location(payload)
+    if client is None or cache_key is None:
+        return
+    try:
+        ttl = int(os.getenv("OPENROUTER_CACHE_TTL_SECONDS", "60"))
+        ttl = min(300, max(10, ttl))
+        client.set(
+            cache_key,
+            json.dumps(
+                {"content": answer["content"], "tool_calls": []},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            ttl,
+        )
+    except Exception:
+        # Do not fail a successful model response because Redis storage failed.
+        return
+
+
 def query_model(messages):
-    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
-    if model != "openrouter/free" and not model.endswith(":free"):
-        raise DomainError(503, "Для ассистента должна быть выбрана бесплатная модель")
+    model = configured_model()
     payload = {
         "model": model,
         "messages": messages,
         "tools": tools(),
         "tool_choice": "auto",
         "max_tokens": 3500,
-            "temperature": 0.2,
-            "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
+        "temperature": 0.2,
+        "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
     }
+    cached = _cached_response(payload)
+    if cached is not None:
+        return cached
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         packed(payload).encode(),
@@ -517,13 +602,14 @@ def query_model(messages):
         answer = value["choices"][0]["message"]
         if not isinstance(answer, dict):
             raise ValueError("message")
-        if isinstance(value.get('usage'),dict):
-            answer['_usage']=value['usage']
+        if isinstance(value.get("usage"), dict):
+            answer["_usage"] = value["usage"]
+        _store_cached_response(payload, answer)
         return answer
     except urllib.error.HTTPError as error:
         if error.code == 429:
             raise DomainError(
-                429, "Бесплатная модель сейчас занята. Попробуйте через минуту."
+                429, "Модель OpenRouter перегружена. Попробуйте чуть позже."
             ) from None
         raise DomainError(
             502, "Ассистент временно недоступен. Ваши данные не изменены."
@@ -535,22 +621,25 @@ def query_model(messages):
 
 
 def query_model_stream(messages, on_delta):
-    """Relay provider SSE deltas while assembling fragmented tool calls."""
-    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
-    if model != "openrouter/free" and not model.endswith(":free"):
-        raise DomainError(503, "Для ассистента должна быть выбрана бесплатная модель")
+    """Relay OpenRouter SSE while caching exact, tool-free duplicate responses."""
+    model = configured_model()
+    payload = {
+        "model": model,
+        "messages": messages,
+        "tools": tools(),
+        "tool_choice": "auto",
+        "max_tokens": 3500,
+        "temperature": 0.2,
+        "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
+        "stream": True,
+    }
+    cached = _cached_response(payload)
+    if cached is not None:
+        on_delta(cached["content"])
+        return cached
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
-        packed({
-            "model": model,
-            "messages": messages,
-            "tools": tools(),
-            "tool_choice": "auto",
-            "max_tokens": 3500,
-            "temperature": 0.2,
-            "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
-            "stream": True,
-        }).encode(),
+        packed(payload).encode(),
         {
             "Authorization": "Bearer " + os.environ["OPENROUTER_API_KEY"],
             "Content-Type": "application/json",
@@ -575,23 +664,26 @@ def query_model_stream(messages, on_delta):
                 if not data:
                     continue
                 event = json.loads(data)
-                if isinstance(event.get('usage'),dict):
-                    usage=event['usage']
+                if isinstance(event.get("usage"), dict):
+                    usage = event["usage"]
                 if event.get("error"):
                     raise ValueError("provider error")
                 choice = (event.get("choices") or [{}])[0]
                 delta = choice.get("delta") or {}
-                content = delta.get("content")
-                if isinstance(content, str) and content:
-                    if sum(map(len, pieces)) + len(content) > 12000:
+                content_part = delta.get("content")
+                if isinstance(content_part, str) and content_part:
+                    if sum(map(len, pieces)) + len(content_part) > 12000:
                         raise ValueError("answer too large")
-                    pieces.append(content)
-                    on_delta(content)
+                    pieces.append(content_part)
+                    on_delta(content_part)
                 for part in delta.get("tool_calls") or []:
                     index = part.get("index")
                     if not isinstance(index, int) or not 0 <= index < 4:
                         continue
-                    call = calls.setdefault(index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                    call = calls.setdefault(
+                        index,
+                        {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+                    )
                     call["id"] += part.get("id") or ""
                     function_part = part.get("function") or {}
                     call["function"]["name"] += function_part.get("name") or ""
@@ -600,13 +692,14 @@ def query_model_stream(messages, on_delta):
                         raise ValueError("tool arguments too large")
         if not done:
             raise ValueError("incomplete stream")
-        result={"content": "".join(pieces), "tool_calls": list(calls.values())}
+        result = {"content": "".join(pieces), "tool_calls": list(calls.values())}
         if usage is not None:
-            result['_usage']=usage
+            result["_usage"] = usage
+        _store_cached_response(payload, result)
         return result
     except urllib.error.HTTPError as error:
         if error.code == 429:
-            raise DomainError(429, "Бесплатная модель сейчас занята. Попробуйте позже.") from None
+            raise DomainError(429, "Модель OpenRouter перегружена. Попробуйте позже.") from None
         raise DomainError(502, "Ассистент временно недоступен. Ваши данные не изменены.") from None
     except (BrokenPipeError, ConnectionResetError):
         raise
