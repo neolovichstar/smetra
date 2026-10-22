@@ -1766,8 +1766,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         )
                         if subscription['product_code'] == 'pro_team_month' and subscription['workspace_id']:
                             con.execute(
-                                "UPDATE workspaces SET plan='free',subscription_status='canceled',entitlement_until=?,seat_limit=1 WHERE id=? AND entitlement_until<=? OR id=?",
-                                (now(),subscription['workspace_id'],now(),subscription['workspace_id']),
+                                "UPDATE workspaces SET plan='free',subscription_status='canceled',entitlement_until=?,seat_limit=1 WHERE id=?",
+                                (now(),subscription['workspace_id']),
                             )
                         elif subscription['product_code'] == 'smart_supplier_month' and terms and terms['workspace_id']:
                             con.execute(
