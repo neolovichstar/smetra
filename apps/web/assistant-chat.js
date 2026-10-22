@@ -100,14 +100,22 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const assistantContentHost=assistantStudioRoot?.querySelector('.assistant-content');
   const assistantAppShell=document.querySelector('.app-shell');
   const assistantMainHost=document.querySelector('#content.main');
-  const assistantCompactViewport=window.matchMedia?window.matchMedia('(max-width:800px)').matches:window.innerWidth<=800;
-  if(assistantToolRail&&assistantMainColumn&&assistantContentHost){
-    if(assistantCompactViewport){
-      if(assistantToolRail.parentElement!==assistantMainColumn)assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
+  const positionAssistantToolRail=()=>{
+    if(!assistantStudioRoot?.isConnected||!assistantToolRail?.isConnected)return;
+    const compact=window.matchMedia?window.matchMedia('(max-width:800px)').matches:window.innerWidth<=800;
+    if(compact){
+      if(assistantMainColumn&&assistantContentHost&&assistantToolRail.parentElement!==assistantMainColumn)assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
     }else if(assistantAppShell&&assistantMainHost&&assistantToolRail.parentElement!==assistantAppShell){
       assistantAppShell.insertBefore(assistantToolRail,assistantMainHost);
     }
-  }
+  };
+  const cleanupAssistantToolRail=()=>{
+    window.removeEventListener('resize',positionAssistantToolRail);
+    document.removeEventListener('smetra:before-view',cleanupAssistantToolRail);
+  };
+  document.addEventListener('smetra:before-view',cleanupAssistantToolRail,{once:true});
+  window.addEventListener('resize',positionAssistantToolRail,{passive:true});
+  positionAssistantToolRail();
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
