@@ -16,6 +16,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
 await send('Network.deleteCookies',{name:'session',url:site});await send('Page.navigate',{url:site+'/app'});
  await until("document.querySelector('#auth-form')?.onsubmit");await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('.workspace-home')");
  await visit('assistant');await until("document.querySelector('#assistant-input')");
+ assert.equal(await evaluate("document.querySelector('#sidebar .workspace-label')===null"),true,'Sidebar no longer renders the redundant Сметра/C workspace block');
  assert.equal(await evaluate("document.querySelector('#assistant-thread-select')?.closest('.select-control')===null"),true,'Hidden compatibility select must not create a duplicate visible dropdown');
  assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display"),'none','Mobile layout hides the desktop collapse control');
  assert.notEqual(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display"),'none','Mobile navigation toggle is visible');
@@ -24,6 +25,12 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  await evaluate("document.querySelector('#assistant-history-toggle').click()");
  await until("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')&&getComputedStyle(document.querySelector('#assistant-history-panel')).display==='flex'");
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});await new Promise(resolve=>setTimeout(resolve,220));
+ const historyGeometry=await evaluate("(()=>{const root=document.querySelector('.assistant-studio'),rail=root?.querySelector('.assistant-toolrail'),panel=root?.querySelector('#assistant-history-panel'),list=root?.querySelector('#assistant-history-list');if(!root||!rail||!panel||!list)return null;const r=rail.getBoundingClientRect(),p=panel.getBoundingClientRect(),l=list.getBoundingClientRect();return {collapsed:root.classList.contains('assistant-tools-collapsed'),rail:{left:Math.round(r.left),right:Math.round(r.right)},panel:{left:Math.round(p.left),right:Math.round(p.right)},list:{left:Math.round(l.left),right:Math.round(l.right)}}})()");
+ assert.ok(historyGeometry,'Assistant rail and persistent history must exist');
+ if(!historyGeometry.collapsed){
+  assert.ok(historyGeometry.panel.left>=historyGeometry.rail.left-1&&historyGeometry.panel.right<=historyGeometry.rail.right+1,'Expanded history panel must remain inside assistant rail: '+JSON.stringify(historyGeometry));
+  assert.ok(historyGeometry.list.left>=historyGeometry.panel.left-1&&historyGeometry.list.right<=historyGeometry.panel.right+1,'Chat rows must not spill out of history panel: '+JSON.stringify(historyGeometry));
+ }
  const rowBefore=await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active[data-thread-id]'),r=row.getBoundingClientRect();return {id:row.dataset.threadId,left:r.left,top:r.top,width:r.width,height:r.height}})()");
  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(rowBefore.left+Math.min(72,rowBefore.width/2)),y:Math.round(rowBefore.top+rowBefore.height/2)});
  await until("getComputedStyle(document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-actions')).opacity==='1'");
