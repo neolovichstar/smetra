@@ -1,6 +1,8 @@
+import os
 import sqlite3
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +17,8 @@ class _Handler:
 
 class RewardedAdTests(unittest.TestCase):
     def setUp(self):
+        self.env_patch = patch.dict(os.environ, {"REWARDED_ADS_REQUIRED": "1"})
+        self.env_patch.start()
         self.con = sqlite3.connect(":memory:", isolation_level=None)
         self.con.row_factory = sqlite3.Row
         self.con.execute("PRAGMA foreign_keys=ON")
@@ -35,6 +39,7 @@ class RewardedAdTests(unittest.TestCase):
 
     def tearDown(self):
         self.con.close()
+        self.env_patch.stop()
 
     def test_free_user_has_no_unearned_allowance(self):
         quota = assistant.quota(self.service)
