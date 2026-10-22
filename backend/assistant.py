@@ -1122,6 +1122,8 @@ def route(service, method, parts, data):
     # Reward claims are bound to a short-lived, single-use server nonce. The mobile
     # client must call complete only from Yandex's earned-reward callback.
     if parts == ["rewarded-ad", "start"] and method == "POST":
+        if os.getenv("REWARDED_ADS_REQUIRED", "0").strip().lower() not in ("1", "true", "yes"):
+            raise DomainError(503, "Rewarded-реклама ещё не настроена в клиенте")
         service.h.throttle("assistant-ad-start:" + service.user["id"], 20, 86400)
         if quota(service)["plan"] != "free":
             raise DomainError(409, "На платном тарифе рекламные награды не требуются")
@@ -1151,6 +1153,8 @@ def route(service, method, parts, data):
         }
 
     if parts == ["rewarded-ad", "complete"] and method == "POST":
+        if os.getenv("REWARDED_ADS_REQUIRED", "0").strip().lower() not in ("1", "true", "yes"):
+            raise DomainError(503, "Rewarded-реклама ещё не настроена в клиенте")
         attempt_id = string(data.get("attempt_id", ""), "Попытка рекламы", 80, True)
         nonce = string(data.get("nonce", ""), "Ключ попытки", 100, True)
         nonce_hash = hashlib.sha256(nonce.encode()).hexdigest()
