@@ -1,5 +1,7 @@
 name: Capture native RuStore screenshots
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [capture-rustore-native-screens]
     paths:
