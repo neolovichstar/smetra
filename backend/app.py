@@ -1021,12 +1021,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
             key = self.headers.get("Idempotency-Key", "")
             if not isinstance(plan, str) or plan not in PLANS or not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
                 raise ApiError(400, "Неверный тариф или ключ запроса")
-            expected_amount = data.get('expected_amount_kopecks')
-            if 'expected_amount_kopecks' in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
+            expected_amount = data.get("expected_amount_kopecks")
+            if "expected_amount_kopecks" in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
                 raise ApiError(400, "Некорректная сумма выбранного тарифа")
             mode = yookassa_mode(user)
             if mode == "off":
                 raise ApiError(503, "Оплата пока недоступна")
+
+            auto_renew_requested = data.get("auto_renew", False)
+            if type(auto_renew_requested) is not bool:
+                raise ApiError(400, "Некорректная настройка автопродления")
+            consent_version = None
+            if auto_renew_requested:
+                recurring_enabled = os.getenv("YOOKASSA_RECURRING_ENABLED", "").lower() in ("1", "true", "yes")
+                if mode != "live" or not recurring_enabled:
+                    raise ApiError(409, "Автопродление пока недоступно для этого магазина")
+                if data.get("recurring_consent") is not True or data.get("consent_version") != "smetra-recurring-v1":
+                    raise ApiError(400, "Для автопродления нужно отдельно подтвердить условия регулярных списаний")
+                consent_version = "smetra-recurring-v1"
+
+            workspace_id = None
+            if plan in ("pro_team_month", "smart_supplier_month"):
+                if plan == "smart_supplier_month" and not (
+                    user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
+                ):
+                    raise ApiError(403, "Модуль «Умный Снабженец» доступен только при активном PRO Solo")
+                workspace_id = business.ensure_workspace(con, user)
+                workspace = con.execute(
+                    "SELECT id,owner_id FROM workspaces WHERE id=?", (workspace_id,)
+                ).fetchone()
+                if not workspace or workspace["owner_id"] != user["id"]:
+                    raise ApiError(409, "Не удалось подтвердить рабочее пространство")
+
             previous = con.execute(
                 "SELECT * FROM payments WHERE user_id=? AND idempotency_key=?",
                 (user["id"], key),
@@ -1034,21 +1060,47 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if previous:
                 if previous["plan"] != plan:
                     raise ApiError(409, "Ключ уже использован для другого тарифа")
-                if expected_amount is not None and expected_amount != previous['amount_kopecks']:
+                if expected_amount is not None and expected_amount != previous["amount_kopecks"]:
                     raise ApiError(409, "Стоимость выбранной оплаты изменилась. Обновите тариф.")
-                captured = con.execute('SELECT is_test FROM billing_intents WHERE payment_id=?', (previous['id'],)).fetchone()
-                if captured and captured['is_test'] != int(mode == 'test'):
-                    raise ApiError(409, "Режим магазина изменился. Начните новую оплату.")
-                refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous['id'],)).fetchone()
+                captured = con.execute(
+                    "SELECT is_test,workspace_id,auto_renew_requested,renewal_consent_version FROM billing_intents WHERE payment_id=?",
+                    (previous["id"],),
+                ).fetchone()
+                if captured and (
+                    captured["is_test"] != int(mode == "test")
+                    or captured["workspace_id"] != workspace_id
+                    or bool(captured["auto_renew_requested"]) != auto_renew_requested
+                    or captured["renewal_consent_version"] != consent_version
+                ):
+                    raise ApiError(409, "Условия оплаты изменились. Начните новый checkout.")
+                refunded = con.execute(
+                    "SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'",
+                    (previous["id"],),
+                ).fetchone()
                 return self.send_json(
                     200,
-                    {"url": previous["confirmation_url"], "status": 'refunded' if refunded else previous["status"]},
+                    {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"]},
                 )
+
             try:
-                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount)
+                intent = revenue.prepare_intent(
+                    con, user, key, plan, data.get("source"), mode == "test",
+                    expected_amount, workspace_id=workspace_id,
+                    auto_renew_requested=auto_renew_requested,
+                    renewal_consent_version=consent_version,
+                )
             except ValueError:
-                raise ApiError(409,'Условия оплаты изменились. Обновите страницу тарифа.') from None
-            amount = intent['amount_kopecks']
+                raise ApiError(409, "Условия оплаты изменились. Обновите тариф.") from None
+            amount = intent["amount_kopecks"]
+            descriptions = {
+                "pro_month": "Сметра PRO Solo — 31 день",
+                "pro_year": "Сметра PRO Solo — 366 дней",
+                "pro_team_month": "Сметра PRO Team — 31 день, до 6 участников",
+                "smart_supplier_month": "Сметра «Умный Снабженец» — 31 день",
+            }
+            metadata = {"user_id": user["id"], "plan": plan}
+            if workspace_id:
+                metadata["workspace_id"] = workspace_id
             request = {
                 "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
                 "capture": True,
@@ -1056,29 +1108,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "type": "redirect",
                     "return_url": ORIGIN + "/app?payment=return",
                 },
-                "description": "Доступ Сметра Про на " + str(intent['duration_days']) + " дней",
-                "metadata": {"user_id": user["id"], "plan": plan},
+                "description": descriptions[plan],
+                "metadata": metadata,
             }
-            # YooKassa keys belong to the shop, rather than a browser/account,
-            # and must be at most 64 characters. Keep retries deterministic.
-            provider_key = hashlib.sha256(("checkout:v1:"+user["id"]+":"+key).encode()).hexdigest()
+            if auto_renew_requested:
+                # Requires a separately acknowledged consent and explicit production feature flag.
+                request["save_payment_method"] = True
+            provider_key = hashlib.sha256(("checkout:v1:" + user["id"] + ":" + key).encode()).hexdigest()
             try:
                 result = self.provider_call("/payments", "POST", request, provider_key)
             except ApiError:
-                revenue.record(con,user['id'],'checkout_failed',intent['source'],intent['variant'],'checkout-failed:'+intent['id'])
+                revenue.record(
+                    con, user["id"], "checkout_failed", intent["source"], intent["variant"],
+                    "checkout-failed:" + intent["id"],
+                )
                 raise
             self.verify_yookassa_shop(result)
             if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
                 raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
-            if not result.get("id") or not result.get("confirmation", {}).get(
-                "confirmation_url", ""
-            ).startswith("https://"):
-                raise ApiError(502, "Платежный сервис вернул неполный ответ")
+            if not result.get("id") or not result.get("confirmation", {}).get("confirmation_url", "").startswith("https://"):
+                raise ApiError(502, "Платёжный сервис вернул неполный ответ")
             try:
-                saved, created = revenue.persist_checkout(con,user,key,plan,intent,result)
+                saved, created = revenue.persist_checkout(con, user, key, plan, intent, result)
             except ValueError:
-                raise ApiError(409,"Conflicting checkout") from None
-            return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"]})
+                raise ApiError(409, "Конфликт повторного checkout") from None
+            return self.send_json(
+                201 if created else 200,
+                {"url": saved["confirmation_url"], "status": saved["status"],
+                 "auto_renew_requested": auto_renew_requested},
+            )
         if path == "/api/billing/sync" and method == "POST":
             self.throttle("sync:" + user["id"], 5, 60)
             rows = con.execute(
