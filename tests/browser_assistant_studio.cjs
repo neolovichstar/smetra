@@ -20,11 +20,21 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display"),'none','Mobile layout hides the desktop collapse control');
  assert.notEqual(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display"),'none','Mobile navigation toggle is visible');
  await screenshot('welcome-mobile');
- assert.equal(await evaluate("document.querySelector('#assistant-rename').disabled||document.querySelector('#assistant-pin').disabled||document.querySelector('#assistant-delete').disabled"),false);
- await evaluate("document.querySelector('.assistant-options').open=true;document.querySelector('#assistant-rename').click();document.querySelector('#assistant-thread-name').value='Studio conversation';document.querySelector('#assistant-thread-edit').requestSubmit()");await until("document.querySelector('.assistant-current-title').textContent==='Studio conversation'");
- await evaluate("document.querySelector('#assistant-pin').click()");await until("document.querySelector('#assistant-pin').textContent==='Открепить'");await evaluate("document.querySelector('#assistant-pin').click()");await until("document.querySelector('#assistant-pin').textContent==='Закрепить'");
- await evaluate("document.querySelector('#assistant-delete').click()");await until("!sessionStorage.getItem('smetra.assistant.conversation')&&!document.querySelector('#assistant-delete').disabled");
- await evaluate("document.querySelector('#assistant-delete').click()");await until("document.querySelector('#assistant-delete')?.textContent==='Очистить диалог'&&!document.querySelector('#assistant-delete').disabled");
+ await evaluate("document.querySelector('#assistant-new-thread').click()");await until("sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]')");
+ const rowBefore=await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active[data-thread-id]'),r=row.getBoundingClientRect();return {id:row.dataset.threadId,left:r.left,top:r.top,width:r.width,height:r.height}})()");
+ await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(rowBefore.left+Math.min(72,rowBefore.width/2)),y:Math.round(rowBefore.top+rowBefore.height/2)});
+ await until("getComputedStyle(document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-actions')).opacity==='1'");
+ assert.equal(await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-delete]')!==null"),true,'History exposes a dedicated trash action on hover');
+ await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]').click();document.querySelector('.assistant-conversation-row.is-active [data-thread-rename]').click();const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-rename-input]').value='Studio conversation';row.querySelector('[data-thread-rename-form]').requestSubmit()");
+ await until("document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-title').textContent==='Studio conversation'");
+ await evaluate("const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()");
+ await until("document.querySelector('.assistant-conversation-row.is-active')?.dataset.pinned==='1'");
+ await evaluate("const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()");
+ await until("document.querySelector('.assistant-conversation-row.is-active')?.dataset.pinned==='0'");
+ await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-delete]').click()");
+ await until("!sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-general.is-active')");
+ await evaluate("document.querySelector('.assistant-conversation-general [data-thread-delete]').click()");
+ await until("!document.querySelector('.assistant-conversation-general [data-thread-delete]').disabled");
  await until("document.querySelector('.assistant-welcome h2')");
  for(const width of [320,390,768,1024,1440,1728]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
@@ -34,16 +44,14 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
    const vertical=await evaluate("(()=>{const items=[...document.querySelectorAll('.assistant-suggestions button')],last=items[items.length-1],composer=document.querySelector('.assistant-composer');if(!last||!composer)return null;const a=last.getBoundingClientRect(),b=composer.getBoundingClientRect();return {lastBottom:Math.round(a.bottom),composerTop:Math.round(b.top),gap:Math.round(b.top-a.bottom)}})()");
    assert.ok(vertical&&vertical.gap>=0,'Last welcome suggestion must remain above the sticky composer at '+width+'px: '+JSON.stringify(vertical));
   }
-  const iconAudit=await evaluate("(()=>{const item=id=>{const el=document.querySelector(id);return {svg:el?.querySelectorAll(':scope > svg').length||0,before:el?getComputedStyle(el,'::before').content:'missing',dataIcon:el?.getAttribute('data-ui-icon')??null}};const history=document.querySelector('.assistant-history-icon');return {create:item('#assistant-new-thread'),knowledge:item('#assistant-knowledge'),historySvg:history?.querySelectorAll(':scope > svg').length||0,historyMask:history?getComputedStyle(history).maskImage:'missing',svgButtons:[...document.querySelectorAll('.assistant-studio button:has(>svg)')].map(el=>({id:el.id,svg:el.querySelectorAll(':scope > svg').length,dataIcon:el.getAttribute('data-ui-icon'),before:getComputedStyle(el,'::before').content}))}})()");
-  assert.equal(iconAudit.create.svg,1,'New-dialog button keeps exactly one inline SVG');
-  assert.equal(iconAudit.create.before,'none','No duplicate pseudo-icon on new-dialog button');
-  assert.equal(iconAudit.create.dataIcon,null,'New-dialog button is not assigned a second automatic icon');
-  assert.equal(iconAudit.knowledge.svg,1,'Knowledge button keeps exactly one inline SVG');
-  assert.equal(iconAudit.knowledge.before,'none','No duplicate pseudo-icon on knowledge button');
-  assert.equal(iconAudit.knowledge.dataIcon,null,'Knowledge button is not assigned a second automatic icon');
-  assert.equal(iconAudit.historySvg,1,'Conversation-history icon has one inline SVG');
-  assert.equal(iconAudit.historyMask,'none','History wrapper does not paint a second masked icon');
-  assert.ok(iconAudit.svgButtons.every(item=>item.svg===1&&item.dataIcon===null&&item.before==='none'),'Every assistant button with an inline SVG has only that icon source: '+JSON.stringify(iconAudit.svgButtons));
+  const iconAudit=await evaluate("(()=>{const item=id=>{const el=document.querySelector(id);return {svg:el?.querySelectorAll(':scope > svg').length||0,before:el?getComputedStyle(el,'::before').content:'missing',dataIcon:el?.getAttribute('data-ui-icon')??null}};const icons={create:document.querySelector('#assistant-new-thread .assistant-icon-plus'),knowledge:document.querySelector('#assistant-knowledge .assistant-icon-knowledge'),history:document.querySelector('#assistant-history-toggle .assistant-icon-chat'),trash:document.querySelector('.assistant-conversation-general .assistant-trash-mark')};return {create:item('#assistant-new-thread'),knowledge:item('#assistant-knowledge'),history:item('#assistant-history-toggle'),masks:Object.fromEntries(Object.entries(icons).map(([key,el])=>[key,el?getComputedStyle(el).maskImage:'missing'])),inlineButtons:[...document.querySelectorAll('.assistant-studio button:has(>svg)')].map(el=>({id:el.id,svg:el.querySelectorAll(':scope > svg').length,dataIcon:el.getAttribute('data-ui-icon'),before:getComputedStyle(el,'::before').content}))}})()");
+  assert.ok(iconAudit.masks.create.includes('/assets/icons/plus.svg'),'New-dialog icon uses the shared plus asset');
+  assert.ok(iconAudit.masks.knowledge.includes('/assets/icons/book-open.svg'),'Knowledge icon uses the shared book asset');
+  assert.ok(iconAudit.masks.history.includes('/assets/icons/chat-circle.svg'),'History icon uses the shared chat asset');
+  assert.ok(iconAudit.masks.trash.includes('/assets/icons/trash.svg'),'Delete icon uses the shared trash asset');
+  assert.ok(iconAudit.inlineButtons.every(item=>item.before==='none'),'Inline disclosure icon has no duplicate CSS pseudo-icon: '+JSON.stringify(iconAudit.inlineButtons));
+  assert.equal(await evaluate("document.querySelector('.assistant-options')===null"),true,'No global ellipsis action remains in the assistant rail');
+  assert.equal(await evaluate("document.querySelectorAll('.assistant-conversation-row').length>=1"),true,'Chat history is rendered directly in the sidebar');
   const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
   if(width<=800){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Drawer menu toggle shown at '+width)}
   else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width)}
