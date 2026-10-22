@@ -315,6 +315,7 @@ class BusinessFlows(unittest.TestCase):
 
     def test_construction_act_freezes_recorded_fact_instead_of_plan(self):
         owner, _ = self.account('act-owner')
+        quote = self.quote(owner, title="Act currency", currency="EUR")
         _, created = self.call('/construction/objects', 'POST', {'name': 'Квартира'}, owner)
         obj = created['object']['id']
         _, room = self.call(f'/construction/objects/{obj}/zones', 'POST',
@@ -327,6 +328,11 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)[0], 409)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '3'}, owner)[0], 201)
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE construction_objects SET quote_id=? WHERE id=?",
+                (quote["id"], obj),
+            )
         status, created_act = self.call(f'/construction/objects/{obj}/act', 'POST', {}, owner)
         self.assertEqual(status, 201, created_act)
         self.assertEqual(created_act['amount_kopecks'], 30000)
@@ -337,6 +343,8 @@ class BusinessFlows(unittest.TestCase):
         first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
         self.assertIn('Покраска', first)
         self.assertIn('3 м²', first)
+        self.assertIn('EUR', first)
+        self.assertNotIn('RUB', first)
         self.assertNotIn('20 м²', first)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',
                                    {'quantity_id': quantity, 'quantity': '4'}, owner)[0], 201)
