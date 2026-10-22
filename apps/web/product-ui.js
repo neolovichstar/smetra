@@ -53,16 +53,15 @@
       }
       heading.replaceWith(toggle); group.append(items);
       toggle.onclick = () => {
-        if(toggle._smetraCloseTimer){clearTimeout(toggle._smetraCloseTimer);toggle._smetraCloseTimer=null;}
         const opening=items.hidden;
         toggle.setAttribute('aria-expanded',String(opening));
         if(opening){
           items.hidden=false;items.classList.remove('is-closing');
           requestAnimationFrame(()=>items.classList.add('is-open'));
         }else{
-          items.classList.remove('is-open');items.classList.add('is-closing');
-          const delay=matchMedia('(prefers-reduced-motion: reduce)').matches?0:190;
-          toggle._smetraCloseTimer=setTimeout(()=>{items.hidden=true;items.classList.remove('is-closing');toggle._smetraCloseTimer=null},delay);
+          // Closing is immediate for deterministic focus/visibility semantics; opening remains animated.
+          items.classList.remove('is-open','is-closing');
+          items.hidden=true;
         }
       };
     });
