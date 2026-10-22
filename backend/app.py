@@ -1307,13 +1307,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)
+        terms = con.execute(
+            "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
+        ).fetchone()
+        metadata = remote.get("metadata", {})
+        target_workspace_id = terms["workspace_id"] if terms else None
         if (
             remote.get("id") != local["provider_id"]
             or remote.get("amount", {}).get("currency") != "RUB"
-            or remote.get("amount", {}).get("value")
-            != f"{local['amount_kopecks'] / 100:.2f}"
-            or remote.get("metadata", {}).get("user_id") != local["user_id"]
-            or remote.get("metadata", {}).get("plan") != local["plan"]
+            or remote.get("amount", {}).get("value") != f"{local['amount_kopecks'] / 100:.2f}"
+            or metadata.get("user_id") != local["user_id"]
+            or metadata.get("plan") != local["plan"]
+            or (metadata.get("workspace_id") or None) != target_workspace_id
         ):
             raise ApiError(409, "Данные платежа не совпали")
         status = remote.get("status")
@@ -1321,49 +1326,181 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if status == "succeeded" and remote.get("paid") is not True:
             raise ApiError(409, "Платёж не подтверждён как оплаченный")
+
         newly_succeeded = False
-        with _LOCK, business.transaction_lock_scope(
-            con, (f"user:{local['user_id']}",)
-        ):
+        scopes = [f"user:{local['user_id']}"]
+        if target_workspace_id:
+            scopes.append(f"workspace:{target_workspace_id}")
+        with _LOCK, business.transaction_lock_scope(con, scopes):
             con.execute("BEGIN IMMEDIATE")
             try:
                 current = con.execute(
                     "SELECT status FROM payments WHERE id=?", (local["id"],)
                 ).fetchone()
+                if not current:
+                    raise ApiError(404, "Платёж не найден")
                 if current["status"] != status and current["status"] == "pending":
                     con.execute(
                         "UPDATE payments SET status=?, activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
                         (status, status, now(), local["id"]),
                     )
                     if status == "succeeded":
-                        terms = con.execute('SELECT duration_days,bonus_ai_messages,is_test FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
-                        prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
-                        grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
-                        entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
-                        con.execute(
-                            "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                            (entitlement_until, "pro", local["user_id"]),
+                        terms = con.execute(
+                            "SELECT * FROM billing_intents WHERE payment_id=?",
+                            (local["id"],),
+                        ).fetchone()
+                        prior_user = con.execute(
+                            "SELECT entitlement_until FROM users WHERE id=?",
+                            (local["user_id"],),
+                        ).fetchone()
+                        if not prior_user:
+                            raise ApiError(404, "Пользователь платежа не найден")
+                        grant_days = int(terms["duration_days"]) if terms else PLANS[local["plan"]][1]
+                        period_start = max(int(prior_user["entitlement_until"] or 0), now())
+                        product_code = {
+                            "pro_month": "pro_solo_month",
+                            "pro_year": "pro_solo_year",
+                            "pro_team_month": "pro_team_month",
+                            "smart_supplier_month": "smart_supplier_month",
+                        }.get(local["plan"])
+                        if not product_code:
+                            raise ApiError(409, "Неизвестный оплаченный тариф")
+
+                        if local["plan"] in ("pro_month", "pro_year"):
+                            entitlement_until = period_start + grant_days * 86400
+                            con.execute(
+                                "UPDATE users SET entitlement_until=?,plan='pro' WHERE id=?",
+                                (entitlement_until, local["user_id"]),
+                            )
+                            subscription_period_start = period_start
+                        elif local["plan"] == "pro_team_month":
+                            workspace_id = terms["workspace_id"] if terms else None
+                            workspace = con.execute(
+                                "SELECT id,owner_id,entitlement_until FROM workspaces WHERE id=?",
+                                (workspace_id,),
+                            ).fetchone() if workspace_id else None
+                            if not workspace or workspace["owner_id"] != local["user_id"]:
+                                raise ApiError(409, "Рабочее пространство оплаты не подтверждено")
+                            subscription_period_start = max(int(workspace["entitlement_until"] or 0), now())
+                            entitlement_until = subscription_period_start + grant_days * 86400
+                            con.execute(
+                                "UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=6 WHERE id=?",
+                                (entitlement_until, workspace_id),
+                            )
+                        else:
+                            workspace_id = terms["workspace_id"] if terms else None
+                            workspace = con.execute(
+                                "SELECT id,owner_id,smart_supplier_until FROM workspaces WHERE id=?",
+                                (workspace_id,),
+                            ).fetchone() if workspace_id else None
+                            if not workspace or workspace["owner_id"] != local["user_id"]:
+                                raise ApiError(409, "Рабочее пространство модуля снабжения не подтверждено")
+                            subscription_period_start = max(int(workspace["smart_supplier_until"] or 0), now())
+                            entitlement_until = subscription_period_start + grant_days * 86400
+                            con.execute(
+                                "UPDATE workspaces SET smart_supplier_enabled=TRUE,smart_supplier_until=? WHERE id=?",
+                                (entitlement_until, workspace_id),
+                            )
+
+                        saved_method = remote.get("payment_method")
+                        fresh_method_id = (
+                            saved_method.get("id")
+                            if isinstance(saved_method, dict) and saved_method.get("saved") is True
+                            and isinstance(saved_method.get("id"), str) and saved_method.get("id")
+                            else None
                         )
-                        # Gift credits are issued only for a provider-confirmed live payment.
-                        # The amount and expiry are fixed in the original payment intent.
-                        bonus = int(terms['bonus_ai_messages'] or 0) if terms else 0
-                        if terms and not terms['is_test'] and bonus > 0:
+                        renewal_requested = bool(terms and terms["auto_renew_requested"])
+                        renewal_allowed = (
+                            renewal_requested
+                            and os.getenv("YOOKASSA_RECURRING_ENABLED", "").lower() in ("1", "true", "yes")
+                            and remote.get("test") is False
+                            and fresh_method_id is not None
+                            and terms["renewal_consent_at"] is not None
+                            and bool(terms["renewal_consent_version"])
+                        )
+
+                        sub_id = terms["subscription_id"] if terms else None
+                        existing_sub = None
+                        if sub_id:
+                            existing_sub = con.execute(
+                                "SELECT * FROM billing_subscriptions WHERE id=? AND user_id=? AND product_code=?",
+                                (sub_id, local["user_id"], product_code),
+                            ).fetchone()
+                        if not existing_sub:
+                            if product_code == "pro_team_month":
+                                existing_sub = con.execute(
+                                    "SELECT * FROM billing_subscriptions WHERE user_id=? AND workspace_id=? AND product_code=? AND status IN ('active','past_due','cancel_at_period_end') ORDER BY updated_at DESC LIMIT 1",
+                                    (local["user_id"], target_workspace_id, product_code),
+                                ).fetchone()
+                            else:
+                                existing_sub = con.execute(
+                                    "SELECT * FROM billing_subscriptions WHERE user_id=? AND workspace_id IS NULL AND product_code=? AND status IN ('active','past_due','cancel_at_period_end') ORDER BY updated_at DESC LIMIT 1",
+                                    (local["user_id"], product_code),
+                                ).fetchone()
+
+                        subscription_method_id = fresh_method_id
+                        consent_at = terms["renewal_consent_at"] if terms else None
+                        consent_version = terms["renewal_consent_version"] if terms else None
+                        auto_renew = bool(renewal_allowed)
+                        if existing_sub and existing_sub["auto_renew"]:
+                            auto_renew = True
+                            subscription_method_id = subscription_method_id or existing_sub["provider_payment_method_id"]
+                            consent_at = consent_at or existing_sub["renewal_consent_at"]
+                            consent_version = consent_version or existing_sub["renewal_consent_version"]
+                        subscription_method_id = subscription_method_id or (
+                            existing_sub["provider_payment_method_id"] if existing_sub else None
+                        )
+                        if not auto_renew and not (existing_sub and existing_sub["auto_renew"]):
+                            subscription_method_id = None
+                            consent_at = None
+                            consent_version = None
+                        next_charge_at = entitlement_until if auto_renew else None
+                        subscription_workspace_id = target_workspace_id if product_code == "pro_team_month" else None
+                        if existing_sub:
+                            subscription_id = existing_sub["id"]
+                            con.execute(
+                                "UPDATE billing_subscriptions SET amount_kopecks=?,status='active',auto_renew=?,renewal_consent_at=?,renewal_consent_version=?,provider_payment_method_id=?,current_period_start=?,current_period_end=?,next_charge_at=?,cancel_at_period_end=FALSE,canceled_at=NULL,last_payment_id=?,updated_at=? WHERE id=?",
+                                (local["amount_kopecks"], bool(auto_renew), consent_at, consent_version,
+                                 subscription_method_id, subscription_period_start, entitlement_until,
+                                 next_charge_at, local["id"], now(), subscription_id),
+                            )
+                        else:
+                            subscription_id = uid()
+                            con.execute(
+                                "INSERT INTO billing_subscriptions(id,user_id,workspace_id,product_code,provider,provider_payment_method_id,amount_kopecks,status,auto_renew,renewal_consent_at,renewal_consent_version,current_period_start,current_period_end,next_charge_at,last_payment_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (subscription_id, local["user_id"], subscription_workspace_id,
+                                 product_code, "yookassa", subscription_method_id, local["amount_kopecks"],
+                                 "active", bool(auto_renew), consent_at, consent_version,
+                                 subscription_period_start, entitlement_until, next_charge_at,
+                                 local["id"], now(), now()),
+                            )
+                        if terms:
+                            con.execute(
+                                "UPDATE billing_intents SET subscription_id=? WHERE id=?",
+                                (subscription_id, terms["id"]),
+                            )
+
+                        # Gift credits remain limited to Solo purchases and provider-confirmed live payments.
+                        bonus = int(terms["bonus_ai_messages"] or 0) if terms else 0
+                        if terms and not terms["is_test"] and bonus > 0 and local["plan"] in ("pro_month", "pro_year"):
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
-                                (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
+                                (uid(), local["user_id"], local["id"], bonus, bonus, entitlement_until, now()),
                             )
                         newly_succeeded = True
-                    if status in ('succeeded','canceled'):
-                        revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
+                        revenue.payment_event(
+                            con, local, status,
+                            status == "succeeded" and int(prior_user["entitlement_until"] or 0) > now(),
+                        )
+                    elif status == "canceled":
+                        revenue.payment_event(con, local, status, False)
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
                 con.execute("COMMIT")
             except Exception:
                 con.execute("ROLLBACK")
                 raise
-        # Advertising attribution must never participate in the payment DB transaction.
-        # This fires only for the first pending -> succeeded transition, so duplicate
-        # YooKassa webhooks do not duplicate the conversion.
+        # Attribution is best-effort and never part of the payment transaction.
         if newly_succeeded:
             mytracker.track_custom_event(
                 local["user_id"],
