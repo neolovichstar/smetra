@@ -864,6 +864,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Неизвестное событие")
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
+        if path.startswith("/api/marketplace/"):
+            try:
+                from backend import marketplace
+            except ModuleNotFoundError:
+                import marketplace
+            return marketplace.handle(self, con, user, method, path, query)
         if path == "/api/me" and method == "GET":
             revenue.visit(con, user)
             return self.send_json(200, {"user": user_view(user, con)})
