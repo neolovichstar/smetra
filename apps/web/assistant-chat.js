@@ -166,13 +166,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(voiceStarting)return;
     if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.';return}
     voiceStarting=true;voiceError=false;voiceText='';syncSendButton();
-    status.textContent='Запрашиваем доступ к микрофону…';
+    status.textContent='Запускаем распознавание речи…';
     try{
-      // Request microphone permission explicitly before starting recognition.
-      if(navigator.mediaDevices?.getUserMedia){
-        const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-        stream.getTracks().forEach(track=>track.stop());
-      }
+      // Start in the original click gesture. Awaiting getUserMedia first can consume
+      // transient user activation and make Chromium reject recognition.start().
       if(!voiceRecognition){
         voiceRecognition=new SpeechRecognitionAPI();
         voiceRecognition.lang='ru-RU';voiceRecognition.interimResults=true;voiceRecognition.continuous=true;voiceRecognition.maxAlternatives=1;
@@ -195,6 +192,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
           voiceError=true;voiceStarting=false;voiceListening=false;syncSendButton();
           const errors={
             'not-allowed':'Нет доступа к микрофону. Разрешите его для сайта в настройках браузера.',
+            'aborted':'Голосовой ввод остановлен.',
             'service-not-allowed':'Браузер заблокировал распознавание речи. Проверьте разрешения микрофона.',
             'no-speech':'Не услышал речь. Проверьте микрофон и попробуйте ещё раз.',
             'audio-capture':'Не найден микрофон. Проверьте подключение устройства.',

@@ -2082,3 +2082,176 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
   .workspace-page .assistant-studio.has-conversation .assistant-content{height:calc(100% - 210px)!important}
 }
 
+
+/* Workspace polish pass — unified canvas, fused rails, and restrained rainy-glass controls. */
+.workspace-page{
+  background:var(--smetra-bg,#0c0c0e)!important;
+  color:var(--smetra-text,#f3f3f4)!important;
+}
+.workspace-page #shell,.workspace-page .app-shell,.workspace-page #content.main,
+.workspace-page .workspace-section,.workspace-page .workspace-section::before{background:transparent!important}
+.workspace-page #content.main{
+  box-sizing:border-box!important;width:100%!important;max-width:none!important;min-width:0!important;
+  margin:0!important;overflow-x:hidden!important;
+}
+.workspace-page #content.main>.workspace-section{
+  box-sizing:border-box!important;width:100%!important;max-width:none!important;min-width:0!important;
+  margin:0!important;background:transparent!important;
+}
+.workspace-page .main .panel{border-color:transparent!important;box-shadow:none!important}
+.workspace-page .main :is(.team-overview,.team-members-panel,.team-business-settings,.team-custom-fields,
+  .settings-account-panel,.settings-personalization-host .personalization-settings,
+  .settings-export-host>.panel,.notifications-panel,.activity-panel,.document-register,.file-center){
+  background:rgba(255,255,255,.018)!important;border-color:transparent!important;box-shadow:none!important;
+}
+.workspace-page .main,.workspace-page #content.main,.workspace-page .workspace-section{background:transparent!important}
+.workspace-page .app-nav{border:1px solid rgba(255,255,255,.055)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 10px 32px rgba(0,0,0,.12)!important}
+.workspace-page .sidebar{
+  border:0!important;border-radius:0!important;
+  background:linear-gradient(180deg,rgba(18,18,21,.72),rgba(12,12,14,.76))!important;
+  -webkit-backdrop-filter:blur(24px) saturate(140%)!important;backdrop-filter:blur(24px) saturate(140%)!important;
+}
+.workspace-page .sidebar-foot{border-top:0!important;background:transparent!important}
+.workspace-page .sidebar-group-items{gap:3px!important;will-change:opacity,transform}
+.workspace-page .sidebar-group-items.is-open{animation:smetra-menu-enter 230ms cubic-bezier(.2,.7,.2,1) both!important}
+.workspace-page .sidebar-group-items.is-closing{animation:none!important;transition:opacity 180ms ease,transform 210ms cubic-bezier(.2,.7,.2,1)!important}
+.workspace-page .sidebar-disclosure::after{transition:transform 220ms cubic-bezier(.2,.7,.2,1),opacity 180ms ease!important}
+.workspace-page .sidebar-group button,.workspace-page .sidebar-disclosure,.workspace-page .sidebar-foot button,
+.workspace-page .app-nav-actions button,.workspace-page .workspace-modes button,.workspace-page .main .btn,
+.workspace-page .assistant-studio .assistant-workbar button,.workspace-page .assistant-studio #assistant-send{
+  -webkit-backdrop-filter:blur(18px) saturate(150%)!important;backdrop-filter:blur(18px) saturate(150%)!important;
+  transition:background 220ms cubic-bezier(.2,.7,.2,1),color 180ms ease,border-color 220ms ease,
+    box-shadow 220ms ease,transform 220ms cubic-bezier(.2,.7,.2,1)!important;
+}
+.workspace-page .main .btn:not(.primary):not(.danger),.workspace-page .assistant-studio .assistant-workbar button,
+.workspace-page .assistant-studio #assistant-send{
+  background:linear-gradient(135deg,rgba(255,255,255,.035),rgba(187,177,228,.025) 56%,rgba(146,211,179,.018))!important;
+  border-color:rgba(255,255,255,.055)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.workspace-page .main .btn.primary:not(:disabled){
+  background:linear-gradient(130deg,rgba(199,188,244,.21),rgba(155,214,185,.15))!important;
+  border-color:rgba(214,211,236,.16)!important;color:var(--smetra-text,#f4f4f5)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.065),0 8px 24px rgba(0,0,0,.1)!important;
+}
+.workspace-page .main .btn:hover:not(:disabled),.workspace-page .sidebar-group button:hover,
+.workspace-page .sidebar-disclosure:hover,.workspace-page .assistant-studio .assistant-workbar button:hover{
+  transform:translateY(-1px)!important;background:linear-gradient(135deg,rgba(255,255,255,.075),rgba(189,177,241,.06),rgba(145,212,178,.04))!important;
+  border-color:rgba(255,255,255,.09)!important;
+}
+.workspace-page .main :is(.panel,.record-line,.settings-page,.team-page,.settings-danger-zone),
+.workspace-page .main :is(.panel,.record-line)::before,.workspace-page .main :is(.panel,.record-line)::after{outline:0!important}
+.workspace-page .main .empty{
+  width:min(620px,100%)!important;min-height:280px!important;margin:18px auto!important;
+  border:0!important;border-radius:22px!important;background:rgba(255,255,255,.018)!important;
+}
+.workspace-page .workspace-section:has(.empty):not(:has(.record-line,.notification-row,.activity-item,.team-member-row)){
+  min-height:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important;
+}
+.workspace-page .section-notifications:has(.notifications-panel .empty),.workspace-page .section-activity:has(.activity-panel .empty){
+  min-height:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important;
+}
+.workspace-page .section-notifications:has(.notifications-panel .empty)>.topline,
+.workspace-page .section-activity:has(.activity-panel .empty)>.topline{
+  width:min(100%,920px)!important;margin:0 auto 16px!important;
+}
+.workspace-page .section-notifications:has(.notifications-panel .empty) .notifications-panel,
+.workspace-page .section-activity:has(.activity-panel .empty) .activity-panel{
+  width:min(100%,920px)!important;min-height:0!important;margin:0 auto!important;padding:0!important;background:transparent!important;
+}
+.workspace-page .section-notifications:has(.notifications-panel .empty) .empty,
+.workspace-page .section-activity:has(.activity-panel .empty) .empty{min-height:260px!important;margin:0 auto!important}
+
+/* Align the app rail, assistant toolrail, and canvas on one top edge. */
+.workspace-page .app-shell:has(.assistant-studio){
+  height:calc(100dvh - 82px)!important;min-height:0!important;
+  grid-template-columns:232px 54px minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)!important;
+  align-items:stretch!important;gap:0!important;overflow:hidden!important;
+}
+.workspace-page.sidebar-compact .app-shell:has(.assistant-studio){grid-template-columns:66px 54px minmax(0,1fr)!important}
+.workspace-page .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed)){grid-template-columns:232px 220px minmax(0,1fr)!important}
+.workspace-page.sidebar-compact .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed)){grid-template-columns:66px 220px minmax(0,1fr)!important}
+.workspace-page .app-shell:has(.assistant-studio)>#sidebar{
+  grid-column:1!important;grid-row:1!important;align-self:stretch!important;height:100%!important;min-height:0!important;
+}
+.workspace-page .app-shell:has(.assistant-studio)>.assistant-toolrail{
+  grid-column:2!important;grid-row:1!important;align-self:stretch!important;width:100%!important;height:100%!important;
+  min-height:0!important;margin:0!important;padding:8px 5px!important;overflow:hidden!important;border:0!important;border-radius:0!important;
+  background:linear-gradient(180deg,rgba(18,18,21,.72),rgba(12,12,14,.76))!important;
+  -webkit-backdrop-filter:blur(24px) saturate(140%)!important;backdrop-filter:blur(24px) saturate(140%)!important;box-shadow:none!important;
+}
+.workspace-page .app-shell:has(.assistant-studio)>#content.main{
+  grid-column:3!important;grid-row:1!important;align-self:stretch!important;height:100%!important;min-height:0!important;
+  padding:0 22px 10px 0!important;overflow:hidden!important;background:transparent!important;
+}
+.workspace-page .app-shell:has(.assistant-studio) .assistant-studio{
+  display:block!important;height:100%!important;min-height:0!important;max-height:100%!important;
+  margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;
+}
+.workspace-page .app-shell:has(.assistant-studio) .assistant-main-column{
+  position:relative!important;display:flex!important;flex-direction:column!important;height:100%!important;
+  min-height:0!important;padding:0!important;overflow:hidden!important;
+}
+.workspace-page .assistant-studio .assistant-header h1,
+.workspace-page .assistant-studio .assistant-main-column>.assistant-header h1{display:none!important}
+.workspace-page .assistant-studio .assistant-header{
+  flex:0 0 auto!important;min-height:34px!important;margin:0!important;padding:4px 0 6px!important;
+  border:0!important;display:flex!important;justify-content:flex-end!important;align-items:center!important;
+}
+.workspace-page .assistant-studio .assistant-header .assistant-quota{border:0!important;background:rgba(255,255,255,.025)!important;padding:5px 10px!important}
+.workspace-page .assistant-studio .assistant-content{
+  position:relative!important;flex:1 1 auto!important;width:100%!important;height:auto!important;max-height:none!important;
+  min-height:0!important;padding:0 0 205px!important;overflow-x:hidden!important;overflow-y:auto!important;background:transparent!important;
+}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-content{padding-bottom:0!important}
+.workspace-page .assistant-studio .assistant-composer{
+  position:absolute!important;left:50%!important;top:56%!important;right:auto!important;bottom:auto!important;
+  transform:translate(-50%,-50%)!important;width:min(780px,calc(100% - 28px))!important;max-width:780px!important;
+  margin:0!important;padding:10px 0!important;background:transparent!important;box-shadow:none!important;
+  transition:top 520ms cubic-bezier(.18,.72,.22,1),transform 520ms cubic-bezier(.18,.72,.22,1),width 220ms ease!important;
+}
+.workspace-page .assistant-studio.has-conversation .assistant-composer{top:auto!important;bottom:4px!important;transform:translateX(-50%)!important}
+.workspace-page .assistant-studio .assistant-composer #assistant-form,.workspace-page .assistant-studio #assistant-form{
+  border:1px solid rgba(255,255,255,.065)!important;
+  background:linear-gradient(140deg,rgba(28,28,32,.58),rgba(13,13,15,.48),rgba(19,25,22,.5))!important;
+  -webkit-backdrop-filter:blur(30px) saturate(155%)!important;backdrop-filter:blur(30px) saturate(155%)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 18px 45px rgba(0,0,0,.18)!important;
+}
+.workspace-page .assistant-studio .assistant-compose-tools #assistant-send,.workspace-page .assistant-studio #assistant-send{
+  background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(190,177,240,.045),rgba(142,213,180,.035))!important;
+  border:1px solid rgba(255,255,255,.075)!important;color:var(--smetra-text)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(160%)!important;backdrop-filter:blur(20px) saturate(160%)!important;
+}
+.workspace-page .assistant-studio #assistant-send.has-message{
+  background:linear-gradient(135deg,rgba(202,192,246,.2),rgba(161,224,190,.15))!important;
+  border-color:rgba(214,211,238,.16)!important;color:#f5f5f7!important;
+}
+.workspace-page .assistant-studio.has-conversation .assistant-content{padding-bottom:200px!important}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-thread:has(.assistant-welcome){
+  display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
+  height:100%!important;min-height:0!important;padding:0 0 190px!important;
+}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-welcome{width:min(720px,100%)!important;margin:0 auto!important;padding:10px!important;text-align:center!important}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-welcome h2{margin:0 0 8px!important;font-size:clamp(26px,2.2vw,32px)!important}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-welcome p{margin:0 auto 14px!important}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-suggestions{justify-content:center!important;gap:8px!important}
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-suggestions button{
+  border:1px solid rgba(255,255,255,.055)!important;border-radius:999px!important;background:rgba(255,255,255,.025)!important;
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+}
+@media(max-width:800px){
+  .workspace-page .app-shell:has(.assistant-studio){display:block!important;height:calc(100dvh - 72px)!important;min-height:0!important;overflow:hidden!important}
+  .workspace-page .app-shell:has(.assistant-studio)>.assistant-toolrail{display:none!important}
+  .workspace-page .app-shell:has(.assistant-studio)>#content.main{display:block!important;height:100%!important;padding:0 12px 8px!important;overflow:hidden!important}
+  .workspace-page .app-shell:has(.assistant-studio) .assistant-studio{height:100%!important}
+  .workspace-page .assistant-studio .assistant-header{min-height:28px!important;padding:2px 0 5px!important}
+  .workspace-page .assistant-studio .assistant-composer{width:calc(100% - 8px)!important;top:54%!important}
+  .workspace-page .assistant-studio.has-conversation .assistant-composer{top:auto!important;bottom:4px!important}
+  .workspace-page .assistant-studio:not(.has-conversation) .assistant-thread:has(.assistant-welcome){padding-bottom:175px!important}
+  .workspace-page .assistant-studio.has-conversation .assistant-content{padding-bottom:190px!important}
+  .workspace-page .workspace-section:has(.empty):not(:has(.record-line,.notification-row,.activity-item,.team-member-row)){min-height:calc(100dvh - 140px)!important}
+  .workspace-page .team-page,.workspace-page .settings-page{width:100%!important}
+}
+@media(prefers-reduced-motion:no-preference){
+  .workspace-page .sidebar-group button:hover,.workspace-page .sidebar-disclosure:hover,.workspace-page .main .btn:not(:disabled):hover{transform:translateY(-1px)}
+}
+

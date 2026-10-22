@@ -495,7 +495,23 @@ window.Workspace = (() => {
   }
   async function customFieldSettings(){
     const active=pageRequest();
-    const data=await api('/custom-fields');if(!active()||current!=='team')return;const section=document.createElement('section');section.className='panel';section.innerHTML=`<div class="section-top"><h3>Дополнительные поля</h3><button class="btn small" id="new-custom-field">+ Поле</button></div><p class="muted">Настройте клиентов, сметы и заказы под свой способ работы.</p>${data.items.map(f=>`<div class="record-line"><strong>${e(f.name)}</strong><small>${e({clients:'Клиенты',estimates:'Сметы',projects:'Заказы'}[f.entity_type])} · ${e(f.type)}</small></div>`).join('')}`;document.querySelector('#content').append(section);section.querySelector('button').onclick=()=>{const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});closeModal();await render('team')})};
+    const data=await api('/custom-fields');
+    if(!active()||current!=='team')return;
+    const host=document.querySelector('#content .team-page');if(!host)return;
+    const section=document.createElement('details');section.className='panel team-custom-fields';
+    const entityLabel={clients:'Клиенты',estimates:'Сметы',projects:'Заказы'};
+    const rows=data.items.map(f=>`<div class="team-custom-field-row"><span><strong>${e(f.name)}</strong><small>${e(entityLabel[f.entity_type]||f.entity_type)} · ${e(f.type)}</small></span></div>`).join('');
+    section.innerHTML=`<summary><span><strong>Дополнительные поля</strong><small>${data.items.length?data.items.length+' настроено':'Настройка карточек клиентов, смет и заказов'}</small></span><span class="team-settings-chevron" aria-hidden="true"></span></summary><div class="team-custom-fields-body"><p class="muted">Добавляйте только поля, которых действительно не хватает в стандартных карточках.</p><div class="team-custom-fields-list">${rows||'<p class="team-custom-fields-empty">Дополнительные поля ещё не созданы.</p>'}</div><button type="button" class="btn small" id="new-custom-field">Добавить поле</button></div>`;
+    host.append(section);
+    section.querySelector('#new-custom-field').onclick=()=>{
+      const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}</form>`);
+      bindCancel(root);
+      submitForm(root.querySelector('form'),async d=>{
+        d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);
+        await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});
+        closeModal();await render('team');
+      });
+    };
   }
   async function aiDraft(){const root=openModal('Из описания — в черновик','Текст будет отправлен AI-провайдеру. Проверьте позиции и цены перед сохранением.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}<p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor(r.draft)})}
   async function attachments(key,id){
