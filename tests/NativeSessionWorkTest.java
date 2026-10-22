@@ -24,6 +24,20 @@ public final class NativeSessionWorkTest {
         if(!"fallback".equals(work.tokenForRequest("fallback")))throw new AssertionError("Thread context leaked");
         AtomicReference<String> anonymous=new AtomicReference<>();NativeSessionWork anonymousWork=new NativeSessionWork(Runnable::run,anonymous::get,()->1);
         anonymousWork.execute(()->{anonymous.set("signed-in");if(anonymousWork.tokenForRequest("signed-in")!=null)throw new AssertionError("Anonymous work acquired a new session");});
-        System.out.println("PASS: queued old work skipped; running work keeps its account; old replies rejected; new account/page and anonymous context isolated");
+
+        // A long-lived SSE stream must not monopolize the executor used by ordinary I/O.
+        ExecutorService ordinary=Executors.newSingleThreadExecutor(),stream=Executors.newSingleThreadExecutor();
+        NativeSessionWork isolated=new NativeSessionWork(ordinary,token::get,page::get);
+        CountDownLatch streamStarted=new CountDownLatch(1),releaseStream=new CountDownLatch(1),ordinaryFinished=new CountDownLatch(1);
+        try {
+            isolated.executeOn(stream,()->{streamStarted.countDown();try{if(!releaseStream.await(5,TimeUnit.SECONDS))throw new AssertionError("Stream fixture timed out");}catch(InterruptedException error){Thread.currentThread().interrupt();throw new AssertionError(error);}});
+            if(!streamStarted.await(5,TimeUnit.SECONDS))throw new AssertionError("Dedicated stream executor did not start");
+            isolated.execute(ordinaryFinished::countDown);
+            if(!ordinaryFinished.await(1,TimeUnit.SECONDS))throw new AssertionError("Long stream blocked normal session work");
+        } finally {
+            releaseStream.countDown();ordinary.shutdownNow();stream.shutdownNow();
+            if(!ordinary.awaitTermination(5,TimeUnit.SECONDS)||!stream.awaitTermination(5,TimeUnit.SECONDS))throw new AssertionError("Isolated executors did not stop");
+        }
+        System.out.println("PASS: session isolation, page races, and long-lived stream cannot block ordinary native work");
     }
 }
