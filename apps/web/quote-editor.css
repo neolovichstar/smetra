@@ -1,0 +1,188 @@
+/* Smetra quote editor: clear document hierarchy, calm controls and a persistent total. */
+.workspace-page .main:has(#estimate-editor){
+  width:100%;max-width:1780px!important;min-width:0;margin-inline:auto;
+  padding:34px clamp(22px,3.4vw,60px) 88px!important;
+}
+.workspace-page .main:has(#estimate-editor)>.topline{
+  width:min(100%,1480px);max-width:1480px;margin:0 auto 30px;align-items:center;gap:26px;
+}
+.workspace-page .main:has(#estimate-editor)>.topline h1{
+  margin:0 0 7px;font-size:clamp(29px,2.2vw,36px);font-weight:620;line-height:1.18;letter-spacing:-.045em;
+}
+.workspace-page .main:has(#estimate-editor)>.topline p{margin:0;color:#929292;font-size:12px;line-height:1.6}
+.workspace-page .main:has(#estimate-editor)>.topline .topline-actions{flex:none;margin:0}
+.workspace-page .main:has(#estimate-editor)>.topline .topline-actions .btn{min-height:40px;border:1px solid #303030;border-radius:9px;background:transparent;color:#d5d5d5;font-size:12px}
+.workspace-page #content:has(#estimate-editor) .quote-editor-form{width:100%;max-width:1480px;margin:0 auto}
+.workspace-page #content:has(#estimate-editor) .editor-layout{
+  display:grid;grid-template-columns:minmax(0,1fr) 292px;align-items:start;
+  gap:clamp(28px,4vw,64px);width:100%;max-width:none;margin:0;
+}
+.workspace-page #content:has(#estimate-editor) .editor-main{display:flex;flex-direction:column;min-width:0;gap:0}
+.workspace-page #content:has(#estimate-editor) .editor-main>.editor-section,
+.workspace-page #content:has(#estimate-editor) .editor-main>.panel{
+  min-width:0;margin:0 0 28px;padding:0 0 27px;border:0;border-bottom:1px solid #262626;
+  border-radius:0;background:transparent;box-shadow:none;
+}
+.workspace-page #content:has(#estimate-editor) .editor-section-head{display:flex;align-items:flex-start;gap:13px;margin:0 0 23px;min-width:0}
+.workspace-page #content:has(#estimate-editor) .editor-step{
+  display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;margin-top:1px;
+  border:1px solid #303030;border-radius:9px;background:#111;color:#aaa;font-size:10px;font-weight:650;font-variant-numeric:tabular-nums;
+}
+.workspace-page #content:has(#estimate-editor) .editor-section-head>div{flex:1;min-width:0}
+.workspace-page #content:has(#estimate-editor) .editor-section-title{margin:1px 0 5px;color:#ededed;font-size:17px;font-weight:600;letter-spacing:-.025em;line-height:1.35}
+.workspace-page #content:has(#estimate-editor) .editor-section-head p{margin:0;color:#7f7f7f;font-size:11px;line-height:1.55}
+.workspace-page #content:has(#estimate-editor) .editor-meta-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(205px,1fr);gap:19px 20px;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-meta-grid .field{min-width:0;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-meta-grid .field>label,
+.workspace-page #content:has(#estimate-editor) .editor-item .item-fields label,
+.workspace-page #content:has(#estimate-editor) .editor-bulk label{display:flex;flex-direction:column;align-items:stretch;gap:7px;margin:0;color:#a6a6a6;font-size:11px;font-weight:550;line-height:1.4}
+.workspace-page #content:has(#estimate-editor) #f-title{font-size:14px;font-weight:550}
+.workspace-page #content:has(#estimate-editor) #estimate-editor input:not([type=checkbox]),
+.workspace-page #content:has(#estimate-editor) #estimate-editor textarea,
+.workspace-page #content:has(#estimate-editor) #estimate-editor .select-trigger,
+.workspace-page #content:has(#estimate-editor) #estimate-editor select{
+  box-sizing:border-box;min-width:0;min-height:43px;border:1px solid #2e2e2e;border-radius:9px;
+  background:#0a0a0a;color:#ececec;font-size:12px;box-shadow:none;transition:border-color .14s ease,background .14s ease;
+}
+.workspace-page #content:has(#estimate-editor) #estimate-editor input:not([type=checkbox]),
+.workspace-page #content:has(#estimate-editor) #estimate-editor textarea{padding:10px 12px}
+.workspace-page #content:has(#estimate-editor) #estimate-editor input::placeholder,
+.workspace-page #content:has(#estimate-editor) #estimate-editor textarea::placeholder{color:#5f5f5f}
+.workspace-page #content:has(#estimate-editor) #estimate-editor input:not([type=checkbox]):hover,
+.workspace-page #content:has(#estimate-editor) #estimate-editor textarea:hover,
+.workspace-page #content:has(#estimate-editor) #estimate-editor .select-trigger:hover{border-color:#414141;background:#0d0d0d}
+.workspace-page #content:has(#estimate-editor) #estimate-editor input:not([type=checkbox]):focus,
+.workspace-page #content:has(#estimate-editor) #estimate-editor textarea:focus,
+.workspace-page #content:has(#estimate-editor) #estimate-editor .select-trigger:focus-visible{border-color:#686868;outline:2px solid #77777720;outline-offset:1px;box-shadow:none}
+.workspace-page #content:has(#estimate-editor) .editor-description{margin:18px 0 0;padding-top:7px;border-top:1px solid #202020}
+.workspace-page #content:has(#estimate-editor) .editor-description>summary,
+.workspace-page #content:has(#estimate-editor) .editor-terms>summary{min-height:44px;padding:10px 2px;color:#c1c1c1;font-size:12px}
+.workspace-page #content:has(#estimate-editor) .editor-optional{margin-left:auto;color:#6e6e6e;font-size:10px;font-weight:450}
+.workspace-page #content:has(#estimate-editor) .editor-description .field{margin:8px 0 0}
+.workspace-page #content:has(#estimate-editor) .editor-description textarea,
+.workspace-page #content:has(#estimate-editor) .editor-terms textarea{min-height:94px;resize:vertical;line-height:1.6}
+.workspace-page #content:has(#estimate-editor) .editor-positions{padding-bottom:24px}
+.workspace-page #content:has(#estimate-editor) .editor-positions-heading{align-items:flex-start;margin-bottom:20px}
+.workspace-page #content:has(#estimate-editor) .editor-position-count{flex:none;margin:3px 0 0 auto;padding:5px 9px;border:1px solid #292929;border-radius:999px;color:#999;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools{display:grid;grid-template-columns:minmax(0,1fr) minmax(205px,.78fr) auto;align-items:center;gap:9px;margin:0 0 12px}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker{display:contents;width:auto;max-width:none}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools #catalog-search{display:block!important;width:100%;height:43px;min-height:43px;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker>.row{display:block;width:100%;min-width:0;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker .field{width:100%;min-width:0;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker .field>label{display:none}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker .select-control,
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker .select-trigger{width:100%;min-width:0}
+.workspace-page #content:has(#estimate-editor) .editor-catalog-tools .catalog-picker .select-trigger{justify-content:space-between;padding:10px 12px;color:#cfcfcf;background:#0a0a0a;font-weight:500;white-space:normal;text-align:left}
+.workspace-page #content:has(#estimate-editor) .editor-add-row{display:inline-flex;align-items:center;justify-content:center;min-height:43px;padding:10px 13px;border:1px solid #3a3a3a;border-radius:9px;background:#1b1b1b;color:#eee;font-size:11px;font-weight:550;white-space:nowrap}
+.workspace-page #content:has(#estimate-editor) .editor-add-row:hover{background:#242424;border-color:#4a4a4a}
+.workspace-page #content:has(#estimate-editor) .editor-history{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;margin:0 0 4px;padding:11px 0;border-top:1px solid #202020;border-bottom:1px solid #202020}
+.workspace-page #content:has(#estimate-editor) .editor-history>div{display:flex;gap:3px;flex-wrap:wrap}
+.workspace-page #content:has(#estimate-editor) .editor-history .editor-tool{min-height:31px;height:31px;padding:5px 8px;border:1px solid transparent;border-radius:7px;color:#989898;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-history .editor-tool:hover:not(:disabled){border-color:#2c2c2c;background:#151515;color:#ededed}
+.workspace-page #content:has(#estimate-editor) .editor-history [role=status]{min-width:0;color:#7d7d7d;font-size:10px;line-height:1.5;text-align:right}
+.workspace-page #content:has(#estimate-editor) .editor-history [data-state=saved]{color:#aaa}
+.workspace-page #content:has(#estimate-editor) .editor-history [data-state=conflict],
+.workspace-page #content:has(#estimate-editor) .editor-history [data-state=offline]{color:#c9a46e}
+.workspace-page #content:has(#estimate-editor) .editor-recovery,
+.workspace-page #content:has(#estimate-editor) .editor-conflict{margin:12px 0;padding:12px 14px;border:1px solid #363636;border-radius:10px;background:#101010;color:#bcbcbc;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-recovery button{min-height:34px;padding:6px 9px;color:#ddd;font-size:11px}
+.workspace-page #content:has(#estimate-editor) #editor-retry{margin:9px 0;color:#ddd;font-size:11px}
+.workspace-page #content:has(#estimate-editor) #editor-rows{min-width:0}
+.workspace-page #content:has(#estimate-editor) .editor-item{min-width:0;margin:0;padding:20px 0 23px!important;border:0;border-bottom:1px solid #252525;border-radius:0;background:transparent;box-shadow:none;animation:none}
+.workspace-page #content:has(#estimate-editor) .editor-item:last-child{border-bottom:1px solid #252525}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-heading{display:grid;grid-template-columns:18px 22px minmax(0,1fr) 34px;align-items:center;gap:8px;margin:0 0 12px}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-heading .editor-row-select{display:grid;place-items:center;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-heading .editor-drag{display:grid;place-items:center;width:22px;min-width:22px;height:32px;min-height:32px;padding:0;color:#666;font-size:16px}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-heading input[data-key=name]{height:43px;min-height:43px;font-size:13px;font-weight:550}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-heading .icon-button{display:grid;place-items:center;width:34px;min-width:34px;height:34px;min-height:34px;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:#858585;font-size:18px}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-heading .icon-button:hover{border-color:#353535;background:#181818;color:#eee}
+.workspace-page #content:has(#estimate-editor) .editor-row-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 13px;color:#747474;font-size:10px}
+.workspace-page #content:has(#estimate-editor) .editor-row-tools>div{display:flex;gap:3px;flex-wrap:wrap}
+.workspace-page #content:has(#estimate-editor) .editor-row-tools button{min-height:30px;height:30px;padding:5px 8px;border:1px solid transparent;border-radius:7px;color:#8f8f8f;font-size:10px}
+.workspace-page #content:has(#estimate-editor) .editor-row-tools button:hover:not(:disabled){border-color:#303030;background:#151515;color:#ddd}
+.workspace-page #content:has(#estimate-editor) .editor-layout .item-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-fields label{min-width:0;gap:6px;margin:0;color:#898989;font-size:10px}
+.workspace-page #content:has(#estimate-editor) .editor-item .item-fields input:not([type=checkbox]){width:100%;height:40px;min-height:40px;padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums}
+.workspace-page #content:has(#estimate-editor) .editor-item>details{margin-top:14px;padding-top:5px;border-top:1px solid #202020}
+.workspace-page #content:has(#estimate-editor) .editor-item>details>summary{min-height:38px;padding:8px 2px;color:#9b9b9b;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-item>details .item-fields{padding:6px 0 12px}
+.workspace-page #content:has(#estimate-editor) .editor-item .check-label{display:flex;align-items:center;gap:9px;margin:7px 0;color:#aaa;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-item .check-label input{width:15px;height:15px;min-height:15px;accent-color:#bdbdbd}
+.workspace-page #content:has(#estimate-editor) .editor-bulk{margin:15px 0 0;padding:0 0 8px;border:0;border-top:1px solid #202020;background:transparent}
+.workspace-page #content:has(#estimate-editor) .editor-bulk>summary{min-height:42px;padding:10px 2px;color:#858585;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-bulk-heading{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;color:#aaa;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-bulk-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:12px;align-items:end}
+.workspace-page #content:has(#estimate-editor) .editor-bulk-controls .btn{min-height:43px}
+.workspace-page #content:has(#estimate-editor) .editor-terms{margin:0!important;padding:0!important;border:0!important}
+.workspace-page #content:has(#estimate-editor) .editor-terms>summary{display:flex;align-items:center;gap:12px;min-height:55px;padding:8px 0;color:#c1c1c1;font-size:12px}
+.workspace-page #content:has(#estimate-editor) .editor-terms>summary .editor-step{flex:0 0 30px;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-terms-title{font-size:13px;font-weight:550}
+.workspace-page #content:has(#estimate-editor) .editor-terms-body{padding:5px 0 10px 43px}
+.workspace-page #content:has(#estimate-editor) .editor-terms-body .field{margin:0 0 17px}
+.workspace-page #content:has(#estimate-editor) .editor-terms-body .form-grid{gap:14px 20px}
+.workspace-page #content:has(#estimate-editor) .editor-main>.panel{padding:0 0 27px!important;background:transparent!important;border:0!important;border-bottom:1px solid #262626!important;border-radius:0!important;box-shadow:none!important}
+.workspace-page #content:has(#estimate-editor) .editor-aside{position:sticky;top:92px;min-width:0;margin:0}
+.workspace-page #content:has(#estimate-editor) .editor-aside>.editor-summary{
+  padding:23px 21px;border:1px solid #303030;border-radius:15px;background:#0d0d0d;box-shadow:none;
+}
+.workspace-page #content:has(#estimate-editor) .editor-summary-kicker{display:block;margin:0 0 14px;color:#858585;font-size:9px;font-weight:650;letter-spacing:.12em}
+.workspace-page #content:has(#estimate-editor) .editor-summary .editor-section-title{margin:0;color:#d0d0d0;font-size:12px;font-weight:550;letter-spacing:0}
+.workspace-page #content:has(#estimate-editor) .editor-aside .editor-total{margin:10px 0 5px;color:#f3f3f3;font-size:clamp(28px,2.4vw,35px);font-weight:550;letter-spacing:-.055em;line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.workspace-page #content:has(#estimate-editor) .editor-aside .muted{margin:0 0 20px;color:#858585;font-size:10px;line-height:1.6}
+.workspace-page #content:has(#estimate-editor) .editor-aside .form-error:empty{display:none}
+.workspace-page #content:has(#estimate-editor) .editor-aside .btn[type=submit]{display:flex;align-items:center;justify-content:center;min-height:45px;margin-top:15px;border-radius:9px;font-size:12px;font-weight:600}
+.workspace-page #content:has(#estimate-editor) .editor-device{margin:18px 0 0;padding-top:6px;border-top:1px solid #252525}
+.workspace-page #content:has(#estimate-editor) .editor-device>summary{min-height:40px;color:#949494;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-device .editor-tool{display:block;width:100%;min-height:36px;padding:7px 2px;text-align:left;color:#b2b2b2;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-ai-action{display:flex;align-items:center;justify-content:flex-start;width:100%;min-height:42px;margin-top:13px;padding:10px 0;border:0;border-top:1px solid #252525;border-radius:0;background:transparent;color:#aaa;text-align:left;font-size:11px}
+.workspace-page #content:has(#estimate-editor) .editor-ai-action:hover{background:transparent;color:#f1f1f1}
+@media(max-width:1100px){
+  .workspace-page #content:has(#estimate-editor) .editor-layout{grid-template-columns:minmax(0,1fr) 260px;gap:25px}
+  .workspace-page #content:has(#estimate-editor) .editor-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .workspace-page #content:has(#estimate-editor) .editor-catalog-tools{grid-template-columns:minmax(0,1fr) minmax(185px,.8fr)}
+  .workspace-page #content:has(#estimate-editor) .editor-add-row{grid-column:1/-1;justify-self:start}
+}
+@media(max-width:800px){
+  .workspace-page .main:has(#estimate-editor){padding:25px 22px 76px!important}
+  .workspace-page .main:has(#estimate-editor)>.topline{align-items:flex-start;margin-bottom:24px}
+  .workspace-page #content:has(#estimate-editor) .editor-layout{grid-template-columns:minmax(0,1fr);gap:0}
+  .workspace-page #content:has(#estimate-editor) .editor-aside{position:static;grid-row:1;margin:0 0 27px}
+  .workspace-page #content:has(#estimate-editor) .editor-aside>.editor-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,.65fr);align-items:center;gap:0 18px;padding:17px 18px}
+  .workspace-page #content:has(#estimate-editor) .editor-summary-kicker,.workspace-page #content:has(#estimate-editor) .editor-summary .editor-section-title,.workspace-page #content:has(#estimate-editor) .editor-aside .editor-total,.workspace-page #content:has(#estimate-editor) .editor-aside .muted,.workspace-page #content:has(#estimate-editor) .editor-aside .form-error{grid-column:1}
+  .workspace-page #content:has(#estimate-editor) .editor-summary-kicker{margin-bottom:5px}
+  .workspace-page #content:has(#estimate-editor) .editor-aside .editor-total{margin:4px 0;font-size:27px}
+  .workspace-page #content:has(#estimate-editor) .editor-aside .muted{margin-bottom:0}
+  .workspace-page #content:has(#estimate-editor) .editor-aside .btn[type=submit]{grid-column:2;grid-row:2/6;align-self:center;margin:0;white-space:normal}
+  .workspace-page #content:has(#estimate-editor) .editor-device,.workspace-page #content:has(#estimate-editor) .editor-ai-action{grid-column:1/-1}
+  .workspace-page #content:has(#estimate-editor) .editor-device{margin-top:13px}
+  .workspace-page #content:has(#estimate-editor) .editor-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .workspace-page #content:has(#estimate-editor) .editor-catalog-tools{grid-template-columns:minmax(0,1fr) minmax(180px,.8fr)}
+  .workspace-page #content:has(#estimate-editor) .editor-add-row{grid-column:1/-1}
+}
+@media(max-width:540px){
+  .workspace-page .main:has(#estimate-editor){padding:20px 16px 55px!important}
+  .workspace-page .main:has(#estimate-editor)>.topline{gap:12px;margin-bottom:19px}
+  .workspace-page .main:has(#estimate-editor)>.topline h1{font-size:28px}
+  .workspace-page .main:has(#estimate-editor)>.topline p{max-width:34ch;font-size:11px}
+  .workspace-page #content:has(#estimate-editor) .editor-section-head{gap:10px;margin-bottom:18px}
+  .workspace-page #content:has(#estimate-editor) .editor-step{flex-basis:28px;width:28px;height:28px;border-radius:8px}
+  .workspace-page #content:has(#estimate-editor) .editor-section-title{font-size:16px}
+  .workspace-page #content:has(#estimate-editor) .editor-meta-grid{grid-template-columns:minmax(0,1fr);gap:14px}
+  .workspace-page #content:has(#estimate-editor) .editor-catalog-tools{grid-template-columns:minmax(0,1fr)}
+  .workspace-page #content:has(#estimate-editor) .editor-add-row{grid-column:1;justify-self:stretch}
+  .workspace-page #content:has(#estimate-editor) .editor-history{align-items:flex-start;flex-direction:column;gap:5px}
+  .workspace-page #content:has(#estimate-editor) .editor-history [role=status]{width:100%;text-align:left}
+  .workspace-page #content:has(#estimate-editor) .editor-item{padding:16px 0 18px!important}
+  .workspace-page #content:has(#estimate-editor) .editor-layout .item-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .workspace-page #content:has(#estimate-editor) .editor-item .item-heading{grid-template-columns:17px 20px minmax(0,1fr) 32px;gap:5px}
+  .workspace-page #content:has(#estimate-editor) .editor-item .item-heading input[data-key=name]{font-size:13px}
+  .workspace-page #content:has(#estimate-editor) .editor-row-tools{align-items:flex-start}
+  .workspace-page #content:has(#estimate-editor) .editor-row-tools>div{gap:0}
+  .workspace-page #content:has(#estimate-editor) .editor-row-tools button{padding-inline:6px}
+  .workspace-page #content:has(#estimate-editor) .editor-bulk-controls{grid-template-columns:minmax(0,1fr)}
+  .workspace-page #content:has(#estimate-editor) .editor-terms-body{padding-left:0}
+  .workspace-page #content:has(#estimate-editor) .editor-aside>.editor-summary{grid-template-columns:minmax(0,1fr) 136px;gap:0 10px;padding:14px}
+  .workspace-page #content:has(#estimate-editor) .editor-aside .editor-total{font-size:23px}
+  .workspace-page #content:has(#estimate-editor) .editor-aside .btn[type=submit]{padding:9px 10px;font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){.workspace-page #content:has(#estimate-editor) #estimate-editor :is(input,textarea,.select-trigger),.workspace-page #content:has(#estimate-editor) .editor-layout summary:after{transition:none}}
