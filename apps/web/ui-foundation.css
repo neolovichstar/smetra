@@ -1249,3 +1249,29 @@
   mask:none!important;
   -webkit-mask:none!important;
 }
+
+
+/* Desktop assistant starts directly at the primary navigation boundary.
+   The generic .main rule uses a centered max-width for content pages; that
+   is unsuitable for a full-height, two-rail workspace. */
+@media(min-width:801px){
+  .workspace-page:has(.assistant-studio) #content.main{
+    display:flex!important;
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:clamp(12px,1.7vw,22px) clamp(12px,1.5vw,24px) max(10px,env(safe-area-inset-bottom)) 0!important;
+    box-sizing:border-box!important;
+    justify-self:stretch!important;
+    align-self:stretch!important;
+  }
+  .workspace-page:has(.assistant-studio) #content.main>.assistant-studio{
+    flex:1 1 auto!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+    box-sizing:border-box!important;
+  }
+}
