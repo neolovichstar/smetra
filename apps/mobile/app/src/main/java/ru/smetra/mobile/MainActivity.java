@@ -23,6 +23,9 @@ public class MainActivity extends Activity {
     private static final int REQUEST_PUSH_PERMISSION = 5901;
     private boolean waitingForPushPermission = false;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
+    // Long-lived SSE responses must not block file reads, previews or session work.
+    private final ExecutorService assistantWorker=Executors.newSingleThreadExecutor();
+    private volatile HttpURLConnection assistantConnection;
     // Navigation must not queue behind a long AI stream or file upload.
     private final ExecutorService apiWorker=Executors.newFixedThreadPool(2);
     private LinearLayout content;
@@ -90,7 +93,13 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
     private boolean openLink(Intent intent){if(intent==null)return false;if("ru.smetra.mobile.OPEN_NOTIFICATIONS".equals(intent.getAction())){if(token==null)login(false);else notificationsCenter();return true;}if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
     private void afterLogin(){PushManager.syncIfEnabled(this,token);if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
-    @Override public void onDestroy(){if(quoteDraftEditor!=null)quoteDraftEditor.close();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
+    @Override public void onDestroy(){cancelAssistantStream();if(quoteDraftEditor!=null)quoteDraftEditor.close();assistantWorker.shutdownNow();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
+    private void cancelAssistantStream(){
+        assistantStreaming=false;
+        HttpURLConnection connection=assistantConnection;
+        assistantConnection=null;
+        if(connection!=null)connection.disconnect();
+    }
     @Override protected void onSaveInstanceState(Bundle state){
         state.putString("pending_pdf_document",pendingPdfDocument);
         state.putString("assistant_attachment_request_key",assistantAttachmentRequestKey);
@@ -164,6 +173,7 @@ public class MainActivity extends Activity {
     }
     private QuoteDraftEditor quoteDraftEditor;
     private void page(String title,String page,boolean back){
+        if(assistantConnection!=null||assistantStreaming)cancelAssistantStream();
         if(quoteDraftEditor!=null){quoteDraftEditor.close();quoteDraftEditor=null;}
         View focused=getCurrentFocus();if(focused!=null)((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(focused.getWindowToken(),0);
         currentPage=page;pageVersion++;clickedButton=null;feedback=null;
@@ -531,13 +541,16 @@ public class MainActivity extends Activity {
         TextView answerText=assistantMessage(messages,"assistant","");
         answerText.setText("Думаю…");
         scrollAssistantToEnd(true);
-        sessionWork.execute(()->{
+        sessionWork.executeOn(assistantWorker,()->{
             HttpURLConnection connection=null;
             StringBuilder answer=new StringBuilder();
             JSONObject[] currentQuota={null};
             boolean completed=false;
             try{
+                if(version!=pageVersion||isFinishing())return;
                 connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api/assistant/stream").openConnection();
+                assistantConnection=connection;
+                if(version!=pageVersion||isFinishing()) { connection.disconnect(); return; }
                 connection.setConnectTimeout(10000);
                 connection.setReadTimeout(110000);
                 connection.setRequestMethod("POST");
@@ -606,7 +619,9 @@ public class MainActivity extends Activity {
                     if(assistantStatus!=null&&assistantRemaining>0)assistantStatus.setText("Не удалось ответить · повторите отправку");
                     message(error instanceof ApiException?error.getMessage():"Не удалось получить ответ. Попробуйте ещё раз.");
                 });
-            }finally{if(connection!=null)connection.disconnect();}
+            }finally{
+                if(connection!=null){if(assistantConnection==connection)assistantConnection=null;connection.disconnect();}
+            }
         });
     }
     private boolean assistantNearEnd(){return pageScroll!=null&&content.getHeight()-pageScroll.getHeight()-pageScroll.getScrollY()<dp(120);}
