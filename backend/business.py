@@ -2097,6 +2097,25 @@ class Service:
                     and (role == "admin" or existing and existing["role"] == "admin")
                 ):
                     raise DomainError(403, "Эта роль доступна только владельцу")
+                if not existing:
+                    team_workspace = self.con.execute(
+                        "SELECT plan,subscription_status,entitlement_until,seat_limit FROM workspaces WHERE id=?",
+                        (self.wid,),
+                    ).fetchone()
+                    current_time = stamp()
+                    if (
+                        not team_workspace
+                        or team_workspace["plan"] != "pro_team"
+                        or team_workspace["subscription_status"] != "active"
+                        or int(team_workspace["entitlement_until"] or 0) <= current_time
+                    ):
+                        raise DomainError(403, "Добавление сотрудников доступно при активном PRO Team")
+                    member_count = self.con.execute(
+                        "SELECT COUNT(*) AS count FROM workspace_members WHERE workspace_id=?",
+                        (self.wid,),
+                    ).fetchone()["count"]
+                    if int(member_count) >= int(team_workspace["seat_limit"] or 6):
+                        raise DomainError(409, "В PRO Team максимум 6 участников, включая владельца")
                 self.con.execute(
                     "INSERT INTO workspace_members VALUES(?,?,?) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
                     (self.wid, member["id"], role),
