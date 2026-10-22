@@ -141,7 +141,15 @@ window.Workspace = (() => {
       html=mainTitle('Документы','Предложения, акты и условия работы.',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div><div class="attachment-actions">${button('Спросить AI','ask-document',d.id).replace('data-work=',`data-label="${e(d.name)}" data-work=`)}${button('Скачать PDF','download-document',d.id)}</div></div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
     }else return false;
     if(!active())return true;
-    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);bind(section);
+    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);
+    if(section==='team'){
+      // Start with a clean member directory; business inputs are intentionally progressive disclosure.
+      const businessSettings=document.querySelector('.team-business-settings');
+      const advancedSettings=document.querySelector('.team-advanced-settings');
+      if(businessSettings)businessSettings.open=false;
+      if(advancedSettings)advancedSettings.open=false;
+    }
+    bind(section);
     if(section==='files')bindFileCenter(fileCenterData);
     if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){
       // Onboarding is optional. Do not block the dashboard render on the lazy growth chunk;
