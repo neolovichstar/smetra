@@ -35,7 +35,10 @@ TABLES = TABLES | frozenset("quote_creation_requests".split())
 TABLES = TABLES | frozenset(["assistant_jobs"])
 TABLES = TABLES | frozenset(
     "billing_subscriptions subscription_events marketplace_leads marketplace_lead_contacts "
-    "lead_purchases lead_token_ledger affiliate_clicks".split()
+    "lead_purchases lead_token_ledger affiliate_clicks billing_renewal_attempts".split()
+)
+TABLES = TABLES | frozenset(
+    "assistant_ad_attempts assistant_ad_reward_credits assistant_ad_reward_usage".split()
 )
 TABLES = TABLES | frozenset(["creation_requests"])
 TABLES = TABLES | frozenset("push_devices push_outbox push_deliveries".split())
