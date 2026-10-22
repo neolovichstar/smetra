@@ -172,7 +172,6 @@ def _prepare_attempt(con, candidate):
 
 
 def _persist_provider_payment(handler, con, sub, attempt, intent, remote):
-    from time import time
     t = _now()
     payment_id = None
     with business.transaction_lock_scope(con, (f"user:{sub['user_id']}", f"subscription:{sub['id']}")):
@@ -255,6 +254,25 @@ def _charge(handler, con, item):
     sub, attempt, intent = item["sub"], item["attempt"], item["intent"]
     workspace_id = item["workspace_id"]
     plan = intent["plan"]
+    # Cancellation may race with preparation; re-check immediately before contacting
+    # the payment provider so a stale scheduled item cannot initiate a new charge.
+    current = con.execute(
+        "SELECT auto_renew,cancel_at_period_end,status,next_charge_at,current_period_end,provider_payment_method_id "
+        "FROM billing_subscriptions WHERE id=?",
+        (sub["id"],),
+    ).fetchone()
+    if (
+        not current
+        or not current["auto_renew"]
+        or current["cancel_at_period_end"]
+        or current["status"] not in ("active", "past_due")
+        or not current["next_charge_at"]
+        or int(current["next_charge_at"]) > _now()
+        or int(current["current_period_end"]) != int(attempt["period_end"])
+        or current["provider_payment_method_id"] != sub["provider_payment_method_id"]
+    ):
+        _mark_attempt(con, attempt["id"], "canceled", "renewal_disabled", subscription_id=sub["id"])
+        return "skipped"
     metadata = {"user_id": sub["user_id"], "plan": plan}
     if workspace_id:
         metadata["workspace_id"] = workspace_id
