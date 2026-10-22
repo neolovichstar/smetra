@@ -5,7 +5,6 @@ import base64
 import hashlib
 import os
 import time
-import secrets
 import re
 import urllib.error
 import urllib.request

@@ -4,8 +4,6 @@ Browser events cannot grant entitlement or manufacture confirmed revenue.
 No external analytics network calls participate in a work/payment transaction.
 """
 import datetime as dt
-import hashlib
-import json
 import os
 import secrets
 import time

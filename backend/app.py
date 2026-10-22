@@ -643,7 +643,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def api(self, method, path, query, con):
         if path == '/api/billing/pricing' and method == 'GET':
-            offer = revenue.pricing(con, user)
+            offer = revenue.pricing(con, None)
             prices = {code: item["amount_kopecks"] for code, item in offer["plans"].items()}
             return self.send_json(200, {
                 "month": prices["pro_month"],
