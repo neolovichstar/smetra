@@ -2067,3 +2067,18 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
  .workspace-page .app-shell:has(.assistant-studio)>#content.main{grid-column:auto!important;grid-row:auto!important;height:100%!important}
 }
 
+/* Reserve real scrollable space above the floating composer. */
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-content{
+  flex:0 1 auto!important;height:calc(58% - 36px)!important;max-height:none!important;
+}
+.workspace-page .assistant-studio.has-conversation .assistant-content{
+  flex:0 1 auto!important;height:calc(100% - 210px)!important;max-height:none!important;
+}
+@media(max-height:760px) and (min-width:801px){
+  .workspace-page .assistant-studio:not(.has-conversation) .assistant-content{height:calc(60% - 36px)!important}
+}
+@media(max-width:800px){
+  .workspace-page .assistant-studio:not(.has-conversation) .assistant-content{height:calc(58% - 100px)!important}
+  .workspace-page .assistant-studio.has-conversation .assistant-content{height:calc(100% - 210px)!important}
+}
+
