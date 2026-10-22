@@ -60,6 +60,7 @@ jobs:
             adb shell wm density 420
             bash apps/mobile/gradlew -p apps/mobile connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:18084
             mkdir -p data/native-rustore-screens/default
+            adb shell am instrument -w ru.smetra.mobile.test/ru.smetra.mobile.DesignSmoke | tee data/native-rustore-screens/default-instrumentation.log
             adb pull /sdcard/Android/data/ru.smetra.mobile/files/design-qa data/native-rustore-screens/default/
             adb shell pm clear ru.smetra.mobile
             adb shell am instrument -w -e receiptsOnly true ru.smetra.mobile.test/ru.smetra.mobile.DesignSmoke | tee data/native-rustore-screens/construction-instrumentation.log
