@@ -89,8 +89,11 @@ def quota(service):
     team_paid = bool(team_row)
     paid = solo_paid or team_paid
     plan_name = "pro" if solo_paid else ("pro_team" if team_paid else "free")
-    # Free AI calls are earned only through the rewarded-ad flow (or explicit referral credits).
-    base_limit = 100 if paid else 0
+    # Preserve the existing experience until the native Yandex SDK callback is
+    # integrated in the shipped client and the rewarded-ad unit is configured.
+    # Enabling this flag makes free users earn every AI call through rewarded ads.
+    requires_rewarded_ads = os.getenv("REWARDED_ADS_REQUIRED", "0").strip().lower() in ("1", "true", "yes")
+    base_limit = 100 if paid else (0 if requires_rewarded_ads else 3)
     from backend.revenue import referral_bonus
     referral_limit = referral_bonus(service.con, service.user["id"], period)
     key = hashlib.sha256(
