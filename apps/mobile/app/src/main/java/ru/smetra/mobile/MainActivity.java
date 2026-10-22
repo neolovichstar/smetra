@@ -33,6 +33,8 @@ public class MainActivity extends Activity {
     private LinearLayout pageShell;
     private ScrollView pageScroll;
     private TextView assistantStatus;
+    private EditText assistantPrompt;
+    private Button assistantSendButton;
     private boolean returning;
     private SmetraUi ui;
     private TokenVault vault;
@@ -177,7 +179,8 @@ public class MainActivity extends Activity {
         if(quoteDraftEditor!=null){quoteDraftEditor.close();quoteDraftEditor=null;}
         View focused=getCurrentFocus();if(focused!=null)((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(focused.getWindowToken(),0);
         currentPage=page;pageVersion++;clickedButton=null;feedback=null;
-        root=new FrameLayout(this);root.setBackgroundColor(BG);LinearLayout shell=ui.column();pageShell=shell;root.addView(shell,new FrameLayout.LayoutParams(-1,-1));
+        assistantPrompt=null;assistantSendButton=null;
+        root=new FrameLayout(this);root.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,new int[]{0xff0c0d0f,0xff060708}));LinearLayout shell=ui.column();pageShell=shell;root.addView(shell,new FrameLayout.LayoutParams(-1,-1));
         root.setOnApplyWindowInsetsListener((view,insets)->{
             if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets safe=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());view.setPadding(safe.left,safe.top,safe.right,safe.bottom);View nav=shell.findViewWithTag("bottom-navigation");if(nav!=null)nav.setVisibility(insets.isVisible(WindowInsets.Type.ime())?View.GONE:View.VISIBLE);}
             else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;
@@ -197,14 +200,21 @@ public class MainActivity extends Activity {
         if(ui.motion()){content.setAlpha(0);content.setTranslationX(dp(returning?-10:10));content.animate().alpha(1).translationX(0).setDuration(240).setInterpolator(EASE).start();}returning=false;
     }
     private void navigation(LinearLayout shell){
-        LinearLayout nav=ui.row();nav.setTag("bottom-navigation");nav.setPadding(dp(8),dp(6),dp(8),dp(6));nav.setBackgroundColor(BG);
+        LinearLayout nav=ui.row();nav.setTag("bottom-navigation");nav.setPadding(dp(7),dp(6),dp(7),dp(6));
+        nav.setBackground(ui.shape(0xe817191c,27,0x2dffffff));nav.setElevation(dp(11));nav.setClipToOutline(true);
         String[] labels={"Сегодня","Клиенты","Создать","Проекты","Ещё"},pages={"home","clients","create","projects","more"},icons={"home","clients","plus","projects","more"};
         String selected=currentPage.equals("create")||currentPage.equals("quote")||currentPage.equals("capture")||currentPage.equals("draft-preview")?"home":currentPage.equals("client")?"clients":currentPage.equals("project")?"projects":currentPage.equals("files")||currentPage.equals("file-preview")||currentPage.startsWith("assistant")||currentPage.equals("settings")||currentPage.equals("tasks")||currentPage.equals("support")||currentPage.equals("billing")||currentPage.equals("payments")||currentPage.equals("receipt")||currentPage.equals("approvals")||currentPage.startsWith("catalog")?"more":currentPage;
         for(int i=0;i<5;i++){final int index=i;boolean active=pages[i].equals(selected);LinearLayout item=ui.column();item.setGravity(Gravity.CENTER);item.setPadding(0,dp(8),0,dp(8));ui.ripple(item,BG,18,0);item.setSelected(active);item.setContentDescription(labels[i]+(active?", выбрано":""));
-            if(active)ui.ripple(item,0xff0b1524,16,0);
-            FrameLayout iconBox=new FrameLayout(this);if(index==2)iconBox.setBackground(ui.shape(BLUE,12,0));FrameLayout.LayoutParams glyphParams=new FrameLayout.LayoutParams(dp(21),dp(21),Gravity.CENTER);iconBox.addView(ui.new Icon(icons[i],index==2?BG:active?BLUE:MUTED),glyphParams);item.addView(iconBox,new LinearLayout.LayoutParams(dp(32),dp(28)));ui.space(item,4);TextView caption=ui.label(labels[i],10,active?BLUE:MUTED,active);caption.setGravity(Gravity.CENTER);item.addView(caption);
+            if(active)ui.ripple(item,0x1aa8c4ff,18,0x28a8c4ff);
+            FrameLayout iconBox=new FrameLayout(this);
+            if(index==2)iconBox.setBackground(ui.shape(BLUE,17,0x55dbe5ff));
+            FrameLayout.LayoutParams glyphParams=new FrameLayout.LayoutParams(dp(21),dp(21),Gravity.CENTER);
+            int iconTint=index==2?0xff111720:active?BLUE:ui.tintAlpha(ui.iconColor(icons[i]),212);
+            iconBox.addView(ui.new Icon(icons[i],iconTint),glyphParams);item.addView(iconBox,new LinearLayout.LayoutParams(dp(34),dp(29)));ui.space(item,4);
+            TextView caption=ui.label(labels[i],10,index==2?0xff111720:active?BLUE:ui.tintAlpha(ui.iconColor(icons[i]),214),active||index==2);caption.setGravity(Gravity.CENTER);item.addView(caption);
             ui.tap(item,()->{publicView=false;if(index!=2&&pages[index].equals(currentPage))return;if(index==0)home();else if(index==1)records("clients");else if(index==2)quickCreate();else if(index==3)records("projects");else more();});LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);params.setMargins(dp(2),0,dp(2),0);nav.addView(item,params);
-        }shell.addView(nav);
+        }
+        LinearLayout.LayoutParams navParams=new LinearLayout.LayoutParams(-1,-2);navParams.setMargins(dp(12),0,dp(12),dp(8));shell.addView(nav,navParams);
     }
     private void quickCreate(){ui.choiceSheet("Создать в Сметре",new String[]{"Новая смета","Из сообщения клиента","Новый клиент"},new Runnable[]{this::create,this::capture,this::newClient});}
     private TextView text(String value){TextView view=ui.label(value,14,MUTED,false);ui.space(content,10);content.addView(view);return view;}
@@ -221,7 +231,13 @@ public class MainActivity extends Activity {
     private String exactMoney(long cents,String currency){return String.format(new Locale("ru","RU"),"%,.2f",cents/100.0)+" "+currencySymbol(currency);}
     private String currencySymbol(String currency){switch(currency){case "RUB":return "₽";case "USD":return "$";case "EUR":return "€";case "KZT":return "₸";case "GBP":return "£";default:return currency;}}
     private String status(String value){switch(value){case "draft":return "Черновик";case "sent":return "На согласовании";case "viewed":return "Просмотрена клиентом";case "changes_requested":return "Нужны изменения";case "approved":case "accepted":return "Согласована";case "expired":return "Срок истёк";case "declined":return "Отклонена";case "completed":case "done":return "Завершён";case "in_progress":case "active":return "В работе";case "new":return "Новый";case "planned":return "Запланирован";case "waiting":return "Ожидает";case "todo":return "К выполнению";case "paused":return "На паузе";case "cancelled":return "Отменён";default:return value.isEmpty()?"Без статуса":value;}}
-    private int statusColor(String value){if(value.equals("accepted")||value.equals("approved")||value.equals("completed")||value.equals("done"))return GREEN;if(value.equals("sent")||value.equals("viewed")||value.equals("changes_requested")||value.equals("paused")||value.equals("waiting"))return AMBER;if(value.equals("declined")||value.equals("cancelled")||value.equals("expired"))return RED;return BLUE;}
+    private int statusColor(String value){
+        if(value.equals("accepted")||value.equals("approved")||value.equals("completed")||value.equals("done")||value.equals("active"))return GREEN;
+        if(value.equals("sent")||value.equals("viewed"))return CYAN;
+        if(value.equals("changes_requested")||value.equals("paused")||value.equals("waiting")||value.equals("planned")||value.equals("todo"))return AMBER;
+        if(value.equals("declined")||value.equals("cancelled")||value.equals("expired")||value.equals("failed"))return RED;
+        return BLUE;
+    }
 
     private void emailLogin(boolean create){
         publicView=false;page("",create?"register":"login",false);
@@ -351,16 +367,21 @@ public class MainActivity extends Activity {
         }
         LinearLayout preparation=ui.column();content.addView(preparation);
         LinearLayout messages=ui.column();content.addView(messages);loading(messages);
-        LinearLayout dock=ui.column();dock.setTag("assistant-composer");dock.setPadding(dp(16),dp(8),dp(16),dp(8));dock.setBackgroundColor(BG);pageShell.addView(dock,pageShell.getChildCount()-1,ui.match());
-        LinearLayout composer=ui.column();composer.setPadding(dp(6),dp(4),dp(6),dp(6));composer.setBackground(ui.shape(SURFACE,22,LINE));dock.addView(composer,ui.match());
+        LinearLayout dock=ui.column();dock.setTag("assistant-composer");dock.setPadding(dp(14),dp(8),dp(14),dp(8));dock.setBackgroundColor(0xe9070809);pageShell.addView(dock,pageShell.getChildCount()-1,ui.match());
+        LinearLayout composer=ui.column();composer.setPadding(dp(7),dp(5),dp(7),dp(7));composer.setBackground(ui.shape(0xe51d2024,25,0x2dffffff));composer.setElevation(dp(7));dock.addView(composer,ui.match());
         EditText prompt=new EditText(this);prompt.setTextSize(16);prompt.setTypeface(ui.regular);prompt.setTextColor(INK);prompt.setHintTextColor(MUTED);prompt.setBackgroundColor(android.graphics.Color.TRANSPARENT);prompt.setPadding(dp(12),dp(12),dp(12),dp(8));prompt.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);prompt.setGravity(Gravity.TOP|Gravity.START);prompt.setMinHeight(dp(56));prompt.setMaxLines(5);prompt.setHint("Сообщение Сметре…");prompt.setContentDescription("Ваше сообщение");prompt.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});composer.addView(prompt,ui.match());
-        prompt.setOnFocusChangeListener((v,focused)->composer.setBackground(ui.shape(SURFACE,22,focused?0xff55769c:LINE)));
+        prompt.setOnFocusChangeListener((v,focused)->composer.setBackground(ui.shape(focused?0xec22252a:0xe51d2024,25,focused?0x6aa8c4ff:0x2dffffff)));
         final String draftKey=assistantDraftKey(assistantConversation,me==null?"":me.optString("id"));
         prompt.setText(getPreferences(MODE_PRIVATE).getString(draftKey,""));
-        prompt.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){getPreferences(MODE_PRIVATE).edit().putString(draftKey,s.toString()).apply();}public void afterTextChanged(Editable value){}});
+        prompt.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){getPreferences(MODE_PRIVATE).edit().putString(draftKey,s.toString()).apply();syncAssistantComposerAction();}public void afterTextChanged(Editable value){}});
         LinearLayout controls=ui.row();composer.addView(controls,ui.match());
         controls.addView(ui.glyphButton("attachment","Прикрепить файл · PDF, TXT, MD",false,this::pickAssistantAttachment));
-        final Button[] submit={null};Button send=ui.glyphButton("send","Отправить сообщение",true,()->{String value=prompt.getText().toString().trim();if(value.isEmpty()){prompt.setError("Напишите задачу");return;}((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(prompt.getWindowToken(),0);prompt.clearFocus();streamAssistant(value,messages,prompt,allowance,submit[0]);});submit[0]=send;send.setTag("assistant-send");send.setEnabled(false);send.setAlpha(.45f);
+        final Button[] submit={null};Button send=ui.glyphButton("mic","Надиктовать сообщение",false,()->{
+            String value=prompt.getText().toString().trim();
+            if(value.isEmpty()){startAssistantVoice();return;}
+            if(!assistantAvailable||assistantRemaining<=0||assistantFileBlocked||assistantStreaming){message(assistantRemaining<=0?"Лимит на месяц исчерпан":"Сейчас нельзя отправить сообщение");return;}
+            ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(prompt.getWindowToken(),0);prompt.clearFocus();streamAssistant(value,messages,prompt,allowance,submit[0]);
+        });submit[0]=send;send.setTag("assistant-send");assistantPrompt=prompt;assistantSendButton=send;syncAssistantComposerAction();
         final Button[] backgroundHolder={null};Button background=ui.glyphButton("clock","Выполнить в фоне",false,()->{
             if(!send.isEnabled()){message("Дождитесь ответа или проверьте лимит сообщений.");return;}
             String value=prompt.getText().toString().trim();if(value.isEmpty()){prompt.setError("Напишите задачу");return;}
@@ -387,7 +408,7 @@ public class MainActivity extends Activity {
         if(thread!=null)call("/assistant","GET",null,result->assistantState(messages,allowance,send,status,result));
         if(assistantContext!=null&&assistantContext.optString("entity").equals("files"))loadFilePreparation(preparation,send,assistantContext.optString("id"),pageVersion);
     }
-    private void assistantState(LinearLayout messages,TextView allowance,Button send,TextView status,JSONObject result){assistantAvailable=result.optBoolean("available");assistantMaxUpload=Math.max(1,Math.min(5_000_000,result.optInt("file_upload_max_bytes",3_000_000)));JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));JSONArray recent=result.optJSONArray("recent_actions");if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));applyAssistantQuota(result.optJSONObject("quota"),allowance,send);if(!assistantAvailable){send.setEnabled(false);status.setText("Ассистент пока не подключён.");}}
+    private void assistantState(LinearLayout messages,TextView allowance,Button send,TextView status,JSONObject result){assistantAvailable=result.optBoolean("available");assistantMaxUpload=Math.max(1,Math.min(5_000_000,result.optInt("file_upload_max_bytes",3_000_000)));JSONArray actions=result.optJSONArray("actions");if(actions!=null)for(int i=0;i<actions.length();i++)assistantAction(messages,actions.optJSONObject(i));JSONArray recent=result.optJSONArray("recent_actions");if(recent!=null)for(int i=0;i<recent.length();i++)assistantUndo(ui.card(messages),recent.optJSONObject(i));applyAssistantQuota(result.optJSONObject("quota"),allowance,send);if(!assistantAvailable){syncAssistantComposerAction();status.setText("Ассистент пока не подключён.");}}
     private void loadFilePreparation(LinearLayout host,Button send,String id,int version){
         if(version!=pageVersion||isFinishing())return;
         call("/files/"+id+"/metadata","GET",null,result->{
@@ -395,7 +416,7 @@ public class MainActivity extends Activity {
             JSONObject info=result.optJSONObject("processing"),file=result.optJSONObject("file");if(info==null||file==null)return;
             String state=info.optString("state");boolean active=state.equals("queued")||state.equals("running")||state.equals("retry");
             assistantFileBlocked=active||state.equals("failed")||state.equals("deferred")||state.equals("cancelled")||state.equals("needs_ocr")||file.optLong("size")>2000000&&!state.equals("ready");
-            send.setEnabled(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked&&!assistantStreaming);host.removeAllViews();
+            syncAssistantComposerAction();host.removeAllViews();
             String label=state.equals("ready")?"Текст готов · "+info.optInt("pages")+" стр."+(info.optBoolean("truncated")?" · подготовлена часть текста":""):state.equals("needs_ocr")?"В PDF есть страницы без текста. Для них нужен OCR.":state.equals("failed")?info.optString("error","Не удалось подготовить документ"):state.equals("cancelled")?"Подготовка отменена":active?"Подготавливаю текст документа…":"Подготовьте документ перед вопросом";
             ui.space(host,8);host.addView(ui.label(label,11,MUTED,false));
             JSONArray missingPages=info.optJSONArray("missing_text_pages");
@@ -410,6 +431,23 @@ public class MainActivity extends Activity {
             }
             if(active)host.postDelayed(()->loadFilePreparation(host,send,id,version),hasWindowFocus()?4000:15000);
         });
+    }
+    private void syncAssistantComposerAction(){
+        Button button=assistantSendButton;EditText prompt=assistantPrompt;
+        if(button==null||prompt==null)return;
+        boolean hasText=!prompt.getText().toString().trim().isEmpty();
+        boolean enabled=hasText?(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked&&!assistantStreaming):!assistantStreaming;
+        ui.setGlyphButtonAppearance(button,hasText?"send":"mic",hasText,hasText?"Отправить сообщение":"Надиктовать сообщение");
+        button.setEnabled(enabled);button.setAlpha(enabled?1f:.43f);button.setTag("assistant-send");
+    }
+    private void startAssistantVoice(){
+        try{
+            Intent voice=new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE,"ru-RU");
+            voice.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,"Продиктуйте сообщение для Сметры");
+            startActivityForResult(voice,306);
+        }catch(Exception error){message("Голосовой ввод недоступен на этом устройстве");}
     }
     private String assistantDraftKey(String thread,String account){return "assistant_draft:"+account+":"+thread;}
     private void clearAssistantAttachment(){
@@ -528,15 +566,14 @@ public class MainActivity extends Activity {
         int remaining=quota.optInt("remaining"),limit=quota.optInt("limit");
         label.setText(remaining+" из "+limit+" сообщений · "+(quota.optString("plan").equals("pro")?"Про":"Старт"));
         assistantRemaining=remaining;
-        send.setEnabled(remaining>0&&assistantAvailable&&!assistantFileBlocked&&!assistantStreaming);
+        syncAssistantComposerAction();
         if(assistantStatus!=null)assistantStatus.setText(remaining==0?"Лимит на месяц исчерпан":"Изменения — после подтверждения");
-        send.setContentDescription(remaining==0?"Лимит на месяц исчерпан":"Отправить сообщение");
     }
     private void streamAssistant(String value,LinearLayout messages,EditText prompt,TextView allowance,Button send){
         final int version=pageVersion;
         final String conversationId=assistantConversation;
         final JSONObject context=assistantContext;
-        assistantStreaming=true;send.setEnabled(false);prompt.setEnabled(false);if(assistantStatus!=null)assistantStatus.setText("Сметра отвечает…");
+        assistantStreaming=true;syncAssistantComposerAction();prompt.setEnabled(false);if(assistantStatus!=null)assistantStatus.setText("Сметра отвечает…");
         TextView userText=assistantMessage(messages,"user",value);
         TextView answerText=assistantMessage(messages,"assistant","");
         answerText.setText("Думаю…");
@@ -615,7 +652,7 @@ public class MainActivity extends Activity {
                     messages.removeView(userText.getParent() instanceof View?(View)userText.getParent():userText);
                     messages.removeView(answerText.getParent() instanceof View?(View)answerText.getParent():answerText);
                     applyAssistantQuota(currentQuota[0],allowance,send);
-                    if(currentQuota[0]==null)send.setEnabled(assistantAvailable&&assistantRemaining>0&&!assistantFileBlocked);
+                    if(currentQuota[0]==null)syncAssistantComposerAction();
                     if(assistantStatus!=null&&assistantRemaining>0)assistantStatus.setText("Не удалось ответить · повторите отправку");
                     message(error instanceof ApiException?error.getMessage():"Не удалось получить ответ. Попробуйте ещё раз.");
                 });
@@ -1918,7 +1955,7 @@ public class MainActivity extends Activity {
     }
     private void menu(String icon,String title,String subtitle,Runnable click){LinearLayout card=ui.card(content),row=ui.row();row.addView(ui.new Icon(icon,BLUE),new LinearLayout.LayoutParams(dp(22),dp(22)));ui.gap(row,16);LinearLayout copy=ui.column();copy.addView(ui.label(title,15,INK,true));ui.space(copy,5);copy.addView(ui.label(subtitle,11,MUTED,false));row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));row.addView(ui.new Icon("chevron",MUTED),new LinearLayout.LayoutParams(dp(18),dp(18)));card.addView(row);ui.tap(card,click);}
     private void support(){parentPage="settings";page("Мы на связи","support",true);content.addView(ui.label("Чем можем\nпомочь?",32,INK,true));text("Опишите, что произошло или чего не хватает. Ваше сообщение попадёт в поддержку Сметры.");EditText input=field("Ваше сообщение",1);ui.space(content,16);button("Отправить сообщение",true,v->{if(input.getText().toString().trim().isEmpty()){input.setError("Напишите сообщение");return;}try{call("/support","POST",new JSONObject().put("message",input.getText().toString()),r->{settings();message("Сообщение отправлено");});}catch(Exception error){message(error.getMessage());}});}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==305){receiveAssistantAttachment(resultCode,data);return;}if(requestCode==304){saveActPdf(resultCode,data);return;}if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect,logId=uploadLog,purchaseId=uploadPurchase;uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;message("Прикрепляем файл…");sessionWork.execute(()->{try{String mime=getContentResolver().getType(uri);String attachmentName=workspaceAttachmentName(uri,mime);byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name",attachmentName).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));postWorkerView(()->{if(!isFinishing())constructionDetail(constructionId);});}if(logId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/logs/"+logId+"/photos","POST",new JSONObject().put("file_id",file.optString("id")));postWorkerView(()->{if(!isFinishing())constructionDetail(constructionId);});}if(purchaseId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/purchases/"+purchaseId,"PATCH",new JSONObject().put("receipt_file_id",file.optString("id")));postWorkerView(()->{if(!isFinishing())constructionDetail(constructionId);});}postWorkerView(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){postWorkerView(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==305){receiveAssistantAttachment(resultCode,data);return;}if(requestCode==304){saveActPdf(resultCode,data);return;}if(requestCode==306){if(resultCode==RESULT_OK&&data!=null){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()&&assistantPrompt!=null&&currentPage.startsWith("assistant")){assistantPrompt.setText(words.get(0));assistantPrompt.setSelection(assistantPrompt.length());assistantPrompt.requestFocus();syncAssistantComposerAction();}}return;}if(resultCode!=RESULT_OK||data==null){if(requestCode==301){uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;}return;}if(requestCode==302){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty()){pendingCaptureText=words.get(0);capture();}return;}if(requestCode==303){if(data.getData()!=null){pendingCaptureFile=data.getData();capture();}return;}if(requestCode!=301||data.getData()==null)return;final android.net.Uri uri=data.getData();final String projectId=uploadProject,constructionId=uploadConstruction,defectId=uploadDefect,logId=uploadLog,purchaseId=uploadPurchase;uploadProject=null;uploadConstruction=null;uploadDefect=null;uploadLog=null;uploadPurchase=null;message("Прикрепляем файл…");sessionWork.execute(()->{try{String mime=getContentResolver().getType(uri);String attachmentName=workspaceAttachmentName(uri,mime);byte[] bytes;try(InputStream input=getContentResolver().openInputStream(uri)){bytes=readLimited(input,3_000_000);}JSONObject payload=new JSONObject().put(constructionId!=null?"construction_id":"project_id",constructionId!=null?constructionId:projectId).put("name",attachmentName).put("content",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP));JSONObject uploaded=request("/files","POST",payload);if(defectId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/defects/"+defectId,"PATCH",new JSONObject().put("photo_file_id",file.optString("id")));postWorkerView(()->{if(!isFinishing())constructionDetail(constructionId);});}if(logId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/logs/"+logId+"/photos","POST",new JSONObject().put("file_id",file.optString("id")));postWorkerView(()->{if(!isFinishing())constructionDetail(constructionId);});}if(purchaseId!=null){JSONObject file=uploaded.optJSONObject("file");if(file==null)throw new IOException("Missing upload");request("/construction/objects/"+constructionId+"/purchases/"+purchaseId,"PATCH",new JSONObject().put("receipt_file_id",file.optString("id")));postWorkerView(()->{if(!isFinishing())constructionDetail(constructionId);});}postWorkerView(()->{if(!isFinishing())message("Файл прикреплён");});}catch(Exception error){postWorkerView(()->{if(!isFinishing())message("Не удалось прикрепить файл. "+error.getMessage());});}});}
     private void publicQuote(String publicToken){publicView=true;page("Предложение","public",false);loading(content);call("/public/quote?token="+android.net.Uri.encode(publicToken),"GET",null,r->{clearLoading(content);JSONObject q=r.optJSONObject("quote");if(q==null)return;content.addView(ui.badge(status(q.optString("status")),statusColor(q.optString("status"))));ui.space(content,20);content.addView(ui.label(q.optString("title"),26,INK,true));text(q.optString("description"));LinearLayout price=ui.card(content);price.setBackground(ui.gradient(24));price.addView(ui.label("Стоимость предложения",13,BLUE,false));ui.space(price,14);price.addView(ui.label(exactMoney(q.optLong("amount_kopecks"),q.optString("currency","RUB")),32,INK,true));ui.space(content,16);if(q.optString("status").equals("sent"))button("Согласовать предложение",true,v->ui.sheet("Согласовать условия?","Вы принимаете состав работ и стоимость этой версии предложения.","Да, согласовать",false,()->{try{call("/public/accept","POST",new JSONObject().put("token",publicToken).put("version",q.optInt("published_version")),result->{publicQuote(publicToken);message("Предложение согласовано");});}catch(Exception error){message(error.getMessage());}}));});}
     private void goBack(){returning=true;if(currentPage.equals("quote-review")){quoteReviewBack();return;}if(currentPage.equals("file-preview")){if(filePreviewReturn.equals("assistant"))assistant();else workspaceFiles();return;}if(currentPage.equals("files")){more();return;}if(currentPage.startsWith("assistant-")){assistant();return;}if(currentPage.equals("catalog-form")){if(catalogParentId!=null)catalogDetail(catalogParentId);else catalogList();return;}if(currentPage.equals("catalog-detail")){catalogList();return;}if(currentPage.equals("catalog")){more();return;}if(currentPage.equals("construction-zone")||currentPage.equals("construction-work")||currentPage.equals("construction-material")||currentPage.equals("construction-fact")||currentPage.equals("construction-defect-new")||currentPage.equals("construction-defect-detail")||currentPage.equals("construction-log-new")||currentPage.equals("construction-log-edit")||currentPage.equals("construction-log-detail")||currentPage.equals("construction-purchase-new")||currentPage.equals("construction-purchase-edit")||currentPage.equals("construction-purchase-detail")||currentPage.equals("construction-change-new")||currentPage.equals("construction-change-edit")||currentPage.equals("construction-change-detail")||currentPage.equals("construction-supplier-new")||currentPage.equals("construction-zone-edit")||currentPage.equals("construction-measure-new")||currentPage.equals("construction-measure-edit")){if(constructionParentId!=null)constructionDetail(constructionParentId);else constructionList();return;}if(currentPage.equals("construction-detail")||currentPage.equals("construction-new")){constructionList();return;}if(currentPage.equals("construction")){more();return;}if(currentPage.equals("draft-preview")){capture();return;}if(currentPage.equals("clients")||currentPage.equals("projects")||currentPage.equals("settings")){home();return;}if(currentPage.equals("tasks")){settings();return;}if(currentPage.equals("public")){publicView=false;if(token==null)login(false);else refresh();return;}if(currentPage.equals("register")){login(false);return;}publicView=false;if(parentPage.equals("clients"))records("clients");else if(parentPage.equals("projects"))records("projects");else if(parentPage.equals("settings"))settings();else if(token!=null)home();else login(false);}
     @Override public void onBackPressed(){returning=true;if(currentPage.equals("home")||currentPage.equals("login"))super.onBackPressed();else if(currentPage.startsWith("assistant-"))assistant();else goBack();}

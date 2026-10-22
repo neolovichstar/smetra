@@ -118,6 +118,41 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   assistantForm.insertBefore(jobList,input);
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
+  let voiceRecognition=null,voiceListening=false;
+  const syncComposerAction=()=>{
+    const hasText=Boolean(input.value.trim());
+    send.classList.toggle('is-voice-ready',!hasText);
+    send.classList.toggle('is-listening',voiceListening);
+    const label=voiceListening?'Остановить голосовой ввод':hasText?'Отправить сообщение':'Надиктовать сообщение';
+    send.setAttribute('aria-label',label);send.title=label;
+    if(!send.disabled)send.dataset.mode=hasText?'send':'voice';
+  };
+  const startVoiceInput=()=>{
+    if(voiceListening){try{voiceRecognition?.stop()}catch{}return}
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SpeechRecognition){status.textContent='Голосовой ввод не поддерживается в этом браузере. Используйте микрофон клавиатуры или введите текст.';input.focus();return}
+    try{
+      const recognition=new SpeechRecognition();voiceRecognition=recognition;
+      recognition.lang='ru-RU';recognition.interimResults=true;recognition.maxAlternatives=1;
+      let finalText='';
+      recognition.onstart=()=>{voiceListening=true;syncComposerAction();status.textContent='Слушаю… Говорите после сигнала.'};
+      recognition.onresult=event=>{
+        let interim='';
+        for(let i=event.resultIndex;i<event.results.length;i++){
+          const transcript=event.results[i]?.[0]?.transcript||'';
+          if(event.results[i].isFinal)finalText+=transcript;else interim+=transcript;
+        }
+        const phrase=(finalText+interim).trim();
+        if(phrase){input.value=phrase;resize();saveDraft();renderQuota(quota);syncComposerAction()}
+        if(finalText.trim())status.textContent='Распознано. Проверьте текст перед отправкой.';
+      };
+      recognition.onerror=event=>{if(active()&&event.error!=='aborted')status.textContent=event.error==='not-allowed'?'Разрешите доступ к микрофону в браузере.':'Не удалось распознать речь. Попробуйте ещё раз.'};
+      recognition.onend=()=>{voiceListening=false;voiceRecognition=null;syncComposerAction();if(active()&&!status.textContent.startsWith('Распознано'))status.textContent=''};
+      recognition.start();
+    }catch{voiceListening=false;voiceRecognition=null;syncComposerAction();status.textContent='Не удалось запустить микрофон. Проверьте разрешение браузера.'}
+  };
+  send.addEventListener('click',event=>{if(input.value.trim())return;event.preventDefault();startVoiceInput()});
+  syncComposerAction();
   const quotaLabel=document.querySelector('#assistant-quota');
   const upgrade=document.querySelector('#assistant-upgrade');
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
@@ -281,7 +316,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const quotaBlocked=value.remaining<1&&value.plan!=='pro';
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
-    send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
+    const hasPrompt=Boolean(input.value.trim());
+    send.disabled=hasPrompt?(blocked||(backgroundMode&&!backgroundEnabled)):(working||threadBusy);
+    syncComposerAction();
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
@@ -460,7 +497,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит исчерпан: обычные и фоновые сообщения используют общий месячный лимит. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
-  input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota)});resize();
+  input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncComposerAction()});resize();syncComposerAction();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
     event.preventDefault();const prompt=input.value.trim();if(!prompt||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
