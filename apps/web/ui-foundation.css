@@ -1486,3 +1486,14 @@
 @media(max-width:700px){
   .workspace-page .assistant-studio:not(.assistant-tools-collapsed) .assistant-workbar #assistant-history-toggle{display:flex!important}
 }
+
+
+/* Touch screens have no hover. Keep actions on the selected conversation reachable. */
+@media(max-width:700px) and (hover:none){
+  .workspace-page .assistant-studio .assistant-conversation-row.is-active .assistant-conversation-actions{
+    opacity:1;pointer-events:auto;
+  }
+  .workspace-page .assistant-studio .assistant-conversation-row:not(.is-active) .assistant-conversation-actions{
+    opacity:0;pointer-events:none;
+  }
+}

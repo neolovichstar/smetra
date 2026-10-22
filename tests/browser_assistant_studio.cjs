@@ -23,6 +23,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  await evaluate("document.querySelector('#assistant-new-thread').click()");await until("sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]')");
  await evaluate("document.querySelector('#assistant-history-toggle').click()");
  await until("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')&&getComputedStyle(document.querySelector('#assistant-history-panel')).display==='flex'");
+ await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});await new Promise(resolve=>setTimeout(resolve,220));
  const rowBefore=await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active[data-thread-id]'),r=row.getBoundingClientRect();return {id:row.dataset.threadId,left:r.left,top:r.top,width:r.width,height:r.height}})()");
  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(rowBefore.left+Math.min(72,rowBefore.width/2)),y:Math.round(rowBefore.top+rowBefore.height/2)});
  await until("getComputedStyle(document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-actions')).opacity==='1'");
