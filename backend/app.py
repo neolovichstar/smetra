@@ -433,7 +433,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
-                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
+                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/billing"):
                         raise ApiError(404, "Не найдено")
                     if path == "/api/cron/assistant":
                         from backend.assistant_jobs import authenticate
@@ -651,6 +651,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_batch(con))
+        if path == "/api/cron/billing" and method == "GET":
+            try:
+                from backend import billing_renewals
+            except ModuleNotFoundError:
+                import billing_renewals
+            return self.send_json(200, billing_renewals.run(self, con))
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
@@ -1570,6 +1576,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 con.execute("ROLLBACK")
                 raise
+        # Keep durable renewal-attempt state aligned when the provider webhook or
+        # the user-triggered payment sync resolves an off-session charge.
+        try:
+            if status in ("succeeded", "canceled"):
+                con.execute(
+                    "UPDATE billing_renewal_attempts SET status=?,finished_at=?,last_error_code=? "
+                    "WHERE payment_id=? AND status IN ('prepared','pending','needs_action')",
+                    ("succeeded" if status == "succeeded" else "canceled", now(),
+                     None if status == "succeeded" else "payment_canceled", local["id"]),
+                )
+        except Exception:
+            # Payment entitlement was already committed; renewal diagnostics can be repaired later.
+            print(json.dumps({"renewal_attempt_update": "deferred", "payment_id": local["id"]}), flush=True)
+
         # Attribution is best-effort and never part of the payment transaction.
         if newly_succeeded:
             mytracker.track_custom_event(
