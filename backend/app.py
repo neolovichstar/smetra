@@ -38,7 +38,7 @@ _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
 REQUIRED_CLOUD_SCHEMA_VERSION = 42
-PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366), "pro_team_month": (249000, 31), "smart_supplier_month": (20000, 31)}
+PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366), "pro_team_month": (249000, 31), "smart_supplier_month": (20000, 31), "lead_tokens_150": (15000, 31)}
 
 
 def yookassa_mode(user=None):
@@ -429,7 +429,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
@@ -1033,6 +1033,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Некорректная настройка автопродления")
             consent_version = None
             if auto_renew_requested:
+                if plan == "lead_tokens_150":
+                    raise ApiError(400, "Покупка токенов не является подпиской и не продлевается автоматически")
                 recurring_enabled = os.getenv("YOOKASSA_RECURRING_ENABLED", "").lower() in ("1", "true", "yes")
                 if mode != "live" or not recurring_enabled:
                     raise ApiError(409, "Автопродление пока недоступно для этого магазина")
@@ -1097,6 +1099,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "pro_year": "Сметра PRO Solo — 366 дней",
                 "pro_team_month": "Сметра PRO Team — 31 день, до 6 участников",
                 "smart_supplier_month": "Сметра «Умный Снабженец» — 31 день",
+                "lead_tokens_150": "Сметра — 150 токенов для открытия одного лида",
             }
             metadata = {"user_id": user["id"], "plan": plan}
             if workspace_id:
