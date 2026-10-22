@@ -22,10 +22,12 @@ from email.message import EmailMessage
 
 try:
     from backend import business, mytracker, revenue
+    from backend.plan_catalog import BILLING_PLANS, CHECKOUT_PLAN_CODES
 except ModuleNotFoundError:
     import business
     import mytracker
     import revenue
+    from plan_catalog import BILLING_PLANS, CHECKOUT_PLAN_CODES
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
@@ -37,8 +39,10 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 47
-PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366), "pro_team_month": (249000, 31), "smart_supplier_month": (20000, 31), "lead_tokens_150": (15000, 31)}
+REQUIRED_CLOUD_SCHEMA_VERSION = 48
+# Includes private legacy codes only for existing-payment reconciliation/refunds.
+# Public checkout validates against CHECKOUT_PLAN_CODES from the canonical catalogue.
+PLANS = BILLING_PLANS
 
 
 def yookassa_mode(user=None):
@@ -639,9 +643,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def api(self, method, path, query, con):
         if path == '/api/billing/pricing' and method == 'GET':
-            experiment,variants=revenue.configuration()
-            cheapest=min(variants.values(),key=lambda v:v['month'])
-            return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment})
+            offer = revenue.pricing(con, user)
+            prices = {code: item["amount_kopecks"] for code, item in offer["plans"].items()}
+            return self.send_json(200, {
+                "month": prices["pro_month"],
+                "year": prices["pro_year"],
+                "pro_plus_month": prices["pro_plus_month"],
+                "pro_team_month": prices["pro_team_month"],
+                "pro_team_year": prices["pro_team_year"],
+                "plans": prices,
+                "catalog": offer["catalog"],
+                "from_price": False,
+                "experiment": offer["experiment"],
+            })
         if path == "/api/cron/assistant" and method == "GET":
             from backend.assistant_jobs import run_one
 
@@ -1046,7 +1060,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             data = self.body()
             plan = data.get("plan")
             key = self.headers.get("Idempotency-Key", "")
-            if not isinstance(plan, str) or plan not in PLANS or not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
+            if not isinstance(plan, str) or plan not in CHECKOUT_PLAN_CODES or not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
                 raise ApiError(400, "Неверный тариф или ключ запроса")
             expected_amount = data.get("expected_amount_kopecks")
             if "expected_amount_kopecks" in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
@@ -1060,8 +1074,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Некорректная настройка автопродления")
             consent_version = None
             if auto_renew_requested:
-                if plan == "lead_tokens_150":
-                    raise ApiError(400, "Покупка токенов не является подпиской и не продлевается автоматически")
                 recurring_enabled = os.getenv("YOOKASSA_RECURRING_ENABLED", "").lower() in ("1", "true", "yes")
                 if mode != "live" or not recurring_enabled:
                     raise ApiError(409, "Автопродление пока недоступно для этого магазина")
@@ -1070,20 +1082,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 consent_version = "smetra-recurring-v1"
 
             workspace_id = None
-            if plan == "lead_tokens_150":
-                team_access = con.execute(
-                    "SELECT 1 FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
-                    "WHERE m.user_id=? AND w.plan='pro_team' AND w.subscription_status='active' AND w.entitlement_until>? LIMIT 1",
-                    (user["id"], now()),
-                ).fetchone()
-                solo_access = user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
-                if not solo_access and not team_access:
-                    raise ApiError(403, "Токены биржи можно купить при активном PRO Solo или PRO Team")
-            if plan in ("pro_team_month", "smart_supplier_month"):
-                if plan == "smart_supplier_month" and not (
-                    user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
-                ):
-                    raise ApiError(403, "Модуль «Умный Снабженец» доступен только при активном PRO Solo")
+            if plan in ("pro_team_month", "pro_team_year"):
                 workspace_id = business.ensure_workspace(con, user)
                 workspace = con.execute(
                     "SELECT id,owner_id FROM workspaces WHERE id=?", (workspace_id,)
@@ -1131,11 +1130,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(409, "Условия оплаты изменились. Обновите тариф.") from None
             amount = intent["amount_kopecks"]
             descriptions = {
-                "pro_month": "Сметра PRO Solo — 31 день",
-                "pro_year": "Сметра PRO Solo — 366 дней",
-                "pro_team_month": "Сметра PRO Team — 31 день, до 6 участников",
-                "smart_supplier_month": "Сметра «Умный Снабженец» — 31 день",
-                "lead_tokens_150": "Сметра — 150 токенов для открытия одного лида",
+                "pro_month": "Сметра PRO Solo — 1 месяц",
+                "pro_year": "Сметра PRO Solo — 1 год",
+                "pro_plus_month": "Сметра PRO Плюс / Снабженец — 1 месяц",
+                "pro_team_month": "Сметра TEAM / Компания — 1 месяц, до 5 участников",
+                "pro_team_year": "Сметра TEAM / Компания — 1 год, до 5 участников",
             }
             metadata = {"user_id": user["id"], "plan": plan}
             if workspace_id:
@@ -1496,20 +1495,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         product_code = {
                             "pro_month": "pro_solo_month",
                             "pro_year": "pro_solo_year",
+                            "pro_plus_month": "pro_plus_month",
                             "pro_team_month": "pro_team_month",
+                            "pro_team_year": "pro_team_year",
                             "smart_supplier_month": "smart_supplier_month",
                         }.get(local["plan"])
                         if not product_code:
                             raise ApiError(409, "Неизвестный оплаченный тариф")
 
-                        if local["plan"] in ("pro_month", "pro_year"):
+                        if local["plan"] in ("pro_month", "pro_year", "pro_plus_month"):
                             entitlement_until = period_start + grant_days * 86400
                             con.execute(
                                 "UPDATE users SET entitlement_until=?,plan='pro' WHERE id=?",
                                 (entitlement_until, local["user_id"]),
                             )
                             subscription_period_start = period_start
-                        elif local["plan"] == "pro_team_month":
+                        elif local["plan"] in ("pro_team_month", "pro_team_year"):
                             workspace_id = terms["workspace_id"] if terms else None
                             workspace = con.execute(
                                 "SELECT id,owner_id,entitlement_until FROM workspaces WHERE id=?",
@@ -1520,7 +1521,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             subscription_period_start = max(int(workspace["entitlement_until"] or 0), now())
                             entitlement_until = subscription_period_start + grant_days * 86400
                             con.execute(
-                                "UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=6 WHERE id=?",
+                                "UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?",
                                 (entitlement_until, workspace_id),
                             )
                         else:
@@ -1563,7 +1564,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 (sub_id, local["user_id"], product_code),
                             ).fetchone()
                         if not existing_sub:
-                            if product_code == "pro_team_month":
+                            if product_code in ("pro_team_month", "pro_team_year"):
                                 existing_sub = con.execute(
                                     "SELECT * FROM billing_subscriptions WHERE user_id=? AND workspace_id=? AND product_code=? AND status IN ('active','past_due','cancel_at_period_end') ORDER BY updated_at DESC LIMIT 1",
                                     (local["user_id"], target_workspace_id, product_code),
@@ -1591,7 +1592,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             consent_at = None
                             consent_version = None
                         next_charge_at = entitlement_until if auto_renew else None
-                        subscription_workspace_id = target_workspace_id if product_code == "pro_team_month" else None
+                        subscription_workspace_id = target_workspace_id if product_code in ("pro_team_month", "pro_team_year") else None
                         if existing_sub:
                             subscription_id = existing_sub["id"]
                             con.execute(
@@ -1618,7 +1619,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
                         # Gift credits remain limited to Solo purchases and provider-confirmed live payments.
                         bonus = int(terms["bonus_ai_messages"] or 0) if terms else 0
-                        if terms and not terms["is_test"] and bonus > 0 and local["plan"] in ("pro_month", "pro_year"):
+                        if terms and not terms["is_test"] and bonus > 0 and local["plan"] in ("pro_month", "pro_year", "pro_plus_month"):
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
                                 (uid(), local["user_id"], local["id"], bonus, bonus, entitlement_until, now()),
@@ -1770,7 +1771,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     grants = con.execute(
                         """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
                         WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
-                        AND p.plan IN ('pro_month','pro_year')
+                        AND p.plan IN ('pro_month','pro_year','pro_plus_month')
                         AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                         ORDER BY p.activated_at,p.created_at,p.id""",
                         (payment["user_id"],),
@@ -1824,7 +1825,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             "UPDATE billing_subscriptions SET status='canceled',auto_renew=FALSE,provider_payment_method_id=NULL,next_charge_at=NULL,cancel_at_period_end=FALSE,canceled_at=?,current_period_end=?,updated_at=? WHERE id=? AND last_payment_id=?",
                             (now(),now(),now(),subscription['id'],payment['id']),
                         )
-                        if subscription['product_code'] == 'pro_team_month' and subscription['workspace_id']:
+                        if subscription['product_code'] in ('pro_team_month','pro_team_year') and subscription['workspace_id']:
                             con.execute(
                                 "UPDATE workspaces SET plan='free',subscription_status='canceled',entitlement_until=?,seat_limit=1 WHERE id=?",
                                 (now(),subscription['workspace_id']),

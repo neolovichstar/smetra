@@ -12,8 +12,11 @@ except ModuleNotFoundError:
 PLAN_BY_PRODUCT = {
     "pro_solo_month": ("pro_month", 31),
     "pro_solo_year": ("pro_year", 366),
-    "smart_supplier_month": ("smart_supplier_month", 31),
+    "pro_plus_month": ("pro_plus_month", 31),
     "pro_team_month": ("pro_team_month", 31),
+    "pro_team_year": ("pro_team_year", 366),
+    # Legacy records remain reconcilable; no new checkout is available for them.
+    "smart_supplier_month": ("smart_supplier_month", 31),
 }
 
 
@@ -53,7 +56,7 @@ def _set_past_due(con, subscription_id, error_code, delay=86400):
 
 def _workspace_for_subscription(con, sub):
     product = sub["product_code"]
-    if product == "pro_team_month":
+    if product in ("pro_team_month", "pro_team_year"):
         return sub["workspace_id"]
     if product == "smart_supplier_month":
         row = con.execute(

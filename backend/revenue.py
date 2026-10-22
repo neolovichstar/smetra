@@ -11,10 +11,23 @@ import secrets
 import time
 import uuid
 
+try:
+    from backend.plan_catalog import PUBLIC_PLANS, PUBLIC_PLAN_CODES
+except ModuleNotFoundError:
+    from plan_catalog import PUBLIC_PLANS, PUBLIC_PLAN_CODES
+
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
-# One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_team_month': 0, 'smart_supplier_month': 0, 'lead_tokens_150': 0}
+# Included assistant bonus credits are issued only after provider-confirmed subscription payments.
+PURCHASE_BONUS_MESSAGES = {
+    'pro_month': 50,
+    'pro_year': 300,
+    'pro_plus_month': 50,
+    'pro_team_month': 0,
+    'pro_team_year': 0,
+    'smart_supplier_month': 0,  # grandfathered billing code only
+    'lead_tokens_150': 0,       # grandfathered billing code only
+}
 
 
 def now():
@@ -36,58 +49,39 @@ def integer_env(key, default, minimum=0, maximum=100_000_000):
 
 
 def configuration():
-    month = integer_env('PRO_MONTH_PRICE_KOPECKS', 49000, 100)
-    year = integer_env('PRO_YEAR_PRICE_KOPECKS', 490000, 100)
-    experiment = os.getenv('PRICING_EXPERIMENT_ID', 'baseline')
-    if not experiment or len(experiment) > 50 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in experiment):
-        raise ValueError('Invalid pricing experiment')
-    variants = json.loads(os.getenv('PRICING_VARIANTS_JSON', '{}'))
-    if not isinstance(variants, dict) or len(variants) > 8:
-        raise ValueError('Invalid pricing variants')
-    if not variants:
-        variants = {'baseline': {'month': month, 'year': year}}
-    for key, amounts in variants.items():
-        if not isinstance(key, str) or not key or len(key) > 40 or not isinstance(amounts, dict):
-            raise ValueError('Invalid pricing variant')
-        for period in ('month', 'year'):
-            value = amounts.get(period)
-            if type(value) is not int or not 100 <= value <= 100_000_000:
-                raise ValueError('Invalid pricing amount')
-        if amounts['year'] >= amounts['month'] * 12:
-            raise ValueError('Annual plan must offer real savings')
-    return experiment, variants
+    """Return a stable catalogue version; live A/B price mutation is intentionally disabled."""
+    return "subscription-catalog-v2", {"fixed": {"month": 49000, "year": 490000}}
 
 
 def pricing(con, user):
-    experiment, variants = configuration()
-    uid = user['id']
-    assigned = con.execute('SELECT variant FROM pricing_assignments WHERE user_id=? AND experiment=?', (uid, experiment)).fetchone()
-    if not assigned:
-        keys = sorted(variants)
-        selected = keys[int(hashlib.sha256((experiment+':'+uid).encode()).hexdigest(), 16) % len(keys)]
-        con.execute('INSERT INTO pricing_assignments(user_id,experiment,variant,created_at) VALUES(?,?,?,?) ON CONFLICT(user_id,experiment) DO NOTHING', (uid, experiment, selected, now()))
-        assigned = con.execute('SELECT variant FROM pricing_assignments WHERE user_id=? AND experiment=?', (uid, experiment)).fetchone()
-    if assigned['variant'] not in variants:
-        # Removing a live cohort cannot silently charge that user another price.
-        raise ValueError('Assigned pricing variant is no longer configured')
-    prices = variants[assigned['variant']]
-    team_month = integer_env('PRO_TEAM_MONTH_PRICE_KOPECKS', 249000, 100)
-    supplier_month = integer_env('SMART_SUPPLIER_MONTH_PRICE_KOPECKS', 20000, 100)
-    launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
+    """Canonical four-tier catalogue; env overrides cannot silently change checkout prices."""
     plans = {
-        'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366},
-        'pro_team_month': {'amount_kopecks': team_month, 'duration_days': 31},
-        'smart_supplier_month': {'amount_kopecks': supplier_month, 'duration_days': 31},
-        'lead_tokens_150': {'amount_kopecks': 15000, 'duration_days': 31},
+        code: {"amount_kopecks": item["amount_kopecks"], "duration_days": item["duration_days"]}
+        for code, item in PUBLIC_PLANS.items()
     }
-    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': plans,
-        'annual_saving_kopecks': prices['month']*12-prices['year'],
-        'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
-        'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
-        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
-
-
+    catalog = []
+    for code, item in PUBLIC_PLANS.items():
+        catalog.append({
+            "code": code,
+            "title": item["title"],
+            "period": item["period"],
+            "tier": item["tier"],
+            "amount_kopecks": item["amount_kopecks"],
+            "duration_days": item["duration_days"],
+            "features": list(item["features"]),
+            "seat_limit": item.get("seat_limit"),
+        })
+    return {
+        "experiment": "subscription-catalog-v2",
+        "variant": "fixed",
+        "plans": plans,
+        "catalog": catalog,
+        "annual_saving_kopecks": plans["pro_month"]["amount_kopecks"] * 12 - plans["pro_year"]["amount_kopecks"],
+        "team_annual_saving_kopecks": plans["pro_team_month"]["amount_kopecks"] * 12 - plans["pro_team_year"]["amount_kopecks"],
+        "purchase_bonus": {code: PURCHASE_BONUS_MESSAGES.get(code, 0) for code in PUBLIC_PLAN_CODES},
+        "launch_offer": None,
+        "limits": {"free_quotes": 10, "free_ai": 3, "pro_ai": 100, "pro_quotes": None},
+    }
 
 def record(con, uid, name, origin='', variant='', key=None):
     key = key or uuid.uuid4().hex

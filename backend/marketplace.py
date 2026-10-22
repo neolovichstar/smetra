@@ -83,14 +83,9 @@ def handle(handler, con, user, method, path, query):
                 select + " ORDER BY published_at DESC,id DESC LIMIT ?",
                 (now, limit),
             ).fetchall()
-        balance = con.execute(
-            "SELECT lead_token_balance FROM users WHERE id=?", (user["id"],)
-        ).fetchone()
         return handler.send_json(200, {
             "items": [_lead(row) for row in rows],
-            "lead_token_balance": int(balance["lead_token_balance"] if balance else 0),
-            "unlock_price_tokens": 150,
-            "topup_plan": "lead_tokens_150",
+            "included_with_subscription": True,
         })
 
     if path == prefix + "leads" and method == "POST":
@@ -184,19 +179,37 @@ def handle(handler, con, user, method, path, query):
         return handler.send_json(201, {"lead": _lead(row)})
 
     if path == prefix + "purchases" and method == "GET":
-        handler.throttle("marketplace-purchases:" + user["id"], 60, 60)
+        handler.throttle("marketplace-unlocks:" + user["id"], 60, 60)
+        active_team = (
+            "SELECT w.id FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+            "WHERE m.user_id=? AND w.plan='pro_team' AND w.subscription_status='active' "
+            "AND w.entitlement_until>?"
+        )
         rows = con.execute(
             "SELECT l.id,l.city,l.property_type,l.area_sqm,l.budget_min_kopecks,l.budget_max_kopecks,"
             "l.description,l.desired_start_date,l.status,l.published_at,l.expires_at,l.created_at,"
-            "p.purchased_at,p.price_kopecks,p.tokens_spent,c.contact_name,c.phone,c.email,c.preferred_contact_method "
+            "g.created_at AS purchased_at,0 AS price_kopecks,0 AS tokens_spent,"
+            "c.contact_name,c.phone,c.email,c.preferred_contact_method "
+            "FROM lead_access_grants g JOIN marketplace_leads l ON l.id=g.lead_id "
+            "JOIN marketplace_lead_contacts c ON c.lead_id=l.id "
+            "WHERE (g.user_id=? OR g.workspace_id IN (" + active_team + ")) "
+            "UNION ALL "
+            "SELECT l.id,l.city,l.property_type,l.area_sqm,l.budget_min_kopecks,l.budget_max_kopecks,"
+            "l.description,l.desired_start_date,l.status,l.published_at,l.expires_at,l.created_at,"
+            "p.purchased_at,p.price_kopecks,p.tokens_spent,"
+            "c.contact_name,c.phone,c.email,c.preferred_contact_method "
             "FROM lead_purchases p JOIN marketplace_leads l ON l.id=p.lead_id "
             "JOIN marketplace_lead_contacts c ON c.lead_id=l.id "
-            "WHERE p.buyer_user_id=? ORDER BY p.purchased_at DESC LIMIT 100",
-            (user["id"],),
+            "WHERE (p.buyer_user_id=? OR p.buyer_workspace_id IN (" + active_team + ")) "
+            "AND NOT EXISTS (SELECT 1 FROM lead_access_grants g WHERE g.lead_id=p.lead_id "
+            "AND (g.user_id=p.buyer_user_id OR g.workspace_id=p.buyer_workspace_id)) "
+            "ORDER BY purchased_at DESC LIMIT 100",
+            (user["id"], user["id"], now, user["id"], user["id"], now),
         ).fetchall()
         return handler.send_json(200, {"items": [
-            {**_lead(row), "purchased_at": row["purchased_at"], "price_kopecks": row["price_kopecks"],
-             "tokens_spent": row["tokens_spent"], "contact": _contact(row)}
+            {**_lead(row), "purchased_at": row["purchased_at"], "unlocked_at": row["purchased_at"],
+             "price_kopecks": row["price_kopecks"], "tokens_spent": row["tokens_spent"],
+             "contact": _contact(row)}
             for row in rows
         ]})
 
@@ -204,11 +217,11 @@ def handle(handler, con, user, method, path, query):
     if len(parts) == 5 and parts[:3] == ["api", "marketplace", "leads"] and parts[4] == "purchase" and method == "POST":
         lead_id = parts[3]
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", lead_id):
-            raise _error(400, "Некорректный идентификатор заказа")
+            raise _error(400, "Некорректный идентификатор заявки")
         idem = handler.headers.get("Idempotency-Key", "")
         if not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", idem):
-            raise _error(400, "Для покупки нужен корректный Idempotency-Key")
-        handler.throttle("marketplace-purchase:" + user["id"], 10, 60)
+            raise _error(400, "Для доступа к контакту нужен корректный Idempotency-Key")
+        handler.throttle("marketplace-unlock:" + user["id"], 10, 60)
         team = con.execute(
             "SELECT w.id FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
             "WHERE m.user_id=? AND w.plan='pro_team' AND w.subscription_status='active' AND w.entitlement_until>? "
@@ -217,54 +230,37 @@ def handle(handler, con, user, method, path, query):
         ).fetchone()
         solo_active = user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now
         if not solo_active and not team:
-            raise _error(403, "Открытие контактов доступно только владельцам активного PRO Solo или участникам PRO Team")
-        workspace_id = team["id"] if team else business.ensure_workspace(con, user)
+            raise _error(403, "Контакты заявок входят в активную подписку PRO Solo, PRO Плюс или TEAM")
+        workspace_id = team["id"] if team else None
+        grant_id = _id()
         stamp = now
-        purchase_id = _id()
         with business.transaction_lock_scope(con, (f"user:{user['id']}", f"lead:{lead_id}")):
             con.execute("BEGIN IMMEDIATE")
             try:
-                existing = con.execute(
-                    "SELECT id,lead_id FROM lead_purchases WHERE buyer_user_id=? AND idempotency_key=?",
+                duplicate_key = con.execute(
+                    "SELECT id,lead_id FROM lead_access_grants WHERE user_id=? AND idempotency_key=?",
                     (user["id"], idem),
                 ).fetchone()
-                if existing and existing["lead_id"] != lead_id:
-                    raise _error(409, "Этот ключ идемпотентности уже использован для другого заказа")
+                if duplicate_key and duplicate_key["lead_id"] != lead_id:
+                    raise _error(409, "Этот ключ доступа уже использован для другой заявки")
+                existing = duplicate_key or con.execute(
+                    "SELECT id,lead_id FROM lead_access_grants WHERE lead_id=? AND (user_id=? OR workspace_id=?)",
+                    (lead_id, user["id"], workspace_id),
+                ).fetchone()
                 if not existing:
-                    existing = con.execute(
-                        "SELECT id FROM lead_purchases WHERE lead_id=? AND buyer_user_id=?",
-                        (lead_id, user["id"]),
-                    ).fetchone()
-                if existing:
-                    purchase_id = existing["id"]
-                else:
                     lead = con.execute(
-                        "SELECT id FROM marketplace_leads WHERE id=? AND status='published' "
+                        "SELECT id,created_by FROM marketplace_leads WHERE id=? AND status='published' "
                         "AND (expires_at IS NULL OR expires_at>?)",
                         (lead_id, stamp),
                     ).fetchone()
                     if not lead:
-                        raise _error(404, "Опубликованный заказ не найден или срок публикации истёк")
-                    changed = con.execute(
-                        "UPDATE users SET lead_token_balance=lead_token_balance-150,lead_token_balance_updated_at=? "
-                        "WHERE id=? AND lead_token_balance>=150 AND deleted_at IS NULL AND blocked=0",
-                        (stamp, user["id"]),
-                    )
-                    if changed.rowcount != 1:
-                        raise _error(402, "Недостаточно токенов. Пополните баланс пакетом 150 токенов за 150 ₽.")
-                    balance = con.execute(
-                        "SELECT lead_token_balance FROM users WHERE id=?", (user["id"],)
-                    ).fetchone()["lead_token_balance"]
+                        raise _error(404, "Опубликованная заявка не найдена или срок публикации истёк")
+                    if lead["created_by"] == user["id"]:
+                        raise _error(409, "Нельзя открывать собственную заявку")
                     con.execute(
-                        "INSERT INTO lead_purchases(id,lead_id,buyer_user_id,buyer_workspace_id,price_kopecks,tokens_spent,idempotency_key,purchased_at) "
-                        "VALUES(?,?,?,?,15000,150,?,?)",
-                        (purchase_id, lead_id, user["id"], workspace_id, idem, stamp),
-                    )
-                    con.execute(
-                        "INSERT INTO lead_token_ledger(id,user_id,delta_tokens,balance_after,entry_type,source,source_id,idempotency_key,created_at) "
-                        "VALUES(?,?,?,?,?,?,?,?,?)",
-                        (_id(), user["id"], -150, balance, "purchase", "marketplace_lead", purchase_id,
-                         "lead-purchase:" + purchase_id, stamp),
+                        "INSERT INTO lead_access_grants(id,lead_id,user_id,workspace_id,idempotency_key,created_at) "
+                        "VALUES(?,?,?,?,?,?) ON CONFLICT(lead_id,user_id) DO NOTHING",
+                        (grant_id, lead_id, user["id"], workspace_id, idem, stamp),
                     )
                 con.execute("COMMIT")
             except Exception:
@@ -273,17 +269,19 @@ def handle(handler, con, user, method, path, query):
         row = con.execute(
             "SELECT l.id,l.city,l.property_type,l.area_sqm,l.budget_min_kopecks,l.budget_max_kopecks,"
             "l.description,l.desired_start_date,l.status,l.published_at,l.expires_at,l.created_at,"
-            "p.purchased_at,p.price_kopecks,p.tokens_spent,c.contact_name,c.phone,c.email,c.preferred_contact_method "
-            "FROM lead_purchases p JOIN marketplace_leads l ON l.id=p.lead_id "
+            "g.created_at AS purchased_at,0 AS price_kopecks,0 AS tokens_spent,"
+            "c.contact_name,c.phone,c.email,c.preferred_contact_method "
+            "FROM lead_access_grants g JOIN marketplace_leads l ON l.id=g.lead_id "
             "JOIN marketplace_lead_contacts c ON c.lead_id=l.id "
-            "WHERE p.id=? AND p.buyer_user_id=?",
-            (purchase_id, user["id"]),
+            "WHERE g.lead_id=? AND (g.user_id=? OR g.workspace_id=?)",
+            (lead_id, user["id"], workspace_id),
         ).fetchone()
         if not row:
-            raise _error(404, "Покупка не найдена")
+            raise _error(404, "Доступ к заявке не найден")
         return handler.send_json(200, {
             "lead": _lead(row), "purchased_at": row["purchased_at"],
-            "price_kopecks": row["price_kopecks"], "tokens_spent": row["tokens_spent"],
+            "unlocked_at": row["purchased_at"], "price_kopecks": 0,
+            "tokens_spent": 0, "included_with_subscription": True,
             "contact": _contact(row),
         })
 

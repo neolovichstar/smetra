@@ -529,6 +529,10 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    if not con.execute("SELECT 1 FROM schema_migrations WHERE version=34").fetchone():
+        con.executescript(
+            (Path(__file__).parent / "migrations" / "031_subscription_catalog_and_lead_access.sql").read_text(encoding="utf-8")
+        )
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_assistant_jobs_ad_reward ON assistant_jobs(ad_reward_id) WHERE ad_reward_id IS NOT NULL"
     )
