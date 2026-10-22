@@ -1697,8 +1697,7 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
 .workspace-page .workspace-modes{grid-column:2;grid-row:1;justify-self:center;margin:0!important}
 .workspace-page .app-nav-actions{grid-column:3;grid-row:1;justify-self:end;gap:8px!important;margin:0!important}
 .workspace-page #header-user{display:none!important}
-.workspace-page #theme{min-width:40px;min-height:40px;width:40px;height:40px;padding:0!important;font-size:0!important;border-radius:50%!important}
-.workspace-page #theme::before{content:"";width:17px;height:17px;display:block;margin:auto;background:currentColor;mask:url('/assets/icons/sun.svg') center/contain no-repeat;-webkit-mask:url('/assets/icons/sun.svg') center/contain no-repeat}
+.workspace-page #theme{display:none!important}
 .workspace-page .nav-search{border-radius:50%!important;width:42px;min-width:42px;height:42px;min-height:42px;padding:0!important;justify-content:center}
 .workspace-page .nav-search span,.workspace-page .nav-search kbd{display:none!important}
 .workspace-page .nav-search::before{content:"";display:block;width:18px;height:18px;background:currentColor;mask:url('/assets/icons/magnifying-glass.svg') center/contain no-repeat;-webkit-mask:url('/assets/icons/magnifying-glass.svg') center/contain no-repeat}
@@ -1733,7 +1732,7 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
   border:1px solid transparent!important;border-radius:11px!important;background:transparent!important;
   color:var(--smetra-text-muted)!important;text-align:left;font-size:12px!important;
 }
-.workspace-page .sidebar-disclosure::after{content:"";width:15px;height:15px;flex:0 0 15px;opacity:.75;background:currentColor;mask:url('/assets/icons/chevron-down.svg') center/contain no-repeat;-webkit-mask:url('/assets/icons/chevron-down.svg') center/contain no-repeat;transition:transform 180ms ease,opacity 180ms ease}
+.workspace-page .sidebar-disclosure::after{content:"";width:8px;height:8px;flex:0 0 8px;margin:0 4px 3px 0;opacity:.75;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);transition:transform 180ms ease,opacity 180ms ease}
 .workspace-page .sidebar-disclosure[aria-expanded="true"]{color:var(--smetra-text)!important;background:rgba(255,255,255,.035)!important}
 .workspace-page .sidebar-disclosure[aria-expanded="true"]::after{transform:rotate(180deg)}
 .workspace-page .sidebar-group-items{display:flex!important;flex-direction:column;gap:2px;overflow:hidden;opacity:1;transform:none;transition:opacity 180ms ease,transform 180ms ease}
