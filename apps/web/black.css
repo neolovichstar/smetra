@@ -181,3 +181,25 @@ body.public-quote-mode .nav .links,body.public-quote-mode .nav .btn{display:none
   #public-quote .quote-summary strong{font-size:25px}
   #public-quote .public-branding{align-items:flex-start;flex-direction:column}
 }
+
+
+/* Smetra landing: floating frosted navigation, tactile pill controls and no jitter. */
+.black-landing .nav{position:sticky;top:12px;z-index:110;width:calc(100% - clamp(24px,4vw,64px));margin:12px auto 0;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(15,15,18,.68)!important;backdrop-filter:blur(26px) saturate(150%);box-shadow:inset 0 1px 0 rgba(255,255,255,.075),0 12px 36px rgba(0,0,0,.24);transition:background-color 180ms,border-color 180ms}
+.black-landing .nav .container{width:100%;max-width:none;padding-inline:clamp(14px,2vw,28px)}
+.black-landing .nav-inner{min-height:66px!important}.black-landing .nav .brand{font-size:23px;letter-spacing:-1.1px}.black-landing .nav .links{gap:clamp(14px,2.2vw,30px)}
+.black-landing .nav .links a{padding:9px 11px;border-radius:999px;color:#bebec7;transition:background-color 170ms,color 170ms}.black-landing .nav .links a:hover{background:rgba(255,255,255,.055);color:#fff}
+.black-landing .btn{border-radius:999px!important;border-color:rgba(255,255,255,.13)!important;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(186,174,246,.045))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)!important;transition:background-color 180ms,border-color 180ms,box-shadow 180ms,color 180ms!important;text-decoration:none!important}
+.black-landing .btn:hover:not(:disabled){background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(157,224,193,.08))!important;border-color:rgba(255,255,255,.23)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.075),0 7px 23px rgba(0,0,0,.16)!important;transform:none!important}
+.black-landing .btn:active{transform:none!important}.black-landing .btn.primary{color:#19171e!important;border-color:rgba(255,255,255,.48)!important;background:linear-gradient(125deg,#e6deff,#d5f0e3)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.82),0 7px 23px rgba(157,145,207,.1)!important}
+.black-landing .btn.primary:hover:not(:disabled){background:linear-gradient(125deg,#f0eaff,#e1f6ea)!important}.black-landing a{text-decoration:none}
+.black-landing .black-hero{padding-top:clamp(58px,8vh,88px)}.black-landing .hero-art img{animation:none!important;transform:none!important}
+.black-landing .preview-steps button{border:1px solid transparent;border-radius:14px;background:transparent;padding:15px 16px;transition:background-color 180ms,border-color 180ms,color 180ms}
+.black-landing .preview-steps button[aria-selected="true"]{border-color:rgba(190,178,240,.18);border-left:1px solid rgba(190,178,240,.25);background:linear-gradient(120deg,rgba(190,176,255,.1),rgba(150,220,190,.055));color:#f6f4ff}
+.black-landing .plan-switch{gap:6px;border:0;margin-block:25px}.black-landing .plan-switch button{min-height:39px;padding:8px 15px;border:1px solid transparent!important;border-radius:999px;background:transparent;color:#9b9ba5;transition:background-color 170ms,color 170ms}
+.black-landing .plan-switch button[aria-selected="true"]{border-color:rgba(255,255,255,.1)!important;background:linear-gradient(135deg,rgba(190,176,255,.15),rgba(153,222,192,.09));color:#f4f2ff;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.black-landing .preview-steps small{line-height:1.55}.black-landing .open-benefits li:before{border-left-color:#a5dfbd;border-bottom-color:#a5dfbd}
+.black-landing .assistant-mark{background:linear-gradient(135deg,#c7b6ff,#9ddfba);box-shadow:0 0 15px rgba(177,170,238,.18)}
+.black-landing .conversation-preview .proposal,.black-landing .feature-list article{border-top-color:rgba(255,255,255,.12)}
+.black-landing :is(.document-total,.document-top,.open-price){font-variant-numeric:tabular-nums}.black-landing :is(.overline,.feature-number){letter-spacing:.09em}
+@media(max-width:760px){.black-landing .nav{width:calc(100% - 20px);top:7px;margin-top:7px;border-radius:24px}.black-landing .nav-inner{min-height:58px!important}.black-landing .nav .container{padding-inline:12px}.black-landing .nav .links{gap:3px}.black-landing .nav .links a{font-size:11px;padding:8px 7px}.black-landing .nav .brand{font-size:21px}.black-landing .nav .btn{min-height:38px;padding:8px 12px;font-size:11px}}
+

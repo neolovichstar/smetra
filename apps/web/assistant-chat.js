@@ -44,7 +44,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
-        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="btn primary" id="assistant-send" type="submit" aria-label="Отправить сообщение">↗</button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
+        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button is-voice" id="assistant-send" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" data-ui-icon="microphone" data-ui-icon-only="true"><span class="visually-hidden">Голосовой ввод</span></button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
       </div>
     </div>
@@ -118,6 +118,61 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   assistantForm.insertBefore(jobList,input);
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
+  const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let voiceRecognition=null,voiceListening=false,voiceText='',voiceError=false;
+  const syncSendButton=()=>{
+    const hasText=Boolean(input.value.trim()),icon=hasText?'arrow-up':'microphone';
+    send.type=hasText?'submit':'button';
+    send.dataset.uiIcon=icon;
+    send.style.setProperty('--ui-icon',"url('/assets/icons/"+icon+".svg')");
+    send.classList.toggle('is-voice',!hasText);
+    send.classList.toggle('has-message',hasText);
+    send.classList.toggle('is-recording',voiceListening);
+    send.setAttribute('aria-label',hasText?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
+    send.title=hasText?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
+    send.setAttribute('aria-pressed',String(!hasText&&voiceListening));
+  };
+  const startVoiceInput=()=>{
+    if(voiceListening){voiceRecognition?.stop();return}
+    if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в Chrome.';return}
+    try{
+      if(!voiceRecognition){
+        voiceRecognition=new SpeechRecognitionAPI();
+        voiceRecognition.lang='ru-RU';voiceRecognition.interimResults=true;voiceRecognition.continuous=true;voiceRecognition.maxAlternatives=1;
+        voiceRecognition.onstart=()=>{voiceListening=true;voiceText='';voiceError=false;syncSendButton();status.textContent='Слушаю… Нажмите микрофон, чтобы завершить.'};
+        voiceRecognition.onresult=event=>{
+          const finalParts=[],interimParts=[];
+          for(let i=0;i<event.results.length;i++){
+            const result=event.results[i],transcript=result[0]?.transcript?.trim();
+            if(transcript&&result.isFinal)finalParts.push(transcript);
+          }
+          voiceText=finalParts.join(' ').replace(/\s+/g,' ').trim();
+          for(let i=event.resultIndex;i<event.results.length;i++){
+            const result=event.results[i],transcript=result[0]?.transcript?.trim();
+            if(transcript&&!result.isFinal)interimParts.push(transcript);
+          }
+          status.textContent=interimParts.length?'Распознаю: '+interimParts.join(' '):'Слушаю… Нажмите микрофон, чтобы завершить.'
+        };
+        voiceRecognition.onerror=event=>{
+          voiceError=true;
+          status.textContent=event.error==='not-allowed'?'Разрешите доступ к микрофону в настройках браузера.':event.error==='no-speech'?'Не расслышал речь. Нажмите микрофон и попробуйте ещё раз.':'Голосовой ввод прерван. Попробуйте ещё раз.'
+        };
+        voiceRecognition.onend=()=>{
+          const transcript=voiceText.trim();voiceListening=false;
+          if(transcript){
+            const current=input.value.trim();
+            input.value=[current,transcript].filter(Boolean).join(current?' ':'');
+            input.dispatchEvent(new Event('input',{bubbles:true}));
+            input.focus({preventScroll:true})
+          }
+          if(!voiceError)status.textContent=transcript?'Текст распознан — проверьте и отправьте.':'Голосовой ввод завершён.';
+          syncSendButton()
+        };
+      }
+      voiceError=false;voiceText='';voiceRecognition.start()
+    }catch(error){voiceListening=false;syncSendButton();status.textContent='Не удалось включить микрофон. Проверьте разрешения браузера.'}
+  };
+  send.addEventListener('click',()=>{if(send.type==='button')startVoiceInput()});
   const quotaLabel=document.querySelector('#assistant-quota');
   const upgrade=document.querySelector('#assistant-upgrade');
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
@@ -420,7 +475,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});
       clearSentDraft(text);jobRequest=null;
       if(!active())return;
-      renderQuota(result.quota);input.value='';resize();status.textContent='В очереди · можно закрыть страницу';refreshJobs();
+      renderQuota(result.quota);input.value='';resize();syncSendButton();status.textContent='В очереди · можно закрыть страницу';refreshJobs();
     }catch(error){if(active()){status.textContent=error.message;notify(error.message)}}
     finally{working=false;if(active()){renderQuota(quota);if(!input.disabled)input.focus()}}
   };
@@ -452,7 +507,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   refreshFile();
   if(!thread.messages.length){
     messages.innerHTML='<div class="assistant-welcome"><span class="assistant-welcome-line" aria-hidden="true"></span><h2>С чего начнём?</h2><p>Помогу со сметами, проектами и оплатами.</p><div class="assistant-suggestions"><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали." data-ui-icon="file-text">Составить смету</button><button type="button" data-prompt="Какие сметы ожидают согласования?" data-ui-icon="check-square">Проверить согласования</button><button type="button" data-prompt="Покажи поступления и остатки по заказам." data-ui-icon="wallet">Разобраться в оплатах</button></div></div>';
-    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize();renderQuota(quota)});
+    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize();syncSendButton();renderQuota(quota)});
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
@@ -460,7 +515,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<1)status.textContent='Лимит исчерпан: обычные и фоновые сообщения используют общий месячный лимит. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
-  input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota)});resize();
+  input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
     event.preventDefault();const prompt=input.value.trim();if(!prompt||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
@@ -492,7 +547,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
       if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.');
-      assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);resize();
+      assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);resize();syncSendButton();
     }catch(error){
       if(error.name==='AbortError'){assistantMessage.item.classList.remove('streaming');if(!generated){assistantMessage.item.remove();userMessage.item.remove()}status.textContent='Ответ остановлен.'}
       else{userMessage.item.remove();assistantMessage.item.remove();status.textContent=error.message}
