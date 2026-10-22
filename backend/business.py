@@ -520,6 +520,9 @@ def migrate(con):
         con.execute(
             "ALTER TABLE assistant_jobs ADD COLUMN ad_reward_id TEXT REFERENCES assistant_ad_reward_credits(id) ON DELETE SET NULL"
         )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_assistant_jobs_ad_reward ON assistant_jobs(ad_reward_id) WHERE ad_reward_id IS NOT NULL"
+    )
     billing_intent_columns = {row["name"] for row in con.execute("PRAGMA table_info(billing_intents)")}
     if "subscription_id" not in billing_intent_columns:
         con.execute(
