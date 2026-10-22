@@ -336,6 +336,40 @@ def migrate(con):
         for name, definition in additions.items():
             if name not in present:
                 con.execute("ALTER TABLE "+table+" ADD COLUMN "+name+" "+definition)
+    # B2B monetization columns are additive so existing accounts and estimates keep their IDs.
+    for table, additions in {
+        "users": {
+            "lead_token_balance": "INTEGER NOT NULL DEFAULT 0",
+            "lead_token_balance_updated_at": "INTEGER NOT NULL DEFAULT 0",
+        },
+        "workspaces": {
+            "plan": "TEXT NOT NULL DEFAULT 'free'",
+            "subscription_status": "TEXT NOT NULL DEFAULT 'inactive'",
+            "entitlement_until": "INTEGER NOT NULL DEFAULT 0",
+            "seat_limit": "INTEGER NOT NULL DEFAULT 1",
+            "smart_supplier_enabled": "INTEGER NOT NULL DEFAULT 0",
+            "smart_supplier_until": "INTEGER NOT NULL DEFAULT 0",
+        },
+        "quote_items": {
+            "supplier_status": "TEXT NOT NULL DEFAULT 'not_started'",
+            "marketplace_product_id": "TEXT REFERENCES catalog_items(id) ON DELETE SET NULL",
+            "supplier_paid_kopecks": "INTEGER NOT NULL DEFAULT 0",
+            "supplier_due_kopecks": "INTEGER NOT NULL DEFAULT 0",
+            "supplier_notes": "TEXT NOT NULL DEFAULT ''",
+            "supplier_updated_at": "INTEGER NOT NULL DEFAULT 0",
+        },
+        "billing_intents": {
+            "workspace_id": "TEXT REFERENCES workspaces(id) ON DELETE SET NULL",
+            "auto_renew_requested": "INTEGER NOT NULL DEFAULT 0",
+            "renewal_consent_at": "INTEGER",
+            "renewal_consent_version": "TEXT",
+        },
+    }.items():
+        present = {row["name"] for row in con.execute(f"PRAGMA table_info({table})")}
+        for name, definition in additions.items():
+            if name not in present:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
     columns = {
         "workspace_id": "TEXT REFERENCES workspaces(id)",
         "client_id": "TEXT REFERENCES clients(id) ON DELETE SET NULL",
@@ -459,6 +493,23 @@ def migrate(con):
         (Path(__file__).parent / "migrations" / "025_ai_draft_provenance.sql").read_text(
             encoding="utf-8"
         )
+    )
+
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_b2b_monetization.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    billing_intent_columns = {row["name"] for row in con.execute("PRAGMA table_info(billing_intents)")}
+    if "subscription_id" not in billing_intent_columns:
+        con.execute(
+            "ALTER TABLE billing_intents ADD COLUMN subscription_id TEXT REFERENCES billing_subscriptions(id) ON DELETE SET NULL"
+        )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_intents_workspace ON billing_intents(workspace_id) WHERE workspace_id IS NOT NULL"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_intents_subscription ON billing_intents(subscription_id) WHERE subscription_id IS NOT NULL"
     )
 
 
