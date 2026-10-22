@@ -1442,7 +1442,7 @@
 .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-tool-label{display:none!important}
 .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-history-panel{display:none}
 .workspace-page .assistant-studio.assistant-tools-collapsed #assistant-history-toggle{display:flex}
-.workspace-page .assistant-studio.is-history-expanded .assistant-history-panel{
+.workspace-page .assistant-studio.assistant-tools-collapsed.is-history-expanded .assistant-history-panel{
   position:absolute;z-index:110;top:74px;bottom:10px;left:calc(100% + 8px);
   display:flex;width:min(300px,calc(100vw - 84px));max-width:calc(100vw - 70px);
   margin:0;padding:12px;border:1px solid #333336;border-radius:12px;
