@@ -19,9 +19,10 @@ final class NativeSessionWork {
     NativeSessionWork(Executor executor, Supplier<String> token, IntSupplier page) {
         this.executor=executor; this.token=token; this.page=page;
     }
-    void execute(Runnable action) {
+    void execute(Runnable action) { executeOn(executor, action); }
+    void executeOn(Executor target, Runnable action) {
         Snapshot captured=new Snapshot(token.get(),page.getAsInt());
-        executor.execute(()->{
+        target.execute(()->{
             if(!accepts(captured))return;
             context.set(captured);
             try { action.run(); } finally { context.remove(); }

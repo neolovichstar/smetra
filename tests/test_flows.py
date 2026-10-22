@@ -119,6 +119,30 @@ class FlowTests(unittest.TestCase):
             with self.assertRaises(self.mod.ApiError):
                 self.mod.Handler.verify_yookassa_shop(None, valid)
 
+    def test_sqlite_wal_mode_is_initialized_once_per_database_file(self):
+        original_path = self.mod.DB_PATH
+        with tempfile.TemporaryDirectory() as directory:
+            self.mod.DB_PATH = Path(directory) / "wal-once.sqlite3"
+            executed = []
+            connect = self.mod.sqlite3.connect
+
+            def traced_connect(*args, **kwargs):
+                connection = connect(*args, **kwargs)
+                connection.set_trace_callback(executed.append)
+                return connection
+
+            try:
+                with patch.object(self.mod.sqlite3, "connect", side_effect=traced_connect):
+                    for _ in range(4):
+                        with self.mod.db() as con:
+                            self.assertEqual(con.execute("SELECT 1").fetchone()[0], 1)
+                    with self.mod.db() as con:
+                        self.assertEqual(str(con.execute("PRAGMA journal_mode").fetchone()[0]).lower(), "wal")
+                switches = [sql for sql in executed if sql.strip().upper() == "PRAGMA JOURNAL_MODE=WAL"]
+                self.assertEqual(len(switches), 1, "WAL mode should be configured once, not on every request")
+            finally:
+                self.mod.DB_PATH = original_path
+
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()

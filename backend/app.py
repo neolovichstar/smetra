@@ -34,6 +34,8 @@ PORT = int(os.getenv("PORT", "8080"))
 ORIGIN = os.getenv("PUBLIC_ORIGIN", "https://" + os.environ['VERCEL_URL'] if os.getenv('VERCEL_URL') else f"http://localhost:{PORT}").rstrip("/")
 COOKIE_SECURE = ORIGIN.startswith("https://")
 _LOCK = threading.RLock()
+_SQLITE_WAL_LOCK = threading.Lock()
+_SQLITE_WAL_FILES = set()
 RATE = {}
 REQUIRED_CLOUD_SCHEMA_VERSION = 39
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
@@ -72,8 +74,21 @@ def db():
     try:
         con.row_factory = sqlite3.Row
         con.execute("PRAGMA foreign_keys=ON")
-        con.execute("PRAGMA journal_mode=WAL")
         con.execute("PRAGMA busy_timeout=10000")
+        # WAL is persistent in SQLite's database file. Reissuing the mode-change
+        # pragma for every HTTP request needlessly enters SQLite's journal-mode
+        # coordination path and can contend with concurrent readers/writers.
+        # Track the file identity (not just the path) so a replaced test/database
+        # file is configured again without repeating this work on warm requests.
+        if str(DB_PATH) != ":memory:":
+            stat = DB_PATH.stat()
+            wal_key = (str(DB_PATH.resolve()), stat.st_dev, stat.st_ino)
+            if wal_key not in _SQLITE_WAL_FILES:
+                with _SQLITE_WAL_LOCK:
+                    if wal_key not in _SQLITE_WAL_FILES:
+                        mode = con.execute("PRAGMA journal_mode=WAL").fetchone()
+                        if mode and str(mode[0]).lower() == "wal":
+                            _SQLITE_WAL_FILES.add(wal_key)
         with con:
             yield con
     finally:
