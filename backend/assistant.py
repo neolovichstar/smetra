@@ -8,7 +8,7 @@ import time
 import urllib.error
 import urllib.request
 import datetime as dt
-from backend.business import DomainError, identity, packed, stamp, string, transaction
+from backend.business import DomainError, business_date, identity, packed, stamp, string, transaction
 
 ENTITIES = (
     "quotes",
@@ -98,7 +98,17 @@ def quota(service):
             "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (key,)
         ).fetchone()
         bonus_used = int(usage["count"] or 0) if usage else 0
-    limit = base_limit + referral_limit + bonus_remaining + bonus_used
+    ad_reward_remaining = 0
+    ad_reward_total = 0
+    if not paid:
+        ad_rewards = service.con.execute(
+            "SELECT coalesce(sum(remaining),0) AS remaining,coalesce(sum(amount),0) AS total "
+            "FROM assistant_ad_rewards WHERE user_id=? AND expires_at>?",
+            (service.user["id"], stamp()),
+        ).fetchone()
+        ad_reward_remaining = int(ad_rewards["remaining"] or 0)
+        ad_reward_total = int(ad_rewards["total"] or 0)
+    limit = base_limit + referral_limit + bonus_remaining + bonus_used + ad_reward_total
     return {
         "plan": "pro" if paid else "free",
         "period": period,
@@ -106,6 +116,7 @@ def quota(service):
         "used": used,
         "remaining": max(0, limit - used),
         "purchase_bonus_remaining": bonus_remaining,
+        "ad_reward_remaining": ad_reward_remaining,
         "resets_at": int(next_month.timestamp()),
         "base_limit": base_limit,
         "referral_limit": referral_limit,
@@ -150,6 +161,29 @@ def reserve_in_transaction(service):
         )
         return {"key": key, "bonus_grant_id": None}
 
+    # Rewarded ads are only available on the free plan. The Yandex SDK does not
+    # provide server-side reward validation, so the backend enforces a strict
+    # one-grant-per-account-per-Moscow-day cap and consumes every grant atomically.
+    if current["plan"] == "free" and current["ad_reward_remaining"] > 0:
+        ad_grant = service.con.execute(
+            "SELECT id FROM assistant_ad_rewards WHERE user_id=? AND remaining>0 AND expires_at>? "
+            "ORDER BY expires_at,created_at,id LIMIT 1",
+            (service.user["id"], stamp()),
+        ).fetchone()
+        if ad_grant:
+            updated_ad = service.con.execute(
+                "UPDATE assistant_ad_rewards SET remaining=remaining-1 "
+                "WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
+                (ad_grant["id"], stamp()),
+            ).fetchone()
+            if not updated_ad:
+                raise DomainError(429, "Бонусные сообщения уже использованы. Обновите страницу.")
+            service.con.execute(
+                "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
+                "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
+                (key, stamp()),
+            )
+            return {"key": key, "bonus_grant_id": None, "ad_reward_id": ad_grant["id"]}
     grant = service.con.execute(
         "SELECT id FROM assistant_bonus_grants WHERE user_id=? AND remaining>0 AND expires_at>? ORDER BY expires_at,created_at,id LIMIT 1",
         (service.user["id"], stamp()),
@@ -172,7 +206,7 @@ def reserve_in_transaction(service):
         "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_bonus_usage.count+1,updated_at=excluded.updated_at",
         (key, service.user["id"], stamp()),
     )
-    return {"key": key, "bonus_grant_id": grant["id"]}
+    return {"key": key, "bonus_grant_id": grant["id"], "ad_reward_id": None}
 
 
 def release(service, reservation):
@@ -190,6 +224,13 @@ def release(service, reservation):
             service.con.execute(
                 "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
                 (stamp(), key),
+            )
+        ad_reward_id = reservation.get("ad_reward_id") if isinstance(reservation, dict) else None
+        if ad_reward_id:
+            service.con.execute(
+                "UPDATE assistant_ad_rewards SET remaining=remaining+1 "
+                "WHERE id=? AND remaining<amount AND expires_at>?",
+                (ad_reward_id, stamp()),
             )
 
 
@@ -1053,6 +1094,53 @@ class ChatStream:
 
 
 def route(service, method, parts, data):
+    if parts == ["ad-reward"]:
+        if method == "GET":
+            unit_id = os.getenv("YANDEX_REWARDED_AD_UNIT_ID", "").strip()
+            current = quota(service)
+            today = business_date().isoformat()
+            claimed = service.con.execute(
+                "SELECT id FROM assistant_ad_rewards WHERE user_id=? AND reward_date=?",
+                (service.user["id"], today),
+            ).fetchone()
+            paid = current["plan"] == "pro"
+            enabled = bool(unit_id)
+            eligible = enabled and not paid and current["remaining"] <= 0 and not claimed
+            return 200, {
+                "enabled": enabled,
+                "available": bool(eligible),
+                "claimed_today": bool(claimed),
+                "amount": 3,
+                "ad_unit_id": unit_id if eligible else "",
+                "quota": public_quota(service),
+            }
+        if method != "POST":
+            raise DomainError(405, "Получение бонуса требует POST")
+        if not os.getenv("YANDEX_REWARDED_AD_UNIT_ID", "").strip():
+            raise DomainError(503, "Рекламный блок ещё не подключён")
+        current = quota(service)
+        if current["plan"] != "free":
+            raise DomainError(403, "Бонус за просмотр доступен только на бесплатном тарифе")
+        if current["remaining"] > 0:
+            raise DomainError(409, "Сначала израсходуйте бесплатные запросы")
+        today = business_date().isoformat()
+        grant_id = identity()
+        now = stamp()
+        # Unique(user_id, reward_date) prevents multiple claims across devices and instances.
+        # Yandex Mobile Ads has no server-side reward validation; the daily cap limits client-side abuse.
+        with transaction(service.con, lock_scopes=(f"user:{service.user['id']}",)):
+            service.con.execute(
+                "INSERT OR IGNORE INTO assistant_ad_rewards "
+                "(id,user_id,reward_date,amount,remaining,created_at,expires_at) VALUES(?,?,?,3,3,?,?)",
+                (grant_id, service.user["id"], today, now, now + 86400),
+            )
+            saved = service.con.execute(
+                "SELECT id FROM assistant_ad_rewards WHERE user_id=? AND reward_date=?",
+                (service.user["id"], today),
+            ).fetchone()
+            if not saved or saved["id"] != grant_id:
+                raise DomainError(409, "Бонус за сегодня уже получен")
+        return 200, {"granted": 3, "quota": public_quota(service)}
     if method == "GET" and len(parts) == 3 and parts[0] == "actions" and parts[2] == "preview.pdf":
         from backend.assistant_resources import document_preview
 

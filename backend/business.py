@@ -460,6 +460,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_assistant_ad_rewards.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {

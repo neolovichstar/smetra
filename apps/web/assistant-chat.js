@@ -40,7 +40,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const historyExpanded=Boolean(document.querySelector('.assistant-studio.is-history-expanded'));
   view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}${historyExpanded?' is-history-expanded':''}">
     <div class="assistant-main-column">
-      <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
+      <header class="assistant-header" aria-label="Лимит ассистента"><span id="assistant-quota" class="assistant-quota"></span></header>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
@@ -94,11 +94,40 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       </div>
     </aside>
   </section>`);
+  const assistantStudioRoot=document.querySelector('.assistant-studio');
+  const assistantMainColumn=assistantStudioRoot?.querySelector('.assistant-main-column');
+  const assistantToolRail=assistantStudioRoot?.querySelector('.assistant-toolrail');
+  const assistantContentHost=assistantStudioRoot?.querySelector('.assistant-content');
+  const assistantAppShell=document.querySelector('.app-shell');
+  const assistantMainHost=document.querySelector('#content.main');
+  const positionAssistantToolRail=()=>{
+    if(!assistantStudioRoot?.isConnected||!assistantToolRail?.isConnected)return;
+    const compact=window.matchMedia?window.matchMedia('(max-width:800px)').matches:window.innerWidth<=800;
+    if(compact){
+      if(assistantMainColumn&&assistantContentHost&&assistantToolRail.parentElement!==assistantMainColumn)assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
+    }else if(assistantAppShell&&assistantMainHost&&assistantToolRail.parentElement!==assistantAppShell){
+      assistantAppShell.insertBefore(assistantToolRail,assistantMainHost);
+    }
+  };
+  const cleanupAssistantToolRail=()=>{
+    window.removeEventListener('resize',positionAssistantToolRail);
+    document.removeEventListener('smetra:before-view',cleanupAssistantToolRail);
+  };
+  document.addEventListener('smetra:before-view',cleanupAssistantToolRail,{once:true});
+  window.addEventListener('resize',positionAssistantToolRail,{passive:true});
+  positionAssistantToolRail();
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
+  const syncAssistantConversationState=()=>{
+    if(!assistantStudioRoot||!messages?.isConnected)return;
+    assistantStudioRoot.classList.toggle('has-conversation',Boolean(messages.querySelector('.assistant-message.user')));
+  };
+  const conversationObserver=new MutationObserver(syncAssistantConversationState);
+  conversationObserver.observe(messages,{childList:true,subtree:true});
+  syncAssistantConversationState();
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
   attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
   attachmentBar.querySelector('span').textContent='PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
@@ -119,7 +148,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
-  let voiceRecognition=null,voiceListening=false,voiceText='',voiceError=false;
+  let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   const syncSendButton=()=>{
     const hasText=Boolean(input.value.trim()),icon=hasText?'arrow-up':'microphone';
     send.type=hasText?'submit':'button';
@@ -127,50 +156,72 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     send.style.setProperty('--ui-icon',"url('/assets/icons/"+icon+".svg')");
     send.classList.toggle('is-voice',!hasText);
     send.classList.toggle('has-message',hasText);
-    send.classList.toggle('is-recording',voiceListening);
+    send.classList.toggle('is-recording',voiceListening||voiceStarting);
     send.setAttribute('aria-label',hasText?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
     send.title=hasText?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
     send.setAttribute('aria-pressed',String(!hasText&&voiceListening));
   };
-  const startVoiceInput=()=>{
-    if(voiceListening){voiceRecognition?.stop();return}
-    if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в Chrome.';return}
+  const startVoiceInput=async()=>{
+    if(voiceListening){try{voiceRecognition?.stop()}catch{};return}
+    if(voiceStarting)return;
+    if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.';return}
+    voiceStarting=true;voiceError=false;voiceText='';voiceInterim='';syncSendButton();
+    status.textContent='Запускаем распознавание речи…';
     try{
+      // SpeechRecognition requests microphone permission itself. Do not start a second
+      // getUserMedia prompt in parallel: two simultaneous microphone requests can stall
+      // recognition in Chromium/WebView. Start directly from this explicit button gesture.
       if(!voiceRecognition){
         voiceRecognition=new SpeechRecognitionAPI();
         voiceRecognition.lang='ru-RU';voiceRecognition.interimResults=true;voiceRecognition.continuous=true;voiceRecognition.maxAlternatives=1;
-        voiceRecognition.onstart=()=>{voiceListening=true;voiceText='';voiceError=false;syncSendButton();status.textContent='Слушаю… Нажмите микрофон, чтобы завершить.'};
+        voiceRecognition.onstart=()=>{
+          voiceStarting=false;voiceListening=true;voiceText='';voiceInterim='';voiceError=false;syncSendButton();
+          status.textContent='Слушаю… Нажмите микрофон, чтобы закончить.';
+        };
         voiceRecognition.onresult=event=>{
           const finalParts=[],interimParts=[];
           for(let i=0;i<event.results.length;i++){
             const result=event.results[i],transcript=result[0]?.transcript?.trim();
             if(transcript&&result.isFinal)finalParts.push(transcript);
+            else if(transcript&&!result.isFinal)interimParts.push(transcript);
           }
           voiceText=finalParts.join(' ').replace(/\s+/g,' ').trim();
-          for(let i=event.resultIndex;i<event.results.length;i++){
-            const result=event.results[i],transcript=result[0]?.transcript?.trim();
-            if(transcript&&!result.isFinal)interimParts.push(transcript);
-          }
-          status.textContent=interimParts.length?'Распознаю: '+interimParts.join(' '):'Слушаю… Нажмите микрофон, чтобы завершить.'
+          voiceInterim=interimParts.join(' ').replace(/\s+/g,' ').trim();
+          status.textContent=voiceInterim?'Распознаю: '+voiceInterim:'Слушаю… Нажмите микрофон, чтобы закончить.';
         };
         voiceRecognition.onerror=event=>{
-          voiceError=true;
-          status.textContent=event.error==='not-allowed'?'Разрешите доступ к микрофону в настройках браузера.':event.error==='no-speech'?'Не расслышал речь. Нажмите микрофон и попробуйте ещё раз.':'Голосовой ввод прерван. Попробуйте ещё раз.'
+          voiceError=true;voiceStarting=false;voiceListening=false;syncSendButton();
+          const errors={
+            'not-allowed':'Нет доступа к микрофону. Разрешите его для сайта в настройках браузера.',
+            'aborted':'Голосовой ввод остановлен.',
+            'service-not-allowed':'Браузер заблокировал распознавание речи. Проверьте разрешения микрофона.',
+            'no-speech':'Не услышал речь. Проверьте микрофон и попробуйте ещё раз.',
+            'audio-capture':'Не найден микрофон. Проверьте подключение устройства.',
+            'network':'Сервис распознавания речи недоступен. Проверьте подключение к интернету.'
+          };
+          status.textContent=errors[event.error]||'Голосовой ввод прерван. Нажмите микрофон и повторите попытку.';
         };
         voiceRecognition.onend=()=>{
-          const transcript=voiceText.trim();voiceListening=false;
+          const transcript=(voiceText||voiceInterim).trim();voiceListening=false;voiceStarting=false;
           if(transcript){
             const current=input.value.trim();
             input.value=[current,transcript].filter(Boolean).join(current?' ':'');
             input.dispatchEvent(new Event('input',{bubbles:true}));
-            input.focus({preventScroll:true})
+            input.focus({preventScroll:true});
           }
-          if(!voiceError)status.textContent=transcript?'Текст распознан — проверьте и отправьте.':'Голосовой ввод завершён.';
-          syncSendButton()
+          if(!voiceError)status.textContent=transcript?'Текст распознан — проверьте его и отправьте.':'Голосовой ввод завершён.';
+          syncSendButton();syncAssistantConversationState();
         };
       }
-      voiceError=false;voiceText='';voiceRecognition.start()
-    }catch(error){voiceListening=false;syncSendButton();status.textContent='Не удалось включить микрофон. Проверьте разрешения браузера.'}
+      try{voiceRecognition.start()}catch(startError){voiceStarting=false;voiceListening=false;syncSendButton();throw startError}
+    }catch(error){
+      voiceStarting=false;voiceListening=false;syncSendButton();
+      const denied=error?.name==='NotAllowedError'||error?.name==='SecurityError';
+      const missing=error?.name==='NotFoundError'||error?.name==='DevicesNotFoundError';
+      status.textContent=denied?'Нет доступа к микрофону. Разрешите его в адресной строке браузера и повторите попытку.':
+        missing?'Микрофон не найден. Подключите устройство и попробуйте ещё раз.':
+        'Не удалось включить микрофон. Проверьте разрешения сайта и повторите попытку.';
+    }
   };
   send.addEventListener('click',()=>{if(send.type==='button')startVoiceInput()});
   const quotaLabel=document.querySelector('#assistant-quota');
@@ -336,7 +387,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const quotaBlocked=value.remaining<1&&value.plan!=='pro';
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
-    send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
+    // The empty composer button is a microphone, not an AI request: dictation remains available at zero quota.
+    const canRecordVoice=send.type==='button'&&!input.value.trim();
+    send.disabled=working||fileBlocking||!data.available||(!canRecordVoice&&(quotaBlocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled)));
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';

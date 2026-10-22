@@ -109,11 +109,29 @@ window.Workspace = (() => {
       html=mainTitle('Календарь','Ближайшие сроки по задачам и проектам.',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${days.length?days.map(day=>`<section class="agenda-day"><time datetime="${e(day)}"><strong>${e(day.slice(-2))}</strong><span>${e(new Intl.DateTimeFormat('ru-RU',{month:'short',weekday:'short'}).format(new Date(day+'T12:00:00')))}</span></time><div>${result.deadlines.filter(item=>item.due_date===day).map(d=>`<div class="record-line"><button class="record-title" data-work="entity" data-kind="${d.kind==='task'?'tasks':'projects'}" data-id="${e(d.id)}"><strong>${e(d.name)}</strong><small>${d.kind==='task'?'Задача':'Проект'}</small></button>${status(d.status)}</div>`).join('')}</div></section>`).join(''):empty('Сроки пока не назначены','Укажите дату в проекте или задаче.')}</section>`;
     }else if(section==='activity'||section==='notifications'){
       const result=await api('/'+section);if(!active())return true;
-      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel">${section==='activity'?activityList(result.items):result.items.map(n=>`<div class="record-line ${n.is_read?'':'unread'}"><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div>`).join('')||empty('Пока тихо','Новые события появятся здесь.')}</section>`;
+      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel ${section==='notifications'?'notifications-panel':'activity-panel'}">${section==='activity'?activityList(result.items):result.items.length?result.items.map(n=>`<div class="record-line notification-row ${n.is_read?'':'unread'}"><span class="notification-dot" aria-hidden="true"></span><div><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div></div>`).join(''):empty('Пока тихо','Новые события появятся здесь.')}</section>`;
     }else if(section==='team'){
       const result=await api('/workspace/members');if(!active())return true;
-      html=mainTitle('Рабочее пространство','Роли определяют доступ к данным и действиям.',button('Добавить участника','member','','primary'))+
-        `<section class="panel"><div class="form-grid">${select('workspace','Пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}<div class="field"><label>Ваша роль</label><p>${e(labels[workspace.role])}</p></div></div><h3>Команда</h3>${result.items.map(m=>`<div class="record-line"><div><strong>${e(m.name)}</strong><small>${e(m.email)}</small></div>${status(m.role)}${m.role!=='owner'?button('Убрать','remove-member',m.user_id):''}</div>`).join('')}</section><section class="panel"><h3>Настройки бизнеса</h3><form id="workspace-settings"><div class="form-grid">${field('name','Название',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>${field('company_details','Реквизиты',workspace.settings.company_details||'','textarea')}${field('pipeline','Этапы лидов — по одному в строке',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea')}<p class="form-error" role="alert"></p><button class="btn primary" type="submit">Сохранить</button></form></section>`;
+      const memberRows=result.items.map(m=>`<div class="team-member-row"><span class="team-member-avatar" aria-hidden="true">${e((m.name||m.email||'?').trim().slice(0,1).toLocaleUpperCase('ru-RU'))}</span><div class="team-member-copy"><strong>${e(m.name||'Участник')}</strong><small>${e(m.email)}</small></div><span class="pill team-role-badge status-${e(m.role)}">${e(labels[m.role]||m.role)}</span>${m.role!=='owner'?button('Убрать','remove-member',m.user_id,'team-remove-member'):''}</div>`).join('');
+      html=mainTitle('Команда','Люди, роли и настройки одного рабочего пространства.',button('Добавить участника','member','','primary'))+
+        `<div class="team-page">
+          <section class="team-overview">
+            <div class="team-workspace-picker">${select('workspace','Рабочее пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}</div>
+            <div class="team-current-role"><span>Ваша роль</span><strong>${e(labels[workspace.role]||workspace.role)}</strong><small>Доступ к данным текущего пространства</small></div>
+          </section>
+          <section class="panel team-members-panel">
+            <div class="team-section-heading"><div><h2>Участники</h2><p>Кто имеет доступ к сметам и клиентским данным.</p></div><span class="team-count">${result.items.length}</span></div>
+            <div class="team-member-list">${memberRows||empty('Пока нет участников','Добавьте коллегу, чтобы работать над сметами вместе.')}</div>
+          </section>
+          <details class="panel team-business-settings">
+            <summary><span><strong>Настройки рабочего пространства</strong><small>Название, валюта и реквизиты бизнеса</small></span><span class="team-settings-chevron" aria-hidden="true"></span></summary>
+            <form id="workspace-settings" class="team-settings-form">
+              <div class="form-grid">${field('name','Название пространства',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта по умолчанию',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>
+              <details class="team-advanced-settings"><summary>Дополнительные параметры</summary>${field('company_details','Реквизиты для документов',workspace.settings.company_details||'','textarea','rows="3"')}${field('pipeline','Этапы лидов — каждый с новой строки',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea','rows="4"')}</details>
+              <p class="form-error" role="alert"></p><div class="team-settings-actions"><button class="btn primary" type="submit">Сохранить изменения</button></div>
+            </form>
+          </details>
+        </div>`;
     }else if(section==='files'){
       fileCenterData=await api('/files');if(!active())return true;
       html=mainTitle('Файлы','Вложения смет, клиентов и заказов. Текстовые файлы доступны для поиска и ассистента.')+
@@ -123,9 +141,23 @@ window.Workspace = (() => {
       html=mainTitle('Документы','Предложения, акты и условия работы.',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div><div class="attachment-actions">${button('Спросить AI','ask-document',d.id).replace('data-work=',`data-label="${e(d.name)}" data-work=`)}${button('Скачать PDF','download-document',d.id)}</div></div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
     }else return false;
     if(!active())return true;
-    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);bind(section);
+    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);
+    if(section==='team'){
+      // Start with a clean member directory; business inputs are intentionally progressive disclosure.
+      const businessSettings=document.querySelector('.team-business-settings');
+      const advancedSettings=document.querySelector('.team-advanced-settings');
+      if(businessSettings)businessSettings.open=false;
+      if(advancedSettings)advancedSettings.open=false;
+    }
+    bind(section);
     if(section==='files')bindFileCenter(fileCenterData);
-    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){await window.SmetraLoadFeature('growth');if(!active())return true;window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));}
+    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){
+      // Onboarding is optional. Do not block the dashboard render on the lazy growth chunk;
+      // otherwise a slow chunk lets the app-level loading timer replace an already-rendered page.
+      window.SmetraLoadFeature('growth').then(()=>{
+        if(active())window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));
+      }).catch(()=>{});
+    }
     if(section==='team')await customFieldSettings();
     return true;
   }
@@ -471,7 +503,23 @@ window.Workspace = (() => {
   }
   async function customFieldSettings(){
     const active=pageRequest();
-    const data=await api('/custom-fields');if(!active()||current!=='team')return;const section=document.createElement('section');section.className='panel';section.innerHTML=`<div class="section-top"><h3>Дополнительные поля</h3><button class="btn small" id="new-custom-field">+ Поле</button></div><p class="muted">Настройте клиентов, сметы и заказы под свой способ работы.</p>${data.items.map(f=>`<div class="record-line"><strong>${e(f.name)}</strong><small>${e({clients:'Клиенты',estimates:'Сметы',projects:'Заказы'}[f.entity_type])} · ${e(f.type)}</small></div>`).join('')}`;document.querySelector('#content').append(section);section.querySelector('button').onclick=()=>{const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});closeModal();await render('team')})};
+    const data=await api('/custom-fields');
+    if(!active()||current!=='team')return;
+    const host=document.querySelector('#content .team-page');if(!host)return;
+    const section=document.createElement('details');section.className='panel team-custom-fields';
+    const entityLabel={clients:'Клиенты',estimates:'Сметы',projects:'Заказы'};
+    const rows=data.items.map(f=>`<div class="team-custom-field-row"><span><strong>${e(f.name)}</strong><small>${e(entityLabel[f.entity_type]||f.entity_type)} · ${e(f.type)}</small></span></div>`).join('');
+    section.innerHTML=`<summary><span><strong>Дополнительные поля</strong><small>${data.items.length?data.items.length+' настроено':'Настройка карточек клиентов, смет и заказов'}</small></span><span class="team-settings-chevron" aria-hidden="true"></span></summary><div class="team-custom-fields-body"><p class="muted">Добавляйте только поля, которых действительно не хватает в стандартных карточках.</p><div class="team-custom-fields-list">${rows||'<p class="team-custom-fields-empty">Дополнительные поля ещё не созданы.</p>'}</div><button type="button" class="btn small" id="new-custom-field">Добавить поле</button></div>`;
+    host.append(section);
+    section.querySelector('#new-custom-field').onclick=()=>{
+      const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);
+      bindCancel(root);
+      submitForm(root.querySelector('form'),async d=>{
+        d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);
+        await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});
+        closeModal();await render('team');
+      });
+    };
   }
   async function aiDraft(){const root=openModal('Из описания — в черновик','Текст будет отправлен AI-провайдеру. Проверьте позиции и цены перед сохранением.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}<p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor(r.draft)})}
   async function attachments(key,id){

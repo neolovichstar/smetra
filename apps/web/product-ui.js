@@ -45,6 +45,7 @@
       const items = document.createElement('div');
       items.className = 'sidebar-group-items'; items.id = `sidebar-group-${index}`; items.hidden = true;
       toggle.setAttribute('aria-controls',items.id);
+      let closeTimer=null;
       [...group.querySelectorAll('[data-tab]')].forEach(control => items.append(control));
       // Construction belongs to the work group, alongside tasks and calendar.
       if (index === 1) {
@@ -53,8 +54,21 @@
       }
       heading.replaceWith(toggle); group.append(items);
       toggle.onclick = () => {
-        items.hidden = !items.hidden;
-        toggle.setAttribute('aria-expanded',String(!items.hidden));
+        const opening=items.hidden || toggle.getAttribute('aria-expanded')==='false';
+        toggle.setAttribute('aria-expanded',String(opening));
+        clearTimeout(closeTimer);items._closeTimer=null;
+        if(opening){
+          items.hidden=false;items.classList.remove('is-closing');
+          requestAnimationFrame(()=>items.classList.add('is-open'));
+        }else{
+          items.classList.remove('is-open');items.classList.add('is-closing');
+          closeTimer=setTimeout(()=>{
+            if(toggle.getAttribute('aria-expanded')==='false'){
+              items.hidden=true;items.classList.remove('is-closing');
+            }
+            items._closeTimer=null;
+          },220);items._closeTimer=closeTimer;
+        }
       };
     });
   }
@@ -63,10 +77,13 @@
     document.querySelectorAll('[data-mode]').forEach(control => {
       control.setAttribute('aria-pressed',String(control.dataset.mode === (active?.dataset.tab === 'assistant'?'assistant':'dashboard')));
     });
-    const items = active?.closest('.sidebar-group-items');
-    if (items?.hidden) {
-      items.hidden = false;
+    const items=active?.closest('.sidebar-group-items');
+    if(items){
+      clearTimeout(items._closeTimer);items._closeTimer=null;
+      const wasHidden=items.hidden||items.classList.contains('is-closing');
+      items.hidden=false;items.classList.remove('is-closing');
       items.previousElementSibling?.setAttribute('aria-expanded','true');
+      if(wasHidden)requestAnimationFrame(()=>items.classList.add('is-open'));
     }
   }
   document.querySelectorAll('[data-mode]').forEach(control => {

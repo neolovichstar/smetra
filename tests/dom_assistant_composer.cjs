@@ -3,12 +3,21 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
 const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no});return {promise,resolve,reject}};
-async function setup(enabled=true){
+async function setup(enabled=true,voice=false,remaining=3){
  const dom=new JSDOM('<body class="workspace-page"><main id="content"></main></body>',{url:'https://example.test/app',runScripts:'dangerously',pretendToBeVisual:true}),w=dom.window;
  w.load=source=>{const script=w.document.createElement('script');script.textContent=source;w.document.head.append(script)};
  w.load("let user={id:'qa'},tab='assistant'; const escapeHtml=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); const view=html=>document.querySelector('#content').innerHTML=html;");
  w.sessionStorage.setItem('workspace_id','qa-workspace');w.Workspace={currentWorkspaceId:()=> 'qa-workspace'};
- const quota={remaining:3,limit:3,plan:'free',resets_at:2000000000},requests=[],notices=[];
+ const quota={remaining,limit:3,plan:'free',resets_at:2000000000},requests=[],notices=[];
+ let activeRecognition=null,microphoneTrackStopped=false;
+ if(voice){
+  Object.defineProperty(w.navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){microphoneTrackStopped=true}}]})}});
+  w.SpeechRecognition=class FakeSpeechRecognition{
+   constructor(){activeRecognition=this;this.lang='';this.interimResults=false;this.continuous=false;this.maxAlternatives=1;}
+   start(){this.started=true;this.onstart?.()}
+   stop(){this.stopped=true;this.onend?.()}
+  };
+ }
  w.notify=text=>notices.push(text);w.scrollTo=()=>{};
  w.TextDecoder=TextDecoder;
  w.api=async(path,options={})=>{
@@ -19,21 +28,40 @@ async function setup(enabled=true){
   throw Error('Unexpected path: '+path);
  };
  for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));await w.SmetraAssistant();await tick();
- return {w,doc:w.document,requests,notices,close:()=>dom.window.close()};
+ return {w,doc:w.document,requests,notices,recognition:()=>activeRecognition,microphoneTrackStopped:()=>microphoneTrackStopped,close:()=>dom.window.close()};
 }
 (async()=>{
  const failures=[];
- const test=async(name,run,enabled=true)=>{const env=await setup(enabled);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
+ const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
- await test('empty and whitespace messages cannot be sent',async({w,doc})=>{
-  assert.equal(doc.querySelector('#assistant-send').disabled,true);type(w,doc,'   ');assert.equal(doc.querySelector('#assistant-send').disabled,true);
-  type(w,doc,'Prepare estimate');assert.equal(doc.querySelector('#assistant-send').disabled,false);
+ await test('microphone works with exhausted AI quota and produces an editable draft',async({w,doc,recognition,microphoneTrackStopped})=>{
+  const button=doc.querySelector('#assistant-send'),input=doc.querySelector('#assistant-input');
+  assert.equal(button.dataset.uiIcon,'microphone');
+  assert.equal(button.disabled,false,'voice input should not be blocked by exhausted AI quota');
+  button.click();await tick();await tick();
+  const rec=recognition();assert.ok(rec,'SpeechRecognition instance should be created');assert.equal(rec.started,true);
+  assert.equal(microphoneTrackStopped(),true,'temporary permission stream must be released');
+  assert.match(doc.querySelector('#assistant-status').textContent,/Слушаю/);
+  rec.onresult({results:[{0:{transcript:'Составь смету'},isFinal:true}],resultIndex:0});
+  rec.stop();await tick();
+  assert.equal(input.value,'Составь смету');
+  assert.equal(button.dataset.uiIcon,'arrow-up');
+  assert.equal(button.type,'submit');
+  assert.equal(button.disabled,true,'sending remains blocked while quota is exhausted');
+  assert.match(doc.querySelector('#assistant-status').textContent,/Текст распознан/);
+ },true,true,0);
+ await test('empty and whitespace messages cannot be sent while microphone stays available',async({w,doc,requests})=>{
+  const button=doc.querySelector('#assistant-send');
+  assert.equal(button.dataset.uiIcon,'microphone');assert.equal(button.type,'button');assert.equal(button.disabled,false);
+  type(w,doc,'   ');assert.equal(button.dataset.uiIcon,'microphone');assert.equal(button.type,'button');assert.equal(button.disabled,false);
+  doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(requests.length,0,'blank prompts must not queue work');
+  type(w,doc,'Prepare estimate');assert.equal(button.dataset.uiIcon,'arrow-up');assert.equal(button.type,'submit');assert.equal(button.disabled,false);
  });
  await test('background mode selects delivery and uses the shared submit button',async({w,doc,requests})=>{
   const mode=doc.querySelector('#assistant-background');assert.ok(mode);mode.click();assert.equal(mode.getAttribute('aria-pressed'),'true');assert.equal(requests.length,0);
   type(w,doc,'Prepare estimate');doc.querySelector('#assistant-form').requestSubmit();await tick();
   assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].body).text,'Prepare estimate');assert.ok(requests[0].headers['Idempotency-Key']);
-  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,true);
+  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').dataset.uiIcon,'microphone');assert.equal(doc.querySelector('#assistant-send').disabled,false,'microphone stays available when the composer resets');
   assert.ok(doc.querySelector('#assistant-status').textContent.length>0);
  });
  await test('missing worker cannot be selected or receive a job',async({w,doc,requests})=>{
