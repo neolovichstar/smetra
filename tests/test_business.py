@@ -1104,6 +1104,68 @@ class BusinessFlows(unittest.TestCase):
             429,
         )
 
+    def test_empty_dashboard_quote_counters_are_zero(self):
+        token, _ = self.account("empty-quote-dashboard")
+
+        code, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(code, 200, dashboard)
+        self.assertEqual(
+            dashboard["overview"]["quotes"],
+            {"total": 0, "waiting": 0, "approved": 0},
+        )
+
+    def test_expired_quotes_are_not_waiting_or_follow_up_actions(self):
+        token, _ = self.account("expired-followup")
+
+        expired_sent = self.quote(token, title="Expired sent", expires_at=1)
+        sent = self.publish(token, expired_sent)
+        sent_token = sent["public_url"].split("quote=")[1]
+        code, public = self.call("/public/quote?token=" + sent_token)
+        self.assertEqual(code, 200)
+        self.assertEqual(public["quote"]["approval_state"], "expired")
+
+        with self.mod.db() as con:
+            stored = con.execute(
+                "SELECT approval_state,view_count FROM quotes WHERE id=?",
+                (expired_sent["id"],),
+            ).fetchone()
+            self.assertEqual(stored["approval_state"], "sent")
+            self.assertEqual(stored["view_count"], 1)
+            con.execute(
+                "UPDATE quotes SET sent_at=? WHERE id=?",
+                (self.mod.now() - 3 * 86400, expired_sent["id"]),
+            )
+
+        needs_changes = self.quote(
+            token, title="Expired changes", expires_at=self.mod.now() + 86400
+        )
+        published_changes = self.publish(token, needs_changes)
+        changes_token = published_changes["public_url"].split("quote=")[1]
+        code, result = self.call(
+            "/public/respond",
+            "POST",
+            {
+                "token": changes_token,
+                "version": 1,
+                "action": "changes_requested",
+                "name": "Client",
+                "comment": "Нужно уточнить состав работ",
+            },
+        )
+        self.assertEqual(code, 200, result)
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE quotes SET expires_at=?,sent_at=? WHERE id=?",
+                (1, self.mod.now() - 3 * 86400, needs_changes["id"]),
+            )
+
+        code, dashboard = self.call("/dashboard", token=token)
+        self.assertEqual(code, 200)
+        self.assertEqual(dashboard["overview"]["quotes"]["waiting"], 0)
+        action_titles = [item["title"] for item in dashboard["actions"]["items"]]
+        self.assertNotIn("Смета ждёт согласования", action_titles)
+        self.assertNotIn("Клиент запросил изменения", action_titles)
+
     def test_full_client_quote_project_partial_payments_expense_document(self):
         token, _ = self.account("lifecycle")
         code, c = self.call(
