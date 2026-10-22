@@ -374,7 +374,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const quotaBlocked=value.remaining<1&&value.plan!=='pro';
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
-    send.disabled=blocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled);
+    // The empty composer button is a microphone, not an AI request: dictation remains available at zero quota.
+    const canRecordVoice=send.type==='button'&&!input.value.trim();
+    send.disabled=working||fileBlocking||!data.available||(!canRecordVoice&&(quotaBlocked||!input.value.trim()||(backgroundMode&&!backgroundEnabled)));
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
