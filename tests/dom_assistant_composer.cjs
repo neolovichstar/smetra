@@ -50,15 +50,18 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(button.disabled,true,'sending remains blocked while quota is exhausted');
   assert.match(doc.querySelector('#assistant-status').textContent,/Текст распознан/);
  },true,true,0);
- await test('empty and whitespace messages cannot be sent',async({w,doc})=>{
-  assert.equal(doc.querySelector('#assistant-send').disabled,true);type(w,doc,'   ');assert.equal(doc.querySelector('#assistant-send').disabled,true);
-  type(w,doc,'Prepare estimate');assert.equal(doc.querySelector('#assistant-send').disabled,false);
+ await test('empty and whitespace messages cannot be sent while microphone stays available',async({w,doc,requests})=>{
+  const button=doc.querySelector('#assistant-send');
+  assert.equal(button.dataset.uiIcon,'microphone');assert.equal(button.type,'button');assert.equal(button.disabled,false);
+  type(w,doc,'   ');assert.equal(button.dataset.uiIcon,'microphone');assert.equal(button.type,'button');assert.equal(button.disabled,false);
+  doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(requests.length,0,'blank prompts must not queue work');
+  type(w,doc,'Prepare estimate');assert.equal(button.dataset.uiIcon,'arrow-up');assert.equal(button.type,'submit');assert.equal(button.disabled,false);
  });
  await test('background mode selects delivery and uses the shared submit button',async({w,doc,requests})=>{
   const mode=doc.querySelector('#assistant-background');assert.ok(mode);mode.click();assert.equal(mode.getAttribute('aria-pressed'),'true');assert.equal(requests.length,0);
   type(w,doc,'Prepare estimate');doc.querySelector('#assistant-form').requestSubmit();await tick();
   assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].body).text,'Prepare estimate');assert.ok(requests[0].headers['Idempotency-Key']);
-  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,true);
+  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').dataset.uiIcon,'microphone');assert.equal(doc.querySelector('#assistant-send').disabled,false,'microphone stays available when the composer resets');
   assert.ok(doc.querySelector('#assistant-status').textContent.length>0);
  });
  await test('missing worker cannot be selected or receive a job',async({w,doc,requests})=>{
