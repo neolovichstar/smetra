@@ -225,9 +225,11 @@ def handle(handler, con, user, method, path, query):
             con.execute("BEGIN IMMEDIATE")
             try:
                 existing = con.execute(
-                    "SELECT id FROM lead_purchases WHERE buyer_user_id=? AND idempotency_key=?",
+                    "SELECT id,lead_id FROM lead_purchases WHERE buyer_user_id=? AND idempotency_key=?",
                     (user["id"], idem),
                 ).fetchone()
+                if existing and existing["lead_id"] != lead_id:
+                    raise _error(409, "Этот ключ идемпотентности уже использован для другого заказа")
                 if not existing:
                     existing = con.execute(
                         "SELECT id FROM lead_purchases WHERE lead_id=? AND buyer_user_id=?",
