@@ -104,6 +104,8 @@ function enhanceSidebarNavigation(){
   const label=(button.dataset.navLabel||button.querySelector('.sidebar-item-label')?.textContent||[...button.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent).join(' ')).trim()||button.dataset.tab;
   const icon=makeSvg('sidebar-item-icon',sidebarIcons[button.dataset.tab]||sidebarIcons.documents);
   const text=document.createElement('span');text.className='sidebar-item-label';text.textContent=label;
+  // Remove any legacy auto-icon source before installing the canonical navigation SVG.
+  button.removeAttribute('data-ui-icon');button.removeAttribute('data-ui-icon-only');button.style.removeProperty('--ui-icon');
   // Replace every legacy child in one operation. The nav item has one canonical SVG, never an appended second icon.
   button.replaceChildren(icon,text);
   button.dataset.navLabel=label;button.title=label;
