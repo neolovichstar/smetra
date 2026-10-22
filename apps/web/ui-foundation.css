@@ -2319,3 +2319,26 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
   }
 }
 
+/* On desktop the assistant rail is a persistent conversation sidebar, not a floating menu. */
+@media(min-width:801px){
+  .workspace-page .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed))>.assistant-toolrail .assistant-history-panel{
+    display:flex!important;position:relative!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;z-index:auto!important;
+    flex:1 1 auto!important;width:100%!important;max-width:none!important;height:calc(100% - 102px)!important;max-height:none!important;
+    min-height:0!important;margin:12px 0 0!important;padding:0!important;overflow:hidden!important;
+    border:0!important;border-radius:0!important;background:transparent!important;
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;animation:none!important;
+  }
+  .workspace-page .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed))>.assistant-toolrail .assistant-history-heading{
+    flex:0 0 auto!important;padding:2px 7px 9px!important;
+  }
+  .workspace-page .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed))>.assistant-toolrail .assistant-history-list{
+    position:relative!important;display:flex!important;flex:1 1 auto!important;
+    width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;max-height:none!important;
+    margin:0!important;padding:1px 0 8px!important;overflow-x:hidden!important;overflow-y:auto!important;
+    border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;animation:none!important;
+  }
+  .workspace-page .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed))>.assistant-toolrail .assistant-conversation-row{
+    flex:0 0 auto!important;
+  }
+}
+
