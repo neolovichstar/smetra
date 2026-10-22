@@ -54,6 +54,19 @@ def refund(con, row):
                     'UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0',
                     (stamp(), row['quota_key']),
                 )
+        ad_reward_id = row['ad_reward_id'] if 'ad_reward_id' in row.keys() else None
+        if ad_reward_id:
+            restored = con.execute(
+                'UPDATE assistant_ad_reward_credits SET remaining=remaining+1 '
+                'WHERE id=? AND remaining<amount AND expires_at>? RETURNING id',
+                (ad_reward_id, stamp()),
+            ).fetchone()
+            if restored:
+                con.execute(
+                    'UPDATE assistant_ad_reward_usage SET count=count-1,updated_at=? '
+                    'WHERE quota_key=? AND count>0',
+                    (stamp(), row['quota_key']),
+                )
 
 
 def route(service, method, parts, data):
@@ -130,10 +143,11 @@ def route(service, method, parts, data):
         reservation = assistant.reserve_in_transaction(service)
         quota_key = reservation['key'] if isinstance(reservation, dict) else reservation
         bonus_grant_id = reservation.get('bonus_grant_id') if isinstance(reservation, dict) else None
+        ad_reward_id = reservation.get('ad_reward_id') if isinstance(reservation, dict) else None
         job_id, now = identity(), stamp()
         service.con.execute(
-            'INSERT INTO assistant_jobs(id,workspace_id,user_id,conversation_id,session_hash,request_key,request_hash,prompt,context,quota_key,bonus_grant_id,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            (job_id, *args, thread_id, service.h.session_token_hash, key, request_hash, prompt, packed(context), quota_key, bonus_grant_id, now, now, now),
+            'INSERT INTO assistant_jobs(id,workspace_id,user_id,conversation_id,session_hash,request_key,request_hash,prompt,context,quota_key,bonus_grant_id,ad_reward_id,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            (job_id, *args, thread_id, service.h.session_token_hash, key, request_hash, prompt, packed(context), quota_key, bonus_grant_id, ad_reward_id, now, now, now),
         )
         row = service.con.execute('SELECT * FROM assistant_jobs WHERE id=?', (job_id,)).fetchone()
     return 202, {'job': public(row), 'quota': assistant.public_quota(service)}
