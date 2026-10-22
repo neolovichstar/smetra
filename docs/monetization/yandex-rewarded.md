@@ -1,6 +1,6 @@
 # Rewarded ads in Smetra (Yandex)
 
-The Android app uses Yandex Mobile Ads SDK 8.6.0. Rewarded ads are requested only when the free assistant quota reaches zero; a completed reward grants three additional assistant requests and expires after 24 hours. The backend allows one grant per account per Moscow calendar day and never accepts a client-supplied ad-unit ID.
+The Android app uses Yandex Mobile Ads SDK 8.6.0 and initializes the SDK only after the user taps the rewarded-ad offer. Rewarded ads are requested only when the free assistant quota reaches zero; a completed reward grants three additional assistant requests and expires after 24 hours. The backend allows one grant per account per Moscow calendar day and never accepts a client-supplied ad-unit ID.
 
 ## One-time account setup
 

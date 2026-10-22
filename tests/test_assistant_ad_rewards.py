@@ -43,7 +43,9 @@ class AssistantAdRewardTests(unittest.TestCase):
             self.assertEqual(self.call("/assistant/ad-reward", token=token)[1]["available"], False)
             self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["remaining"], 3)
 
-            with patch("backend.assistant.query_model", return_value={"content": "Ещё один ответ"}):
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-only"}), patch(
+                "backend.assistant.query_model", return_value={"content": "Ещё один ответ"}
+            ):
                 status, result = self.call("/assistant/chat", "POST", {"text": "Первый бонусный запрос"}, token)
             self.assertEqual(status, 200, result)
             self.assertEqual(result["quota"]["remaining"], 2)
