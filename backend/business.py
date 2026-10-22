@@ -516,10 +516,19 @@ def migrate(con):
         )
     )
     assistant_job_columns = {row["name"] for row in con.execute("PRAGMA table_info(assistant_jobs)")}
+    if "bonus_grant_id" not in assistant_job_columns:
+        con.execute(
+            "ALTER TABLE assistant_jobs ADD COLUMN bonus_grant_id TEXT REFERENCES assistant_bonus_grants(id) ON DELETE SET NULL"
+        )
     if "ad_reward_id" not in assistant_job_columns:
         con.execute(
             "ALTER TABLE assistant_jobs ADD COLUMN ad_reward_id TEXT REFERENCES assistant_ad_reward_credits(id) ON DELETE SET NULL"
         )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "030_assistant_bonus_runtime_compatibility.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_assistant_jobs_ad_reward ON assistant_jobs(ad_reward_id) WHERE ad_reward_id IS NOT NULL"
     )
