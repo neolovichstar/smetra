@@ -2283,3 +2283,39 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
   .workspace-page .assistant-studio.has-conversation .assistant-content{height:calc(100% - 220px)!important}
 }
 
+/* Center the complete empty notifications/activity view. Their generated markup is
+   a direct .topline followed by the corresponding panel, not .section-notifications. */
+.workspace-page #content.main:has(> .topline + .notifications-panel .empty),
+.workspace-page #content.main:has(> .topline + .activity-panel .empty){
+  display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;
+  min-height:calc(100dvh - 82px)!important;height:auto!important;box-sizing:border-box!important;
+  padding-block:24px!important;
+}
+.workspace-page #content.main:has(> .topline + .notifications-panel .empty)>.topline,
+.workspace-page #content.main:has(> .topline + .activity-panel .empty)>.topline{
+  width:min(100%,920px)!important;max-width:920px!important;flex:0 0 auto!important;
+  margin:0 auto 14px!important;
+}
+.workspace-page #content.main:has(> .topline + .notifications-panel .empty)>.notifications-panel,
+.workspace-page #content.main:has(> .topline + .activity-panel .empty)>.activity-panel{
+  display:block!important;width:min(100%,920px)!important;max-width:920px!important;
+  flex:0 0 auto!important;min-height:0!important;margin:0 auto!important;padding:0!important;
+  border:0!important;border-radius:22px!important;background:transparent!important;
+}
+.workspace-page #content.main:has(> .topline + .notifications-panel .empty)>.notifications-panel>.empty,
+.workspace-page #content.main:has(> .topline + .activity-panel .empty)>.activity-panel>.empty{
+  width:100%!important;max-width:100%!important;min-height:280px!important;
+  margin:0!important;border:0!important;border-radius:22px!important;
+  background:rgba(255,255,255,.018)!important;
+}
+@media(max-width:800px){
+  .workspace-page #content.main:has(> .topline + .notifications-panel .empty),
+  .workspace-page #content.main:has(> .topline + .activity-panel .empty){
+    min-height:calc(100dvh - 72px)!important;padding:16px 14px max(16px,env(safe-area-inset-bottom))!important;
+  }
+  .workspace-page #content.main:has(> .topline + .notifications-panel .empty)>.notifications-panel>.empty,
+  .workspace-page #content.main:has(> .topline + .activity-panel .empty)>.activity-panel>.empty{
+    min-height:250px!important;
+  }
+}
+
