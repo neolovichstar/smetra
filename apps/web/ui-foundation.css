@@ -1651,3 +1651,25 @@
  .workspace-page *, .workspace-page *::before, .workspace-page *::after,.black-landing *, .black-landing *::before, .black-landing *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
 
+/* Keep the full-height assistant inside the viewport on desktop.
+   Grid items otherwise keep their intrinsic composer height and stretch the app shell below the fold. */
+@media(min-width:801px){
+ .workspace-page:has(.assistant-studio) .app-shell{
+  height:calc(100dvh - 82px)!important;
+  min-height:0!important;
+  grid-template-rows:minmax(0,1fr)!important;
+ }
+ .workspace-page:has(.assistant-studio) #content.main{
+  height:100%!important;min-height:0!important;overflow:hidden!important;
+ }
+ .workspace-page:has(.assistant-studio) .assistant-studio{
+  height:100%!important;min-height:0!important;max-height:100%!important;overflow:hidden!important;
+ }
+ .workspace-page:has(.assistant-studio) .assistant-main-column{
+  min-height:0!important;overflow:hidden!important;
+ }
+ .workspace-page:has(.assistant-studio) .assistant-content{
+  min-height:0!important;overflow-y:auto!important;
+ }
+}
+
