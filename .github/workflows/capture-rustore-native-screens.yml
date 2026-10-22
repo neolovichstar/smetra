@@ -35,7 +35,7 @@ jobs:
           pip install -r requirements-dev.txt Pillow
           sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' apps/mobile/app/src/main/AndroidManifest.xml
           mkdir -p data/native-rustore-screens
-          SMETRA_FIXTURE_PORT=8084 python scripts/android_ui_fixture.py > data/native-rustore-screens/fixture.log 2>&1 &
+          SMETRA_FIXTURE_PORT=18084 python scripts/android_ui_fixture.py > data/native-rustore-screens/fixture.log 2>&1 &
           echo $! > data/native-rustore-screens/fixture.pid
           for i in $(seq 1 60); do
             if grep -Fq ANDROID_UI_FIXTURE_READY data/native-rustore-screens/fixture.log; then break; fi
@@ -58,7 +58,7 @@ jobs:
             set -e
             adb shell wm size 1080x1920
             adb shell wm density 420
-            ./apps/mobile/gradlew -p apps/mobile connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:8084
+            ./apps/mobile/gradlew -p apps/mobile connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:18084
             mkdir -p data/native-rustore-screens/default
             adb pull /sdcard/Android/data/ru.smetra.mobile/files/design-qa data/native-rustore-screens/default/
             adb shell pm clear ru.smetra.mobile
