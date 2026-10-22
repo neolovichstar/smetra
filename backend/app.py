@@ -1007,6 +1007,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 (uid(), user["id"], message, "open", now()),
             )
             return self.send_json(201, {"ok": True})
+        if path == "/api/billing/subscriptions" and method == "GET":
+            rows = con.execute(
+                "SELECT s.id,s.product_code,s.amount_kopecks,s.currency,s.status,s.auto_renew,"
+                "s.current_period_start,s.current_period_end,s.next_charge_at,s.cancel_at_period_end,"
+                "COALESCE(s.workspace_id,(SELECT i.workspace_id FROM billing_intents i "
+                "WHERE i.subscription_id=s.id AND i.workspace_id IS NOT NULL ORDER BY i.created_at DESC LIMIT 1)) AS workspace_id,"
+                "w.name AS workspace_name "
+                "FROM billing_subscriptions s LEFT JOIN workspaces w ON w.id=COALESCE(s.workspace_id,"
+                "(SELECT i.workspace_id FROM billing_intents i WHERE i.subscription_id=s.id AND i.workspace_id IS NOT NULL ORDER BY i.created_at DESC LIMIT 1)) "
+                "WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 50",
+                (user["id"],),
+            ).fetchall()
+            # Never send payment_method_id or renewal consent metadata to the client.
+            return self.send_json(200, {"items": [dict(row) for row in rows]})
         if path == "/api/billing" and method == "GET":
             offer=revenue.pricing(con,user)
             payments = con.execute(
@@ -1056,6 +1070,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 consent_version = "smetra-recurring-v1"
 
             workspace_id = None
+            if plan == "lead_tokens_150":
+                team_access = con.execute(
+                    "SELECT 1 FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+                    "WHERE m.user_id=? AND w.plan='pro_team' AND w.subscription_status='active' AND w.entitlement_until>? LIMIT 1",
+                    (user["id"], now()),
+                ).fetchone()
+                solo_access = user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
+                if not solo_access and not team_access:
+                    raise ApiError(403, "Токены биржи можно купить при активном PRO Solo или PRO Team")
             if plan in ("pro_team_month", "smart_supplier_month"):
                 if plan == "smart_supplier_month" and not (
                     user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now()
@@ -1153,6 +1176,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 {"url": saved["confirmation_url"], "status": saved["status"],
                  "auto_renew_requested": auto_renew_requested},
             )
+        parts = path.strip("/").split("/")
+        if len(parts) == 5 and parts[:3] == ["api", "billing", "subscriptions"] and parts[4] == "cancel-renewal" and method == "POST":
+            subscription_id = parts[3]
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", subscription_id):
+                raise ApiError(400, "Некорректный идентификатор подписки")
+            self.throttle("cancel-renewal:" + user["id"], 10, 60)
+            with _LOCK, business.transaction_lock_scope(con, (f"user:{user['id']}", f"subscription:{subscription_id}")):
+                con.execute("BEGIN IMMEDIATE")
+                try:
+                    subscription = con.execute(
+                        "SELECT id,status,auto_renew,current_period_end FROM billing_subscriptions WHERE id=? AND user_id=?",
+                        (subscription_id, user["id"]),
+                    ).fetchone()
+                    if not subscription:
+                        raise ApiError(404, "Подписка не найдена")
+                    if subscription["auto_renew"] or subscription["status"] in ("active", "past_due"):
+                        con.execute(
+                            "UPDATE billing_subscriptions SET auto_renew=FALSE,cancel_at_period_end=TRUE,"
+                            "status='cancel_at_period_end',provider_payment_method_id=NULL,next_charge_at=NULL,"
+                            "updated_at=? WHERE id=? AND user_id=?",
+                            (now(), subscription_id, user["id"]),
+                        )
+                        con.execute(
+                            "UPDATE billing_renewal_attempts SET status='canceled',finished_at=?,last_error_code='user_cancelled' "
+                            "WHERE subscription_id=? AND status='prepared' AND provider_payment_id IS NULL",
+                            (now(), subscription_id),
+                        )
+                    con.execute("COMMIT")
+                except Exception:
+                    con.execute("ROLLBACK")
+                    raise
+            return self.send_json(200, {
+                "ok": True,
+                "auto_renew": False,
+                "access_until": int(subscription["current_period_end"] or 0),
+                "message": "Автопродление отменено; оплаченный период сохраняется до даты окончания.",
+            })
         if path == "/api/billing/sync" and method == "POST":
             self.throttle("sync:" + user["id"], 5, 60)
             rows = con.execute(
