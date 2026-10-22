@@ -154,12 +154,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const closeRowMenu=()=>{if(!menu)return;menu.hidden=true;more?.setAttribute('aria-expanded','false');row.classList.remove('is-menu-open','is-renaming');const actions=menu.querySelector('.assistant-conversation-menu-actions');if(actions)actions.hidden=false;const form=menu.querySelector('[data-thread-rename-form]');if(form)form.hidden=true};
     more?.addEventListener('click',event=>{
       event.stopPropagation();if(working||threadBusy)return;
-      const open=menu.hidden;closeConversationMenus(row);toolrail.classList.remove('is-history-expanded');historyToggle.setAttribute('aria-expanded','false');
+      const open=menu.hidden;closeConversationMenus(row);
       menu.hidden=!open;more.setAttribute('aria-expanded',String(open));row.classList.toggle('is-menu-open',open);
     });
     row.querySelector('[data-thread-rename]')?.addEventListener('click',event=>{
       event.stopPropagation();if(working||threadBusy)return;
-      closeConversationMenus(row);toolrail.classList.remove('is-history-expanded');historyToggle.setAttribute('aria-expanded','false');
+      closeConversationMenus(row);
       menu.hidden=false;more.setAttribute('aria-expanded','true');row.classList.add('is-menu-open','is-renaming');
       menu.querySelector('.assistant-conversation-menu-actions').hidden=true;
       const form=menu.querySelector('[data-thread-rename-form]');form.hidden=false;
@@ -210,7 +210,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(toolrail.classList.contains('is-history-expanded')){event.preventDefault();closeHistoryPanel();historyToggle.focus();}
   });
   document.querySelector('#assistant-new-thread').onclick=event=>threadAction(event.currentTarget,async()=>{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});if(!active())return;sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);await window.SmetraAssistant()});
-  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
+  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
@@ -268,7 +268,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const setThreadBusy=blocked=>{
     document.querySelectorAll('.assistant-workbar button,.assistant-history-list button,.assistant-history-rename-form input,.assistant-history-rename-form button').forEach(button=>button.disabled=blocked);
     document.querySelectorAll('.assistant-workbar summary').forEach(summary=>summary.setAttribute('aria-disabled',String(blocked)));
-    if(blocked){closeConversationMenus();closeHistoryPanel();}
+    if(blocked)closeConversationMenus();
   };
   const stop=document.querySelector('#assistant-stop');
   stop.onclick=()=>requestController?.abort();
