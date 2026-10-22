@@ -48,6 +48,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
   assert.ok(iconAudit.masks.create.includes('/assets/icons/plus.svg'),'New-dialog icon uses the shared plus asset');
   assert.ok(iconAudit.masks.knowledge.includes('/assets/icons/book-open.svg'),'Knowledge icon uses the shared book asset');
   assert.ok(iconAudit.masks.history.includes('/assets/icons/chat-circle.svg'),'History icon uses the shared chat asset');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-history-toggle')).display!=='none'"),width<=700,'History launcher appears only on compact layouts at '+width+'px');
   assert.ok(iconAudit.masks.trash.includes('/assets/icons/trash.svg'),'Delete icon uses the shared trash asset');
   assert.ok(iconAudit.inlineButtons.every(item=>item.before==='none'),'Inline disclosure icon has no duplicate CSS pseudo-icon: '+JSON.stringify(iconAudit.inlineButtons));
   assert.equal(await evaluate("document.querySelector('.assistant-options')===null"),true,'No global ellipsis action remains in the assistant rail');

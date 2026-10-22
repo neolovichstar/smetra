@@ -1478,3 +1478,11 @@
   .workspace-page .assistant-studio .assistant-conversation-actions,
   .workspace-page .assistant-studio .assistant-conversation-icon-button{transition:none!important}
 }
+
+
+/* Show the history launcher only when the full list is collapsed or on narrow screens. */
+.workspace-page .assistant-studio:not(.assistant-tools-collapsed) .assistant-workbar #assistant-history-toggle{display:none!important}
+.workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar #assistant-history-toggle{display:flex!important}
+@media(max-width:700px){
+  .workspace-page .assistant-studio:not(.assistant-tools-collapsed) .assistant-workbar #assistant-history-toggle{display:flex!important}
+}
