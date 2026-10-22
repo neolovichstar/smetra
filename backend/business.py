@@ -500,6 +500,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "027_billing_renewal_attempts.sql").read_text(
+            encoding="utf-8"
+        )
+    )
     billing_intent_columns = {row["name"] for row in con.execute("PRAGMA table_info(billing_intents)")}
     if "subscription_id" not in billing_intent_columns:
         con.execute(
