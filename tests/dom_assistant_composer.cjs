@@ -25,15 +25,15 @@ async function setup(enabled=true){
  const failures=[];
  const test=async(name,run,enabled=true)=>{const env=await setup(enabled);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
- await test('empty and whitespace messages cannot be sent',async({w,doc})=>{
-  assert.equal(doc.querySelector('#assistant-send').disabled,true);type(w,doc,'   ');assert.equal(doc.querySelector('#assistant-send').disabled,true);
-  type(w,doc,'Prepare estimate');assert.equal(doc.querySelector('#assistant-send').disabled,false);
+ await test('empty and whitespace drafts keep voice input available but cannot submit',async({w,doc})=>{
+  const send=doc.querySelector('#assistant-send');assert.equal(send.type,'button');assert.equal(send.disabled,false);type(w,doc,'   ');assert.equal(send.type,'button');assert.equal(send.disabled,false);
+  type(w,doc,'Prepare estimate');assert.equal(send.type,'submit');assert.equal(send.disabled,false);
  });
  await test('background mode selects delivery and uses the shared submit button',async({w,doc,requests})=>{
   const mode=doc.querySelector('#assistant-background');assert.ok(mode);mode.click();assert.equal(mode.getAttribute('aria-pressed'),'true');assert.equal(requests.length,0);
   type(w,doc,'Prepare estimate');doc.querySelector('#assistant-form').requestSubmit();await tick();
   assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].body).text,'Prepare estimate');assert.ok(requests[0].headers['Idempotency-Key']);
-  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,true);
+  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').type,'button');assert.equal(doc.querySelector('#assistant-send').disabled,false);
   assert.ok(doc.querySelector('#assistant-status').textContent.length>0);
  });
  await test('missing worker cannot be selected or receive a job',async({w,doc,requests})=>{
