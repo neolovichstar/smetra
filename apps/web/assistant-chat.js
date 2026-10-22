@@ -168,8 +168,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     voiceStarting=true;voiceError=false;voiceText='';syncSendButton();
     status.textContent='Запускаем распознавание речи…';
     try{
-      // Start in the original click gesture. Awaiting getUserMedia first can consume
-      // transient user activation and make Chromium reject recognition.start().
+      // Start the permission request in the click gesture, but do not await it before
+      // recognition.start(): Chromium can consume transient activation across await.
+      // Release the temporary stream as soon as the permission prompt resolves.
+      if(navigator.mediaDevices?.getUserMedia){
+        try{
+          const permissionRequest=navigator.mediaDevices.getUserMedia({audio:true});
+          permissionRequest.then(stream=>stream?.getTracks?.().forEach(track=>track.stop())).catch(()=>{});
+        }catch{}
+      }
       if(!voiceRecognition){
         voiceRecognition=new SpeechRecognitionAPI();
         voiceRecognition.lang='ru-RU';voiceRecognition.interimResults=true;voiceRecognition.continuous=true;voiceRecognition.maxAlternatives=1;
