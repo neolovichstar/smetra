@@ -30,6 +30,7 @@ window.SmetraProfile=(()=>{
       if(exportRoot)settingsPage.insertBefore(root,exportRoot);else settingsPage.append(root);
     }
     if(!active()||!root?.isConnected||!root.closest('.settings-page'))return;
+    if(!root||!root.isConnected)return;
     root.innerHTML=`<div class="personalization-settings"><div><h3>Ассистент</h3><p>Ответы и личная память.</p></div><form id="personalization-form"><label>Стиль ответа<select name="response_style"><option value="concise" ${p.response_style==='concise'?'selected':''}>Кратко и по делу</option><option value="balanced" ${p.response_style==='balanced'?'selected':''}>С пояснениями</option><option value="detailed" ${p.response_style==='detailed'?'selected':''}>Подробно</option></select></label><label class="memory-setting"><span><strong>Личная память</strong><small>Ассистент запоминает полезные факты из разговора. Записи можно изменить в окне знаний.</small></span><input type="checkbox" name="memory_enabled" ${p.memory_enabled?'checked':''}></label><div class="profile-save-row"><button class="btn primary" type="submit">Сохранить настройки</button><span role="status"></span></div></form></div>`;
     const form=root.querySelector('form');if(form)saveForm(form,active);
   };

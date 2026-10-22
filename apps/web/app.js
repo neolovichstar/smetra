@@ -180,7 +180,14 @@ async function render() {
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   $('#sidebar-profile')?.classList.toggle('active',tab==='profile');
-  const loadingTimer=setTimeout(()=>{if(active())view(loadingView(section))},80);pendingPageLoadingTimer=loadingTimer;
+  const contentBefore=$('#content');
+  const initialMarkup=contentBefore?.innerHTML;
+  const initialSection=contentBefore?.dataset.section;
+  const loadingTimer=setTimeout(()=>{
+    const content=$('#content');
+    // Never replace a section that has already rendered while a lazy module is still resolving.
+    if(active()&&content&&content.innerHTML===initialMarkup&&initialSection!==section)view(loadingView(section));
+  },180);pendingPageLoadingTimer=loadingTimer;
   try {
     const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
@@ -216,7 +223,7 @@ async function render() {
       $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
       if(window.SmetraProfile){await window.SmetraProfile.settings(active);if(!active())return;}
       if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
-      syncThemeLabel();$('#theme-alt').onclick=theme;$('#delete-account').onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+      syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);const deleteAccountButton=$('#delete-account');if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
     } else {tab='dashboard';history.replaceState({},'',location.pathname+location.search+'#dashboard');return render()}

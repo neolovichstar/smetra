@@ -148,7 +148,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const send=document.querySelector('#assistant-send');
   const status=document.querySelector('#assistant-status');
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
-  let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceError=false;
+  let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   const syncSendButton=()=>{
     const hasText=Boolean(input.value.trim()),icon=hasText?'arrow-up':'microphone';
     send.type=hasText?'submit':'button';
@@ -165,7 +165,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(voiceListening){try{voiceRecognition?.stop()}catch{};return}
     if(voiceStarting)return;
     if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.';return}
-    voiceStarting=true;voiceError=false;voiceText='';syncSendButton();
+    voiceStarting=true;voiceError=false;voiceText='';voiceInterim='';syncSendButton();
     status.textContent='Запускаем распознавание речи…';
     try{
       // Start the permission request in the click gesture, but do not await it before
@@ -181,7 +181,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         voiceRecognition=new SpeechRecognitionAPI();
         voiceRecognition.lang='ru-RU';voiceRecognition.interimResults=true;voiceRecognition.continuous=true;voiceRecognition.maxAlternatives=1;
         voiceRecognition.onstart=()=>{
-          voiceStarting=false;voiceListening=true;voiceText='';voiceError=false;syncSendButton();
+          voiceStarting=false;voiceListening=true;voiceText='';voiceInterim='';voiceError=false;syncSendButton();
           status.textContent='Слушаю… Нажмите микрофон, чтобы закончить.';
         };
         voiceRecognition.onresult=event=>{
@@ -192,8 +192,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             else if(transcript&&!result.isFinal)interimParts.push(transcript);
           }
           voiceText=finalParts.join(' ').replace(/\s+/g,' ').trim();
-          const interim=interimParts.join(' ').replace(/\s+/g,' ').trim();
-          status.textContent=interim?'Распознаю: '+interim:'Слушаю… Нажмите микрофон, чтобы закончить.';
+          voiceInterim=interimParts.join(' ').replace(/\s+/g,' ').trim();
+          status.textContent=voiceInterim?'Распознаю: '+voiceInterim:'Слушаю… Нажмите микрофон, чтобы закончить.';
         };
         voiceRecognition.onerror=event=>{
           voiceError=true;voiceStarting=false;voiceListening=false;syncSendButton();
@@ -208,7 +208,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
           status.textContent=errors[event.error]||'Голосовой ввод прерван. Нажмите микрофон и повторите попытку.';
         };
         voiceRecognition.onend=()=>{
-          const transcript=voiceText.trim();voiceListening=false;voiceStarting=false;
+          const transcript=(voiceText||voiceInterim).trim();voiceListening=false;voiceStarting=false;
           if(transcript){
             const current=input.value.trim();
             input.value=[current,transcript].filter(Boolean).join(current?' ':'');
@@ -219,7 +219,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
           syncSendButton();syncAssistantConversationState();
         };
       }
-      voiceRecognition.start();
+      try{voiceRecognition.start()}catch(startError){voiceStarting=false;voiceListening=false;syncSendButton();throw startError}
     }catch(error){
       voiceStarting=false;voiceListening=false;syncSendButton();
       const denied=error?.name==='NotAllowedError'||error?.name==='SecurityError';
