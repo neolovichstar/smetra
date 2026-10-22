@@ -28,9 +28,9 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(rowBefore.left+Math.min(72,rowBefore.width/2)),y:Math.round(rowBefore.top+rowBefore.height/2)});
  await until("getComputedStyle(document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-actions')).opacity==='1'");
  assert.equal(await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-delete]')!==null"),true,'History exposes a dedicated trash action on hover');
- await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]').click();document.querySelector('.assistant-conversation-row.is-active [data-thread-rename]').click();const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-rename-input]').value='Studio conversation';row.querySelector('[data-thread-rename-form]').requestSubmit()");
+ await evaluate("(()=>{document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]').click();document.querySelector('.assistant-conversation-row.is-active [data-thread-rename]').click();const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-rename-input]').value='Studio conversation';row.querySelector('[data-thread-rename-form]').requestSubmit()})()");
  await until("document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-title').textContent==='Studio conversation'");
- await evaluate("const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()");
+ await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()})()");
  await until("document.querySelector('.assistant-conversation-row.is-active')?.dataset.pinned==='1'");
  await evaluate("const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()");
  await until("document.querySelector('.assistant-conversation-row.is-active')?.dataset.pinned==='0'");
