@@ -203,3 +203,7 @@ body.public-quote-mode .nav .links,body.public-quote-mode .nav .btn{display:none
 .black-landing :is(.document-total,.document-top,.open-price){font-variant-numeric:tabular-nums}.black-landing :is(.overline,.feature-number){letter-spacing:.09em}
 @media(max-width:760px){.black-landing .nav{width:calc(100% - 20px);top:7px;margin-top:7px;border-radius:24px}.black-landing .nav-inner{min-height:58px!important}.black-landing .nav .container{padding-inline:12px}.black-landing .nav .links{gap:3px}.black-landing .nav .links a{font-size:11px;padding:8px 7px}.black-landing .nav .brand{font-size:21px}.black-landing .nav .btn{min-height:38px;padding:8px 12px;font-size:11px}}
 
+
+/* Keep client-facing approval actions readable even when workspace theme variables are loaded. */
+body.public-quote-mode #public-quote .btn.primary{background:#181818!important;border-color:#181818!important;color:#fff!important;box-shadow:none!important}
+body.public-quote-mode #public-quote .btn.primary:hover:not(:disabled){background:#383838!important;border-color:#383838!important;color:#fff!important}
