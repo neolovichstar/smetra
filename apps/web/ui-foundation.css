@@ -2255,3 +2255,31 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
   .workspace-page .sidebar-group button:hover,.workspace-page .sidebar-disclosure:hover,.workspace-page .main .btn:not(:disabled):hover{transform:translateY(-1px)}
 }
 
+/* Keep transcript content above the floating composer; the composer itself moves on first send. */
+.workspace-page .assistant-studio:not(.has-conversation) .assistant-content{
+  flex:0 0 auto!important;height:calc(42% - 4px)!important;max-height:none!important;
+}
+.workspace-page .assistant-studio.has-conversation .assistant-content{
+  flex:0 0 auto!important;height:calc(100% - 220px)!important;max-height:none!important;
+}
+.workspace-page .assistant-studio :is(.assistant-header h1,.assistant-page-title,.assistant-title){display:none!important}
+.workspace-page .team-custom-fields{overflow:hidden;border:0!important;border-radius:18px!important;background:rgba(255,255,255,.018)!important}
+.workspace-page .team-custom-fields>summary{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:66px;
+  padding:16px 20px;list-style:none;cursor:pointer
+}
+.workspace-page .team-custom-fields>summary::-webkit-details-marker{display:none}
+.workspace-page .team-custom-fields>summary strong{display:block;font-size:14px;font-weight:600}
+.workspace-page .team-custom-fields>summary small{display:block;margin-top:4px;color:var(--smetra-text-muted);font-size:12px}
+.workspace-page .team-custom-fields[open]>summary{background:rgba(255,255,255,.018)}
+.workspace-page .team-custom-fields-body{padding:0 20px 20px}
+.workspace-page .team-custom-fields-list{display:grid;gap:2px;margin:8px 0 14px}
+.workspace-page .team-custom-field-row{display:flex;align-items:center;min-height:42px;padding:8px 0}
+.workspace-page .team-custom-field-row span{display:flex;flex-direction:column;gap:3px}
+.workspace-page .team-custom-field-row strong{font-size:12px;font-weight:550}
+.workspace-page .team-custom-field-row small,.workspace-page .team-custom-fields-empty{font-size:11px;color:var(--smetra-text-muted)}
+@media(max-width:800px){
+  .workspace-page .assistant-studio:not(.has-conversation) .assistant-content{height:calc(42% - 4px)!important}
+  .workspace-page .assistant-studio.has-conversation .assistant-content{height:calc(100% - 220px)!important}
+}
+
