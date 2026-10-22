@@ -45,6 +45,7 @@
       const items = document.createElement('div');
       items.className = 'sidebar-group-items'; items.id = `sidebar-group-${index}`; items.hidden = true;
       toggle.setAttribute('aria-controls',items.id);
+      let closeTimer=null;
       [...group.querySelectorAll('[data-tab]')].forEach(control => items.append(control));
       // Construction belongs to the work group, alongside tasks and calendar.
       if (index === 1) {
@@ -53,15 +54,19 @@
       }
       heading.replaceWith(toggle); group.append(items);
       toggle.onclick = () => {
-        const opening=items.hidden;
+        const opening=items.hidden || toggle.getAttribute('aria-expanded')==='false';
         toggle.setAttribute('aria-expanded',String(opening));
+        clearTimeout(closeTimer);
         if(opening){
           items.hidden=false;items.classList.remove('is-closing');
           requestAnimationFrame(()=>items.classList.add('is-open'));
         }else{
-          // Closing is immediate for deterministic focus/visibility semantics; opening remains animated.
-          items.classList.remove('is-open','is-closing');
-          items.hidden=true;
+          items.classList.remove('is-open');items.classList.add('is-closing');
+          closeTimer=setTimeout(()=>{
+            if(toggle.getAttribute('aria-expanded')==='false'){
+              items.hidden=true;items.classList.remove('is-closing');
+            }
+          },220);
         }
       };
     });
@@ -73,8 +78,10 @@
     });
     const items = active?.closest('.sidebar-group-items');
     if (items?.hidden) {
-      items.hidden = false;
-      items.previousElementSibling?.setAttribute('aria-expanded','true');
+      items.hidden=false;items.classList.remove('is-closing');
+      const disclosure=items.previousElementSibling;
+      disclosure?.setAttribute('aria-expanded','true');
+      requestAnimationFrame(()=>items.classList.add('is-open'));
     }
   }
   document.querySelectorAll('[data-mode]').forEach(control => {
