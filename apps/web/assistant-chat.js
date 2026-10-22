@@ -100,7 +100,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const assistantContentHost=assistantStudioRoot?.querySelector('.assistant-content');
   const assistantAppShell=document.querySelector('.app-shell');
   const assistantMainHost=document.querySelector('#content.main');
-  const assistantCompactViewport=window.matchMedia('(max-width:800px)').matches;
+  const assistantCompactViewport=window.matchMedia?window.matchMedia('(max-width:800px)').matches:window.innerWidth<=800;
   if(assistantToolRail&&assistantMainColumn&&assistantContentHost){
     if(assistantCompactViewport){
       if(assistantToolRail.parentElement!==assistantMainColumn)assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
