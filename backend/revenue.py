@@ -14,7 +14,7 @@ import uuid
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300}
+PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_team_month': 0, 'smart_supplier_month': 0}
 
 
 def now():
@@ -71,14 +71,21 @@ def pricing(con, user):
         # Removing a live cohort cannot silently charge that user another price.
         raise ValueError('Assigned pricing variant is no longer configured')
     prices = variants[assigned['variant']]
+    team_month = integer_env('PRO_TEAM_MONTH_PRICE_KOPECKS', 249000, 100)
+    supplier_month = integer_env('SMART_SUPPLIER_MONTH_PRICE_KOPECKS', 20000, 100)
     launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
-    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': {
+    plans = {
         'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366}},
+        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366},
+        'pro_team_month': {'amount_kopecks': team_month, 'duration_days': 31},
+        'smart_supplier_month': {'amount_kopecks': supplier_month, 'duration_days': 31},
+    }
+    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': plans,
         'annual_saving_kopecks': prices['month']*12-prices['year'],
         'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
         'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
+
 
 
 def record(con, uid, name, origin='', variant='', key=None):
