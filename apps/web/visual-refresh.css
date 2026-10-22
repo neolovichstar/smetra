@@ -496,3 +496,12 @@ body:not(.workspace-page) :is(.feature-card,.product-preview,.preview-document,.
 :root[data-theme="light"] .workspace-page .assistant-studio .assistant-composer textarea { color: #242b37 !important; }
 :root[data-theme="light"] .workspace-page .assistant-studio .assistant-composer textarea::placeholder { color: #778192 !important; }
 :root[data-theme="light"] .workspace-page .assistant-studio .assistant-message.user .assistant-markdown { color: #263447; background: rgba(168,196,255,.24); }
+
+/* Keep the mobile drawer backdrop aligned with the floating header's real edge. */
+@media (max-width: 800px) {
+  .workspace-page.nav-open .nav-backdrop { top: 74px !important; }
+}
+@media (max-width: 700px) {
+  .workspace-page .nav-backdrop,
+  .workspace-page.nav-open .nav-backdrop { top: 119px !important; }
+}
