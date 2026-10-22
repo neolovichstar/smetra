@@ -168,15 +168,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     voiceStarting=true;voiceError=false;voiceText='';voiceInterim='';syncSendButton();
     status.textContent='Запускаем распознавание речи…';
     try{
-      // Start the permission request in the click gesture, but do not await it before
-      // recognition.start(): Chromium can consume transient activation across await.
-      // Release the temporary stream as soon as the permission prompt resolves.
-      if(navigator.mediaDevices?.getUserMedia){
-        try{
-          const permissionRequest=navigator.mediaDevices.getUserMedia({audio:true});
-          permissionRequest.then(stream=>stream?.getTracks?.().forEach(track=>track.stop())).catch(()=>{});
-        }catch{}
-      }
+      // SpeechRecognition requests microphone permission itself. Do not start a second
+      // getUserMedia prompt in parallel: two simultaneous microphone requests can stall
+      // recognition in Chromium/WebView. Start directly from this explicit button gesture.
       if(!voiceRecognition){
         voiceRecognition=new SpeechRecognitionAPI();
         voiceRecognition.lang='ru-RU';voiceRecognition.interimResults=true;voiceRecognition.continuous=true;voiceRecognition.maxAlternatives=1;
