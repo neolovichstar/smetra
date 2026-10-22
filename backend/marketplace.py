@@ -99,44 +99,44 @@ def handle(handler, con, user, method, path, query):
         city = business.string(data.get("city"), "Город", 120, True)
         property_type = data.get("property_type", "apartment")
         if property_type not in ("apartment", "house", "commercial", "other"):
-            raise handler.api_error(400, "Неизвестный тип объекта")
+            raise _error(400, "Неизвестный тип объекта")
         description = business.string(data.get("description", ""), "Описание объекта", 5000)
         contact_name = business.string(data.get("contact_name", user["name"]), "Контактное имя", 120, True)
         phone = business.string(data.get("phone", ""), "Телефон", 50)
         email = business.string(data.get("email", ""), "Электронная почта", 254)
         if not phone and not email:
-            raise handler.api_error(400, "Укажите телефон или электронную почту для связи")
+            raise _error(400, "Укажите телефон или электронную почту для связи")
         area = data.get("area_sqm")
         if area is not None:
             if isinstance(area, bool):
-                raise handler.api_error(400, "Некорректная площадь объекта")
+                raise _error(400, "Некорректная площадь объекта")
             try:
                 area = float(area)
             except (TypeError, ValueError):
-                raise handler.api_error(400, "Некорректная площадь объекта")
+                raise _error(400, "Некорректная площадь объекта")
             if not (0 < area <= 100000):
-                raise handler.api_error(400, "Площадь должна быть от 0 до 100 000 м²")
+                raise _error(400, "Площадь должна быть от 0 до 100 000 м²")
             area = str(area)
 
         budget_min = data.get("budget_min_kopecks")
         budget_max = data.get("budget_max_kopecks")
         for label, value in (("Минимальный бюджет", budget_min), ("Максимальный бюджет", budget_max)):
             if value is not None and (type(value) is not int or not 0 <= value <= 100_000_000_000):
-                raise handler.api_error(400, "Некорректное поле «" + label + "»")
+                raise _error(400, "Некорректное поле «" + label + "»")
         if budget_min is not None and budget_max is not None and budget_max < budget_min:
-            raise handler.api_error(400, "Максимальный бюджет не может быть меньше минимального")
+            raise _error(400, "Максимальный бюджет не может быть меньше минимального")
         desired_date = data.get("desired_start_date")
         if desired_date:
             if not isinstance(desired_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", desired_date):
-                raise handler.api_error(400, "Дата начала работ должна быть в формате ГГГГ-ММ-ДД")
+                raise _error(400, "Дата начала работ должна быть в формате ГГГГ-ММ-ДД")
             try:
                 dt.date.fromisoformat(desired_date)
             except ValueError:
-                raise handler.api_error(400, "Некорректная дата начала работ")
+                raise _error(400, "Некорректная дата начала работ")
         quote_id = data.get("source_quote_id") or None
         if quote_id is not None:
             if not isinstance(quote_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", quote_id):
-                raise handler.api_error(400, "Некорректная ссылка на смету")
+                raise _error(400, "Некорректная ссылка на смету")
             accessible = con.execute(
                 "SELECT 1 FROM quotes q LEFT JOIN workspace_members m "
                 "ON m.workspace_id=q.workspace_id AND m.user_id=? "
@@ -144,7 +144,7 @@ def handle(handler, con, user, method, path, query):
                 (user["id"], quote_id, user["id"], user["id"]),
             ).fetchone()
             if not accessible:
-                raise handler.api_error(404, "Исходная смета не найдена")
+                raise _error(404, "Исходная смета не найдена")
 
         lead_id = _id()
         stamp = now
@@ -204,10 +204,10 @@ def handle(handler, con, user, method, path, query):
     if len(parts) == 5 and parts[:3] == ["api", "marketplace", "leads"] and parts[4] == "purchase" and method == "POST":
         lead_id = parts[3]
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", lead_id):
-            raise handler.api_error(400, "Некорректный идентификатор заказа")
+            raise _error(400, "Некорректный идентификатор заказа")
         idem = handler.headers.get("Idempotency-Key", "")
         if not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", idem):
-            raise handler.api_error(400, "Для покупки нужен корректный Idempotency-Key")
+            raise _error(400, "Для покупки нужен корректный Idempotency-Key")
         handler.throttle("marketplace-purchase:" + user["id"], 10, 60)
         team = con.execute(
             "SELECT w.id FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
@@ -217,7 +217,7 @@ def handle(handler, con, user, method, path, query):
         ).fetchone()
         solo_active = user["plan"] == "pro" and int(user["entitlement_until"] or 0) > now
         if not solo_active and not team:
-            raise handler.api_error(403, "Открытие контактов доступно только владельцам активного PRO Solo или участникам PRO Team")
+            raise _error(403, "Открытие контактов доступно только владельцам активного PRO Solo или участникам PRO Team")
         workspace_id = team["id"] if team else business.ensure_workspace(con, user)
         stamp = now
         purchase_id = _id()
@@ -242,14 +242,14 @@ def handle(handler, con, user, method, path, query):
                         (lead_id, stamp),
                     ).fetchone()
                     if not lead:
-                        raise handler.api_error(404, "Опубликованный заказ не найден или срок публикации истёк")
+                        raise _error(404, "Опубликованный заказ не найден или срок публикации истёк")
                     changed = con.execute(
                         "UPDATE users SET lead_token_balance=lead_token_balance-150,lead_token_balance_updated_at=? "
                         "WHERE id=? AND lead_token_balance>=150 AND deleted_at IS NULL AND blocked=0",
                         (stamp, user["id"]),
                     )
                     if changed.rowcount != 1:
-                        raise handler.api_error(402, "Недостаточно токенов. Пополните баланс пакетом 150 токенов за 150 ₽.")
+                        raise _error(402, "Недостаточно токенов. Пополните баланс пакетом 150 токенов за 150 ₽.")
                     balance = con.execute(
                         "SELECT lead_token_balance FROM users WHERE id=?", (user["id"],)
                     ).fetchone()["lead_token_balance"]
@@ -278,7 +278,7 @@ def handle(handler, con, user, method, path, query):
             (purchase_id, user["id"]),
         ).fetchone()
         if not row:
-            raise handler.api_error(404, "Покупка не найдена")
+            raise _error(404, "Покупка не найдена")
         return handler.send_json(200, {
             "lead": _lead(row), "purchased_at": row["purchased_at"],
             "price_kopecks": row["price_kopecks"], "tokens_spent": row["tokens_spent"],
@@ -294,7 +294,7 @@ def handle(handler, con, user, method, path, query):
             (lead_id, now),
         ).fetchone()
         if not row:
-            raise handler.api_error(404, "Опубликованный заказ не найден")
+            raise _error(404, "Опубликованный заказ не найден")
         return handler.send_json(200, {"lead": _lead(row)})
 
-    raise handler.api_error(404, "Не найдено")
+    raise _error(404, "Не найдено")
