@@ -13,24 +13,22 @@
   window.SmetraEmailSignupAvailable=data.email_signup_available!==false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
   const enabled=data.providers.filter(provider=>provider.enabled);
+  const enabledIds=new Set(enabled.map(provider=>provider.id));
+  // OAuth links are present in initial HTML; this API only filters unconfigured routes.
+  host.querySelectorAll('[data-provider]').forEach(button=>{
+   button.classList.toggle('hidden',!enabledIds.has(button.dataset.provider));
+  });
   host.classList.toggle('single',enabled.length===1);
-  for(const provider of enabled){
-   const button=document.createElement('button');
-   button.type='button';button.className='btn'+(provider.id==='yandex'?' primary':'');
-   button.textContent='Продолжить с '+provider.name;
-   button.onclick=()=>{location.href='/api/auth/oauth/'+encodeURIComponent(provider.id)+'/start'};
-   host.append(button);
-  }
   if(!enabled.length){
    host.closest('.auth-provider-block')?.classList.add('hidden');
   }else{
    note.textContent='Один профиль для сайта и приложения.';
-  }
- }catch{
+  } }catch{
   window.SmetraEmailDeliveryAvailable=false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
-  host.closest('.auth-provider-block')?.classList.add('hidden');
-  document.querySelector('#auth-status').textContent='Способы входа временно не загрузились. Войдите по почте.';
+  // Keep pre-rendered OAuth links available during capability API outages.
+  host.closest('.auth-provider-block')?.classList.remove('hidden');
+  note.textContent='Не удалось проверить способы входа. Попробуйте открыть сервис ещё раз или войдите по почте.';
  }
 })();
 const proposalLabels={title:'Название',name:'Название',client:'Клиент',client_id:'Клиент',description:'Описание',amount:'Стоимость',amount_kopecks:'Сумма',price:'Цена',cost_price:'Себестоимость',currency:'Валюта',quantity:'Количество',unit_price:'Цена',items:'Работы',due_date:'Срок',status:'Статус',email:'Почта',phone:'Телефон',terms:'Условия',project_id:'Заказ',note:'Примечание'};
