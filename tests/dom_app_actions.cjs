@@ -100,7 +100,7 @@ async function ready(){await new Promise((resolve,reject)=>{let text='';child.st
  console.log('PASS: Markdown note create, preview, edit, history and restore');
   await visit('assistant');
   assert.equal(query('.assistant-conversation-row.assistant-conversation-general').dataset.threadId,'','General conversation remains accessible in chat history');
-  assert.equal(query('.assistant-options')===null,true,'No global ellipsis menu remains in the rail');
+  assert.equal(doc.querySelector('.assistant-options'),null,'No global ellipsis menu remains in the rail');
   w.confirm=()=>true;const clearGeneral=click('.assistant-conversation-general [data-thread-delete]');await until(()=>query('.assistant-conversation-general [data-thread-delete]')!==clearGeneral,'Clear general conversation');w.confirm=()=>false;
   console.log('PASS: general conversation clear action is scoped to its own history row');
   const priorThread=w.sessionStorage.getItem('smetra.assistant.conversation');click('#assistant-new-thread');await until(()=>w.sessionStorage.getItem('smetra.assistant.conversation')!==priorThread&&!query('#assistant-new-thread').disabled,'New conversation');
