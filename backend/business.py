@@ -510,6 +510,16 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "029_assistant_rewarded_ad_flow.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    assistant_job_columns = {row["name"] for row in con.execute("PRAGMA table_info(assistant_jobs)")}
+    if "ad_reward_id" not in assistant_job_columns:
+        con.execute(
+            "ALTER TABLE assistant_jobs ADD COLUMN ad_reward_id TEXT REFERENCES assistant_ad_reward_credits(id) ON DELETE SET NULL"
+        )
     billing_intent_columns = {row["name"] for row in con.execute("PRAGMA table_info(billing_intents)")}
     if "subscription_id" not in billing_intent_columns:
         con.execute(
