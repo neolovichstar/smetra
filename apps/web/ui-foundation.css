@@ -658,7 +658,7 @@
 @media (max-width:800px) {
   body.workspace-page #sidebar-collapse{display:none!important}
   body.workspace-page #nav-toggle{display:inline-flex!important}
-  .workspace-page.nav-open .nav-backdrop{top:64px}
+  .workspace-page.nav-open .nav-backdrop{top:72px!important}
   #content .editor-layout{display:flex!important;flex-direction:column!important;gap:0!important;min-width:0!important}
   #content .editor-main,#content .editor-aside,#content .editor-positions{width:100%!important;max-width:none!important;min-width:0!important;flex:0 0 auto}
   #content .editor-positions>.section-top{
