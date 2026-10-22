@@ -1440,7 +1440,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise ApiError(409, "Платёж получен не от выбранного магазина")
 
     def apply_payment(self, con, local, remote):
-        if local.get("plan") == "lead_tokens_150":
+        if local["plan"] == "lead_tokens_150":
             return self.apply_lead_token_payment(con, local, remote)
         self.verify_yookassa_shop(remote)
         terms = con.execute(
