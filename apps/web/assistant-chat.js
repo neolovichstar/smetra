@@ -98,8 +98,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const assistantMainColumn=assistantStudioRoot?.querySelector('.assistant-main-column');
   const assistantToolRail=assistantStudioRoot?.querySelector('.assistant-toolrail');
   const assistantContentHost=assistantStudioRoot?.querySelector('.assistant-content');
-  if(assistantToolRail&&assistantMainColumn&&assistantContentHost&&assistantToolRail.parentElement!==assistantMainColumn){
-    assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
+  const assistantAppShell=document.querySelector('.app-shell');
+  const assistantMainHost=document.querySelector('#content.main');
+  const assistantCompactViewport=window.matchMedia('(max-width:800px)').matches;
+  if(assistantToolRail&&assistantMainColumn&&assistantContentHost){
+    if(assistantCompactViewport){
+      if(assistantToolRail.parentElement!==assistantMainColumn)assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
+    }else if(assistantAppShell&&assistantMainHost&&assistantToolRail.parentElement!==assistantAppShell){
+      assistantAppShell.insertBefore(assistantToolRail,assistantMainHost);
+    }
   }
   const messages=document.querySelector('#assistant-messages');
   const actions=document.querySelector('#assistant-actions');

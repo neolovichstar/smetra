@@ -2008,3 +2008,62 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
  .workspace-page *, .workspace-page *::before, .workspace-page *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 
+/* Fuse the app sidebar and assistant tool rail into adjacent, top-aligned columns. */
+.workspace-page .app-shell:has(.assistant-studio){
+  grid-template-columns:256px 58px minmax(0,1fr)!important;
+}
+.workspace-page.sidebar-compact .app-shell:has(.assistant-studio){
+  grid-template-columns:66px 58px minmax(0,1fr)!important;
+}
+.workspace-page .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed)){
+  grid-template-columns:256px 232px minmax(0,1fr)!important;
+}
+.workspace-page.sidebar-compact .app-shell:has(.assistant-studio:not(.assistant-tools-collapsed)){
+  grid-template-columns:66px 232px minmax(0,1fr)!important;
+}
+.workspace-page .app-shell:has(.assistant-studio)>#sidebar{grid-column:1;grid-row:1}
+.workspace-page .app-shell:has(.assistant-studio)>.assistant-toolrail{
+  grid-column:2;grid-row:1;position:relative!important;display:flex!important;flex-direction:column!important;
+  align-self:stretch!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;
+  margin:0!important;padding:10px 6px 12px!important;overflow:hidden!important;
+  border:0!important;border-radius:0!important;background:var(--smetra-bg)!important;
+  box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+}
+.workspace-page .app-shell:has(.assistant-studio)>#content.main{grid-column:3;grid-row:1;min-width:0!important}
+.workspace-page .app-shell>.assistant-toolrail .assistant-toolrail-toggle{
+  display:grid!important;place-items:center!important;align-self:center!important;
+  width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;
+  margin:0 auto 10px!important;padding:10px!important;border:0!important;border-radius:13px!important;
+  background:rgba(255,255,255,.04)!important;color:var(--smetra-text-muted)!important;
+  transition:background 180ms ease,color 180ms ease,transform 180ms ease!important;
+}
+.workspace-page .app-shell>.assistant-toolrail .assistant-toolrail-toggle:hover{background:rgba(255,255,255,.075)!important;color:var(--smetra-text)!important}
+.workspace-page .app-shell>.assistant-toolrail .assistant-toolrail-toggle svg{display:block;width:18px;height:18px}
+.workspace-page .app-shell>.assistant-toolrail .assistant-toolrail-body{display:flex!important;flex-direction:column!important;gap:10px!important;flex:1 1 auto!important;min-height:0!important;width:100%!important}
+.workspace-page .app-shell>.assistant-toolrail .assistant-workbar{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:6px!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+.workspace-page .app-shell>.assistant-toolrail .assistant-workbar button{
+  display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;
+  width:100%!important;min-width:0!important;min-height:42px!important;height:42px!important;
+  margin:0!important;padding:10px!important;border:0!important;border-radius:13px!important;
+  background:rgba(255,255,255,.025)!important;color:var(--smetra-text-muted)!important;
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;
+}
+.workspace-page .app-shell>.assistant-toolrail .assistant-workbar button:hover{background:rgba(255,255,255,.065)!important;color:var(--smetra-text)!important}
+.workspace-page .app-shell:has(.assistant-studio.assistant-tools-collapsed)>.assistant-toolrail .assistant-workbar button .assistant-tool-label{display:none!important}
+.workspace-page .app-shell:has(.assistant-studio.assistant-tools-collapsed)>.assistant-toolrail .assistant-workbar button{padding:9px!important}
+.workspace-page .app-shell>.assistant-toolrail .assistant-history-panel{
+  display:none;position:absolute!important;left:calc(100% + 8px)!important;top:10px!important;z-index:120!important;
+  width:min(320px,calc(100vw - 340px))!important;max-width:none!important;max-height:min(58vh,520px)!important;
+  margin:0!important;padding:10px!important;overflow:auto!important;border:1px solid rgba(255,255,255,.075)!important;
+  border-radius:17px!important;background:rgba(17,17,20,.94)!important;
+  -webkit-backdrop-filter:blur(24px) saturate(135%)!important;backdrop-filter:blur(24px) saturate(135%)!important;
+  box-shadow:0 20px 58px rgba(0,0,0,.32)!important;
+}
+.workspace-page .app-shell:has(.assistant-studio.is-history-expanded)>.assistant-toolrail .assistant-history-panel{display:block!important;animation:smetra-menu-enter 180ms ease both}
+.workspace-page .app-shell:has(.assistant-studio.assistant-tools-collapsed)>.assistant-toolrail .assistant-history-list .assistant-conversation-title{max-width:100%}
+@media(max-width:800px){
+ .workspace-page .app-shell:has(.assistant-studio){display:block!important;height:calc(100dvh - 72px)!important;min-height:0!important}
+ .workspace-page .app-shell:has(.assistant-studio)>.assistant-toolrail{display:none!important}
+ .workspace-page .app-shell:has(.assistant-studio)>#content.main{grid-column:auto!important;grid-row:auto!important;height:100%!important}
+}
+
