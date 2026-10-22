@@ -548,3 +548,15 @@ body:not(.workspace-page) :is(.feature-card,.product-preview,.preview-document,.
 :root[data-theme="light"] .workspace-page:not(.auth-mode) .btn.is-danger { color: #a53f51; background: linear-gradient(140deg,rgba(211,100,119,.12),rgba(211,100,119,.045)); border-color: rgba(173,67,84,.23); }
 :root[data-theme="light"] .workspace-page:not(.auth-mode) .btn.is-success { color: #21764d; background: linear-gradient(140deg,rgba(65,164,109,.13),rgba(65,164,109,.045)); border-color: rgba(42,137,85,.22); }
 :root[data-theme="light"] .workspace-page:not(.auth-mode) .btn.is-warning { color: #92651c; background: linear-gradient(140deg,rgba(195,145,49,.14),rgba(195,145,49,.045)); border-color: rgba(170,123,32,.23); }
+
+
+/* The floating header adds its margin to document flow; size the full-height assistant below its actual edge. */
+@media (min-width: 801px) {
+  .workspace-page:has(.assistant-studio) .app-shell { block-size: calc(100dvh - 74px); }
+}
+@media (max-width: 800px) and (min-width: 701px) {
+  .workspace-page:has(.assistant-studio) .app-shell { block-size: calc(100dvh - 71px); }
+}
+@media (max-width: 700px) {
+  .workspace-page:has(.assistant-studio) .app-shell { block-size: calc(100dvh - 119px); }
+}
