@@ -2442,3 +2442,35 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
 }
 @media(prefers-reduced-motion:reduce){.workspace-page .workspace-section,.workspace-page .app-view-enter{animation:none!important}}
 
+/* Final composer positioning: idle prompts are truly centered; after the first message the composer docks to the bottom. */
+.workspace-page .assistant-studio .assistant-main-column>.assistant-composer{
+ position:absolute!important;z-index:20!important;margin:0!important;flex:none!important;
+ transition:top 430ms cubic-bezier(.22,.72,.24,1),bottom 430ms cubic-bezier(.22,.72,.24,1),transform 430ms cubic-bezier(.22,.72,.24,1),width 220ms cubic-bezier(.22,.72,.24,1)!important;
+ will-change:top,transform
+}
+@media(min-width:801px){
+ .workspace-page .assistant-studio:not(.has-conversation) .assistant-main-column>.assistant-composer{
+  left:50%!important;top:58%!important;bottom:auto!important;
+  width:min(980px,calc(100% - 64px))!important;max-width:980px!important;
+  transform:translate(-50%,-50%)!important
+ }
+ .workspace-page .assistant-studio.has-conversation .assistant-main-column>.assistant-composer{
+  left:50%!important;top:calc(100% - 14px)!important;bottom:auto!important;
+  width:min(1080px,calc(100% - 48px))!important;max-width:1080px!important;
+  transform:translate(-50%,-100%)!important
+ }
+}
+@media(max-width:800px){
+ .workspace-page .assistant-studio:not(.has-conversation) .assistant-main-column>.assistant-composer{
+  left:50%!important;top:57%!important;bottom:auto!important;width:calc(100% - 24px)!important;
+  transform:translate(-50%,-50%)!important
+ }
+ .workspace-page .assistant-studio.has-conversation .assistant-main-column>.assistant-composer{
+  left:50%!important;top:calc(100% - 8px)!important;bottom:auto!important;width:calc(100% - 18px)!important;
+  transform:translate(-50%,-100%)!important
+ }
+}
+@media(prefers-reduced-motion:reduce){
+ .workspace-page .assistant-studio .assistant-main-column>.assistant-composer{transition:none!important}
+}
+
