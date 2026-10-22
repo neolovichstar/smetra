@@ -1,0 +1,83 @@
+name: Capture native RuStore screenshots
+on:
+  push:
+    branches: [capture-rustore-native-screens]
+    paths:
+      - '.github/workflows/capture-rustore-native-screens.yml'
+      - 'apps/mobile/**'
+      - 'backend/**'
+      - 'scripts/android_ui_fixture.py'
+      - 'requirements*.txt'
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@v3
+      - name: Prepare isolated native UI fixture
+        run: |
+          pip install -r requirements-dev.txt Pillow
+          sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' apps/mobile/app/src/main/AndroidManifest.xml
+          mkdir -p data/native-rustore-screens
+          SMETRA_FIXTURE_PORT=8084 python scripts/android_ui_fixture.py > data/native-rustore-screens/fixture.log 2>&1 &
+          echo $! > data/native-rustore-screens/fixture.pid
+          for i in $(seq 1 60); do
+            if grep -Fq ANDROID_UI_FIXTURE_READY data/native-rustore-screens/fixture.log; then break; fi
+            sleep 1
+          done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/native-rustore-screens/fixture.log || { cat data/native-rustore-screens/fixture.log; exit 1; }
+      - name: Run native app on Android emulator and capture device pixels
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none
+          disable-animations: true
+          script: |
+            set -e
+            adb shell wm size 1080x1920
+            adb shell wm density 420
+            ./apps/mobile/gradlew -p apps/mobile connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:8084
+            mkdir -p data/native-rustore-screens/default
+            adb pull /sdcard/Android/data/ru.smetra.mobile/files/design-qa data/native-rustore-screens/default/
+            adb shell pm clear ru.smetra.mobile
+            adb shell am instrument -w -e receiptsOnly true ru.smetra.mobile.test/ru.smetra.mobile.DesignSmoke | tee data/native-rustore-screens/construction-instrumentation.log
+            mkdir -p data/native-rustore-screens/construction
+            adb pull /sdcard/Android/data/ru.smetra.mobile/files/design-qa data/native-rustore-screens/construction/
+      - name: Assemble selected native screenshots
+        if: always()
+        run: |
+          mkdir -p data/native-rustore-screens/selected
+          find data/native-rustore-screens -type f -name '*.png' -print
+          for pair in \
+            '02-overview:01-overview' \
+            '03-itemized-quote:02-estimate' \
+            '11-assistant-diff:03-assistant' \
+            '05-project:04-project' \
+            '21-receipt-draft:05-construction'; do
+            source_name=${pair%%:*}; target_name=${pair##*:}
+            source_file=$(find data/native-rustore-screens -type f -path "*/design-qa/${source_name}.png" -print -quit)
+            if [ -n "$source_file" ]; then cp "$source_file" "data/native-rustore-screens/selected/${target_name}.png"; fi
+          done
+          (cd data/native-rustore-screens/selected && zip -q ../smetra-native-screens.zip ./*.png) || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smetra-native-rustore-screens
+          path: data/native-rustore-screens/
+          if-no-files-found: warn
+          retention-days: 2
