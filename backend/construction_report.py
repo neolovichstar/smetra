@@ -1,13 +1,24 @@
 """Private, client-safe field report generated from live construction records."""
 
 import io
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 from backend.attachments import download
+from backend.business import business_date
 from backend.documents import Download
+
+
+def _format_currency(value, code):
+    allowed = ("RUB", "USD", "EUR", "KZT", "BYN", "GBP")
+    code = code if code in allowed else "RUB"
+    return f'{Decimal(value) / 100:,.2f}'.replace(',', ' ') + ' ' + code
+
+
+def _report_date(moment=None):
+    """Use Smetra's business timezone instead of the server's local timezone."""
+    return business_date(moment).strftime("%d.%m.%Y")
 
 
 def report(service, obj, snapshot):
@@ -22,21 +33,28 @@ def report(service, obj, snapshot):
     if 'Smetra' not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont('Smetra', str(font)))
     body = ParagraphStyle('ReportBody', fontName='Smetra', fontSize=9, leading=14,
-                          textColor=colors.HexColor('#2f3946'))
+                          textColor=colors.HexColor('#303030'))
     small = ParagraphStyle('ReportSmall', parent=body, fontSize=7.5, leading=11)
     title = ParagraphStyle('ReportTitle', parent=body, fontSize=23, leading=31,
-                           textColor=colors.HexColor('#17293c'))
+                           textColor=colors.HexColor('#222222'))
 
     def text(value, style=body):
         return Paragraph(escape(str(value or '')), style)
 
-    def currency(value):
-        return f'{Decimal(value) / 100:,.2f}'.replace(',', ' ') + ' ₽'
 
     project = service.con.execute(
-        'SELECT status,amount_kopecks FROM projects WHERE id=? AND workspace_id=?',
+        'SELECT status,amount_kopecks,currency FROM projects WHERE id=? AND workspace_id=?',
         (obj['project_id'], service.wid),
     ).fetchone() if obj['project_id'] else None
+    quote = service.con.execute(
+        'SELECT currency FROM quotes WHERE id=? AND workspace_id=?',
+        (obj['quote_id'], service.wid),
+    ).fetchone() if obj['quote_id'] else None
+    scope_currency = (
+        quote['currency'] if quote
+        else project['currency'] if project
+        else 'RUB'
+    )
     paid = service.con.execute(
         'SELECT coalesce(sum(amount_kopecks),0) FROM project_payments WHERE project_id=? AND workspace_id=?',
         (obj['project_id'], service.wid),
@@ -48,7 +66,7 @@ def report(service, obj, snapshot):
                             topMargin=45, bottomMargin=45, title='Отчёт по объекту · Сметра')
     story = [text('СМЕТРА / ОТЧЁТ ПО ОБЪЕКТУ', small), Spacer(1, 14),
              text(obj['name'], title), Spacer(1, 8),
-             text(f'Сформирован {date.today().strftime("%d.%m.%Y")} · Исполнитель: {workspace["name"]}'),
+             text(f'Сформирован {_report_date()} · Исполнитель: {workspace["name"]}'),
              text(f'Заказчик: {client["name"] if client else "Не указан"}'),
              text(f'Статус: {project["status"] if project else obj["status"]}'), Spacer(1, 18)]
     work = [item for item in snapshot['quantities'] if item['kind'] == 'work' and Decimal(item['actual_quantity']) > 0]
@@ -60,9 +78,9 @@ def report(service, obj, snapshot):
     if len(rows) == 1:
         rows.append([text('Фактические объёмы ещё не записаны', small), text('—', small), text('—', small)])
     table = Table(rows, colWidths=[270, 110, 127], repeatRows=1, hAlign='LEFT')
-    table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e9eef4')),
+    table.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eeeeee')),
                                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                               ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dce3ec')),
+                               ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dddddd')),
                                ('TOPPADDING', (0, 0), (-1, -1), 8),
                                ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
     story += [table, Spacer(1, 22), text('Материалы', title), Spacer(1, 8)]
@@ -73,9 +91,9 @@ def report(service, obj, snapshot):
                                   text(item['required_quantity'] + ' ' + item['unit'], small),
                                   text(item['received_quantity'] + ' ' + item['unit'], small)])
         materials = Table(material_rows, colWidths=[270, 110, 127], repeatRows=1, hAlign='LEFT')
-        materials.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e9eef4')),
+        materials.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eeeeee')),
                                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                                       ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dce3ec')),
+                                       ('LINEBELOW', (0, 0), (-1, -1), .4, colors.HexColor('#dddddd')),
                                        ('TOPPADDING', (0, 0), (-1, -1), 8),
                                        ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
         story.append(materials)
@@ -84,10 +102,10 @@ def report(service, obj, snapshot):
     story += [Spacer(1, 22), text('Согласование и оплаты', title), Spacer(1, 8)]
     base = snapshot['scope']['base_quote_kopecks']
     if base is not None:
-        story.append(text('Основная смета: ' + currency(base)))
-    story.append(text('Согласованные допработы: ' + currency(snapshot['scope']['approved_changes_kopecks'])))
+        story.append(text('Основная смета: ' + _format_currency(base, scope_currency)))
+    story.append(text('Согласованные допработы: ' + _format_currency(snapshot['scope']['approved_changes_kopecks'], scope_currency)))
     if project:
-        story.append(text('Учтено поступлений: ' + currency(paid)))
+        story.append(text('Учтено поступлений: ' + _format_currency(paid, project['currency'] if project else scope_currency)))
     story.append(text('Поступления указаны по записям исполнителя и не являются кассовым чеком.', small))
     photos = service.con.execute(
         'SELECT f.*,l.work_date,l.work_description FROM construction_log_photos p '
