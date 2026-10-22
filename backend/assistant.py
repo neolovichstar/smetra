@@ -1116,6 +1116,94 @@ class ChatStream:
 
 
 def route(service, method, parts, data):
+    # Reward claims are bound to a short-lived, single-use server nonce. The mobile
+    # client must call complete only from Yandex's earned-reward callback.
+    if parts == ["rewarded-ad", "start"] and method == "POST":
+        service.h.throttle("assistant-ad-start:" + service.user["id"], 20, 86400)
+        if quota(service)["plan"] != "free":
+            raise DomainError(409, "На платном тарифе рекламные награды не требуются")
+        now_ts = stamp()
+        now_utc = dt.datetime.now(dt.timezone.utc)
+        midnight = int(now_utc.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        attempt_id = identity()
+        nonce = secrets.token_urlsafe(32)
+        with transaction(service.con):
+            daily = service.con.execute(
+                "SELECT count(*) AS n FROM assistant_ad_attempts WHERE user_id=? AND created_at>=?",
+                (service.user["id"], midnight),
+            ).fetchone()
+            if int(daily["n"] or 0) >= 20:
+                raise DomainError(429, "Достигнут дневной лимит рекламных наград")
+            service.con.execute(
+                "INSERT INTO assistant_ad_attempts(id,user_id,nonce_hash,status,created_at,expires_at) "
+                "VALUES(?,?,?,'issued',?,?)",
+                (attempt_id, service.user["id"], hashlib.sha256(nonce.encode()).hexdigest(), now_ts, now_ts + 900),
+            )
+        return 201, {
+            "attempt_id": attempt_id,
+            "nonce": nonce,
+            "expires_at": now_ts + 900,
+            "reward_tokens": 3,
+            "note": "Вызывайте complete только из callback начисления награды рекламного SDK.",
+        }
+
+    if parts == ["rewarded-ad", "complete"] and method == "POST":
+        attempt_id = string(data.get("attempt_id", ""), "Попытка рекламы", 80, True)
+        nonce = string(data.get("nonce", ""), "Ключ попытки", 100, True)
+        nonce_hash = hashlib.sha256(nonce.encode()).hexdigest()
+        now_ts = stamp()
+        now_utc = dt.datetime.now(dt.timezone.utc)
+        reward_date = now_utc.date().isoformat()
+        with transaction(service.con):
+            attempt = service.con.execute(
+                "SELECT * FROM assistant_ad_attempts WHERE id=? AND user_id=?",
+                (attempt_id, service.user["id"]),
+            ).fetchone()
+            if not attempt:
+                raise DomainError(404, "Попытка рекламного просмотра не найдена")
+            if not secrets.compare_digest(attempt["nonce_hash"], nonce_hash):
+                raise DomainError(403, "Неверный ключ попытки")
+            existing = service.con.execute(
+                "SELECT id,remaining,expires_at FROM assistant_ad_reward_credits WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+            if attempt["status"] == "completed" and existing:
+                remaining = service.con.execute(
+                    "SELECT coalesce(sum(remaining),0) AS n FROM assistant_ad_reward_credits WHERE user_id=? AND expires_at>?",
+                    (service.user["id"], now_ts),
+                ).fetchone()["n"]
+                return 200, {"ok": True, "duplicate": True, "awarded_tokens": 3, "ad_reward_remaining": int(remaining or 0)}
+            if attempt["status"] != "issued":
+                raise DomainError(409, "Эта попытка рекламного просмотра уже закрыта")
+            if int(attempt["expires_at"]) <= now_ts:
+                service.con.execute(
+                    "UPDATE assistant_ad_attempts SET status='expired' WHERE id=? AND status='issued'",
+                    (attempt_id,),
+                )
+                return 410, {"error": "Время подтверждения просмотра истекло. Запустите рекламу заново."}
+            changed = service.con.execute(
+                "UPDATE assistant_ad_attempts SET status='completed',completed_at=? "
+                "WHERE id=? AND user_id=? AND status='issued' AND expires_at>? RETURNING id",
+                (now_ts, attempt_id, service.user["id"], now_ts),
+            ).fetchone()
+            if not changed:
+                raise DomainError(409, "Попытку рекламного просмотра уже обработали")
+            credit_id = identity()
+            service.con.execute(
+                "INSERT INTO assistant_ad_reward_credits(id,user_id,attempt_id,reward_date,amount,remaining,created_at,expires_at) "
+                "VALUES(?,?,?, ?,3,3,?,?) ON CONFLICT(attempt_id) DO NOTHING",
+                (credit_id, service.user["id"], attempt_id, reward_date, now_ts, now_ts + 30 * 86400),
+            )
+            remaining = service.con.execute(
+                "SELECT coalesce(sum(remaining),0) AS n FROM assistant_ad_reward_credits WHERE user_id=? AND expires_at>?",
+                (service.user["id"], now_ts),
+            ).fetchone()["n"]
+        return 200, {
+            "ok": True, "duplicate": False, "awarded_tokens": 3,
+            "ad_reward_remaining": int(remaining or 0),
+            "expires_in_days": 30,
+        }
+
     if method == "GET" and len(parts) == 3 and parts[0] == "actions" and parts[2] == "preview.pdf":
         from backend.assistant_resources import document_preview
 
