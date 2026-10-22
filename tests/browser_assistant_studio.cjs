@@ -37,7 +37,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  await until("!sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-general.is-active')");
  await evaluate("document.querySelector('.assistant-conversation-general [data-thread-delete]').click()");
  await until("!document.querySelector('.assistant-conversation-general [data-thread-delete]').disabled");
- await evaluate("document.querySelector('#assistant-history-toggle').click()");
+ await evaluate("if(document.querySelector('.assistant-studio').classList.contains('is-history-expanded'))document.querySelector('#assistant-history-toggle').click()");
  await until("!document.querySelector('.assistant-studio').classList.contains('is-history-expanded')");
  await until("document.querySelector('.assistant-welcome h2')");
  for(const width of [320,390,768,1024,1440,1728]){

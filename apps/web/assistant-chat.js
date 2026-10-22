@@ -37,7 +37,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(!active())return;
   document.querySelector('.contextual-upgrade')?.remove();
   const collapsedTools=(()=>{try{return localStorage.getItem('smetra.assistant.tools-collapsed')==='true'}catch{return false}})();
-  view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}">
+  const historyExpanded=Boolean(document.querySelector('.assistant-studio.is-history-expanded'));
+  view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}${historyExpanded?' is-history-expanded':''}">
     <div class="assistant-main-column">
       <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
