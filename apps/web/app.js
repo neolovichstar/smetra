@@ -199,8 +199,20 @@ async function render() {
     } else if(tab==='settings') {
       view(header('Настройки','Отображение и поведение ассистента.')+`<div class="panel"><h3>Аккаунт</h3><p>${escapeHtml(user.email)}</p><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Переключить тему</button></div><section id="settings-personalization"></section><section id="settings-export"></section><div class="panel"><h3>Удалить аккаунт</h3><p class="muted">Предложения и доступ будут удалены без возможности восстановления.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div>`);
       $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
-      if(window.SmetraProfile){await window.SmetraProfile.settings(active);if(!active())return;}
-      if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
+      if(window.SmetraProfile){
+        try{await window.SmetraProfile.settings(active);if(!active())return;}
+        catch(error){
+          if(!active())return;
+          const root=$('#settings-personalization');
+          if(root){root.innerHTML='<div class="personalization-settings settings-recovery"><div><h3>Настройки ассистента</h3><p>Не удалось загрузить параметры персонализации. Остальные настройки доступны.</p></div><button class="btn small" id="settings-personalization-retry" type="button">Повторить</button><span class="settings-recovery-status" role="status"></span></div>';
+            root.querySelector('#settings-personalization-retry').onclick=async event=>{const button=event.currentTarget,status=root.querySelector('[role=status]');button.disabled=true;status.textContent='Загружаем…';try{await window.SmetraProfile.settings(active)}catch(retryError){if(active())status.textContent='Не получилось загрузить настройки. Проверьте соединение.'}finally{if(button.isConnected)button.disabled=false}}
+          }
+        }
+      }
+      if(window.SmetraLoadFeature){
+        try{await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport?.render?.()}
+        catch(error){const exportRoot=$('#settings-export');if(exportRoot)exportRoot.innerHTML='<p class="muted settings-export-unavailable">Экспорт временно недоступен. Настройки профиля по-прежнему можно изменить.</p>'}
+      }
       syncThemeLabel();$('#theme-alt').onclick=theme;$('#delete-account').onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
