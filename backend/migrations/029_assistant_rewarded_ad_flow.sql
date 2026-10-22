@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_assistant_ad_attempts_expiry
 CREATE TABLE IF NOT EXISTS assistant_ad_reward_credits (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  attempt_id TEXT NOT NULL UNIQUE REFERENCES assistant_ad_attempts(id) ON DELETE RESTRICT,
+  attempt_id TEXT NOT NULL UNIQUE REFERENCES assistant_ad_attempts(id) ON DELETE CASCADE,
   reward_date TEXT NOT NULL,
   amount INTEGER NOT NULL DEFAULT 3 CHECK(amount=3),
   remaining INTEGER NOT NULL DEFAULT 3 CHECK(remaining BETWEEN 0 AND amount),
