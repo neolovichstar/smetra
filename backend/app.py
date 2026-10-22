@@ -212,6 +212,7 @@ def user_view(user, con):
         "role": user["role"],
         "plan": user["plan"] if expiry > now() else "free",
         "entitlement_until": expiry,
+        "lead_token_balance": int(user["lead_token_balance"] or 0),
         "email_verified": user["email_verified_at"] is not None,
         "quote_count": con.execute(
             "SELECT count(*) FROM quotes WHERE user_id=?", (user["id"],)
@@ -1689,6 +1690,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     grants = con.execute(
                         """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
                         WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
+                        AND p.plan IN ('pro_month','pro_year')
                         AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                         ORDER BY p.activated_at,p.created_at,p.id""",
                         (payment["user_id"],),
@@ -1704,10 +1706,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
-                    # Any unused gift credits attached to a fully refunded purchase are revoked.
+                    # Revoke unused purchased AI credits on full refund.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    terms=con.execute(
+                        'SELECT is_test,source,variant,plan,workspace_id,subscription_id FROM billing_intents WHERE payment_id=?',
+                        (payment['id'],),
+                    ).fetchone()
+
+                    if terms and terms['plan'] == 'lead_tokens_150':
+                        # Remove any unspent part of the refunded token pack. Spent credits are
+                        # accounted for in the immutable ledger and require manual fraud review.
+                        balance_row=con.execute(
+                            'SELECT lead_token_balance FROM users WHERE id=?', (payment['user_id'],)
+                        ).fetchone()
+                        available=int(balance_row['lead_token_balance'] or 0) if balance_row else 0
+                        revoke=min(150,available)
+                        if revoke:
+                            balance_after=available-revoke
+                            con.execute(
+                                'UPDATE users SET lead_token_balance=?,lead_token_balance_updated_at=? WHERE id=?',
+                                (balance_after,now(),payment['user_id']),
+                            )
+                            con.execute(
+                                'INSERT INTO lead_token_ledger(id,user_id,delta_tokens,balance_after,entry_type,source,source_id,idempotency_key,created_at) '
+                                'VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING',
+                                (uid(),payment['user_id'],-revoke,balance_after,'refund','yookassa',payment['id'],'refund:'+refund_id,now()),
+                            )
+
+                    subscription=con.execute(
+                        'SELECT * FROM billing_subscriptions WHERE last_payment_id=?',
+                        (payment['id'],),
+                    ).fetchone()
+                    if subscription:
+                        # A later successful renewal changes last_payment_id, so refunding
+                        # an older charge cannot disable newer paid access.
+                        con.execute(
+                            "UPDATE billing_subscriptions SET status='canceled',auto_renew=FALSE,provider_payment_method_id=NULL,next_charge_at=NULL,cancel_at_period_end=FALSE,canceled_at=?,current_period_end=?,updated_at=? WHERE id=? AND last_payment_id=?",
+                            (now(),now(),now(),subscription['id'],payment['id']),
+                        )
+                        if subscription['product_code'] == 'pro_team_month' and subscription['workspace_id']:
+                            con.execute(
+                                "UPDATE workspaces SET plan='free',subscription_status='canceled',entitlement_until=?,seat_limit=1 WHERE id=? AND entitlement_until<=? OR id=?",
+                                (now(),subscription['workspace_id'],now(),subscription['workspace_id']),
+                            )
+                        elif subscription['product_code'] == 'smart_supplier_month' and terms and terms['workspace_id']:
+                            con.execute(
+                                "UPDATE workspaces SET smart_supplier_enabled=FALSE,smart_supplier_until=? WHERE id=?",
+                                (now(),terms['workspace_id']),
+                            )
+
                     event(con, payment["user_id"], "payment_refunded")
-                    terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:
                         revenue.record(con,payment['user_id'],'subscription_cancelled',terms['source'],terms['variant'],'refund:'+refund_id)
                     audit(con, None, "payment.refunded", payment["id"])
