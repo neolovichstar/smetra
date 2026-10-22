@@ -25,15 +25,30 @@ async function setup(enabled=true){
  const failures=[];
  const test=async(name,run,enabled=true)=>{const env=await setup(enabled);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
- await test('empty and whitespace messages cannot be sent',async({w,doc})=>{
-  assert.equal(doc.querySelector('#assistant-send').disabled,true);type(w,doc,'   ');assert.equal(doc.querySelector('#assistant-send').disabled,true);
-  type(w,doc,'Prepare estimate');assert.equal(doc.querySelector('#assistant-send').disabled,false);
+ await test('empty composer offers microphone and text switches it to send',async({w,doc})=>{
+  const send=doc.querySelector('#assistant-send');
+  assert.equal(send.disabled,false);assert.ok(send.classList.contains('is-voice-ready'));assert.equal(send.getAttribute('aria-label'),'Надиктовать сообщение');
+  type(w,doc,'   ');assert.equal(send.disabled,false);assert.ok(send.classList.contains('is-voice-ready'));
+  type(w,doc,'Prepare estimate');assert.equal(send.disabled,false);assert.equal(send.classList.contains('is-voice-ready'),false);assert.equal(send.getAttribute('aria-label'),'Отправить сообщение');
+  type(w,doc,'');const click=new w.MouseEvent('click',{bubbles:true,cancelable:true});send.dispatchEvent(click);assert.equal(click.defaultPrevented,true);assert.match(doc.querySelector('#assistant-status').textContent,/Голосовой ввод не поддерживается/);
+ });
+ await test('voice recognition fills the composer draft without auto-sending',async({w,doc})=>{
+  class FakeRecognition{
+   start(){this.onstart?.();this.onresult?.({resultIndex:0,results:[{0:{transcript:'Составь смету на ремонт'},isFinal:true,length:1}]});this.onend?.()}
+   stop(){this.onend?.()}
+  }
+  w.SpeechRecognition=FakeRecognition;
+  const send=doc.querySelector('#assistant-send');send.click();
+  assert.equal(doc.querySelector('#assistant-input').value,'Составь смету на ремонт');
+  assert.equal(send.classList.contains('is-voice-ready'),false);
+  assert.equal(send.getAttribute('aria-label'),'Отправить сообщение');
+  assert.match(doc.querySelector('#assistant-status').textContent,/Распознано/);
  });
  await test('background mode selects delivery and uses the shared submit button',async({w,doc,requests})=>{
   const mode=doc.querySelector('#assistant-background');assert.ok(mode);mode.click();assert.equal(mode.getAttribute('aria-pressed'),'true');assert.equal(requests.length,0);
   type(w,doc,'Prepare estimate');doc.querySelector('#assistant-form').requestSubmit();await tick();
   assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].body).text,'Prepare estimate');assert.ok(requests[0].headers['Idempotency-Key']);
-  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,true);
+  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,false);assert.ok(doc.querySelector('#assistant-send').classList.contains('is-voice-ready'));
   assert.ok(doc.querySelector('#assistant-status').textContent.length>0);
  });
  await test('missing worker cannot be selected or receive a job',async({w,doc,requests})=>{

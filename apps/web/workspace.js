@@ -13,7 +13,11 @@ window.Workspace = (() => {
   const field = (key,label,value='',type='text',extra='') => `<div class="field"><label for="f-${key}">${e(label)}</label>${type==='textarea'?`<textarea id="f-${key}" name="${key}" rows="3" ${extra}>${e(value??'')}</textarea>`:`<input id="f-${key}" name="${key}" type="${type}" value="${e(value??'')}" ${extra}>`}</div>`;
   const select = (key,label,values,selected='') => `<div class="field"><label for="f-${key}">${e(label)}</label><select name="${key}" id="f-${key}">${option(values,selected)}</select></div>`;
   const empty = (title,text) => `<div class="empty"><span class="eyebrow">Начните с первого шага</span><h3>${e(title)}</h3><p>${e(text)}</p></div>`;
-  const button = (label,action,id='',cls='') => `<button class="btn small ${cls}" data-work="${action}" data-id="${e(id)}">${label}</button>`;
+  const button = (label,action,id='',cls='') => {
+    const text=String(label||'').toLocaleLowerCase('ru');
+    const tone=cls||(/удалить|удалени|убрать|отклонить|безвозврат|выйти из аккаунта|отменить закупку/.test(text)?'is-danger':/согласовать|принять|подтвердить|завершить|оплатить|готово|сохранить изменения/.test(text)?'is-success':/нужны изменения|повторить|ожидани|проверить/.test(text)?'is-warning':'');
+    return '<button class="btn small '+tone+'" data-work="'+action+'" data-id="'+e(id)+'">'+label+'</button>';
+  };
   const mainTitle = (title,subtitle,actions='') => header(title,subtitle,actions);
   const formObject = form => Object.fromEntries(new FormData(form));
   const decimalUnits=(value,places=4)=>{

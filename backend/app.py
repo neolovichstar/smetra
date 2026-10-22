@@ -562,6 +562,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/design-system.css"] = ("design-system.css", "text/css")
         public["/ui-foundation.css"] = ("ui-foundation.css", "text/css")
         public["/quote-editor.css"] = ("quote-editor.css", "text/css")
+        public["/visual-refresh.css"] = ("visual-refresh.css", "text/css")
         for name in (
             "reference-hero",
             "reference-sphere",
@@ -611,6 +612,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "trash",
             "users",
             "wallet",
+            "microphone",
         ):
             icon = f"assets/icons/{name}.svg"
             public["/" + icon] = (icon, "image/svg+xml")
@@ -624,7 +626,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
