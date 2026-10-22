@@ -125,7 +125,13 @@ window.Workspace = (() => {
     if(!active())return true;
     view(`<section class="workspace-section section-${e(section)}">${html}</section>`);bind(section);
     if(section==='files')bindFileCenter(fileCenterData);
-    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){await window.SmetraLoadFeature('growth');if(!active())return true;window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));}
+    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){
+      // Onboarding is optional. Do not block the dashboard render on the lazy growth chunk;
+      // otherwise a slow chunk lets the app-level loading timer replace an already-rendered page.
+      window.SmetraLoadFeature('growth').then(()=>{
+        if(active())window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));
+      }).catch(()=>{});
+    }
     if(section==='team')await customFieldSettings();
     return true;
   }
