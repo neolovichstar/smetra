@@ -846,12 +846,16 @@
   padding-right:0!important;
   padding-left:clamp(14px,2vw,26px)!important;
 }
-.workspace-page .assistant-studio .assistant-history-list,
+/* The history is a persistent rail list, not a displaced dropdown. Only the options menu flies out. */
 .workspace-page .assistant-studio .assistant-options-list{
   left:calc(100% + 10px)!important;
   right:auto!important;
 }
-.workspace-page .assistant-studio.assistant-tools-collapsed .assistant-history-list,
+.workspace-page .assistant-studio .assistant-history-list{
+  left:auto!important;
+  right:auto!important;
+  top:auto!important;
+}
 .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-options-list{
   left:calc(100% + 8px)!important;
   right:auto!important;
