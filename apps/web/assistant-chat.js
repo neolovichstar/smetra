@@ -35,13 +35,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(activeConversation&&!threadIndex.items.some(item=>item.id===activeConversation))activeConversation='';
   const thread=activeConversation?await api('/assistant/conversations/'+encodeURIComponent(activeConversation)):data;
   if(!active())return;
-  const currentTitle=threadIndex.items.find(item=>item.id===activeConversation)?.title||'Общий диалог';
   document.querySelector('.contextual-upgrade')?.remove();
   const collapsedTools=(()=>{try{return localStorage.getItem('smetra.assistant.tools-collapsed')==='true'}catch{return false}})();
-  view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}">
+  const historyExpanded=Boolean(document.querySelector('.assistant-studio.is-history-expanded'));
+  view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}${historyExpanded?' is-history-expanded':''}">
     <div class="assistant-main-column">
       <header class="assistant-header"><div><h1>Ассистент<span class="assistant-brand-dot" aria-hidden="true"></span></h1></div><span id="assistant-quota" class="assistant-quota"></span></header>
-      <form id="assistant-thread-edit" class="assistant-thread-edit hidden"><label class="visually-hidden" for="assistant-thread-name">Название диалога</label><input id="assistant-thread-name" maxlength="120" required aria-label="Название диалога"><button class="btn small primary" type="submit">Сохранить</button><button class="btn small" type="button" id="assistant-thread-cancel">Отмена</button></form>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
@@ -49,26 +48,49 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
       </div>
     </div>
-    <aside class="assistant-toolrail" aria-label="Инструменты диалога">
+    <aside class="assistant-toolrail" aria-label="История и инструменты ассистента">
       <button class="assistant-toolrail-toggle" id="assistant-toolrail-toggle" type="button" aria-expanded="${!collapsedTools}" aria-controls="assistant-workbar" aria-label="${collapsedTools?'Развернуть панель диалога':'Свернуть панель диалога'}" title="${collapsedTools?'Развернуть панель':'Свернуть панель'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="${collapsedTools?'M15 8l-4 4 4 4':'M9 8l4 4-4 4'}"/><path d="M7 4v16"/></svg></button>
-      <div class="assistant-toolrail-heading"><span class="assistant-toolrail-heading-label">ДИАЛОГ</span></div>
       <div class="assistant-toolrail-body">
         <div class="assistant-workbar" id="assistant-workbar">
-          <button class="btn small assistant-tool-new" id="assistant-new-thread" type="button" aria-label="Новый диалог" title="Новый диалог"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="assistant-tool-label">Новый диалог</span></button>
-          <details class="assistant-history"><summary aria-label="Диалоги" title="Диалоги"><span class="assistant-history-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 5.5V21M8 7h8M8 11h8"/></svg></span><span class="assistant-current-title assistant-tool-label">${escapeHtml(currentTitle)}</span><svg class="assistant-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
-            <div class="assistant-history-list"><span class="assistant-history-label">Ваши диалоги</span>
-              <button type="button" data-conversation="" aria-pressed="${!activeConversation}">Общий диалог</button>
-              ${threadIndex.items.map(item=>`<button type="button" data-conversation="${escapeHtml(item.id)}" aria-pressed="${item.id===activeConversation}"><span>${escapeHtml(item.title)}</span>${item.pinned?'<span class="assistant-pinned" aria-label="Закреплён"></span>':''}</button>`).join('')}
-            </div>
-          </details>
-          <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
-          <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="База знаний" title="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 4.5V22M8 6h8M8 10h8"/></svg><span class="assistant-tool-label">Знания</span></button>
-          <details class="assistant-options"><summary aria-label="Дополнительные действия" title="Дополнительные действия"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary><div class="assistant-options-list">
-            <button class="assistant-thread-action" id="assistant-rename" type="button">Переименовать</button>
-            <button class="assistant-thread-action" id="assistant-pin" type="button">${threadIndex.items.find(item=>item.id===activeConversation)?.pinned?'Открепить':'Закрепить'}</button>
-            <button class="assistant-thread-action" id="assistant-delete" type="button">${activeConversation?'Удалить диалог':'Очистить диалог'}</button>
-          </div></details>
+          <button class="btn small assistant-tool-new" id="assistant-new-thread" type="button" aria-label="Новый диалог" title="Новый диалог"><span class="icon assistant-tool-icon assistant-icon-plus" aria-hidden="true"></span><span class="assistant-tool-label">Новый диалог</span></button>
+          <button class="btn small assistant-history-toggle" id="assistant-history-toggle" type="button" aria-label="Показать историю диалогов" title="История диалогов" aria-expanded="false" aria-controls="assistant-history-panel"><span class="icon assistant-tool-icon assistant-icon-chat" aria-hidden="true"></span><span class="assistant-tool-label">История</span></button>
+          <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="База знаний" title="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel"><span class="icon assistant-tool-icon assistant-icon-knowledge" aria-hidden="true"></span><span class="assistant-tool-label">Знания</span></button>
         </div>
+        <section class="assistant-history-panel" id="assistant-history-panel" aria-label="История диалогов">
+          <div class="assistant-history-heading" id="assistant-history-heading"><span>ИСТОРИЯ</span><span class="assistant-history-count">${threadIndex.items.length}</span></div>
+          <div class="assistant-history-list" id="assistant-history-list" role="list" aria-label="История диалогов">
+            <div class="assistant-conversation-row assistant-conversation-general${!activeConversation?' is-active':''}" data-thread-row data-thread-id="" data-pinned="0" role="listitem">
+              <button class="assistant-conversation-open" type="button" data-conversation="" aria-pressed="${!activeConversation}" title="Общий диалог">
+                <span class="icon assistant-conversation-leading assistant-icon-chat" aria-hidden="true"></span><span class="assistant-conversation-title">Общий диалог</span>
+              </button>
+              <div class="assistant-conversation-actions">
+                <button class="assistant-conversation-icon-button assistant-conversation-delete" type="button" data-thread-delete aria-label="Очистить общий диалог" title="Очистить общий диалог"><span class="assistant-trash-mark" aria-hidden="true"></span></button>
+              </div>
+            </div>
+            ${threadIndex.items.map(item=>`<div class="assistant-conversation-row${item.id===activeConversation?' is-active':''}" data-thread-row data-thread-id="${escapeHtml(item.id)}" data-pinned="${item.pinned?'1':'0'}" role="listitem">
+              <button class="assistant-conversation-open" type="button" data-conversation="${escapeHtml(item.id)}" aria-pressed="${item.id===activeConversation}" title="${escapeHtml(item.title)}">
+                <span class="icon assistant-conversation-leading assistant-icon-chat" aria-hidden="true"></span><span class="assistant-conversation-title">${escapeHtml(item.title)}</span>${item.pinned?'<span class="assistant-conversation-pinned" aria-label="Закреплён" title="Закреплён"></span>':''}
+              </button>
+              <div class="assistant-conversation-actions">
+                <button class="assistant-conversation-icon-button assistant-conversation-more" type="button" data-thread-menu aria-expanded="false" aria-label="Действия для диалога «${escapeHtml(item.title)}»" title="Действия"><span class="assistant-more-mark" aria-hidden="true"></span></button>
+                <button class="assistant-conversation-icon-button assistant-conversation-delete" type="button" data-thread-delete aria-label="Удалить диалог «${escapeHtml(item.title)}»" title="Удалить диалог"><span class="assistant-trash-mark" aria-hidden="true"></span></button>
+              </div>
+              <div class="assistant-conversation-menu" data-thread-menu-panel hidden>
+                <div class="assistant-conversation-menu-actions">
+                  <button type="button" data-thread-rename><span class="icon assistant-menu-icon assistant-icon-pencil" aria-hidden="true"></span>Переименовать</button>
+                  <button type="button" data-thread-pin><span class="icon assistant-menu-icon assistant-icon-pin" aria-hidden="true"></span>${item.pinned?'Открепить':'Закрепить'}</button>
+                </div>
+                <form class="assistant-history-rename-form" data-thread-rename-form hidden>
+                  <label class="visually-hidden" for="assistant-history-name-${escapeHtml(item.id)}">Название диалога</label>
+                  <input id="assistant-history-name-${escapeHtml(item.id)}" data-thread-rename-input maxlength="120" required aria-label="Название диалога" value="${escapeHtml(item.title)}">
+                  <div class="assistant-history-rename-actions"><button type="submit" class="is-primary">Сохранить</button><button type="button" data-thread-rename-cancel>Отмена</button></div>
+                </form>
+              </div>
+            </div>`).join('')}
+            ${threadIndex.items.length===0?'<div class="assistant-history-empty">Созданные диалоги будут здесь</div>':''}
+          </div>
+        </section>
+        <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
       </div>
     </aside>
   </section>`);
@@ -101,45 +123,94 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
   let threadPath=activeConversation?'/assistant/conversations/'+encodeURIComponent(activeConversation):'';
   const clearLocalDraft=()=>{try{sessionStorage.removeItem(draftSlot())}catch{}};
-  let adoption=null,adopted=null;
-  const ensureThread=async()=>{
-    if(activeConversation)return threadPath;
-    if(!adoption){const body=JSON.stringify({title:currentTitle,adopt_general:true,...(context?{context_entity:context.entity,context_id:context.id}:{})});adoption={body,key:crypto.randomUUID()}}
-    const result=adopted||await api('/assistant/conversations',{method:'POST',headers:{'Idempotency-Key':adoption.key},body:adoption.body});adopted=result;
-    if(!active())return '';
-    const previousDraft=draftSlot();activeConversation=result.conversation.id;threadPath='/assistant/conversations/'+encodeURIComponent(activeConversation);
-    sessionStorage.setItem('smetra.assistant.conversation',activeConversation);
-    try{const draft=sessionStorage.getItem(previousDraft);if(draft){sessionStorage.setItem(draftSlot(),draft);sessionStorage.removeItem(previousDraft)}}catch{}
-    return threadPath;
-  };
   document.querySelector('#assistant-thread-select').onchange=event=>{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',event.target.value);window.SmetraAssistant()};
-  document.querySelectorAll('[data-conversation]').forEach(button=>{button.onclick=()=>{
-    const select=document.querySelector('#assistant-thread-select');select.value=button.dataset.conversation;select.dispatchEvent(new Event('change'));
-  }});
-  document.querySelectorAll('.assistant-workbar details').forEach(menu=>{
-    menu.querySelector('summary').addEventListener('click',event=>{if(working||threadBusy)event.preventDefault()});
-    menu.addEventListener('toggle',()=>{if(menu.open)document.querySelectorAll('.assistant-workbar details').forEach(other=>{if(other!==menu)other.open=false})});
-    menu.addEventListener('keydown',event=>{if(event.key==='Escape'){menu.open=false;menu.querySelector('summary').focus();event.stopPropagation()}});
-    menu.addEventListener('focusout',()=>{setTimeout(()=>{if(menu.isConnected&&!menu.contains(document.activeElement))menu.open=false},0)});
-  });
   const toolrail=document.querySelector('.assistant-studio'),toolrailToggle=document.querySelector('#assistant-toolrail-toggle');
-  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';toolrailToggle.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
-  document.querySelector('.assistant-page').addEventListener('click',event=>{
-    if(!event.target.closest('.assistant-workbar'))document.querySelectorAll('.assistant-workbar details').forEach(menu=>{menu.open=false});
-  });
+  const historyToggle=document.querySelector('#assistant-history-toggle');
+  const closeConversationMenus=(exceptRow=null)=>{
+    document.querySelectorAll('.assistant-conversation-menu:not([hidden])').forEach(menu=>{
+      const row=menu.closest('.assistant-conversation-row');
+      if(row===exceptRow)return;
+      menu.hidden=true;row?.classList.remove('is-menu-open','is-renaming');
+      row?.querySelector('[data-thread-menu]')?.setAttribute('aria-expanded','false');
+      const actions=menu.querySelector('.assistant-conversation-menu-actions');if(actions)actions.hidden=false;
+      const form=menu.querySelector('[data-thread-rename-form]');if(form)form.hidden=true;
+    });
+  };
+  const closeHistoryPanel=()=>{toolrail.classList.remove('is-history-expanded');historyToggle.setAttribute('aria-expanded','false')};
+  historyToggle.onclick=event=>{event.stopPropagation();const open=toolrail.classList.toggle('is-history-expanded');historyToggle.setAttribute('aria-expanded',String(open));if(open)closeConversationMenus()};
+  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');closeHistoryPanel();toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';toolrailToggle.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
+  document.querySelectorAll('[data-conversation]').forEach(button=>{button.onclick=()=>{
+    const select=document.querySelector('#assistant-thread-select');select.value=button.dataset.conversation||'';select.dispatchEvent(new Event('change'));
+  }});
   async function threadAction(button,action){
     if(button.disabled||!active()||working||threadBusy)return;threadBusy=true;
     setThreadBusy(true);
     try{await action();}catch(error){if(active())notify(error.message);}
     finally{threadBusy=false;if(active())setThreadBusy(working);}
   }
+  document.querySelectorAll('.assistant-conversation-row').forEach(row=>{
+    const id=row.dataset.threadId||'',path=id?'/assistant/conversations/'+encodeURIComponent(id):'/assistant/conversations/general';
+    const more=row.querySelector('[data-thread-menu]'),menu=row.querySelector('[data-thread-menu-panel]');
+    const closeRowMenu=()=>{if(!menu)return;menu.hidden=true;more?.setAttribute('aria-expanded','false');row.classList.remove('is-menu-open','is-renaming');const actions=menu.querySelector('.assistant-conversation-menu-actions');if(actions)actions.hidden=false;const form=menu.querySelector('[data-thread-rename-form]');if(form)form.hidden=true};
+    more?.addEventListener('click',event=>{
+      event.stopPropagation();if(working||threadBusy)return;
+      const open=menu.hidden;closeConversationMenus(row);
+      menu.hidden=!open;more.setAttribute('aria-expanded',String(open));row.classList.toggle('is-menu-open',open);
+    });
+    row.querySelector('[data-thread-rename]')?.addEventListener('click',event=>{
+      event.stopPropagation();if(working||threadBusy)return;
+      closeConversationMenus(row);
+      menu.hidden=false;more.setAttribute('aria-expanded','true');row.classList.add('is-menu-open','is-renaming');
+      menu.querySelector('.assistant-conversation-menu-actions').hidden=true;
+      const form=menu.querySelector('[data-thread-rename-form]');form.hidden=false;
+      const input=form.querySelector('[data-thread-rename-input]');input.value=row.querySelector('.assistant-conversation-title').textContent;input.focus();input.select();
+    });
+    row.querySelector('[data-thread-rename-cancel]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();closeRowMenu();more?.focus();
+    });
+    row.querySelector('[data-thread-rename-form]')?.addEventListener('submit',event=>{
+      event.preventDefault();event.stopPropagation();const title=event.currentTarget.querySelector('[data-thread-rename-input]').value.trim();
+      if(!title){notify('Введите название диалога');return}
+      return threadAction(event.currentTarget.querySelector('button[type=submit]'),async()=>{
+        await api(path,{method:'PATCH',body:JSON.stringify({title})});
+        if(active())await window.SmetraAssistant();
+      });
+    });
+    row.querySelector('[data-thread-pin]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();const pinned=row.dataset.pinned==='1';
+      return threadAction(event.currentTarget,async()=>{
+        await api(path,{method:'PATCH',body:JSON.stringify({pinned:pinned?0:1})});
+        if(active())await window.SmetraAssistant();
+      });
+    });
+    row.querySelector('[data-thread-delete]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();
+      if(working||threadBusy)return;
+      const general=!id;
+      const message=general?'Очистить сообщения общего диалога? Остальные диалоги сохранятся.':'Удалить этот диалог и его сообщения?';
+      if(!confirm(message))return;
+      return threadAction(event.currentTarget,async()=>{
+        await api(path,{method:'DELETE'});
+        if(!active())return;
+        const deletingActive=general?!activeConversation:id===activeConversation;
+        if(deletingActive){clearLocalDraft();sessionStorage.removeItem('smetra.assistant.conversation');}
+        await window.SmetraAssistant();
+      });
+    });
+    row.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&menu&&!menu.hidden){event.preventDefault();closeRowMenu();more?.focus();}
+    });
+  });
+  document.querySelector('.assistant-page').addEventListener('click',event=>{
+    if(!event.target.closest('.assistant-conversation-row-actions,.assistant-conversation-menu'))closeConversationMenus();
+    if(!event.target.closest('.assistant-history-panel,#assistant-history-toggle')&&toolrail.classList.contains('is-history-expanded'))closeHistoryPanel();
+  });
+  document.querySelector('.assistant-page').addEventListener('keydown',event=>{
+    if(event.key!=='Escape')return;
+    if(toolrail.classList.contains('is-history-expanded')){event.preventDefault();closeHistoryPanel();historyToggle.focus();}
+  });
   document.querySelector('#assistant-new-thread').onclick=event=>threadAction(event.currentTarget,async()=>{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});if(!active())return;sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);await window.SmetraAssistant()});
-  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
-  document.querySelector('#assistant-rename').onclick=()=>{if(!active()||working||threadBusy)return;document.querySelector('.assistant-options').open=false;const form=document.querySelector('#assistant-thread-edit');form.classList.remove('hidden');const name=document.querySelector('#assistant-thread-name');name.value=currentTitle;name.focus();name.select()};
-  document.querySelector('#assistant-thread-cancel').onclick=()=>{document.querySelector('#assistant-thread-edit').classList.add('hidden');document.querySelector('.assistant-options summary').focus()};
-  document.querySelector('#assistant-thread-edit').onsubmit=event=>{event.preventDefault();const title=document.querySelector('#assistant-thread-name').value.trim();if(!title){notify('Введите название диалога');return}return threadAction(event.currentTarget.querySelector('button[type=submit]'),async()=>{const path=await ensureThread();if(!path)return;await api(path,{method:'PATCH',body:JSON.stringify({title})});if(active())await window.SmetraAssistant()})};
-  document.querySelector('#assistant-pin').onclick=event=>threadAction(event.currentTarget,async()=>{const path=await ensureThread();if(!path)return;await api(path,{method:'PATCH',body:JSON.stringify({pinned:selectedThread?.pinned?0:1})});if(active())await window.SmetraAssistant()});
-  document.querySelector('#assistant-delete').onclick=event=>{if(!active()||working||threadBusy||!confirm(activeConversation?'Удалить этот диалог и его сообщения?':'Очистить сообщения общего диалога? Остальные диалоги сохранятся.'))return;return threadAction(event.currentTarget,async()=>{await api(threadPath||'/assistant/conversations/general',{method:'DELETE'});if(!active())return;clearLocalDraft();sessionStorage.removeItem('smetra.assistant.conversation');await window.SmetraAssistant()})};
+  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
@@ -195,9 +266,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();uploadAttachment(event.dataTransfer.files[0])}});
   let quota=data.quota,working=false,threadBusy=false,requestController=null;
   const setThreadBusy=blocked=>{
-    document.querySelectorAll('.assistant-workbar button,#assistant-thread-edit button,#assistant-thread-edit input').forEach(button=>button.disabled=blocked);
+    document.querySelectorAll('.assistant-workbar button,.assistant-history-list button,.assistant-history-rename-form input,.assistant-history-rename-form button').forEach(button=>button.disabled=blocked);
     document.querySelectorAll('.assistant-workbar summary').forEach(summary=>summary.setAttribute('aria-disabled',String(blocked)));
-    if(blocked)document.querySelectorAll('.assistant-workbar details').forEach(menu=>menu.open=false);
+    if(blocked)closeConversationMenus();
   };
   const stop=document.querySelector('#assistant-stop');
   stop.onclick=()=>requestController?.abort();
