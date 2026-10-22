@@ -10,7 +10,15 @@ except ModuleNotFoundError:
 
 
 def _now(handler):
-    return handler.now() if hasattr(handler, "now") else __import__("time").time_ns() // 1_000_000_000
+    return __import__("time").time_ns() // 1_000_000_000
+
+
+def _error(status, message):
+    try:
+        from backend.app import ApiError
+    except ModuleNotFoundError:
+        from app import ApiError
+    return ApiError(status, message)
 
 
 def _id():
@@ -59,7 +67,7 @@ def handle(handler, con, user, method, path, query):
         try:
             limit = max(1, min(50, int(_query(query, "limit", "30"))))
         except (TypeError, ValueError):
-            raise handler.api_error(400, "Некорректный лимит выдачи")
+            raise _error(400, "Некорректный лимит выдачи")
         select = (
             "SELECT id,city,property_type,area_sqm,budget_min_kopecks,budget_max_kopecks,"
             "description,desired_start_date,status,published_at,expires_at,created_at "
