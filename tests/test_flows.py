@@ -196,6 +196,13 @@ class FlowTests(unittest.TestCase):
                     self.assertEqual(response.headers.get_content_type(), mime)
                     self.assertGreater(len(response.read()), 100)
 
+    def test_workspace_enables_same_origin_microphone_only(self):
+        with urllib.request.urlopen(self.base + "/app") as response:
+            policy = response.headers.get("Permissions-Policy", "")
+            self.assertIn("microphone=(self)", policy)
+            self.assertIn("camera=()", policy)
+            self.assertIn("geolocation=()", policy)
+
     def test_workspace_initial_assets_are_served(self):
         html = (ROOT / "apps/web/app.html").read_text(encoding="utf-8")
         assets = set(re.findall(r'(?:src|href)="(/[^"?#]+)', html))

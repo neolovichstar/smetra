@@ -626,7 +626,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
