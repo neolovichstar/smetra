@@ -60,9 +60,14 @@ class AssistantAdRewardTests(unittest.TestCase):
             self.assertFalse(offer["enabled"])
             self.assertEqual(self.call("/assistant/ad-reward", "POST", {}, token)[0], 503)
 
+        with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
+            # With free quota remaining the offer must stay hidden.
+            self.assertFalse(self.call("/assistant/ad-reward", token=token)[1]["available"])
+
         self.exhaust_free_quota(token)
         with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
-            self.assertFalse(self.call("/assistant/ad-reward", token=token)[1]["available"])
+            # Only after the three free monthly requests are exhausted does the offer appear.
+            self.assertTrue(self.call("/assistant/ad-reward", token=token)[1]["available"])
 
     def test_paid_plan_cannot_claim_rewarded_ads(self):
         token, user_id = self.account("rewarded-ad-pro")
