@@ -19,7 +19,16 @@ window.SmetraProfile=(()=>{
     saveForm(document.querySelector('#profile-form'),active,async()=>{const current=await api('/me');if(!active())return;Object.assign(user,current.user);document.querySelector('#header-user').textContent=user.name;document.querySelector('#profile-display-name').textContent=user.name});
   };
   const settings=async(active)=>{
-    const result=await api('/profile');if(!active())return;const p=result.profile,root=document.querySelector('#settings-personalization');
+    const result=await api('/profile');if(!active())return;const p=result.profile;
+    let root=document.querySelector('#settings-personalization');
+    if(!root){
+      const content=document.querySelector('#content');
+      const settingsPage=content?.querySelector('.settings-page');
+      if(!content||!settingsPage||!active())return;
+      root=document.createElement('section');root.id='settings-personalization';
+      const exportRoot=settingsPage.querySelector('#settings-export');
+      if(exportRoot)settingsPage.insertBefore(root,exportRoot);else settingsPage.append(root);
+    }
     root.innerHTML=`<div class="personalization-settings"><div><h3>Ассистент</h3><p>Ответы и личная память.</p></div><form id="personalization-form"><label>Стиль ответа<select name="response_style"><option value="concise" ${p.response_style==='concise'?'selected':''}>Кратко и по делу</option><option value="balanced" ${p.response_style==='balanced'?'selected':''}>С пояснениями</option><option value="detailed" ${p.response_style==='detailed'?'selected':''}>Подробно</option></select></label><label class="memory-setting"><span><strong>Личная память</strong><small>Ассистент запоминает полезные факты из разговора. Записи можно изменить в окне знаний.</small></span><input type="checkbox" name="memory_enabled" ${p.memory_enabled?'checked':''}></label><div class="profile-save-row"><button class="btn primary" type="submit">Сохранить настройки</button><span role="status"></span></div></form></div>`;
     saveForm(root.querySelector('form'),active);
   };

@@ -109,11 +109,29 @@ window.Workspace = (() => {
       html=mainTitle('Календарь','Ближайшие сроки по задачам и проектам.',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${days.length?days.map(day=>`<section class="agenda-day"><time datetime="${e(day)}"><strong>${e(day.slice(-2))}</strong><span>${e(new Intl.DateTimeFormat('ru-RU',{month:'short',weekday:'short'}).format(new Date(day+'T12:00:00')))}</span></time><div>${result.deadlines.filter(item=>item.due_date===day).map(d=>`<div class="record-line"><button class="record-title" data-work="entity" data-kind="${d.kind==='task'?'tasks':'projects'}" data-id="${e(d.id)}"><strong>${e(d.name)}</strong><small>${d.kind==='task'?'Задача':'Проект'}</small></button>${status(d.status)}</div>`).join('')}</div></section>`).join(''):empty('Сроки пока не назначены','Укажите дату в проекте или задаче.')}</section>`;
     }else if(section==='activity'||section==='notifications'){
       const result=await api('/'+section);if(!active())return true;
-      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel">${section==='activity'?activityList(result.items):result.items.map(n=>`<div class="record-line ${n.is_read?'':'unread'}"><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div>`).join('')||empty('Пока тихо','Новые события появятся здесь.')}</section>`;
+      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel ${section==='notifications'?'notifications-panel':'activity-panel'}">${section==='activity'?activityList(result.items):result.items.length?result.items.map(n=>`<div class="record-line notification-row ${n.is_read?'':'unread'}"><span class="notification-dot" aria-hidden="true"></span><div><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div></div>`).join(''):empty('Пока тихо','Новые события появятся здесь.')}</section>`;
     }else if(section==='team'){
       const result=await api('/workspace/members');if(!active())return true;
-      html=mainTitle('Рабочее пространство','Роли определяют доступ к данным и действиям.',button('Добавить участника','member','','primary'))+
-        `<section class="panel"><div class="form-grid">${select('workspace','Пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}<div class="field"><label>Ваша роль</label><p>${e(labels[workspace.role])}</p></div></div><h3>Команда</h3>${result.items.map(m=>`<div class="record-line"><div><strong>${e(m.name)}</strong><small>${e(m.email)}</small></div>${status(m.role)}${m.role!=='owner'?button('Убрать','remove-member',m.user_id):''}</div>`).join('')}</section><section class="panel"><h3>Настройки бизнеса</h3><form id="workspace-settings"><div class="form-grid">${field('name','Название',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>${field('company_details','Реквизиты',workspace.settings.company_details||'','textarea')}${field('pipeline','Этапы лидов — по одному в строке',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea')}<p class="form-error" role="alert"></p><button class="btn primary" type="submit">Сохранить</button></form></section>`;
+      const memberRows=result.items.map(m=>`<div class="team-member-row"><span class="team-member-avatar" aria-hidden="true">${e((m.name||m.email||'?').trim().slice(0,1).toLocaleUpperCase('ru-RU'))}</span><div class="team-member-copy"><strong>${e(m.name||'Участник')}</strong><small>${e(m.email)}</small></div><span class="pill team-role-badge status-${e(m.role)}">${e(labels[m.role]||m.role)}</span>${m.role!=='owner'?button('Убрать','remove-member',m.user_id,'team-remove-member'):''}</div>`).join('');
+      html=mainTitle('Команда','Люди, роли и настройки одного рабочего пространства.',button('Добавить участника','member','','primary'))+
+        `<div class="team-page">
+          <section class="team-overview">
+            <div class="team-workspace-picker">${select('workspace','Рабочее пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}</div>
+            <div class="team-current-role"><span>Ваша роль</span><strong>${e(labels[workspace.role]||workspace.role)}</strong><small>Доступ к данным текущего пространства</small></div>
+          </section>
+          <section class="panel team-members-panel">
+            <div class="team-section-heading"><div><h2>Участники</h2><p>Кто имеет доступ к сметам и клиентским данным.</p></div><span class="team-count">${result.items.length}</span></div>
+            <div class="team-member-list">${memberRows||empty('Пока нет участников','Добавьте коллегу, чтобы работать над сметами вместе.')}</div>
+          </section>
+          <details class="panel team-business-settings">
+            <summary><span><strong>Настройки рабочего пространства</strong><small>Название, валюта и реквизиты бизнеса</small></span><span class="team-settings-chevron" aria-hidden="true"></span></summary>
+            <form id="workspace-settings" class="team-settings-form">
+              <div class="form-grid">${field('name','Название пространства',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта по умолчанию',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>
+              <details class="team-advanced-settings"><summary>Дополнительные параметры</summary>${field('company_details','Реквизиты для документов',workspace.settings.company_details||'','textarea','rows="3"')}${field('pipeline','Этапы лидов — каждый с новой строки',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea','rows="4"')}</details>
+              <p class="form-error" role="alert"></p><div class="team-settings-actions"><button class="btn primary" type="submit">Сохранить изменения</button></div>
+            </form>
+          </details>
+        </div>`;
     }else if(section==='files'){
       fileCenterData=await api('/files');if(!active())return true;
       html=mainTitle('Файлы','Вложения смет, клиентов и заказов. Текстовые файлы доступны для поиска и ассистента.')+
