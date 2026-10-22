@@ -229,7 +229,7 @@
   .workspace-page .workspace-home #capture-form{grid-template-columns:44px minmax(0,1fr) 44px!important;gap:4px!important;min-height:68px;padding:7px!important;border-radius:20px!important}
   .workspace-page .workspace-home #capture-form .capture-file{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;border-radius:14px!important;padding:9px!important}
   .workspace-page .workspace-home #capture-form #capture-text{min-height:46px!important;padding:9px 2px!important;font-size:16px!important;line-height:1.45!important}
-  .workspace-page .workspace-home #capture-form .capture-actions .btn{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;padding:0!important;font-size:0!important;border-radius:14px!important}
+  .workspace-page .workspace-home #capture-form .capture-actions .btn{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;font-size:0!important;border-radius:14px!important}
   .workspace-page .workspace-home #capture-form .capture-actions .btn::before{content:"";display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/arrow-up-right.svg') center/contain no-repeat;-webkit-mask:url('/assets/icons/arrow-up-right.svg') center/contain no-repeat}
   .workspace-page .workspace-home #capture-form:not(:has(.capture-file)){grid-template-columns:minmax(0,1fr) 44px!important}
   .workspace-page .workspace-home #capture-form:not(:has(.capture-file)) #capture-text{grid-column:1!important}
