@@ -14,7 +14,7 @@ import uuid
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_team_month': 0, 'smart_supplier_month': 0}
+PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_team_month': 0, 'smart_supplier_month': 0, 'lead_tokens_150': 0}
 
 
 def now():
@@ -79,6 +79,7 @@ def pricing(con, user):
         'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366},
         'pro_team_month': {'amount_kopecks': team_month, 'duration_days': 31},
         'smart_supplier_month': {'amount_kopecks': supplier_month, 'duration_days': 31},
+        'lead_tokens_150': {'amount_kopecks': 15000, 'duration_days': 31},
     }
     return {'experiment': experiment, 'variant': assigned['variant'], 'plans': plans,
         'annual_saving_kopecks': prices['month']*12-prices['year'],
