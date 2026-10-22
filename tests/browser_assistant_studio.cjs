@@ -21,6 +21,8 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  assert.notEqual(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display"),'none','Mobile navigation toggle is visible');
  await screenshot('welcome-mobile');
  await evaluate("document.querySelector('#assistant-new-thread').click()");await until("sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]')");
+ await evaluate("document.querySelector('#assistant-history-toggle').click()");
+ await until("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')&&getComputedStyle(document.querySelector('#assistant-history-panel')).display==='flex'");
  const rowBefore=await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active[data-thread-id]'),r=row.getBoundingClientRect();return {id:row.dataset.threadId,left:r.left,top:r.top,width:r.width,height:r.height}})()");
  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(rowBefore.left+Math.min(72,rowBefore.width/2)),y:Math.round(rowBefore.top+rowBefore.height/2)});
  await until("getComputedStyle(document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-actions')).opacity==='1'");
@@ -35,6 +37,8 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
  await until("!sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-general.is-active')");
  await evaluate("document.querySelector('.assistant-conversation-general [data-thread-delete]').click()");
  await until("!document.querySelector('.assistant-conversation-general [data-thread-delete]').disabled");
+ await evaluate("document.querySelector('#assistant-history-toggle').click()");
+ await until("!document.querySelector('.assistant-studio').classList.contains('is-history-expanded')");
  await until("document.querySelector('.assistant-welcome h2')");
  for(const width of [320,390,768,1024,1440,1728]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
