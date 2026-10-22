@@ -3,8 +3,8 @@
   const pending=new Map();
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js?v=20261022-glass-voice-v2','/ai-workspace.js']},
-    profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js?v=20261023-voice-input-v3','/ai-workspace.js']},
+    profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261023-settings-root-v2']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,files:['/construction.js']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js']},
