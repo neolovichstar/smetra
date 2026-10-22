@@ -123,11 +123,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const content=document.querySelector('.assistant-content');
   const syncAssistantConversationState=()=>{
     if(!assistantStudioRoot||!messages?.isConnected)return;
-    assistantStudioRoot.classList.toggle('has-conversation',Boolean(messages.querySelector('.assistant-message.user'))||Boolean(input.value.trim()));
+    assistantStudioRoot.classList.toggle('has-conversation',Boolean(messages.querySelector('.assistant-message.user')));
   };
   const conversationObserver=new MutationObserver(syncAssistantConversationState);
   conversationObserver.observe(messages,{childList:true,subtree:true});
-  input.addEventListener('input',syncAssistantConversationState);
   syncAssistantConversationState();
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
   attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
