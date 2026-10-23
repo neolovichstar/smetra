@@ -258,3 +258,17 @@ body.public-quote-mode #public-quote .btn.primary:hover:not(:disabled){backgroun
 .black-landing #pricing>.document-note{margin-top:22px;line-height:1.75;max-width:970px}
 @media(max-width:1160px){.black-landing .landing-plans{grid-template-columns:repeat(2,minmax(0,1fr))}.black-landing .landing-plan>p{min-height:0}}
 @media(max-width:660px){.black-landing .landing-plans{grid-template-columns:1fr}.black-landing .landing-plan{padding:21px}.black-landing .landing-price{font-size:31px}.black-landing #pricing .section-heading{margin-bottom:28px}}
+
+
+/* Contact channels: one typographic directory, not a row of cards. */
+.doc .contact-channels{margin:20px 0 36px;border-top:1px solid rgba(255,255,255,.12)}
+.doc .contact-channel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px 32px;padding:18px 0;border-bottom:1px solid rgba(255,255,255,.10)}
+.doc .contact-channel h3{font-size:15px;font-weight:600;line-height:1.4;margin:0 0 5px;color:#f2f2f3}
+.doc .contact-channel p{margin:0;max-width:46ch;font-size:12px;line-height:1.65}
+.doc .contact-channel>a{color:#e6e6e9;text-decoration:none;font-size:13px;overflow-wrap:anywhere}
+.doc .contact-channel>a:hover,.doc .contact-channel>a:focus-visible{text-decoration:underline;text-underline-offset:4px}
+.doc strong{color:#ececee;font-weight:600}
+.black-footer .footer-mail-links{display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px}
+.black-footer .footer-mail-links>a{color:#d6d6dc;text-decoration:none;white-space:nowrap}
+.black-footer .footer-mail-links>a:hover{text-decoration:underline;text-underline-offset:4px}
+@media(max-width:700px){.doc .contact-channel{grid-template-columns:minmax(0,1fr);gap:8px;padding:16px 0}}
