@@ -348,15 +348,28 @@ def _quote_item(service, quote_id, item_id):
         raise business.DomainError(404, "Смета не найдена")
     if quote["status"] != "draft" or int(quote["published_version"] or 0) > 0:
         raise business.DomainError(409, "Источник товара можно привязать к черновику. Создайте новую редакцию перед изменением опубликованной сметы.")
-    item = service.con.execute("SELECT * FROM quote_items WHERE id=? AND quote_id=?", (item_id, quote_id)).fetchone()
-    if not item:
+    item = None
+    payload = None
+    for candidate in service.con.execute("SELECT * FROM quote_items WHERE quote_id=? ORDER BY position", (quote_id,)).fetchall():
+        try:
+            item_data = json.loads(candidate["data"])
+        except (ValueError, TypeError):
+            continue
+        if isinstance(item_data, dict) and item_data.get("line_id") == item_id:
+            item, payload = candidate, item_data
+            break
+    if item is None:
+        # Accept a legacy DB row id only for compatibility with older clients.
+        candidate = service.con.execute("SELECT * FROM quote_items WHERE id=? AND quote_id=?", (item_id, quote_id)).fetchone()
+        if candidate:
+            try:
+                payload = json.loads(candidate["data"])
+            except (ValueError, TypeError):
+                payload = None
+            if isinstance(payload, dict):
+                item = candidate
+    if item is None or not isinstance(payload, dict):
         raise business.DomainError(404, "Строка сметы не найдена")
-    try:
-        payload = json.loads(item["data"])
-    except (ValueError, TypeError):
-        raise business.DomainError(409, "Строка сметы имеет некорректные данные") from None
-    if not isinstance(payload, dict):
-        raise business.DomainError(409, "Строка сметы имеет некорректные данные")
     return quote, item, payload
 
 
@@ -377,12 +390,12 @@ def _save_metadata(service, quote, item, payload, source_id, product):
     })
     service.con.execute("UPDATE quote_items SET data=? WHERE id=? AND quote_id=?", (
         business.packed(payload), item["id"], quote["id"]))
-    service.con.execute("UPDATE quotes SET revision=revision+1,updated_at=? WHERE id=? AND workspace_id=? AND revision=?", (
-        _now(), quote["id"], service.wid, quote["revision"]))
-    if service.con.execute("SELECT changes()").fetchone() is not None and getattr(service.con, "is_postgres", False):
-        # PostgreSQL UPDATE row count is enforced by the revision predicate; the caller
-        # has already checked the locked row within the route transaction.
-        pass
+    updated = service.con.execute(
+        "UPDATE quotes SET revision=revision+1,updated_at=? WHERE id=? AND workspace_id=? AND revision=?",
+        (_now(), quote["id"], service.wid, quote["revision"]),
+    )
+    if updated.rowcount != 1:
+        raise business.DomainError(409, "Смета изменилась. Обновите её перед привязкой товара")
 
 
 def _observe(con, source_id, workspace_id, product):
