@@ -116,6 +116,44 @@ class CommunicationApiTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertFalse(object_chats["available"])
 
+    def test_published_quote_delivery_is_bound_to_a_private_estimate_chat(self):
+        quote_id = app.uid()
+        public_token = app.secrets.token_urlsafe(32)
+        with app.db() as con:
+            workspace = con.execute(
+                "SELECT id FROM workspaces WHERE owner_id=? ORDER BY created_at LIMIT 1",
+                (self.alice_id,),
+            ).fetchone()
+            self.assertIsNotNone(workspace)
+            workspace_id = workspace["id"]
+            con.execute(
+                "INSERT INTO quotes(id,user_id,title,client,description,amount_kopecks,status,"
+                "public_token,created_at,updated_at,workspace_id,published_version,approval_state) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (quote_id,self.alice_id,"Ремонт кухни","Борис","Отделка стен",1250000,
+                 "sent",public_token,app.now(),app.now(),workspace_id,1,"sent"),
+            )
+            delivery = community.send_quote_to_user(
+                con, workspace_id, quote_id, self.alice_id, self.bob_id,
+                "Ремонт кухни", self.base + "/?quote=" + public_token, 1,
+            )
+            self.assertEqual(delivery["recipient_id"], self.bob_id)
+            self.assertEqual(delivery["quote_version"], 1)
+            self.assertEqual(delivery["public_url"], self.base + "/?quote=" + public_token)
+            chat_id = delivery["conversation_id"]
+            members = con.execute(
+                "SELECT user_id FROM chat_members WHERE conversation_id=? ORDER BY user_id",
+                (chat_id,),
+            ).fetchall()
+            self.assertEqual({row["user_id"] for row in members},{self.alice_id,self.bob_id})
+            saved = con.execute(
+                "SELECT body,metadata FROM chat_messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 1",
+                (chat_id,),
+            ).fetchone()
+            self.assertIn("Ремонт кухни",saved["body"])
+            self.assertIn(public_token,saved["body"])
+            self.assertEqual(json.loads(saved["metadata"])["quote_id"],quote_id)
+
     def test_support_escalation_is_visible_to_admin_and_user_cannot_read_admin_queue(self):
         mocked = {"reply": "Подключаю сотрудника поддержки.", "escalate": True,
                   "reason": "user_requested_human"}
