@@ -290,3 +290,48 @@ class AssistantEditTests(unittest.TestCase):
             self.assertEqual(action['_preview']['currency'], 'USD')
             self.assertEqual(action['_preview']['after_total'], quote['amount_kopecks'])
             self.assertEqual(action['items'][after]['subtotal'], 12506)
+
+
+    def test_email_send_is_a_reviewable_proposal_and_sends_only_after_confirmation(self):
+        from unittest.mock import patch
+
+        owner, _ = self.account("assistant-email-confirm")
+        quote = self.quote(owner)
+        action = self.propose(owner, "send_quote_email", {"id": quote["id"], "email": "client@example.test"})
+        self.assertEqual(action["tool"], "send_quote_email")
+        self.assertIn("client@example.test", action["summary"])
+        self.assertEqual(action["preview"]["rows"][1]["after"], "client@example.test")
+        self.assertEqual(self.call("/quotes/" + quote["id"], token=owner)[1]["quote"]["status"], "draft")
+        with patch("backend.app.mail") as mail_sender:
+            status, result = self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner)
+        self.assertEqual(status, 200, result)
+        mail_sender.assert_called_once()
+        self.assertEqual(mail_sender.call_args.args[0], "client@example.test")
+        self.assertIn(result["result"]["url"], mail_sender.call_args.args[2])
+        self.assertTrue(result["result"]["email_sent"])
+        self.assertEqual(self.call("/quotes/" + quote["id"], token=owner)[1]["quote"]["status"], "sent")
+        self.assertEqual(self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner), (200, result))
+        mail_sender.assert_called_once()
+
+    def test_email_send_resolves_attached_client_but_refuses_missing_recipient(self):
+        from backend.assistant import prepare
+
+        owner, _ = self.account("assistant-email-client")
+        client_status, client_result = self.call("/clients", "POST", {"name": "Клиент", "email": "linked@example.test"}, owner)
+        self.assertEqual(client_status, 201, client_result)
+        quote_status, quote_result = self.call("/quotes", "POST", {
+            "title": "Смета с клиентом", "client": "Клиент", "client_id": client_result["item"]["id"],
+            "items": [{"name": "Работа", "unit_price": 5000, "quantity": "1"}],
+        }, owner)
+        self.assertEqual(quote_status, 201, quote_result)
+        action = self.propose(owner, "send_quote_email", {"id": quote_result["quote"]["id"]})
+        self.assertIn("linked@example.test", action["summary"])
+        quote_without_client = self.quote(owner)
+        service = SimpleNamespace(
+            con=None, user={"id": "current-user"}, wid="workspace",
+            get=lambda entity, record_id: quote_without_client if entity == "quotes" else {},
+            write_access=lambda: None,
+        )
+        with self.assertRaises(DomainError):
+            prepare(service, "send_quote_email", {"id": quote_without_client["id"]})
+
