@@ -11,6 +11,7 @@ function setup(saved){
  w.eval("user={id:'qa',name:'QA',email:'qa@example.test',role:'user',email_verified:true,quote_count:0,plan:'free'};tab='settings'");
  w.Workspace={render:async()=>false,reset(){}};w.api=async()=>({});
  w.load(fs.readFileSync('apps/web/growth.js','utf8'));
+ w.load(fs.readFileSync('apps/web/communications-ui.js','utf8'));
  return {w,doc,close:()=>dom.window.close()};
 }
 (async()=>{
@@ -27,11 +28,14 @@ function setup(saved){
  await test('failed account deletion prevents duplicate requests and enables retry',async({w,doc})=>{
   w.confirm=()=>true;let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};await w.render();const button=doc.querySelector('#delete-account');button.click();button.click();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);
  });
- await test('support topic buttons change selection and retain the written question',async({w,doc})=>{
-  w.eval("tab='support'");await w.render();const topics=[...doc.querySelectorAll('[data-support-topic]')];topics[0].click();doc.querySelector('#message').value+='My question';topics[1].click();assert.equal(doc.querySelector('#message').value,topics[1].dataset.supportTopic+': My question');assert.equal(topics[1].getAttribute('aria-pressed'),'true');
- });
- await test('support submit prevents duplicates and keeps text on failure',async({w,doc})=>{
-  w.eval("tab='support'");await w.render();let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};doc.querySelector('#message').value='Help me';const form=doc.querySelector('#support-form');form.requestSubmit();form.requestSubmit();assert.equal(calls,1);reject(Error('Offline'));await tick();assert.equal(doc.querySelector('#message').value,'Help me');assert.equal(form.querySelector('button').disabled,false);
+ await test('support opens the in-app ticket inbox instead of the retired topic form',async({w,doc})=>{
+  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};
+  w.eval("tab='support'");await w.render();
+  assert.ok(doc.querySelector('.comms-support-layout'));
+  assert.ok(doc.querySelector('#support-new'));
+  assert.equal(doc.querySelector('#support-form'),null);
+  assert.equal(doc.querySelector('#message'),null);
+  assert.deepEqual(requests.map(path=>path.split('?')[0]),['/support']);
  });
  await test('billing status refresh prevents duplicate calls and never grants unpaid Pro',async({w,doc})=>{
   const billing={email_verified:true,checkout_mode:'off',payments:[],pricing:{plans:{pro_month:{amount_kopecks:49000},pro_year:{amount_kopecks:490000}},annual_saving_kopecks:98000,limits:{free_quotes:10,pro_quotes:10000,pro_ai:100}}};w.api=async path=>path==='/billing'?billing:{};w.eval("tab='billing'");await w.render();let resolve,calls=0;w.api=path=>path==='/billing'?Promise.resolve(billing):path==='/billing/sync'?(calls++,new Promise(yes=>resolve=yes)):Promise.resolve({});const button=doc.querySelector('#sync');button.click();button.click();assert.equal(calls,1);resolve({user:{id:'qa',name:'QA',role:'user',plan:'free',quote_count:0,email_verified:true}});await tick();assert.match(doc.querySelector('#toast').textContent,/Старт/);
