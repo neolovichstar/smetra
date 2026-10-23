@@ -42,6 +42,7 @@ class CommunicationApiTests(unittest.TestCase):
                 "INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)",
                 (app.uid(), user_id, hashlib.sha256(token.encode()).hexdigest(), app.now() + 3600),
             )
+            app.business.ensure_workspace(con, {"id": user_id, "name": name})
         return token, user_id
 
     @classmethod
@@ -101,6 +102,20 @@ class CommunicationApiTests(unittest.TestCase):
             f"/api/profile/chats/{chat_id}/messages", token=self.admin_token
         )
         self.assertEqual(status, 403, "An administrator must not gain private-chat access by role alone")
+
+    def test_admin_metrics_and_team_access_fail_closed_on_free_workspaces(self):
+                status, overview = self.request(
+                    "/api/admin/communication/overview", token=self.admin_token
+                )
+                self.assertEqual(status, 200)
+                self.assertGreaterEqual(overview["users_total"], 3)
+                self.assertGreaterEqual(overview["workspaces_total"], 3)
+        
+                status, object_chats = self.request(
+                    "/api/profile/object-chats", token=self.alice_token
+                )
+                self.assertEqual(status, 200)
+                self.assertFalse(object_chats["available"])
 
     def test_support_escalation_is_visible_to_admin_and_user_cannot_read_admin_queue(self):
         mocked = {"reply": "Подключаю сотрудника поддержки.", "escalate": True,
