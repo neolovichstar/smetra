@@ -50,6 +50,40 @@ CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_real_access
   ON smetra.billing_subscriptions(workspace_id,status,current_period_end DESC)
   WHERE is_test=FALSE;
 
+-- Preserve existing paid access through the catalog migration. Legacy records
+-- are non-renewing and excluded from live-revenue/subscriber reporting.
+INSERT INTO smetra.billing_subscriptions(
+  id,user_id,workspace_id,product_code,provider,provider_subscription_id,
+  provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,
+  current_period_start,current_period_end,cancel_at_period_end,last_payment_id,
+  created_at,updated_at
+)
+SELECT
+  'legacy-' || w.id,u.id,w.id,'pro_month','legacy','legacy:' || w.id,
+  '',0,'RUB','active',FALSE,FALSE,
+  floor(extract(epoch FROM now()))::bigint,u.entitlement_until,FALSE,NULL,
+  floor(extract(epoch FROM now()))::bigint,floor(extract(epoch FROM now()))::bigint
+FROM smetra.users u
+JOIN smetra.workspaces w ON w.owner_id=u.id
+WHERE u.deleted_at IS NULL AND u.plan='pro'
+  AND COALESCE(u.entitlement_until,0)>floor(extract(epoch FROM now()))::bigint
+  AND NOT EXISTS (
+    SELECT 1 FROM smetra.billing_subscriptions s
+    WHERE s.workspace_id=w.id AND s.status IN ('active','succeeded')
+      AND s.current_period_end>floor(extract(epoch FROM now()))::bigint
+  )
+ON CONFLICT(provider_subscription_id) DO NOTHING;
+
+UPDATE smetra.workspaces w
+SET plan='pro_solo',subscription_status='active',seat_limit=1,
+    entitlement_until=u.entitlement_until
+FROM smetra.users u
+WHERE w.owner_id=u.id AND w.id IN (
+  SELECT s.workspace_id FROM smetra.billing_subscriptions s
+  WHERE s.provider='legacy' AND s.status='active'
+    AND s.current_period_end>floor(extract(epoch FROM now()))::bigint
+);
+
 ALTER TABLE smetra.chat_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE smetra.chat_conversations FORCE ROW LEVEL SECURITY;
 ALTER TABLE smetra.chat_members ENABLE ROW LEVEL SECURITY;
