@@ -560,6 +560,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         public["/admin.js"] = ("admin.js", "text/javascript")
         public["/admin.css"] = ("admin.css", "text/css")
         public["/growth.js"] = ("growth.js", "text/javascript")
+        public["/realtime.js"] = ("realtime.js", "text/javascript")
         public["/quote-review.js"] = ("quote-review.js", "text/javascript")
         public["/quote-editor-state.js"] = ("quote-editor-state.js", "text/javascript")
         public["/select-menu.js"] = ("select-menu.js", "text/javascript")
