@@ -1401,12 +1401,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             "provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,"
                             "current_period_start,current_period_end,cancel_at_period_end,last_payment_id,"
                             "created_at,updated_at) "
-                            "VALUES(?,?,?,?,?,?,?,?,?,'active',?,0,?,?,0,?,?,?) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,'active',?,?,?,?,?,?,?,?) "
                             "ON CONFLICT(provider_subscription_id) DO NOTHING",
                             (
                                 uid(), local["user_id"], workspace_id, local["plan"], "yookassa",
                                 local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
-                                test_mode, product_period_start, product_period_end, local["id"], moment, moment,
+                                test_mode, False, product_period_start, product_period_end, False,
+                                local["id"], moment, moment,
                             ),
                         )
                         active_products = con.execute(
