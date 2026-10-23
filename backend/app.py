@@ -1531,7 +1531,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (payment["id"], payment["provider_id"]),
                     ).fetchall()
                     con.execute(
-                        "UPDATE billing_subscriptions SET status='refunded',auto_renew=?,"
+                        "UPDATE billing_subscriptions SET status='canceled',auto_renew=?,"
                         "cancel_at_period_end=?,canceled_at=?,updated_at=? "
                         "WHERE last_payment_id=? OR (provider='yookassa' AND provider_subscription_id=?)",
                         (False, False, now(), now(), payment["id"], payment["provider_id"]),
