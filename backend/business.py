@@ -2465,5 +2465,6 @@ ROUTES = set(ENTITIES) | {
     "export",
     "construction",
     "ai",
+    "premium",
     "capabilities",
 }
