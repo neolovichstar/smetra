@@ -843,7 +843,6 @@ def route(service, method, parts, query, data):
             raise business.DomainError(400, "Авторизация в облаке отклонена пользователем")
         return _oauth_callback(service, query)
     _premium_access(service)
-    _manager(service)
     if parts == ["connections"] and method == "GET":
         rows = service.con.execute(
             "SELECT id,provider,provider_account_id,account_label,scopes,status,last_synced_at,last_error,created_at,updated_at FROM cloud_connections WHERE workspace_id=? ORDER BY created_at DESC",
@@ -851,6 +850,7 @@ def route(service, method, parts, query, data):
         ).fetchall()
         return 200, {"connections": [dict(row) for row in rows]}
     if parts == ["connections"] and method == "DELETE":
+        _manager(service)
         connection_id = str(data.get("connection_id", ""))[:100]
         conn = _connection(service, connection_id)
         service.con.execute("UPDATE cloud_connections SET status='disabled',access_token_enc='',refresh_token_enc='',updated_at=?,last_error='Отключено пользователем' WHERE id=? AND workspace_id=?",
@@ -865,6 +865,7 @@ def route(service, method, parts, query, data):
         ).fetchall()
         return 200, {"folders": [dict(row) for row in rows]}
     if parts == ["folders"] and method == "POST":
+        _manager(service)
         connection = _connection(service, str(data.get("connection_id", "")))
         name, canonical_folder = _folder_metadata(service.con, connection, data.get("folder_id"))
         quote_id = data.get("quote_id") or None
@@ -885,6 +886,7 @@ def route(service, method, parts, query, data):
         ).fetchone()
         return 201, {"folder_id": row["id"], "folder_name": name, "sync_requested": True}
     if len(parts) == 2 and parts[0] == "folders" and method == "DELETE":
+        _manager(service)
         binding_id = parts[1]
         row = service.con.execute("SELECT id FROM cloud_folder_bindings WHERE id=? AND workspace_id=?", (binding_id, service.wid)).fetchone()
         if not row:
@@ -892,6 +894,7 @@ def route(service, method, parts, query, data):
         service.con.execute("UPDATE cloud_folder_bindings SET status='disabled',sync_requested=0,updated_at=? WHERE id=?", (_now(), binding_id))
         return 200, {"ok": True}
     if parts == ["sync"] and method == "POST":
+        _manager(service)
         count = service.con.execute("UPDATE cloud_folder_bindings SET sync_requested=1,next_sync_at=?,updated_at=? WHERE workspace_id=? AND status='active'", (_now(), _now(), service.wid)).rowcount
         return 202, {"queued": count}
     if parts == ["jobs"] and method == "GET":
