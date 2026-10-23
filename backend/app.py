@@ -1404,7 +1404,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         active_products = con.execute(
                             "SELECT product_code,current_period_end FROM billing_subscriptions "
                             "WHERE workspace_id=? AND status IN ('active','succeeded') "
-                            "AND current_period_end>? AND is_test=FALSE",
+                            "AND current_period_end>?",
                             (workspace_id, now()),
                         ).fetchall()
                         if active_products:
