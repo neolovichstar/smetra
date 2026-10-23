@@ -6,6 +6,7 @@ const money = v => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB
 const num = v => new Intl.NumberFormat('ru-RU').format(Number(v||0));
 const time = v => v ? new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(Number(v)*1000)) : '';
 const state = {open:false,tab:'direct',current:null,messages:[],chats:[],channels:[],workspaces:[],role:'user',userId:'',publicId:'',mode:'user',busy:false,poll:null,observer:null,adminLoading:false,lastWaitingHuman:null};
+let sessionEpoch=0;
 const tabs = [['direct','Личные'],['object','Объекты'],['community','Сообщество'],['support','Поддержка']];
 const ico = {
  chat:'<path d="M21 11.5a8.5 8.5 0 0 1-12.9 7.3L3 20l1.2-4.1A8.5 8.5 0 1 1 21 11.5Z"/>',
@@ -19,8 +20,10 @@ const ico = {
 };
 const icon = n => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ico[n]||ico.chat)+'</svg>';
 async function api(path,options={}) {
+ const epoch=sessionEpoch;
  const response=await fetch('/api'+path,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
  let data={};try{data=await response.json()}catch{}
+ if(epoch!==sessionEpoch)throw new Error('Сессия изменилась');
  if(!response.ok)throw new Error(data.error||'Не удалось выполнить действие');
  return data;
 }
@@ -94,7 +97,7 @@ async function refresh(reset){
  try{
  const me=await api('/profile/id');state.userId=me.id;state.role=me.role||'user';state.publicId=me.public_id||'';state.mode=state.tab==='support'&&state.role==='admin'?'admin':'user';
  $('#comms-my-id code').textContent=state.publicId||'не задан';
- $('#communication-center [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.tab));
+ document.querySelectorAll('#communication-center [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.tab));
  if(state.tab==='direct'){const d=await api('/profile/chats');state.chats=d.chats||[];state.channels=[]}
  else if(state.tab==='object'){const d=await api('/profile/object-chats');state.chats=d.chats||[];state.workspaces=d.workspaces||[];state.channels=[]}
  else if(state.tab==='community'){const d=await api('/profile/communities');state.channels=(d.channels||[]).map(c=>({...c,subject:c.label,kind:'community'}));state.chats=[]}
@@ -112,7 +115,7 @@ async function loadMessages(force){
  if(state.tab==='support'&&state.mode==='admin')path='/admin/communication/threads/'+encodeURIComponent(c.id)+'/messages';
  else if(state.tab==='support')path='/support/threads/'+encodeURIComponent(c.id)+'/messages';
  else path='/profile/chats/'+encodeURIComponent(c.id)+'/messages';
- try{const after=force?0:Math.max(0,state.messages.reduce((v,m)=>Math.max(v,Number(m.created_at||0)),0)-1);const data=await api(path+(after?'?after='+after:''));const incoming=data.messages||[];if(force)state.messages=incoming;else{const seen=new Set(state.messages.map(m=>m.id));state.messages.push(...incoming.filter(m=>!seen.has(m.id)))}if(state.current&&state.current.id===c.id)renderMessages()}catch(error){if(force)$('#comms-messages').innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
+ try{const after=force?0:Math.max(0,state.messages.reduce((v,m)=>Math.max(v,Number(m.created_at||0)),0)-1);const data=await api(path+(after?'?after='+after:''));const incoming=data.messages||[];if(!state.current||state.current.id!==c.id)return;if(force)state.messages=incoming;else{const seen=new Set(state.messages.map(m=>m.id));state.messages.push(...incoming.filter(m=>!seen.has(m.id)))}if(state.current&&state.current.id===c.id)renderMessages()}catch(error){if(force)$('#comms-messages').innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
 }
 async function sendMessage(e){
  e.preventDefault();if(!state.current||state.busy)return;const box=$('#comms-message'),message=box.value.trim();if(!message)return;
@@ -231,5 +234,9 @@ function watch(){
  if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin')adminPage();
 }
 document.addEventListener('DOMContentLoaded',()=>{mount();watch();const heartbeat=()=>api('/profile/presence',{method:'POST',body:'{}'}).catch(()=>{});heartbeat();setInterval(heartbeat,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)heartbeat()});setInterval(()=>{if(location.hash==='#admin')adminPage()},30000);});
-window.SmetraCommunication={open,close,refresh:()=>refresh(true)};
+function reset(){
+ sessionEpoch++;close();state.current=null;state.messages=[];state.chats=[];state.channels=[];state.workspaces=[];state.userId='';state.publicId='';state.role='user';state.mode='user';state.busy=false;state.adminLoading=false;state.lastWaitingHuman=null;
+ if($('#communication-center')){renderList();renderMessages();$('#comms-tools')?.replaceChildren();$('#comms-my-id code').textContent='';}
+}
+window.SmetraCommunication={open,close,reset,refresh:()=>refresh(true)};
 })();
