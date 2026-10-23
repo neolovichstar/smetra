@@ -2121,7 +2121,8 @@ class Service:
 
                     _refresh_workspace_entitlement(self.con, self.wid)
                     workspace_access = self.con.execute(
-                        "SELECT plan,seat_limit FROM workspaces WHERE id=?", (self.wid,)
+                        "SELECT plan,subscription_status,entitlement_until,seat_limit "
+                        "FROM workspaces WHERE id=?", (self.wid,)
                     ).fetchone()
                     seat_limit = max(1, int(workspace_access["seat_limit"] or 1))
                     occupied = int(self.con.execute(
