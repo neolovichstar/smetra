@@ -207,6 +207,7 @@ def user_view(user, con):
     expiry = user["entitlement_until"] or 0
     return {
         "id": user["id"],
+        "public_id": "SM-" + str(user["id"]).replace("-", "").upper(),
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
