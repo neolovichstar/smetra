@@ -2115,6 +2115,29 @@ class Service:
                     and (role == "admin" or existing and existing["role"] == "admin")
                 ):
                     raise DomainError(403, "Эта роль доступна только владельцу")
+                if not existing:
+                    # Reconcile subscription expiry before allocating another seat.
+                    from backend.community import _refresh_workspace_entitlement
+
+                    _refresh_workspace_entitlement(self.con, self.wid)
+                    workspace_access = self.con.execute(
+                        "SELECT plan,seat_limit FROM workspaces WHERE id=?", (self.wid,)
+                    ).fetchone()
+                    seat_limit = max(1, int(workspace_access["seat_limit"] or 1))
+                    occupied = int(self.con.execute(
+                        "SELECT COUNT(*) FROM workspace_members WHERE workspace_id=?",
+                        (self.wid,),
+                    ).fetchone()[0] or 0)
+                    if occupied >= seat_limit:
+                        if seat_limit <= 1:
+                            raise DomainError(
+                                402,
+                                "Для добавления сотрудников нужен тариф TEAM (5 мест) или BUSINESS (15 мест).",
+                            )
+                        raise DomainError(
+                            402,
+                            f"Лимит мест текущего тарифа — {seat_limit}, включая владельца.",
+                        )
                 self.con.execute(
                     "INSERT INTO workspace_members VALUES(?,?,?) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
                     (self.wid, member["id"], role),
