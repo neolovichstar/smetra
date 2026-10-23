@@ -12,7 +12,7 @@
   }
   link.href='/api/auth/oauth/'+encodeURIComponent(link.dataset.provider)+'/start?'+query.toString();
  });
- const params=new URLSearchParams(location.search);if(params.has('auth_error')){document.querySelector('#auth-status').textContent=errors[params.get('auth_error')]||'Не удалось войти';history.replaceState({},'',location.pathname+location.hash)}
+ const params=new URLSearchParams(location.search);document.body.classList.toggle('auth-password-reset',params.has('reset'));if(params.has('auth_error')){document.querySelector('#auth-status').textContent=errors[params.get('auth_error')]||'Не удалось войти';history.replaceState({},'',location.pathname+location.hash)}
  if(params.has('reset'))document.querySelector('#email-disclosure').open=true;
  const note=document.querySelector('#provider-note');
  const email=document.querySelector('#email-disclosure');
@@ -22,15 +22,16 @@
   window.SmetraEmailDeliveryAvailable=data.email_delivery_available===true;
   window.SmetraEmailSignupAvailable=data.email_signup_available!==false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
-  const enabled=data.providers.filter(provider=>provider.enabled);
+  const enabled=data.providers.filter(provider=>provider.enabled&&provider.id==='yandex');
   const enabledIds=new Set(enabled.map(provider=>provider.id));
   // OAuth links are present in initial HTML; this API only filters unconfigured routes.
   host.querySelectorAll('[data-provider]').forEach(button=>{
    button.classList.toggle('hidden',!enabledIds.has(button.dataset.provider));
   });
-  host.classList.toggle('single',enabled.length===1);
+  host.classList.add('single');
   if(!enabled.length){
    host.closest('.auth-provider-block')?.classList.add('hidden');
+   document.querySelector('#auth-status').textContent='Яндекс ID временно недоступен. Обратитесь в поддержку.';
   }else{
    note.textContent='Один профиль для сайта и приложения.';
   } }catch{
@@ -38,7 +39,7 @@
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
   // Keep pre-rendered OAuth links available during capability API outages.
   host.closest('.auth-provider-block')?.classList.remove('hidden');
-  note.textContent='Не удалось проверить способы входа. Попробуйте открыть сервис ещё раз или войдите по почте.';
+  note.textContent='Не удалось проверить доступность Яндекс ID. Если вход не откроется, попробуйте позднее.';
  }
 })();
 const proposalLabels={title:'Название',name:'Название',client:'Клиент',client_id:'Клиент',description:'Описание',amount:'Стоимость',amount_kopecks:'Сумма',price:'Цена',cost_price:'Себестоимость',currency:'Валюта',quantity:'Количество',unit_price:'Цена',items:'Работы',due_date:'Срок',status:'Статус',email:'Почта',phone:'Телефон',terms:'Условия',project_id:'Заказ',note:'Примечание'};

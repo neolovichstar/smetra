@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="/quote-editor.css?v=20261022-quote-editor-v1">
   <link rel="stylesheet" href="/premium-tools.css">
   <link rel="stylesheet" href="/dashboard-polish.css?v=20261024-minimal-v1">
+  <link rel="stylesheet" href="/auth-classic.css?v=20261024-yandex-v1">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#content">К содержимому</a>
@@ -54,13 +55,7 @@
       <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
       <h2>От идеи<br>до оплаты<span>.</span></h2>
       <p>Смета, клиент и каждый следующий шаг — в одном рабочем пространстве.</p>
-      <div class="auth-proof" aria-hidden="true">
-        <div class="auth-proof-head"><span>ПРЕДЛОЖЕНИЕ / 024</span><span>СОГЛАСОВАНО</span></div>
-        <div class="auth-proof-title">Сайт для студии Север</div>
-        <div class="auth-proof-line"><span>Исследование</span><span>35 000 ₽</span></div>
-        <div class="auth-proof-line"><span>Дизайн и разработка</span><span>63 000 ₽</span></div>
-        <div class="auth-proof-total"><span>Итого</span><strong>98 000 ₽</strong></div>
-      </div>
+
     </section>
 
     <section class="auth-flow" aria-labelledby="auth-title">
@@ -82,12 +77,13 @@
         </form>
       </details>
       <div class="field hidden" id="legal-consent-field"><label class="estimate-consent-check"><input id="legal-consent" type="checkbox"><span>Я согласен с <a href="/terms" target="_blank" rel="noopener noreferrer">Пользовательским соглашением</a> и <a href="/disclaimer" target="_blank" rel="noopener noreferrer">Политикой отказа от ответственности (As Is)</a>.</span></label></div>
-      <div class="auth-provider-block"><div class="auth-provider-divider"><span>или используйте российский сервис</span></div><div id="provider-buttons" class="provider-buttons" aria-label="Способ входа">
-          <a class="btn primary" data-provider="yandex" href="/api/auth/oauth/yandex/start">Продолжить с Яндекс ID</a>
-          <a class="btn" data-provider="vk" href="/api/auth/oauth/vk/start">Продолжить с VK ID</a>
-          <a class="btn" data-provider="mail" href="/api/auth/oauth/mail/start">Продолжить с Mail ID</a>
-          <a class="btn" data-provider="ok" href="/api/auth/oauth/ok/start">Продолжить с Одноклассники</a>
-        </div><p id="provider-note" class="auth-provider-pending"></p></div>
+      <div class="auth-provider-block">
+        <div class="auth-provider-divider"><span>Единый вход для сайта и приложения</span></div>
+        <div id="provider-buttons" class="provider-buttons single" aria-label="Вход через Яндекс ID">
+          <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span></a>
+        </div>
+        <p id="provider-note" class="auth-provider-pending"></p>
+      </div>
       <p id="auth-status" class="auth-status" role="status"></p>
       <p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
     </section>
