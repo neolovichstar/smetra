@@ -22,7 +22,7 @@ async function ready(){await new Promise((resolve,reject)=>{let text='';child.st
  Object.defineProperty(w.HTMLElement.prototype,'innerText',{get(){return this.textContent},set(value){this.textContent=value}});
  w.fetch=async(url,options={})=>{const target=new URL(url,origin);assert.equal(target.origin,origin,'Fixture must never call another service');const response=await fetch(target,{...options,headers:{...options.headers,Origin:origin,...(cookies?{Cookie:cookies}:{})}});for(const cookie of response.headers.getSetCookie()){const entry=cookie.split(';')[0];cookies=entry}return response};
  const load=file=>{const script=doc.createElement('script');script.textContent=fs.readFileSync('apps/web/'+file,'utf8');doc.head.append(script)};
- ['theme-init.js','select-menu.js','app.js','workspace.js','quote-editor-state.js','growth.js','black.js','profile-ui.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js','ai-workspace.js','admin.js','file-preview.js','construction.js','file-editor.js','product-ui.js'].forEach(load);
+ ['theme-init.js','select-menu.js','communications-ui.js','app.js','workspace.js','quote-editor-state.js','growth.js','black.js','profile-ui.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js','ai-workspace.js','admin.js','file-preview.js','construction.js','file-editor.js','product-ui.js'].forEach(load);
  async function until(check,label){for(let i=0;i<400;i++){if(check())return;await pause(20)}throw Error(label+'; '+doc.querySelector('#content').textContent.slice(-650)+'; modal: '+doc.querySelector('#workspace-dialog')?.textContent.slice(-300)+'; file: '+doc.querySelector('.file-preview-body')?.textContent)}
  const query=selector=>{const node=doc.querySelector(selector);assert.ok(node,'Missing '+selector);return node};
  const fill=(selector,value)=>{const node=query(selector);node.value=value;node.dispatchEvent(new w.Event('input',{bubbles:true}));node.dispatchEvent(new w.Event('change',{bubbles:true}));return node};
@@ -76,12 +76,31 @@ async function ready(){await new Promise((resolve,reject)=>{let text='';child.st
  await until(()=>doc.querySelector('#new-custom-field'),'Custom fields');await modal('#new-custom-field');fill('#f-name','UI field');await submit('#workspace-dialog form');await until(()=>!doc.querySelector('#workspace-dialog').open,'Custom field save');assert.ok((await w.api('/custom-fields')).items.some(item=>item.name==='UI field'));
  fill('#workspace-f-company_details','UI company');await submit('#workspace-settings');await until(()=>doc.querySelector('#toast').textContent==='Настройки сохранены','Business settings');assert.equal((await w.api('/workspace')).workspace.settings.company_details,'UI company');
  console.log('PASS: team dialog, custom fields and business settings');
- await visit('support');click('[data-support-topic="Работа со сметой"]');fill('#message','UI support request');await submit('#support-form');await until(()=>query('#message').value==='','Support saved');
+ await visit('support');
+ click('#support-new');
+ fill('#support-create-form input[name=subject]','UI support request');
+ fill('#support-create-form textarea[name=message]','После открытия сметы вижу пустую страницу на экране.');
+ await submit('#support-create-form');
+ await until(()=>doc.querySelector('#support-reply-form'),'Support ticket chat');
+ assert.match(query('.comms-chat-head h2').textContent,/UI support request/);
+ assert.ok(query('#support-messages').textContent.includes('Помощник Сметры'),'Support bot answers inside the conversation');
+ fill('#support-reply-form textarea','Ошибка повторяется и после обновления.');
+ await submit('#support-reply-form');
+ await until(()=>query('#support-messages').textContent.includes('Ошибка повторяется'),'Support reply sent');
  await visit('billing');click('#sync');await until(()=>doc.querySelector('#toast').textContent.includes('Про активен'),'Billing sync');
  await visit('admin');for(const section of ['support','payments','audit','users']){click('[data-admin-section="'+section+'"]');await pause(100);assert.ok(doc.querySelector('#admin-section').textContent.trim())}
- click('[data-admin-section=support]');await until(()=>doc.querySelector('[data-admin-ticket]'),'Support ticket');
- const ticket=query('[data-admin-ticket]'),ticketId=ticket.dataset.adminTicket;click(ticket);await until(()=>!doc.querySelector('[data-admin-ticket="'+ticketId+'"]'),'Close ticket');
- click('[data-admin-support-filter=closed]');await until(()=>doc.querySelector('[data-admin-ticket="'+ticketId+'"]'),'Closed tickets');click('[data-admin-ticket="'+ticketId+'"]');await until(()=>!doc.querySelector('[data-admin-ticket="'+ticketId+'"]'),'Reopen ticket');
+ click('[data-admin-section=support]');await until(()=>doc.querySelector('[data-admin-chat-open]'),'Support ticket');
+ const ticketOpen=query('[data-admin-chat-open]'),ticketId=ticketOpen.dataset.adminChatOpen;
+ click('[data-admin-chat-open="'+ticketId+'"]');await until(()=>doc.querySelector('#admin-support-reply'),'Open support conversation');
+ fill('#admin-support-reply textarea','Я подключился к обращению. Давайте проверим это вместе.');
+ await submit('#admin-support-reply');
+ await until(()=>query('#admin-support-messages').textContent.includes('Я подключился к обращению'),'Admin reply sent');
+ const ticketToggle=query('[data-admin-ticket="'+ticketId+'"]');click(ticketToggle);
+ await until(()=>!doc.querySelector('[data-admin-chat-open="'+ticketId+'"]'),'Close ticket');
+ click('[data-admin-support-filter=closed]');
+ await until(()=>doc.querySelector('[data-admin-ticket="'+ticketId+'"]'),'Closed tickets');
+ click('[data-admin-ticket="'+ticketId+'"]');
+ await until(()=>!doc.querySelector('[data-admin-ticket="'+ticketId+'"]'),'Reopen ticket');
  const fetchBeforeFailure=w.fetch;let failedRefresh=0;
  w.fetch=async(url,options)=>{if(String(url).endsWith('/admin/overview')){failedRefresh++;await pause(30);return new Response(JSON.stringify({error:'QA refresh unavailable'}),{status:503,headers:{'Content-Type':'application/json'}})}return fetchBeforeFailure(url,options)};
  const refresh=click('[data-admin-refresh]');refresh.click();await until(()=>!refresh.disabled,'Admin failed refresh enables retry');assert.equal(failedRefresh,1);assert.match(doc.querySelector('#toast').textContent,/QA refresh/);w.fetch=fetchBeforeFailure;
