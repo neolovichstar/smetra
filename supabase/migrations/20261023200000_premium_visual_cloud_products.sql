@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS smetra.product_sources (
  product_title TEXT NOT NULL DEFAULT '',
  brand TEXT NOT NULL DEFAULT '',
  sku TEXT NOT NULL DEFAULT '',
+ provider_mime TEXT NOT NULL DEFAULT '',
  image_url TEXT NOT NULL DEFAULT '',
  price_kopecks BIGINT CHECK(price_kopecks IS NULL OR price_kopecks >= 0),
  currency TEXT NOT NULL DEFAULT 'RUB',
