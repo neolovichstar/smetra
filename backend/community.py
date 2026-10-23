@@ -308,31 +308,70 @@ def _community(con, user_id, category):
     return conversation_id
 
 
+def _refresh_workspace_entitlement(con, workspace_id):
+    """Keep persisted workspace access in sync with active, product-specific periods."""
+    workspace = con.execute(
+        "SELECT id,owner_id FROM workspaces WHERE id=?", (workspace_id,)
+    ).fetchone()
+    if not workspace:
+        return None
+    moment = now()
+    subscriptions = con.execute(
+        "SELECT product_code,status,current_period_end FROM billing_subscriptions "
+        "WHERE workspace_id=?",
+        (workspace_id,),
+    ).fetchall()
+    from backend import revenue
+    resolved = revenue.workspace_entitlement(subscriptions, moment)
+    if resolved:
+        con.execute(
+            "UPDATE workspaces SET plan=?,subscription_status='active',entitlement_until=?,seat_limit=? "
+            "WHERE id=?",
+            (resolved["plan"], resolved["entitlement_until"], resolved["seat_limit"], workspace_id),
+        )
+    else:
+        # Pre-catalog/manual legacy access remains supported only when there has
+        # never been a subscription record to provide the authoritative expiry.
+        legacy = con.execute(
+            "SELECT plan,entitlement_until FROM users WHERE id=?", (workspace["owner_id"],)
+        ).fetchone()
+        if not subscriptions and legacy and legacy["plan"] == "pro" and int(legacy["entitlement_until"] or 0) > moment:
+            con.execute(
+                "UPDATE workspaces SET plan='pro_solo',subscription_status='active',"
+                "entitlement_until=?,seat_limit=1 WHERE id=?",
+                (int(legacy["entitlement_until"]), workspace_id),
+            )
+        else:
+            con.execute(
+                "UPDATE workspaces SET plan='free',subscription_status='inactive',"
+                "entitlement_until=0,seat_limit=1 WHERE id=?",
+                (workspace_id,),
+            )
+    return con.execute(
+        "SELECT id,owner_id,name,plan,subscription_status,entitlement_until,seat_limit "
+        "FROM workspaces WHERE id=?", (workspace_id,)
+    ).fetchone()
+
+
 def _team_workspace(con, user_id, workspace_id):
-    row = con.execute(
-        "SELECT w.id,w.owner_id,w.name,w.plan,w.subscription_status,w.entitlement_until,w.seat_limit,"
-        "COALESCE(m.role,'owner') AS role FROM workspaces w "
-        "LEFT JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=? "
+    # Check membership before touching any workspace state, then refresh the
+    # entitlement against authoritative subscription rows and re-read access.
+    permitted = con.execute(
+        "SELECT w.id FROM workspaces w LEFT JOIN workspace_members m "
+        "ON m.workspace_id=w.id AND m.user_id=? "
         "WHERE w.id=? AND (m.user_id=? OR w.owner_id=?)",
         (user_id, workspace_id, user_id, user_id),
     ).fetchone()
-    if not row:
+    if not permitted:
         raise ApiError(404, "Рабочее пространство не найдено")
-    active = row["subscription_status"] in ("active", "succeeded") and row["entitlement_until"] > now()
+    row = _refresh_workspace_entitlement(con, workspace_id)
+    active = row["subscription_status"] in ("active", "succeeded") and int(row["entitlement_until"] or 0) > now()
     team_plan = str(row["plan"] or "").lower() in (
-        "team", "company", "team_month", "team_year", "team_monthly", "team_annual",
+        "team", "business", "company", "team_month", "team_year", "team_monthly", "team_annual",
         "team_company", "pro_team",
     )
     if not (active and (team_plan or int(row["seat_limit"] or 1) >= 5)):
-        # Check the product catalog as well; legacy workspace.plan may lag checkout state.
-        subscription = con.execute(
-            "SELECT 1 FROM billing_subscriptions WHERE workspace_id=? "
-            "AND status IN ('active','succeeded') AND current_period_end>? AND is_test=FALSE "
-            "AND (lower(product_code) LIKE '%team%' OR lower(product_code) LIKE '%company%' OR lower(product_code) LIKE '%business%') LIMIT 1",
-            (workspace_id, now()),
-        ).fetchone()
-        if not subscription:
-            raise ApiError(403, "Чаты объектов доступны на тарифе TEAM / Компания")
+        raise ApiError(403, "Чаты объектов доступны на тарифе TEAM / Компания")
     return row
 
 
@@ -660,19 +699,19 @@ def _public_id_route(handler, method, path, query, con, user):
         }})
     if path == "/api/profile/object-chats" and method == "GET":
         rows = con.execute(
-            "SELECT w.id,w.name,w.plan,w.subscription_status,w.entitlement_until,w.seat_limit "
-            "FROM workspaces w LEFT JOIN workspace_members m "
+            "SELECT w.id FROM workspaces w LEFT JOIN workspace_members m "
             "ON m.workspace_id=w.id AND m.user_id=? "
             "WHERE (m.user_id=? OR w.owner_id=?) ORDER BY w.created_at DESC LIMIT 50",
             (user["id"], user["id"], user["id"]),
         ).fetchall()
         workspaces = []
-        for row in rows:
+        for item in rows:
+            row = _refresh_workspace_entitlement(con, item["id"])
             plan = str(row["plan"] or "").lower()
             enabled = (
                 row["subscription_status"] in ("active", "succeeded")
-                and row["entitlement_until"] > now()
-                and (plan in ("team", "company", "team_month", "team_year", "team_monthly",
+                and int(row["entitlement_until"] or 0) > now()
+                and (plan in ("team", "business", "company", "team_month", "team_year", "team_monthly",
                               "team_annual", "team_company", "pro_team")
                      or int(row["seat_limit"] or 1) >= 5)
             )
