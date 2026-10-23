@@ -177,6 +177,46 @@ def calculate(items):
             tax_amount=int(tax_amount),
             internal_cost=cost_total,
         )
+        # Product presentation metadata is allow-listed; it never participates in quote math.
+        metadata_strings = {
+            'product_source_id': 100, 'product_title': 300, 'product_brand': 160,
+            'product_sku': 120, 'product_unit': 40, 'product_currency': 3,
+            'product_availability': 24, 'visual_group': 120, 'visual_role': 40,
+        }
+        for key, max_length in metadata_strings.items():
+            if key in item:
+                row[key] = string(item[key], key, max_length)
+        for key in ('product_url', 'product_image_url'):
+            if key in item:
+                value = string(item[key], key, 2048)
+                if value:
+                    try:
+                        parsed = urllib.parse.urlsplit(value)
+                    except ValueError:
+                        raise DomainError(400, 'Некорректная ссылка товара') from None
+                    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+                        raise DomainError(400, 'Ссылки товара должны использовать HTTPS')
+                row[key] = value
+        if 'product_price_kopecks' in item:
+            value = item['product_price_kopecks']
+            if value is not None and (type(value) is not int or not 0 <= value <= 100_000_000_000):
+                raise DomainError(400, 'Некорректная цена товара')
+            row['product_price_kopecks'] = value
+        if 'product_checked_at' in item:
+            value = item['product_checked_at']
+            if type(value) is not int or value < 0:
+                raise DomainError(400, 'Некорректное время проверки товара')
+            row['product_checked_at'] = value
+        if 'product_attributes' in item:
+            attributes = item['product_attributes']
+            if not isinstance(attributes, dict) or len(attributes) > 40 or len(packed(attributes)) > 10000:
+                raise DomainError(400, 'Некорректные характеристики товара')
+            row['product_attributes'] = attributes
+        if 'visual_order' in item:
+            value = item['visual_order']
+            if type(value) is not int or not 0 <= value <= 10000:
+                raise DomainError(400, 'Некорректный порядок карточки товара')
+            row['visual_order'] = value
         result.append(row)
         if included:
             total += subtotal
