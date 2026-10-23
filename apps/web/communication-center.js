@@ -172,23 +172,45 @@ function addTrigger(){
 }
 function supportPage(){
  const content=$('#content');
- if(!content||content.dataset.section!=='support'||content.querySelector('[data-comms-support-page]'))return;
- content.innerHTML='<section data-comms-support-page class="comms-admin-panel" style="max-width:900px;margin:0 auto"><div class="comms-eyebrow">СМЕТРА / ПОДДЕРЖКА</div><h2 style="font-size:28px;letter-spacing:-.04em;margin:8px 0">Помощь, прямо в приложении.</h2><p>Создавайте отдельные обращения и продолжайте переписку здесь. Бесплатный ИИ-помощник отвечает на вопросы о Сметре; если он не справляется или вы зовёте сотрудника, обращение попадёт в рабочую очередь.</p><form id="support-form" style="display:grid;gap:9px;max-width:680px;margin:18px 0"><label for="message" style="font-size:12px;opacity:.7">Что случилось?</label><textarea id="message" rows="4" minlength="5" maxlength="2000" required placeholder="Опишите вопрос — история останется в чате поддержки." style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--line,rgba(128,128,128,.2));border-radius:12px;background:transparent;color:inherit;font:inherit;font-size:13px;resize:vertical"></textarea><div><button class="comms-btn primary" type="submit">Отправить в поддержку</button> <button class="comms-btn" type="button" data-open-help>Открыть все обращения</button></div><p class="comms-note">ИИ бесплатен для пользователя. Если потребуется сотрудник, разговор передадут в очередь поддержки.</p></form></section>';
- content.querySelector('[data-open-help]').onclick=()=>open('support');
- content.querySelector('#support-form').addEventListener('submit',async event=>{
+ if(!content||content.dataset.section!=='support')return;
+ // Retain the existing support page markup/topics so older web and Android
+ // navigation flows keep their selectors and history behavior.
+ const form=content.querySelector('#support-form');
+ if(!form||state.supportForm===form)return;
+ state.supportForm=form;
+ const guide=content.querySelector('.support-guide');
+ const actions=guide||form.parentElement||content;
+ if(!actions.querySelector('[data-comms-open-support]')){
+  const button=document.createElement('button');
+  button.type='button';button.className='comms-btn';button.dataset.commsOpenSupport='1';
+  button.textContent='Открыть историю обращений';
+  button.style.marginTop='10px';button.onclick=()=>open('support');
+  const topics=actions.querySelector('.support-topics');
+  if(topics)topics.insertAdjacentElement('afterend',button);else actions.append(button);
+ }
+ const panel=content.querySelector('.support-panel')||form.parentElement;
+ if(panel&&!panel.querySelector('[data-comms-support-note]')){
+  const note=document.createElement('p');note.dataset.commsSupportNote='1';note.className='comms-note';
+  note.style.marginBottom='12px';
+  note.textContent='Бесплатный ИИ поддержки отвечает в чате. Если он не справится или вы позовёте сотрудника, обращение попадёт в очередь команды, а история сохранится.';
+  panel.insertBefore(note,form);
+ }
+ form.onsubmit=async event=>{
   event.preventDefault();
-  const form=event.currentTarget,button=form.querySelector('[type="submit"]'),input=form.querySelector('#message'),message=input.value.trim();
-  if(!message||button.disabled)return;
+  const button=form.querySelector('[type=submit],button:not([type])');
+  const input=form.querySelector('#message');
+  const message=input?.value.trim();
+  if(!message||!button||button.disabled)return;
   button.disabled=true;
   try{
    const data=await api('/support',{method:'POST',body:JSON.stringify({message})});
-   input.value='';
+   if(input.value.trim()===message)input.value='';
    await open('support');
    await select(data.ticket_id);
    notify(data.needs_human?'Обращение передано в очередь поддержки':'Ответ поддержки получен');
   }catch(error){notify(error.message)}
   finally{if(button.isConnected)button.disabled=false}
- });
+ };
 }
 async function adminPage(){
  const content=$('#content');if(!content||content.dataset.section!=='admin'||state.role!=='admin')return;
