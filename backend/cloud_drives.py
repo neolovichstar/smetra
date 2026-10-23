@@ -887,6 +887,18 @@ def route(service, method, parts, query, data):
     if parts == ["sync"] and method == "POST":
         count = service.con.execute("UPDATE cloud_folder_bindings SET sync_requested=1,next_sync_at=?,updated_at=? WHERE workspace_id=? AND status='active'", (_now(), _now(), service.wid)).rowcount
         return 202, {"queued": count}
+    if parts == ["jobs"] and method == "GET":
+        rows = service.con.execute(
+            "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.error,j.attempts,j.created_at,j.updated_at,"
+            "f.name,f.web_view_url,f.mime,f.size,b.quote_id,b.project_id,b.folder_name,"
+            "c.provider,c.account_label FROM document_processing_jobs j "
+            "JOIN cloud_files f ON f.id=j.cloud_file_id "
+            "JOIN cloud_folder_bindings b ON b.id=f.binding_id "
+            "JOIN cloud_connections c ON c.id=f.connection_id "
+            "WHERE j.workspace_id=? ORDER BY j.updated_at DESC,j.id DESC LIMIT 100",
+            (service.wid,),
+        ).fetchall()
+        return 200, {"jobs": [dict(row) for row in rows]}
     if len(parts) == 2 and parts[0] == "jobs" and method == "GET":
         row = service.con.execute(
             "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.extraction,j.proposal,j.error,j.attempts,j.created_at,j.updated_at,f.name,f.web_view_url,b.quote_id,b.project_id FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id WHERE j.id=? AND j.workspace_id=?",
