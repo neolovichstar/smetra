@@ -87,7 +87,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     if(route==='support'){
       await evaluate("document.querySelector('[data-support-topic]').click()");
       assert.equal(await evaluate("document.querySelector('#message').value.length>0"),true);
-      assert.equal(await evaluate("!document.querySelector('a[href^=\\\"mailto:\\"]')"),true,'Support contact remains inside Smetra');
+      assert.equal(await evaluate("Array.from(document.querySelectorAll('a')).every(a=>!a.getAttribute('href')?.startsWith('mailto:'))"),true,'Support contact remains inside Smetra');
     }
     if(route==='profile'){
       assert.equal(await evaluate("!!document.querySelector('.profile-public-id')&&document.querySelector('#profile-public-id-value').textContent.startsWith('SM-')"),true,'Profile exposes a searchable public ID');
