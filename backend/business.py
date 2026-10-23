@@ -530,7 +530,7 @@ def migrate(con):
             "current_period_end=excluded.current_period_end,updated_at=excluded.updated_at",
             (
                 "legacy-" + legacy["workspace_id"], legacy["user_id"], legacy["workspace_id"],
-                "pro_month", "legacy", provider_id, "", 0, "RUB", moment,
+                "pro_solo_month", "legacy", provider_id, "", 0, "RUB", moment,
                 legacy["entitlement_until"], moment, moment,
             ),
         )
