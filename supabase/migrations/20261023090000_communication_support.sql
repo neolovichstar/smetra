@@ -184,9 +184,6 @@ USING (visible OR user_id=(SELECT smetra.runtime_user_id()));
 DROP POLICY IF EXISTS user_directory_self_insert ON smetra.user_directory;
 CREATE POLICY user_directory_self_insert ON smetra.user_directory FOR INSERT
 WITH CHECK (user_id=(SELECT smetra.runtime_user_id()));
-DROP POLICY IF EXISTS user_directory_self_insert ON smetra.user_directory;
-CREATE POLICY user_directory_self_insert ON smetra.user_directory FOR INSERT
-WITH CHECK (user_id=(SELECT smetra.runtime_user_id()));
 DROP POLICY IF EXISTS user_directory_self_update ON smetra.user_directory;
 CREATE POLICY user_directory_self_update ON smetra.user_directory FOR UPDATE
 USING (user_id=(SELECT smetra.runtime_user_id()))

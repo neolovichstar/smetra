@@ -60,7 +60,7 @@ BEGIN
   IF NEW.needs_human IS TRUE AND OLD.needs_human IS DISTINCT FROM TRUE THEN
     FOR v_topic IN
       SELECT d.inbox_topic FROM smetra.users u JOIN smetra.user_directory d ON d.user_id=u.id
-      WHERE u.role='admin' AND u.blocked IS FALSE AND u.deleted_at IS NULL
+      WHERE u.role='admin' AND u.blocked=0 AND u.deleted_at IS NULL
         AND d.inbox_topic IS NOT NULL AND d.inbox_topic<>''
     LOOP
       PERFORM realtime.send(jsonb_build_object('v',1),'support_escalated',v_topic,FALSE);
