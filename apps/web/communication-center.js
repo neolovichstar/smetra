@@ -195,6 +195,7 @@ function supportPage(){
  if(!form||state.supportForm===form)return;
  state.supportForm=form;
  const guide=content.querySelector('.support-guide');
+ guide?.querySelector('a[href^="mailto:"]')?.remove();
  const actions=guide||form.parentElement||content;
  if(!actions.querySelector('[data-comms-open-support]')){
   const button=document.createElement('button');
