@@ -4,7 +4,7 @@ const rubFormatter=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB
 const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
-let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0, authRevision=0;
+let user = null, quotes = [], tab = location.hash.slice(1) || (new URLSearchParams(location.search).get('cloud') === 'connected' ? 'premium' : 'dashboard'), registering = false, toastTimer, renderRevision=0, authRevision=0;
 try{sessionStorage.removeItem('mobile_token');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 const apiResponseCache=new Map();
