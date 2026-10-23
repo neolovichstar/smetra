@@ -1402,7 +1402,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             "current_period_start,current_period_end,cancel_at_period_end,last_payment_id,"
                             "created_at,updated_at) "
                             "VALUES(?,?,?,?,?,?,?,?,?,'active',?,?,?,?,?,?,?,?) "
-                            "ON CONFLICT(provider_subscription_id) DO NOTHING",
+                            "ON CONFLICT DO NOTHING",
                             (
                                 uid(), local["user_id"], workspace_id, local["plan"], "yookassa",
                                 local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
