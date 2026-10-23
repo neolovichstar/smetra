@@ -1363,15 +1363,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     )
                     if status == "succeeded":
                         terms = con.execute('SELECT duration_days,bonus_ai_messages,is_test FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
-                        prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
-                        grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
-                        entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
+                        prior_user = con.execute(
+                            "SELECT entitlement_until FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()
+                        moment = now()
+                        test_mode = bool(terms["is_test"]) if terms else False
+                        grant_days = terms["duration_days"] if terms else PLANS[local["plan"]][1]
+                        access = revenue.PRODUCT_ACCESS.get(local["plan"], ("pro_solo", 1, 1))
+                        same_rank_codes = [
+                            code for code, value in revenue.PRODUCT_ACCESS.items()
+                            if value[2] == access[2]
+                        ]
+                        placeholders = ",".join("?" for _ in same_rank_codes)
+                        current_same_tier = con.execute(
+                            "SELECT COALESCE(MAX(current_period_end),0) FROM billing_subscriptions "
+                            "WHERE workspace_id=(SELECT id FROM workspaces WHERE owner_id=? ORDER BY created_at LIMIT 1) "
+                            "AND status IN ('active','succeeded') AND current_period_end>? AND is_test=? "
+                            "AND product_code IN (" + placeholders + ")",
+                            (local["user_id"], moment, test_mode, *same_rank_codes),
+                        ).fetchone()[0]
+                        # Stack a purchase behind an already active subscription at
+                        # the same tier, never behind a lower tier with a longer term.
+                        product_period_start = max(moment, int(current_same_tier or 0))
+                        product_period_end = product_period_start + grant_days * 86400
+                        # A legacy entitlement may predate billing_subscriptions. Preserve
+                        # it as an account-level fallback while new product periods stay separate.
+                        has_prior_products = con.execute(
+                            "SELECT 1 FROM billing_subscriptions WHERE user_id=? AND is_test=? LIMIT 1",
+                            (local["user_id"], test_mode),
+                        ).fetchone()
+                        legacy_until = int(prior_user["entitlement_until"] or 0) if not has_prior_products else 0
                         con.execute(
                             "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                            (entitlement_until, "pro", local["user_id"]),
+                            (max(legacy_until, product_period_end), "pro", local["user_id"]),
                         )
-                        # Store the confirmed product as a non-renewing entitlement. A
-                        # checkout return URL or client-side status never creates this row.
                         paid_user = con.execute(
                             "SELECT * FROM users WHERE id=?", (local["user_id"],)
                         ).fetchone()
@@ -1387,40 +1412,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             (
                                 uid(), local["user_id"], workspace_id, local["plan"], "yookassa",
                                 local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
-                                bool(terms["is_test"]) if terms else False,
-                                now(), entitlement_until, local["id"], now(), now(),
+                                test_mode, product_period_start, product_period_end, local["id"], moment, moment,
                             ),
                         )
-                        product_tiers = {
-                            "pro_month": ("pro_solo", 1, 1),
-                            "pro_year": ("pro_solo", 1, 1),
-                            "pro_plus_month": ("pro_plus", 1, 2),
-                            "pro_plus_year": ("pro_plus", 1, 2),
-                            "team_month": ("team", 5, 3),
-                            "team_year": ("team", 5, 3),
-                            "business_month": ("business", 15, 4),
-                            "business_year": ("business", 15, 4),
-                        }
                         active_products = con.execute(
-                            "SELECT product_code,current_period_end FROM billing_subscriptions "
-                            "WHERE workspace_id=? AND status IN ('active','succeeded') "
-                            "AND current_period_end>?",
-                            (workspace_id, now()),
+                            "SELECT product_code,status,current_period_end FROM billing_subscriptions "
+                            "WHERE workspace_id=? AND status IN ('active','succeeded') AND current_period_end>?",
+                            (workspace_id, moment),
                         ).fetchall()
-                        if active_products:
-                            best_code, _best_rank = max(
-                                (
-                                    (row["product_code"], product_tiers.get(row["product_code"], ("pro_solo", 1, 1))[2])
-                                    for row in active_products
-                                ),
-                                key=lambda item: item[1],
-                            )
-                            best_tier, best_seats, _ = product_tiers.get(best_code, ("pro_solo", 1, 1))
-                            workspace_expiry = max(int(row["current_period_end"] or 0) for row in active_products)
+                        resolved = revenue.workspace_entitlement(active_products, moment)
+                        if resolved:
                             con.execute(
                                 "UPDATE workspaces SET plan=?,subscription_status='active',"
                                 "entitlement_until=?,seat_limit=? WHERE id=?",
-                                (best_tier, workspace_expiry, best_seats, workspace_id),
+                                (resolved["plan"], resolved["entitlement_until"], resolved["seat_limit"], workspace_id),
                             )
                         # Gift credits are issued only for a provider-confirmed live payment.
                         # The amount and expiry are fixed in the original payment intent.
