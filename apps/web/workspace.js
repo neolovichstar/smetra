@@ -1,7 +1,7 @@
 /* Workspace UI. All persistent business actions go through the authenticated API. */
 window.Workspace = (() => {
   const labels = {draft:'Черновик',sent:'Отправлена',viewed:'Просмотрена',changes_requested:'Нужны изменения',approved:'Согласована',rejected:'Отклонена',expired:'Истекла',planned:'Запланирован',in_progress:'В работе',waiting:'Ожидание',completed:'Завершён',cancelled:'Отменён',todo:'К выполнению',done:'Готово',person:'Физлицо',company:'Компания',low:'Низкий',normal:'Обычный',high:'Высокий',bank_transfer:'Перевод',cash:'Наличные',external:'Внешняя оплата',owner:'Владелец',admin:'Администратор',manager:'Менеджер',member:'Участник',viewer:'Наблюдатель'};
-  const names = {clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
+  const names = {premium:'Материалы и облака',clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
   const e = escapeHtml;
   const moneyFormatters=new Map();
   const money = (n,c='RUB') => {if(!moneyFormatters.has(c))moneyFormatters.set(c,new Intl.NumberFormat('ru-RU',{style:'currency',currency:c,maximumFractionDigits:2}));return moneyFormatters.get(c).format((n||0)/100)};
