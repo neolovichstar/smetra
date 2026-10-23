@@ -332,6 +332,11 @@ def fingerprint(product):
     return hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _require_quote_writer(service):
+    if service.role not in ("owner", "admin", "manager", "member"):
+        raise business.DomainError(403, "У вас нет прав изменять строки сметы")
+
+
 def _premium_access(service):
     row = service.con.execute(
         "SELECT plan,subscription_status,entitlement_until,smart_supplier_enabled,smart_supplier_until FROM workspaces WHERE id=?",
@@ -448,6 +453,7 @@ def route(service, method, parts, query, data):
         sql += " ORDER BY updated_at DESC LIMIT 100"
         return 200, {"sources": [dict(row) for row in service.con.execute(sql, args).fetchall()]}
     if parts == ["product-sources"] and method == "POST":
+        _require_quote_writer(service)
         service.h.throttle("product-source-create:" + service.wid + ":" + service.user["id"], 20, 3600)
         quote_id = str(data.get("quote_id", ""))[:100]
         item_id = str(data.get("quote_item_id", ""))[:100]
@@ -478,6 +484,7 @@ def route(service, method, parts, query, data):
         return 201, {"source_id": source_id, "product": product, "next_check_at": now + 7 * 86400,
                      "quote_revision": int(quote["revision"]) + 1, "financial_price_changed": False}
     if len(parts) == 2 and parts[0] == "product-sources" and method == "DELETE":
+        _require_quote_writer(service)
         source_id = parts[1]
         row = service.con.execute("SELECT id FROM product_sources WHERE id=? AND workspace_id=?", (source_id, service.wid)).fetchone()
         if not row:
