@@ -51,7 +51,7 @@ function mount(){
  document.body.append(shell);
  shell.addEventListener('click',e=>{if(e.target===shell||e.target.closest('[data-close]'))close()});
  shell.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{state.tab=b.dataset.tab;state.current=null;state.messages=[];await refresh(true)});
- $('#comms-tools').addEventListener('submit',async e=>{e.preventDefault();if(e.target.id==='comms-direct-form')await findPerson();if(e.target.id==='comms-object-form')await createObjectChat()});
+ $('#comms-tools').addEventListener('submit',async e=>{e.preventDefault();if(e.target.id==='comms-direct-form')await findPerson();if(e.target.id==='comms-object-form')await createObjectChat();if(e.target.id==='comms-quote-form')await createQuoteChat()});
  $('#comms-tools').addEventListener('click',async e=>{const b=e.target.closest('[data-new-ticket],[data-handoff],[data-join]');if(!b)return;if(b.hasAttribute('data-new-ticket'))await newTicket();if(b.hasAttribute('data-handoff'))await handoff();if(b.hasAttribute('data-join'))await joinCommunity(b.dataset.join)});
  $('#comms-list').addEventListener('click',e=>{const b=e.target.closest('[data-conv]');if(b)select(b.dataset.conv)});
  $('#comms-compose').onsubmit=sendMessage;
@@ -67,7 +67,7 @@ function open(tab='direct'){
 function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.style.overflow=''}
 function renderTools(){
  const el=$('#comms-tools');if(!el)return;
- if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form>';
+ if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form>';
  else if(state.tab==='object'){
  const enabled=state.workspaces.filter(w=>w.enabled);
  el.innerHTML=enabled.length?'<form class="comms-form" id="comms-object-form"><label for="comms-workspace">Рабочее пространство TEAM</label><select id="comms-workspace">'+enabled.map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join('')+'</select><label for="comms-object-name">Название объекта или бригады</label><input id="comms-object-name" maxlength="120" placeholder="Например, ЖК Октябрьский"><button class="comms-btn" type="submit">'+icon('plus')+' Создать чат объекта</button><p class="comms-note">Участники добавятся из списка команды.</p></form>':'<div class="comms-form"><p class="comms-note">Объектные чаты доступны рабочим пространствам с активным тарифом TEAM / Компания.</p></div>';
@@ -143,6 +143,11 @@ async function findPerson(){
  try{const d=await api('/profile/directory?q='+encodeURIComponent(value));const p=d.user;out.innerHTML='<div style="padding-top:8px;font-size:12px">'+esc(p.name)+' <code style="opacity:.55;font-size:10px">'+esc(p.public_id)+'</code> <button class="comms-btn" type="button" id="comms-start-chat">Написать</button></div>';$('#comms-start-chat').onclick=async()=>{try{const x=await api('/profile/chats',{method:'POST',body:JSON.stringify({public_id:p.public_id})});state.tab='direct';state.current=null;await refresh(true);await select(x.chat.id)}catch(error){notify(error.message)}}
  }catch(error){out.innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
 }
+async function createQuoteChat(){
+ const quote_id=$('#comms-quote-id')?.value.trim(),public_id=$('#comms-quote-client')?.value.trim();
+ if(!quote_id||!public_id)return;
+ try{const d=await api('/profile/quote-chats',{method:'POST',body:JSON.stringify({quote_id,public_id})});await refresh(true);await select(d.chat.id);notify('Чат привязан к смете')}catch(error){notify(error.message)}
+}
 async function createObjectChat(){
  const workspace=$('#comms-workspace')?.value;if(!workspace){notify('Нет активного пространства TEAM');return}
  const subject=$('#comms-object-name')?.value.trim()||'Рабочий чат объекта';
@@ -174,7 +179,7 @@ async function adminPage(){
  const base=content.querySelector('.admin-metrics');if(!base)return;
  let panel=content.querySelector('[data-comms-admin-overview]');
  if(!panel){panel=document.createElement('section');panel.className='comms-admin-panel';panel.dataset.commsAdminOverview='1';panel.innerHTML='<div class="comms-eyebrow">СМЕТРА / ОПЕРАЦИОННАЯ АНАЛИТИКА</div><h3>Экосистема в цифрах</h3><p>Сводные показатели сервиса и очередь поддержки. Личные переписки и содержимое документов здесь не показываются.</p><div class="comms-admin-metrics" data-admin-metrics></div><button type="button" class="comms-btn" data-admin-queue>'+icon('support')+' Открыть очередь поддержки</button>';base.insertAdjacentElement('afterend',panel);panel.querySelector('[data-admin-queue]').onclick=()=>open('support')}
- try{const d=await api('/admin/communication/overview');const rows=[['Пользователи',d.users_total],['DAU · сутки',d.users_dau],['MAU · 30 дней',d.users_mau],['Все сметы',d.estimates_total],['Сметы за месяц',d.estimates_30d],['Рабочие пространства',d.workspaces_total],['Объекты',d.projects_total],['Клиенты',d.clients_total],['Файлы',d.files_total],['Расходы',d.expenses_total],['Переписки',d.chats_total],['Сообщения',d.messages_total],['Ожидают сотрудника',d.support_waiting_human],['Открытые обращения',d.support_open],['Получено за всё время',money(d.revenue_kopecks)],['Получено за 30 дней',money(d.revenue_30d_kopecks)],['Оплаченные платежи',d.paid_transactions],['Доход сегодня',money(d.revenue_today_kopecks)]];
+ try{const d=await api('/admin/communication/overview');const rows=[['Пользователи',d.users_total],['DAU · сутки',d.users_dau],['MAU · 30 дней',d.users_mau],['Все сметы',d.estimates_total],['Сметы за месяц',d.estimates_30d],['Рабочие пространства',d.workspaces_total],['Объекты',d.projects_total],['Клиенты',d.clients_total],['Файлы',d.files_total],['Расходы',d.expenses_total],['Переписки',d.chats_total],['Сообщения',d.messages_total],['Ожидают сотрудника',d.support_waiting_human],['Открытые обращения',d.support_open],['Получено за всё время',money(d.revenue_kopecks)],['Получено за 30 дней',money(d.revenue_30d_kopecks)],['Оплаченные платежи',d.paid_transactions],['Ожидают оплаты',d.pending_payments],['Доход сегодня',money(d.revenue_today_kopecks)]];
  panel.querySelector('[data-admin-metrics]').innerHTML=rows.map(r=>'<div class="comms-admin-metric"><span>'+esc(r[0])+'</span><strong>'+(typeof r[1]==='number'?num(r[1]):esc(r[1]))+'</strong></div>').join('');
  panel.querySelector('[data-admin-queue]').innerHTML=icon('support')+' Открыть очередь поддержки'+(d.support_waiting_human?' · '+num(d.support_waiting_human)+' ожидают':'');
  }catch(error){panel.querySelector('p').textContent='Не удалось обновить статистику: '+error.message}
@@ -185,6 +190,6 @@ function watch(){
  state.observer.observe(root,{childList:true,subtree:true});addTrigger();
  if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin')adminPage();
 }
-document.addEventListener('DOMContentLoaded',()=>{mount();watch();});
+document.addEventListener('DOMContentLoaded',()=>{mount();watch();const heartbeat=()=>api('/profile/presence',{method:'POST',body:'{}'}).catch(()=>{});heartbeat();setInterval(heartbeat,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)heartbeat()});setInterval(()=>{if(location.hash==='#admin')adminPage()},30000);});
 window.SmetraCommunication={open,close,refresh:()=>refresh(true)};
 })();
