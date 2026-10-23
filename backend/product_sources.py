@@ -516,10 +516,6 @@ def authenticate_cron(handler):
 
 def run_monitor_batch(con, limit=10):
     """Run bounded due price checks. Failures are recorded; no bad data is treated as a price."""
-    try:
-        from backend.business import transaction
-    except ImportError:
-        transaction = None
     due = []
     with business.transaction(con, lock_scopes=("product-monitor-queue",)):
         sql = ("SELECT * FROM product_sources WHERE monitored=1 AND source_status='active' "
@@ -560,7 +556,7 @@ def run_monitor_batch(con, limit=10):
                     notification_id = hashlib.sha256(("price:"+note_key).encode()).hexdigest()[:32]
                     existing = con.execute("SELECT 1 FROM notifications WHERE id=?", (notification_id,)).fetchone()
                     if not existing:
-                        message = f"{product['product_title'] or 'Товар'} подорожал на {pct:.2f}%".replace("%", "%")
+                        message = f"{product['product_title'] or 'Товар'} подорожал на {pct:.2f}%"
                         con.execute("INSERT INTO notifications(id,workspace_id,message,entity_id,created_at) VALUES(?,?,?,?,?)",
                                     (notification_id, source["workspace_id"], message[:1000], source["quote_id"], now))
                         from backend.push import enqueue
