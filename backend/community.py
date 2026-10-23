@@ -318,8 +318,8 @@ def _refresh_workspace_entitlement(con, workspace_id):
     moment = now()
     subscriptions = con.execute(
         "SELECT product_code,status,current_period_end FROM billing_subscriptions "
-        "WHERE workspace_id=?",
-        (workspace_id,),
+        "WHERE workspace_id=? OR (workspace_id IS NULL AND user_id=?)",
+        (workspace_id, workspace["owner_id"]),
     ).fetchall()
     from backend import revenue
     resolved = revenue.workspace_entitlement(subscriptions, moment)
