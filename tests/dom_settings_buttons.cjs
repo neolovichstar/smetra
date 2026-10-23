@@ -24,9 +24,9 @@ function setup(saved){
   assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/);doc.querySelector('#theme').click();assert.equal(doc.documentElement.dataset.theme,'dark');assert.equal(w.getComputedStyle(doc.body).backgroundColor,'rgb(0, 0, 0)');
  });
  await test('saved light theme survives rerender',async({w,doc})=>{await w.render();assert.equal(doc.documentElement.dataset.theme,'light');assert.notEqual(w.getComputedStyle(doc.body).backgroundColor,'rgb(0, 0, 0)');await w.render();assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/)},'light');
- await test('cancelled account deletion makes no request',async({w,doc})=>{let calls=0;w.api=async()=>{calls++;return {}};await w.render();doc.querySelector('#delete-account').click();await tick();assert.equal(calls,0);assert.ok(doc.querySelector('#delete-account'))});
+ await test('cancelled account deletion makes no request',async({w,doc})=>{let calls=0;w.api=async()=>{calls++;return {}};await w.render();calls=0;doc.querySelector('#delete-account').click();await tick();assert.equal(calls,0);assert.ok(doc.querySelector('#delete-account'))});
  await test('failed account deletion prevents duplicate requests and enables retry',async({w,doc})=>{
-  w.confirm=()=>true;let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};await w.render();const button=doc.querySelector('#delete-account');button.click();button.click();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);
+  w.confirm=()=>true;let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};await w.render();calls=0;const button=doc.querySelector('#delete-account');button.click();button.click();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);
  });
  await test('support opens the in-app ticket inbox instead of the retired topic form',async({w,doc})=>{
   const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};

@@ -360,7 +360,7 @@
       const manageButton=event.target.closest('[data-admin-manage]');
       if(manageButton){manage(manageButton.dataset.adminManage);return;}
       const conversation=event.target.closest('[data-admin-conversation]');
-      if(conversation){state.selectedConversationId=conversation.dataset.adminConversation;loadAdminTranscript(state.selectedConversationId);loadAdminChats();return;}
+      if(conversation){state.selectedConversationId=conversation.dataset.adminConversation;loadAdminChats();return;}
       if(event.target.closest('[data-admin-chats-refresh]')){loadAdminChats();return;}
       const page=event.target.closest('[data-admin-page]');
       if(page){state.offset+=page.dataset.adminPage==='next'?25:-25;loadUsers();return;}
