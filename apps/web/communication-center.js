@@ -171,13 +171,8 @@ async function handoff(){
  }catch(error){notify(error.message)}
 }
 function addTrigger(){
- if(!$('#open-comms')){
-  const actions=$('.app-nav-actions');
-  if(actions){
-   const b=document.createElement('button');b.id='open-comms';b.type='button';b.className='comms-trigger';b.innerHTML=icon('chat')+'<span>Чаты</span>';b.onclick=()=>open('direct');
-   const ref=$('#command-open',actions);if(ref)ref.insertAdjacentElement('afterend',b);else actions.prepend(b);
-  }
- }
+ // Chat entry point belongs in the workspace sidebar, not the mobile top bar.
+ // Keeping the top bar untouched preserves the validated mobile layout.
  const support=$('#sidebar [data-tab="support"]');
  if(support&&!$('#sidebar-open-comms')){
   const b=document.createElement('button');b.id='sidebar-open-comms';b.type='button';b.className='comms-sidebar-trigger';
