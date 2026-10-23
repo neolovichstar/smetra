@@ -1634,7 +1634,7 @@
  .workspace-page .nav-search{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:10px!important;font-size:0!important}
  .workspace-page .nav-search::before{content:"";display:block;width:19px;height:19px;background:currentColor;mask:url('/assets/icons/magnifying-glass.svg') center/contain no-repeat;-webkit-mask:url('/assets/icons/magnifying-glass.svg') center/contain no-repeat}
  .workspace-page .nav-search span,.workspace-page .nav-search kbd{display:none!important}.workspace-page #theme{display:none!important}
- .workspace-page .app-shell{min-height:calc(100dvh - 124px)!important}.workspace-page .sidebar{top:116px!important;height:calc(100dvh - 116px - env(safe-area-inset-bottom))!important;max-height:none!important;border-radius:0 0 17px 17px!important}
+ .workspace-page .app-shell{min-height:calc(100dvh - 124px)!important}.workspace-page:not(.auth-mode) .sidebar{top:116px!important;height:calc(100dvh - 116px - env(safe-area-inset-bottom))!important;max-height:none!important;border-radius:0 0 17px 17px!important}
  .workspace-page .nav-backdrop,.workspace-page.nav-open .nav-backdrop{top:116px!important}
  .workspace-page .sidebar .sidebar-group button{border-radius:999px!important}
  .workspace-page .assistant-studio,.workspace-page .assistant-studio.assistant-tools-collapsed{grid-template-columns:48px minmax(0,1fr)!important}
