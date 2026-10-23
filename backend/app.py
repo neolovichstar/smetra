@@ -42,8 +42,11 @@ PLANS = {
     "pro_month": (49000, 31),
     "pro_year": (490000, 366),
     "pro_plus_month": (69000, 31),
+    "pro_plus_year": (690000, 366),
     "team_month": (399000, 31),
     "team_year": (3990000, 366),
+    "business_month": (999000, 31),
+    "business_year": (9990000, 366),
 }
 
 
@@ -1388,11 +1391,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             ),
                         )
                         product_tiers = {
-                            "pro_month": ("pro_solo", 1),
-                            "pro_year": ("pro_solo", 1),
-                            "pro_plus_month": ("pro_plus", 2),
-                            "team_month": ("team", 3),
-                            "team_year": ("team", 3),
+                            "pro_month": ("pro_solo", 1, 1),
+                            "pro_year": ("pro_solo", 1, 1),
+                            "pro_plus_month": ("pro_plus", 1, 2),
+                            "pro_plus_year": ("pro_plus", 1, 2),
+                            "team_month": ("team", 5, 3),
+                            "team_year": ("team", 5, 3),
+                            "business_month": ("business", 15, 4),
+                            "business_year": ("business", 15, 4),
                         }
                         active_products = con.execute(
                             "SELECT product_code,current_period_end FROM billing_subscriptions "
@@ -1403,17 +1409,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         if active_products:
                             best_code, _best_rank = max(
                                 (
-                                    (row["product_code"], product_tiers.get(row["product_code"], ("pro_solo", 1))[1])
+                                    (row["product_code"], product_tiers.get(row["product_code"], ("pro_solo", 1, 1))[2])
                                     for row in active_products
                                 ),
                                 key=lambda item: item[1],
                             )
-                            best_tier = product_tiers.get(best_code, ("pro_solo", 1))[0]
+                            best_tier, best_seats, _ = product_tiers.get(best_code, ("pro_solo", 1, 1))
                             workspace_expiry = max(int(row["current_period_end"] or 0) for row in active_products)
                             con.execute(
                                 "UPDATE workspaces SET plan=?,subscription_status='active',"
                                 "entitlement_until=?,seat_limit=? WHERE id=?",
-                                (best_tier, workspace_expiry, 5 if best_tier == "team" else 1, workspace_id),
+                                (best_tier, workspace_expiry, best_seats, workspace_id),
                             )
                         # Gift credits are issued only for a provider-confirmed live payment.
                         # The amount and expiry are fixed in the original payment intent.
