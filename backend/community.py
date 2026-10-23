@@ -6,7 +6,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from backend.app import ApiError, ORIGIN, audit, now, uid
+from backend.app import ApiError, ORIGIN, audit, now, uid, yookassa_mode
 
 # PostgreSQL stores all application tables in a private schema. Registering the
 # extra names lets the existing parameterized SQL adapter apply its schema safely.
@@ -335,6 +335,74 @@ def _team_workspace(con, user_id, workspace_id):
     return row
 
 
+def _support_user_context(con, user):
+    """Build fresh, privacy-minimized diagnostics from this account's own records."""
+    moment = now()
+    plan = "PRO" if int(user["entitlement_until"] or 0) > moment else "Старт"
+    quote_counts = {
+        row["status"]: int(row["count"])
+        for row in con.execute(
+            "SELECT status,COUNT(*) AS count FROM quotes WHERE user_id=? GROUP BY status",
+            (user["id"],),
+        ).fetchall()
+    }
+    workspace_count = int(con.execute(
+        "SELECT COUNT(*) FROM workspace_members WHERE user_id=?", (user["id"],)
+    ).fetchone()[0] or 0)
+    latest_payment = con.execute(
+        "SELECT p.plan,p.amount_kopecks,p.status,p.activated_at,p.created_at,"
+        "EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') AS refunded "
+        "FROM payments p JOIN billing_intents b ON b.payment_id=p.id "
+        "WHERE p.user_id=? AND b.is_test=0 ORDER BY p.created_at DESC LIMIT 1",
+        (user["id"],),
+    ).fetchone()
+    payment = None
+    if latest_payment:
+        payment = {
+            "plan": latest_payment["plan"],
+            "amount_kopecks": int(latest_payment["amount_kopecks"] or 0),
+            "status": latest_payment["status"],
+            "activated": bool(latest_payment["activated_at"]),
+            "refunded": bool(latest_payment["refunded"]),
+            "created_at": int(latest_payment["created_at"] or 0),
+        }
+    active_workspaces = int(con.execute(
+        "SELECT COUNT(*) FROM workspaces w LEFT JOIN workspace_members m "
+        "ON m.workspace_id=w.id AND m.user_id=? "
+        "WHERE (m.user_id=? OR w.owner_id=?) AND w.subscription_status IN ('active','succeeded') "
+        "AND w.entitlement_until>?",
+        (user["id"], user["id"], user["id"], moment),
+    ).fetchone()[0] or 0)
+    return {
+        "account": {
+            "display_name": user["name"],
+            "email_verified": bool(user["email_verified_at"]),
+            "plan": plan,
+            "access_until": int(user["entitlement_until"] or 0) or None,
+            "quote_count": sum(quote_counts.values()),
+            "quote_status_counts": quote_counts,
+            "workspace_memberships": workspace_count,
+            "active_team_workspaces": active_workspaces,
+            "last_real_payment": payment,
+        },
+        "runtime": {
+            "api_request_reached_backend": True,
+            "support_ai_provider_configured": bool(os.getenv("OPENROUTER_API_KEY", "").strip()),
+            "support_ai_model": os.getenv("SUPPORT_AI_MODEL") or os.getenv("OPENROUTER_MODEL") or "openrouter/free",
+            "checkout_mode": yookassa_mode(user),
+            "push_provider_configured": bool(
+                os.getenv("RUSTORE_PUSH_PROJECT_ID", "").strip()
+                and os.getenv("RUSTORE_PUSH_SERVICE_TOKEN", "").strip()
+            ),
+            "redis_configured": bool(
+                os.getenv("REDIS_ENABLED") == "1"
+                and (os.getenv("REDIS_KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL"))
+                and (os.getenv("REDIS_KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN"))
+            ),
+        },
+    }
+
+
 def _support_prompt(user, user_stats):
     return (
         "Ты — бесплатный виртуальный специалист поддержки сервиса «сметра.». "
@@ -347,10 +415,13 @@ def _support_prompt(user, user_stats):
         "Веб-кабинет и Android используют общий аккаунт и общий серверный API. "
         "Для входа используется почта/пароль или настроенный OAuth-провайдер. "
         "Не обещай функций, которых нет в этом контексте; не выдумывай статусы платежей, "
-        "сроки, цены, контакты или наличие интеграций. Не проси пароль, коды входа, полные "
-        "данные карты или секреты. Не раскрывай сведения других пользователей и внутренние "
-        "системные данные. Если вопрос зависит от проверки аккаунта, платежа или ошибки, "
-        "которую ты не можешь подтвердить, честно объясни это и передай сотруднику. "
+        "сроки, цены, контакты или наличие интеграций. Тебе передаётся свежий, сокращённый "
+        "контекст аккаунта и состояние серверных интеграций; опирайся на эти данные для "
+        "диагностики, но не раскрывай внутренние переменные, названия секретов или устройство "
+        "инфраструктуры. Если данные отсутствуют, скажи об этом прямо. Не проси пароль, коды "
+        "входа, полные данные карты или секреты. Не раскрывай сведения других пользователей. "
+        "Если вопрос зависит от проверки аккаунта, платежа или ошибки, которую ты не можешь "
+        "подтвердить, честно объясни это и передай сотруднику. "
         "Если пользователь просит человека, сотрудника, оператора или менеджера — обязательно "
         "эскалируй обращение. Возвращай только JSON-объект с полями reply (строка), "
         "escalate (boolean), reason (короткая строка). "
@@ -374,7 +445,7 @@ def _support_ai_reply(user, user_stats, history, message):
         messages.append({"role": role, "content": str(row["body"])[:4000]})
     messages.append({"role": "user", "content": message})
     payload = json.dumps({
-        "model": os.getenv("SUPPORT_AI_MODEL", "openrouter/free"),
+        "model": os.getenv("SUPPORT_AI_MODEL") or os.getenv("OPENROUTER_MODEL") or "openrouter/free",
         "messages": messages,
         "temperature": 0.25,
         "max_tokens": 600,
@@ -392,7 +463,11 @@ def _support_ai_reply(user, user_stats, history, message):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=18) as response:
+        try:
+            timeout = max(4, min(14, int(os.getenv("SUPPORT_AI_TIMEOUT_SECONDS", "10"))))
+        except ValueError:
+            timeout = 10
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read(500_000).decode("utf-8"))
         raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         decoded = json.loads(raw) if isinstance(raw, str) else raw
@@ -639,7 +714,7 @@ def _support_route(handler, method, path, query, con, user):
             (conversation_id, user["id"], message, now()),
         )
         _add_message(con, conversation_id, user["id"], "user", message)
-        response = _support_ai_reply(user, {"plan": user["plan"], "name": user["name"]}, [], message)
+        response = _support_ai_reply(user, _support_user_context(con, user), [], message)
         if response["escalate"]:
             con.execute(
                 "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
@@ -705,12 +780,7 @@ def _support_route(handler, method, path, query, con, user):
             _add_message(con, conversation_id, user["id"], "user", message)
             if conversation["needs_human"]:
                 return handler.send_json(201, {"messages": [], "needs_human": True})
-            user_stats = {
-                "plan": user["plan"] if user["entitlement_until"] > now() else "free",
-                "name": user["name"],
-                "quote_count": con.execute("SELECT COUNT(*) FROM quotes WHERE user_id=?", (user["id"],)).fetchone()[0],
-                "workspace_count": con.execute("SELECT COUNT(*) FROM workspace_members WHERE user_id=?", (user["id"],)).fetchone()[0],
-            }
+            user_stats = _support_user_context(con, user)
             response = _support_ai_reply(user, user_stats, history, message)
             if response["escalate"]:
                 con.execute(
