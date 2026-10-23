@@ -733,13 +733,28 @@ def _admin_overview(con):
     moment = now()
     users = scalar("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
     quotes = scalar("SELECT COUNT(*) FROM quotes")
-    revenue = scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM payments WHERE status='succeeded'")
-    refunds = scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM refunds WHERE status='succeeded'")
+    def paid_amount(since=None):
+        conditions = [
+            "b.is_test=0",
+            "p.status='succeeded'",
+            "NOT EXISTS (SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')",
+        ]
+        parameters = []
+        if since is not None:
+            conditions.append("COALESCE(p.activated_at,p.created_at)>=?")
+            parameters.append(since)
+        return scalar(
+            "SELECT COALESCE(SUM(p.amount_kopecks),0) FROM payments p "
+            "JOIN billing_intents b ON b.payment_id=p.id WHERE " + " AND ".join(conditions),
+            tuple(parameters),
+        )
     active_subs = scalar(
-        "SELECT COUNT(*) FROM billing_subscriptions WHERE status IN ('active','succeeded') AND current_period_end>?",
-        (moment,),
+        "SELECT COUNT(*) FROM ("
+        "SELECT user_id FROM billing_subscriptions WHERE status IN ('active','succeeded') AND current_period_end>? "
+        "UNION SELECT id AS user_id FROM users WHERE deleted_at IS NULL AND entitlement_until>?"
+        ") AS active_paid_users",
+        (moment, moment),
     )
-    legacy_pro = scalar("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND entitlement_until>?", (moment,))
     return {
         "as_of": moment,
         "users_total": users,
@@ -761,14 +776,17 @@ def _admin_overview(con):
         "support_waiting_human": scalar("SELECT COUNT(*) FROM chat_conversations WHERE kind='support' AND status<>'closed' AND needs_human=1 AND assigned_admin_id IS NULL"),
         "paid_subscriptions": active_subs + legacy_pro,
         "revenue_kopecks": max(0, revenue-refunds),
-        "revenue_today_kopecks": max(0,
-            scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM payments WHERE status='succeeded' AND created_at>=?", (moment-86400,))
-            - scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM refunds WHERE status='succeeded' AND created_at>=?", (moment-86400,))),
-        "revenue_30d_kopecks": max(0,
-            scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM payments WHERE status='succeeded' AND created_at>=?", (moment-2592000,))
-            - scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM refunds WHERE status='succeeded' AND created_at>=?", (moment-2592000,))),
-        "pending_payments": scalar("SELECT COUNT(*) FROM payments WHERE status='pending'"),
-        "paid_transactions": scalar("SELECT COUNT(*) FROM payments WHERE status='succeeded'"),
+        "revenue_today_kopecks": paid_amount(moment-86400),
+        "revenue_30d_kopecks": paid_amount(moment-2592000),
+        "pending_payments": scalar(
+            "SELECT COUNT(*) FROM payments p JOIN billing_intents b ON b.payment_id=p.id "
+            "WHERE b.is_test=0 AND p.status='pending'"
+        ),
+        "paid_transactions": scalar(
+            "SELECT COUNT(*) FROM payments p JOIN billing_intents b ON b.payment_id=p.id "
+            "WHERE b.is_test=0 AND p.status='succeeded' AND NOT EXISTS "
+            "(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')"
+        ),
         "tracked_events_30d": scalar("SELECT COUNT(*) FROM events WHERE created_at>=?", (moment-2592000,)),
     }
 
