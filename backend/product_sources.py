@@ -446,6 +446,11 @@ def route(service, method, parts, query, data):
         quote_id = str(data.get("quote_id", ""))[:100]
         item_id = str(data.get("quote_item_id", ""))[:100]
         quote, item, item_data = _quote_item(service, quote_id, item_id)
+        # quote_items database row IDs are regenerated on each autosave. Persist the
+        # stable line_id stored in JSON so sources survive normal quote edits.
+        item_id = str(item_data.get("line_id") or "")
+        if not item_id:
+            raise business.DomainError(409, "У строки сметы нет стабильного идентификатора. Пересохраните черновик.")
         if type(data.get("revision")) is not int or data["revision"] != quote["revision"]:
             raise business.DomainError(409, "Смета изменилась. Обновите её перед привязкой товара.")
         product = fetch_product(data.get("url"))
