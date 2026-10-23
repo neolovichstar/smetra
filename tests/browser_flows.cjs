@@ -102,7 +102,7 @@ const assert = require('node:assert/strict');
     await wait(300);await shot('assistant-refined-'+width);
     await click('#assistant-history-toggle');await wait(100);
     assert.equal(await evaluate("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')"),true);
-    assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-history-panel')).display"),'flex');
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-history-panel')).display"),'block');
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
     await evaluate("document.querySelector('#assistant-history-toggle').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     assert.equal(await evaluate("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')"),false);
