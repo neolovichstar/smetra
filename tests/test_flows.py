@@ -177,6 +177,73 @@ class FlowTests(unittest.TestCase):
         except urllib.error.HTTPError as r:
             return r.code, json.load(r)
 
+    def test_workspace_member_invites_obey_current_subscription_seat_limit(self):
+        def register(name, email):
+            token, user_id = secrets.token_urlsafe(32), self.mod.uid()
+            with self.mod.db() as con:
+                con.execute(
+                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                    (user_id, email, self.mod.hash_password("secure twelve password"), name, self.mod.now(), self.mod.now()),
+                )
+                con.execute(
+                    "INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)",
+                    (self.mod.uid(), user_id, hashlib.sha256(token.encode()).hexdigest(), self.mod.now()+3600),
+                )
+                self.mod.business.ensure_workspace(con, {"id": user_id, "name": name})
+            return token, user_id
+
+        owner_token, owner_id = register("Владелец", "seat-owner@sample.test")
+        invitees = [
+            register("Участник "+str(i), "seat-member-"+str(i)+"@sample.test")
+            for i in range(5)
+        ]
+        with self.mod.db() as con:
+            workspace = con.execute(
+                "SELECT id FROM workspaces WHERE owner_id=?", (owner_id,)
+            ).fetchone()
+            workspace_id = workspace["id"]
+
+        status, error = self.request(
+            "/api/workspace/members", "POST",
+            {"email": "seat-member-0@sample.test", "role": "member"},
+            owner_token,
+        )
+        self.assertEqual(status, 402, error)
+        self.assertIn("TEAM", error["error"])
+
+        moment = self.mod.now()
+        with self.mod.db() as con:
+            con.execute(
+                "INSERT INTO billing_subscriptions("
+                "id,user_id,workspace_id,product_code,provider,provider_subscription_id,"
+                "amount_kopecks,status,is_test,current_period_start,current_period_end,created_at,updated_at"
+                ") VALUES(?,?,?,?,?,?,?,'active',0,?,?,?,?)",
+                (
+                    self.mod.uid(), owner_id, workspace_id, "pro_team_month", "manual",
+                    "seat-test-"+owner_id, 399000, moment, moment+31*86400, moment, moment,
+                ),
+            )
+
+        for index in range(4):
+            status, result = self.request(
+                "/api/workspace/members", "POST",
+                {"email": f"seat-member-{index}@sample.test", "role": "member"},
+                owner_token,
+            )
+            self.assertIn(status, (200, 201), result)
+        status, error = self.request(
+            "/api/workspace/members", "POST",
+            {"email": "seat-member-4@sample.test", "role": "member"},
+            owner_token,
+        )
+        self.assertEqual(status, 402, error)
+        self.assertIn("5", error["error"])
+        with self.mod.db() as con:
+            count = con.execute(
+                "SELECT COUNT(*) FROM workspace_members WHERE workspace_id=?", (workspace_id,)
+            ).fetchone()[0]
+        self.assertEqual(count, 5, "The owner plus four invited members fill the TEAM tier")
+
     def test_assistant_studio_assets_are_served(self):
         for path, mime in (
             ("/profile-ui.js", "text/javascript"),
