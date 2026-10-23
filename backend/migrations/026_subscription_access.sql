@@ -28,34 +28,4 @@ CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_workspace_access
 CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_user_access
   ON billing_subscriptions(user_id,status,current_period_end DESC);
 
--- Preserve pre-catalog PRO entitlements as a non-renewing legacy product so
--- that an upgrade's shorter period cannot erase the user's remaining access.
-INSERT INTO billing_subscriptions(
-  id,user_id,workspace_id,product_code,provider,provider_subscription_id,
-  provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,
-  current_period_start,current_period_end,cancel_at_period_end,last_payment_id,
-  created_at,updated_at
-)
-SELECT
-  'legacy-' || w.id,u.id,w.id,'pro_month','legacy','legacy:' || w.id,
-  '',0,'RUB','active',0,0,CAST(strftime('%s','now') AS INTEGER),
-  u.entitlement_until,0,NULL,CAST(strftime('%s','now') AS INTEGER),
-  CAST(strftime('%s','now') AS INTEGER)
-FROM users u JOIN workspaces w ON w.owner_id=u.id
-WHERE u.deleted_at IS NULL AND u.plan='pro'
-  AND COALESCE(u.entitlement_until,0)>CAST(strftime('%s','now') AS INTEGER)
-  AND NOT EXISTS (
-    SELECT 1 FROM billing_subscriptions s
-    WHERE s.workspace_id=w.id AND s.status IN ('active','succeeded')
-      AND s.current_period_end>CAST(strftime('%s','now') AS INTEGER)
-  )
-ON CONFLICT(provider_subscription_id) DO NOTHING;
-
-UPDATE workspaces
-SET plan='pro_solo',subscription_status='active',seat_limit=1
-WHERE id IN (
-  SELECT s.workspace_id FROM billing_subscriptions s
-  WHERE s.provider='legacy' AND s.status='active'
-    AND s.current_period_end>CAST(strftime('%s','now') AS INTEGER)
-);
 INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(29,CAST(strftime('%s','now') AS INTEGER));
