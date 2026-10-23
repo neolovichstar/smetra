@@ -45,7 +45,8 @@
   const pricing=b.pricing;
   if(!pricing)throw Error('Не удалось получить условия тарифа. Повторите загрузку.');
   const source=sessionStorage.getItem('smetra.paywall.source')||'pricing_page';
-  const pro=owner.plan==='pro'&&owner.entitlement_until>Date.now()/1000;
+  const workspacePaid=['active','cancel_at_period_end'].includes(space.workspace?.subscription_status)&&Number(space.workspace?.entitlement_until)>Date.now()/1000;
+  const pro=(owner.plan==='pro'&&owner.entitlement_until>Date.now()/1000)||workspacePaid;
   const ready=b.email_verified&&['test','live'].includes(b.checkout_mode);
   const ownSpace=space.workspace?.owner_id===owner.id;
   const note=b.checkout_mode==='off'?'Оплата временно недоступна. Ваш текущий доступ сохраняется.':!b.email_verified?'Для оплаты нужна подтверждённая почта аккаунта.':b.checkout_mode==='test'?'Тестовый режим: деньги не списываются.':'Защищённая оплата через ЮKassa. Без автоматических списаний.';
@@ -57,7 +58,8 @@
   const annualSavingPct=Math.round(annualSaving/(monthlyPrice*12)*100);
   const monthlyPurchaseBonus=Number(pricing.purchase_bonus?.pro_month||0);
   const annualPurchaseBonus=Number(pricing.purchase_bonus?.pro_year||0);
-  const paymentHistory=b.payments.length?b.payments.map(p=>'<div class="record-line billing-history-row"><div><strong>Про · '+(p.plan==='pro_year'?'год':'31 день')+'</strong><small>'+date(p.created_at)+' · '+e(paymentNames[p.status]||p.status)+'</small></div><b>'+rub(p.amount_kopecks)+'</b></div>').join(''):'<p class="muted">Здесь появятся ваши оплаты подписки.</p>';
+  const planNames={pro_month:'PRO Solo · месяц',pro_year:'PRO Solo · год',pro_plus_month:'PRO Плюс / Снабженец · месяц',pro_team_month:'TEAM / Компания · месяц',pro_team_year:'TEAM / Компания · год',smart_supplier_month:'Снабженец · старый тариф',lead_tokens_150:'Историческая покупка'};
+  const paymentHistory=b.payments.length?b.payments.map(p=>'<div class="record-line billing-history-row"><div><strong>'+e(planNames[p.plan]||'Сметра')+'</strong><small>'+date(p.created_at)+' · '+e(paymentNames[p.status]||p.status)+'</small></div><b>'+rub(p.amount_kopecks)+'</b></div>').join(''):'<p class="muted">Здесь появятся ваши оплаты подписки.</p>';
   view(`<section class="revenue-billing billing-v2">
    <header class="billing-hero">
     <div class="billing-hero-copy"><span class="overline billing-eyebrow">СМЕТРА / PRO</span><div class="billing-plan-status"><span class="billing-status-dot" aria-hidden="true"></span>${pro?'Подписка активна': 'План Старт · '+pricing.limits.free_quotes+' смет бесплатно'}</div>
@@ -66,13 +68,13 @@
      <div class="billing-trust-row"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>Без автопродления</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></svg>Оплата через ЮKassa</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></svg>Сайт и Android</span></div>
     </div>
     <aside class="billing-hero-stats" aria-label="Возможности Сметра Про">
-     <div class="billing-hero-stat"><strong>${pricing.limits.pro_quotes.toLocaleString('ru-RU')}</strong><span>смет и предложений</span></div>
+     <div class="billing-hero-stat"><strong>${pricing.limits.pro_quotes==null?'∞':Number(pricing.limits.pro_quotes).toLocaleString('ru-RU')}</strong><span>смет и предложений</span></div>
      <div class="billing-hero-stat"><strong>${pricing.limits.pro_ai}</strong><span>сообщений ИИ каждый месяц</span></div>
      <div class="billing-hero-stat-note">Один профиль.<br>Все рабочие процессы.</div>
     </aside>
    </header>
    <section class="payment-recovery" ${pending||recent?.status==='canceled'||new URLSearchParams(location.search).has('payment')?'':'hidden'}><div><strong>${pending?'Оплата не завершена':pro?'Про активирован':'Оплата не завершена'}</strong><p class="muted">${pending?'Вы можете продолжить оплату или проверить её статус.':pro?'Доступ уже действует на всех устройствах.':'Повторная попытка не изменит ваш текущий тариф.'}</p></div><div class="row wrap">${pending&&ready?'<button class="btn primary" id="checkout-resume" type="button">Продолжить оплату</button>':''}<button class="btn" id="payment-continue" type="button">Продолжить работу</button></div></section>
-   <section class="billing-purchase" aria-labelledby="billing-purchase-title">
+   <section class="billing-purchase billing-purchase-carousel" aria-labelledby="billing-purchase-title">
     <div class="billing-section-heading"><div><span class="overline">ТАРИФ И ОПЛАТА</span><h2 id="billing-purchase-title">${pro?'Продлите Сметра Про':'Выберите удобный срок'}</h2><p>Оплачиваете выбранный период один раз. Автоматического списания не будет.</p></div><span class="billing-secure-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.3-8 10-4.6-1.7-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Прозрачная цена</span></div>
     <div class="billing-audience-switch" role="tablist" aria-label="Категория тарифов">
       <button type="button" role="tab" aria-selected="true" aria-controls="billing-plan-carousel" data-plan-audience="personal"><strong>Для себя</strong><small>Для индивидуальной работы</small></button>
@@ -173,7 +175,7 @@
     const result=await synchronize(owner.id+':'+revision);
     if(!active()||user!==owner||sessionRevision()!==revision)return;
     user=result.user;
-    if(user.plan==='pro'&&!result.payments?.some(p=>p.status==='pending'))for(const value of ['pro_month','pro_year'])sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value);
+    if(user.plan==='pro'&&!result.payments?.some(p=>p.status==='pending'))for(const value of Object.keys(pricing.plans))sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value);
     await render();
     if(tab==='billing'&&user?.id===owner.id&&sessionRevision()===revision)notify(result.payments?.some(p=>p.status==='pending')?'Оплата пока не завершена. Текущий доступ сохранён.':user.plan==='pro'?'Про активен. Можно продолжать работу.':'Оплата пока не подтверждена. Доступ остаётся на тарифе Старт.');
    }catch(error){if(active()&&user===owner&&sessionRevision()===revision)notify(error.message)}
