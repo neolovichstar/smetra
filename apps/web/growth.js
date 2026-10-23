@@ -86,6 +86,7 @@
      </div>
      <p class="billing-payment-note billing-carousel-payment-note">${e(note)}</p><p id="checkout-error" role="alert" aria-live="polite"></p>
      <div class="billing-guarantee-line"><span aria-hidden="true">✓</span><span>Оплата после подтверждения платёжным провайдером. Без автоматических списаний.</span></div>
+     <div class="billing-branding-row" id="billing-branding-row"></div>
    </section>
    <section class="billing-history"><div class="billing-section-heading billing-history-heading"><div><span class="overline">ИСТОРИЯ</span><h2>Ваши оплаты</h2></div><button class="btn small" id="sync" type="button">Проверить статус</button></div>${paymentHistory}</section>
    <section class="billing-referral"><div class="billing-section-heading"><div><span class="overline">ДЕЛИТЕСЬ С КОЛЛЕГАМИ</span><h2>Пригласите коллегу</h2><p class="muted">Вы получите 3 дополнительных сообщения ассистенту, когда коллега создаст первую смету. До 30 бонусных сообщений в месяц.</p></div><button class="btn billing-referral-button" type="button" id="referral-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Скопировать приглашение</button></div><span id="referral-status" role="status"></span></section>
@@ -159,7 +160,10 @@
   document.querySelectorAll("[data-plan-audience]").forEach(button=>button.onclick=()=>{audience=button.dataset.planAudience;activeSlide=0;renderCarousel()});
   carousel.querySelectorAll("[data-carousel-move]").forEach(button=>button.onclick=()=>{activeSlide=Math.max(0,Math.min(plansForAudience().length-1,activeSlide+Number(button.dataset.carouselMove)));renderCarousel()});
   const keyHandler=event=>{if(!carousel.isConnected||!carousel.matches(":hover,:focus-within"))return;if(event.key==="ArrowRight"&&activeSlide<plansForAudience().length-1){activeSlide++;renderCarousel()}else if(event.key==="ArrowLeft"&&activeSlide>0){activeSlide--;renderCarousel()}};
-  document.addEventListener("keydown",keyHandler);
+  carousel.addEventListener("keydown",keyHandler);
+  let touchStartX=0;
+  carousel.addEventListener("touchstart",event=>{touchStartX=event.changedTouches[0]?.clientX??0},{passive:true});
+  carousel.addEventListener("touchend",event=>{const endX=event.changedTouches[0]?.clientX??touchStartX,delta=endX-touchStartX;if(Math.abs(delta)>40){const next=activeSlide+(delta<0?1:-1);if(next>=0&&next<plansForAudience().length){activeSlide=next;renderCarousel()}}},{passive:true});
   const retryCancelled=recent&&["canceled","refunded"].includes(recent.status);if(retryCancelled)for(const value of Object.keys(pricing.plans))sessionStorage.removeItem("smetra.checkout."+owner.id+"."+value);
   renderCarousel();
     async function sync(){
