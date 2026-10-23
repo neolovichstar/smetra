@@ -74,43 +74,95 @@
    <section class="payment-recovery" ${pending||recent?.status==='canceled'||new URLSearchParams(location.search).has('payment')?'':'hidden'}><div><strong>${pending?'Оплата не завершена':pro?'Про активирован':'Оплата не завершена'}</strong><p class="muted">${pending?'Вы можете продолжить оплату или проверить её статус.':pro?'Доступ уже действует на всех устройствах.':'Повторная попытка не изменит ваш текущий тариф.'}</p></div><div class="row wrap">${pending&&ready?'<button class="btn primary" id="checkout-resume" type="button">Продолжить оплату</button>':''}<button class="btn" id="payment-continue" type="button">Продолжить работу</button></div></section>
    <section class="billing-purchase" aria-labelledby="billing-purchase-title">
     <div class="billing-section-heading"><div><span class="overline">ТАРИФ И ОПЛАТА</span><h2 id="billing-purchase-title">${pro?'Продлите Сметра Про':'Выберите удобный срок'}</h2><p>Оплачиваете выбранный период один раз. Автоматического списания не будет.</p></div><span class="billing-secure-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.3-8 10-4.6-1.7-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Прозрачная цена</span></div>
-    <div class="billing-plan-grid">
-     <div class="billing-plan-card">
-      <div class="billing-plan-card-head"><div><span class="billing-plan-kicker">СМЕТРА PRO</span><h3>Полный рабочий набор</h3></div><span class="billing-plan-badge">Без автосписаний</span></div>
-      <div class="billing-periods" role="group" aria-label="Срок доступа">
-       <button class="billing-period-option" type="button" data-period="pro_month" aria-pressed="true"><span>31 день</span><small>Оплата на месяц</small></button>
-       <button class="billing-period-option billing-period-annual" type="button" data-period="pro_year" aria-pressed="false"><span>366 дней</span><small>Годовой доступ</small><b>Выгоднее</b></button>
-      </div>
-      <p class="launch-offer billing-launch-offer" id="billing-launch-offer" hidden></p>
-      <div class="billing-price-block"><div class="billing-price-caption">Стоимость выбранного периода</div><div class="billing-price-line"><strong class="open-price" id="offer-price"></strong><span class="billing-price-currency">RUB</span></div><p class="note" id="offer-saving"></p></div>
-      <div class="billing-annual-bonus" id="billing-annual-bonus"><span class="billing-bonus-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.2 5.7L20 11l-5.8 2.3L12 19l-2.2-5.7L4 11l5.8-2.3z"/><path d="m19 16 1.1 2.1L22 19l-1.9.9L19 22l-.9-2.1L16 19l2.1-.9z"/></svg></span><span id="billing-annual-bonus-text">Подарок при покупке: +${monthlyPurchaseBonus} сообщений ИИ</span><span class="billing-bonus-arrow" aria-hidden="true">↗</span></div>
-      <button class="btn primary billing-checkout-button" data-plan="pro_month" id="upgrade-checkout" type="button" ${ready?'':'disabled'}>${pro?'Продлить Сметра Про':'Подключить Сметра Про'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      <p class="billing-payment-note">${e(note)}</p><p id="checkout-error" role="alert"></p>
-      <div class="billing-guarantee-line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.3-8 10-4.6-1.7-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></svg><span>Без автоматического продления. Условия оплаты и возврата доступны до покупки.</span></div>
+    <div class="billing-audience-switch" role="tablist" aria-label="Категория тарифов">
+      <button type="button" role="tab" aria-selected="true" aria-controls="billing-plan-carousel" data-plan-audience="personal"><strong>Для себя</strong><small>Для индивидуальной работы</small></button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="billing-plan-carousel" data-plan-audience="business"><strong>Бизнес</strong><small>Для снабжения и команды</small></button>
      </div>
-     <aside class="billing-bundle-card"><div class="billing-bundle-top"><span class="overline">ВКЛЮЧЕНО В PRO</span><span class="billing-bundle-orbit" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L15 18l2.2-.8z"/></svg></span></div><h3>Больше, чем лимит</h3><p class="billing-bundle-intro">Инструменты, которые помогают доводить работу до оплаты.</p>
-      <div class="billing-perk-list">
-       <article class="billing-perk"><span class="billing-perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/></svg></span><div><strong>Документы без бренда Сметры</strong><p>Клиенту уходит документ с вашим оформлением.</p></div><span class="billing-perk-tag">Pro</span></article>
-       <article class="billing-perk"><span class="billing-perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 13.8 8.2 19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><div><strong>100 сообщений ассистента в месяц</strong><p>Подготовка смет, разбор данных и рабочие подсказки.</p></div><span class="billing-perk-tag">/мес</span></article>
-       <article class="billing-perk"><span class="billing-perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/></svg></span><div><strong>До 10 000 смет и предложений</strong><p>Не упирайтесь в лимит, когда клиентов становится больше.</p></div><span class="billing-perk-tag">Лимит</span></article>
-       <article class="billing-perk"><span class="billing-perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="18" rx="2"/><rect x="14" y="3" width="7" height="12" rx="2"/><path d="M15 19h5"/></svg></span><div><strong>Один профиль на всех устройствах</strong><p>Сметы и работа остаются рядом на сайте и Android.</p></div><span class="billing-perk-tag">Включено</span></article>
-      </div>
-      <div class="billing-year-savings"><span>Подарок за годовую оплату</span><strong id="billing-year-savings">+${annualPurchaseBonus} сообщений ИИ</strong><small id="billing-year-savings-note">Бонус начисляется после подтверждения оплаты и действует до окончания оплаченного доступа. Экономия относительно 12 месячных периодов — ${rub(annualSaving)}.</small></div>
-      <div class="billing-branding-row" id="billing-branding-row"></div>
-     </aside>
-    </div>
+     <p class="billing-audience-description" id="billing-audience-description">Профессиональные инструменты для одного специалиста без лишних расходов.</p>
+     <div class="billing-plan-carousel" id="billing-plan-carousel" role="region" aria-roledescription="карусель" aria-label="Тарифы для себя">
+      <div class="billing-carousel-toolbar"><button type="button" class="billing-carousel-arrow" data-carousel-move="-1" aria-label="Предыдущий тариф">←</button><span id="billing-carousel-position" aria-live="polite">1 из 2</span><button type="button" class="billing-carousel-arrow" data-carousel-move="1" aria-label="Следующий тариф">→</button></div>
+      <div class="billing-carousel-viewport"><div class="billing-carousel-track" id="billing-plan-track"></div></div>
+      <div class="billing-carousel-dots" id="billing-carousel-dots" aria-label="Выбрать тариф"></div>
+     </div>
+     <p class="billing-payment-note billing-carousel-payment-note">${e(note)}</p><p id="checkout-error" role="alert" aria-live="polite"></p>
+     <div class="billing-guarantee-line"><span aria-hidden="true">✓</span><span>Оплата после подтверждения платёжным провайдером. Без автоматических списаний.</span></div>
    </section>
    <section class="billing-history"><div class="billing-section-heading billing-history-heading"><div><span class="overline">ИСТОРИЯ</span><h2>Ваши оплаты</h2></div><button class="btn small" id="sync" type="button">Проверить статус</button></div>${paymentHistory}</section>
    <section class="billing-referral"><div class="billing-section-heading"><div><span class="overline">ДЕЛИТЕСЬ С КОЛЛЕГАМИ</span><h2>Пригласите коллегу</h2><p class="muted">Вы получите 3 дополнительных сообщения ассистенту, когда коллега создаст первую смету. До 30 бонусных сообщений в месяц.</p></div><button class="btn billing-referral-button" type="button" id="referral-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Скопировать приглашение</button></div><span id="referral-status" role="status"></span></section>
    <p class="note billing-legal">Оплату принимает самозанятый МУРАВЬЕВ КОНСТАНТИН АЛЕКСЕЕВИЧ · ИНН 713304603876. <a href="/terms">Условия оплаты и возврата</a> · <a href="/contacts">Контакты</a></p></section>`);
   const launchOffer=document.querySelector('#billing-launch-offer');
   if(pricing.launch_offer&&launchOffer){launchOffer.hidden=false;launchOffer.textContent=e(pricing.launch_offer.label)+' · до '+date(pricing.launch_offer.until);}
-  let plan='pro_month';const checkout=document.querySelector('#upgrade-checkout');
-  const paint=()=>{const amount=pricing.plans[plan].amount_kopecks;const annual=plan==='pro_year';checkout.dataset.plan=plan;document.querySelector('#offer-price').textContent=rub(amount);document.querySelector('#offer-saving').textContent=annual?rub(Math.round(amount/12))+' в месяц в пересчёте · доступ на 366 дней':'Один платёж за 31 день';document.querySelector('#billing-annual-bonus-text').textContent=annual?'Подарок за год: +'+annualPurchaseBonus+' сообщений ИИ и экономия '+rub(annualSaving)+' ('+annualSavingPct+'%)':'Подарок за покупку: +'+monthlyPurchaseBonus+' сообщений ИИ. За год — +'+annualPurchaseBonus+' и экономия '+rub(annualSaving);document.querySelector('#billing-year-savings').textContent='+'+annualPurchaseBonus+' сообщений ИИ';document.querySelector('#billing-year-savings-note').textContent='Бонус начисляется после подтверждения оплаты. Он действует до окончания оплаченного доступа. Дополнительная экономия — '+rub(annualSaving)+' ('+annualSavingPct+'%).';document.querySelector('#billing-annual-bonus').classList.toggle('is-active',annual);document.querySelectorAll('[data-period]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.period===plan)))};paint();
-  document.querySelectorAll('[data-period]').forEach(button=>button.onclick=()=>{plan=button.dataset.period;paint()});
-  const retryCancelled=recent&&['canceled','refunded'].includes(recent.status);if(retryCancelled)for(const value of ['pro_month','pro_year'])sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value);
-  checkout.onclick=async()=>{if(checkout.disabled)return;checkout.disabled=true;const selected=plan,keyName='smetra.checkout.'+owner.id+'.'+selected;let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}track('upgrade_clicked',source);if(!sessionStorage.getItem('smetra.checkout.return.'+owner.id))sessionStorage.setItem('smetra.checkout.return.'+owner.id,'dashboard');try{const result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:selected,source,expected_amount_kopecks:pricing.plans[selected].amount_kopecks})});if(!active()||sessionRevision()!==revision)return;if(result.status==='canceled'||result.status==='refunded'){sessionStorage.removeItem(keyName);throw Error('Предыдущая оплата завершена отменой или возвратом. Нажмите ещё раз для новой попытки.')}if(result.status==='succeeded'){await sync();return}location.href=result.url}catch(error){if(active()&&sessionRevision()===revision){if(error.status===409){sessionStorage.removeItem(keyName);checkout.disabled=true;checkout.textContent='Обновить условия';checkout.onclick=()=>render()}document.querySelector('#checkout-error').textContent=error.message}}finally{if(checkout.isConnected)checkout.disabled=false}};
-  async function sync(){
+  const checkoutError=document.querySelector("#checkout-error");
+  const carousel=document.querySelector("#billing-plan-carousel");
+  const carouselTrack=document.querySelector("#billing-plan-track");
+  const carouselDots=document.querySelector("#billing-carousel-dots");
+  const carouselPosition=document.querySelector("#billing-carousel-position");
+  const audienceDescription=document.querySelector("#billing-audience-description");
+  const audiencePlans={personal:["pro_month","pro_year"],business:["pro_plus_month","pro_team_month","pro_team_year"]};
+  let audience="personal",activeSlide=0;
+  const planByCode=Object.fromEntries(pricing.catalog.map(item=>[item.code,item]));
+  const plansForAudience=()=>audiencePlans[audience].map(code=>planByCode[code]).filter(Boolean);
+  function renderPlanCard(item,index,total){
+   const yearly=item.period==="year",team=item.tier==="team",plus=item.tier==="plus";
+   const monthlyEquivalent=yearly?Math.round(item.amount_kopecks/12):item.amount_kopecks;
+   const saving=item.code==="pro_year"?annualSaving:item.code==="pro_team_year"?pricing.team_annual_saving_kopecks:0;
+   const badge=team?"До 5 участников":plus?"Учёт финансов и фирменные бланки":yearly?"Оплата за год со скидкой":"Для одного специалиста";
+   const bonus=Number(pricing.purchase_bonus?.[item.code]||0);
+   return '<article class="billing-carousel-slide" role="group" aria-roledescription="слайд" aria-label="'+(index+1)+' из '+total+'">'+
+    '<div class="billing-carousel-card '+(team?'is-business':'')+(yearly?' is-annual':'')+'">'+
+     '<div class="billing-carousel-card-top"><span class="billing-plan-kicker">'+(team?"СМЕТРА / TEAM":plus?"СМЕТРА / PRO ПЛЮС":"СМЕТРА / PRO SOLO")+'</span><span class="billing-plan-badge">'+e(badge)+'</span></div>'+
+     '<h3>'+e(item.title)+'</h3>'+
+     '<div class="billing-carousel-price"><strong>'+rub(item.amount_kopecks)+'</strong><span>/ '+(yearly?"год":"месяц")+'</span></div>'+
+     '<p class="billing-carousel-term">'+(yearly?"Годовой доступ · "+rub(monthlyEquivalent)+" в месяц в пересчёте":"Один платёж · доступ на 31 день")+'</p>'+
+     (saving>0?'<p class="billing-carousel-saving">Экономия за год — '+rub(saving)+'</p>':'')+
+     '<ul class="billing-carousel-features">'+item.features.map(feature=>'<li>'+e(feature)+'</li>').join('')+'</ul>'+
+     (bonus>0?'<div class="billing-carousel-bonus">+'+bonus+' бонусных сообщений ассистента после подтверждения оплаты</div>':'')+
+     '<button type="button" class="btn primary billing-carousel-checkout" data-plan-choice="'+e(item.code)+'" '+(ready?'':'disabled')+'><span>'+(ready?'Выбрать тариф':'Оплата недоступна')+'</span><span aria-hidden="true">↗</span></button>'+
+     '<p class="billing-carousel-trust">Без автоматического продления. Цена фиксируется до перехода к оплате.</p>'+
+    '</div></article>';
+  }
+  function renderCarousel(requestedCode){
+   const items=plansForAudience();
+   if(requestedCode){const idx=items.findIndex(item=>item.code===requestedCode);if(idx>=0)activeSlide=idx}
+   activeSlide=Math.max(0,Math.min(activeSlide,items.length-1));
+   if(!items.length){carouselTrack.innerHTML='<p class="muted">Тарифы не найдены.</p>';carouselDots.innerHTML="";carouselPosition.textContent="0 из 0";return}
+   carouselTrack.innerHTML=items.map((item,index)=>renderPlanCard(item,index,items.length)).join("");
+   carouselTrack.style.transform="translateX(-"+(activeSlide*100)+"%)";
+   carouselDots.innerHTML=items.map((item,index)=>'<button type="button" class="billing-carousel-dot" data-carousel-index="'+index+'" aria-label="Тариф: '+e(item.title)+'" aria-current="'+(index===activeSlide?'true':'false')+'"></button>').join("");
+   carouselPosition.textContent=(activeSlide+1)+" из "+items.length;
+   carousel.setAttribute("aria-label",audience==="business"?"Бизнес-тарифы":"Тарифы для себя");
+   audienceDescription.textContent=audience==="business"?"PRO Плюс добавляет финансы и шаблоны, а TEAM объединяет владельца и до четырёх сотрудников.":"Выберите месячную или годовую подписку PRO Solo с чистым экспортом и приоритетом ИИ.";
+   document.querySelectorAll("[data-plan-audience]").forEach(button=>{const isActive=button.dataset.planAudience===audience;button.setAttribute("aria-selected",String(isActive));button.tabIndex=isActive?0:-1});
+   carousel.querySelectorAll("[data-carousel-move]").forEach(button=>{button.disabled=items.length<2||(button.dataset.carouselMove==="-1"&&activeSlide===0)||(button.dataset.carouselMove==="1"&&activeSlide===items.length-1)});
+   carouselDots.querySelectorAll("[data-carousel-index]").forEach(button=>button.onclick=()=>{activeSlide=Number(button.dataset.carouselIndex);renderCarousel()});
+   carousel.querySelectorAll("[data-plan-choice]").forEach(button=>button.onclick=()=>startCheckout(button.dataset.planChoice,button));
+  }
+  async function startCheckout(selected,button){
+   if(button.disabled)return;
+   const option=pricing.plans[selected];
+   if(!option){checkoutError.textContent="Тариф больше недоступен. Обновите страницу.";return}
+   button.disabled=true;
+   const keyName="smetra.checkout."+owner.id+"."+selected;
+   let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}
+   track("upgrade_clicked",source);
+   if(!sessionStorage.getItem("smetra.checkout.return."+owner.id))sessionStorage.setItem("smetra.checkout.return."+owner.id,"dashboard");
+   try{
+    const result=await api("/billing/checkout",{method:"POST",headers:{"Idempotency-Key":key},body:JSON.stringify({plan:selected,source,expected_amount_kopecks:option.amount_kopecks})});
+    if(!active()||sessionRevision()!==revision)return;
+    if(result.status==="canceled"||result.status==="refunded"){sessionStorage.removeItem(keyName);throw Error("Предыдущая оплата завершена отменой или возвратом. Нажмите ещё раз для новой попытки.")}
+    if(result.status==="succeeded"){await sync();return}
+    if(!result.url||!result.url.startsWith("https://"))throw Error("Платёжный провайдер не вернул безопасную ссылку для оплаты.");
+    location.href=result.url;
+   }catch(error){if(active()&&sessionRevision()===revision){if(error.status===409){sessionStorage.removeItem(keyName);button.textContent="Обновить условия";button.onclick=()=>render()}checkoutError.textContent=error.message}}
+   finally{if(button.isConnected)button.disabled=false}
+  }
+  document.querySelectorAll("[data-plan-audience]").forEach(button=>button.onclick=()=>{audience=button.dataset.planAudience;activeSlide=0;renderCarousel()});
+  carousel.querySelectorAll("[data-carousel-move]").forEach(button=>button.onclick=()=>{activeSlide=Math.max(0,Math.min(plansForAudience().length-1,activeSlide+Number(button.dataset.carouselMove)));renderCarousel()});
+  const keyHandler=event=>{if(!carousel.isConnected||!carousel.matches(":hover,:focus-within"))return;if(event.key==="ArrowRight"&&activeSlide<plansForAudience().length-1){activeSlide++;renderCarousel()}else if(event.key==="ArrowLeft"&&activeSlide>0){activeSlide--;renderCarousel()}};
+  document.addEventListener("keydown",keyHandler);
+  const retryCancelled=recent&&["canceled","refunded"].includes(recent.status);if(retryCancelled)for(const value of Object.keys(pricing.plans))sessionStorage.removeItem("smetra.checkout."+owner.id+"."+value);
+  renderCarousel();
+    async function sync(){
    const button=document.querySelector('#sync');if(!active()||sessionRevision()!==revision||!button||button.disabled)return;
    button.disabled=true;
    try{

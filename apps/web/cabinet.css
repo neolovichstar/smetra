@@ -361,3 +361,45 @@
 @media(max-width:800px){.workspace-page .workspace-modes{display:none}.workspace-page .app-nav-inner{gap:10px}.workspace-page .app-nav-actions{margin-left:auto}.workspace-page .main{padding-inline:22px}.workspace-page .section-top{align-items:flex-start}}
 @media(max-width:650px){.workspace-page .app-nav-actions{gap:7px}.workspace-page .main{padding-inline:20px}.workspace-page .topline-actions .btn{flex:1}.workspace-page .topline-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-page .record-line{gap:10px}.workspace-page .record-meta{width:100%;justify-content:space-between}.workspace-page .record-meta b{font-size:12px}.workspace-page .section-top{gap:10px}.workspace-page .section-top h2,.workspace-page .section-top h3{font-size:16px}.workspace-page .dashboard-work .record-meta .btn{display:inline-flex}.workspace-page .workspace-page .btn{min-height:42px}}
 @media(prefers-reduced-motion:reduce){.workspace-page .btn,.workspace-page .workspace-modes button,.workspace-page .field input,.workspace-page .field textarea,.workspace-page .field select{transition:none}.workspace-page .btn:active,.workspace-page .sidebar-group button:active{transform:none}}
+
+/* Tariff cards carousel: only the card area changes; page chrome stays intact. */
+.billing-audience-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;width:min(100%,520px);margin:24px auto 0;padding:5px;border:1px solid #272930;border-radius:12px;background:#08090b}
+.billing-audience-switch button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;padding:12px 15px;border:1px solid transparent;border-radius:8px;background:transparent;color:#9ea2ad;text-align:left;cursor:pointer;transition:background .2s ease,border-color .2s ease,color .2s ease}
+.billing-audience-switch button strong{font-size:13px;font-weight:600;color:inherit}
+.billing-audience-switch button small{font-size:10px;color:#888d98;line-height:1.4}
+.billing-audience-switch button[aria-selected=true]{border-color:#3c3e45;background:#191a1f;color:#f5f5f6;box-shadow:0 3px 12px #0005}
+.billing-audience-description{max-width:600px;margin:13px auto 0;text-align:center;color:#9da1ab;font-size:12px;line-height:1.6}
+.billing-plan-carousel{max-width:620px;margin:22px auto 0}
+.billing-carousel-toolbar{display:flex;align-items:center;justify-content:center;gap:18px;margin:0 0 12px;color:#9296a0;font-size:11px;font-variant-numeric:tabular-nums}
+.billing-carousel-arrow{display:grid;place-items:center;width:36px;height:36px;border:1px solid #30323a;border-radius:50%;background:#111215;color:#f1f2f5;font-size:19px;line-height:1;cursor:pointer;transition:background .18s ease,border-color .18s ease,opacity .18s ease}
+.billing-carousel-arrow:hover:not(:disabled){background:#22242a;border-color:#656974}
+.billing-carousel-arrow:disabled{opacity:.28;cursor:default}
+.billing-carousel-viewport{overflow:hidden;touch-action:pan-y;overscroll-behavior-x:contain;border-radius:15px}
+.billing-carousel-track{display:flex;align-items:stretch;width:100%;transition:transform .34s cubic-bezier(.2,.75,.2,1);will-change:transform}
+.billing-carousel-slide{flex:0 0 100%;min-width:0;box-sizing:border-box;padding:2px}
+.billing-carousel-card{display:flex;flex-direction:column;min-height:520px;padding:clamp(20px,4vw,30px);border:1px solid #34363d;border-radius:15px;background:radial-gradient(ellipse at 95% 0%,#27292e50,transparent 36%),linear-gradient(155deg,#151619,#080809);box-shadow:0 22px 55px #0005}
+.billing-carousel-card.is-business{border-color:#50525a;background:radial-gradient(ellipse at 90% 0%,#42444b5a,transparent 38%),linear-gradient(155deg,#1b1c20,#09090a)}
+.billing-carousel-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.billing-carousel-card-top .billing-plan-kicker{font-size:9px;letter-spacing:.13em;color:#a8abb4}
+.billing-carousel-card-top .billing-plan-badge{max-width:100%;padding:5px 8px;border:1px solid #373940;border-radius:99px;background:#111215;color:#c9cbd1;font-size:10px;white-space:normal}
+.billing-carousel-card h3{margin:24px 0 8px;font-size:clamp(22px,3vw,30px);font-weight:550;letter-spacing:-.045em;line-height:1.15;color:#f6f6f7}
+.billing-carousel-price{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.billing-carousel-price strong{font-size:clamp(38px,6vw,52px);font-weight:500;line-height:1.12;letter-spacing:-.065em;font-variant-numeric:tabular-nums;color:#fff}
+.billing-carousel-price span{font-size:12px;color:#a6a9b2}
+.billing-carousel-term{margin:8px 0 0;color:#9da1aa;font-size:11px;line-height:1.5}
+.billing-carousel-saving{margin:9px 0 0;color:#e1e2e5;font-size:11px}
+.billing-carousel-features{display:grid;gap:12px;list-style:none;margin:23px 0 24px;padding:0;flex:1}
+.billing-carousel-features li{display:flex;align-items:flex-start;gap:10px;color:#c6c8cf;font-size:12px;line-height:1.55}
+.billing-carousel-features li:before{content:"✓";display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:0;border:1px solid #44464e;border-radius:50%;color:#e7e8ec;font-size:10px}
+.billing-carousel-bonus{margin:0 0 14px;padding:11px 12px;border:1px solid #303239;border-radius:8px;background:#111215;color:#c6c8ce;font-size:11px;line-height:1.5}
+.billing-carousel-checkout{width:100%;min-height:48px;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;font-size:12px}
+.billing-carousel-checkout:disabled{opacity:.46;cursor:not-allowed}
+.billing-carousel-trust{margin:11px 0 0;text-align:center;color:#838791;font-size:10px;line-height:1.55}
+.billing-carousel-dots{display:flex;justify-content:center;gap:8px;min-height:26px;padding:15px 0 0}
+.billing-carousel-dot{width:7px;height:7px;padding:0;border:0;border-radius:20px;background:#4c4e56;cursor:pointer;transition:width .2s ease,background .2s ease}
+.billing-carousel-dot[aria-current=true]{width:23px;background:#dedfe3}
+.billing-carousel-payment-note{max-width:620px;margin:16px auto 0;text-align:center}
+.billing-purchase-carousel #checkout-error{max-width:620px;margin:6px auto 0;color:#ffb4b4;font-size:12px}
+.billing-purchase-carousel .billing-guarantee-line{max-width:620px;margin:17px auto 0;justify-content:center;text-align:center;font-size:10px;line-height:1.5}
+@media(max-width:650px){.billing-audience-switch{margin-top:20px}.billing-audience-switch button{padding:11px}.billing-plan-carousel{margin-top:19px}.billing-carousel-card{min-height:0;padding:21px}.billing-carousel-card h3{margin-top:19px}.billing-carousel-features{gap:10px;margin:20px 0}.billing-carousel-price strong{font-size:39px}.billing-carousel-checkout{min-height:46px}}
+@media(prefers-reduced-motion:reduce){.billing-audience-switch button,.billing-carousel-arrow,.billing-carousel-track,.billing-carousel-dot{transition:none}}
