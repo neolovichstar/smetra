@@ -47,6 +47,18 @@ CREATE INDEX IF NOT EXISTS idx_app_presence_seen ON smetra.app_presence(last_see
 ALTER TABLE smetra.billing_subscriptions
   ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Match the workspace entitlement values and seat counts in the four-tier catalog.
+ALTER TABLE smetra.workspaces
+  DROP CONSTRAINT IF EXISTS workspaces_plan_check;
+ALTER TABLE smetra.workspaces
+  ADD CONSTRAINT workspaces_plan_check
+  CHECK (plan IN ('free','pro_solo','pro_plus','team','business','pro_team'));
+ALTER TABLE smetra.workspaces
+  DROP CONSTRAINT IF EXISTS workspaces_seat_limit_check;
+ALTER TABLE smetra.workspaces
+  ADD CONSTRAINT workspaces_seat_limit_check
+  CHECK (seat_limit >= 1 AND seat_limit <= 16);
+
 -- Expand the product/state constraints before the app starts writing the new catalog.
 ALTER TABLE smetra.billing_subscriptions
   DROP CONSTRAINT IF EXISTS billing_subscriptions_product_code_check;
