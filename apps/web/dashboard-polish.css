@@ -250,3 +250,7 @@
   .workspace-page .workspace-home .dashboard-metric,.workspace-page .workspace-home .dashboard-metric+.dashboard-metric{padding:12px 10px!important}
   .workspace-page .workspace-home .capture-shortcuts .btn{font-size:10px!important}
 }
+
+/* The client portal is a light document surface: approval must remain unmistakable. */
+body.public-quote-mode #public-quote button.btn.primary{background:#181818!important;background-color:#181818!important;border-color:#181818!important;color:#fff!important;box-shadow:none!important}
+body.public-quote-mode #public-quote button.btn.primary:hover:not(:disabled){background:#383838!important;background-color:#383838!important;border-color:#383838!important;color:#fff!important}
