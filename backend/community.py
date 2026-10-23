@@ -275,10 +275,11 @@ def _community(con, user_id, category):
 
 def _team_workspace(con, user_id, workspace_id):
     row = con.execute(
-        "SELECT w.id,w.name,w.plan,w.subscription_status,w.entitlement_until,w.seat_limit,"
-        "m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
-        "WHERE w.id=? AND m.user_id=?",
-        (workspace_id, user_id),
+        "SELECT w.id,w.owner_id,w.name,w.plan,w.subscription_status,w.entitlement_until,w.seat_limit,"
+        "COALESCE(m.role,'owner') AS role FROM workspaces w "
+        "LEFT JOIN workspace_members m ON m.workspace_id=w.id AND m.user_id=? "
+        "WHERE w.id=? AND (m.user_id=? OR w.owner_id=?)",
+        (user_id, workspace_id, user_id, user_id),
     ).fetchone()
     if not row:
         raise ApiError(404, "Рабочее пространство не найдено")
@@ -524,6 +525,7 @@ def _public_id_route(handler, method, path, query, con, user):
             _add_member(con, conversation_id, user["id"], "director")
         for member in members:
             _add_member(con, conversation_id, member["user_id"], member["role"])
+        _add_member(con, conversation_id, workspace["owner_id"], "director")
         _add_message(con, conversation_id, None, "system", "Рабочий чат объекта создан.", {
             "event": "object_chat_created", "workspace_id": workspace_id,
             "project_id": project_id,
