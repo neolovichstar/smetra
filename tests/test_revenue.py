@@ -178,6 +178,45 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(refreshed["seat_limit"], 1)
         self.assertEqual(refreshed["entitlement_until"], solo["current_period_end"])
 
+    def test_business_migration_upgrades_legacy_subscription_table(self):
+        legacy_con = sqlite3.connect(":memory:", isolation_level=None)
+        legacy_con.row_factory = sqlite3.Row
+        legacy_con.execute("PRAGMA foreign_keys=ON")
+        legacy_con.executescript((Path(__file__).parents[1] / "backend/schema.sql").read_text())
+        legacy_con.execute(
+            "CREATE TABLE billing_subscriptions("
+            "id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace_id TEXT NOT NULL,"
+            "product_code TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',"
+            "is_test INTEGER NOT NULL DEFAULT 0,current_period_end INTEGER NOT NULL DEFAULT 0)"
+        )
+        legacy_expiry = revenue.now() + 86400 * 20
+        legacy_con.execute(
+            "INSERT INTO users(id,email,password_hash,name,role,plan,entitlement_until,created_at,email_verified_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            ("legacy-paid", "legacy-paid@test.invalid", "unused", "Legacy", "user",
+             "pro", legacy_expiry - 10, revenue.now(), revenue.now()),
+        )
+        try:
+            business.migrate(legacy_con)
+            columns = {row["name"] for row in legacy_con.execute("PRAGMA table_info(billing_subscriptions)")}
+            self.assertIn("provider_subscription_id", columns)
+            self.assertIn("auto_renew", columns)
+            self.assertIn("current_period_start", columns)
+            workspace = legacy_con.execute(
+                "SELECT * FROM workspaces WHERE owner_id='legacy-paid'"
+            ).fetchone()
+            subscription = legacy_con.execute(
+                "SELECT * FROM billing_subscriptions WHERE provider='legacy' AND workspace_id=?",
+                (workspace["id"],),
+            ).fetchone()
+            self.assertIsNotNone(subscription)
+            self.assertEqual(subscription["product_code"], "pro_month")
+            self.assertEqual(subscription["current_period_end"], legacy_expiry - 10)
+            self.assertEqual(workspace["plan"], "pro_solo")
+            self.assertEqual(workspace["seat_limit"], 1)
+        finally:
+            legacy_con.close()
+
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}
         with patch.dict(os.environ,config):
