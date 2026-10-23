@@ -283,3 +283,68 @@
   .workspace-page .workspace-modes{width:min(100%,250px)!important}
 }
 
+
+/* Approved minimal dashboard, 2026-10-24. Neutral surfaces, one content grid. */
+.workspace-page .app-nav .nav-user{display:none!important}
+.workspace-page .app-nav-caption{display:none!important}
+.workspace-page .btn.primary,
+.workspace-page .workspace-home #capture-form .btn.primary{
+ background:var(--smetra-action)!important;color:var(--smetra-action-text)!important;
+ border-color:transparent!important;box-shadow:none!important;
+}
+.workspace-page .btn:not(.primary):not(.danger){
+ background:color-mix(in srgb,var(--smetra-surface) 94%,transparent)!important;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+.workspace-page .btn:focus-visible{outline:2px solid var(--smetra-focus)!important;outline-offset:3px}
+.workspace-page .workspace-home .dashboard-intro .btn{display:inline-flex!important;border-radius:12px!important}
+.workspace-page .workspace-home .dashboard-intro{padding:0 0 24px!important;margin:0!important}
+.workspace-page #content.main:has(.workspace-home){padding:32px clamp(20px,3vw,48px) 56px!important}
+.workspace-page #content.main>.workspace-home{max-width:1280px!important}
+.workspace-page .workspace-home .capture-panel{padding:32px 0 24px!important}
+.workspace-page .workspace-home .capture-heading h2{font-size:clamp(23px,2vw,28px)!important;letter-spacing:-.025em!important}
+.workspace-page .workspace-home #capture-form{
+ width:min(100%,1040px)!important;min-height:72px!important;border-radius:18px!important;
+ background:var(--smetra-surface)!important;border-color:var(--smetra-line)!important;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+ backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.workspace-page .workspace-home #capture-form:focus-within{border-color:var(--smetra-line-strong)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--smetra-focus) 12%,transparent)!important}
+.workspace-page .workspace-home .capture-shortcuts{margin-top:12px!important}
+.workspace-page .workspace-home .dashboard-metrics{
+ width:100%!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+ gap:16px!important;margin:8px 0 24px!important;align-self:stretch!important;
+}
+.workspace-page .workspace-home .dashboard-metric,
+.workspace-page .workspace-home .dashboard-metric+.dashboard-metric{
+ min-width:0!important;padding:20px!important;border:1px solid var(--smetra-line)!important;
+ border-radius:14px!important;background:var(--smetra-surface)!important;box-shadow:none!important;
+}
+.workspace-page .workspace-home .dashboard-metric span{display:block;font-size:12px!important;color:var(--smetra-text-muted)!important;line-height:1.5!important;margin-bottom:16px!important}
+.workspace-page .workspace-home .dashboard-metric strong{font-size:clamp(22px,2vw,28px)!important;font-weight:600!important;color:var(--smetra-text)!important;letter-spacing:-.025em}
+.workspace-page .workspace-home .dashboard-work{gap:24px!important}
+.workspace-page .workspace-home .dashboard-work>.panel{
+ padding:22px 24px!important;border:1px solid var(--smetra-line)!important;
+ border-radius:16px!important;background:var(--smetra-surface)!important;
+}
+.workspace-page .workspace-home .record-line{padding-block:18px!important;border-color:var(--smetra-line)!important}
+.workspace-page .workspace-home .section-top{align-items:center!important;margin-bottom:16px!important}
+.workspace-page .workspace-home .section-top h3{margin:0!important}
+@media(max-width:1100px){
+ .workspace-page .workspace-home .dashboard-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:600px){
+ .workspace-page #content.main:has(.workspace-home){padding:20px 16px 40px!important}
+ .workspace-page .workspace-home .dashboard-intro{gap:12px!important;padding-bottom:18px!important}
+ .workspace-page .workspace-home .dashboard-intro h1{font-size:25px!important}
+ .workspace-page .workspace-home .dashboard-intro .btn{font-size:12px!important;padding:10px 12px!important}
+ .workspace-page .workspace-home .capture-panel{padding:24px 0 20px!important}
+ .workspace-page .workspace-home .dashboard-metrics{gap:10px!important}
+ .workspace-page .workspace-home .dashboard-metric{padding:14px!important}
+ .workspace-page .workspace-home .dashboard-metric span{font-size:11px!important;margin-bottom:10px!important}
+ .workspace-page .workspace-home .dashboard-metric strong{font-size:22px!important}
+ .workspace-page .workspace-home .dashboard-work>.panel{padding:18px 14px!important}
+}
+@media(prefers-reduced-motion:reduce){
+ .workspace-page *, .workspace-page *::before,.workspace-page *::after,.workspace-page #sidebar,.workspace-page .sidebar{animation-duration:0s!important;transition-duration:0s!important}
+}
