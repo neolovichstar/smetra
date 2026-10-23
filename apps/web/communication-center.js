@@ -229,14 +229,22 @@ function supportPage(){
  };
 }
 async function adminPage(){
- const content=$('#content');if(!content||content.dataset.section!=='admin'||state.role!=='admin')return;
- const base=content.querySelector('.admin-metrics');if(!base)return;
+ const content=$('#content');if(!content||content.dataset.section!=='admin')return;
+ if(state.adminLoading)return;
+ state.adminLoading=true;
+ try{
+  const profile=await api('/profile/id');
+  state.role=profile.role||'user';
+ }catch(error){state.adminLoading=false;return}
+ if(state.role!=='admin'){state.adminLoading=false;return}
+ const base=content.querySelector('.admin-metrics');if(!base){state.adminLoading=false;return}
  let panel=content.querySelector('[data-comms-admin-overview]');
  if(!panel){panel=document.createElement('section');panel.className='comms-admin-panel';panel.dataset.commsAdminOverview='1';panel.innerHTML='<div class="comms-eyebrow">СМЕТРА / ОПЕРАЦИОННАЯ АНАЛИТИКА</div><h3>Экосистема в цифрах</h3><p>Сводные показатели сервиса и очередь поддержки. Личные переписки и содержимое документов здесь не показываются.</p><div class="comms-admin-metrics" data-admin-metrics></div><button type="button" class="comms-btn" data-admin-queue>'+icon('support')+' Открыть очередь поддержки</button>';base.insertAdjacentElement('afterend',panel);panel.querySelector('[data-admin-queue]').onclick=()=>open('support')}
  try{const d=await api('/admin/communication/overview');const rows=[['Пользователи',d.users_total],['DAU · сутки',d.users_dau],['MAU · 30 дней',d.users_mau],['Все сметы',d.estimates_total],['Сметы за месяц',d.estimates_30d],['Рабочие пространства',d.workspaces_total],['Объекты',d.projects_total],['Клиенты',d.clients_total],['Файлы',d.files_total],['Расходы',d.expenses_total],['Переписки',d.chats_total],['Сообщения',d.messages_total],['Ожидают сотрудника',d.support_waiting_human],['Открытые обращения',d.support_open],['Получено за всё время',money(d.revenue_kopecks)],['Получено за 30 дней',money(d.revenue_30d_kopecks)],['Оплаченные платежи',d.paid_transactions],['Ожидают оплаты',d.pending_payments],['Доход сегодня',money(d.revenue_today_kopecks)]];
  panel.querySelector('[data-admin-metrics]').innerHTML=rows.map(r=>'<div class="comms-admin-metric"><span>'+esc(r[0])+'</span><strong>'+(typeof r[1]==='number'?num(r[1]):esc(r[1]))+'</strong></div>').join('');
  panel.querySelector('[data-admin-queue]').innerHTML=icon('support')+' Открыть очередь поддержки'+(d.support_waiting_human?' · '+num(d.support_waiting_human)+' ожидают':'');
  }catch(error){panel.querySelector('p').textContent='Не удалось обновить статистику: '+error.message}
+ }finally{state.adminLoading=false}
 }
 function watch(){
  const root=$('#content');if(!root||state.observer)return;
