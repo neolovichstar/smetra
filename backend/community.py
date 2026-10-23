@@ -326,8 +326,8 @@ def _team_workspace(con, user_id, workspace_id):
         # Check the product catalog as well; legacy workspace.plan may lag checkout state.
         subscription = con.execute(
             "SELECT 1 FROM billing_subscriptions WHERE workspace_id=? "
-            "AND status IN ('active','succeeded') AND current_period_end>? "
-            "AND (lower(product_code) LIKE '%team%' OR lower(product_code) LIKE '%company%') LIMIT 1",
+            "AND status IN ('active','succeeded') AND current_period_end>? AND is_test=FALSE "
+            "AND (lower(product_code) LIKE '%team%' OR lower(product_code) LIKE '%company%' OR lower(product_code) LIKE '%business%') LIMIT 1",
             (workspace_id, now()),
         ).fetchone()
         if not subscription:
@@ -887,10 +887,14 @@ def _admin_overview(con):
         )
     active_subs = scalar(
         "SELECT COUNT(*) FROM ("
-        "SELECT user_id FROM billing_subscriptions WHERE status IN ('active','succeeded') AND current_period_end>? "
-        "UNION SELECT id AS user_id FROM users WHERE deleted_at IS NULL AND entitlement_until>?"
-        ") AS active_paid_users",
-        (moment, moment),
+        "SELECT user_id FROM billing_subscriptions WHERE status IN ('active','succeeded') "
+        "AND current_period_end>? AND is_test=FALSE "
+        "UNION SELECT u.id AS user_id FROM users u WHERE u.deleted_at IS NULL "
+        "AND u.entitlement_until>? AND NOT EXISTS ("
+        "SELECT 1 FROM billing_subscriptions b WHERE b.user_id=u.id AND b.is_test=TRUE "
+        "AND b.status IN ('active','succeeded') AND b.current_period_end>?"
+        ")) AS active_paid_users",
+        (moment, moment, moment),
     )
     return {
         "as_of": moment,
