@@ -1305,6 +1305,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "SELECT count(*) FROM assistant_jobs WHERE created_at>?",
                     (now() - 30 * 86400,),
                 ).fetchone()[0],
+                "clients": con.execute("SELECT count(*) FROM clients").fetchone()[0],
+                "leads": con.execute("SELECT count(*) FROM leads").fetchone()[0],
+                "marketplace_leads": con.execute("SELECT count(*) FROM marketplace_leads").fetchone()[0],
+                "expenses": con.execute("SELECT count(*) FROM expenses").fetchone()[0],
+                "payments_recorded": con.execute("SELECT count(*) FROM project_payments").fetchone()[0],
+                "catalog_items": con.execute("SELECT count(*) FROM catalog_items").fetchone()[0],
+                "documents": con.execute("SELECT count(*) FROM documents").fetchone()[0],
+                "quote_versions": con.execute("SELECT count(*) FROM quote_versions").fetchone()[0],
+                "quotes_awaiting_approval": con.execute("SELECT count(*) FROM quotes WHERE approval_state IN ('sent','viewed','changes_requested')").fetchone()[0],
+                "quotes_approved": con.execute("SELECT count(*) FROM quotes WHERE approval_state='approved' OR status IN ('accepted','completed')").fetchone()[0],
+                "conversations": con.execute("SELECT count(*) FROM conversations").fetchone()[0],
+                "messages": con.execute("SELECT count(*) FROM messages WHERE deleted_at IS NULL").fetchone()[0],
+                "community_members": con.execute("SELECT count(*) FROM conversation_members cm JOIN conversations c ON c.id=cm.conversation_id WHERE c.kind='community'").fetchone()[0],
+                "team_workspaces": con.execute("SELECT count(*) FROM workspaces WHERE plan='pro_team' AND subscription_status='active' AND entitlement_until>?", (now(),)).fetchone()[0],
+                "failed_assistant_jobs_30d": con.execute("SELECT count(*) FROM assistant_jobs WHERE created_at>? AND status IN ('failed','error')", (now()-30*86400,)).fetchone()[0],
+                "refunds_succeeded": con.execute("SELECT count(*) FROM refunds WHERE status='succeeded'").fetchone()[0],
             })
             users = [
                 dict(r)

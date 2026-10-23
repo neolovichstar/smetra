@@ -36,6 +36,17 @@
         <div><span>Выручка за 30 дней</span><strong data-admin-money="revenue_30d_kopecks">${rub(stats.revenue_30d_kopecks)}</strong></div>
         <div><span>Поддержка / человек</span><strong data-admin-metric="support_open">${count(stats.support_open)} / ${count(stats.support_human)}</strong></div>
         <div><span>Задачи ИИ за 30 дней</span><strong data-admin-metric="assistant_jobs_30d">${count(stats.assistant_jobs_30d)}</strong></div>
+        <div><span>Клиенты</span><strong data-admin-metric="clients">${count(stats.clients)}</strong></div>
+        <div><span>Заказы / лиды</span><strong data-admin-metric="leads">${count(stats.leads)} / ${count(stats.marketplace_leads)}</strong></div>
+        <div><span>Расходы / поступления</span><strong data-admin-metric="expenses">${count(stats.expenses)} / ${count(stats.payments_recorded)}</strong></div>
+        <div><span>Позиции каталога</span><strong data-admin-metric="catalog_items">${count(stats.catalog_items)}</strong></div>
+        <div><span>Документы / версии</span><strong data-admin-metric="documents">${count(stats.documents)} / ${count(stats.quote_versions)}</strong></div>
+        <div><span>Согласование / утверждено</span><strong data-admin-metric="quotes_awaiting_approval">${count(stats.quotes_awaiting_approval)} / ${count(stats.quotes_approved)}</strong></div>
+        <div><span>Чаты / сообщения</span><strong data-admin-metric="conversations">${count(stats.conversations)} / ${count(stats.messages)}</strong></div>
+        <div><span>Участники сообществ</span><strong data-admin-metric="community_members">${count(stats.community_members)}</strong></div>
+        <div><span>Активные TEAM</span><strong data-admin-metric="team_workspaces">${count(stats.team_workspaces)}</strong></div>
+        <div><span>Сбои задач ИИ</span><strong data-admin-metric="failed_assistant_jobs_30d">${count(stats.failed_assistant_jobs_30d)}</strong></div>
+        <div><span>Возвраты</span><strong data-admin-metric="refunds_succeeded">${count(stats.refunds_succeeded)}</strong></div>
       </div>
       <nav class="admin-tabs" aria-label="Разделы администрирования">
         <button data-admin-section="users" type="button">Пользователи</button>
@@ -219,12 +230,21 @@
 
   function syncMetrics(data) {
     const stats=data.stats||{};
-    for(const key of ['users','subscriptions','quotes','active_24h','active_30d','new_users_24h','new_quotes_24h','workspaces','files','payments_pending','support_open','support_human','assistant_jobs_30d']) {
+    for(const key of ['users','subscriptions','quotes','active_24h','active_30d','new_users_24h','new_quotes_24h','workspaces','files','payments_pending','support_open','support_human','assistant_jobs_30d','clients','catalog_items','documents','quote_versions','quotes_awaiting_approval','quotes_approved','conversations','messages','community_members','team_workspaces','failed_assistant_jobs_30d','refunds_succeeded']) {
       const element=document.querySelector('[data-admin-metric="'+key+'"]');
       if(element)element.textContent=count(stats[key]||0);
     }
-    const projectMetric=document.querySelector('[data-admin-metric="projects"]');
-    if(projectMetric)projectMetric.textContent=count(stats.projects)+' / '+count(stats.tasks);
+    const compositeMetrics={
+      projects:count(stats.projects)+' / '+count(stats.tasks),
+      leads:count(stats.leads)+' / '+count(stats.marketplace_leads),
+      expenses:count(stats.expenses)+' / '+count(stats.payments_recorded),
+      documents:count(stats.documents)+' / '+count(stats.quote_versions),
+      quotes_awaiting_approval:count(stats.quotes_awaiting_approval)+' / '+count(stats.quotes_approved)
+    };
+    for(const [key,value] of Object.entries(compositeMetrics)){
+      const element=document.querySelector('[data-admin-metric="'+key+'"]');
+      if(element)element.textContent=value;
+    }
     for(const key of ['revenue_kopecks','revenue_24h_kopecks','revenue_30d_kopecks']){
       const element=document.querySelector('[data-admin-metric="'+key+'"],[data-admin-money="'+key+'"]');
       if(element)element.textContent=rub(stats[key]||0);
