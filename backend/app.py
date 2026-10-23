@@ -37,7 +37,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 49
+REQUIRED_CLOUD_SCHEMA_VERSION = 50
 PLANS = {
     "pro_month": (49000, 31),
     "pro_year": (490000, 366),
