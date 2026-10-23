@@ -103,7 +103,15 @@
   const audienceDescription=document.querySelector("#billing-audience-description");
   const audiencePlans={personal:["start","pro_month","pro_year"],business:["pro_plus_month","pro_team_month","pro_team_year"]};
   let audience="personal",activeSlide=0;
-  const planByCode=Object.fromEntries(pricing.catalog.map(item=>[item.code,item]));
+  const fallbackMeta={
+   pro_month:{title:"PRO Solo",period:"month",tier:"solo",duration_days:31,features:["Неограниченное число смет","Приоритетная очередь ИИ","PDF и XLSX без водяного знака","500 МБ облачного хранилища"]},
+   pro_year:{title:"PRO Solo",period:"year",tier:"solo",duration_days:366,features:["Неограниченное число смет","Приоритетная очередь ИИ","PDF и XLSX без водяного знака","500 МБ облачного хранилища"]},
+   pro_plus_month:{title:"PRO Плюс / Снабженец",period:"month",tier:"plus",duration_days:31,features:["Всё из PRO Solo","Учёт авансов, расходов и этапов","Конструктор фирменных бланков","Облако до 5 ГБ"]},
+   pro_team_month:{title:"TEAM / Компания",period:"month",tier:"team",duration_days:31,seat_limit:5,features:["Всё из PRO Плюс","Владелец и четыре сотрудника","Общая база клиентов"]},
+   pro_team_year:{title:"TEAM / Компания",period:"year",tier:"team",duration_days:366,seat_limit:5,features:["Всё из PRO Плюс","Владелец и четыре сотрудника","Общая база клиентов"]}
+  };
+  const catalogSource=Array.isArray(pricing.catalog)&&pricing.catalog.length?pricing.catalog:Object.entries(pricing.plans||{}).map(([code,values])=>({code,...(fallbackMeta[code]||{title:code,period:"month",tier:"solo",duration_days:31,features:[]}),amount_kopecks:values.amount_kopecks,duration_days:values.duration_days||fallbackMeta[code]?.duration_days||31}));
+  const planByCode=Object.fromEntries(catalogSource.map(item=>[item.code,item]));
   planByCode.start={code:"start",title:"Старт",period:"free",tier:"start",amount_kopecks:0,duration_days:0,features:["10 бесплатных смет для знакомства","Экспорт текста и PDF с водяным знаком","Базовые инструменты составления смет","Без платных функций для команды"]};
   const plansForAudience=()=>audiencePlans[audience].map(code=>planByCode[code]).filter(Boolean);
   function renderPlanCard(item,index,total){

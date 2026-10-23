@@ -5,7 +5,7 @@ function setup(){
  const dom=new JSDOM('<div id="content"></div>',{url:'https://example.test/app#billing',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window;
  w.user={id:'owner',plan:'free',entitlement_until:0};w.authRevision=1;w.tab='billing';w.escapeHtml=value=>String(value??'');w.rub=value=>String(value);w.date=()=>'';
  const notices=[];w.notify=value=>notices.push(value);w.view=html=>w.document.querySelector('#content').innerHTML=html;
- const offer={email_verified:true,checkout_mode:'live',payments:[],pricing:{plans:{pro_month:{amount_kopecks:49000},pro_year:{amount_kopecks:490000}},annual_saving_kopecks:98000,limits:{free_quotes:10,pro_quotes:10000,pro_ai:100}}};
+ const offer={email_verified:true,checkout_mode:'live',payments:[],pricing:{plans:{pro_month:{amount_kopecks:49000,duration_days:31},pro_year:{amount_kopecks:490000,duration_days:366}},catalog:[{code:'pro_month',title:'PRO Solo',period:'month',tier:'solo',amount_kopecks:49000,duration_days:31,features:['Неограниченное число смет']},{code:'pro_year',title:'PRO Solo',period:'year',tier:'solo',amount_kopecks:490000,duration_days:366,features:['Неограниченное число смет']}],annual_saving_kopecks:98000,team_annual_saving_kopecks:798000,purchase_bonus:{pro_month:50,pro_year:300},limits:{free_quotes:10,pro_quotes:null,pro_ai:100}}};
  let resolve,calls=0,version=0;
  w.api=async path=>path==='/billing'?offer:path==='/billing/sync'?(calls++,new Promise(r=>resolve=r)):{};
  w.eval(fs.readFileSync('apps/web/growth.js','utf8'));
