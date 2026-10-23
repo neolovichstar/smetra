@@ -533,7 +533,13 @@ def migrate(con):
         con.executescript(
             (Path(__file__).parent / "migrations" / "031_subscription_catalog_and_lead_access.sql").read_text(encoding="utf-8")
         )
-    if not con.execute("SELECT 1 FROM schema_migrations WHERE version=35").fetchone():
+    communication_schema_ready = (
+        "public_id" in {row["name"] for row in con.execute("PRAGMA table_info(users)")}
+        and con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations'").fetchone()
+        and con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'").fetchone()
+        and "conversation_id" in {row["name"] for row in con.execute("PRAGMA table_info(support)")}
+    )
+    if not communication_schema_ready:
         con.executescript(
             (Path(__file__).parent / "migrations" / "032_communication_support.sql").read_text(encoding="utf-8")
         )
