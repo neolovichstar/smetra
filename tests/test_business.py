@@ -1439,6 +1439,67 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn(b"'=HYPERLINK", csv)
 
+    def test_published_quote_hash_rejects_stale_or_malformed_approval(self):
+        owner, _ = self.account("snapshot-hash-owner")
+        quote = self.publish(owner, self.quote(owner))
+        public_token = quote["public_url"].split("quote=")[1]
+        status, viewed = self.call("/public/quote?token=" + public_token)
+        self.assertEqual(status, 200)
+        version_hash = viewed["quote"]["snapshot_sha256"]
+        self.assertRegex(version_hash, r"^[a-f0-9]{64}$")
+        self.assertNotIn("cost_price", json.dumps(viewed))
+        base = {"token": public_token, "version": quote["published_version"],
+                "name": "Клиент"}
+        for bad in ("0" * 64, "", 123, None):
+            code, _ = self.call("/public/accept", "POST",
+                                {**base, "snapshot_sha256": bad})
+            self.assertEqual(code, 409)
+        self.assertEqual(self.call("/public/accept", "POST",
+                                  {**base, "snapshot_sha256": version_hash})[0], 200)
+        self.assertEqual(self.call("/public/accept", "POST",
+                                  {**base, "snapshot_sha256": version_hash})[0], 409)
+
+    def test_snapshot_hash_does_not_grant_workspace_access(self):
+        owner, _ = self.account("fingerprint-tenant-owner")
+        outsider, _ = self.account("fingerprint-tenant-outsider")
+        quote = self.publish(owner, self.quote(owner))
+        token = quote["public_url"].split("quote=")[1]
+        code, viewed = self.call("/public/quote?token=" + token)
+        self.assertEqual(code, 200)
+        self.assertRegex(viewed["quote"]["snapshot_sha256"], r"^[a-f0-9]{64}$")
+        qid = quote["id"]
+        self.assertEqual(self.call("/quotes/" + qid, token=outsider)[0], 404)
+        self.assertEqual(self.call("/quotes/" + qid + "/versions", token=outsider)[0], 404)
+        self.assertEqual(self.call("/quotes/" + qid + "/publish", "POST", {
+            "revision": quote["revision"], "review_confirmed": True,
+            "snapshot_sha256": viewed["quote"]["snapshot_sha256"],
+        }, outsider)[0], 404)
+        self.assertEqual(self.call("/public/accept", "POST", {
+            "snapshot_sha256": viewed["quote"]["snapshot_sha256"],
+            "version": quote["published_version"], "name": "Подмена",
+        })[0], 400)
+
+    def test_corrupted_quote_cannot_be_published_or_change_status(self):
+        owner, _ = self.account("snapshot-corruption-owner")
+        quote = self.quote(owner)
+        with self.mod.db() as con:
+            con.execute("UPDATE quotes SET amount_kopecks=amount_kopecks+1 WHERE id=?",
+                        (quote["id"],))
+        status, result = self.call(
+            "/quotes/" + quote["id"] + "/publish", "POST",
+            {"revision": quote["revision"], "review_confirmed": True}, owner,
+        )
+        self.assertEqual(status, 409, result)
+        status, loaded = self.call("/quotes/" + quote["id"], token=owner)
+        self.assertEqual(status, 200)
+        self.assertEqual(loaded["quote"]["status"], "draft")
+        self.assertEqual(loaded["quote"]["published_version"], 0)
+        with self.mod.db() as con:
+            self.assertEqual(con.execute(
+                "SELECT count(*) FROM quote_versions WHERE quote_id=?",
+                (quote["id"],),
+            ).fetchone()[0], 0)
+
     def test_logs_redact_public_tokens(self):
         token, _ = self.account("logging")
         q = self.publish(token, self.quote(token))

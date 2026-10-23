@@ -718,11 +718,16 @@ class Service:
             if not version:
                 raise DomainError(404, "Предложение ещё не отправлено")
             result = json.loads(version["snapshot"])
+            # This identifies the exact published offer without exposing private
+            # line identifiers. It is NOT a bearer token or an auth credential.
+            from backend.quote_integrity import fingerprint
+            version_sha256 = fingerprint(result)
             for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "ai_generated", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by"):
                 result.pop(key, None)
             for item in result.get("items", []):
                 for key in ("cost_price", "internal_cost", "markup", "line_id"):
                     item.pop(key, None)
+            result["snapshot_sha256"] = version_sha256
         else:
             keys = (
                 "id",
@@ -992,6 +997,15 @@ class Service:
         if row["approval_state"] in ("sent", "viewed"):
             raise DomainError(409, "Эта версия уже отправлена")
         snapshot = self.quote_view(row)
+        # Recalculate persisted rows before creating an immutable offer. A
+        # concurrent or legacy writer must never publish inconsistent money.
+        from backend.quote_integrity import InvalidSnapshot, verify_totals
+        try:
+            verify_totals(snapshot, calculate)
+        except (InvalidSnapshot, DomainError) as error:
+            raise DomainError(
+                409, "Суммы сметы не совпадают со строками. Проверьте и пересохраните расчёт"
+            ) from error
         version = row["published_version"] + 1
         for key in (
             "public_url",
@@ -1196,6 +1210,20 @@ class Service:
             else:
                 if row["approval_state"] not in ("sent", "viewed", "changes_requested"):
                     raise DomainError(409, "Предложение уже обработано")
+                # Optional for backwards compatibility with existing RuStore
+                # clients. New clients bind their answer to a snapshot hash.
+                supplied_hash = data.get("snapshot_sha256")
+                if "snapshot_sha256" in data:
+                    if (
+                        type(supplied_hash) is not str
+                        or not re.fullmatch(r"[a-f0-9]{64}", supplied_hash)
+                        or not secrets.compare_digest(
+                            supplied_hash, public_quote["snapshot_sha256"]
+                        )
+                    ):
+                        raise DomainError(
+                            409, "Версия сметы изменилась. Обновите предложение"
+                        )
                 if row["itemized"] and data.get("version") != row["published_version"]:
                     raise DomainError(
                         409,

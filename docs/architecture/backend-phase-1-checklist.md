@@ -59,3 +59,19 @@
 **Не проверено:** сквозная доставка Resend, юридически значимое согласование, фактическая готовность к 300k MAU, все tenant-политики под нагрузкой, восстановление резервной копии, поведение текущих RuStore APK с новым API.
 
 **Следующее действие разработчика:** начинать с P0-02/P0-03/P0-04, затем проектировать новую передачу share (P1-01). Не включать новую approval-семантику, пока не готова проверка версии и расчетов.
+
+
+## P0 implementation progress — 24 October 2026 (iteration 1)
+
+Implemented and unit-tested:
+- The new quote-integrity backend module calculates a stable SHA-256 fingerprint for the complete published estimate snapshot. This is a version identifier, not an authorization token or evidence of recipient identity.
+- Before publication, the server recalculates persisted itemized quotes and checks grand total, internal cost, and line subtotals, tax and cost. On mismatch, it aborts with HTTP 409, without creating an immutable version or changing status.
+- The public quote API returns snapshot_sha256, computed from the saved version before private values are removed. A browser submits it when responding; malformed or stale supplied hashes are rejected with HTTP 409. For older RuStore clients this field remains optional.
+- Public web client passes the viewed snapshot hash on response and supports a legacy API fallback.
+- Regression tests cover money rounding, optional rows, invalid snapshots, foreign workspace access, stale and malformed approvals, and rollback after rejected publication.
+
+Verification: 20 focused quote/version/integrity/API regressions passed; six existing calculation tests passed; web build, Python compilation, and JS syntax checks passed. The entire integration suite was not certified in this sandbox because PDF and PostgreSQL optional dependencies are not installed.
+
+Important limitation: the legacy public approval still relies on the bearer public_token and an unverified name. Snapshot hashes do NOT solve recipient identity. A verified share-recipient model is required before treating approval as authenticated client consent.
+
+No database schema was changed. Backwards compatibility is intentional.
