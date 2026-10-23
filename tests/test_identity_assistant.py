@@ -185,15 +185,39 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertTrue(any(item.get("kind") == "file" and item.get("page") == 1 for item in found))
         self.assertFalse(self.call("/search?q=24", token=outsider)[1]["items"])
 
-    def get_redirect(self, path, cookie=""):
+    def get_redirect(self, path, cookie="", host=None):
         connection = http.client.HTTPConnection(
             "127.0.0.1", self.server.server_address[1]
         )
-        connection.request("GET", path, headers={"Cookie": cookie})
+        headers = {"Cookie": cookie}
+        if host is not None:
+            headers["Host"] = host
+        connection.request("GET", path, headers=headers)
         response = connection.getresponse()
         result = response.status, dict(response.getheaders()), response.read()
         connection.close()
         return result
+
+    def test_yandex_callback_stays_on_verified_start_host(self):
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"):
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=login", host="smetra.online"
+            )
+            self.assertEqual(status, 303)
+            params = parse_qs(urlsplit(headers["Location"]).query)
+            self.assertEqual(
+                params["redirect_uri"],
+                ["https://smetra.online/api/auth/oauth/yandex/callback"],
+            )
+            self.assertIn("smetra_oauth=", headers["Set-Cookie"])
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=login", host="www.smetra.online"
+            )
+            self.assertEqual(status, 303)
+            self.assertEqual(
+                headers["Location"],
+                "https://smetra.online/api/auth/oauth/yandex/start?intent=login",
+            )
 
     def test_provider_list_has_no_external_credentials(self):
         with patch.dict(

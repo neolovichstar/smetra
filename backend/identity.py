@@ -150,6 +150,18 @@ def route(h, con, method, path, query, origin):
     if len(parts) != 5 or parts[2] != "oauth" or method != "GET":
         raise DomainError(404, "Страница входа не найдена")
     provider, action = parts[3:]
+    # Keep the state cookie, authorization redirect and token exchange on
+    # the same verified host. PUBLIC_ORIGIN may point at a legacy Vercel alias.
+    if provider == "yandex":
+        host = h.headers.get("Host", "").strip().lower()
+        if host == "www.smetra.online" and action == "start":
+            safe_query = {key: value for key, value in query.items() if key != "path"}
+            target = "https://smetra.online/api/auth/oauth/yandex/start"
+            if safe_query:
+                target += "?" + urllib.parse.urlencode(safe_query, doseq=True)
+            return redirect(h, target)
+        if host in ("smetra.online", "smetra.vercel.app"):
+            origin = "https://" + host
     client, _ = config(provider)
     if not client:
         return redirect(h, origin + "/app?auth_error=unavailable")
