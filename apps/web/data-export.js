@@ -223,8 +223,9 @@
     if (!root) return;
     root.innerHTML = `<section class="panel data-export-panel"><div class="data-export-copy"><span class="data-export-kicker">ДАННЫЕ РАБОЧЕГО ПРОСТРАНСТВА</span><h2>Экспорт данных</h2><p class="muted">Один ZIP-архив со сметами, клиентами, проектами, стройкой, знаниями и файлами. Архив собирается в этом браузере; токены и пароли исключены.</p><p class="data-export-note">Включены вложения и история их версий. Доступно владельцу пространства.</p></div><div class="data-export-actions"><button class="btn primary" id="export-start" type="button">Скачать архив</button><button class="btn" id="export-cancel" type="button" hidden>Остановить</button></div><p id="export-status" class="data-export-status" role="status" aria-live="polite"></p></section>`;
     const button = document.querySelector('#export-start'), status = document.querySelector('#export-status');
-    button.addEventListener('click', () => start(button, status));
-    document.querySelector('#export-cancel').addEventListener('click', () => activeController?.abort());
+    const cancelButton=document.querySelector('#export-cancel');
+    if(button&&status)button.addEventListener('click', () => start(button, status));
+    cancelButton?.addEventListener('click', () => activeController?.abort());
   }
   function cancel() { activeController?.abort(); }
   window.SmetraDataExport = { render, cancel };

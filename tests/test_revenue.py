@@ -205,7 +205,7 @@ class RevenueApiTests(unittest.TestCase):
         status,created=self.request('/api/quotes','POST',{'title':'Repair','client':'Client','items':[{'name':'Work','quantity':'1','unit':'job','unit_price':10000}]},token)
         self.assertEqual(status,201)
         quote=created['quote']
-        self.assertEqual(self.request('/api/quotes/'+quote['id']+'/publish','POST',{'revision':quote['revision']},token)[0],200)
+        self.assertEqual(self.request('/api/quotes/'+quote['id']+'/publish','POST',{'revision':quote['revision'],'review_confirmed':True},token)[0],200)
         public_token=quote['public_url'].split('quote=')[1]
         self.assertEqual(self.request('/api/public/respond','POST',{'token':public_token,'version':1,'name':'Client','action':'approved'})[0],200)
         with self.mod.db() as con:

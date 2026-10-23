@@ -19,6 +19,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from email.message import EmailMessage
+from backend.plan_catalog import PURCHASES
 
 try:
     from backend import business, mytracker, revenue
@@ -26,6 +27,11 @@ except ModuleNotFoundError:
     import business
     import mytracker
     import revenue
+
+try:
+    from backend.estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
+except ModuleNotFoundError:
+    from estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
@@ -37,8 +43,8 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 39
-PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
+REQUIRED_CLOUD_SCHEMA_VERSION = 51
+PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
 def yookassa_mode(user=None):
@@ -311,7 +317,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 3_000_000 if path == "/api/ai/draft" else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":
@@ -432,18 +438,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
-                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
+                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync"):
                         raise ApiError(404, "Не найдено")
                     if path == "/api/cron/assistant":
                         from backend.assistant_jobs import authenticate
 
                         authenticate(self)
                     # /api/cron/push verifies its own dedicated server secret.
-                if root == "webhooks" and path != "/api/webhooks/yookassa":
+                if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
                 if root == "mobile" and path != "/api/mobile/presentation":
                     raise ApiError(404, "Не найдено")
-            if method != "GET" and path != "/api/webhooks/yookassa":
+            if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
             if method == "GET" and path == "/api/auth/providers":
                 from backend.identity import route as identity_route
@@ -499,6 +505,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
+            "/disclaimer": ("disclaimer.html", "text/html"),
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),
@@ -543,6 +550,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("chat-markdown.js", "text/javascript"),
             ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
             ("assistant-studio.css", "text/css"),
+            ("premium-tools.css", "text/css"),
+            ("premium-tools.js", "text/javascript"),
+            ("communication-center.js", "text/javascript"),
+            ("communication-center.css", "text/css"),
+            ("ecosystem-billing.js", "text/javascript"),
+            ("object-chats.js", "text/javascript"),
             ("landing.js", "text/javascript"),
             ("assets/black/unfold.png", "image/png"),
             ("assets/black/flight.png", "image/png"),
@@ -637,6 +650,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def api(self, method, path, query, con):
+        from backend.community import handles, route as communication_route
+        if handles(path):
+            result = communication_route(self, method, path, query, con)
+            if result is not None:
+                return result
+            raise ApiError(404, "Не найдено")
         if path == '/api/billing/pricing' and method == 'GET':
             experiment,variants=revenue.configuration()
             cheapest=min(variants.values(),key=lambda v:v['month'])
@@ -650,6 +669,79 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_batch(con))
+        if path == "/api/cron/product-monitor" and method == "GET":
+            from backend.product_sources import authenticate_cron, run_monitor_batch
+
+            authenticate_cron(self)
+            return self.send_json(200, run_monitor_batch(con))
+        if path == "/api/cron/cloud-sync" and method == "GET":
+            from backend.cloud_drives import authenticate_cron, run_cloud_batch
+
+            authenticate_cron(self)
+            return self.send_json(200, run_cloud_batch(con))
+        if path == "/api/webhooks/google-drive" and method == "POST":
+            from backend.cloud_drives import webhook
+
+            return self.send_json(200, webhook(self, con))
+        # The existing Yandex ID callback can also complete the Disk OAuth flow.
+        # This lets one registered redirect URI serve login and an explicitly requested
+        # read-only Disk grant without confusing the two independent OAuth states.
+        if path == "/api/auth/oauth/yandex/callback" and method == "GET":
+            state = query.get("state", [""])[0]
+            if isinstance(state, str) and state:
+                state_hash = hashlib.sha256(state.encode()).hexdigest()
+                try:
+                    cloud_state = con.execute(
+                        "SELECT id FROM cloud_oauth_states WHERE state_hash=? "
+                        "AND provider='yandex_disk' AND consumed_at IS NULL AND expires_at>?",
+                        (state_hash, now()),
+                    ).fetchone()
+                except Exception:
+                    cloud_state = None
+                if cloud_state:
+                    path = "/api/premium/cloud/oauth/callback"
+        if path == "/api/me/legal-consent" and method in ("GET", "POST"):
+            user = self.auth(con)
+            if method == "GET":
+                row = con.execute(
+                    "SELECT document_version,accepted_at,source FROM legal_acceptances "
+                    "WHERE user_id=? AND document_version=? LIMIT 1",
+                    (user["id"], LEGAL_CONSENT_VERSION),
+                ).fetchone()
+                return self.send_json(200, {
+                    "accepted": bool(row),
+                    "version": LEGAL_CONSENT_VERSION,
+                    "accepted_at": row["accepted_at"] if row else None,
+                })
+            data = self.body()
+            if data.get("accepted") is not True or data.get("version") != LEGAL_CONSENT_VERSION:
+                raise ApiError(400, "Подтвердите согласие с действующей редакцией условий")
+            con.execute(
+                "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(user_id,document_version) DO NOTHING",
+                (uid(), user["id"], LEGAL_CONSENT_VERSION, now(), "first_estimate"),
+            )
+            return self.send_json(200, {
+                "accepted": True,
+                "version": LEGAL_CONSENT_VERSION,
+            })
+        starts_ai_operation = method == "POST" and (
+            path == "/api/ai/draft"
+            or path in (
+                "/api/assistant",
+                "/api/assistant/chat",
+                "/api/assistant/stream",
+                "/api/assistant/jobs",
+            )
+        )
+        if starts_ai_operation:
+            user = self.auth(con)
+            accepted = con.execute(
+                "SELECT 1 FROM legal_acceptances WHERE user_id=? AND document_version=? LIMIT 1",
+                (user["id"], LEGAL_CONSENT_VERSION),
+            ).fetchone()
+            if not accepted:
+                raise ApiError(428, "Сначала примите условия использования AI-черновиков")
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
@@ -664,6 +756,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             if path == "/api/assistant/stream":
                 return payload.write(self)
+            if hasattr(payload, "redirect_url"):
+                self.send_response(status)
+                self.send_header("Location", payload.redirect_url)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                return
             if hasattr(payload, "mime"):
                 self.send_response(status)
                 self.send_header("Content-Type", payload.mime)
@@ -682,6 +782,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/register" and method == "POST":
             self.throttle("register:" + self.client_address[0], 5, 3600)
             data = self.body()
+            if (
+                data.get("legal_acceptance") is not True
+                or data.get("legal_version") != REGISTRATION_CONSENT_VERSION
+            ):
+                raise ApiError(
+                    400,
+                    "Для регистрации примите Пользовательское соглашение, условия и предупреждение об использовании AI",
+                )
             email = str(data.get("email", "")).strip().lower()
             password = str(data.get("password", ""))
             name = str(data.get("name", "")).strip()
@@ -714,6 +822,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         now(),
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
                     ),
+                )
+                con.execute(
+                    "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                    "VALUES(?,?,?,?,?)",
+                    (uid(), user_id, REGISTRATION_CONSENT_VERSION, now(), "registration"),
                 )
                 event(con, user_id, "signup_completed")
                 revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
@@ -1024,6 +1137,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             expected_amount = data.get('expected_amount_kopecks')
             if 'expected_amount_kopecks' in data and (type(expected_amount) is not int or not 100 <= expected_amount <= 100_000_000):
                 raise ApiError(400, "Некорректная сумма выбранного тарифа")
+            selected_workspace = data.get("workspace_id")
+            if selected_workspace is not None:
+                if not isinstance(selected_workspace, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", selected_workspace):
+                    raise ApiError(400, "Некорректное рабочее пространство")
+                if not con.execute("SELECT id FROM workspaces WHERE id=? AND owner_id=?", (selected_workspace, user["id"])).fetchone():
+                    raise ApiError(403, "Тарифом управляет владелец пространства")
             mode = yookassa_mode(user)
             if mode == "off":
                 raise ApiError(503, "Оплата пока недоступна")
@@ -1036,7 +1155,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     raise ApiError(409, "Ключ уже использован для другого тарифа")
                 if expected_amount is not None and expected_amount != previous['amount_kopecks']:
                     raise ApiError(409, "Стоимость выбранной оплаты изменилась. Обновите тариф.")
-                captured = con.execute('SELECT is_test FROM billing_intents WHERE payment_id=?', (previous['id'],)).fetchone()
+                captured = con.execute('SELECT is_test,workspace_id FROM billing_intents WHERE payment_id=?', (previous['id'],)).fetchone()
+                if captured and selected_workspace and captured["workspace_id"] != selected_workspace:
+                    raise ApiError(409, "Ключ уже использован для другого пространства")
                 if captured and captured['is_test'] != int(mode == 'test'):
                     raise ApiError(409, "Режим магазина изменился. Начните новую оплату.")
                 refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous['id'],)).fetchone()
@@ -1045,7 +1166,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {"url": previous["confirmation_url"], "status": 'refunded' if refunded else previous["status"]},
                 )
             try:
-                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount)
+                intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount, data.get('workspace_id'))
             except ValueError:
                 raise ApiError(409,'Условия оплаты изменились. Обновите страницу тарифа.') from None
             amount = intent['amount_kopecks']
@@ -1336,7 +1457,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (status, status, now(), local["id"]),
                     )
                     if status == "succeeded":
-                        terms = con.execute('SELECT duration_days,bonus_ai_messages,is_test FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
+                        terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
                         prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
                         grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
                         entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
@@ -1352,6 +1473,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
                                 (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
                             )
+                        revenue.rebuild_workspace_entitlement(con, local["user_id"], terms["workspace_id"] if terms else None)
                         newly_succeeded = True
                     if status in ('succeeded','canceled'):
                         revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
@@ -1432,6 +1554,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
+                    refunded_terms = con.execute("SELECT workspace_id FROM billing_intents WHERE payment_id=?", (payment["id"],)).fetchone()
+                    revenue.rebuild_workspace_entitlement(con, payment["user_id"], refunded_terms["workspace_id"] if refunded_terms else None)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
                     event(con, payment["user_id"], "payment_refunded")

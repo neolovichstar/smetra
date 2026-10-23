@@ -8,6 +8,7 @@ import re
 import secrets
 import time
 import uuid
+import urllib.parse
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
@@ -177,6 +178,46 @@ def calculate(items):
             tax_amount=int(tax_amount),
             internal_cost=cost_total,
         )
+        # Product presentation metadata is allow-listed; it never participates in quote math.
+        metadata_strings = {
+            'product_source_id': 100, 'product_title': 300, 'product_brand': 160,
+            'product_sku': 120, 'product_unit': 40, 'product_currency': 3,
+            'product_availability': 24, 'visual_group': 120, 'visual_role': 40,
+        }
+        for key, max_length in metadata_strings.items():
+            if key in item:
+                row[key] = string(item[key], key, max_length)
+        for key in ('product_url', 'product_image_url'):
+            if key in item:
+                value = string(item[key], key, 2048)
+                if value:
+                    try:
+                        parsed = urllib.parse.urlsplit(value)
+                    except ValueError:
+                        raise DomainError(400, 'Некорректная ссылка товара') from None
+                    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+                        raise DomainError(400, 'Ссылки товара должны использовать HTTPS')
+                row[key] = value
+        if 'product_price_kopecks' in item:
+            value = item['product_price_kopecks']
+            if value is not None and (type(value) is not int or not 0 <= value <= 100_000_000_000):
+                raise DomainError(400, 'Некорректная цена товара')
+            row['product_price_kopecks'] = value
+        if 'product_checked_at' in item:
+            value = item['product_checked_at']
+            if type(value) is not int or value < 0:
+                raise DomainError(400, 'Некорректное время проверки товара')
+            row['product_checked_at'] = value
+        if 'product_attributes' in item:
+            attributes = item['product_attributes']
+            if not isinstance(attributes, dict) or len(attributes) > 40 or len(packed(attributes)) > 10000:
+                raise DomainError(400, 'Некорректные характеристики товара')
+            row['product_attributes'] = attributes
+        if 'visual_order' in item:
+            value = item['visual_order']
+            if type(value) is not int or not 0 <= value <= 10000:
+                raise DomainError(400, 'Некорректный порядок карточки товара')
+            row['visual_order'] = value
         result.append(row)
         if included:
             total += subtotal
@@ -215,6 +256,16 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    # OAuth registration consent is stored with the one-use server-side state.
+    # Add columns idempotently for databases created before this guardrail.
+    oauth_state_columns = {r["name"] for r in con.execute("PRAGMA table_info(oauth_states)")}
+    for column, definition in (
+        ("registration_intent", "INTEGER NOT NULL DEFAULT 0"),
+        ("legal_acceptance", "INTEGER NOT NULL DEFAULT 0"),
+        ("legal_version", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        if column not in oauth_state_columns:
+            con.execute(f"ALTER TABLE oauth_states ADD COLUMN {column} {definition}")
     con.executescript(
         (Path(__file__).parent / "migrations" / "003_files_ai.sql").read_text(
             encoding="utf-8"
@@ -281,6 +332,22 @@ def migrate(con):
     if "bonus_ai_messages" not in billing_intent_columns:
         con.execute("ALTER TABLE billing_intents ADD COLUMN bonus_ai_messages INTEGER NOT NULL DEFAULT 0")
     con.executescript((Path(__file__).parent / "migrations" / "021_assistant_purchase_bonus.sql").read_text(encoding="utf-8"))
+    # Keep local SQLite and the production private schema aligned.
+    for table, additions in {
+        "workspaces": {
+            "plan": "TEXT NOT NULL DEFAULT 'free'",
+            "subscription_status": "TEXT NOT NULL DEFAULT 'inactive'",
+            "entitlement_until": "INTEGER NOT NULL DEFAULT 0",
+            "seat_limit": "INTEGER NOT NULL DEFAULT 1",
+        },
+        "billing_intents": {"workspace_id": "TEXT REFERENCES workspaces(id) ON DELETE SET NULL"},
+    }.items():
+        present = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+        for column, definition in additions.items():
+            if column not in present:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    con.executescript((Path(__file__).parent / "migrations" / "027_ecosystem_plans.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "028_object_chats.sql").read_text(encoding="utf-8"))
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -438,6 +505,8 @@ def migrate(con):
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(26,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(27,?)", (stamp(),))
         con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(28,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(36,?)", (stamp(),))
+        con.execute("INSERT OR IGNORE INTO schema_migrations VALUES(37,?)", (stamp(),))
     # Apply the idempotent SQLite migration only after the surrounding
     # migration transaction has finished; executescript commits implicitly.
     con.executescript(
@@ -460,7 +529,21 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_premium_visual_cloud_products.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
+    con.executescript((Path(__file__).parent / "migrations" / "026_assistant_ad_rewards.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "029_rewarded_ledger.sql").read_text(encoding="utf-8"))
+    if "ad_reward_id" not in {r["name"] for r in con.execute("PRAGMA table_info(assistant_jobs)")} :
+        con.execute("ALTER TABLE assistant_jobs ADD COLUMN ad_reward_id TEXT")
+    from backend.community import ensure_sqlite_schema
+    ensure_sqlite_schema(con)
+    push_columns = {r["name"] for r in con.execute("PRAGMA table_info(push_outbox)")}
+    if "recipient_user_id" not in push_columns:
+        con.execute("ALTER TABLE push_outbox ADD COLUMN recipient_user_id TEXT REFERENCES users(id) ON DELETE CASCADE")
 
 ENTITIES = {
     "clients": {
@@ -653,6 +736,7 @@ class Service:
                 "created_at",
                 "updated_at",
                 "itemized",
+                "ai_generated",
                 "view_count",
                 "first_viewed_at",
                 "sent_at",
@@ -691,6 +775,13 @@ class Service:
 
     def quote_data(self, data, old=None):
         result = {}
+        previously_ai_generated = bool(old["ai_generated"]) if old is not None and "ai_generated" in old.keys() else False
+        requested_ai_generated = data.get("ai_generated") is True or (
+            type(data.get("ai_generated")) is int and data.get("ai_generated") == 1
+        )
+        # Provenance is monotonic: saving or editing an AI draft must never
+        # clear its warning/export requirements.
+        result["ai_generated"] = int(previously_ai_generated or requested_ai_generated)
         for key, limit, required in (
             ("title", 120, True),
             ("client", 120, True),
@@ -822,7 +913,9 @@ class Service:
             "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'",
             (owner["id"],),
         ).fetchone()[0]
-        if count >= (10 if (owner["entitlement_until"] or 0) <= stamp() else 10000):
+        from backend.entitlements import workspace_feature_access
+        paid_workspace = workspace_feature_access(self.con, self.wid, "clean_export", stamp())["allowed"]
+        if not paid_workspace and (owner["entitlement_until"] or 0) <= stamp() and count >= 10:
             raise DomainError(402, "Достигнут лимит смет текущего тарифа")
         values, items = self.quote_data(data)
         ai_generated = 0
@@ -881,6 +974,11 @@ class Service:
         return self.quote_view(self.get("quotes", qid))
 
     def publish(self, row, data):
+        if data.get("review_confirmed") is not True:
+            raise DomainError(
+                400,
+                "Перед отправкой подтвердите, что проверили объёмы, технологию и цены",
+            )
         if row["status"] in ("accepted", "completed"):
             raise DomainError(
                 409, "Согласованную смету нельзя отправить повторно: создайте копию"
@@ -1819,7 +1917,9 @@ class Service:
             str(amount),
             True,
         )
-        return 201, {"item": values}
+        from backend.cash_control import update_project_risk
+        risk = update_project_risk(self, project["id"])
+        return 201, {"item": values, "cash_control": risk}
 
     def action_center(self):
         """Small, workspace-scoped list of work that needs a human decision."""
@@ -2013,6 +2113,9 @@ class Service:
                     403, "Только владелец или администратор может управлять командой"
                 )
             if method == "POST":
+                from backend.entitlements import workspace_feature_access
+                if not workspace_feature_access(self.con, self.wid, "team_management", stamp())["allowed"]:
+                    raise DomainError(402, "Управление командой доступно в TEAM")
                 email = string(data.get("email", ""), "Почта", 254, True).lower()
                 member = self.global_con.execute(
                     "SELECT id FROM users WHERE email=? AND deleted_at IS NULL AND blocked=0",
@@ -2036,6 +2139,10 @@ class Service:
                     and (role == "admin" or existing and existing["role"] == "admin")
                 ):
                     raise DomainError(403, "Эта роль доступна только владельцу")
+                if not existing and self.con.execute(
+                    "SELECT count(*) FROM workspace_members WHERE workspace_id=?", (self.wid,)
+                ).fetchone()[0] >= 5:
+                    raise DomainError(409, "В TEAM доступны владелец и четыре сотрудника")
                 self.con.execute(
                     "INSERT INTO workspace_members VALUES(?,?,?) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
                     (self.wid, member["id"], role),
@@ -2109,7 +2216,9 @@ class Service:
             row = self.con.execute(
                 "SELECT * FROM workspaces WHERE id=?", (self.wid,)
             ).fetchone()
+        from backend.plan_catalog import workspace_summary
         return 200, {
+            "entitlements": workspace_summary(self.con, self.wid, stamp()),
             "workspace": dict(
                 row, settings=json.loads(row["settings"]), role=self.role
             ),
@@ -2229,6 +2338,13 @@ class Service:
             from backend.assistant import route
 
             return route(self, method, parts, data)
+        if kind == "object-chats":
+            from backend.object_chats import route as chat_route
+            return chat_route(self, method, parts, query, data)
+        if kind == "premium":
+            from backend.product_sources import route as premium_route
+
+            return premium_route(self, method, parts, query, data)
         if kind == "capabilities" and method == "GET":
             try:
                 from backend.ai import available
@@ -2456,5 +2572,7 @@ ROUTES = set(ENTITIES) | {
     "export",
     "construction",
     "ai",
+    "premium",
+    "object-chats",
     "capabilities",
 }

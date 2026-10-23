@@ -4,10 +4,21 @@ import base64
 import io
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import zipfile
 
+
+# Monetary results must live in numeric unit_price fields, never in model prose.
+_CURRENCY_AMOUNT = re.compile(
+    r"\d[\d\s\u00a0]*(?:[.,]\d+)?\s*(?:₽|руб(?:ля|лей|ли|ль|лях)?\.?|RUB|коп(?:еек|ейки|ейка|\.?))(?![A-Za-zА-Яа-яЁё])",
+    re.IGNORECASE,
+)
+_SUMMARY_AMOUNT = re.compile(
+    r"(?:\bитого\b|\bобщая\s+(?:сумма|стоимость)\b|\bк\s+оплате\b|\bвсего\s+(?:составит|выйдет|получится)\b).{0,80}\d[\d\s\u00a0]*(?:[.,]\d+)?",
+    re.IGNORECASE,
+)
 try:
     from backend.business import (
         DomainError,
@@ -173,6 +184,7 @@ def _draft(service, data):
         "quantity": {"type": "string", "description": "Десятичное число как строка. Используй только известный пользователю объём; неизвестный объём не выдумывай и пометь как требующий уточнения."},
         "unit": {"type": "string", "description": "Корректная единица измерения, согласованная с количеством; не смешивай единицы."},
         "unit_price": {"type": "integer", "description": "Цена за единицу в целых копейках. Неизвестная/неподтверждённая цена — 0; ноль обозначает отсутствие цены, а не бесплатную работу."},
+        "requires_measurement": {"type": "boolean"},
     }
     properties = {
         "title": {"type": "string"},
@@ -195,7 +207,8 @@ def _draft(service, data):
             {
                 "role": "system",
                 "content": (
-                    "Ты — эксперт по подготовке предварительных смет и структурированных черновиков для Сметры. Верни только данные JSON по схеме, на русском языке; не добавляй текст вне JSON. "
+                    "Не возвращай итоговые или промежуточные суммы в тексте: итоговую сумму и всю математику вычисляет только код. Помечай неизвестные замеры requires_measurement=true. "
+                    "Ты — черновой ассистент-структуризатор и эксперт по подготовке предварительных смет и структурированных черновиков для Сметры. Верни только данные JSON по схеме, на русском языке; не добавляй текст вне JSON. "
                     "Разбери задачу внимательно: выдели только работы и материалы, которые прямо запрошены пользователем или однозначно следуют из описания. Не добавляй типовые этапы, запас, накладные расходы, доставку, налоги, скидки или дополнительные материалы без основания. Максимум 30 позиций. "
                     "Не придумывай клиента, адрес, сроки, объёмы, размеры, цены или условия. Заполняй client только когда имя/название клиента явно присутствует во входных данных; в противном случае верни пустую строку. "
                     "Цена unit_price — целое число копеек за единицу, не рубли. Используй только цену, прямо указанную в запросе/источнике; перевод рублей в копейки делай точно. Если цены нет или её нельзя однозначно извлечь, ставь 0 и прямо укажи в description или terms, что цену необходимо уточнить. Ноль означает «не указана/не подтверждена», а не бесплатную работу. Никогда не сочиняй рыночные цены. "
@@ -236,28 +249,70 @@ def _draft(service, data):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
-            raw = response.read(300001)
-        if len(raw) > 300000:
-            raise ValueError("response too large")
-        result = json.loads(raw)
+        from backend import estimate_cache
+        cache_payload = packed(payload)
+        result = estimate_cache.read(service.wid, cache_payload)
+        cache_hit = result is not None
+        if not cache_hit:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                raw = response.read(300001)
+            if len(raw) > 300000:
+                raise ValueError("response too large")
+            result = json.loads(raw)
         content = result["choices"][0]
         if content.get("finish_reason") != "stop" or content["message"].get("refusal"):
             raise ValueError("incomplete/refused response")
         value = json.loads(content["message"]["content"])
         title = string(value.get("title", ""), "Название", 120, True)
+        if set(value) != {"title", "client", "description", "terms", "items"}:
+            raise ValueError("unexpected top-level fields")
         if (
             not isinstance(value.get("items"), list)
             or not 1 <= len(value["items"]) <= 30
         ):
             raise ValueError("items")
+        validated_items = []
+        item_keys = {"name", "description", "quantity", "unit", "unit_price", "requires_measurement"}
         for item in value["items"]:
-            if not isinstance(item, dict):
-                raise ValueError("item")
+            if not isinstance(item, dict) or set(item) != item_keys:
+                raise ValueError("unexpected item fields")
             if type(item.get("unit_price")) is not int or item["unit_price"] < 0:
                 raise ValueError("invalid unit price")
-            # Allow an unknown zero price in the unsaved AI draft; regular save still validates the final total.
-            calculate([{**item, "unit_price": item.get("unit_price") or 1}])
+            if type(item.get("requires_measurement", False)) is not bool:
+                raise ValueError("invalid measurement flag")
+            name = string(item.get("name", ""), "Позиция", 200, True)
+            description = string(item.get("description", ""), "Описание", 1000)
+            unit = string(item.get("unit", ""), "Единица", 30, True)
+            quantity = string(item.get("quantity", ""), "Количество", 40, True)
+            lower_name = (name + " " + description).casefold()
+            needs_measurement = item.get("requires_measurement", False) or any(
+                keyword in lower_name
+                for keyword in ("грунтов", "демонтаж", "скрыт", "обеспылив", "гидроизоляц")
+            )
+            if needs_measurement and "Требует замера по месту" not in description:
+                description = (description + " · Требует замера по месту").strip(" ·")
+            normalized = {
+                "name": name,
+                "description": description,
+                "quantity": quantity,
+                "unit": unit,
+                "unit_price": item["unit_price"],
+                "requires_measurement": needs_measurement,
+            }
+            # Validate quantities/ranges with the deterministic domain calculator.
+            # A zero price means "unknown", so substitute one kopeck only for validation;
+            # no subtotal or total from this validation call is exposed to the model or user.
+            calculate([{**normalized, "unit_price": normalized["unit_price"] or 1}])
+            validated_items.append(normalized)
+        draft_client = string(value.get("client", ""), "Клиент", 120)
+        draft_description = string(value.get("description", ""), "Описание", 5000)
+        draft_terms = string(value.get("terms", ""), "Условия", 5000)
+        narrative = [title, draft_description, draft_terms]
+        for item in validated_items:
+            narrative.extend((item["name"], item["description"]))
+        if any(_CURRENCY_AMOUNT.search(text) or _SUMMARY_AMOUNT.search(text) for text in narrative):
+            raise ValueError("money totals must not be returned in narrative fields")
+
         usage = result.get("usage")
         known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in ('prompt_tokens','completion_tokens'))
         service.con.execute(
@@ -269,16 +324,16 @@ def _draft(service, data):
                 usage_id,
             ),
         )
+        if not cache_hit:
+            estimate_cache.write(service.wid, cache_payload, result)
         service.emit("ai", usage_id, "AI создал черновик")
         return 200, {
             "draft": {
                 "title": title,
-                "client": string(value.get("client", ""), "Клиент", 120),
-                "description": string(value.get("description", ""), "Описание", 5000),
-                "terms": string(value.get("terms", ""), "Условия", 5000),
-                "items": value["items"],
-                # Opaque, one-use server capability. It authorizes provenance
-                # attribution only; all pricing remains server-validated.
+                "client": draft_client,
+                "description": draft_description,
+                "terms": draft_terms,
+                "items": validated_items,
                 "ai_draft_usage_id": usage_id,
             },
             "requires_review": True,

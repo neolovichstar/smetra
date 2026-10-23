@@ -8,7 +8,7 @@ configurations.configureEach {
     }
 }
 
-def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://smetra.vercel.app').get()
+def apiBase = providers.gradleProperty('apiBaseUrl').orElse('https://smetra.online').get()
 def verifyUnsignedRelease = providers.gradleProperty('verifyUnsignedRelease').map { it == 'true' }.orElse(false).get()
 def myTrackerSdkKey = providers.gradleProperty('myTrackerSdkKey').orElse(providers.environmentVariable('MYTRACKER_SDK_KEY')).orElse('').get()
 def rustorePushProjectId = providers.gradleProperty('rustorePushProjectId').orElse(providers.environmentVariable('RUSTORE_PUSH_PROJECT_ID')).orElse('').get()
@@ -22,8 +22,8 @@ android {
         applicationId 'ru.smetra.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 39
-        versionName '1.7.27'
+        versionCode 40
+        versionName '1.7.28'
         testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
         buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('\"', '') + '"'
         buildConfigField 'String', 'MYTRACKER_SDK_KEY', '"' + myTrackerSdkKey.replace('\"', '') + '"'
@@ -69,5 +69,6 @@ gradle.taskGraph.whenReady { graph ->
 
 dependencies {
     implementation 'com.my.tracker:mytracker-sdk:3.6.0'
+    implementation 'com.yandex.ads.mediation:mobileads:8.6.0'
     implementation 'ru.rustore.sdk:pushclient:7.5.0'
 }

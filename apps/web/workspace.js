@@ -1,7 +1,7 @@
 /* Workspace UI. All persistent business actions go through the authenticated API. */
 window.Workspace = (() => {
   const labels = {draft:'Черновик',sent:'Отправлена',viewed:'Просмотрена',changes_requested:'Нужны изменения',approved:'Согласована',rejected:'Отклонена',expired:'Истекла',planned:'Запланирован',in_progress:'В работе',waiting:'Ожидание',completed:'Завершён',cancelled:'Отменён',todo:'К выполнению',done:'Готово',person:'Физлицо',company:'Компания',low:'Низкий',normal:'Обычный',high:'Высокий',bank_transfer:'Перевод',cash:'Наличные',external:'Внешняя оплата',owner:'Владелец',admin:'Администратор',manager:'Менеджер',member:'Участник',viewer:'Наблюдатель'};
-  const names = {clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
+  const names = {premium:'Материалы и облака',clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
   const e = escapeHtml;
   const moneyFormatters=new Map();
   const money = (n,c='RUB') => {if(!moneyFormatters.has(c))moneyFormatters.set(c,new Intl.NumberFormat('ru-RU',{style:'currency',currency:c,maximumFractionDigits:2}));return moneyFormatters.get(c).format((n||0)/100)};
@@ -109,11 +109,29 @@ window.Workspace = (() => {
       html=mainTitle('Календарь','Ближайшие сроки по задачам и проектам.',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${days.length?days.map(day=>`<section class="agenda-day"><time datetime="${e(day)}"><strong>${e(day.slice(-2))}</strong><span>${e(new Intl.DateTimeFormat('ru-RU',{month:'short',weekday:'short'}).format(new Date(day+'T12:00:00')))}</span></time><div>${result.deadlines.filter(item=>item.due_date===day).map(d=>`<div class="record-line"><button class="record-title" data-work="entity" data-kind="${d.kind==='task'?'tasks':'projects'}" data-id="${e(d.id)}"><strong>${e(d.name)}</strong><small>${d.kind==='task'?'Задача':'Проект'}</small></button>${status(d.status)}</div>`).join('')}</div></section>`).join(''):empty('Сроки пока не назначены','Укажите дату в проекте или задаче.')}</section>`;
     }else if(section==='activity'||section==='notifications'){
       const result=await api('/'+section);if(!active())return true;
-      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel">${section==='activity'?activityList(result.items):result.items.map(n=>`<div class="record-line ${n.is_read?'':'unread'}"><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div>`).join('')||empty('Пока тихо','Новые события появятся здесь.')}</section>`;
+      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel ${section==='notifications'?'notifications-panel':'activity-panel'}">${section==='activity'?activityList(result.items):result.items.length?result.items.map(n=>`<div class="record-line notification-row ${n.is_read?'':'unread'}"><span class="notification-dot" aria-hidden="true"></span><div><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div></div>`).join(''):empty('Пока тихо','Новые события появятся здесь.')}</section>`;
     }else if(section==='team'){
       const result=await api('/workspace/members');if(!active())return true;
-      html=mainTitle('Рабочее пространство','Роли определяют доступ к данным и действиям.',button('Добавить участника','member','','primary'))+
-        `<section class="panel"><div class="form-grid">${select('workspace','Пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}<div class="field"><label>Ваша роль</label><p>${e(labels[workspace.role])}</p></div></div><h3>Команда</h3>${result.items.map(m=>`<div class="record-line"><div><strong>${e(m.name)}</strong><small>${e(m.email)}</small></div>${status(m.role)}${m.role!=='owner'?button('Убрать','remove-member',m.user_id):''}</div>`).join('')}</section><section class="panel"><h3>Настройки бизнеса</h3><form id="workspace-settings"><div class="form-grid">${field('name','Название',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>${field('company_details','Реквизиты',workspace.settings.company_details||'','textarea')}${field('pipeline','Этапы лидов — по одному в строке',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea')}<p class="form-error" role="alert"></p><button class="btn primary" type="submit">Сохранить</button></form></section>`;
+      const memberRows=result.items.map(m=>`<div class="team-member-row"><span class="team-member-avatar" aria-hidden="true">${e((m.name||m.email||'?').trim().slice(0,1).toLocaleUpperCase('ru-RU'))}</span><div class="team-member-copy"><strong>${e(m.name||'Участник')}</strong><small>${e(m.email)}</small></div><span class="pill team-role-badge status-${e(m.role)}">${e(labels[m.role]||m.role)}</span>${m.role!=='owner'?button('Убрать','remove-member',m.user_id,'team-remove-member'):''}</div>`).join('');
+      html=mainTitle('Команда','Люди, роли и настройки одного рабочего пространства.',button('Добавить участника','member','','primary'))+
+        `<div class="team-page">
+          <section class="team-overview">
+            <div class="team-workspace-picker">${select('workspace','Рабочее пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}</div>
+            <div class="team-current-role"><span>Ваша роль</span><strong>${e(labels[workspace.role]||workspace.role)}</strong><small>Доступ к данным текущего пространства</small></div>
+          </section>
+          <section class="panel team-members-panel">
+            <div class="team-section-heading"><div><h2>Участники</h2><p>Кто имеет доступ к сметам и клиентским данным.</p></div><span class="team-count">${result.items.length}</span></div>
+            <div class="team-member-list">${memberRows||empty('Пока нет участников','Добавьте коллегу, чтобы работать над сметами вместе.')}</div>
+          </section>
+          <details class="panel team-business-settings">
+            <summary><span><strong>Настройки рабочего пространства</strong><small>Название, валюта и реквизиты бизнеса</small></span><span class="team-settings-chevron" aria-hidden="true"></span></summary>
+            <form id="workspace-settings" class="team-settings-form">
+              <div class="form-grid">${field('name','Название пространства',workspace.name,'text','required maxlength="120"')}${select('currency','Валюта по умолчанию',['RUB','USD','EUR','KZT','BYN','GBP'],workspace.currency)}</div>
+              <details class="team-advanced-settings"><summary>Дополнительные параметры</summary>${field('company_details','Реквизиты для документов',workspace.settings.company_details||'','textarea','rows="3"')}${field('pipeline','Этапы лидов — каждый с новой строки',(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).join('\n'),'textarea','rows="4"')}</details>
+              <p class="form-error" role="alert"></p><div class="team-settings-actions"><button class="btn primary" type="submit">Сохранить изменения</button></div>
+            </form>
+          </details>
+        </div>`;
     }else if(section==='files'){
       fileCenterData=await api('/files');if(!active())return true;
       html=mainTitle('Файлы','Вложения смет, клиентов и заказов. Текстовые файлы доступны для поиска и ассистента.')+
@@ -123,9 +141,23 @@ window.Workspace = (() => {
       html=mainTitle('Документы','Предложения, акты и условия работы.',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div><div class="attachment-actions">${button('Спросить AI','ask-document',d.id).replace('data-work=',`data-label="${e(d.name)}" data-work=`)}${button('Скачать PDF','download-document',d.id)}</div></div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
     }else return false;
     if(!active())return true;
-    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);bind(section);
+    view(`<section class="workspace-section section-${e(section)}">${html}</section>`);
+    if(section==='team'){
+      // Start with a clean member directory; business inputs are intentionally progressive disclosure.
+      const businessSettings=document.querySelector('.team-business-settings');
+      const advancedSettings=document.querySelector('.team-advanced-settings');
+      if(businessSettings)businessSettings.open=false;
+      if(advancedSettings)advancedSettings.open=false;
+    }
+    bind(section);
     if(section==='files')bindFileCenter(fileCenterData);
-    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){await window.SmetraLoadFeature('growth');if(!active())return true;window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));}
+    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){
+      // Onboarding is optional. Do not block the dashboard render on the lazy growth chunk;
+      // otherwise a slow chunk lets the app-level loading timer replace an already-rendered page.
+      window.SmetraLoadFeature('growth').then(()=>{
+        if(active())window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));
+      }).catch(()=>{});
+    }
     if(section==='team')await customFieldSettings();
     return true;
   }
@@ -263,15 +295,15 @@ window.Workspace = (() => {
     const active=pageRequest(true);
     const [{quote:q,activity},versions]=await Promise.all([api('/quotes/'+id),api('/quotes/'+id+'/versions')]);
     if(!active())return;
-    view(mainTitle(e(q.title),`${e(q.client)} · ${q.currency} · ${q.published_version?'Версия '+q.published_version:'Новый расчёт'}${q.ai_generated?' · Подготовлено с ИИ':''}`,button('← Все сметы','navigate','quotes')+'<button class="btn small" id="ask-ai">Спросить AI ↗</button>')+
-      `<div class="workspace-columns quote-detail"><section class="panel"><div class="section-top">${status(q.approval_state)}<span class="muted">${q.view_count} просмотров</span></div><p class="preserve-lines">${e(q.description)}</p>${itemTable(q.items,q.currency)}<div class="quote-summary"><span>Итого</span><strong>${money(q.amount_kopecks,q.currency)}</strong></div><p class="muted preserve-lines">${e(q.terms)}</p><div class="row wrap" id="quote-controls">${q.approval_state!=='approved'?button('Редактировать','edit'):''}${['draft','changes_requested','rejected'].includes(q.approval_state)?button('Отправить клиенту','publish','','primary'):''}${q.published_version?button('Клиентская ссылка ↗','link'):''}${q.approval_state==='approved'?button('Создать заказ','project','','primary'):''}${q.published_version?button('Сравнить версии','review'):''}${button('Создать копию','copy')}${button('Документ','document')}</div></section><aside><section class="panel"><span class="eyebrow">Только для команды</span><h3>Экономика сметы</h3><div class="record-line"><span>Себестоимость</span><strong>${money(q.internal_cost,q.currency)}</strong></div><div class="record-line"><span>Плановая прибыль</span><strong>${money(q.profit,q.currency)}</strong></div><p class="muted">Эти данные скрыты от клиента.</p></section><section class="panel"><h3>Версии</h3>${versions.versions.length?versions.versions.map(v=>`<div class="record-line"><div><strong>v${v.version}</strong><small>${date(v.created_at)} · ${e(v.comment)}</small></div><b>${money(v.snapshot.amount_kopecks,q.currency)}</b>${button('Сравнить','review',String(v.version))}</div>`).join(''):'<p class="muted">Версия фиксируется при отправке.</p>'}</section></aside></div><section class="panel"><h3>История</h3>${activityList(activity)}</section>`);
+    view(mainTitle(e(q.title),`${e(q.client)} · ${q.currency} · ${q.published_version?'Версия '+q.published_version:'Новый расчёт'}`,button('← Все сметы','navigate','quotes')+'<button class="btn small" id="ask-ai">Спросить AI ↗</button>')+
+      `<div class="workspace-columns quote-detail"><section class="panel"><div class="section-top">${status(q.approval_state)}<span class="muted">${q.view_count} просмотров</span></div>${q.ai_generated&&window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():''}<p class="preserve-lines">${e(q.description)}</p>${itemTable(q.items,q.currency)}<div class="quote-summary"><span>Итого</span><strong>${money(q.amount_kopecks,q.currency)}</strong></div><p class="muted preserve-lines">${e(q.terms)}</p><div class="row wrap" id="quote-controls">${q.approval_state!=='approved'?button('Редактировать','edit'):''}${['draft','changes_requested','rejected'].includes(q.approval_state)?button('Отправить клиенту','publish','','primary'):''}${q.published_version?button('Клиентская ссылка ↗','link'):''}${q.approval_state==='approved'?button('Создать заказ','project','','primary'):''}${q.published_version?button('Сравнить версии','review'):''}${button('Создать копию','copy')}${button('Документ','document')}</div></section><aside><section class="panel"><span class="eyebrow">Только для команды</span><h3>Экономика сметы</h3><div class="record-line"><span>Себестоимость</span><strong>${money(q.internal_cost,q.currency)}</strong></div><div class="record-line"><span>Плановая прибыль</span><strong>${money(q.profit,q.currency)}</strong></div><p class="muted">Эти данные скрыты от клиента.</p></section><section class="panel"><h3>Версии</h3>${versions.versions.length?versions.versions.map(v=>`<div class="record-line"><div><strong>v${v.version}</strong><small>${date(v.created_at)} · ${e(v.comment)}</small></div><b>${money(v.snapshot.amount_kopecks,q.currency)}</b>${button('Сравнить','review',String(v.version))}</div>`).join(''):'<p class="muted">Версия фиксируется при отправке.</p>'}</section></aside></div><section class="panel"><h3>История</h3>${activityList(activity)}</section>`);
     const reviewQuote=async options=>{if(window.SmetraLoadFeature)await window.SmetraLoadFeature('quoteReview');if(active())await window.SmetraQuoteReview.open(q,versions.versions,options)};
     document.querySelectorAll('[data-work="review"]').forEach(button=>button.onclick=async event=>{event.stopPropagation();if(button.disabled)return;button.disabled=true;try{await reviewQuote(button.dataset.id?{source:button.dataset.id}:{})}catch(error){if(active())notify(error.message)}finally{if(button.isConnected)button.disabled=false}});
     bind('quotes');document.querySelector('#ask-ai').onclick=()=>askAbout('quotes',id,q.title);document.querySelector('#quote-controls').onclick=async ev=>{const b=ev.target.closest('button');if(!b)return;ev.stopPropagation();b.disabled=true;try{
       if(b.dataset.work==='edit')return editor(q);
       if(b.dataset.work==='link'){await navigator.clipboard.writeText(q.public_url);notify('Ссылка скопирована');return}
       if(b.dataset.work==='publish'&&q.published_version){await reviewQuote({publish:true});return}
-      if(b.dataset.work==='publish'){const root=openModal('Отправить новую версию','Клиент увидит зафиксированные позиции, стоимость и условия.',`<form>${field('comment','Что изменилось по сравнению с прошлой версией','','textarea')}${formEnd('Зафиксировать и отправить')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{await api('/quotes/'+id+'/publish',{method:'POST',body:JSON.stringify({revision:q.revision,comment:d.comment})});closeModal();await quoteDetail(id)});return}
+      if(b.dataset.work==='publish'){const root=openModal('Отправить новую версию','Клиент увидит зафиксированные позиции, стоимость и условия.',`<form>${field('comment','Что изменилось по сравнению с прошлой версией','','textarea')}${formEnd('Зафиксировать и отправить')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;await api('/quotes/'+id+'/publish',{method:'POST',body:JSON.stringify({revision:q.revision,comment:d.comment,review_confirmed:true})});closeModal();await quoteDetail(id)});return}
       if(b.dataset.work==='project'){const r=await api('/quotes/'+id+'/project',{method:'POST'});return entityDetail('projects',r.project.id)}
       if(b.dataset.work==='copy'){const r=await api('/quotes/'+id+'/copy',{method:'POST'});return editor(r.quote)}
       if(b.dataset.work==='document')return documentForm(id);
@@ -296,6 +328,7 @@ window.Workspace = (() => {
     const custom=await customControls('estimates',q.custom_fields);
     if(!active())return;
     view(mainTitle(q.id?'Редактирование сметы':'Новая смета','Черновик сохраняется автоматически. Отправьте клиенту, когда всё готово.',button('← К сметам','navigate','quotes'))+
+      ((q.ai_generated||q._ai_generated)&&window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():'')+
       `<form id="estimate-editor" class="quote-editor-form"><div class="workspace-columns editor-layout"><section class="editor-main">
         <section class="editor-section editor-basics" aria-labelledby="editor-basics-title">
           <div class="editor-section-head"><span class="editor-step" aria-hidden="true">01</span><div><h3 class="editor-section-title" id="editor-basics-title">Данные сметы</h3><p>Название документа, клиент и валюта расчёта.</p></div></div>
@@ -374,7 +407,7 @@ window.Workspace = (() => {
     };
     const controls=()=>Array.from(form.querySelectorAll('[name]')).filter(control=>control.name!=='catalog');
     const snapshot=()=>({fields:Object.fromEntries(controls().map(control=>[control.name,control.type==='checkbox'?control.checked:control.multiple?Array.from(control.selectedOptions).map(o=>o.value):control.value])),items:structuredClone(rows)});
-    const payload=()=>{const d=formObject(form);return {title:d.title,client:d.client,client_id:d.client_id||null,currency:d.currency,description:d.description,terms:d.terms,due_date:d.due_date,custom_fields:custom.read(form),expires_at:d.expiry?Math.floor(new Date(d.expiry+'T23:59:59').getTime()/1000):null,items:rows.map(({_raw,...row})=>row)}};
+    const payload=()=>{const d=formObject(form);return {title:d.title,client:d.client,client_id:d.client_id||null,currency:d.currency,description:d.description,terms:d.terms,due_date:d.due_date,ai_generated:Boolean(q.ai_generated||q._ai_generated),custom_fields:custom.read(form),expires_at:d.expiry?Math.floor(new Date(d.expiry+'T23:59:59').getTime()/1000):null,items:rows.map(({_raw,...row})=>row)}};
     const restore=stored=>{rows=structuredClone(stored.items).map(row=>({line_id:rowId(),...row}));for(const [key,value] of Object.entries(stored.fields)){const control=form.elements[key];if(!control)continue;if(control.type==='checkbox')control.checked=value;else if(control.multiple)Array.from(control.options).forEach(option=>option.selected=value.includes(option.value));else control.value=value??''}selectedRows.clear();lastBulk=null;clearBulk();paint();window.SmetraSelects?.enhance(form)};
     const historyState=()=>{form.querySelector('#editor-undo').disabled=!history.canUndo;form.querySelector('#editor-redo').disabled=!history.canRedo};
     paint();history=new window.SmetraQuoteEditorState.History(snapshot());
@@ -471,9 +504,93 @@ window.Workspace = (() => {
   }
   async function customFieldSettings(){
     const active=pageRequest();
-    const data=await api('/custom-fields');if(!active()||current!=='team')return;const section=document.createElement('section');section.className='panel';section.innerHTML=`<div class="section-top"><h3>Дополнительные поля</h3><button class="btn small" id="new-custom-field">+ Поле</button></div><p class="muted">Настройте клиентов, сметы и заказы под свой способ работы.</p>${data.items.map(f=>`<div class="record-line"><strong>${e(f.name)}</strong><small>${e({clients:'Клиенты',estimates:'Сметы',projects:'Заказы'}[f.entity_type])} · ${e(f.type)}</small></div>`).join('')}`;document.querySelector('#content').append(section);section.querySelector('button').onclick=()=>{const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});closeModal();await render('team')})};
+    const data=await api('/custom-fields');
+    if(!active()||current!=='team')return;
+    const host=document.querySelector('#content .team-page');if(!host)return;
+    const section=document.createElement('details');section.className='panel team-custom-fields';
+    const entityLabel={clients:'Клиенты',estimates:'Сметы',projects:'Заказы'};
+    const rows=data.items.map(f=>`<div class="team-custom-field-row"><span><strong>${e(f.name)}</strong><small>${e(entityLabel[f.entity_type]||f.entity_type)} · ${e(f.type)}</small></span></div>`).join('');
+    section.innerHTML=`<summary><span><strong>Дополнительные поля</strong><small>${data.items.length?data.items.length+' настроено':'Настройка карточек клиентов, смет и заказов'}</small></span><span class="team-settings-chevron" aria-hidden="true"></span></summary><div class="team-custom-fields-body"><p class="muted">Добавляйте только поля, которых действительно не хватает в стандартных карточках.</p><div class="team-custom-fields-list">${rows||'<p class="team-custom-fields-empty">Дополнительные поля ещё не созданы.</p>'}</div><button type="button" class="btn small" id="new-custom-field">Добавить поле</button></div>`;
+    host.append(section);
+    section.querySelector('#new-custom-field').onclick=()=>{
+      const root=openModal('Дополнительное поле','Поле появится в редакторе выбранной сущности.',`<form>${field('name','Название','','text','required maxlength="120"')}${select('entity_type','Где показывать',[['clients','Клиенты'],['estimates','Сметы'],['projects','Заказы']],'clients')}${select('type','Тип',[['text','Текст'],['number','Число'],['date','Дата'],['select','Выбор'],['multi_select','Множественный выбор'],['checkbox','Флажок'],['url','Ссылка']],'text')}${field('options','Варианты выбора — по одному в строке','','textarea')}${formEnd('Создать поле')}`);
+      bindCancel(root);
+      submitForm(root.querySelector('form'),async d=>{
+        d.options=d.options.split('\n').map(x=>x.trim()).filter(Boolean);
+        await api('/custom-fields',{method:'POST',body:JSON.stringify(d)});
+        closeModal();await render('team');
+      });
+    };
   }
-  async function aiDraft(){const root=openModal('Из описания — в черновик','Текст будет отправлен AI-провайдеру. Проверьте позиции и цены перед сохранением.',`<form>${field('text','Что нужно сделать?','','textarea','required maxlength="8000"')}<p class="muted">Неизвестные цены останутся нулевыми. Ничего не отправляется клиенту автоматически.</p>${formEnd('Составить черновик')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/ai/draft',{method:'POST',body:JSON.stringify(d)});closeModal();await editor(r.draft)})}
+  async function aiDraft(){
+    if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.ensureConsent()))return;
+    const root=openModal(
+      'Из описания и фото — в черновик',
+      'Добавьте фотографию помещения, объекта или чертежа. AI распознает видимые работы и предложит позиции для проверки.',
+      `<form id="estimate-ai-draft-form">
+        ${field('text','Что нужно сделать?','','textarea','maxlength="8000" placeholder="Например: оценить подготовку стен, укладку плитки и монтаж сантехники"')}
+        <section class="estimate-photo-upload">
+          <div class="estimate-photo-heading"><strong>Фотография объекта</strong><span>PNG или JPG · до 2 МБ</span></div>
+          <input id="estimate-ai-photo" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" hidden>
+          <button class="btn" type="button" id="estimate-ai-photo-pick">＋ Прикрепить фото</button>
+          <div id="estimate-ai-photo-preview" class="estimate-photo-preview" aria-live="polite"></div>
+          <p class="muted">По фото нельзя надёжно определить скрытые слои, точные размеры и состояние основания. Неизвестные цены останутся нулевыми.</p>
+        </section>
+        ${window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():''}
+        <p class="muted">Результат появится как черновик. Ничего не отправляется клиенту автоматически.</p>
+        ${formEnd('Составить черновик')}
+      </form>`
+    );
+    bindCancel(root);
+    const form=root.querySelector('#estimate-ai-draft-form');
+    const picker=form.querySelector('#estimate-ai-photo');
+    const choose=form.querySelector('#estimate-ai-photo-pick');
+    const preview=form.querySelector('#estimate-ai-photo-preview');
+    let photo=null,previewUrl='';
+    const clearPreviewUrl=()=>{if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=''}};
+    const renderPhoto=()=>{
+      preview.replaceChildren();
+      if(!photo)return;
+      const card=document.createElement('div');card.className='estimate-photo-card';
+      const image=document.createElement('img');image.src=previewUrl;image.alt='Предпросмотр фотографии объекта';
+      const details=document.createElement('div');details.className='estimate-photo-file';
+      const name=document.createElement('strong');name.textContent=photo.name;
+      const size=document.createElement('span');size.textContent=(photo.size/1024).toFixed(0)+' КБ';
+      const remove=document.createElement('button');remove.type='button';remove.className='btn small';remove.textContent='Убрать фото';remove.setAttribute('aria-label','Убрать прикреплённое фото');
+      remove.addEventListener('click',()=>{clearPreviewUrl();photo=null;picker.value='';renderPhoto()});
+      details.append(name,size,remove);card.append(image,details);preview.append(card);
+    };
+    choose.addEventListener('click',()=>picker.click());
+    picker.addEventListener('change',()=>{
+      const selected=picker.files?.[0]||null;
+      if(!selected){clearPreviewUrl();photo=null;renderPhoto();return}
+      const ext=selected.name.toLowerCase().split('.').pop();
+      const expected=ext==='png'?'image/png':['jpg','jpeg'].includes(ext)?'image/jpeg':'';
+      if(!expected||selected.type&&selected.type!==expected){
+        picker.value='';photo=null;clearPreviewUrl();renderPhoto();notify('Прикрепите изображение PNG, JPG или JPEG');return;
+      }
+      if(!selected.size||selected.size>2_000_000){
+        picker.value='';photo=null;clearPreviewUrl();renderPhoto();notify('Фото должно быть не больше 2 МБ');return;
+      }
+      clearPreviewUrl();photo=selected;previewUrl=URL.createObjectURL(selected);renderPhoto();
+    });
+    submitForm(form,async d=>{
+      if(!d.text.trim()&&!photo)throw Error('Добавьте описание или фотографию объекта');
+      const body={text:d.text.trim()};
+      if(photo){
+        const selected=photo;
+        const dataUrl=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();
+          reader.onload=()=>typeof reader.result==='string'?resolve(reader.result):reject(Error('Не удалось прочитать фотографию'));
+          reader.onerror=()=>reject(Error('Не удалось прочитать фотографию'));
+          reader.readAsDataURL(selected);
+        });
+        body.file={name:selected.name,mime:selected.type||(/\.png$/i.test(selected.name)?'image/png':'image/jpeg'),content:dataUrl.slice(dataUrl.indexOf(',')+1)};
+      }
+      const result=await api('/ai/draft',{method:'POST',body:JSON.stringify(body)});
+      clearPreviewUrl();closeModal();await editor({...result.draft,_ai_generated:true});
+    });
+  }
   async function attachments(key,id){
     const active=pageRequest();
     const data=await api('/files?'+key+'='+encodeURIComponent(id));
@@ -521,9 +638,18 @@ window.Workspace = (() => {
     });
   }
   async function documentForm(quoteId=''){
-    const result=await api('/quotes');const root=openModal('Создать документ','Документ сохранит условия выбранной версии.',`<form>${select('quote_id','Смета',result.quotes.map(q=>[q.id,q.title]),quoteId)}<div class="form-grid">${select('kind','Вид',[['estimate','Смета'],['proposal','Предложение'],['invoice','Счёт'],['act','Акт'],['contract','Договор-шаблон'],['reference','Справка об оплате']],'estimate')}${select('template','Оформление',['Minimal','Classic','Business','Modern'],'Minimal')}</div>${formEnd('Сформировать PDF')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{const r=await api('/documents',{method:'POST',body:JSON.stringify(d)});closeModal();await download('/documents/'+r.document.id+'/pdf','smetra-'+r.document.number+'.pdf');tab='documents';location.hash=tab;await window.render()});
+    const result=await api('/quotes');const root=openModal('Создать документ','Документ сохранит условия выбранной версии.',`<form>${select('quote_id','Смета',result.quotes.map(q=>[q.id,q.title]),quoteId)}<div class="form-grid">${select('kind','Вид',[['estimate','Смета'],['proposal','Предложение'],['invoice','Счёт'],['act','Акт'],['contract','Договор-шаблон'],['reference','Справка об оплате']],'estimate')}${select('template','Оформление',['Minimal','Classic','Business','Modern'],'Minimal')}</div>${formEnd('Сформировать PDF')}`);bindCancel(root);submitForm(root.querySelector('form'),async d=>{if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;const r=await api('/documents',{method:'POST',body:JSON.stringify({...d,review_confirmed:true})});closeModal();await download('/documents/'+r.document.id+'/pdf','smetra-'+r.document.number+'.pdf',{reviewed:true});tab='documents';location.hash=tab;await window.render()});
   }
-  async function download(path,filename){const headers={};if(sessionStorage.getItem('workspace_id'))headers['X-Workspace-Id']=sessionStorage.getItem('workspace_id');const response=await fetch('/api'+path,{credentials:'same-origin',headers});if(!response.ok){const r=await response.json();throw Error(r.error||'Не удалось скачать файл')}const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
+  async function download(path,filename,options={}){
+    const isPdf=/\.pdf(?:\?|$)|\/pdf(?:\?|$)/i.test(path);
+    if(isPdf&&!options.reviewed&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return false;
+    let guardedPath=path;
+    if(isPdf&&!/[?&]review_confirmed=1(?:&|$)/.test(guardedPath))guardedPath+=(guardedPath.includes('?')?'&':'?')+'review_confirmed=1';
+    const headers={};if(sessionStorage.getItem('workspace_id'))headers['X-Workspace-Id']=sessionStorage.getItem('workspace_id');
+    const response=await fetch('/api'+guardedPath,{credentials:'same-origin',headers});
+    if(!response.ok){const r=await response.json();throw Error(r.error||'Не удалось скачать файл')}
+    const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)
+  }
   async function importForm(kind){
     const catalog=kind==='catalog';
     const root=openModal(catalog?'Импорт расценок':'Импорт клиентов',catalog?'Вставьте таблицу из Excel или CSV. Изменения существующих позиций не затрагиваются.':'Колонки CSV: name, company, email, phone, notes.',`<form>${catalog?select('input_format','Формат',[['excel','Таблица из Excel'],['csv','CSV']], 'excel'):''}${field('csv',catalog?'Таблица / CSV':'Содержимое CSV','','textarea','required maxlength="50000"')}<p class="muted">${catalog?'Excel: название, цена в ₽, себестоимость в ₽, единица, категория. Первая строка с заголовками необязательна. ':' '}До 200 строк. Ошибки отменяют весь импорт.</p>${catalog?'<label class="catalog-duplicate-warning"><input id="import-allow-duplicates" type="checkbox"> Разрешить повторяющиеся названия и единицы</label>':''}${formEnd('Импортировать')}`);bindCancel(root);
@@ -561,7 +687,7 @@ window.Workspace = (() => {
       const r=await api('/public/quote?token='+encodeURIComponent(tokenValue));const q=r.quote;
       document.title=q.title+' — Предложение в Сметре';
       const canReply=['sent','viewed','changes_requested'].includes(q.approval_state);
-      host.innerHTML=`<div class="portal-heading"><span class="eyebrow">Предложение от ${e(r.author)}</span><h1>${e(q.title)}</h1><p class="muted">Для ${e(q.client)} · Версия ${q.published_version}</p>${status(q.approval_state)}</div><div class="workspace-columns"><section class="panel"><p class="preserve-lines">${e(q.description)}</p>${itemTable(q.items,q.currency)}<div class="quote-summary"><span>Итого</span><strong>${money(q.amount_kopecks,q.currency)}</strong></div>${q.due_date?`<p>Срок: ${e(q.due_date)}</p>`:''}<p class="muted preserve-lines">${e(q.terms)}</p></section><aside><section class="panel"><h3>${canReply?'Обсудим следующий шаг?':'Решение по предложению'}</h3>${canReply?`<form id="client-response">${field('name','Ваше имя','','text','required maxlength="120"')}${field('comment','Комментарий','','textarea')}<p class="form-error" role="alert"></p><button class="btn primary full-width" type="submit">Согласовать предложение</button><div class="row wrap"><button class="btn small" type="button" data-response="changes_requested">Нужны изменения</button><button class="btn small" type="button" data-response="rejected">Отклонить</button></div></form>`:`<p class="muted">${q.approval_state==='approved'?'Условия согласованы. Дальнейшая работа появится ниже.':q.approval_state==='draft'?'Исполнитель готовит новую версию. Эта версия сохранена для истории.':'Текущий статус: '+e(labels[q.approval_state]||q.approval_state)}</p>`}</section><section class="panel"><h3>История версий</h3>${r.versions.map(v=>`<div class="record-line"><div><strong>v${v.version}</strong><small>${e(v.comment)}</small></div><b>${money(v.amount_kopecks,q.currency)}</b></div>`).join('')}</section></aside></div>${r.project?`<section class="panel"><div class="section-top"><h2>Работа по заказу</h2>${status(r.project.status)}</div>${(r.stages||[]).map(s=>`<div class="record-line"><div><strong>${e(s.name)}</strong><small>${e(s.due_date)}</small></div>${status(s.status)}</div>`).join('')}<div class="quote-summary"><span>Получено исполнителем</span><strong>${money((r.payments||[]).reduce((s,p)=>s+p.amount_kopecks,0),q.currency)}</strong></div></section>`:''}<section class="panel"><h3>Обсуждение</h3><div id="public-comments">${r.comments.map(c=>`<article class="comment"><strong>${e(c.author)}</strong><small>${date(c.created_at)}</small><p class="preserve-lines">${e(c.message)}</p></article>`).join('')||'<p class="muted" data-comments-empty>Вопросы и комментарии к этому предложению.</p>'}</div><form id="public-comment"><div class="form-grid">${field('name','Ваше имя','','text','required maxlength="120"')}${field('comment','Комментарий','','textarea','required maxlength="3000"')}</div><p class="form-error" role="alert"></p><button class="btn" type="submit">Задать вопрос</button></form></section>`;
+      host.innerHTML=`<div class="portal-heading"><span class="eyebrow">Предложение от ${e(r.author)}</span><h1>${e(q.title)}</h1><p class="muted">Для ${e(q.client)} · Версия ${q.published_version}</p>${status(q.approval_state)}</div>${q.ai_generated&&window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():''}<div class="workspace-columns"><section class="panel"><p class="preserve-lines">${e(q.description)}</p>${itemTable(q.items,q.currency)}<div class="quote-summary"><span>Итого</span><strong>${money(q.amount_kopecks,q.currency)}</strong></div>${q.due_date?`<p>Срок: ${e(q.due_date)}</p>`:''}<p class="muted preserve-lines">${e(q.terms)}</p></section><aside><section class="panel"><h3>${canReply?'Обсудим следующий шаг?':'Решение по предложению'}</h3>${canReply?`<form id="client-response">${field('name','Ваше имя','','text','required maxlength="120"')}${field('comment','Комментарий','','textarea')}<p class="form-error" role="alert"></p><button class="btn primary full-width" type="submit">Согласовать предложение</button><div class="row wrap"><button class="btn small" type="button" data-response="changes_requested">Нужны изменения</button><button class="btn small" type="button" data-response="rejected">Отклонить</button></div></form>`:`<p class="muted">${q.approval_state==='approved'?'Условия согласованы. Дальнейшая работа появится ниже.':q.approval_state==='draft'?'Исполнитель готовит новую версию. Эта версия сохранена для истории.':'Текущий статус: '+e(labels[q.approval_state]||q.approval_state)}</p>`}</section><section class="panel"><h3>История версий</h3>${r.versions.map(v=>`<div class="record-line"><div><strong>v${v.version}</strong><small>${e(v.comment)}</small></div><b>${money(v.amount_kopecks,q.currency)}</b></div>`).join('')}</section></aside></div>${r.project?`<section class="panel"><div class="section-top"><h2>Работа по заказу</h2>${status(r.project.status)}</div>${(r.stages||[]).map(s=>`<div class="record-line"><div><strong>${e(s.name)}</strong><small>${e(s.due_date)}</small></div>${status(s.status)}</div>`).join('')}<div class="quote-summary"><span>Получено исполнителем</span><strong>${money((r.payments||[]).reduce((s,p)=>s+p.amount_kopecks,0),q.currency)}</strong></div></section>`:''}<section class="panel"><h3>Обсуждение</h3>${r.comments.map(c=>`<article class="comment"><strong>${e(c.author)}</strong><small>${date(c.created_at)}</small><p class="preserve-lines">${e(c.message)}</p></article>`).join('')||'<p class="muted">Вопросы и комментарии к этому предложению.</p>'}<form id="public-comment"><div class="form-grid">${field('name','Ваше имя','','text','required maxlength="120"')}${field('comment','Комментарий','','textarea','required maxlength="3000"')}</div><p class="form-error" role="alert"></p><button class="btn" type="submit">Задать вопрос</button></form></section>`;
       if(r.show_branding!==false)host.insertAdjacentHTML('beforeend','<footer class="public-branding"><span>\u0421\u0434\u0435\u043b\u0430\u043d\u043e \u0432 \u0421\u043c\u0435\u0442\u0440\u0435</span><a href="/app?register=1">\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u0432\u043e\u044e \u0441\u043c\u0435\u0442\u0443 \u2197</a></footer>');
       if(r.files?.length||r.documents?.length){const section=document.createElement('section');section.className='panel';section.innerHTML='<h3>Файлы и документы</h3>'+[...(r.files||[]).map(f=>({...f,kind:'file'})),...(r.documents||[]).map(f=>({...f,kind:'document'}))].map(f=>`<div class="record-line"><strong>${e(f.name)}</strong><a class="btn small" href="/api/public/${f.kind}?token=${encodeURIComponent(tokenValue)}&id=${encodeURIComponent(f.id)}" download>Скачать</a></div>`).join('');host.append(section)}
       const response=host.querySelector('#client-response');if(response){submitForm(response,async d=>{await api('/public/respond',{method:'POST',body:JSON.stringify({...d,token:tokenValue,version:q.published_version,action:'approved'})});await publicPage(tokenValue)});response.querySelectorAll('[data-response]').forEach(b=>b.onclick=async()=>{if(!response.reportValidity())return;b.disabled=true;try{await api('/public/respond',{method:'POST',body:JSON.stringify({...formObject(response),token:tokenValue,version:q.published_version,action:b.dataset.response})});await publicPage(tokenValue)}catch(err){response.querySelector('[role=alert]').textContent=err.message;b.disabled=false}})}

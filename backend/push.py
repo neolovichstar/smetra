@@ -34,11 +34,19 @@ def _safe_text(value, limit, fallback=""):
     return text[:limit] or fallback
 
 
-def enqueue(con, workspace_id, notification_id, title, body, entity_id):
+def enqueue(con, workspace_id, notification_id, title, body, entity_id, recipient_user_id=None):
     """Queue a minimal push only when the provider is configured."""
     if not is_configured():
         return
     now = _now()
+    if recipient_user_id:
+        con.execute(
+            "INSERT INTO push_outbox(id,workspace_id,notification_id,title,body,entity_id,created_at,next_attempt_at,recipient_user_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (str(uuid.uuid4()), workspace_id, notification_id, _safe_text(title, MAX_TITLE, "Сметра"),
+             _safe_text(body, MAX_BODY), _safe_text(entity_id, 100), now, now, recipient_user_id),
+        )
+        return
     con.execute(
         "INSERT INTO push_outbox(id,workspace_id,notification_id,title,body,entity_id,created_at,next_attempt_at) "
         "VALUES(?,?,?,?,?,?,?,?)",
@@ -320,6 +328,10 @@ def run_batch(con, limit=3):
             "WHERE m.workspace_id=? AND s.expires_at>? ORDER BY d.id",
             (event["workspace_id"], now),
         ).fetchall()
+        recipient = event["recipient_user_id"] if "recipient_user_id" in event.keys() else None
+        if recipient:
+            allowed = {r["id"] for r in con.execute("SELECT id FROM push_devices WHERE user_id=?", (recipient,))}
+            devices = [d for d in devices if d["id"] in allowed]
         if not devices:
             _complete_event_if_finished(con, event["id"], now)
             continue

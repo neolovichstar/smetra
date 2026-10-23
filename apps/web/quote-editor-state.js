@@ -55,6 +55,7 @@
       async flush(){let result;for(let n=0;n<4;n++){result=await save();if(!result||!active()||blocked)return null;if(!pending&&JSON.stringify(options.data())===saved)return result}schedule();return null},
       retry(){attempt=0;return save()},
       restore(value){if(value.pending)pending=clone(value.pending);persist();schedule(0)},
+      synchronize(value){quote=clone(value);saved=JSON.stringify(options.data());pending=null;blocked=false;attempt=0;clearTimeout(timer);if(active()){options.accept(quote,false);persist();state('saved','Сохранено')}return quote},
       conflict(base){if(base)quote=clone(base);blocked=true;pending=null;clearTimeout(timer);state('conflict','Смета изменилась на сервере. Правки не перезаписаны.');persist()},
       stop(keep=true){if(keep)persist();stopped=true;clearTimeout(timer);window.removeEventListener('online',online);window.removeEventListener('beforeunload',beforeUnload)},
       get quote(){return quote},get blocked(){return blocked}

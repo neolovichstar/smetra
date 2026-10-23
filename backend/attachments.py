@@ -23,6 +23,13 @@ def directory():
     ).resolve()
 
 
+def workspace_storage_limit(service):
+    from backend.plan_catalog import workspace_summary
+    summary = workspace_summary(service.con, service.wid, stamp())
+    # Preserve the existing free attachment allowance; paid plans expand it.
+    return max(100_000_000, summary["storage_bytes"])
+
+
 def maximum_upload():
     # Base64 adds a third to the file size. Keep the complete JSON request
     # below Vercel's 4.5 MB transport limit; local deployments retain 5 MB.
@@ -144,8 +151,8 @@ def _route(service, method, parts, query, data):
         used = service.con.execute(
             "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
         ).fetchone()[0]
-        if used - row["size"] + len(raw) > 100_000_000:
-            raise DomainError(413, "Лимит хранилища пространства — 100 МБ")
+        if used - row["size"] + len(raw) > workspace_storage_limit(service):
+            raise DomainError(413, "Достигнут лимит хранилища текущего тарифа")
         digest = hashlib.sha256(raw).hexdigest()
         if digest == row["sha256"]:
             return 200, {"file": {"id": row["id"], "name": row["name"], "size": len(raw), "sha256": digest}}
@@ -329,8 +336,8 @@ def _route(service, method, parts, query, data):
     used = service.con.execute(
         "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
     ).fetchone()[0]
-    if used + len(raw) > 100_000_000:
-        raise DomainError(413, "Лимит хранилища пространства — 100 МБ")
+    if used + len(raw) > workspace_storage_limit(service):
+        raise DomainError(413, "Достигнут лимит хранилища текущего тарифа")
     public = integer(data.get("public", 0), "Публичность", 0, 1)
     if public and not references["quote_id"]:
         raise DomainError(400, "Публичный файл должен быть привязан к смете")

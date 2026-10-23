@@ -1,17 +1,17 @@
 # Подключение входа, почты и магазина
 
-Сайт и Android уже используют общий сервер `https://smetra.vercel.app`. Вход по почте доступен; Яндекс ID, VK ID, Mail и Одноклассники автоматически появятся активными после настройки указанных ниже переменных. Секреты добавляйте только в **Vercel → Project smetra → Settings → Environment Variables**, для Production, затем публикуйте новую сборку. Не вставляйте их в `.env.example`, GitHub или Android APK.
+Сайт и Android уже используют общий сервер `https://smetra.online`. Вход по почте доступен; Яндекс ID, VK ID, Mail и Одноклассники автоматически появятся активными после настройки указанных ниже переменных. Секреты добавляйте только в **Vercel → Project smetra → Settings → Environment Variables**, для Production, затем публикуйте новую сборку. Не вставляйте их в `.env.example`, GitHub или Android APK.
 
 ## Яндекс ID
 
 1. Создайте OAuth-приложение в [кабинете Яндекса](https://yandex.ru/dev/id/doc/ru/register-auth), выберите веб-сервис и разрешения на профиль и адрес почты (`login:info`, `login:email`).
-2. В Redirect URI укажите **точно** `https://smetra.vercel.app/api/auth/oauth/yandex/callback`.
+2. В Redirect URI укажите **точно** `https://smetra.online/api/auth/oauth/yandex/callback`.
 3. Перенесите ID приложения в `YANDEX_CLIENT_ID`, секрет в `YANDEX_CLIENT_SECRET` в Vercel. Не передавайте секрет Android-приложению.
 
 ## VK ID, Mail и Одноклассники
 
 1. В приложении VK ID **54792875** настройте веб-платформу. Это публичный `APP_ID`; запишите его в `VK_CLIENT_ID` в Vercel.
-2. Разрешите три точных адреса возврата: `https://smetra.vercel.app/api/auth/oauth/vk/callback`, `https://smetra.vercel.app/api/auth/oauth/mail/callback`, `https://smetra.vercel.app/api/auth/oauth/ok/callback`. Адрес `/app` из примера виджета здесь не подходит: обмен одноразового кода и привязку профиля выполняет сервер.
+2. Разрешите три точных адреса возврата: `https://smetra.online/api/auth/oauth/vk/callback`, `https://smetra.online/api/auth/oauth/mail/callback`, `https://smetra.online/api/auth/oauth/ok/callback`. Адрес `/app` из примера виджета здесь не подходит: обмен одноразового кода и привязку профиля выполняет сервер.
 3. Включите способы входа Mail и Одноклассники в настройках VK ID, если они недоступны по умолчанию. Все три кнопки используют одну VK ID-интеграцию и одно пространство аккаунтов.
 
 Использован официальный [VK ID Web SDK](https://github.com/VKCOM/vkid-web-sdk) как справочник по OAuth 2.1 и PKCE. Сметра использует собственные кнопки вместо загрузки SDK с CDN: так единый серверный сценарий работает и для сайта, и для Android. Перед запуском проверьте реальный вход, отмену авторизации и привязку аккаунта каждым способом. Наличие `APP_ID` само по себе не подтверждает, что redirect URL разрешены в кабинете VK ID.
@@ -36,4 +36,13 @@ Android открывает страницу провайдера в систем
 
 ## Платежи и ассистент
 
-Боевой магазин ЮKassa подключён через защищённые переменные Vercel; webhook `https://smetra.vercel.app/api/webhooks/yookassa`, контрольную оплату и ручные чеки «Мой налог» ещё нужно проверить. Шаги описаны в [PAYMENTS.md](../PAYMENTS.md). Оплата тарифа оформляется только на сайте, Android использует тот же доступ. Ассистент работает с серверным `OPENROUTER_API_KEY` и `OPENROUTER_MODEL=openrouter/free`: 3 сообщения в месяц на бесплатном тарифе и 100 на «Про». Запросы к модели расходуют бесплатную квоту OpenRouter; предложения об изменении данных требуют подтверждения в интерфейсе.
+Боевой магазин ЮKassa подключён через защищённые переменные Vercel; webhook `https://smetra.online/api/webhooks/yookassa`, контрольную оплату и ручные чеки «Мой налог» ещё нужно проверить. Шаги описаны в [PAYMENTS.md](../PAYMENTS.md). Оплата тарифа оформляется только на сайте, Android использует тот же доступ. Ассистент работает с серверным `OPENROUTER_API_KEY` и `OPENROUTER_MODEL=openrouter/free`: 3 сообщения в месяц на бесплатном тарифе и 100 на «Про». Запросы к модели расходуют бесплатную квоту OpenRouter; предложения об изменении данных требуют подтверждения в интерфейсе.
+
+
+## Яндекс.Диск и Google Drive
+
+Раздел «Материалы» использует OAuth на сервере; Android SDK для веб-интеграции не нужен. Токены шифруются ключом `CLOUD_TOKEN_ENCRYPTION_KEY`, который хранится только в Vercel. Сгенерируйте его локально командой `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`, сохраните в Production и не меняйте без плана переподключения всех облаков.
+
+Для Яндекс.Диска по умолчанию используются `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET`. Откройте существующее приложение Яндекс ID и добавьте право чтения Диска (`cloud_api:disk.read`), если оно доступно для этого приложения. Точный callback: `https://smetra.online/api/auth/oauth/yandex/callback`. Яндекс OAuth выдаёт только права, разрешённые в настройках приложения; наличия ID и секрета недостаточно, чтобы получить доступ к файлам.
+
+Можно задать отдельный клиент через `YANDEX_DISK_CLIENT_ID`, `YANDEX_DISK_CLIENT_SECRET` и `YANDEX_DISK_REDIRECT_URI`. Google Drive требует `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET` и разрешённый callback `https://smetra.online/api/premium/cloud/oauth/callback`. Используется read-only доступ. Мониторинг и синхронизацию выполняют маршруты Vercel Cron, защищённые `CRON_SECRET`; проверьте его наличие в Production перед запуском.

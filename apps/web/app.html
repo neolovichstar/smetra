@@ -10,7 +10,7 @@
   <script src="/theme-init.js"></script>
   <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/black.css?v=20261022-glass-ui-v1">
+  <link rel="stylesheet" href="/black.css?v=20261023-workspace-canvas-v1">
   <link rel="stylesheet" href="/cabinet.css">
   <link rel="stylesheet" href="/assistant.css">
   <link rel="stylesheet" href="/admin.css">
@@ -24,9 +24,10 @@
   <link rel="stylesheet" href="/select-menu.css">
   <link rel="stylesheet" href="/data-export.css">
   <link rel="stylesheet" href="/design-system.css">
-  <link rel="stylesheet" href="/ui-foundation.css?v=20261022-glass-ui-v5">
+  <link rel="stylesheet" href="/ui-foundation.css?v=20261023-workspace-unified-v7">
   <link rel="stylesheet" href="/quote-editor.css?v=20261022-quote-editor-v1">
-  <link rel="stylesheet" href="/dashboard-polish.css?v=20261022-dashboard-layout-v2">
+  <link rel="stylesheet" href="/premium-tools.css">
+  <link rel="stylesheet" href="/dashboard-polish.css?v=20261022-dashboard-layout-v4">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#content">К содержимому</a>
@@ -41,7 +42,7 @@
       <nav class="workspace-modes" aria-label="Режим работы"><button type="button" data-mode="dashboard" aria-pressed="true">Сметы</button><button type="button" data-mode="assistant" aria-pressed="false">Ассистент</button></nav>
       <div class="app-nav-actions">
         <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
-        <span id="header-user" class="nav-user"></span>
+        
         <button class="btn small" id="theme" type="button">Тема</button>
       </div>
     </div>
@@ -80,6 +81,7 @@
           <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
         </form>
       </details>
+      <div class="field hidden" id="legal-consent-field"><label class="estimate-consent-check"><input id="legal-consent" type="checkbox"><span>Я согласен с <a href="/terms" target="_blank" rel="noopener noreferrer">Пользовательским соглашением</a> и <a href="/disclaimer" target="_blank" rel="noopener noreferrer">Политикой отказа от ответственности (As Is)</a>.</span></label></div>
       <div class="auth-provider-block"><div class="auth-provider-divider"><span>или используйте российский сервис</span></div><div id="provider-buttons" class="provider-buttons" aria-label="Способ входа"></div><p id="provider-note" class="auth-provider-pending"></p></div>
       <p id="auth-status" class="auth-status" role="status"></p>
       <p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
@@ -92,7 +94,7 @@
       <div class="sidebar-scroll">
         <div class="sidebar-group"><span class="sidebar-heading">Основное</span><button data-tab="dashboard" class="active">Сегодня</button><button data-tab="assistant">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="projects">Проекты</button><button data-tab="clients">Клиенты</button></div>
         <div class="sidebar-group"><span class="sidebar-heading">Работа</span><button data-tab="construction">Объекты и замеры</button><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="finance">Платежи</button></div>
-        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="premium">Материалы</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button><button data-tab="chats">Чаты объектов</button></div>
         <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
       </div>
       <div class="sidebar-foot">
@@ -108,13 +110,14 @@
     <main class="main" id="content" tabindex="-1"></main>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261022-glass-voice-v2" defer></script>
+  <script src="/features.js?v=20261023-lazy-features-v4" defer></script>
   <script src="/select-menu.js" defer></script>
-  <script src="/app.js?v=20261022-glass-status-v6" defer></script>
-  <script src="/workspace.js" defer></script>
+  <script src="/app.js?v=20261023-render-race-v7" defer></script>
+  <script src="/workspace.js?v=20261023-team-ui-v2" defer></script>
   <script src="/black.js" defer></script>
   <script src="/file-preview.js" defer></script>
   <script src="/file-editor.js" defer></script>
   <script src="/product-ui.js?v=20261022-outline-icons-v7" defer></script>
+<script src="/communication-center.js" defer></script>
 </body>
 </html>

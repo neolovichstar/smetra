@@ -12,6 +12,11 @@ import urllib.request
 from http.cookies import SimpleCookie
 from backend.business import DomainError, identity, stamp, transaction
 
+try:
+    from backend.estimate_safety import REGISTRATION_CONSENT_VERSION
+except ModuleNotFoundError:
+    from estimate_safety import REGISTRATION_CONSENT_VERSION
+
 
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
@@ -151,6 +156,16 @@ def route(h, con, method, path, query, origin):
     callback = origin + "/api/auth/oauth/" + provider + "/callback"
     if action == "start":
         h.throttle("oauth:" + h.client_address[0], 20, 600)
+        intent = query.get("intent", ["login"])[0]
+        if intent not in ("login", "register"):
+            return redirect(h, origin + "/app?auth_error=expired")
+        legal_accepted = (
+            intent == "register"
+            and query.get("legal_acceptance", [""])[0] == "1"
+            and query.get("legal_version", [""])[0] == REGISTRATION_CONSENT_VERSION
+        )
+        if intent == "register" and not legal_accepted:
+            return redirect(h, origin + "/app?auth_error=registration_consent_required")
         app_challenge = query.get("app_challenge", [""])[0]
         if app_challenge and not re.fullmatch(r"[A-Za-z0-9_-]{43}", app_challenge):
             raise DomainError(400, "Неверный запрос приложения")
@@ -161,7 +176,7 @@ def route(h, con, method, path, query, origin):
             secrets.token_urlsafe(32),
         )
         con.execute(
-            "INSERT INTO oauth_states(state_hash,provider,verifier,browser_hash,app_challenge,link_user_id,expires_at) VALUES(?,?,?,?,?,?,?)",
+            "INSERT INTO oauth_states(state_hash,provider,verifier,browser_hash,app_challenge,link_user_id,expires_at,registration_intent,legal_acceptance,legal_version) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
                 digest(state),
                 provider,
@@ -170,6 +185,9 @@ def route(h, con, method, path, query, origin):
                 app_challenge,
                 linked,
                 stamp() + 600,
+                1 if intent == "register" else 0,
+                1 if legal_accepted else 0,
+                REGISTRATION_CONSENT_VERSION if legal_accepted else "",
             ),
         )
         params = dict(
@@ -248,6 +266,12 @@ def route(h, con, method, path, query, origin):
         elif account:
             user_id = account["id"]
         else:
+            if (
+                row["registration_intent"] != 1
+                or row["legal_acceptance"] != 1
+                or row["legal_version"] != REGISTRATION_CONSENT_VERSION
+            ):
+                return redirect(h, origin + "/app?auth_error=registration_consent_required")
             # Never merge accounts just because provider emails match.
             if (
                 email
@@ -275,6 +299,16 @@ def route(h, con, method, path, query, origin):
                     stamp(),
                     stamp() if not email.endswith('@identity.smetra.invalid') else None,
                 ),
+            )
+        if (
+            row["legal_acceptance"] == 1
+            and row["legal_version"] == REGISTRATION_CONSENT_VERSION
+            and not row["link_user_id"]
+        ):
+            con.execute(
+                "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(user_id,document_version) DO NOTHING",
+                (identity(), user_id, REGISTRATION_CONSENT_VERSION, stamp(), "registration"),
             )
         if not account and not row['link_user_id']:
             from backend.revenue import record

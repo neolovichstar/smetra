@@ -3,23 +3,84 @@
   "buildCommand": "python scripts/build_web.py",
   "outputDirectory": "dist/web",
   "framework": null,
-  "regions": ["fra1"],
-  "functions": {"api/index.py": {"maxDuration": 120, "includeFiles": "{backend/**,apps/web/assets/fonts/**}"}},
-  "rewrites": [
-    {"source": "/api/:path*", "destination": "/api/index"},
-    {"source": "/health", "destination": "/api/index"},
-    {"source": "/app", "destination": "/app.html"},
-    {"source": "/admin", "destination": "/admin.html"},
-    {"source": "/privacy", "destination": "/privacy.html"},
-    {"source": "/terms", "destination": "/terms.html"},
-    {"source": "/contacts", "destination": "/contacts.html"}
+  "regions": [
+    "fra1"
   ],
-  "headers": [{"source": "/(.*)", "headers": [
-    {"key": "X-Content-Type-Options", "value": "nosniff"},
-    {"key": "Referrer-Policy", "value": "no-referrer"},
-    {"key": "X-Frame-Options", "value": "DENY"},
-    {"key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"},
-    {"key": "Permissions-Policy", "value": "camera=(), microphone=(self), geolocation=()"},
-    {"key": "Strict-Transport-Security", "value": "max-age=31536000"}
-  ]}]
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 120,
+      "includeFiles": "{backend/**,apps/web/assets/fonts/**}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/app",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/contacts",
+      "destination": "/contacts.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(self), geolocation=()"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000"
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/product-monitor",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/cloud-sync",
+      "schedule": "20 3 * * *"
+    }
+  ]
 }

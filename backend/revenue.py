@@ -11,10 +11,12 @@ import secrets
 import time
 import uuid
 
+from backend.plan_catalog import public_catalog
+
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300}
+PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_plus_month': 50, 'team_month': 250, 'team_year': 1500}
 
 
 def now():
@@ -74,7 +76,11 @@ def pricing(con, user):
     launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
     return {'experiment': experiment, 'variant': assigned['variant'], 'plans': {
         'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366}},
+        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366},
+        'pro_plus_month': {'amount_kopecks': 69000, 'duration_days': 31},
+        'team_month': {'amount_kopecks': 399000, 'duration_days': 31},
+        'team_year': {'amount_kopecks': 3990000, 'duration_days': 366}},
+        'catalog': public_catalog(),
         'annual_saving_kopecks': prices['month']*12-prices['year'],
         'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
@@ -102,18 +108,28 @@ def activate(con, uid, name, quote_id):
         con.execute('UPDATE referral_rewards SET rewarded_at=?,period=? WHERE invitee_id=? AND rewarded_at IS NULL', (now(), period, uid))
 
 
-def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None):
+def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None, workspace_id=None):
+    from backend.business import ensure_workspace
+    workspace_id = workspace_id or ensure_workspace(con, user)
+    workspace = con.execute("SELECT * FROM workspaces WHERE id=? AND owner_id=?", (workspace_id, user["id"])).fetchone()
+    if not workspace:
+        raise ValueError("Only the owner may subscribe a workspace")
     previous = con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
     if previous:
-        if previous['plan'] != plan or previous['is_test'] != int(is_test) or (expected_amount is not None and previous['amount_kopecks'] != expected_amount):
+        if (previous['workspace_id'] or workspace_id) != workspace_id or previous['plan'] != plan or previous['is_test'] != int(is_test) or (expected_amount is not None and previous['amount_kopecks'] != expected_amount):
             raise ValueError('Checkout key belongs to another plan or shop mode')
         return previous
+    from backend.entitlements import PLAN_TIER
+    current_tier = PLAN_TIER.get(workspace["plan"], "starter")
+    target_tier = PLAN_TIER.get(plan, "starter")
+    if workspace["entitlement_until"] > now() and current_tier not in ("starter", target_tier):
+        raise ValueError("An active workspace cannot silently exchange its paid period for another tier")
     offer = pricing(con, user)
     option = offer['plans'][plan]
     if expected_amount is not None and expected_amount != option['amount_kopecks']:
         raise ValueError('Displayed price changed before checkout')
-    con.execute('INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
-                (str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'], option['duration_days'], offer['experiment']+':'+offer['variant'], source(origin), int(is_test), now(), offer['purchase_bonus'][plan]))
+    con.execute('INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages,workspace_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING',
+                (str(uuid.uuid4()), user['id'], key, plan, option['amount_kopecks'], option['duration_days'], offer['experiment']+':'+offer['variant'], source(origin), int(is_test), now(), offer['purchase_bonus'][plan], workspace_id))
     return con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
 
 
@@ -179,7 +195,7 @@ def dashboard(con):
         count(DISTINCT p.user_id) AS ever_paid FROM payments p JOIN billing_intents b ON b.payment_id=p.id WHERE {valid}''', ((t//86400)*86400,t-7*86400,start)).fetchone())
     population = dict(con.execute('SELECT count(*) AS users,sum(CASE WHEN entitlement_until>? AND blocked=0 THEN 1 ELSE 0 END) AS pro_access FROM users WHERE deleted_at IS NULL', (t,)).fetchone())
     paid = con.execute(f'''SELECT count(DISTINCT p.user_id) FROM payments p JOIN billing_intents b ON b.payment_id=p.id JOIN users u ON u.id=p.user_id WHERE {valid} AND u.entitlement_until>? AND u.deleted_at IS NULL AND u.blocked=0''', (t,)).fetchone()[0]
-    mrr = con.execute(f'''SELECT coalesce(sum(CASE WHEN p.plan='pro_year' THEN p.amount_kopecks/12.0 ELSE p.amount_kopecks END),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id JOIN users u ON u.id=p.user_id WHERE {valid} AND u.entitlement_until>? AND u.deleted_at IS NULL AND u.blocked=0 AND p.id=(SELECT p2.id FROM payments p2 JOIN billing_intents b2 ON b2.payment_id=p2.id WHERE p2.user_id=p.user_id AND p2.status='succeeded' AND b2.is_test=0 AND NOT EXISTS(SELECT 1 FROM refunds r2 WHERE r2.payment_id=p2.id AND r2.status='succeeded') ORDER BY p2.activated_at DESC,p2.id DESC LIMIT 1)''', (t,)).fetchone()[0]
+    mrr = con.execute(f'''SELECT coalesce(sum(CASE WHEN p.plan IN ('pro_year','team_year') THEN p.amount_kopecks/12.0 ELSE p.amount_kopecks END),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id JOIN users u ON u.id=p.user_id WHERE {valid} AND u.entitlement_until>? AND u.deleted_at IS NULL AND u.blocked=0 AND p.id=(SELECT p2.id FROM payments p2 JOIN billing_intents b2 ON b2.payment_id=p2.id WHERE p2.user_id=p.user_id AND p2.status='succeeded' AND b2.is_test=0 AND NOT EXISTS(SELECT 1 FROM refunds r2 WHERE r2.payment_id=p2.id AND r2.status='succeeded') ORDER BY p2.activated_at DESC,p2.id DESC LIMIT 1)''', (t,)).fetchone()[0]
     funnel = {r['name']:r['users'] for r in con.execute('SELECT name,count(DISTINCT user_id) AS users FROM growth_events WHERE created_at>=? GROUP BY name', (start,))}
     intent_stats = dict(con.execute('''SELECT count(*) AS attempts,
         coalesce(sum(CASE WHEN p.status='succeeded' THEN 1 ELSE 0 END),0) AS succeeded,
@@ -250,3 +266,41 @@ def dashboard(con):
         'economics':{'revenue_kopecks':totals['revenue_30d'],'ai_cost_kopecks':ai_cost,'payment_fees_kopecks':fees,'infrastructure_kopecks':infrastructure,
             'storage_kopecks':storage,'unknown_ai_requests':unknown_ai,'gross_margin_kopecks':totals['revenue_30d']-ai_cost-fees-infrastructure-storage,
             'costs_configured':all(os.getenv(key) is not None for key in ('PAYMENT_FEE_BPS','INFRA_MONTHLY_KOPECKS','STORAGE_MONTHLY_KOPECKS','AI_INPUT_KOPECKS_PER_MILLION','AI_OUTPUT_KOPECKS_PER_MILLION')) and (not unknown_ai or integer_env('AI_INPUT_KOPECKS_PER_MILLION',0)==integer_env('AI_OUTPUT_KOPECKS_PER_MILLION',0)==0)}}
+
+
+def rebuild_workspace_entitlement(con, user_id, workspace_id=None):
+    """Recompute from verified, non-refunded grants inside the payment transaction."""
+    from backend.business import ensure_workspace
+    from backend.plan_catalog import PURCHASES, CATALOG
+    if not workspace_id:
+        user = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        if not user:
+            return
+        workspace_id = ensure_workspace(con, user)
+    workspace = con.execute("SELECT owner_id FROM workspaces WHERE id=?", (workspace_id,)).fetchone()
+    if not workspace or workspace["owner_id"] != user_id:
+        raise ValueError("Payment workspace does not belong to its purchaser")
+    default_workspace_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + user_id))
+    grants = con.execute(
+        "SELECT p.plan,p.activated_at,b.duration_days FROM payments p "
+        "JOIN billing_intents b ON b.payment_id=p.id "
+        "WHERE p.user_id=? AND (b.workspace_id=? OR (b.workspace_id IS NULL AND ?=?)) "
+        "AND p.status='succeeded' AND p.activated_at IS NOT NULL "
+        "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') "
+        "ORDER BY p.activated_at,p.created_at,p.id", (user_id, workspace_id, workspace_id, default_workspace_id)
+    ).fetchall()
+    until, code, tier = 0, "free", "starter"
+    for grant in grants:
+        product = PURCHASES.get(grant["plan"])
+        if not product:
+            continue
+        next_tier, _, days = product
+        start = max(until, grant["activated_at"]) if next_tier == tier else grant["activated_at"]
+        until = start + (grant["duration_days"] or days) * 86400
+        code, tier = grant["plan"], next_tier
+    active = until > now()
+    con.execute(
+        "UPDATE workspaces SET plan=?,subscription_status=?,entitlement_until=?,seat_limit=? WHERE id=? AND owner_id=?",
+        (code if active else "free", "active" if active else "inactive", until,
+         CATALOG[tier]["seats"] if active else 1, workspace_id, user_id),
+    )

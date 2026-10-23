@@ -17,6 +17,8 @@ class AccountDeletion(unittest.TestCase):
         owner, _ = self.account('delete-team-owner')
         member, member_id = self.account('delete-team-member')
         shared = self.call('/workspace', token=owner)[1]['workspace']['id']
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET plan='team_month',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (self.mod.now()+86400, shared))
         self.assertEqual(self.call('/workspace/members', 'POST',
             {'email': 'delete-team-member@test.invalid', 'role': 'member'}, owner)[0], 200)
         body = {'title': 'Shared team work', 'client': 'QA', 'amount': 10000}
