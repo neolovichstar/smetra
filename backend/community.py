@@ -774,8 +774,8 @@ def _admin_overview(con):
         "chats_total": scalar("SELECT COUNT(*) FROM chat_conversations"),
         "support_open": scalar("SELECT COUNT(*) FROM chat_conversations WHERE kind='support' AND status<>'closed'"),
         "support_waiting_human": scalar("SELECT COUNT(*) FROM chat_conversations WHERE kind='support' AND status<>'closed' AND needs_human=1 AND assigned_admin_id IS NULL"),
-        "paid_subscriptions": active_subs + legacy_pro,
-        "revenue_kopecks": max(0, revenue-refunds),
+        "paid_subscriptions": active_subs,
+        "revenue_kopecks": paid_amount(),
         "revenue_today_kopecks": paid_amount(moment-86400),
         "revenue_30d_kopecks": paid_amount(moment-2592000),
         "pending_payments": scalar(
