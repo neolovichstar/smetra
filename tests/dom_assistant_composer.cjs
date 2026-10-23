@@ -9,9 +9,9 @@ async function setup(enabled=true,voice=false,remaining=3){
  w.load("let user={id:'qa'},tab='assistant'; const escapeHtml=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); const view=html=>document.querySelector('#content').innerHTML=html;");
  w.sessionStorage.setItem('workspace_id','qa-workspace');w.Workspace={currentWorkspaceId:()=> 'qa-workspace'};
  const quota={remaining,limit:3,plan:'free',resets_at:2000000000},requests=[],notices=[];
- let activeRecognition=null,microphoneTrackStopped=false;
+ let activeRecognition=null,microphoneTrackStopped=false,microphonePermissionRequests=0;
  if(voice){
-  Object.defineProperty(w.navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>({getTracks:()=>[{stop(){microphoneTrackStopped=true}}]})}});
+  Object.defineProperty(w.navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{microphonePermissionRequests++;return {getTracks:()=>[{stop(){microphoneTrackStopped=true}}]}}}});
   w.SpeechRecognition=class FakeSpeechRecognition{
    constructor(){activeRecognition=this;this.lang='';this.interimResults=false;this.continuous=false;this.maxAlternatives=1;}
    start(){this.started=true;this.onstart?.()}
@@ -28,19 +28,19 @@ async function setup(enabled=true,voice=false,remaining=3){
   throw Error('Unexpected path: '+path);
  };
  for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));await w.SmetraAssistant();await tick();
- return {w,doc:w.document,requests,notices,recognition:()=>activeRecognition,microphoneTrackStopped:()=>microphoneTrackStopped,close:()=>dom.window.close()};
+ return {w,doc:w.document,requests,notices,recognition:()=>activeRecognition,microphoneTrackStopped:()=>microphoneTrackStopped,microphonePermissionRequests:()=>microphonePermissionRequests,close:()=>dom.window.close()};
 }
 (async()=>{
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
- await test('microphone works with exhausted AI quota and produces an editable draft',async({w,doc,recognition,microphoneTrackStopped})=>{
+ await test('microphone works with exhausted AI quota and produces an editable draft',async({w,doc,recognition,microphonePermissionRequests})=>{
   const button=doc.querySelector('#assistant-send'),input=doc.querySelector('#assistant-input');
   assert.equal(button.dataset.uiIcon,'microphone');
   assert.equal(button.disabled,false,'voice input should not be blocked by exhausted AI quota');
   button.click();await tick();await tick();
   const rec=recognition();assert.ok(rec,'SpeechRecognition instance should be created');assert.equal(rec.started,true);
-  assert.equal(microphoneTrackStopped(),true,'temporary permission stream must be released');
+  assert.equal(microphonePermissionRequests(),0,'SpeechRecognition must not compete with a second permission request');
   assert.match(doc.querySelector('#assistant-status').textContent,/Слушаю/);
   rec.onresult({results:[{0:{transcript:'Составь смету'},isFinal:true}],resultIndex:0});
   rec.stop();await tick();

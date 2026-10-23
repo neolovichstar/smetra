@@ -100,9 +100,13 @@ def main():
             },
         )
         token = account["token"]
+        call("/me/legal-consent", {"accepted": True, "version": "2026-10-19-ai-estimate-v1"}, token)
         if os.getenv('SMETRA_ACTION_QA') == '1':
             with app.db() as con:
                 con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (int(time.time())+3600,int(time.time()),account['user']['id']))
+            with app.db() as con:
+                wid = app.business.ensure_workspace(con, account['user'])
+                con.execute("UPDATE workspaces SET plan='team_month',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (int(time.time())+3600,wid))
             call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member', 'legal_acceptance': True, 'legal_version': '2026-10-19-registration-v1'})
         from PIL import Image
         receipt_object = call('/construction/objects', {'name': 'Проверка чека'}, token)['object']['id']

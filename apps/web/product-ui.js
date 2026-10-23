@@ -58,7 +58,7 @@
         toggle.setAttribute('aria-expanded',String(opening));
         clearTimeout(closeTimer);items._closeTimer=null;
         if(opening){
-          items.hidden=false;items.classList.remove('is-closing');
+          items.hidden=false;if(items.classList.contains('is-closing'))items.classList.remove('is-closing');
           requestAnimationFrame(()=>items.classList.add('is-open'));
         }else{
           items.classList.remove('is-open');items.classList.add('is-closing');
@@ -81,7 +81,7 @@
     if(items){
       clearTimeout(items._closeTimer);items._closeTimer=null;
       const wasHidden=items.hidden||items.classList.contains('is-closing');
-      items.hidden=false;items.classList.remove('is-closing');
+      items.hidden=false;if(items.classList.contains('is-closing'))items.classList.remove('is-closing');
       items.previousElementSibling?.setAttribute('aria-expanded','true');
       if(wasHidden)requestAnimationFrame(()=>items.classList.add('is-open'));
     }

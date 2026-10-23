@@ -50,7 +50,7 @@ async function open(tab='direct'){
  mount();state.open=true;state.tab=tabs.some(t=>t[0]===tab)?tab:'direct';
  $('#communication-center').classList.add('is-open');$('#communication-center').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
  clearInterval(state.poll);await refresh(true);
- state.poll=setInterval(async()=>{if(state.open&&!state.busy){await refresh(false);if(state.current)await loadMessages(false)}},3500);
+ let lastRefresh=Date.now();state.poll=setInterval(async()=>{if(state.open&&!state.busy&&!document.hidden){if(Date.now()-lastRefresh>=30000){await refresh(false);lastRefresh=Date.now()}if(state.current)await loadMessages(false)}},8000);
  $('#communication-center [data-close]')?.focus();
 }
 function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.style.overflow=''}
@@ -229,7 +229,7 @@ async function adminPage(){
 }
 function watch(){
  const root=$('#content');if(!root||state.observer)return;
- state.observer=new MutationObserver(()=>{addTrigger();if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin')adminPage()});
+ state.observer=new MutationObserver(()=>{addTrigger();if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin'&&!root.querySelector('[data-comms-admin-overview]'))adminPage()});
  state.observer.observe(root,{childList:true,subtree:true});addTrigger();
  if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin')adminPage();
 }
