@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="/quote-editor.css?v=20261022-quote-editor-v1">
   <link rel="stylesheet" href="/premium-tools.css">
   <link rel="stylesheet" href="/dashboard-polish.css?v=20261024-minimal-v1">
-  <link rel="stylesheet" href="/auth-classic.css?v=20261024-yandex-v1">
+  <link rel="stylesheet" href="/auth-layout-v2.css?v=20261024-v2">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#content">К содержимому</a>
@@ -49,43 +49,65 @@
     </div>
   </header>
 
+  <header class="auth-site-header" aria-label="Навигация Сметры">
+    <div class="auth-site-inner">
+      <a class="brand" href="/" aria-label="Сметра — на главную">сметра<span class="brand-mark">.</span></a>
+      <nav class="auth-site-links" aria-label="Разделы сайта">
+        <a href="/#product">Возможности</a>
+        <a href="/#assistant">Ассистент</a>
+        <a href="/#pricing">Тарифы</a>
+      </nav>
+      <a class="auth-site-return" href="/">На главную <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
   <main id="auth" class="auth-wrap hidden">
-    <section class="auth-story" aria-label="О продукте">
-      <div class="auth-story-top"><span class="overline">ПРОСТРАНСТВО ДЛЯ РАБОТЫ</span><span class="auth-story-index">01 / 04</span></div>
-      <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
-      <h2>От идеи<br>до оплаты<span>.</span></h2>
-      <p>Смета, клиент и каждый следующий шаг — в одном рабочем пространстве.</p>
-
+    <section class="auth-story" aria-label="О Сметре">
+      <div class="auth-story-content">
+        <span class="auth-story-kicker">ВСЁ ДЛЯ ВАШЕЙ РАБОТЫ</span>
+        <h2>От идеи<br>до результата<span>.</span></h2>
+        <p>Сметы, клиенты и управление объектами в одном понятном пространстве.</p>
+        <div class="auth-story-art" aria-hidden="true">
+          <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
+        </div>
+        <div class="auth-story-foot"><span>СМЕТРА</span><span>РАБОТА ПОД КОНТРОЛЕМ</span></div>
+      </div>
     </section>
 
     <section class="auth-flow" aria-labelledby="auth-title">
-      <div class="auth-flow-top"><span class="overline">СМЕТРА / АККАУНТ</span><span class="auth-flow-step">ДЛЯ САЙТА И ANDROID</span></div>
-      <h1 id="auth-title">С возвращением.</h1>
-      <p id="auth-copy" class="auth-intro">Продолжите работу с того места, где остановились.</p>
-      <div class="auth-tabs" role="tablist" aria-label="Действие с аккаунтом">
-        <button id="auth-login-tab" type="button" role="tab" aria-selected="true">Войти</button>
-        <button id="auth-register-tab" type="button" role="tab" aria-selected="false">Создать аккаунт</button>
-      </div>
-      <details class="email-disclosure" id="email-disclosure" open>
-        <summary>Продолжить по почте</summary>
-        <form id="auth-form">
-          <div class="field hidden" id="name-field"><label for="name">Как к вам обращаться</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
-          <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
-          <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
-          <p id="auth-form-error" class="auth-form-error" role="alert"></p>
-          <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
-        </form>
-      </details>
-      <div class="field hidden" id="legal-consent-field"><label class="estimate-consent-check"><input id="legal-consent" type="checkbox"><span>Я согласен с <a href="/terms" target="_blank" rel="noopener noreferrer">Пользовательским соглашением</a> и <a href="/disclaimer" target="_blank" rel="noopener noreferrer">Политикой отказа от ответственности (As Is)</a>.</span></label></div>
-      <div class="auth-provider-block">
-        <div class="auth-provider-divider"><span>Единый вход для сайта и приложения</span></div>
-        <div id="provider-buttons" class="provider-buttons single" aria-label="Вход через Яндекс ID">
-          <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span></a>
+      <div class="auth-flow-inner">
+        <div class="auth-flow-top"><span class="overline">ВАШЕ ПРОСТРАНСТВО</span><span class="auth-flow-step">САЙТ И ANDROID</span></div>
+        <h1 id="auth-title">С возвращением.</h1>
+        <p id="auth-copy" class="auth-intro">Войдите в Сметру и продолжайте с того места, где остановились.</p>
+        <div class="auth-tabs" role="tablist" aria-label="Вход и регистрация">
+          <button id="auth-login-tab" type="button" role="tab" aria-selected="true">Войти</button>
+          <button id="auth-register-tab" type="button" role="tab" aria-selected="false">Регистрация</button>
         </div>
-        <p id="provider-note" class="auth-provider-pending"></p>
+        <details class="email-disclosure" id="email-disclosure" open>
+          <summary>Продолжить по почте</summary>
+          <form id="auth-form">
+            <div class="field hidden" id="name-field"><label for="name">Имя</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
+            <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
+            <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
+            <p id="auth-form-error" class="auth-form-error" role="alert"></p>
+            <button class="btn primary full-width" id="auth-submit" type="submit">Продолжить <span aria-hidden="true">↗</span></button>
+          </form>
+        </details>
+        <div class="field hidden" id="legal-consent-field">
+          <label class="estimate-consent-check" for="legal-consent">
+            <input id="legal-consent" type="checkbox">
+            <span>Принимаю <a href="/terms" target="_blank" rel="noopener noreferrer">условия использования</a> и <a href="/disclaimer" target="_blank" rel="noopener noreferrer">предупреждение об ответственности</a>.</span>
+          </label>
+        </div>
+        <div class="auth-provider-block">
+          <div class="auth-provider-divider" aria-hidden="true"><span>Быстрый и безопасный вход</span></div>
+          <div id="provider-buttons" class="provider-buttons single" aria-label="Вход через Яндекс ID">
+            <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+          </div>
+          <p id="provider-note" class="auth-provider-pending">Один аккаунт для сайта и приложения.</p>
+        </div>
+        <p id="auth-status" class="auth-status" role="status"></p>
+        <p class="auth-legal">Используя Сметру, вы принимаете <a href="/terms">условия сервиса</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
       </div>
-      <p id="auth-status" class="auth-status" role="status"></p>
-      <p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
     </section>
   </main>
 
@@ -113,9 +135,9 @@
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="/features.js?v=20261023-lazy-features-v4" defer></script>
   <script src="/select-menu.js" defer></script>
-  <script src="/app.js?v=20261023-render-race-v7" defer></script>
+  <script src="/app.js?v=20261024-auth-v2" defer></script>
   <script src="/workspace.js?v=20261023-team-ui-v2" defer></script>
-  <script src="/black.js" defer></script>
+  <script src="/black.js?v=20261024-auth-v2" defer></script>
   <script src="/file-preview.js" defer></script>
   <script src="/file-editor.js" defer></script>
   <script src="/product-ui.js?v=20261022-outline-icons-v7" defer></script>
