@@ -38,6 +38,9 @@ TABLES = TABLES | frozenset("push_devices push_outbox push_deliveries".split())
 TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
+TABLES = TABLES | frozenset(
+    "product_sources product_price_observations cloud_connections cloud_oauth_states cloud_folder_bindings cloud_files document_processing_jobs cloud_watch_channels".split()
+)
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
