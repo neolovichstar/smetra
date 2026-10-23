@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend import assistant, business, revenue, community
+from backend import assistant, business, revenue, community, attachments
 from backend.app import Handler
 import test_flows as flow_fixtures
 
@@ -217,6 +217,27 @@ class RevenueTests(unittest.TestCase):
         ).fetchone()
         self.assertEqual(account["plan"], "pro")
         self.assertEqual(account["entitlement_until"], solo["current_period_end"])
+
+    def test_file_storage_quota_tracks_active_subscription_tier(self):
+        user = self.account("storage-owner")
+        workspace_id = business.ensure_workspace(self.con, {"id": user["id"], "name": user["name"]})
+        service = SimpleNamespace(con=self.con, wid=workspace_id, user=user)
+
+        limit, plan = attachments.storage_limit(service)
+        self.assertEqual((limit, plan), (100_000_000, "free"))
+
+        for key, product, expected_plan, expected_limit in (
+            ("storage-solo", "pro_month", "pro_solo", 500 * 1024 * 1024),
+            ("storage-plus", "pro_plus_month", "pro_plus", 5 * 1024 * 1024 * 1024),
+            ("storage-team", "team_month", "team", 15 * 1024 * 1024 * 1024),
+            ("storage-business", "business_month", "business", 100 * 1024 * 1024 * 1024),
+        ):
+            self.purchase(user, key=key+"_checkout", plan=product)
+            limit, plan = attachments.storage_limit(service)
+            self.assertEqual((limit, plan), (expected_limit, expected_plan))
+            with self.assertRaises(business.DomainError) as raised:
+                attachments.check_storage_budget(service, limit, 0, 1)
+            self.assertEqual(raised.exception.status, 413)
 
     def test_business_migration_upgrades_legacy_subscription_table(self):
         legacy_con = sqlite3.connect(":memory:", isolation_level=None)
