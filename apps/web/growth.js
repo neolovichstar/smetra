@@ -116,10 +116,14 @@ async function billing(active){
   const launchOffer=document.querySelector('#billing-launch-offer');
   if(pricing.launch_offer&&launchOffer){launchOffer.hidden=false;launchOffer.textContent=e(pricing.launch_offer.label)+' · до '+date(pricing.launch_offer.until);}
   const tiers=pricing.catalog||[];
-  let tierId=tiers[0]?.id||'pro_solo',annual=false;
-  const checkout=document.querySelector('#upgrade-checkout');
   const tierPlan=(entry,period)=>entry?.[period==='year'?'annual_plan':'plan']||'pro_month';
-  let plan=tierPlan(tiers.find(t=>t.id===tierId),'month');
+  const workspaceTier={'pro_solo':'pro_solo','pro_plus':'pro_plus','team':'team_company','business':'business_partner'};
+  let tierId=workspaceTier[space.workspace?.plan]||tiers[0]?.id||'pro_solo';
+  const currentTier=tiers.find(t=>t.id===tierId)||tiers[0];
+  const currentTierPayment=b.payments.find(p=>p.status==='succeeded'&&[currentTier?.plan,currentTier?.annual_plan].includes(p.plan));
+  let annual=Boolean(currentTierPayment&&currentTier.annual_plan&&currentTierPayment.plan===currentTier.annual_plan);
+  const checkout=document.querySelector('#upgrade-checkout');
+  let plan=tierPlan(currentTier,annual?'year':'month');
   const paint=()=>{
    const tier=tiers.find(t=>t.id===tierId)||tiers[0];
    if(!tier)return;
