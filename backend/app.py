@@ -549,6 +549,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             public["/" + name] = (name, mime)
         public["/workspace.js"] = ("workspace.js", "text/javascript")
+        public["/communication-center.js"] = ("communication-center.js", "text/javascript")
         public["/admin.js"] = ("admin.js", "text/javascript")
         public["/admin.css"] = ("admin.css", "text/css")
         public["/growth.js"] = ("growth.js", "text/javascript")
@@ -637,6 +638,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def api(self, method, path, query, con):
+        # Keep local/SQLite and Vercel/PostgreSQL behavior aligned for messaging.
+        from backend.community import handles, route as communication_route
+        if handles(path):
+            result = communication_route(self, method, path, query, con)
+            if result is not None:
+                return result
+            raise ApiError(404, "Не найдено")
+
         if path == '/api/billing/pricing' and method == 'GET':
             experiment,variants=revenue.configuration()
             cheapest=min(variants.values(),key=lambda v:v['month'])
