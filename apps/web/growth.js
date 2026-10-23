@@ -40,13 +40,13 @@
   document.querySelector('#content')?.prepend(notice);
   notice.querySelector('.icon-button').onclick=()=>notice.remove();notice.querySelector('.primary').onclick=()=>{document.querySelector('#local-draft')?.click();sessionStorage.setItem('smetra.checkout.return.'+user.id,tab);sessionStorage.setItem('smetra.paywall.source',source);track('upgrade_clicked',source);tab='billing';location.hash='billing';render()};
  }
- async function billingStyles(){
+ function billingStyles(){
   if(document.querySelector('#billing-tier-styles'))return;
   const style=document.createElement('style');style.id='billing-tier-styles';
   style.textContent='.billing-tier-selector{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:24px 0 20px}.billing-tier-option{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 10px;min-width:0;padding:14px 15px;border:1px solid var(--line,#29292d);border-radius:13px;background:transparent;color:inherit;text-align:left;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}.billing-tier-option:hover{border-color:#777;background:#0c0c0d}.billing-tier-option:active{transform:scale(.99)}.billing-tier-option[aria-pressed=true]{border-color:#85858a;background:#121214;box-shadow:inset 0 0 0 1px #ffffff0c}.billing-tier-option>span{font-size:12px;font-weight:600;line-height:1.3;min-width:0}.billing-tier-option>strong{font-size:14px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.billing-tier-option>small{grid-column:1/-1;color:var(--muted,#999);font-size:10px}.billing-tier-option:focus-visible{outline:2px solid #c9c9c9;outline-offset:3px}.billing-perk-icon:not(:has(svg)){display:grid;place-items:center;font-size:11px;font-weight:600;border:1px solid #404045;border-radius:9px}@media(max-width:900px){.billing-tier-selector{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.billing-tier-option{padding:12px}}@media(max-width:420px){.billing-tier-option>span{font-size:11px}.billing-tier-option>strong{font-size:12px}}';
   document.head.append(style);
 }
-function billing(active){
+async function billing(active){
   billingStyles();
   const owner=user,revision=sessionRevision(),[b,space]=await Promise.all([api('/billing'),api('/workspace')]);if(!active()||sessionRevision()!==revision)return;
   const pricing=b.pricing;
