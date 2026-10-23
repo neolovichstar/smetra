@@ -903,11 +903,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if directory and not inbox_topic:
                 inbox_topic = secrets.token_urlsafe(32)
                 con.execute("UPDATE user_directory SET inbox_topic=?,updated_at=? WHERE user_id=?", (inbox_topic, now(), user["id"]))
+            requested_workspace = self.headers.get("X-Workspace-Id", "").strip()
+            if requested_workspace:
+                workspace = con.execute(
+                    "SELECT w.id,w.realtime_topic FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+                    "WHERE m.user_id=? AND w.id=? LIMIT 1",
+                    (user["id"], requested_workspace),
+                ).fetchone()
+                if not workspace:
+                    raise ApiError(404, "Рабочее пространство не найдено")
+            else:
+                workspace = con.execute(
+                    "SELECT w.id,w.realtime_topic FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
+                    "WHERE m.user_id=? ORDER BY CASE WHEN w.owner_id=? THEN 0 ELSE 1 END,w.created_at DESC LIMIT 1",
+                    (user["id"], user["id"]),
+                ).fetchone()
+            workspace_id = workspace["id"] if workspace else None
+            workspace_topic = workspace["realtime_topic"] if workspace else None
+            if workspace and not workspace_topic:
+                workspace_topic = secrets.token_urlsafe(32)
+                con.execute("UPDATE workspaces SET realtime_topic=? WHERE id=?", (workspace_topic, workspace_id))
             realtime_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
             publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
             enabled = bool(realtime_url.startswith("https://") and publishable_key)
-            return self.send_json(200, {"enabled":enabled,"url":realtime_url if enabled else "",
-                                        "key":publishable_key if enabled else "", "inbox_topic":inbox_topic})
+            return self.send_json(200, {
+                "enabled":enabled,"url":realtime_url if enabled else "",
+                "key":publishable_key if enabled else "", "inbox_topic":inbox_topic,
+                "workspace_id":workspace_id,"workspace_topic":workspace_topic,
+            })
         if (
             path in ("/api/people", "/api/conversations", "/api/community", "/api/support")
             or path.startswith("/api/conversations/")

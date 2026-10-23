@@ -543,12 +543,17 @@ def migrate(con):
         con.executescript(
             (Path(__file__).parent / "migrations" / "032_communication_support.sql").read_text(encoding="utf-8")
         )
-    for table, column in (("conversations", "realtime_topic"), ("user_directory", "inbox_topic")):
+    for table, column in (
+        ("conversations", "realtime_topic"),
+        ("user_directory", "inbox_topic"),
+        ("workspaces", "realtime_topic"),
+    ):
         present = {row["name"] for row in con.execute("PRAGMA table_info(" + table + ")")}
         if column not in present:
             con.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " TEXT")
     con.execute("UPDATE conversations SET realtime_topic=lower(hex(randomblob(32))) WHERE realtime_topic IS NULL OR realtime_topic=''")
     con.execute("UPDATE user_directory SET inbox_topic=lower(hex(randomblob(32))) WHERE inbox_topic IS NULL OR inbox_topic=''")
+    con.execute("UPDATE workspaces SET realtime_topic=lower(hex(randomblob(32))) WHERE realtime_topic IS NULL OR realtime_topic=''")
     con.executescript(
         (Path(__file__).parent / "migrations" / "033_realtime_conversation_topics.sql").read_text(encoding="utf-8")
     )

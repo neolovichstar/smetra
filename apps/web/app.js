@@ -154,8 +154,68 @@ function syncMobileSidebarGeometry(){
  }
 }
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
-function showAuth() { window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
-async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');if(profileName)profileName.textContent=user.name;if(avatar)avatar.textContent=(user.name||'С').trim().slice(0,1).toLocaleUpperCase('ru-RU');$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
+function showAuth() { stopWorkspaceRealtime();window.SmetraCommunications?.leave?.();window.SmetraRealtime?.close?.();window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
+let workspaceRealtimeOwner=null,workspaceRealtimeSelection=null,workspaceRealtimeReady=false;
+const workspaceRealtimeUnsubscribers=new Set();
+let workspaceRealtimeRefreshTimer=null,lastWorkspaceRealtimeNotice=0;
+function stopWorkspaceRealtime(){
+  for(const off of workspaceRealtimeUnsubscribers){try{off()}catch{}}
+  workspaceRealtimeUnsubscribers.clear();
+  if(workspaceRealtimeRefreshTimer!==null)clearTimeout(workspaceRealtimeRefreshTimer);
+  workspaceRealtimeRefreshTimer=null;
+  workspaceRealtimeOwner=null;workspaceRealtimeSelection=null;workspaceRealtimeReady=false;
+}
+function workspaceRealtimePageIsSafe(){
+  const safeTabs=new Set(['dashboard','quotes','clients','catalog','projects','tasks','leads','finance','calendar','notifications','activity','team']);
+  if(!safeTabs.has(tab))return false;
+  if(document.querySelector('input:focus,textarea:focus,select:focus,[contenteditable="true"]:focus'))return false;
+  if(document.querySelector('#quote-form,.editor-panel form,[role="dialog"]:not([hidden]),dialog[open],[data-workspace-editor="true"]'))return false;
+  return true;
+}
+async function ensureWorkspaceRealtime(owner=user){
+  if(!owner||owner!==user){stopWorkspaceRealtime();return;}
+  const selected=sessionStorage.getItem('workspace_id')||'';
+  if(workspaceRealtimeOwner===owner&&workspaceRealtimeSelection===selected&&workspaceRealtimeReady)return;
+  stopWorkspaceRealtime();workspaceRealtimeOwner=owner;workspaceRealtimeSelection=selected;
+  try{
+    const config=await api('/realtime/config');
+    if(user!==owner||workspaceRealtimeOwner!==owner||workspaceRealtimeSelection!==selected)return;
+    if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);
+    if(config.inbox_topic&&window.SmetraRealtime){
+      const off=window.SmetraRealtime.subscribe(config.inbox_topic,(eventName)=>{
+        if(user!==owner||!['inbox_changed','support_escalated'].includes(eventName))return;
+        if(tab==='admin')window.SmetraAdmin?.refresh?.();
+      });
+      workspaceRealtimeUnsubscribers.add(off);
+    }
+    if(config.workspace_topic&&window.SmetraRealtime){
+      const off=window.SmetraRealtime.subscribe(config.workspace_topic,(eventName)=>{
+        if(eventName!=='workspace_changed'||user!==owner)return;
+        clearApiCache();
+        if(workspaceRealtimeRefreshTimer!==null)clearTimeout(workspaceRealtimeRefreshTimer);
+        if(workspaceRealtimePageIsSafe()){
+          const currentTab=tab;
+          workspaceRealtimeRefreshTimer=setTimeout(()=>{
+            workspaceRealtimeRefreshTimer=null;
+            if(user===owner&&tab===currentTab&&workspaceRealtimePageIsSafe())render();
+          },180);
+        }else{
+          const now=Date.now();
+          if(now-lastWorkspaceRealtimeNotice>15000){
+            lastWorkspaceRealtimeNotice=now;
+            const content=$('#content');
+            if(content)content.dataset.workspaceUpdatesPending='true';
+          }
+        }
+      });
+      workspaceRealtimeUnsubscribers.add(off);
+    }
+    workspaceRealtimeReady=true;
+  }catch{
+    if(user===owner&&workspaceRealtimeOwner===owner)workspaceRealtimeReady=true;
+  }
+}
+async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');if(profileName)profileName.textContent=user.name;if(avatar)avatar.textContent=(user.name||'С').trim().slice(0,1).toLocaleUpperCase('ru-RU');$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;void ensureWorkspaceRealtime(owner);const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
 function quoteCard(q) {
@@ -168,6 +228,7 @@ async function render() {
   window.SmetraCommunications?.leave();
   if(!user)return;
   const owner=user,section=tab,mine=++renderRevision;
+  void ensureWorkspaceRealtime(owner);
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   $('#sidebar-profile')?.classList.toggle('active',tab==='profile');

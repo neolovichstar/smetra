@@ -135,6 +135,24 @@ class CommunicationTests(unittest.TestCase):
             self.assertEqual(critical["priority"], "urgent")
 
 
+    def test_realtime_config_returns_only_current_authorized_workspace_topic(self):
+        token, _ = self.account("realtime-topic-owner")
+        status, workspace_result = self.call("/workspace", token=token)
+        self.assertEqual(status, 200, workspace_result)
+        wid = workspace_result["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET realtime_topic='workspace-topic-capability-0001' WHERE id=?", (wid,))
+            con.execute("UPDATE user_directory SET inbox_topic='user-inbox-capability-0001' WHERE user_id=(SELECT id FROM users WHERE email='realtime-topic-owner@test.invalid')")
+        status, config = self.call("/realtime/config", token=token)
+        self.assertEqual(status, 200, config)
+        self.assertEqual(config["workspace_id"], wid)
+        self.assertEqual(config["workspace_topic"], "workspace-topic-capability-0001")
+        self.assertEqual(config["inbox_topic"], "user-inbox-capability-0001")
+        stranger, _ = self.account("realtime-topic-stranger")
+        status, denied = self.call("/realtime/config", token=stranger, workspace=wid)
+        self.assertEqual(status, 404)
+        self.assertNotIn("workspace-topic-capability-0001", json.dumps(denied))
+
     def test_community_rooms_are_joined_before_reading_and_posting(self):
         member, _ = self.account("community-member")
         stranger, _ = self.account("community-stranger")
