@@ -89,7 +89,12 @@ def validate_url(value, resolve_dns=True):
 
 
 class _NoCrossHostRedirect(urllib.request.HTTPRedirectHandler):
+    def __init__(self):
+        super().__init__()
+        self.count = 0
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.count += 1
         old = urllib.parse.urlsplit(req.full_url)
         new = urllib.parse.urlsplit(newurl)
         try:
@@ -97,13 +102,14 @@ class _NoCrossHostRedirect(urllib.request.HTTPRedirectHandler):
             new_port = new.port
         except ValueError:
             return None
-        if (old.scheme != "https" or new.scheme != "https" or
+        if (self.count > 2 or old.scheme != "https" or new.scheme != "https" or
                 old_host.lower() != new_host.lower() or new_port not in (None, 443) or
-                not _host_allowed(new_host) or req.get_header("X-Smetra-Redirects")):
+                not _host_allowed(new_host)):
             return None
-        # urllib doesn't expose a redirect counter on Request; prevent redirect loops
-        # through urllib's own limit and validate the destination in fetch_product().
-        req.add_header("X-Smetra-Redirects", "1")
+        try:
+            validate_url(newurl, resolve_dns=False)
+        except business.DomainError:
+            return None
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
