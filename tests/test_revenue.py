@@ -117,7 +117,7 @@ class RevenueTests(unittest.TestCase):
             ("plus-live", "pro_plus_month", "pro_plus", 1, False),
             ("team-live", "team_month", "team", 5, False),
             ("business-live", "business_year", "business", 15, False),
-            ("team-test", "team_month", "free", 1, True),
+            ("team-test", "team_month", "team", 5, True),
         ]
         for uid, plan, expected_tier, expected_seats, test_mode in cases:
             user = self.account(uid)
