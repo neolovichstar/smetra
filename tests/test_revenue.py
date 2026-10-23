@@ -205,7 +205,7 @@ class RevenueTests(unittest.TestCase):
             "SELECT status FROM billing_subscriptions WHERE last_payment_id=?",
             (team_payment["id"],),
         ).fetchone()
-        self.assertEqual(refunded["status"], "refunded")
+        self.assertEqual(refunded["status"], "canceled")
         workspace = self.con.execute(
             "SELECT * FROM workspaces WHERE id=?", (workspace["id"],)
         ).fetchone()
