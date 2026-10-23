@@ -100,6 +100,11 @@ def ensure_sqlite_schema(con):
         metadata TEXT NOT NULL DEFAULT '{}',
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS app_presence (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        last_seen_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_app_presence_seen ON app_presence(last_seen_at DESC);
       CREATE INDEX IF NOT EXISTS idx_chat_member_user ON chat_members(user_id, joined_at DESC);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id, created_at, id);
       CREATE INDEX IF NOT EXISTS idx_chat_support_queue ON chat_conversations(kind, needs_human, status, updated_at DESC);
@@ -372,6 +377,13 @@ def _support_ai_reply(user, user_stats, history, message):
 
 
 def _public_id_route(handler, method, path, query, con, user):
+    if path == "/api/profile/presence" and method == "POST":
+        con.execute(
+            "INSERT INTO app_presence(user_id,last_seen_at) VALUES(?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at",
+            (user["id"], now()),
+        )
+        return handler.send_json(200, {"ok": True})
     if path == "/api/profile/id" and method == "GET":
         return handler.send_json(200, {
             "id": user["id"], "public_id": make_public_id(user["id"]),
@@ -683,9 +695,11 @@ def _admin_overview(con):
     return {
         "as_of": moment,
         "users_total": users,
+        "users_online": scalar("SELECT COUNT(*) FROM app_presence WHERE last_seen_at>=?", (moment-120,)),
         "users_dau": scalar("SELECT COUNT(DISTINCT user_id) FROM events WHERE user_id IS NOT NULL AND created_at>=?", (moment-86400,)),
         "users_mau": scalar("SELECT COUNT(DISTINCT user_id) FROM events WHERE user_id IS NOT NULL AND created_at>=?", (moment-2592000,)),
         "estimates_total": quotes,
+        "estimates_30d": scalar("SELECT COUNT(*) FROM quotes WHERE created_at>=?", (moment-2592000,)),
         "estimates_sent": scalar("SELECT COUNT(*) FROM quotes WHERE status='sent'"),
         "estimates_approved": scalar("SELECT COUNT(*) FROM quotes WHERE status='accepted'"),
         "workspaces_total": scalar("SELECT COUNT(*) FROM workspaces"),
@@ -699,6 +713,13 @@ def _admin_overview(con):
         "support_waiting_human": scalar("SELECT COUNT(*) FROM chat_conversations WHERE kind='support' AND status<>'closed' AND needs_human=1 AND assigned_admin_id IS NULL"),
         "paid_subscriptions": active_subs + legacy_pro,
         "revenue_kopecks": max(0, revenue-refunds),
+        "revenue_today_kopecks": max(0,
+            scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM payments WHERE status='succeeded' AND created_at>=?", (moment-86400,))
+            - scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM refunds WHERE status='succeeded' AND created_at>=?", (moment-86400,))),
+        "revenue_30d_kopecks": max(0,
+            scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM payments WHERE status='succeeded' AND created_at>=?", (moment-2592000,))
+            - scalar("SELECT COALESCE(SUM(amount_kopecks),0) FROM refunds WHERE status='succeeded' AND created_at>=?", (moment-2592000,))),
+        "pending_payments": scalar("SELECT COUNT(*) FROM payments WHERE status='pending'"),
         "paid_transactions": scalar("SELECT COUNT(*) FROM payments WHERE status='succeeded'"),
         "tracked_events_30d": scalar("SELECT COUNT(*) FROM events WHERE created_at>=?", (moment-2592000,)),
     }
