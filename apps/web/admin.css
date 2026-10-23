@@ -181,3 +181,27 @@
 .admin-support-reply .btn{min-height:43px;flex:none;font-size:10px}
 @media(max-width:900px){.admin-ops-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-ops-metrics>div:nth-child(4n){border-right:1px solid #25262a}.admin-ops-metrics>div:nth-child(2n){border-right:0}.admin-ops-metrics>div:nth-last-child(-n+4){border-bottom:1px solid #25262a}.admin-ops-metrics>div:nth-last-child(-n+2){border-bottom:0}.admin-support-workspace{grid-template-columns:1fr}.admin-support-workspace .admin-ticket-list{max-height:300px}.admin-support-chat{min-height:480px}.admin-support-messages{max-height:58dvh}}
 @media(max-width:520px){.admin-ops-metrics strong{font-size:15px}.admin-ops-metrics>div{padding:12px 10px}.admin-support-chat-head{padding:13px}.admin-support-reply{flex-direction:column;align-items:stretch}.admin-support-reply .btn{width:100%}}
+
+/* Searchable, read-only communications audit. */
+.admin-comms-workspace{display:grid;grid-template-columns:minmax(260px,.75fr) minmax(0,1.25fr);gap:14px;align-items:start;margin-top:16px}
+.admin-chat-results{display:grid;gap:7px;max-height:760px;overflow:auto;min-width:0}
+.admin-chat-row{display:flex;align-items:flex-start;gap:12px;width:100%;padding:14px;border:1px solid #292b31;border-radius:11px;background:#0b0c0e;color:#eee;text-align:left;cursor:pointer}
+.admin-chat-row:hover{border-color:#555860;background:#121316}
+.admin-chat-row.is-selected{border-color:#777b85;background:#191a1e}
+.admin-chat-row-icon{display:grid;place-items:center;width:34px;height:34px;flex:none;border:1px solid #33353b;border-radius:9px;color:#c1c3ca;background:#151619;font-size:15px}
+.admin-chat-row-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.admin-chat-row-copy strong{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.admin-chat-row-copy small{color:#979aa4;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+.admin-chat-transcript{display:flex;flex-direction:column;min-width:0;min-height:560px;border:1px solid #292b31;border-radius:12px;background:#0b0c0e;overflow:hidden}
+.admin-chat-transcript-head{display:flex;justify-content:space-between;gap:12px;padding:17px;border-bottom:1px solid #292b31}
+.admin-chat-transcript-head h3{margin:6px 0;font-size:15px}
+.admin-chat-transcript-head p{margin:0;color:#9295a0;font-size:10px;overflow-wrap:anywhere}
+.admin-chat-participants{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;border-bottom:1px solid #292b31}
+.admin-chat-participants>span:first-child{width:100%;font-size:10px;color:#9295a0}
+.admin-chat-participant{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid #2c2e34;border-radius:8px;background:#111215;max-width:100%}
+.admin-chat-participant strong{font-size:10px;font-weight:600}
+.admin-chat-participant small{font-size:9px;color:#9295a0}
+.admin-chat-transcript-messages{display:flex;flex:1;flex-direction:column;gap:10px;padding:15px;max-height:65dvh;min-height:280px;overflow:auto}
+.admin-chat-transcript-messages .admin-support-message{width:min(95%,650px)}
+@media(max-width:900px){.admin-comms-workspace{grid-template-columns:1fr}.admin-chat-results{max-height:300px}.admin-chat-transcript{min-height:480px}}
+@media(prefers-reduced-motion:reduce){.admin-chat-row{transition:none}}

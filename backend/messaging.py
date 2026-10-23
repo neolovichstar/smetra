@@ -607,4 +607,37 @@ def handle(handler, con, user, method, path, query):
                     _insert_message(con, ticket["conversation_id"], None, "system", "К переписке подключился сотрудник поддержки.", {})
                 ticket = _ticket(con, ticket_id)
                 return {"ticket": _ticket_view(ticket), "messages": _support_messages(con, ticket)}
+    admin_conversation_match = re.fullmatch(r"/api/admin/conversations/([^/]+)/messages", path)
+    if admin_conversation_match:
+        if user["role"] != "admin":
+            raise _api_error(403, "Доступ только администраторам")
+        conversation_id = unquote(admin_conversation_match.group(1))
+        conversation = con.execute(
+            "SELECT id,kind,title,workspace_id,quote_id,object_id,category,status,created_by,created_at,updated_at "
+            "FROM conversations WHERE id=? AND kind<>'support'",
+            (conversation_id,),
+        ).fetchone()
+        if not conversation:
+            raise _api_error(404, "Переписка не найдена")
+        if method != "GET":
+            raise _api_error(405, "В административном просмотре переписка доступна только для чтения")
+        participants = con.execute(
+            "SELECT cm.user_id,cm.role,cm.joined_at,COALESCE(u.public_id,'') AS public_id,"
+            "COALESCE(u.name,'Удалённый пользователь') AS name "
+            "FROM conversation_members cm LEFT JOIN users u ON u.id=cm.user_id "
+            "WHERE cm.conversation_id=? ORDER BY cm.joined_at,cm.user_id",
+            (conversation_id,),
+        ).fetchall()
+        try:
+            from backend.app import audit
+            audit(con, user["id"], "admin.conversation.read", conversation_id, str(conversation["kind"]))
+        except Exception:
+            pass
+        return {
+            "conversation": dict(conversation),
+            "participants": [dict(row) for row in participants],
+            "messages": _messages(con, conversation_id, 100),
+            "read_only": True,
+        }
+
     raise _api_error(404, "Не найдено")

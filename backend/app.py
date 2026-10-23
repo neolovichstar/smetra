@@ -937,6 +937,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             or path.startswith("/api/community/")
             or path.startswith("/api/support/")
             or (path.startswith("/api/admin/support/") and path.endswith("/messages"))
+            or (path.startswith("/api/admin/conversations/") and path.endswith("/messages"))
         ):
             from backend import messaging
             payload = messaging.handle(self, con, user, method, path, query)
@@ -1283,6 +1284,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "SELECT * FROM users WHERE id=?", (user["id"],)
             ).fetchone()
             return self.send_json(200, {"user": user_view(current, con),"payments":[dict(r) for r in con.execute('SELECT id,status FROM payments WHERE user_id=? ORDER BY created_at DESC LIMIT 3',(user['id'],))]})
+        if path == "/api/admin/conversations" and method == "GET":
+            if user["role"] != "admin":
+                raise ApiError(403, "Доступ только администраторам")
+            search = str(query.get("q", [""])[0] or "").strip()
+            kind = str(query.get("kind", ["all"])[0] or "all").strip()
+            if len(search) > 80 or kind not in ("all", "direct", "quote", "workspace", "community"):
+                raise ApiError(400, "Некорректный фильтр переписок")
+            pattern = "%" + search.casefold() + "%"
+            rows = con.execute(
+                "SELECT c.id,c.kind,c.title,c.workspace_id,c.quote_id,c.object_id,c.category,c.status,"
+                "c.created_at,c.updated_at,"
+                "(SELECT count(*) FROM conversation_members cm WHERE cm.conversation_id=c.id) AS participant_count,"
+                "(SELECT count(*) FROM messages m WHERE m.conversation_id=c.id AND m.deleted_at IS NULL) AS message_count,"
+                "(SELECT max(m.created_at) FROM messages m WHERE m.conversation_id=c.id AND m.deleted_at IS NULL) AS last_message_at "
+                "FROM conversations c WHERE c.kind<>'support' AND (?='all' OR c.kind=?) "
+                "AND (?='' OR lower(c.title) LIKE ? OR lower(c.id) LIKE ? OR lower(c.category) LIKE ?) "
+                "ORDER BY c.updated_at DESC,c.id DESC LIMIT 100",
+                (kind, kind, search.casefold(), pattern, pattern, pattern),
+            ).fetchall()
+            return self.send_json(200, {"items": [dict(row) for row in rows], "limit": 100})
         if path == "/api/admin/overview" and method == "GET":
             # Keep this query portable: production uses PostgreSQL, while local
             # development and tests use SQLite. Pass the timestamp instead of

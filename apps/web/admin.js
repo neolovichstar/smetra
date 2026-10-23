@@ -163,6 +163,49 @@
       ${rows.length?`<div class="admin-audit-list">${rows.map(a=>`<div class="admin-audit"><span class="admin-audit-mark" aria-hidden="true"></span><div><strong>${label(auditNames[a.action]||a.action)}</strong><small>${label(a.actor_email||'Система')} · ${label(a.target)}${a.detail?' · '+label(a.detail):''}</small></div><time>${time(a.created_at)}</time></div>`).join('')}</div>`:empty('Действий пока нет','Записи появятся после управления доступом и обращениями.')}`;
   }
 
+  function chatsSection() {
+    return `<div class="admin-section-head"><div><span class="admin-section-index">03 / КОММУНИКАЦИИ</span><h2>Переписки</h2><p>Поиск по личным чатам, обсуждениям смет, объектам и сообществам. Просмотр сообщений фиксируется в журнале.</p></div><span class="admin-section-count">${count(state.conversations.length)} переписок</span></div>
+      <div class="admin-controls"><label class="admin-search"><span class="sr-only">Поиск переписки</span><span aria-hidden="true">⌕</span><input id="admin-chat-search" type="search" maxlength="80" placeholder="Название, ID или категория" value="${label(state.conversationSearch)}" autocomplete="off"></label>
+      <label class="admin-filter"><span class="sr-only">Тип переписки</span><select id="admin-chat-kind"><option value="all">Все личные и рабочие чаты</option><option value="direct">Личные</option><option value="quote">Сметы</option><option value="workspace">Объекты TEAM</option><option value="community">Сообщества</option></select></label><button class="btn small" type="button" data-admin-chats-refresh>Обновить</button></div>
+      <div class="admin-comms-workspace"><div id="admin-chat-results" class="admin-chat-results"><p class="admin-loading">Загружаем переписки…</p></div><section id="admin-chat-transcript" class="admin-chat-transcript" aria-live="polite">${empty('Выберите переписку','Содержание появится после выбора. Это только чтение; платёжные реквизиты сюда не попадают.')}</section></div>`;
+  }
+
+  async function loadAdminChats() {
+    const target=document.querySelector('#admin-chat-results');
+    if(!target||state.section!=='chats')return;
+    const owner=user,request=++state.request;
+    target.innerHTML='<p class="admin-loading">Ищем переписки…</p>';
+    try{
+      const params=new URLSearchParams({q:state.conversationSearch,kind:state.conversationKind,refresh:String(Date.now())});
+      const result=await api('/admin/conversations?'+params);
+      if(user!==owner||tab!=='admin'||state.section!=='chats'||request!==state.request)return;
+      state.conversations=result.items||[];
+      target.innerHTML=state.conversations.length?state.conversations.map(item=>'<button type="button" class="admin-chat-row '+(item.id===state.selectedConversationId?'is-selected':'')+'" data-admin-conversation="'+label(item.id)+'">'+
+        '<span class="admin-chat-row-icon">'+({direct:'↗',quote:'▤',workspace:'▦',community:'◎'}[item.kind]||'○')+'</span>'+
+        '<span class="admin-chat-row-copy"><strong>'+label(item.title||({direct:'Личный чат',quote:'Обсуждение сметы',workspace:'Чат объекта',community:'Сообщество'}[item.kind]||'Переписка'))+'</strong>'+
+        '<small>'+label(({direct:'Личный чат',quote:'Обсуждение сметы',workspace:'Объект TEAM',community:'Сообщество'}[item.kind]||item.kind))+' · '+count(item.participant_count)+' участников · '+count(item.message_count)+' сообщений</small>'+
+        '<small>'+label(item.category||item.id)+' · последнее сообщение '+time(item.last_message_at||item.updated_at)+'</small></span></button>').join(''):empty('Переписок нет','Проверьте другой фильтр или дождитесь первого сообщения.');
+      const kind=document.querySelector('#admin-chat-kind');if(kind)kind.value=state.conversationKind;
+      if(state.selectedConversationId&&state.conversations.some(item=>item.id===state.selectedConversationId))await loadAdminTranscript(state.selectedConversationId);
+      else if(!state.conversations.length){state.selectedConversationId=null;const pane=document.querySelector('#admin-chat-transcript');if(pane)pane.innerHTML=empty('Выберите переписку','Содержание появится после выбора.');}
+    }catch(error){if(user===owner&&state.section==='chats'&&request===state.request)target.innerHTML='<p class="admin-error">'+label(error.message)+'</p>';}
+  }
+
+  async function loadAdminTranscript(id) {
+    const pane=document.querySelector('#admin-chat-transcript');if(!pane||!id)return;
+    const owner=user;pane.innerHTML='<p class="admin-loading">Загружаем переписку…</p>';
+    try{
+      const result=await api('/admin/conversations/'+encodeURIComponent(id)+'/messages?refresh='+Date.now());
+      if(user!==owner||tab!=='admin'||state.section!=='chats'||state.selectedConversationId!==id)return;
+      const conversation=result.conversation||{};
+      pane.innerHTML='<header class="admin-chat-transcript-head"><div><span class="admin-section-index">ТОЛЬКО ЧТЕНИЕ · '+label(conversation.kind)+'</span><h3>'+label(conversation.title||conversation.id)+'</h3><p>'+label(conversation.id)+'</p></div><span class="admin-state admin-state-blue"><i></i>Доступ записан</span></header>'+
+       '<div class="admin-chat-participants"><span>Участники</span>'+(result.participants||[]).map(person=>'<span class="admin-chat-participant"><strong>'+label(person.name)+'</strong><small>'+label(person.public_id||'ID недоступен')+' · '+label(person.role)+'</small></span>').join('')+'</div>'+
+       '<div class="admin-chat-transcript-messages">'+((result.messages||[]).length?(result.messages||[]).map(message=>'<article class="admin-support-message '+(message.sender_role==='ai'?'is-ai':message.sender_role==='system'?'is-system':message.sender_role==='admin'?'is-admin':'')+'"><div><strong>'+label(message.sender_name||({ai:'Помощник Сметры',system:'Сметра'}[message.sender_role]||'Участник'))+'</strong><time>'+time(message.created_at)+'</time></div><p>'+label(message.body).replace(/\\n/g,'<br>')+'</p></article>').join(''):'<p class="admin-loading">Сообщений пока нет.</p>')+'</div>'+
+       '<p class="admin-footnote">Содержание переписки доступно только администратору. Просмотр записан в журнале действий.</p>';
+      const messages=pane.querySelector('.admin-chat-transcript-messages');if(messages)messages.scrollTop=messages.scrollHeight;
+    }catch(error){if(user===owner&&pane.isConnected)pane.innerHTML='<p class="admin-error">'+label(error.message)+'</p>';}
+  }
+
   function renderSection() {
     const target = document.querySelector('#admin-section');
     if (!target) return;
@@ -176,8 +219,9 @@
       const owner=user,current=++state.request;
       api('/admin/revenue').then(data=>{if(user!==owner||tab!=='admin'||state.section!=='revenue'||current!==state.request)return;target.innerHTML=revenueSection(data)}).catch(error=>{if(user===owner&&state.section==='revenue'&&current===state.request)target.innerHTML=`<p class="admin-error">${label(error.message)}</p>`});return;
     }
-    target.innerHTML = ({users:usersSection,support:supportSection,payments:paymentsSection,audit:auditSection})[state.section]();
+    target.innerHTML = ({users:usersSection,support:supportSection,chats:chatsSection,payments:paymentsSection,audit:auditSection})[state.section]();
     if(state.section==='support'&&state.selectedSupportId)loadSupportChat(state.selectedSupportId);
+    if(state.section==='chats')loadAdminChats();
     if (state.section==='users') {
       document.querySelector('#admin-user-filter').value = state.status;
       loadUsers();
@@ -315,6 +359,9 @@
     content.querySelector('#admin-section').onclick=async event=>{
       const manageButton=event.target.closest('[data-admin-manage]');
       if(manageButton){manage(manageButton.dataset.adminManage);return;}
+      const conversation=event.target.closest('[data-admin-conversation]');
+      if(conversation){state.selectedConversationId=conversation.dataset.adminConversation;loadAdminTranscript(state.selectedConversationId);loadAdminChats();return;}
+      if(event.target.closest('[data-admin-chats-refresh]')){loadAdminChats();return;}
       const page=event.target.closest('[data-admin-page]');
       if(page){state.offset+=page.dataset.adminPage==='next'?25:-25;loadUsers();return;}
       const openChat=event.target.closest('[data-admin-chat-open]');
@@ -326,11 +373,15 @@
     };
     let searchTimer;
     content.querySelector('#admin-section').oninput=event=>{
-      if(event.target.id!=='admin-user-search')return;
-      clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=event.target.value.trim();state.offset=0;loadUsers()},250);
+      if(event.target.id==='admin-user-search'){
+        clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=event.target.value.trim();state.offset=0;loadUsers()},250);
+      }else if(event.target.id==='admin-chat-search'){
+        clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.conversationSearch=event.target.value.trim();state.selectedConversationId=null;loadAdminChats()},250);
+      }
     };
     content.querySelector('#admin-section').onchange=event=>{
       if(event.target.id==='admin-user-filter'){state.status=event.target.value;state.offset=0;loadUsers();}
+      else if(event.target.id==='admin-chat-kind'){state.conversationKind=event.target.value;state.selectedConversationId=null;loadAdminChats();}
     };
     renderSection();
     if(!state.escalationSeen)state.escalationSeen=new Set((state.overview.tickets||[]).filter(ticket=>ticket.status==='open'&&ticket.needs_human).map(ticket=>ticket.id));
