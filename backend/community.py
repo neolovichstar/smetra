@@ -458,19 +458,24 @@ def _public_id_route(handler, method, path, query, con, user):
         ).fetchone()
         if not target:
             raise ApiError(404, "Пользователь не найден")
+        estimate_key = "estimate:" + quote_id + ":" + target["id"]
+        existing = con.execute(
+            "SELECT id FROM chat_conversations WHERE direct_key=?", (estimate_key,)
+        ).fetchone()
         conversation_id = _new_conversation(
             con, "estimate", "Смета: " + _text(quote["title"], 150),
-            user["id"], quote_id=quote_id
+            user["id"], quote_id=quote_id, direct_key=estimate_key
         )
         _add_member(con, conversation_id, user["id"], "owner")
         _add_member(con, conversation_id, target["id"], "client")
-        public_url = ORIGIN + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
-        _add_message(
-            con, conversation_id, user["id"], "user",
-            "Создано обсуждение сметы «" + _text(quote["title"], 150) +
-            "». Клиентскую версию можно открыть по ссылке: " + public_url,
-            {"event": "estimate_chat_created", "quote_id": quote_id},
-        )
+        if not existing:
+            public_url = ORIGIN + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
+            _add_message(
+                con, conversation_id, user["id"], "user",
+                "Создано обсуждение сметы «" + _text(quote["title"], 150) +
+                "». Клиентскую версию можно открыть по ссылке: " + public_url,
+                {"event": "estimate_chat_created", "quote_id": quote_id},
+            )
         return handler.send_json(200, {"chat": {
             "id": conversation_id, "kind": "estimate", "subject": "Смета: " + quote["title"],
             "quote_id": quote_id, "partner_name": target["name"],
@@ -479,9 +484,10 @@ def _public_id_route(handler, method, path, query, con, user):
     if path == "/api/profile/object-chats" and method == "GET":
         rows = con.execute(
             "SELECT w.id,w.name,w.plan,w.subscription_status,w.entitlement_until,w.seat_limit "
-            "FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id "
-            "WHERE m.user_id=? ORDER BY w.created_at DESC LIMIT 50",
-            (user["id"],),
+            "FROM workspaces w LEFT JOIN workspace_members m "
+            "ON m.workspace_id=w.id AND m.user_id=? "
+            "WHERE (m.user_id=? OR w.owner_id=?) ORDER BY w.created_at DESC LIMIT 50",
+            (user["id"], user["id"], user["id"]),
         ).fetchall()
         workspaces = []
         for row in rows:
@@ -514,8 +520,10 @@ def _public_id_route(handler, method, path, query, con, user):
             ).fetchone()
             if not project:
                 raise ApiError(404, "Объект не найден в этом рабочем пространстве")
+        object_key = "object:" + workspace_id + ":" + (project_id or subject.casefold())
         conversation_id = _new_conversation(
-            con, "object", subject, user["id"], workspace_id=workspace_id, project_id=project_id
+            con, "object", subject, user["id"], workspace_id=workspace_id,
+            project_id=project_id, direct_key=object_key
         )
         members = con.execute(
             "SELECT user_id,role FROM workspace_members WHERE workspace_id=?",
