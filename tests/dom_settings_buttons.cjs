@@ -35,7 +35,7 @@ function setup(saved){
   assert.ok(doc.querySelector('#support-new'));
   assert.equal(doc.querySelector('#support-form'),null);
   assert.equal(doc.querySelector('#message'),null);
-  assert.deepEqual(requests.map(path=>path.split('?')[0]),['/support']);
+  assert.deepEqual(requests.map(path=>path.split('?')[0]),['/realtime/config','/support']);
  });
  await test('billing status refresh prevents duplicate calls and never grants unpaid Pro',async({w,doc})=>{
   const billing={email_verified:true,checkout_mode:'off',payments:[],pricing:{plans:{pro_month:{amount_kopecks:49000},pro_year:{amount_kopecks:490000}},annual_saving_kopecks:98000,limits:{free_quotes:10,pro_quotes:10000,pro_ai:100}}};w.api=async path=>path==='/billing'?billing:{};w.eval("tab='billing'");await w.render();let resolve,calls=0;w.api=path=>path==='/billing'?Promise.resolve(billing):path==='/billing/sync'?(calls++,new Promise(yes=>resolve=yes)):Promise.resolve({});const button=doc.querySelector('#sync');button.click();button.click();assert.equal(calls,1);resolve({user:{id:'qa',name:'QA',role:'user',plan:'free',quote_count:0,email_verified:true}});await tick();assert.match(doc.querySelector('#toast').textContent,/Старт/);
