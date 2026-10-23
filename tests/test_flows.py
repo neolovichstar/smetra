@@ -193,10 +193,8 @@ class FlowTests(unittest.TestCase):
             return token, user_id
 
         owner_token, owner_id = register("Владелец", "seat-owner@sample.test")
-        invitees = [
-            register("Участник "+str(i), "seat-member-"+str(i)+"@sample.test")
-            for i in range(5)
-        ]
+        for index in range(5):
+            register("Участник "+str(index), "seat-member-"+str(index)+"@sample.test")
         with self.mod.db() as con:
             workspace = con.execute(
                 "SELECT id FROM workspaces WHERE owner_id=?", (owner_id,)
