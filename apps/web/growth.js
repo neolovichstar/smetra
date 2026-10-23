@@ -73,7 +73,8 @@
    </header>
    <section class="payment-recovery" ${pending||recent?.status==='canceled'||new URLSearchParams(location.search).has('payment')?'':'hidden'}><div><strong>${pending?'Оплата не завершена':pro?'Про активирован':'Оплата не завершена'}</strong><p class="muted">${pending?'Вы можете продолжить оплату или проверить её статус.':pro?'Доступ уже действует на всех устройствах.':'Повторная попытка не изменит ваш текущий тариф.'}</p></div><div class="row wrap">${pending&&ready?'<button class="btn primary" id="checkout-resume" type="button">Продолжить оплату</button>':''}<button class="btn" id="payment-continue" type="button">Продолжить работу</button></div></section>
    <section class="billing-purchase" aria-labelledby="billing-purchase-title">
-    <div class="billing-section-heading"><div><span class="overline">ТАРИФ И ОПЛАТА</span><h2 id="billing-purchase-title">${pro?'Продлите Сметра Про':'Выберите удобный срок'}</h2><p>Оплачиваете выбранный период один раз. Автоматического списания не будет.</p></div><span class="billing-secure-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.3-8 10-4.6-1.7-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Прозрачная цена</span></div>
+    <div class="billing-section-heading"><div><span class="overline">ТАРИФ И ОПЛАТА</span><h2 id="billing-purchase-title">${pro?'Управляйте подпиской':'Выберите рабочий набор'}</h2><p>Четыре понятных тарифа. Оплата за выбранный срок — без скрытых списаний и доплат за отдельные функции.</p></div><span class="billing-secure-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.3-8 10-4.6-1.7-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Прозрачная цена</span></div>
+    <div class="billing-tier-selector" role="group" aria-label="Выбор тарифа">${(pricing.catalog||[]).map(tier=>'<button class="billing-tier-option" type="button" data-tier="'+e(tier.id)+'" aria-pressed="'+String(tier.id==='pro_solo')+'"><span>'+e(tier.name)+'</span><strong>'+rub(tier.price_kopecks)+'</strong><small>в месяц</small></button>').join('')}</div>
     <div class="billing-plan-grid">
      <div class="billing-plan-card">
       <div class="billing-plan-card-head"><div><span class="billing-plan-kicker">СМЕТРА PRO</span><h3>Полный рабочий набор</h3></div><span class="billing-plan-badge">Без автосписаний</span></div>
@@ -105,9 +106,46 @@
    <p class="note billing-legal">Оплату принимает самозанятый МУРАВЬЕВ КОНСТАНТИН АЛЕКСЕЕВИЧ · ИНН 713304603876. <a href="/terms">Условия оплаты и возврата</a> · <a href="/contacts">Контакты</a></p></section>`);
   const launchOffer=document.querySelector('#billing-launch-offer');
   if(pricing.launch_offer&&launchOffer){launchOffer.hidden=false;launchOffer.textContent=e(pricing.launch_offer.label)+' · до '+date(pricing.launch_offer.until);}
-  let plan='pro_month';const checkout=document.querySelector('#upgrade-checkout');
-  const paint=()=>{const amount=pricing.plans[plan].amount_kopecks;const annual=plan==='pro_year';checkout.dataset.plan=plan;document.querySelector('#offer-price').textContent=rub(amount);document.querySelector('#offer-saving').textContent=annual?rub(Math.round(amount/12))+' в месяц в пересчёте · доступ на 366 дней':'Один платёж за 31 день';document.querySelector('#billing-annual-bonus-text').textContent=annual?'Подарок за год: +'+annualPurchaseBonus+' сообщений ИИ и экономия '+rub(annualSaving)+' ('+annualSavingPct+'%)':'Подарок за покупку: +'+monthlyPurchaseBonus+' сообщений ИИ. За год — +'+annualPurchaseBonus+' и экономия '+rub(annualSaving);document.querySelector('#billing-year-savings').textContent='+'+annualPurchaseBonus+' сообщений ИИ';document.querySelector('#billing-year-savings-note').textContent='Бонус начисляется после подтверждения оплаты. Он действует до окончания оплаченного доступа. Дополнительная экономия — '+rub(annualSaving)+' ('+annualSavingPct+'%).';document.querySelector('#billing-annual-bonus').classList.toggle('is-active',annual);document.querySelectorAll('[data-period]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.period===plan)))};paint();
-  document.querySelectorAll('[data-period]').forEach(button=>button.onclick=()=>{plan=button.dataset.period;paint()});
+  const tiers=pricing.catalog||[];
+  let tierId=tiers[0]?.id||'pro_solo',annual=false;
+  const checkout=document.querySelector('#upgrade-checkout');
+  const tierPlan=(entry,period)=>entry?.[period==='year'?'annual_plan':'plan']||'pro_month';
+  let plan=tierPlan(tiers.find(t=>t.id===tierId),'month');
+  const paint=()=>{
+   const tier=tiers.find(t=>t.id===tierId)||tiers[0];
+   if(!tier)return;
+   plan=tierPlan(tier,annual?'year':'month');
+   const monthlyAmount=pricing.plans[tierPlan(tier,'month')]?.amount_kopecks||tier.price_kopecks;
+   const yearlyPlan=tier.annual_plan;
+   const yearlyAmount=yearlyPlan?pricing.plans[yearlyPlan]?.amount_kopecks:0;
+   const saving=yearlyAmount?monthlyAmount*12-yearlyAmount:0;
+   const savingPct=saving?Math.round(saving/(monthlyAmount*12)*100):0;
+   const amount=pricing.plans[plan]?.amount_kopecks||monthlyAmount;
+   const monthlyBonus=Number(pricing.purchase_bonus?.[tierPlan(tier,'month')]||0);
+   const annualBonus=Number(pricing.purchase_bonus?.[yearlyPlan]||0);
+   checkout.dataset.plan=plan;
+   checkout.innerHTML=(pro?'Продлить ':'Подключить ')+e(tier.name)+'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+   document.querySelector('#offer-price').textContent=rub(amount);
+   document.querySelector('#offer-saving').textContent=annual?rub(Math.round(amount/12))+' в месяц в пересчёте · доступ на 366 дней':'Один платёж за 31 день';
+   document.querySelector('#billing-annual-bonus-text').textContent=monthlyBonus||annualBonus?(annual?'Подарок за год: +'+annualBonus+' сообщений ИИ':'Подарок за покупку: +'+monthlyBonus+' сообщений ИИ'):'Весь набор тарифа включён. Доплаты за отдельные функции не нужны.';
+   document.querySelector('#billing-year-savings').textContent=annualBonus?'+'+annualBonus+' сообщений ИИ':saving?rub(saving)+' экономии':'Без доплат за функции';
+   document.querySelector('#billing-year-savings-note').textContent=saving?'Годовой платёж без автопродления. Экономия против 12 месячных оплат — '+rub(saving)+' ('+savingPct+'%).':'Один понятный платёж за весь выбранный период без микротранзакций.';
+   document.querySelector('#billing-annual-bonus').classList.toggle('is-active',annual);
+   document.querySelector('#billing-year-savings').closest('.billing-year-savings').querySelector('span').textContent=annual?'Выгода годовой оплаты':'Понятная стоимость';
+   document.querySelectorAll('[data-period]').forEach(button=>{button.setAttribute('aria-pressed',String((button.dataset.period==='pro_year')===annual));button.disabled=annual&&!yearlyPlan});
+   document.querySelectorAll('[data-tier]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.tier===tierId)));
+   document.querySelector('#billing-purchase-title').textContent=pro?'Управляйте подпиской':tier.name+' — выберите срок';
+   document.querySelector('.billing-plan-card-head h3').textContent=tier.name;
+   const perks=document.querySelector('.billing-perk-list');
+   if(perks)perks.innerHTML=tier.features.map((feature,index)=>'<article class="billing-perk"><span class="billing-perk-icon" aria-hidden="true">'+(index+1)+'</span><div><strong>'+e(feature)+'</strong><p>Включено в выбранный тариф.</p></div><span class="billing-perk-tag">Включено</span></article>').join('');
+   const seatText=(tier.seat_limit||1)===1?'1 пользователь':(tier.seat_limit||1)+' участников';
+   document.querySelector('.billing-hero-stat strong').textContent=seatText;
+   document.querySelector('.billing-hero-stat:nth-child(2) strong').textContent=pricing.limits.pro_ai;
+   document.querySelector('.billing-hero-stat-note').textContent=tier.name+' · без доплат';
+  };
+  paint();
+  document.querySelectorAll('[data-tier]').forEach(button=>button.addEventListener('click',()=>{tierId=button.dataset.tier;annual=false;paint()}));
+  document.querySelectorAll('[data-period]').forEach(button=>button.onclick=()=>{annual=button.dataset.period==='pro_year';paint()});
   const retryCancelled=recent&&['canceled','refunded'].includes(recent.status);if(retryCancelled)for(const value of ['pro_month','pro_year'])sessionStorage.removeItem('smetra.checkout.'+owner.id+'.'+value);
   checkout.onclick=async()=>{if(checkout.disabled)return;checkout.disabled=true;const selected=plan,keyName='smetra.checkout.'+owner.id+'.'+selected;let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}track('upgrade_clicked',source);if(!sessionStorage.getItem('smetra.checkout.return.'+owner.id))sessionStorage.setItem('smetra.checkout.return.'+owner.id,'dashboard');try{const result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:selected,source,expected_amount_kopecks:pricing.plans[selected].amount_kopecks})});if(!active()||sessionRevision()!==revision)return;if(result.status==='canceled'||result.status==='refunded'){sessionStorage.removeItem(keyName);throw Error('Предыдущая оплата завершена отменой или возвратом. Нажмите ещё раз для новой попытки.')}if(result.status==='succeeded'){await sync();return}location.href=result.url}catch(error){if(active()&&sessionRevision()===revision){if(error.status===409){sessionStorage.removeItem(keyName);checkout.disabled=true;checkout.textContent='Обновить условия';checkout.onclick=()=>render()}document.querySelector('#checkout-error').textContent=error.message}}finally{if(checkout.isConnected)checkout.disabled=false}};
   async function sync(){
