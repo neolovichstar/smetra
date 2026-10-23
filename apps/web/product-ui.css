@@ -909,3 +909,12 @@
 @media (min-width:701px) and (max-width:800px){
   .workspace-page:not(.auth-mode) .workspace-modes{display:none!important}
 }
+
+/* Enforce touch-sized controls even on the narrowest supported phone widths. */
+@media(max-width:700px){
+  .workspace-page:not(.auth-mode) #nav-toggle,
+  .workspace-page:not(.auth-mode) #command-open{
+    width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;
+    box-sizing:border-box!important;flex:none!important;
+  }
+}
