@@ -840,10 +840,10 @@ def prepare(service, name, args):
             row_in_object(service, "construction_quantities", args.get("parent_work_id") or args["quantity_id"], args["object_id"])
         summary = "Объект · " + str(args.get("name") or args.get("title") or args.get("symbol") or args.get("quantity") or name)[:120]
     elif name == "send_quote_email":
-        record = service.get("quotes", string(args.get("id", ""), "ID", 80, True))
+        record = dict(service.get("quotes", string(args.get("id", ""), "ID", 80, True)))
         recipient = str(args.get("email") or "").strip().lower()
         if not recipient and record.get("client_id"):
-            client = service.get("clients", record["client_id"])
+            client = dict(service.get("clients", record["client_id"]))
             recipient = str(client.get("email") or "").strip().lower()
         if not re.fullmatch(r"[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+", recipient) or len(recipient) > 254:
             raise DomainError(422, "У сметы нет корректного email получателя. Укажите адрес явно или привяжите клиента с email.")
@@ -1012,7 +1012,7 @@ def _confirm(service, action_id):
             }
             kind, parts, method = "construction", paths[name], "POST"
         elif name == "send_quote_email":
-            current = service.get("quotes", args["id"])
+            current = dict(service.get("quotes", args["id"]))
             if int(current.get("revision") or 0) != int(args["_revision"]):
                 raise DomainError(409, "Смета изменилась после подготовки письма. Обновите предложение ассистента.")
             if current.get("status") in ("accepted", "completed") or current.get("approval_state") == "approved":
@@ -1029,8 +1029,9 @@ def _confirm(service, action_id):
                 )
                 if publish_status >= 400:
                     raise DomainError(publish_status, publish_result.get("error", "Не удалось подготовить смету к отправке"))
-                current = service.get("quotes", args["id"])
-            public_url = str(current.get("public_url") or "").strip()
+                current = dict(service.get("quotes", args["id"]))
+            current_view = service.quote_view(current)
+            public_url = str(current_view.get("public_url") or "").strip()
             if not public_url.startswith(("https://", "http://")):
                 raise DomainError(503, "Не удалось сформировать ссылку на смету")
             recipient = args["email"]
@@ -1051,7 +1052,7 @@ def _confirm(service, action_id):
                 from app import mail
             mail(recipient, "Сметра — смета «" + title + "»", message)
             status, result = 200, {
-                "quote": current,
+                "quote": current_view,
                 "email_sent": True,
                 "sent_to": recipient,
                 "url": public_url,
