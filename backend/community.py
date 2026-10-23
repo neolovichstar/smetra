@@ -403,6 +403,67 @@ def _support_user_context(con, user):
     }
 
 
+def send_quote_to_user(con, workspace_id, quote_id, owner_id, recipient_id, quote_title, public_url, published_version):
+    """Create/update the quote-bound chat and post the published client link."""
+    moment = now()
+    ensure_sqlite_schema(con)
+    quote = con.execute(
+        "SELECT id,title,public_token,published_version,workspace_id,user_id,status "
+        "FROM quotes WHERE id=? AND workspace_id=?",
+        (quote_id, workspace_id),
+    ).fetchone()
+    if not quote or int(quote["published_version"] or 0) < 1:
+        raise ApiError(409, "Смета ещё не опубликована. Обновите предложение и подтвердите отправку снова.")
+    if quote["status"] in ("accepted", "completed"):
+        raise ApiError(409, "Согласованную или завершённую смету нельзя отправлять как новое предложение.")
+    recipient = con.execute(
+        "SELECT id,name FROM users WHERE id=? AND id<>? AND deleted_at IS NULL AND blocked=0",
+        (recipient_id, owner_id),
+    ).fetchone()
+    if not recipient:
+        raise ApiError(404, "Получатель не найден или его аккаунт недоступен.")
+    normalized_title = _text(quote["title"] or quote_title, 150, required=True)
+    url = _text(public_url, 1000, required=True)
+    direct_key = "estimate:" + quote_id + ":" + recipient_id
+    existing = con.execute(
+        "SELECT id FROM chat_conversations WHERE direct_key=?", (direct_key,)
+    ).fetchone()
+    conversation_id = _new_conversation(
+        con, "estimate", "Смета: " + normalized_title, owner_id,
+        workspace_id=workspace_id, quote_id=quote_id, direct_key=direct_key,
+    )
+    _add_member(con, conversation_id, owner_id, "owner")
+    _add_member(con, conversation_id, recipient_id, "client")
+    version = int(quote["published_version"] or published_version or 1)
+    _add_message(
+        con, conversation_id, owner_id, "user",
+        "Смета «" + normalized_title + "» — версия " + str(version) + ". "
+        "Откройте документ по ссылке: " + url,
+        {
+            "event": "estimate_shared_in_chat",
+            "quote_id": quote_id,
+            "quote_version": version,
+            "public_url": url,
+            "recipient_id": recipient_id,
+            "sent_by": owner_id,
+            "sent_at": moment,
+        },
+    )
+    con.execute(
+        "UPDATE chat_conversations SET subject=?,updated_at=? WHERE id=?",
+        ("Смета: " + normalized_title, moment, conversation_id),
+    )
+    return {
+        "conversation_id": conversation_id,
+        "quote_id": quote_id,
+        "quote_version": version,
+        "recipient_id": recipient_id,
+        "recipient_name": recipient["name"],
+        "public_url": url,
+        "reused_conversation": bool(existing),
+    }
+
+
 def _support_prompt(user, user_stats):
     return (
         "Ты — бесплатный виртуальный специалист поддержки сервиса «сметра.». "
