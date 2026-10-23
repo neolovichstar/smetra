@@ -5,7 +5,7 @@ import time
 import uuid
 from urllib.parse import unquote
 
-from backend.business import packed, transaction
+from backend.business import DomainError, packed, transaction
 
 try:
     from backend.support_ai import answer as support_answer
@@ -35,11 +35,9 @@ def _id():
 
 
 def _api_error(status, message):
-    try:
-        from backend.app import ApiError
-    except ModuleNotFoundError:
-        from app import ApiError
-    return ApiError(status, message)
+    # Use the shared domain error type so the active request handler catches
+    # the same exception even when loaded by a test runner or serverless shim.
+    return DomainError(status, message)
 
 
 def _body(handler):
