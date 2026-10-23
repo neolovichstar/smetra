@@ -185,8 +185,8 @@ def route(h, con, method, path, query, origin):
                 app_challenge,
                 linked,
                 stamp() + 600,
-                1 if intent == "register" else 0,
-                1 if legal_accepted else 0,
+                intent == "register",
+                bool(legal_accepted),
                 REGISTRATION_CONSENT_VERSION if legal_accepted else "",
             ),
         )

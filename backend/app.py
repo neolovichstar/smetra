@@ -532,6 +532,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             public["/" + font] = (font, "font/ttf")
         for name, mime in (
             ("black.css", "text/css"),
+            ("auth-layout-v2.css", "text/css"),
+            ("landing-refinement.css", "text/css"),
+            ("cabinet-refinement.css", "text/css"),
             ("cabinet.css", "text/css"),
             ("product-ui.css", "text/css"),
             ("product-ui.js", "text/javascript"),
