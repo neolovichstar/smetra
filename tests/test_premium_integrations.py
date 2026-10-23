@@ -44,12 +44,13 @@ class YandexDiskOAuthTests(unittest.TestCase):
             )
 
     def test_yandex_authorization_requests_read_only_disk_scope_and_callback(self):
-        url = cloud_drives._provider_start_url(
-            "yandex_disk",
-            "client-id",
-            "https://smetra.online/api/auth/oauth/yandex/callback",
-            "state-value",
-        )
+        with patch.dict(os.environ, {}, clear=True):
+            url = cloud_drives._provider_start_url(
+                "yandex_disk",
+                "client-id",
+                "https://smetra.online/api/auth/oauth/yandex/callback",
+                "state-value",
+            )
         params = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
         self.assertEqual(params["redirect_uri"], ["https://smetra.online/api/auth/oauth/yandex/callback"])
         self.assertEqual(params["scope"], ["cloud_api:disk.read"])
@@ -93,11 +94,12 @@ class YandexDiskOAuthTests(unittest.TestCase):
 class ProductSourceSafetyTests(unittest.TestCase):
     def test_product_url_is_restricted_to_configured_store_domains(self):
         with patch.dict(os.environ, {"PRODUCT_SCRAPE_ALLOWED_HOSTS": "petrovich.ru"}, clear=True):
-            valid = product_sources.validate_url(
+            canonical, hostname = product_sources.validate_url(
                 "https://shop.petrovich.ru/catalog/item/123",
                 resolve_dns=False,
             )
-            self.assertEqual(valid["hostname"], "shop.petrovich.ru")
+            self.assertEqual(hostname, "shop.petrovich.ru")
+            self.assertTrue(canonical.startswith("https://shop.petrovich.ru/catalog/item/123"))
             with self.assertRaises(business.DomainError):
                 product_sources.validate_url(
                     "https://example.com/catalog/item/123",
