@@ -79,7 +79,7 @@ function renderList(){
  const rows=state.tab==='community'?state.channels:state.chats;
  if(!rows.length){el.innerHTML='<div class="comms-empty" style="padding:22px 8px"><div class="comms-empty-icon">'+icon(state.tab==='support'?'support':'chat')+'</div><h3>Пока пусто</h3><p>'+(state.tab==='direct'?'Найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Создайте новое обращение.')+'</p></div>';return}
  el.innerHTML=rows.map(row=>{
- const title=row.subject||row.partner_name||row.label||row.name||'Переписка',id=row.id;
+ const title=(row.kind==='direct'&&row.partner_name)||row.subject||row.partner_name||row.label||row.name||'Переписка',id=row.id;
  const preview=row.last_message|| (row.needs_human?'Ожидает сотрудника':row.kind==='community'?'Профессиональный канал':'Открыть переписку');
  return '<button type="button" class="comms-row '+(state.current&&state.current.id===id?'active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar">'+esc(title.slice(0,1).toUpperCase())+'</span><span class="comms-copy"><span class="comms-label">'+esc(title)+'</span><span class="comms-preview">'+esc(preview)+'</span></span><span class="comms-time">'+esc(time(row.last_message_at||row.updated_at||row.created_at))+'</span>'+(row.needs_human?'<i style="width:6px;height:6px;border-radius:50%;background:#d7a459" aria-label="Требуется сотрудник"></i>':'')+'</button>';
  }).join('');
@@ -126,7 +126,7 @@ async function loadMessages(force){
  if(state.tab==='support'&&state.mode==='admin')path='/admin/communication/threads/'+encodeURIComponent(c.id)+'/messages';
  else if(state.tab==='support')path='/support/threads/'+encodeURIComponent(c.id)+'/messages';
  else path='/profile/chats/'+encodeURIComponent(c.id)+'/messages';
- try{const after=force?0:state.messages.reduce((v,m)=>Math.max(v,Number(m.created_at||0)),0);const data=await api(path+(after?'?after='+after:''));const incoming=data.messages||[];if(force)state.messages=incoming;else{const seen=new Set(state.messages.map(m=>m.id));state.messages.push(...incoming.filter(m=>!seen.has(m.id)))}if(state.current&&state.current.id===c.id)renderMessages()}catch(error){if(force)$('#comms-messages').innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
+ try{const after=force?0:Math.max(0,state.messages.reduce((v,m)=>Math.max(v,Number(m.created_at||0)),0)-1);const data=await api(path+(after?'?after='+after:''));const incoming=data.messages||[];if(force)state.messages=incoming;else{const seen=new Set(state.messages.map(m=>m.id));state.messages.push(...incoming.filter(m=>!seen.has(m.id)))}if(state.current&&state.current.id===c.id)renderMessages()}catch(error){if(force)$('#comms-messages').innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
 }
 async function sendMessage(e){
  e.preventDefault();if(!state.current||state.busy)return;const box=$('#comms-message'),message=box.value.trim();if(!message)return;
