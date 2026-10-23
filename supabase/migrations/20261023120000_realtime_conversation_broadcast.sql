@@ -34,7 +34,11 @@ CREATE TABLE IF NOT EXISTS smetra.workspace_change_outbox (
   PRIMARY KEY(transaction_id,workspace_id)
 );
 ALTER TABLE smetra.workspace_change_outbox ENABLE ROW LEVEL SECURITY;
-ALTER TABLE smetra.workspace_change_outbox FORCE ROW LEVEL SECURITY;
+-- This private outbox is writable only by its SECURITY DEFINER trigger, owned by the
+-- migration role. Avoid FORCE RLS here so the owner can write it; the runtime role
+-- receives no direct access and the table lives in the private schema.
+REVOKE ALL ON smetra.workspace_change_outbox FROM PUBLIC;
+REVOKE ALL ON smetra.workspace_change_outbox FROM smetra_runtime;
 CREATE INDEX IF NOT EXISTS idx_workspace_change_outbox_created
   ON smetra.workspace_change_outbox(created_at);
 
