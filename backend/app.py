@@ -432,18 +432,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
-                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push"):
+                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync"):
                         raise ApiError(404, "Не найдено")
                     if path == "/api/cron/assistant":
                         from backend.assistant_jobs import authenticate
 
                         authenticate(self)
                     # /api/cron/push verifies its own dedicated server secret.
-                if root == "webhooks" and path != "/api/webhooks/yookassa":
+                if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
                 if root == "mobile" and path != "/api/mobile/presentation":
                     raise ApiError(404, "Не найдено")
-            if method != "GET" and path != "/api/webhooks/yookassa":
+            if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
             if method == "GET" and path == "/api/auth/providers":
                 from backend.identity import route as identity_route
@@ -650,6 +650,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_batch(con))
+        if path == "/api/cron/product-monitor" and method == "GET":
+            from backend.product_sources import authenticate_cron, run_monitor_batch
+
+            authenticate_cron(self)
+            return self.send_json(200, run_monitor_batch(con))
+        if path == "/api/cron/cloud-sync" and method == "GET":
+            from backend.cloud_drives import authenticate_cron, run_cloud_batch
+
+            authenticate_cron(self)
+            return self.send_json(200, run_cloud_batch(con))
+        if path == "/api/webhooks/google-drive" and method == "POST":
+            from backend.cloud_drives import webhook
+
+            return self.send_json(200, webhook(self, con))
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
@@ -664,6 +678,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             if path == "/api/assistant/stream":
                 return payload.write(self)
+            if hasattr(payload, "redirect_url"):
+                self.send_response(status)
+                self.send_header("Location", payload.redirect_url)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                return
             if hasattr(payload, "mime"):
                 self.send_response(status)
                 self.send_header("Content-Type", payload.mime)
