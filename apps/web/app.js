@@ -216,9 +216,10 @@ function syncMobileSidebarGeometry(){
   const top=Math.max(0,Math.round(header.getBoundingClientRect().bottom));
   // The legacy stylesheets have several historical mobile offsets. Align the drawer to the actual header.
   sidebar.style.setProperty('top',top+'px','important');
+  $('#nav-backdrop')?.style.setProperty('top',top+'px','important');
   sidebar.style.setProperty('height','calc(100dvh - '+top+'px)','important');
  }else{
-  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');
+  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');$('#nav-backdrop')?.style.removeProperty('top');
  }
 }
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
