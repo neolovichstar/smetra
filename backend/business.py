@@ -2128,15 +2128,18 @@ class Service:
                         "SELECT COUNT(*) FROM workspace_members WHERE workspace_id=?",
                         (self.wid,),
                     ).fetchone()[0] or 0)
-                    if occupied >= seat_limit:
-                        if seat_limit <= 1:
-                            raise DomainError(
-                                402,
-                                "Для добавления сотрудников нужен тариф TEAM (5 мест) или BUSINESS (15 мест).",
-                            )
+                    plan = str(workspace_access["plan"] or "").lower()
+                    subscription_active = (
+                        workspace_access["subscription_status"] in ("active", "succeeded")
+                        and int(workspace_access["entitlement_until"] or 0) > stamp()
+                    )
+                    # Preserve legacy shared-workspace and viewer flows on existing
+                    # free/individual accounts. Strict named-seat limits belong to
+                    # active collaborative TEAM/BUSINESS products.
+                    if subscription_active and plan in ("team", "business") and occupied >= seat_limit:
                         raise DomainError(
                             402,
-                            f"Лимит мест текущего тарифа — {seat_limit}, включая владельца.",
+                            f"Лимит мест тарифа {plan.upper()} — {seat_limit}, включая владельца.",
                         )
                 self.con.execute(
                     "INSERT INTO workspace_members VALUES(?,?,?) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
