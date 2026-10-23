@@ -427,11 +427,11 @@ def handle(handler, con, user, method, path, query):
         term = _clean(term, "Поиск", 80)
         rows = con.execute(
             "SELECT d.public_id,d.user_id,d.display_name,d.profession,d.company FROM user_directory d "
-            "JOIN users u ON u.id=d.user_id WHERE d.visible=TRUE AND u.blocked=0 AND u.deleted_at IS NULL "
+            "JOIN users u ON u.id=d.user_id WHERE (d.visible=TRUE OR upper(d.public_id)=upper(?)) AND u.blocked=0 AND u.deleted_at IS NULL "
             "AND d.user_id<>? AND (instr(lower(d.public_id),lower(?))>0 OR instr(lower(d.display_name),lower(?))>0 "
             "OR instr(lower(d.profession),lower(?))>0 OR instr(lower(d.company),lower(?))>0) "
             "ORDER BY CASE WHEN upper(d.public_id)=upper(?) THEN 0 ELSE 1 END,lower(d.display_name) LIMIT 20",
-            (user_id, term, term, term, term, term),
+            (term, user_id, term, term, term, term, term),
         ).fetchall()
         return {"items": [_public_user(row) for row in rows]}
 

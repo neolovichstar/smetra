@@ -19,16 +19,20 @@ def profile_route(con, user, method, data):
     if method == 'GET':
         value = profile(con, user)
         value['public_id'] = user['public_id']
+        directory = con.execute('SELECT visible FROM user_directory WHERE user_id=?', (user['id'],)).fetchone()
+        value['directory_visible'] = bool(directory['visible']) if directory else True
         return {'profile': value}
     if method != 'PATCH':
         raise DomainError(405, 'Метод не поддерживается')
-    if not isinstance(data, dict) or not data or not set(data).issubset(set(FIELDS) | {'response_style', 'memory_enabled'}):
+    allowed = set(FIELDS) | {'response_style', 'memory_enabled', 'directory_visible'}
+    if not isinstance(data, dict) or not data or not set(data).issubset(allowed):
         raise DomainError(400, 'Неверные поля профиля')
     values = {key: string(value, 'Поле профиля', FIELDS[key]) for key, value in data.items() if key in FIELDS}
     if 'response_style' in data:
         values['response_style'] = choice(data['response_style'], ('concise', 'balanced', 'detailed'), 'Стиль ответа')
     if 'memory_enabled' in data:
         values['memory_enabled'] = integer(data['memory_enabled'], 'Память', 0, 1)
+    directory_visible = integer(data['directory_visible'], 'Видимость профиля', 0, 1) if 'directory_visible' in data else None
     with transaction(con):
         current = profile(con, user)
         current.update(values, updated_at=stamp())
@@ -40,16 +44,19 @@ def profile_route(con, user, method, data):
             (user['id'], *(current[key] for key in (*FIELDS, 'response_style', 'memory_enabled', 'updated_at'))),
         )
         name = ' '.join(filter(None, (current['first_name'], current['last_name'])))
+        existing_directory = con.execute('SELECT visible FROM user_directory WHERE user_id=?', (user['id'],)).fetchone()
+        visible = directory_visible if directory_visible is not None else (int(existing_directory['visible']) if existing_directory else 1)
         con.execute(
             "INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at) "
-            "VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(user_id) DO UPDATE SET "
+            "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET "
             "public_id=excluded.public_id,display_name=excluded.display_name,profession=excluded.profession,"
-            "company=excluded.company,updated_at=excluded.updated_at",
-            (user['public_id'], user['id'], (name or user['name'])[:160], current['profession'], current['company'], user['created_at'], current['updated_at']),
+            "company=excluded.company,visible=excluded.visible,updated_at=excluded.updated_at",
+            (user['public_id'], user['id'], (name or user['name'])[:160], current['profession'], current['company'], visible, user['created_at'], current['updated_at']),
         )
         if name and ('first_name' in values or 'last_name' in values):
             con.execute('UPDATE users SET name=? WHERE id=?', (name[:160], user['id']))
     current['public_id'] = user['public_id']
+    current['directory_visible'] = bool(visible)
     return {'profile': current}
 
 
