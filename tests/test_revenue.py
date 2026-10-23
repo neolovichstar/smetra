@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend import assistant, business, revenue
+from backend import assistant, business, revenue, community
 from backend.app import Handler
 import test_flows as flow_fixtures
 
@@ -137,6 +137,46 @@ class RevenueTests(unittest.TestCase):
             self.assertEqual(bool(subscription["is_test"]), test_mode)
             self.assertEqual(subscription["status"], "active")
             self.assertGreater(subscription["current_period_end"], revenue.now())
+
+    def test_higher_tier_does_not_inherit_lower_tier_expiry_and_rolls_back(self):
+        user = self.account("tier-period-change")
+        self.purchase(user, key="solo_annual_tier_change", plan="pro_year")
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE owner_id=?", (user["id"],)
+        ).fetchone()
+        solo = self.con.execute(
+            "SELECT current_period_end FROM billing_subscriptions WHERE workspace_id=? "
+            "AND product_code='pro_year' AND status='active'",
+            (workspace["id"],),
+        ).fetchone()
+        self.assertIsNotNone(solo)
+
+        team_payment, _ = self.purchase(user, key="team_monthly_tier_change", plan="team_month")
+        team = self.con.execute(
+            "SELECT * FROM billing_subscriptions WHERE provider_subscription_id=?",
+            (team_payment["provider_id"],),
+        ).fetchone()
+        self.assertIsNotNone(team)
+        self.assertLess(team["current_period_end"], solo["current_period_end"])
+        self.assertAlmostEqual(
+            team["current_period_end"] - revenue.now(), 31 * 86400, delta=10,
+            msg="TEAM starts now; the longer Solo annual expiry must not be added to it",
+        )
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE id=?", (workspace["id"],)
+        ).fetchone()
+        self.assertEqual(workspace["plan"], "team")
+        self.assertEqual(workspace["seat_limit"], 5)
+        self.assertEqual(workspace["entitlement_until"], team["current_period_end"])
+
+        self.con.execute(
+            "UPDATE billing_subscriptions SET current_period_end=? WHERE id=?",
+            (revenue.now() - 1, team["id"]),
+        )
+        refreshed = community._refresh_workspace_entitlement(self.con, workspace["id"])
+        self.assertEqual(refreshed["plan"], "pro_solo")
+        self.assertEqual(refreshed["seat_limit"], 1)
+        self.assertEqual(refreshed["entitlement_until"], solo["current_period_end"])
 
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}
