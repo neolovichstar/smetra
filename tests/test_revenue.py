@@ -186,7 +186,7 @@ class RevenueTests(unittest.TestCase):
         ).fetchone()
         solo = self.con.execute(
             "SELECT current_period_end FROM billing_subscriptions WHERE workspace_id=? "
-            "AND product_code='pro_year' AND status='active'",
+            "AND product_code='pro_solo_year' AND status='active'",
             (workspace["id"],),
         ).fetchone()
         team_payment, team_remote = self.purchase(
