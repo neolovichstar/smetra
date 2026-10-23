@@ -46,12 +46,35 @@ CREATE INDEX IF NOT EXISTS idx_app_presence_seen ON smetra.app_presence(last_see
 
 ALTER TABLE smetra.billing_subscriptions
   ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Expand the product/state constraints before the app starts writing the new catalog.
+ALTER TABLE smetra.billing_subscriptions
+  DROP CONSTRAINT IF EXISTS billing_subscriptions_product_code_check;
+ALTER TABLE smetra.billing_subscriptions
+  ADD CONSTRAINT billing_subscriptions_product_code_check
+  CHECK (product_code IN (
+    'pro_solo_month','pro_solo_year','pro_plus_month','pro_plus_year',
+    'pro_team_month','pro_team_year','smart_supplier_month',
+    'business_month','business_year'
+  ));
+ALTER TABLE smetra.billing_subscriptions
+  DROP CONSTRAINT IF EXISTS billing_subscriptions_workspace_plan_check;
+ALTER TABLE smetra.billing_subscriptions
+  ADD CONSTRAINT billing_subscriptions_workspace_plan_check
+  CHECK (
+    (product_code IN ('pro_team_month','pro_team_year','business_month','business_year')
+      AND workspace_id IS NOT NULL)
+    OR
+    (product_code NOT IN ('pro_team_month','pro_team_year','business_month','business_year')
+      AND workspace_id IS NULL)
+  );
 CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_real_access
   ON smetra.billing_subscriptions(workspace_id,status,current_period_end DESC)
   WHERE is_test=FALSE;
 
--- Preserve existing paid access through the catalog migration. Legacy records
--- are non-renewing and excluded from live-revenue/subscriber reporting.
+-- Preserve old PRO access as a non-renewing account-level subscription.
+-- Amount 1 satisfies the schema's positive-amount check; it is not revenue and
+-- analytics use confirmed payment rows, not subscription metadata.
 INSERT INTO smetra.billing_subscriptions(
   id,user_id,workspace_id,product_code,provider,provider_subscription_id,
   provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,
@@ -59,17 +82,16 @@ INSERT INTO smetra.billing_subscriptions(
   created_at,updated_at
 )
 SELECT
-  'legacy-' || w.id,u.id,w.id,'pro_month','legacy','legacy:' || w.id,
-  '',0,'RUB','active',FALSE,FALSE,
+  'legacy-' || u.id,u.id,NULL,'pro_solo_month','manual','legacy:' || u.id,
+  '',1,'RUB','active',FALSE,FALSE,
   floor(extract(epoch FROM now()))::bigint,u.entitlement_until,FALSE,NULL,
   floor(extract(epoch FROM now()))::bigint,floor(extract(epoch FROM now()))::bigint
 FROM smetra.users u
-JOIN smetra.workspaces w ON w.owner_id=u.id
 WHERE u.deleted_at IS NULL AND u.plan='pro'
   AND COALESCE(u.entitlement_until,0)>floor(extract(epoch FROM now()))::bigint
   AND NOT EXISTS (
     SELECT 1 FROM smetra.billing_subscriptions s
-    WHERE s.workspace_id=w.id AND s.status IN ('active','succeeded')
+    WHERE s.user_id=u.id AND s.status='active'
       AND s.current_period_end>floor(extract(epoch FROM now()))::bigint
   )
 ON CONFLICT DO NOTHING;
@@ -78,9 +100,11 @@ UPDATE smetra.workspaces w
 SET plan='pro_solo',subscription_status='active',seat_limit=1,
     entitlement_until=u.entitlement_until
 FROM smetra.users u
-WHERE w.owner_id=u.id AND w.id IN (
-  SELECT s.workspace_id FROM smetra.billing_subscriptions s
-  WHERE s.provider='legacy' AND s.status='active'
+WHERE w.owner_id=u.id AND EXISTS (
+  SELECT 1 FROM smetra.billing_subscriptions s
+  WHERE s.user_id=u.id AND s.workspace_id IS NULL
+    AND s.provider='manual' AND s.product_code='pro_solo_month'
+    AND s.status='active'
     AND s.current_period_end>floor(extract(epoch FROM now()))::bigint
 );
 
