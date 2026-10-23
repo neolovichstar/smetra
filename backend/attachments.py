@@ -30,6 +30,36 @@ def maximum_upload():
     return min(maximum,3_000_000) if os.getenv('VERCEL')=='1' else maximum
 
 
+def storage_limit(service):
+    """Resolve the current workspace's tier before allowing new bytes to be stored."""
+    from backend import revenue
+    from backend.community import _refresh_workspace_entitlement
+
+    workspace = _refresh_workspace_entitlement(service.con, service.wid)
+    plan = str(workspace["plan"] if workspace else "free").lower()
+    limit = revenue.STORAGE_LIMIT_BYTES.get(plan, revenue.STORAGE_LIMIT_BYTES["free"])
+    return limit, plan
+
+
+def check_storage_budget(service, used_bytes, old_size, new_size):
+    limit, plan = storage_limit(service)
+    requested = max(0, int(used_bytes) - int(old_size)) + int(new_size)
+    if requested <= limit:
+        return
+    labels = {
+        "free": "Старт · 100 МБ",
+        "pro_solo": "PRO Solo · 500 МБ",
+        "pro_plus": "PRO Плюс · 5 ГБ",
+        "team": "TEAM · 15 ГБ",
+        "business": "BUSINESS · 100 ГБ",
+    }
+    raise DomainError(
+        413,
+        f"Лимит хранилища тарифа {labels.get(plan, labels['free'])}. "
+        "Удалите ненужные файлы или выберите подходящий тариф.",
+    )
+
+
 def download(row, con=None):
     if con is not None and getattr(con, "is_postgres", False):
         payload = con.execute(
@@ -144,8 +174,7 @@ def _route(service, method, parts, query, data):
         used = service.con.execute(
             "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
         ).fetchone()[0]
-        if used - row["size"] + len(raw) > 100_000_000:
-            raise DomainError(413, "Лимит хранилища пространства — 100 МБ")
+        check_storage_budget(service, used, row["size"], len(raw))
         digest = hashlib.sha256(raw).hexdigest()
         if digest == row["sha256"]:
             return 200, {"file": {"id": row["id"], "name": row["name"], "size": len(raw), "sha256": digest}}
@@ -329,8 +358,7 @@ def _route(service, method, parts, query, data):
     used = service.con.execute(
         "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
     ).fetchone()[0]
-    if used + len(raw) > 100_000_000:
-        raise DomainError(413, "Лимит хранилища пространства — 100 МБ")
+    check_storage_budget(service, used, 0, len(raw))
     public = integer(data.get("public", 0), "Публичность", 0, 1)
     if public and not references["quote_id"]:
         raise DomainError(400, "Публичный файл должен быть привязан к смете")
