@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS billing_subscriptions (
   amount_kopecks INTEGER NOT NULL CHECK (amount_kopecks >= 0),
   currency TEXT NOT NULL DEFAULT 'RUB',
   status TEXT NOT NULL DEFAULT 'pending',
+  is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0,1)),
   auto_renew INTEGER NOT NULL DEFAULT 0 CHECK (auto_renew IN (0,1)),
   renewal_consent_at INTEGER,
   renewal_consent_version TEXT,
