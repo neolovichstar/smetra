@@ -1442,7 +1442,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         if terms and not terms['is_test'] and bonus > 0:
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
-                                (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
+                                (uid(), local['user_id'], local['id'], bonus, bonus, product_period_end, now()),
                             )
                         newly_succeeded = True
                     if status in ('succeeded','canceled'):
