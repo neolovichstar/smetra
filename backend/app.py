@@ -1379,14 +1379,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         con.execute(
                             "INSERT INTO billing_subscriptions("
                             "id,user_id,workspace_id,product_code,provider,provider_subscription_id,"
-                            "provider_payment_method_id,amount_kopecks,currency,status,auto_renew,"
+                            "provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,"
                             "current_period_start,current_period_end,cancel_at_period_end,last_payment_id,"
                             "created_at,updated_at) "
-                            "VALUES(?,?,?,?,?,?,?,?,?,'active',0,?,?,0,?,?,?) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,'active',?,0,?,?,0,?,?,?) "
                             "ON CONFLICT(provider_subscription_id) DO NOTHING",
                             (
                                 uid(), local["user_id"], workspace_id, local["plan"], "yookassa",
                                 local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
+                                bool(terms["is_test"]) if terms else False,
                                 now(), entitlement_until, local["id"], now(), now(),
                             ),
                         )
@@ -1403,7 +1404,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         active_products = con.execute(
                             "SELECT product_code,current_period_end FROM billing_subscriptions "
                             "WHERE workspace_id=? AND status IN ('active','succeeded') "
-                            "AND current_period_end>?",
+                            "AND current_period_end>? AND is_test=FALSE",
                             (workspace_id, now()),
                         ).fetchall()
                         if active_products:
