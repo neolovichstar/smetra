@@ -127,6 +127,7 @@ def ensure_sqlite_schema(con):
         workspace_id TEXT NOT NULL DEFAULT '',
         product_code TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending',
+        is_test INTEGER NOT NULL DEFAULT 0,
         current_period_end INTEGER NOT NULL DEFAULT 0
       );
     """)
