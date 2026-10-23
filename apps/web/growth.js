@@ -129,7 +129,7 @@
      (saving>0?'<p class="billing-carousel-saving">Экономия за год — '+rub(saving)+'</p>':'')+
      '<ul class="billing-carousel-features">'+item.features.map(feature=>'<li>'+e(feature)+'</li>').join('')+'</ul>'+
      (bonus>0?'<div class="billing-carousel-bonus">+'+bonus+' бонусных сообщений ассистента после подтверждения оплаты</div>':'')+
-     '<button type="button" class="btn '+(isFree?'':'primary')+' billing-carousel-checkout" data-plan-choice="'+e(item.code)+'" '+(ready&&!isFree?'':'disabled')+'><span>'+(isFree?(pro?'Тариф Старт':'Ваш текущий тариф'):(ready?'Выбрать тариф':'Оплата недоступна'))+'</span>'+(isFree?'':'<span aria-hidden="true">↗</span>')+'</button>'+
+     '<button type="button" class="btn '+(isFree?'':'primary')+' billing-carousel-checkout" data-plan-choice="'+e(item.code)+'" '+(ready&&!isFree?'':'disabled')+'><span>'+(isFree?(pro?'Базовый план':'Ваш текущий тариф'):(ready?'Выбрать тариф':'Оплата недоступна'))+'</span>'+(isFree?'':'<span aria-hidden="true">↗</span>')+'</button>'+
      '<p class="billing-carousel-trust">'+(isFree?'После 10 бесплатных смет для дальнейшей работы понадобится платная подписка.':"Без автоматического продления. Цена фиксируется до перехода к оплате.")+'</p>'+
     '</div></article>';
   }
