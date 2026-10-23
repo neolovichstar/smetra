@@ -53,10 +53,23 @@ def wants_human(text):
 
 
 def handles(path):
+    # Do not shadow unrelated legacy profile/support endpoints. This API only
+    # owns the exact routes below; every other route falls through to app.py.
+    exact = {
+        "/api/profile/id",
+        "/api/profile/directory",
+        "/api/profile/chats",
+        "/api/profile/quote-chats",
+        "/api/profile/object-chats",
+        "/api/profile/communities",
+        "/api/profile/presence",
+        "/api/support",
+        "/api/support/threads",
+    }
     return (
-        path.startswith("/api/profile/")
-        or path.startswith("/api/support/")
-        or path in ("/api/support",)
+        path in exact
+        or bool(re.fullmatch(r"/api/profile/chats/[A-Za-z0-9_-]+/messages", path))
+        or bool(re.fullmatch(r"/api/support/threads/[A-Za-z0-9_-]+(?:/(?:messages|handoff))?", path))
         or path.startswith("/api/admin/communication/")
     )
 
