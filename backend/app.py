@@ -664,6 +664,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
             from backend.cloud_drives import webhook
 
             return self.send_json(200, webhook(self, con))
+        # The existing Yandex ID callback can also complete the Disk OAuth flow.
+        # This lets one registered redirect URI serve login and an explicitly requested
+        # read-only Disk grant without confusing the two independent OAuth states.
+        if path == "/api/auth/oauth/yandex/callback" and method == "GET":
+            state = query.get("state", [""])[0]
+            if isinstance(state, str) and state:
+                state_hash = hashlib.sha256(state.encode()).hexdigest()
+                try:
+                    cloud_state = con.execute(
+                        "SELECT id FROM cloud_oauth_states WHERE state_hash=? "
+                        "AND provider='yandex_disk' AND consumed_at IS NULL AND expires_at>?",
+                        (state_hash, now()),
+                    ).fetchone()
+                except Exception:
+                    cloud_state = None
+                if cloud_state:
+                    path = "/api/premium/cloud/oauth/callback"
         if (
             path == "/api/auth/providers"
             or path.startswith("/api/auth/oauth/")
