@@ -83,7 +83,7 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#capture-text')).resize"),'none','Mobile input has no manual resize grip');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('#capture-text')).fontSize)>=16"),true,'Mobile input text stays readable');
 
-    assert.equal(await evaluate("document.querySelector('.workspace-modes').getBoundingClientRect().top >= document.querySelector('.app-nav-brand').getBoundingClientRect().bottom"),true);
+    assert.equal(await evaluate("(()=>{const modes=document.querySelector('.workspace-modes');return getComputedStyle(modes).display==='none'||modes.getBoundingClientRect().top>=document.querySelector('.app-nav-brand').getBoundingClientRect().bottom})()"),true,'Workspace mode switch is hidden on compact screens or positioned below the brand');
     assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44 && document.querySelector('#command-open').getBoundingClientRect().height >= 44"),true);
     assert.equal(await evaluate("document.querySelector('.capture-actions button').getBoundingClientRect().width >= 44"),true);
     assert.equal(await evaluate("(()=>{const input=document.querySelector('#capture-text'),button=document.querySelector('.capture-actions button');if(!input||!button)return false;const a=input.getBoundingClientRect(),b=button.getBoundingClientRect();return a.width>=100&&a.right<=b.left+1&&b.width<=52&&getComputedStyle(input).visibility!=='hidden'})()"),true,'Mobile estimate input remains visible and does not overlap the compact send button');
