@@ -11,6 +11,7 @@
     growth:{ready:()=>!!window.SmetraGrowth,files:['/growth.js']},
     quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js']},
     quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState,files:['/quote-editor-state.js']},
+    premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js']},
   };
   const load=source=>{
     if(pending.has(source))return pending.get(source);
