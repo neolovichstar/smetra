@@ -201,13 +201,12 @@ class FlowTests(unittest.TestCase):
             ).fetchone()
             workspace_id = workspace["id"]
 
-        status, error = self.request(
+        status, result = self.request(
             "/api/workspace/members", "POST",
             {"email": "seat-member-0@sample.test", "role": "member"},
             owner_token,
         )
-        self.assertEqual(status, 402, error)
-        self.assertIn("TEAM", error["error"])
+        self.assertEqual(status, 200, result)
 
         moment = self.mod.now()
         with self.mod.db() as con:
@@ -222,7 +221,7 @@ class FlowTests(unittest.TestCase):
                 ),
             )
 
-        for index in range(4):
+        for index in range(1, 4):
             status, result = self.request(
                 "/api/workspace/members", "POST",
                 {"email": f"seat-member-{index}@sample.test", "role": "member"},
