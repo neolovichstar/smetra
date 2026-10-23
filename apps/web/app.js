@@ -156,6 +156,31 @@ function syncMobileSidebarGeometry(){
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
 function showAuth() { stopWorkspaceRealtime();window.SmetraCommunications?.leave?.();window.SmetraRealtime?.close?.();window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
 let workspaceRealtimeOwner=null,workspaceRealtimeSelection=null,workspaceRealtimeReady=false,workspaceRealtimePromise=null,workspaceRealtimeGeneration=0;
+let sharedRealtimeConfigOwner=null,sharedRealtimeConfigSelection=null,sharedRealtimeConfig=null,sharedRealtimeConfigPromise=null;
+async function getRealtimeConfig(owner=user){
+  const selected=sessionStorage.getItem('workspace_id')||'';
+  if(sharedRealtimeConfigOwner===owner&&sharedRealtimeConfigSelection===selected){
+    if(sharedRealtimeConfig)return sharedRealtimeConfig;
+    if(sharedRealtimeConfigPromise)return sharedRealtimeConfigPromise;
+  }
+  sharedRealtimeConfigOwner=owner;sharedRealtimeConfigSelection=selected;sharedRealtimeConfig=null;
+  const promise=(async()=>{
+    try{
+      const value=await api('/realtime/config');
+      if(user===owner&&sharedRealtimeConfigOwner===owner&&sharedRealtimeConfigSelection===selected)sharedRealtimeConfig=value;
+      return value;
+    }catch{
+      const value={enabled:false};
+      if(user===owner&&sharedRealtimeConfigOwner===owner&&sharedRealtimeConfigSelection===selected)sharedRealtimeConfig=value;
+      return value;
+    }finally{
+      if(sharedRealtimeConfigOwner===owner&&sharedRealtimeConfigSelection===selected)sharedRealtimeConfigPromise=null;
+    }
+  })();
+  sharedRealtimeConfigPromise=promise;
+  return promise;
+}
+window.SmetraGetRealtimeConfig=()=>getRealtimeConfig(user);
 const workspaceRealtimeUnsubscribers=new Set();
 let workspaceRealtimeRefreshTimer=null,lastWorkspaceRealtimeNotice=0;
 function stopWorkspaceRealtime(){
@@ -185,7 +210,7 @@ function ensureWorkspaceRealtime(owner=user){
   workspaceRealtimeOwner=owner;workspaceRealtimeSelection=selected;
   workspaceRealtimePromise=(async()=>{
     try{
-      const config=await api('/realtime/config');
+      const config=await getRealtimeConfig(owner);
       if(generation!==workspaceRealtimeGeneration||user!==owner||workspaceRealtimeOwner!==owner||workspaceRealtimeSelection!==selected)return;
       if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);
       if(config.inbox_topic&&window.SmetraRealtime){

@@ -12,7 +12,15 @@ window.SmetraCommunications = (() => {
     if(realtimeUserId===user?.id&&realtimeConfig)return realtimeConfig;
     if(realtimeUserId===user?.id&&realtimePromise)return realtimePromise;
     realtimeUserId=user?.id||'';realtimeConfig=null;
-    realtimePromise=(async()=>{try{const config=await api('/realtime/config');if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);realtimeConfig=config;return config;}catch{realtimeConfig={enabled:false};return realtimeConfig;}})();
+    realtimePromise=(async()=>{
+      try{
+        const config=window.SmetraGetRealtimeConfig
+          ? await window.SmetraGetRealtimeConfig()
+          : await api('/realtime/config');
+        if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);
+        realtimeConfig=config;return config;
+      }catch{realtimeConfig={enabled:false};return realtimeConfig;}
+    })();
     return realtimePromise;
   }
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
