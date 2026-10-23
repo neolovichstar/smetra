@@ -26,7 +26,7 @@ COMMUNITIES = {
     "subcontract": "Биржа субподряда",
 }
 HUMAN_PATTERN = re.compile(
-    r"\b(оператор|сотрудник|человек|менеджер|специалист поддержки|живой человек)\b|"
+    r"\b(оператор\w*|сотрудник\w*|человек\w*|менеджер\w*|специалист\w*\s+поддержки|живой\s+человек)\b|"
     r"позови(те)?\s+(кого-то|сотрудника|человека)|"
     r"соедини(те)?\s+(с|меня)|"
     r"нужен\s+(человек|сотрудник|оператор)|"
@@ -466,7 +466,7 @@ def _public_id_route(handler, method, path, query, con, user):
         _add_member(con, conversation_id, target["id"], "client")
         public_url = ORIGIN + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
         _add_message(
-            con, user["id"], "user",
+            con, conversation_id, user["id"], "user",
             "Создано обсуждение сметы «" + _text(quote["title"], 150) +
             "». Клиентскую версию можно открыть по ссылке: " + public_url,
             {"event": "estimate_chat_created", "quote_id": quote_id},
@@ -592,14 +592,18 @@ def _support_route(handler, method, path, query, con, user):
         subject = _text(data.get("subject") or "Обращение в поддержку", 120)
         conversation_id = _new_conversation(con, "support", subject, user["id"])
         _add_member(con, conversation_id, user["id"], "customer")
-        _add_message(con, user["id"], "user", message)
+        con.execute(
+            "INSERT INTO support(id,user_id,message,status,created_at) VALUES(?,?,?,'open',?)",
+            (conversation_id, user["id"], message, now()),
+        )
+        _add_message(con, conversation_id, user["id"], "user", message)
         response = _support_ai_reply(user, {"plan": user["plan"], "name": user["name"]}, [], message)
         if response["escalate"]:
             con.execute(
                 "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
                 (response["reason"], now(), conversation_id),
             )
-        _add_message(con, None, "assistant", response["reply"], {
+        _add_message(con, conversation_id, None, "assistant", response["reply"], {
             "escalated": response["escalate"], "reason": response["reason"]
         })
         return handler.send_json(201, {"ok": True, "ticket_id": conversation_id,
@@ -613,7 +617,7 @@ def _support_route(handler, method, path, query, con, user):
         subject = _text(data.get("subject") or "Новый вопрос", 120, required=True)
         conversation_id = _new_conversation(con, "support", subject, user["id"])
         _add_member(con, conversation_id, user["id"], "customer")
-        _add_message(con, None, "system", "Обращение создано. Опишите вопрос — ассистент поддержки ответит здесь.")
+        _add_message(con, conversation_id, None, "system", "Обращение создано. Опишите вопрос — ассистент поддержки ответит здесь.")
         row = con.execute("SELECT * FROM chat_conversations WHERE id=?", (conversation_id,)).fetchone()
         return handler.send_json(201, {"thread": {
             "id": row["id"], "subject": row["subject"], "status": row["status"],
@@ -636,7 +640,7 @@ def _support_route(handler, method, path, query, con, user):
                 "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
                 (reason, now(), conversation_id),
             )
-            _add_message(con, None, "system", "Пользователь попросил подключить сотрудника. Обращение добавлено в очередь поддержки.")
+            _add_message(con, conversation_id, None, "system", "Пользователь попросил подключить сотрудника. Обращение добавлено в очередь поддержки.")
             return handler.send_json(200, {"ok": True, "needs_human": True})
         if action == "messages" and method == "GET":
             try:
@@ -671,7 +675,7 @@ def _support_route(handler, method, path, query, con, user):
                     "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
                     (response["reason"], now(), conversation_id),
                 )
-            answer = _add_message(con, None, "assistant", response["reply"], {
+            answer = _add_message(con, conversation_id, None, "assistant", response["reply"], {
                 "escalated": response["escalate"], "reason": response["reason"]
             })
             return handler.send_json(201, {
