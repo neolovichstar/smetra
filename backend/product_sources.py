@@ -288,7 +288,7 @@ def _extract(page, source_url, hostname):
 def fetch_product(value):
     normalized_url, hostname = validate_url(value)
     request = urllib.request.Request(normalized_url, headers={
-        "User-Agent": "SmetraProductMonitor/1.0 (+https://smetra.vercel.app)",
+        "User-Agent": "SmetraProductMonitor/1.0 (+https://smetra.online)",
         "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
         "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.5",
     }, method="GET")
@@ -338,19 +338,14 @@ def _require_quote_writer(service):
 
 
 def _premium_access(service):
-    row = service.con.execute(
-        "SELECT plan,subscription_status,entitlement_until,smart_supplier_enabled,smart_supplier_until FROM workspaces WHERE id=?",
-        (service.wid,),
-    ).fetchone()
-    if not row:
-        raise business.DomainError(404, "Рабочее пространство не найдено")
-    plan = str(row["plan"] or "").strip().lower().replace("-", "_").replace(" ", "_")
-    supported = {"pro_plus", "pro_plus_month", "pro_plus_year", "pro_plus_monthly", "pro_plus_yearly", "team", "team_month", "team_year", "team_monthly", "team_yearly"}
-    entitlement = int(row["entitlement_until"] or 0) > _now()
-    sub_status = str(row["subscription_status"] or "").lower()
-    if plan not in supported or not entitlement or sub_status not in ("active", "trialing", "paid"):
+    try:
+        from backend.entitlements import workspace_feature_access
+    except ModuleNotFoundError:
+        from entitlements import workspace_feature_access
+    decision = workspace_feature_access(service.con, service.wid, "product_monitor", _now())
+    if not decision["allowed"]:
         raise business.DomainError(402, "Эта функция доступна в тарифах «PRO Плюс» и «TEAM»")
-    return {"plan": plan, "team": plan.startswith("team")}
+    return {"plan": decision["tier"], "team": decision["tier"] == "team"}
 
 
 def _quote_item(service, quote_id, item_id):
