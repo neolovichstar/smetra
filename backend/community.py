@@ -3,6 +3,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from backend.app import ApiError, ORIGIN, audit, now, uid
@@ -511,7 +512,7 @@ def _public_id_route(handler, method, path, query, con, user):
             _add_member(con, conversation_id, user["id"], "director")
         for member in members:
             _add_member(con, conversation_id, member["user_id"], member["role"])
-        _add_message(con, None, "system", "Рабочий чат объекта создан.", {
+        _add_message(con, conversation_id, None, "system", "Рабочий чат объекта создан.", {
             "event": "object_chat_created", "workspace_id": workspace_id,
             "project_id": project_id,
         })
@@ -624,7 +625,11 @@ def _support_route(handler, method, path, query, con, user):
             _add_message(con, None, "system", "Пользователь попросил подключить сотрудника. Обращение добавлено в очередь поддержки.")
             return handler.send_json(200, {"ok": True, "needs_human": True})
         if action == "messages" and method == "GET":
-            messages = _messages(con, conversation_id, after=int((query.get("after") or ["0"])[0] or 0))
+            try:
+                after = max(0, int((query.get("after") or ["0"])[0] or 0))
+            except (TypeError, ValueError):
+                after = 0
+            messages = _messages(con, conversation_id, after=after)
             con.execute(
                 "UPDATE chat_members SET last_read_at=? WHERE conversation_id=? AND user_id=?",
                 (now(), conversation_id, user["id"]),
