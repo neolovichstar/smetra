@@ -460,6 +460,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_premium_visual_cloud_products.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
@@ -2229,6 +2234,10 @@ class Service:
             from backend.assistant import route
 
             return route(self, method, parts, data)
+        if kind == "premium":
+            from backend.product_sources import route as premium_route
+
+            return premium_route(self, method, parts, query, data)
         if kind == "capabilities" and method == "GET":
             try:
                 from backend.ai import available
