@@ -48,7 +48,7 @@ def profile_route(con, user, method, data):
         visible = directory_visible if directory_visible is not None else (int(existing_directory['visible']) if existing_directory else 1)
         con.execute(
             "INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET "
+            "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET "
             "public_id=excluded.public_id,display_name=excluded.display_name,profession=excluded.profession,"
             "company=excluded.company,visible=excluded.visible,updated_at=excluded.updated_at",
             (user['public_id'], user['id'], (name or user['name'])[:160], current['profession'], current['company'], visible, user['created_at'], current['updated_at']),

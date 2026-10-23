@@ -435,7 +435,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace", "people", "conversations", "community"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace", "people", "conversations", "community", "realtime"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/billing"):
