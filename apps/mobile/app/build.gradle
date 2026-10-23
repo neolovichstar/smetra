@@ -69,6 +69,6 @@ gradle.taskGraph.whenReady { graph ->
 
 dependencies {
     implementation 'com.my.tracker:mytracker-sdk:3.6.0'
-    implementation 'com.yandex.ads.mediation:mobileads:8.6.0'
+    implementation 'com.yandex.android:mobileads:8.6.0'
     implementation 'ru.rustore.sdk:pushclient:7.5.0'
 }

@@ -58,6 +58,7 @@ REVOKE ALL ON smetra.chat_messages FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON smetra.app_presence FROM PUBLIC, anon, authenticated;
 ALTER TABLE smetra.billing_subscriptions ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE smetra.assistant_jobs ADD COLUMN IF NOT EXISTS ad_reward_id TEXT;
-CREATE INDEX IF NOT EXISTS idx_reward_credit_expiry ON smetra.assistant_ad_reward_credits(user_id,expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reward_credit_daily
+ ON smetra.assistant_ad_reward_credits(user_id,reward_date);
 INSERT INTO smetra.schema_migrations(version,applied_at) VALUES(51,extract(epoch FROM now())::bigint) ON CONFLICT(version) DO NOTHING;
 COMMIT;

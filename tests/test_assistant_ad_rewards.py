@@ -111,7 +111,7 @@ class AssistantAdRewardTests(unittest.TestCase):
             assistant.release(service, reserved)
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-only", "ASSISTANT_WORKER_SECRET": "x"*40}):
             status, job = self.call("/assistant/jobs", "POST",
-                                   {"text": "Проверка возврата"}, token, extra_headers={"Idempotency-Key": "ad-job-cancel-0001"})
+                                   {"text": "Проверка возврата"}, token, key="ad-job-cancel-0001")
             self.assertEqual(status, 202, job)
             self.assertEqual(self.call("/assistant/jobs/" + job["job"]["id"], "DELETE", token=token)[0], 200)
             self.assertEqual(self.call("/assistant/jobs/" + job["job"]["id"], "DELETE", token=token)[0], 200)

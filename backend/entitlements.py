@@ -24,6 +24,7 @@ PLAN_TIER = {
     "pro_plus_monthly": "pro_plus",
     "pro_plus_yearly": "pro_plus",
     "team": "team",
+    "pro_team": "team",
     "team_month": "team",
     "team_year": "team",
     "team_monthly": "team",

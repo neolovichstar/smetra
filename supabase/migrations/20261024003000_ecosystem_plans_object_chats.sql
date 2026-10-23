@@ -1,6 +1,10 @@
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
+ALTER TABLE smetra.workspaces DROP CONSTRAINT IF EXISTS workspaces_plan_check;
+ALTER TABLE smetra.workspaces ADD CONSTRAINT workspaces_plan_check CHECK(plan IN (
+ 'free','starter','pro','pro_month','pro_year','pro_solo','pro_plus','pro_plus_month',
+ 'team','team_month','team_year','pro_team'));
 ALTER TABLE smetra.billing_intents ADD COLUMN IF NOT EXISTS bonus_ai_messages BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE smetra.push_outbox ADD COLUMN IF NOT EXISTS recipient_user_id TEXT REFERENCES smetra.users(id) ON DELETE CASCADE;
 CREATE TABLE IF NOT EXISTS smetra.object_chat_threads (
@@ -55,7 +59,7 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog 
    AND s.token_hash=auth.jwt()->>'smetra_session'
    AND s.expires_at>EXTRACT(EPOCH FROM NOW())
    AND u.blocked=0 AND u.deleted_at IS NULL
-   AND w.plan IN ('team','team_month','team_year','team_monthly','team_yearly')
+   AND w.plan IN ('team','team_month','team_year','team_monthly','team_yearly','pro_team')
    AND w.subscription_status IN ('active','trialing','paid')
    AND w.entitlement_until>EXTRACT(EPOCH FROM NOW())
  );

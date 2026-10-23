@@ -403,6 +403,7 @@ class EstimateSafetyTests(unittest.TestCase):
 
     def test_ai_estimate_provenance_is_preserved_when_editor_saves(self):
         token, uid = self.account("ai-provenance")
+        self.call("/workspace", token=token)
         import uuid
         draft_id = str(uuid.uuid4())
         with self.mod.db() as con:
