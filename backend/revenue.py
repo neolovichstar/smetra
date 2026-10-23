@@ -76,7 +76,24 @@ PRODUCT_ACCESS = {
     'team_year': ('team', 5, 3),
     'business_month': ('business', 15, 4),
     'business_year': ('business', 15, 4),
+    # Stable storage codes retained by the cloud billing schema.
+    'pro_solo_month': ('pro_solo', 1, 1),
+    'pro_solo_year': ('pro_solo', 1, 1),
+    'pro_team_month': ('team', 5, 3),
+    'pro_team_year': ('team', 5, 3),
+    'smart_supplier_month': ('pro_plus', 1, 2),
 }
+PRODUCT_CODE = {
+    'pro_month': 'pro_solo_month',
+    'pro_year': 'pro_solo_year',
+    'pro_plus_month': 'pro_plus_month',
+    'pro_plus_year': 'pro_plus_year',
+    'team_month': 'pro_team_month',
+    'team_year': 'pro_team_year',
+    'business_month': 'business_month',
+    'business_year': 'business_year',
+}
+
 
 
 def workspace_entitlement(subscriptions, moment=None):
