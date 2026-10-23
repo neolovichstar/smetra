@@ -4,7 +4,7 @@ import urllib.parse
 import unittest
 from unittest.mock import Mock, patch
 
-from backend import business, cloud_drives, product_sources
+from backend import business, cloud_drives, product_sources, entitlements
 from backend.app import Handler
 
 
@@ -118,6 +118,35 @@ class ProductSourceSafetyTests(unittest.TestCase):
                     "https://127.0.0.1/catalog/item/123",
                     resolve_dns=False,
                 )
+
+
+
+class WorkspaceEntitlementTests(unittest.TestCase):
+    def test_legacy_pro_is_solo_not_plus(self):
+        row = {"plan": "pro_month", "subscription_status": "active", "entitlement_until": 500}
+        result = entitlements.evaluate_workspace_plan(row, "product_monitor", 100)
+        self.assertEqual(result["tier"], "pro_solo")
+        self.assertFalse(result["allowed"])
+
+    def test_plus_requires_active_subscription_and_unexpired_entitlement(self):
+        row = {"plan": "pro_plus_month", "subscription_status": "active", "entitlement_until": 500}
+        self.assertTrue(entitlements.evaluate_workspace_plan(row, "cloud_drives", 100)["allowed"])
+        self.assertFalse(entitlements.evaluate_workspace_plan(row, "cloud_drives", 501)["allowed"])
+        row["subscription_status"] = "cancelled"
+        self.assertFalse(entitlements.evaluate_workspace_plan(row, "cloud_drives", 100)["allowed"])
+
+    def test_team_inherits_plus_features(self):
+        row = {"plan": "team_year", "subscription_status": "paid", "entitlement_until": 500}
+        self.assertTrue(entitlements.evaluate_workspace_plan(row, "visual_estimates", 100)["allowed"])
+        self.assertTrue(entitlements.evaluate_workspace_plan(row, "team_management", 100)["allowed"])
+
+    def test_unknown_plan_fails_closed(self):
+        row = {"plan": "unrecognized_plan", "subscription_status": "active", "entitlement_until": 500}
+        self.assertFalse(entitlements.evaluate_workspace_plan(row, "cloud_drives", 100)["allowed"])
+
+    def test_unknown_feature_is_rejected(self):
+        with self.assertRaises(ValueError):
+            entitlements.evaluate_workspace_plan(None, "invented_feature", 100)
 
 
 if __name__ == "__main__":
