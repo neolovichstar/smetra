@@ -14,7 +14,16 @@ import uuid
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300}
+PURCHASE_BONUS_MESSAGES = {
+    'pro_month': 50,
+    'pro_year': 300,
+    'pro_plus_month': 0,
+    'pro_plus_year': 0,
+    'team_month': 0,
+    'team_year': 0,
+    'business_month': 0,
+    'business_year': 0,
+}
 
 
 def now():
@@ -58,6 +67,64 @@ def configuration():
     return experiment, variants
 
 
+PRODUCT_ACCESS = {
+    'pro_month': ('pro_solo', 1, 1),
+    'pro_year': ('pro_solo', 1, 1),
+    'pro_plus_month': ('pro_plus', 1, 2),
+    'pro_plus_year': ('pro_plus', 1, 2),
+    'team_month': ('team', 5, 3),
+    'team_year': ('team', 5, 3),
+    'business_month': ('business', 15, 4),
+    'business_year': ('business', 15, 4),
+    # Stable storage codes retained by the cloud billing schema.
+    'pro_solo_month': ('pro_solo', 1, 1),
+    'pro_solo_year': ('pro_solo', 1, 1),
+    'pro_team_month': ('team', 5, 3),
+    'pro_team_year': ('team', 5, 3),
+    'smart_supplier_month': ('pro_plus', 1, 2),
+}
+PRODUCT_CODE = {
+    'pro_month': 'pro_solo_month',
+    'pro_year': 'pro_solo_year',
+    'pro_plus_month': 'pro_plus_month',
+    'pro_plus_year': 'pro_plus_year',
+    'team_month': 'pro_team_month',
+    'team_year': 'pro_team_year',
+    'business_month': 'business_month',
+    'business_year': 'business_year',
+}
+STORAGE_LIMIT_BYTES = {
+    'free': 100_000_000,
+    'pro_solo': 500 * 1024 * 1024,
+    'pro_plus': 5 * 1024 * 1024 * 1024,
+    'team': 15 * 1024 * 1024 * 1024,
+    'business': 100 * 1024 * 1024 * 1024,
+}
+
+
+
+def workspace_entitlement(subscriptions, moment=None):
+    """Resolve tier and expiry from confirmed subscription rows; test mode still grants QA access."""
+    moment = now() if moment is None else int(moment)
+    active = [
+        row for row in subscriptions
+        if row['status'] in ('active', 'succeeded') and int(row['current_period_end'] or 0) > moment
+    ]
+    if not active:
+        return None
+    def access(row):
+        return PRODUCT_ACCESS.get(row['product_code'], ('pro_solo', 1, 1))
+    best_rank = max(access(row)[2] for row in active)
+    highest = [row for row in active if access(row)[2] == best_rank]
+    best_tier, seats, _ = access(highest[0])
+    return {
+        'plan': best_tier,
+        'seat_limit': seats,
+        'entitlement_until': max(int(row['current_period_end'] or 0) for row in highest),
+        'subscription_count': len(highest),
+    }
+
+
 def pricing(con, user):
     experiment, variants = configuration()
     uid = user['id']
@@ -71,14 +138,46 @@ def pricing(con, user):
         # Removing a live cohort cannot silently charge that user another price.
         raise ValueError('Assigned pricing variant is no longer configured')
     prices = variants[assigned['variant']]
+    plus_price = integer_env('PRO_PLUS_MONTH_PRICE_KOPECKS', 69000, 100)
+    team_month = integer_env('TEAM_MONTH_PRICE_KOPECKS', 399000, 100)
+    pro_plus_year = integer_env('PRO_PLUS_YEAR_PRICE_KOPECKS', 690000, 100)
+    team_year = integer_env('TEAM_YEAR_PRICE_KOPECKS', 3990000, 100)
+    business_month = integer_env('BUSINESS_MONTH_PRICE_KOPECKS', 999000, 100)
+    business_year = integer_env('BUSINESS_YEAR_PRICE_KOPECKS', 9990000, 100)
+    if pro_plus_year >= plus_price * 12 or team_year >= team_month * 12 or business_year >= business_month * 12:
+        raise ValueError('Annual subscription must offer real savings')
     launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
-    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': {
-        'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366}},
-        'annual_saving_kopecks': prices['month']*12-prices['year'],
-        'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
+    plans = {
+        'pro_month': {'name': 'PRO Solo', 'tier': 'solo', 'period': 'month', 'amount_kopecks': prices['month'], 'duration_days': 31},
+        'pro_year': {'name': 'PRO Solo', 'tier': 'solo', 'period': 'year', 'amount_kopecks': prices['year'], 'duration_days': 366},
+        'pro_plus_month': {'name': 'PRO Плюс / Снабженец', 'tier': 'plus', 'period': 'month', 'amount_kopecks': plus_price, 'duration_days': 31},
+        'pro_plus_year': {'name': 'PRO Плюс / Снабженец', 'tier': 'plus', 'period': 'year', 'amount_kopecks': pro_plus_year, 'duration_days': 366},
+        'team_month': {'name': 'TEAM / Компания', 'tier': 'team', 'period': 'month', 'amount_kopecks': team_month, 'duration_days': 31},
+        'team_year': {'name': 'TEAM / Компания', 'tier': 'team', 'period': 'year', 'amount_kopecks': team_year, 'duration_days': 366},
+        'business_month': {'name': 'BUSINESS / Партнёр', 'tier': 'business', 'period': 'month', 'amount_kopecks': business_month, 'duration_days': 31},
+        'business_year': {'name': 'BUSINESS / Партнёр', 'tier': 'business', 'period': 'year', 'amount_kopecks': business_year, 'duration_days': 366},
+    }
+    catalog = [
+        {'id': 'pro_solo', 'name': 'PRO Solo', 'price_kopecks': prices['month'], 'billing_period': 'monthly', 'plan': 'pro_month', 'annual_plan': 'pro_year', 'storage_bytes': STORAGE_LIMIT_BYTES['pro_solo'], 'seat_limit': 1,
+         'features': ['Без рекламы', 'До 10 000 смет и предложений', '100 сообщений ИИ в месяц', 'Чистые PDF и XLSX', 'Облако чеков до 500 МБ']},
+        {'id': 'pro_plus', 'name': 'PRO Плюс / Снабженец', 'price_kopecks': plus_price, 'billing_period': 'monthly', 'plan': 'pro_plus_month', 'annual_plan': 'pro_plus_year', 'storage_bytes': STORAGE_LIMIT_BYTES['pro_plus'], 'seat_limit': 1,
+         'features': ['Всё из PRO Solo', 'Авансы, расходы и этапы сметы', 'Фирменные бланки', 'Облако до 5 ГБ']},
+        {'id': 'team_company', 'name': 'TEAM / Компания', 'price_kopecks': team_month, 'billing_period': 'monthly', 'plan': 'team_month', 'annual_plan': 'team_year', 'storage_bytes': STORAGE_LIMIT_BYTES['team'], 'seat_limit': 5,
+         'features': ['Общее пространство директора и 4 сотрудников', 'Общая база клиентов и объектов', 'Синхронизация рабочих данных', 'Групповые чаты объектов']},
+        {'id': 'business_partner', 'name': 'BUSINESS / Партнёр', 'price_kopecks': business_month, 'billing_period': 'monthly', 'plan': 'business_month', 'annual_plan': 'business_year', 'storage_bytes': STORAGE_LIMIT_BYTES['business'], 'seat_limit': 15,
+         'features': ['Всё из TEAM', 'До 15 участников', 'Разделение ролей и зон ответственности', 'Приоритетная поддержка', 'Облако до 100 ГБ']},
+    ]
+    return {
+        'experiment': experiment,
+        'variant': assigned['variant'],
+        'plans': plans,
+        'catalog': catalog,
+        'annual_saving_kopecks': prices['month'] * 12 - prices['year'],
+        'team_annual_saving_kopecks': team_month * 12 - team_year,
+        'purchase_bonus': {**PURCHASE_BONUS_MESSAGES},
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
-        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
+        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000},
+    }
 
 
 def record(con, uid, name, origin='', variant='', key=None):

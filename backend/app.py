@@ -37,8 +37,17 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 39
-PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
+REQUIRED_CLOUD_SCHEMA_VERSION = 50
+PLANS = {
+    "pro_month": (49000, 31),
+    "pro_year": (490000, 366),
+    "pro_plus_month": (69000, 31),
+    "pro_plus_year": (690000, 366),
+    "team_month": (399000, 31),
+    "team_year": (3990000, 366),
+    "business_month": (999000, 31),
+    "business_year": (9990000, 366),
+}
 
 
 def yookassa_mode(user=None):
@@ -207,6 +216,7 @@ def user_view(user, con):
     expiry = user["entitlement_until"] or 0
     return {
         "id": user["id"],
+        "public_id": "SM-" + str(user["id"]).replace("-", "").upper(),
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
@@ -549,6 +559,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             public["/" + name] = (name, mime)
         public["/workspace.js"] = ("workspace.js", "text/javascript")
+        public["/communication-center.js"] = ("communication-center.js", "text/javascript")
         public["/admin.js"] = ("admin.js", "text/javascript")
         public["/admin.css"] = ("admin.css", "text/css")
         public["/growth.js"] = ("growth.js", "text/javascript")
@@ -637,6 +648,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def api(self, method, path, query, con):
+        # Keep local/SQLite and Vercel/PostgreSQL behavior aligned for messaging.
+        from backend.community import handles, route as communication_route
+        if handles(path):
+            result = communication_route(self, method, path, query, con)
+            if result is not None:
+                return result
+            raise ApiError(404, "Не найдено")
+
         if path == '/api/billing/pricing' and method == 'GET':
             experiment,variants=revenue.configuration()
             cheapest=min(variants.values(),key=lambda v:v['month'])
@@ -1183,6 +1202,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(404, "Обращение не найдено")
             if row["status"] != status:
                 con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
+                # Keep the newer chat queue synchronized with legacy support actions.
+                con.execute(
+                    "UPDATE chat_conversations SET status=?, "
+                    "needs_human=CASE WHEN ?='closed' THEN 0 ELSE needs_human END, updated_at=? "
+                    "WHERE id=? AND kind='support'",
+                    (status, status, now(), target),
+                )
                 audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
         if path.startswith("/api/admin/users/") and method == "PATCH":
@@ -1337,20 +1363,104 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     )
                     if status == "succeeded":
                         terms = con.execute('SELECT duration_days,bonus_ai_messages,is_test FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
-                        prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
-                        grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
-                        entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
+                        prior_user = con.execute(
+                            "SELECT entitlement_until FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()
+                        moment = now()
+                        test_mode = bool(terms["is_test"]) if terms else False
+                        grant_days = terms["duration_days"] if terms else PLANS[local["plan"]][1]
+                        paid_user = con.execute(
+                            "SELECT * FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()
+                        workspace_id = business.ensure_workspace(con, paid_user)
+                        access = revenue.PRODUCT_ACCESS.get(local["plan"], ("pro_solo", 1, 1))
+                        product_code = revenue.PRODUCT_CODE.get(local["plan"], local["plan"])
+                        is_postgres = bool(getattr(con, "is_postgres", False))
+                        # Supabase schema keeps Solo/Plus at account level (NULL workspace_id);
+                        # TEAM/Business are attached to the chosen workspace. SQLite stores
+                        # every tier on its single personal workspace for backward compatibility.
+                        subscription_workspace_id = (
+                            workspace_id
+                            if (not is_postgres or access[2] >= 3)
+                            else None
+                        )
+                        same_rank_codes = [
+                            code for code, value in revenue.PRODUCT_ACCESS.items()
+                            if value[2] == access[2]
+                        ]
+                        placeholders = ",".join("?" for _ in same_rank_codes)
+                        if subscription_workspace_id is None:
+                            subscription_scope = "workspace_id IS NULL AND user_id=?"
+                            subscription_scope_args = (local["user_id"],)
+                        else:
+                            subscription_scope = "workspace_id=?"
+                            subscription_scope_args = (subscription_workspace_id,)
+                        current_same_tier = con.execute(
+                            "SELECT COALESCE(MAX(current_period_end),0) FROM billing_subscriptions "
+                            "WHERE " + subscription_scope + " AND status IN ('active','succeeded') "
+                            "AND current_period_end>? AND is_test=? "
+                            "AND product_code IN (" + placeholders + ")",
+                            (*subscription_scope_args, moment, test_mode, *same_rank_codes),
+                        ).fetchone()[0]
+                        # Stack only with a current subscription at the same tier.
+                        # A long lower-tier plan must never prolong a higher tier.
+                        product_period_start = max(moment, int(current_same_tier or 0))
+                        product_period_end = product_period_start + grant_days * 86400
+                        has_prior_products = con.execute(
+                            "SELECT 1 FROM billing_subscriptions WHERE user_id=? AND is_test=? LIMIT 1",
+                            (local["user_id"], test_mode),
+                        ).fetchone()
+                        legacy_until = int(prior_user["entitlement_until"] or 0) if not has_prior_products else 0
+                        con.execute(
+                            "INSERT INTO billing_subscriptions("
+                            "id,user_id,workspace_id,product_code,provider,provider_subscription_id,"
+                            "provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,"
+                            "current_period_start,current_period_end,cancel_at_period_end,last_payment_id,"
+                            "created_at,updated_at) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,'active',?,?,?,?,?,?,?,?) "
+                            "ON CONFLICT DO NOTHING",
+                            (
+                                uid(), local["user_id"], subscription_workspace_id, product_code, "yookassa",
+                                local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
+                                test_mode, False, product_period_start, product_period_end, False,
+                                local["id"], moment, moment,
+                            ),
+                        )
+                        active_products = con.execute(
+                            "SELECT product_code,status,current_period_end FROM billing_subscriptions "
+                            "WHERE (workspace_id=? OR (workspace_id IS NULL AND user_id=?)) "
+                            "AND status IN ('active','succeeded') AND current_period_end>?",
+                            (workspace_id, local["user_id"], moment),
+                        ).fetchall()
+                        resolved = revenue.workspace_entitlement(active_products, moment)
+                        product_until = max(
+                            (int(row["current_period_end"] or 0) for row in active_products),
+                            default=0,
+                        )
+                        account_until = max(legacy_until, product_until)
                         con.execute(
                             "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                            (entitlement_until, "pro", local["user_id"]),
+                            (account_until, "pro" if account_until > moment else "free", local["user_id"]),
                         )
+                        if resolved:
+                            con.execute(
+                                "UPDATE workspaces SET plan=?,subscription_status='active',"
+                                "entitlement_until=?,seat_limit=? WHERE id=?",
+                                (resolved["plan"], resolved["entitlement_until"], resolved["seat_limit"], workspace_id),
+                            )
+                        else:
+                            con.execute(
+                                "UPDATE workspaces SET plan='free',subscription_status='inactive',"
+                                "entitlement_until=0,seat_limit=1 WHERE id=?",
+                                (workspace_id,),
+                            )
                         # Gift credits are issued only for a provider-confirmed live payment.
                         # The amount and expiry are fixed in the original payment intent.
                         bonus = int(terms['bonus_ai_messages'] or 0) if terms else 0
                         if terms and not terms['is_test'] and bonus > 0:
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
-                                (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
+                                (uid(), local['user_id'], local['id'], bonus, bonus, product_period_end, now()),
                             )
                         newly_succeeded = True
                     if status in ('succeeded','canceled'):
@@ -1413,25 +1523,62 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             now(),
                         ),
                     )
-                    # Rebuild remaining paid time without the refunded grant.
-                    grants = con.execute(
-                        """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
-                        WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
-                        AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
-                        ORDER BY p.activated_at,p.created_at,p.id""",
-                        (payment["user_id"],),
+                    # Revoke the exact product period tied to this fully refunded payment.
+                    # Keep lower-tier/other-workspace subscriptions intact.
+                    revoked_subscriptions = con.execute(
+                        "SELECT DISTINCT workspace_id FROM billing_subscriptions "
+                        "WHERE last_payment_id=? OR (provider='yookassa' AND provider_subscription_id=?)",
+                        (payment["id"], payment["provider_id"]),
                     ).fetchall()
-                    until, plan = 0, "free"
-                    for grant in grants:
-                        until = (
-                            max(until, grant["activated_at"])
-                            + (grant['duration_days'] or PLANS[grant["plan"]][1]) * 86400
-                        )
-                        plan = "pro"
+                    con.execute(
+                        "UPDATE billing_subscriptions SET status='canceled',auto_renew=?,"
+                        "cancel_at_period_end=?,canceled_at=?,updated_at=? "
+                        "WHERE last_payment_id=? OR (provider='yookassa' AND provider_subscription_id=?)",
+                        (False, False, now(), now(), payment["id"], payment["provider_id"]),
+                    )
+                    subscription_exists = con.execute(
+                        "SELECT 1 FROM billing_subscriptions WHERE user_id=? LIMIT 1",
+                        (payment["user_id"],),
+                    ).fetchone()
+                    if subscription_exists:
+                        active_until = int(con.execute(
+                            "SELECT COALESCE(MAX(current_period_end),0) FROM billing_subscriptions "
+                            "WHERE user_id=? AND status IN ('active','succeeded') AND current_period_end>?",
+                            (payment["user_id"], now()),
+                        ).fetchone()[0] or 0)
+                    else:
+                        # Backwards compatibility for old payment rows that predate
+                        # the subscription catalog and have no preserved legacy row.
+                        grants = con.execute(
+                            """SELECT p.plan,p.activated_at,b.duration_days FROM payments p
+                            LEFT JOIN billing_intents b ON b.payment_id=p.id
+                            WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
+                            AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
+                            ORDER BY p.activated_at,p.created_at,p.id""",
+                            (payment["user_id"],),
+                        ).fetchall()
+                        active_until = 0
+                        for grant in grants:
+                            active_until = (
+                                max(active_until, int(grant["activated_at"] or 0))
+                                + (grant["duration_days"] or PLANS[grant["plan"]][1]) * 86400
+                            )
                     con.execute(
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                        (until, plan if until > now() else "free", payment["user_id"]),
+                        (active_until, "pro" if active_until > now() else "free", payment["user_id"]),
                     )
+                    from backend.community import _refresh_workspace_entitlement
+
+                    workspace_ids = {
+                        row["workspace_id"] for row in revoked_subscriptions if row["workspace_id"]
+                    }
+                    workspace_ids.update(
+                        row["id"] for row in con.execute(
+                            "SELECT id FROM workspaces WHERE owner_id=?", (payment["user_id"],)
+                        ).fetchall()
+                    )
+                    for workspace_id in workspace_ids:
+                        _refresh_workspace_entitlement(con, workspace_id)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
                     event(con, payment["user_id"], "payment_refunded")

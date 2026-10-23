@@ -36,6 +36,9 @@ TABLES = TABLES | frozenset(["assistant_jobs"])
 TABLES = TABLES | frozenset(["creation_requests"])
 TABLES = TABLES | frozenset("push_devices push_outbox push_deliveries".split())
 TABLES = TABLES | frozenset(
+    "billing_subscriptions chat_conversations chat_members chat_messages app_presence".split()
+)
+TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")

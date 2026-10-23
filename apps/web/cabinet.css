@@ -358,6 +358,19 @@
 .workspace-page .nav-search:focus-visible{outline-offset:2px}
 .workspace-page .toast{max-width:min(420px,calc(100vw - 32px));line-height:1.4}
 @media(max-width:1000px){.workspace-page .workspace-modes{margin-left:auto}.workspace-page .app-nav-actions{gap:10px}.workspace-page .nav-search{min-width:180px}.workspace-page .main{padding-inline:32px}}
-@media(max-width:800px){.workspace-page .workspace-modes{display:none}.workspace-page .app-nav-inner{gap:10px}.workspace-page .app-nav-actions{margin-left:auto}.workspace-page .main{padding-inline:22px}.workspace-page .section-top{align-items:flex-start}}
+@media(max-width:800px){
+ .workspace-page .app-nav{height:100px}
+ .workspace-page .app-nav-inner{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:56px 36px;align-content:center;gap:4px 10px;padding-inline:12px}
+ .workspace-page .app-nav-brand{grid-column:1;grid-row:1;gap:12px}
+ .workspace-page .workspace-modes{display:flex;grid-column:1/-1;grid-row:2;justify-self:start;align-self:start;margin:0}
+ .workspace-page .app-nav-actions{grid-column:2;grid-row:1;margin:0;gap:7px}
+ .workspace-page .nav-toggle{width:44px;height:44px;padding:12px}
+ .workspace-page .nav-search{width:44px;min-width:44px;height:44px}
+ .workspace-page .sidebar{top:100px;height:calc(100dvh - 100px)}
+ .nav-open .nav-backdrop{inset:100px 0 0}
+ .workspace-page .app-shell{min-height:calc(100dvh - 100px)}
+ .workspace-page .main{padding-inline:22px}
+ .workspace-page .section-top{align-items:flex-start}
+}
 @media(max-width:650px){.workspace-page .app-nav-actions{gap:7px}.workspace-page .main{padding-inline:20px}.workspace-page .topline-actions .btn{flex:1}.workspace-page .topline-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-page .record-line{gap:10px}.workspace-page .record-meta{width:100%;justify-content:space-between}.workspace-page .record-meta b{font-size:12px}.workspace-page .section-top{gap:10px}.workspace-page .section-top h2,.workspace-page .section-top h3{font-size:16px}.workspace-page .dashboard-work .record-meta .btn{display:inline-flex}.workspace-page .workspace-page .btn{min-height:42px}}
 @media(prefers-reduced-motion:reduce){.workspace-page .btn,.workspace-page .workspace-modes button,.workspace-page .field input,.workspace-page .field textarea,.workspace-page .field select{transition:none}.workspace-page .btn:active,.workspace-page .sidebar-group button:active{transform:none}}
