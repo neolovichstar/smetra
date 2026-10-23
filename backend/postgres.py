@@ -42,6 +42,7 @@ TABLES = TABLES | frozenset(
 )
 TABLES = TABLES | frozenset(["creation_requests"])
 TABLES = TABLES | frozenset("push_devices push_outbox push_deliveries".split())
+TABLES = TABLES | frozenset("user_directory conversations conversation_members direct_chat_pairs messages".split())
 TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )

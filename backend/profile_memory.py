@@ -17,7 +17,9 @@ def profile(con, user):
 
 def profile_route(con, user, method, data):
     if method == 'GET':
-        return {'profile': profile(con, user)}
+        value = profile(con, user)
+        value['public_id'] = user['public_id']
+        return {'profile': value}
     if method != 'PATCH':
         raise DomainError(405, 'Метод не поддерживается')
     if not isinstance(data, dict) or not data or not set(data).issubset(set(FIELDS) | {'response_style', 'memory_enabled'}):
@@ -38,8 +40,16 @@ def profile_route(con, user, method, data):
             (user['id'], *(current[key] for key in (*FIELDS, 'response_style', 'memory_enabled', 'updated_at'))),
         )
         name = ' '.join(filter(None, (current['first_name'], current['last_name'])))
+        con.execute(
+            "INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(user_id) DO UPDATE SET "
+            "public_id=excluded.public_id,display_name=excluded.display_name,profession=excluded.profession,"
+            "company=excluded.company,updated_at=excluded.updated_at",
+            (user['public_id'], user['id'], (name or user['name'])[:160], current['profession'], current['company'], user['created_at'], current['updated_at']),
+        )
         if name and ('first_name' in values or 'last_name' in values):
             con.execute('UPDATE users SET name=? WHERE id=?', (name[:160], user['id']))
+    current['public_id'] = user['public_id']
     return {'profile': current}
 
 

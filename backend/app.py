@@ -39,7 +39,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 48
+REQUIRED_CLOUD_SCHEMA_VERSION = 49
 # Includes private legacy codes only for existing-payment reconciliation/refunds.
 # Public checkout validates against CHECKOUT_PLAN_CODES from the canonical catalogue.
 PLANS = BILLING_PLANS
@@ -211,6 +211,7 @@ def user_view(user, con):
     expiry = user["entitlement_until"] or 0
     return {
         "id": user["id"],
+        "public_id": user["public_id"],
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
@@ -434,7 +435,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "marketplace", "people", "conversations", "community"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/billing"):
@@ -725,8 +726,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
             try:
                 user_id = uid()
+                public_id = "SM-" + user_id.replace("-", "")[:10].upper()
                 con.execute(
-                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)",
+                    "INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at,public_id) VALUES(?,?,?,?,?,?,?)",
                     (
                         user_id,
                         email,
@@ -734,7 +736,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         name,
                         now(),
                         now() if local_only and not os.getenv("SMTP_HOST") else None,
+                        public_id,
                     ),
+                )
+                con.execute(
+                    "INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at) "
+                    "VALUES(?,?,?,'','',1,?,0)",
+                    (public_id, user_id, name, now()),
                 )
                 event(con, user_id, "signup_completed")
                 revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
@@ -885,6 +893,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Неизвестное событие")
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
+        if (
+            path in ("/api/people", "/api/conversations", "/api/community", "/api/support")
+            or path.startswith("/api/conversations/")
+            or path.startswith("/api/community/")
+            or path.startswith("/api/support/")
+            or (path.startswith("/api/admin/support/") and path.endswith("/messages"))
+        ):
+            from backend import messaging
+            payload = messaging.handle(self, con, user, method, path, query)
+            status = 201 if path == "/api/support" and method == "POST" else 200
+            return self.send_json(status, payload)
         if path.startswith("/api/marketplace/"):
             try:
                 from backend import marketplace
@@ -1243,16 +1262,57 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id WHERE b.is_test=0 AND p.status='succeeded' AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')"
                 ).fetchone()[0],
             }
+            stats.update({
+                "active_24h": con.execute(
+                    "SELECT count(DISTINCT user_id) FROM growth_events WHERE created_at>? AND user_id IS NOT NULL",
+                    (now() - 86400,),
+                ).fetchone()[0],
+                "active_30d": con.execute(
+                    "SELECT count(DISTINCT user_id) FROM growth_events WHERE created_at>? AND user_id IS NOT NULL",
+                    (now() - 30 * 86400,),
+                ).fetchone()[0],
+                "new_users_24h": con.execute(
+                    "SELECT count(*) FROM users WHERE deleted_at IS NULL AND created_at>?",
+                    (now() - 86400,),
+                ).fetchone()[0],
+                "new_quotes_24h": con.execute(
+                    "SELECT count(*) FROM quotes WHERE created_at>?",
+                    (now() - 86400,),
+                ).fetchone()[0],
+                "workspaces": con.execute("SELECT count(*) FROM workspaces").fetchone()[0],
+                "projects": con.execute("SELECT count(*) FROM projects").fetchone()[0],
+                "tasks": con.execute("SELECT count(*) FROM tasks").fetchone()[0],
+                "files": con.execute("SELECT count(*) FROM files").fetchone()[0],
+                "support_open": con.execute("SELECT count(*) FROM support WHERE status='open'").fetchone()[0],
+                "support_human": con.execute("SELECT count(*) FROM support WHERE status='open' AND needs_human=1").fetchone()[0],
+                "payments_pending": con.execute("SELECT count(*) FROM payments WHERE status='pending'").fetchone()[0],
+                "revenue_24h_kopecks": con.execute(
+                    "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id "
+                    "WHERE b.is_test=0 AND p.status='succeeded' AND p.created_at>? "
+                    "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')",
+                    (now() - 86400,),
+                ).fetchone()[0],
+                "revenue_30d_kopecks": con.execute(
+                    "SELECT coalesce(sum(p.amount_kopecks),0) FROM payments p JOIN billing_intents b ON b.payment_id=p.id "
+                    "WHERE b.is_test=0 AND p.status='succeeded' AND p.created_at>? "
+                    "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')",
+                    (now() - 30 * 86400,),
+                ).fetchone()[0],
+                "assistant_jobs_30d": con.execute(
+                    "SELECT count(*) FROM assistant_jobs WHERE created_at>?",
+                    (now() - 30 * 86400,),
+                ).fetchone()[0],
+            })
             users = [
                 dict(r)
                 for r in con.execute(
-                    "SELECT id,email,name,role,blocked,plan,entitlement_until,created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 100"
+                    "SELECT id,public_id,email,name,role,blocked,plan,entitlement_until,created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 100"
                 )
             ]
             tickets = [
                 dict(r)
                 for r in con.execute(
-                    "SELECT s.id,s.user_id,u.email,s.message,s.status,s.created_at FROM support s JOIN users u ON u.id=s.user_id ORDER BY s.created_at DESC LIMIT 100"
+                    "SELECT s.id,s.user_id,u.email,u.name AS user_name,u.public_id,s.message,s.subject,s.status,s.needs_human,s.priority,s.ai_state,s.conversation_id,s.created_at,s.updated_at FROM support s JOIN users u ON u.id=s.user_id ORDER BY s.needs_human DESC,s.updated_at DESC,s.created_at DESC LIMIT 100"
                 )
             ]
             logs = [
@@ -1287,8 +1347,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conditions = ["deleted_at IS NULL"]
             params = []
             if search:
-                conditions.append("(lower(email) LIKE ? OR lower(name) LIKE ?)")
-                params.extend(["%" + search.lower() + "%"] * 2)
+                conditions.append("(lower(email) LIKE ? OR lower(name) LIKE ? OR lower(public_id) LIKE ?)")
+                params.extend(["%" + search.lower() + "%"] * 3)
             if status == "active":
                 conditions.append("blocked=0")
             elif status == "blocked":
@@ -1299,7 +1359,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             where = " AND ".join(conditions)
             count = con.execute("SELECT count(*) FROM users WHERE " + where, params).fetchone()[0]
             rows = [dict(r) for r in con.execute(
-                "SELECT id,email,name,role,blocked,plan,entitlement_until,created_at "
+                "SELECT id,public_id,email,name,role,blocked,plan,entitlement_until,created_at "
                 "FROM users WHERE " + where + " ORDER BY created_at DESC,id DESC LIMIT 25 OFFSET ?",
                 (*params, offset),
             )]
@@ -1315,7 +1375,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not row:
                 raise ApiError(404, "Обращение не найдено")
             if row["status"] != status:
-                con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
+                con.execute("UPDATE support SET status=?,needs_human=CASE WHEN ?='closed' THEN 0 ELSE needs_human END,ai_state=CASE WHEN ?='closed' THEN 'resolved' ELSE ai_state END,updated_at=? WHERE id=?", (status, status, status, now(), target))
+                con.execute("UPDATE conversations SET status=?,updated_at=? WHERE id=(SELECT conversation_id FROM support WHERE id=?)", ("closed" if status == "closed" else "active", now(), target))
                 audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
         if path.startswith("/api/admin/users/") and method == "PATCH":

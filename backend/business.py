@@ -533,6 +533,10 @@ def migrate(con):
         con.executescript(
             (Path(__file__).parent / "migrations" / "031_subscription_catalog_and_lead_access.sql").read_text(encoding="utf-8")
         )
+    if not con.execute("SELECT 1 FROM schema_migrations WHERE version=35").fetchone():
+        con.executescript(
+            (Path(__file__).parent / "migrations" / "032_communication_support.sql").read_text(encoding="utf-8")
+        )
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_assistant_jobs_ad_reward ON assistant_jobs(ad_reward_id) WHERE ad_reward_id IS NOT NULL"
     )
@@ -1032,6 +1036,8 @@ class Service:
         self.emit("quote", row["id"], "Смета отправлена", f"v{version}")
         from backend import revenue
         revenue.activate(self.con,self.user['id'],'estimate_shared',row['id'])
+        from backend.messaging import ensure_quote_conversation
+        ensure_quote_conversation(self.con, dict(row), self.user, self.wid)
 
     def public(self, method, path, query):
         if path == "/api/public/intake":
