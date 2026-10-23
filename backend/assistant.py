@@ -165,7 +165,7 @@ def reserve(service):
 def reserve_in_transaction(service):
     current = quota(service)
     if current["remaining"] <= 0:
-        raise DomainError(429, "Лимит сообщений ассистенту исчерпан. Посмотрите rewarded-видео, чтобы получить ещё 3 запроса.")
+        raise DomainError(429, "Лимит сообщений ассистенту исчерпан. Подключите PRO для увеличения лимита; рекламные награды пока недоступны.")
     key = current["key"]
     base_allowance = current["base_limit"] + current["referral_limit"]
     if current["used"] < base_allowance:

@@ -101,27 +101,28 @@
   const carouselDots=document.querySelector("#billing-carousel-dots");
   const carouselPosition=document.querySelector("#billing-carousel-position");
   const audienceDescription=document.querySelector("#billing-audience-description");
-  const audiencePlans={personal:["pro_month","pro_year"],business:["pro_plus_month","pro_team_month","pro_team_year"]};
+  const audiencePlans={personal:["start","pro_month","pro_year"],business:["pro_plus_month","pro_team_month","pro_team_year"]};
   let audience="personal",activeSlide=0;
   const planByCode=Object.fromEntries(pricing.catalog.map(item=>[item.code,item]));
+  planByCode.start={code:"start",title:"Старт",period:"free",tier:"start",amount_kopecks:0,duration_days:0,features:["10 бесплатных смет для знакомства","Экспорт текста и PDF с водяным знаком","Базовые инструменты составления смет","Без платных функций для команды"]};
   const plansForAudience=()=>audiencePlans[audience].map(code=>planByCode[code]).filter(Boolean);
   function renderPlanCard(item,index,total){
-   const yearly=item.period==="year",team=item.tier==="team",plus=item.tier==="plus";
+   const yearly=item.period==="year",team=item.tier==="team",plus=item.tier==="plus",isFree=item.code==="start";
    const monthlyEquivalent=yearly?Math.round(item.amount_kopecks/12):item.amount_kopecks;
    const saving=item.code==="pro_year"?annualSaving:item.code==="pro_team_year"?pricing.team_annual_saving_kopecks:0;
-   const badge=team?"До 5 участников":plus?"Учёт финансов и фирменные бланки":yearly?"Оплата за год со скидкой":"Для одного специалиста";
+   const badge=isFree?"10 смет бесплатно":team?"До 5 участников":plus?"Учёт финансов и фирменные бланки":yearly?"Оплата за год со скидкой":"Для одного специалиста";
    const bonus=Number(pricing.purchase_bonus?.[item.code]||0);
    return '<article class="billing-carousel-slide" role="group" aria-roledescription="слайд" aria-label="'+(index+1)+' из '+total+'">'+
-    '<div class="billing-carousel-card '+(team?'is-business':'')+(yearly?' is-annual':'')+'">'+
-     '<div class="billing-carousel-card-top"><span class="billing-plan-kicker">'+(team?"СМЕТРА / TEAM":plus?"СМЕТРА / PRO ПЛЮС":"СМЕТРА / PRO SOLO")+'</span><span class="billing-plan-badge">'+e(badge)+'</span></div>'+
+    '<div class="billing-carousel-card '+(team?'is-business':'')+(yearly?' is-annual':'')+(isFree?' is-free':'')+'">'+
+     '<div class="billing-carousel-card-top"><span class="billing-plan-kicker">'+(isFree?"СМЕТРА / СТАРТ":team?"СМЕТРА / TEAM":plus?"СМЕТРА / PRO ПЛЮС":"СМЕТРА / PRO SOLO")+'</span><span class="billing-plan-badge">'+e(badge)+'</span></div>'+
      '<h3>'+e(item.title)+'</h3>'+
-     '<div class="billing-carousel-price"><strong>'+rub(item.amount_kopecks)+'</strong><span>/ '+(yearly?"год":"месяц")+'</span></div>'+
-     '<p class="billing-carousel-term">'+(yearly?"Годовой доступ · "+rub(monthlyEquivalent)+" в месяц в пересчёте":"Один платёж · доступ на 31 день")+'</p>'+
+     '<div class="billing-carousel-price"><strong>'+(isFree?"Бесплатно":rub(item.amount_kopecks))+'</strong>'+(isFree?'':'<span>/ '+(yearly?"год":"месяц")+'</span>')+'</div>'+
+     '<p class="billing-carousel-term">'+(isFree?"Базовый доступ для знакомства со Сметрой":yearly?"Годовой доступ · "+rub(monthlyEquivalent)+" в месяц в пересчёте":"Один платёж · доступ на 31 день")+'</p>'+
      (saving>0?'<p class="billing-carousel-saving">Экономия за год — '+rub(saving)+'</p>':'')+
      '<ul class="billing-carousel-features">'+item.features.map(feature=>'<li>'+e(feature)+'</li>').join('')+'</ul>'+
      (bonus>0?'<div class="billing-carousel-bonus">+'+bonus+' бонусных сообщений ассистента после подтверждения оплаты</div>':'')+
-     '<button type="button" class="btn primary billing-carousel-checkout" data-plan-choice="'+e(item.code)+'" '+(ready?'':'disabled')+'><span>'+(ready?'Выбрать тариф':'Оплата недоступна')+'</span><span aria-hidden="true">↗</span></button>'+
-     '<p class="billing-carousel-trust">Без автоматического продления. Цена фиксируется до перехода к оплате.</p>'+
+     '<button type="button" class="btn '+(isFree?'':'primary')+' billing-carousel-checkout" data-plan-choice="'+e(item.code)+'" '+(ready&&!isFree?'':'disabled')+'><span>'+(isFree?(pro?'Тариф Старт':'Ваш текущий тариф'):(ready?'Выбрать тариф':'Оплата недоступна'))+'</span>'+(isFree?'':'<span aria-hidden="true">↗</span>')+'</button>'+
+     '<p class="billing-carousel-trust">'+(isFree?'После 10 бесплатных смет для дальнейшей работы понадобится платная подписка.':"Без автоматического продления. Цена фиксируется до перехода к оплате.")+'</p>'+
     '</div></article>';
   }
   function renderCarousel(requestedCode){
