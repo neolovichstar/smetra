@@ -198,6 +198,47 @@ class IdentityAssistantTests(unittest.TestCase):
         connection.close()
         return result
 
+    def test_yandex_avatar_claim_is_propagated_without_trusting_picture_urls(self):
+        from backend.identity import profile
+        from backend.app import user_view
+        avatar = {"id": "1000034426", "display_name": "Кирилл",
+                  "default_email": "kirill@example.test",
+                  "default_avatar_id": "131652443",
+                  "is_avatar_empty": False}
+        token = {"access_token": "test-token"}
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-client"), patch(
+            "backend.identity.remote", side_effect=[token, avatar]
+        ):
+            subject, name, email, avatar_id = profile(
+                "yandex", "test-code", "test-state", "test-verifier",
+                "https://smetra.online/api/auth/oauth/yandex/callback", "",
+            )
+        self.assertEqual((subject, name, email, avatar_id),
+                         ("1000034426", "Кирилл", "kirill@example.test", "131652443"))
+        with self.mod.db() as con:
+            row = con.execute("SELECT * FROM users LIMIT 1").fetchone()
+            if row:
+                con.execute("UPDATE users SET avatar_id=? WHERE id=?", (avatar_id, row["id"]))
+                updated = con.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+                self.assertEqual(
+                    user_view(updated, con)["avatar_url"],
+                    "https://avatars.yandex.net/get-yapic/131652443/islands-200",
+                )
+
+    def test_yandex_avatar_missing_uses_initials(self):
+        from backend.identity import profile
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-client"), patch(
+            "backend.identity.remote",
+            side_effect=[{"access_token": "test-token"}, {
+                "id": "123", "display_name": "Олег",
+                "is_avatar_empty": True, "default_avatar_id": "123"
+            }],
+        ):
+            self.assertEqual(
+                profile("yandex", "code", "state", "verifier",
+                        "https://smetra.online/api/auth/oauth/yandex/callback", "")[3], ""
+            )
+
     def test_yandex_callback_stays_on_verified_start_host(self):
         with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"):
             status, headers, _ = self.get_redirect(

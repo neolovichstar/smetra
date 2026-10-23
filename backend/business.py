@@ -256,6 +256,10 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    # A provider picture is a display field, never used for account linking.
+    user_columns = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+    if "avatar_id" not in user_columns:
+        con.execute("ALTER TABLE users ADD COLUMN avatar_id TEXT NOT NULL DEFAULT ''")
     # OAuth registration consent is stored with the one-use server-side state.
     # Add columns idempotently for databases created before this guardrail.
     oauth_state_columns = {r["name"] for r in con.execute("PRAGMA table_info(oauth_states)")}

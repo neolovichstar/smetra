@@ -85,10 +85,14 @@ def profile(provider, code, state, verifier, callback, device):
         )
         if user.get("client_id") and str(user["client_id"]) != client:
             raise ValueError("wrong client")
+        avatar_id = str(user.get("default_avatar_id") or "")
+        if user.get("is_avatar_empty") or not re.fullmatch(r"[A-Za-z0-9_/-]{1,150}", avatar_id):
+            avatar_id = ""
         return (
             str(user["id"]),
             user.get("real_name") or user.get("display_name") or "Пользователь",
             user.get("default_email", ""),
+            avatar_id,
         )
     if not device:
         raise ValueError('missing VK device binding')
@@ -212,7 +216,7 @@ def route(h, con, method, path, query, origin):
         )
         if provider == "yandex":
             url = "https://oauth.yandex.ru/authorize"
-            params["scope"] = "login:info login:email"
+            params["scope"] = "login:info login:email login:avatar"
         else:
             url = "https://id.vk.com/authorize"
             params.update(scope="vkid.personal_info email", code_challenge_method='s256', provider={"mail": "mail_ru", "ok": "ok_ru"}.get(provider, "vkid"))
@@ -247,7 +251,7 @@ def route(h, con, method, path, query, origin):
     if query.get("error"):
         return redirect(h, origin + "/app?auth_error=cancelled")
     try:
-        subject, name, email = profile(
+        details = profile(
             provider,
             query.get("code", [""])[0],
             state,
@@ -255,6 +259,9 @@ def route(h, con, method, path, query, origin):
             callback,
             query.get("device_id", [""])[0],
         )
+        # Backward compatible with three-field VK provider responses.
+        subject, name, email = details[:3]
+        avatar_id = details[3] if len(details) > 3 and provider == "yandex" else None
     except Exception:
         return redirect(h, origin + "/app?auth_error=provider")
     # All VK ID methods use the same VK application identity namespace.
@@ -312,6 +319,8 @@ def route(h, con, method, path, query, origin):
                     stamp() if not email.endswith('@identity.smetra.invalid') else None,
                 ),
             )
+        if avatar_id is not None:
+            con.execute("UPDATE users SET avatar_id=? WHERE id=?", (avatar_id, user_id))
         if (
             row["legal_acceptance"] == 1
             and row["legal_version"] == REGISTRATION_CONSENT_VERSION

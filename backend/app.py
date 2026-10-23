@@ -211,10 +211,15 @@ def event(con, user_id, name):
 
 def user_view(user, con):
     expiry = user["entitlement_until"] or 0
+    avatar_id = user["avatar_id"] if "avatar_id" in user.keys() else ""
+    avatar_url = ("https://avatars.yandex.net/get-yapic/" + avatar_id + "/islands-200"
+                  if avatar_id and re.fullmatch(r"[A-Za-z0-9_/-]{1,150}", avatar_id)
+                  else "")
     return {
         "id": user["id"],
         "email": user["email"],
         "name": user["name"],
+        "avatar_url": avatar_url,
         "role": user["role"],
         "plan": user["plan"] if expiry > now() else "free",
         "entitlement_until": expiry,
@@ -273,7 +278,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         if cookie:
             self.send_header("Set-Cookie", cookie)
@@ -535,6 +540,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("auth-layout-v2.css", "text/css"),
             ("landing-refinement.css", "text/css"),
             ("cabinet-refinement.css", "text/css"),
+            ("workspace-layout-v3.css", "text/css"),
             ("cabinet.css", "text/css"),
             ("product-ui.css", "text/css"),
             ("product-ui.js", "text/javascript"),
@@ -647,7 +653,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         self.end_headers()
         self.wfile.write(data)
