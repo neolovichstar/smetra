@@ -1192,6 +1192,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(404, "Обращение не найдено")
             if row["status"] != status:
                 con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
+                # Keep the newer chat queue synchronized with legacy support actions.
+                con.execute(
+                    "UPDATE chat_conversations SET status=?, "
+                    "needs_human=CASE WHEN ?='closed' THEN 0 ELSE needs_human END, updated_at=? "
+                    "WHERE id=? AND kind='support'",
+                    (status, status, now(), target),
+                )
                 audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
         if path.startswith("/api/admin/users/") and method == "PATCH":
