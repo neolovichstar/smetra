@@ -100,7 +100,11 @@ def main():
         token = account["token"]
         if os.getenv('SMETRA_ACTION_QA') == '1':
             with app.db() as con:
-                con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (int(time.time())+3600,int(time.time()),account['user']['id']))
+                now_ts = int(time.time())
+                con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (now_ts+3600,now_ts,account['user']['id']))
+                owner = con.execute("SELECT * FROM users WHERE id=?", (account['user']['id'],)).fetchone()
+                workspace_id = app.business.ensure_workspace(con, owner)
+                con.execute("UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (now_ts+3600,workspace_id))
             call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member'})
         from PIL import Image
         receipt_object = call('/construction/objects', {'name': 'Проверка чека'}, token)['object']['id']
