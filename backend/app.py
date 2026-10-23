@@ -1374,17 +1374,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         ).fetchone()
                         workspace_id = business.ensure_workspace(con, paid_user)
                         access = revenue.PRODUCT_ACCESS.get(local["plan"], ("pro_solo", 1, 1))
+                        product_code = revenue.PRODUCT_CODE.get(local["plan"], local["plan"])
+                        is_postgres = bool(getattr(con, "is_postgres", False))
+                        # Supabase schema keeps Solo/Plus at account level (NULL workspace_id);
+                        # TEAM/Business are attached to the chosen workspace. SQLite stores
+                        # every tier on its single personal workspace for backward compatibility.
+                        subscription_workspace_id = (
+                            workspace_id
+                            if (not is_postgres or access[2] >= 3)
+                            else None
+                        )
                         same_rank_codes = [
                             code for code, value in revenue.PRODUCT_ACCESS.items()
                             if value[2] == access[2]
                         ]
                         placeholders = ",".join("?" for _ in same_rank_codes)
+                        if subscription_workspace_id is None:
+                            subscription_scope = "workspace_id IS NULL AND user_id=?"
+                            subscription_scope_args = (local["user_id"],)
+                        else:
+                            subscription_scope = "workspace_id=?"
+                            subscription_scope_args = (subscription_workspace_id,)
                         current_same_tier = con.execute(
                             "SELECT COALESCE(MAX(current_period_end),0) FROM billing_subscriptions "
-                            "WHERE workspace_id=? AND status IN ('active','succeeded') "
+                            "WHERE " + subscription_scope + " AND status IN ('active','succeeded') "
                             "AND current_period_end>? AND is_test=? "
                             "AND product_code IN (" + placeholders + ")",
-                            (workspace_id, moment, test_mode, *same_rank_codes),
+                            (*subscription_scope_args, moment, test_mode, *same_rank_codes),
                         ).fetchone()[0]
                         # Stack only with a current subscription at the same tier.
                         # A long lower-tier plan must never prolong a higher tier.
@@ -1404,7 +1420,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             "VALUES(?,?,?,?,?,?,?,?,?,'active',?,?,?,?,?,?,?,?) "
                             "ON CONFLICT DO NOTHING",
                             (
-                                uid(), local["user_id"], workspace_id, local["plan"], "yookassa",
+                                uid(), local["user_id"], subscription_workspace_id, product_code, "yookassa",
                                 local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
                                 test_mode, False, product_period_start, product_period_end, False,
                                 local["id"], moment, moment,
@@ -1412,8 +1428,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         )
                         active_products = con.execute(
                             "SELECT product_code,status,current_period_end FROM billing_subscriptions "
-                            "WHERE workspace_id=? AND status IN ('active','succeeded') AND current_period_end>?",
-                            (workspace_id, moment),
+                            "WHERE (workspace_id=? OR (workspace_id IS NULL AND user_id=?)) "
+                            "AND status IN ('active','succeeded') AND current_period_end>?",
+                            (workspace_id, local["user_id"], moment),
                         ).fetchall()
                         resolved = revenue.workspace_entitlement(active_products, moment)
                         product_until = max(
