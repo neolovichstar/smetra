@@ -863,6 +863,7 @@ def _confirm(service, action_id):
             }
             kind, parts, method = "construction", paths[name], "POST"
         elif name == "send_quote_to_user":
+            kind = "quotes"
             current = service.get("quotes", args["id"])
             if current["revision"] != args["revision"]:
                 raise DomainError(409, "Смета изменилась после предпросмотра. Обновите предложение и подтвердите ещё раз.")
