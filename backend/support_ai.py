@@ -52,22 +52,73 @@ def fallback_answer(text):
     )
 
 
-def answer(messages, context=None):
-    """Return a short answer. A product-accurate fallback always exists if the provider is down."""
-    latest = next((str(row.get("body", "")) for row in reversed(messages) if row.get("sender_role") == "user"), "")
+def _last_user_message(messages):
+    return next((str(row.get("body", "")) for row in reversed(messages) if row.get("sender_role") == "user"), "")
+
+
+def _escalation_for(latest, reply, provider_ok):
+    value = str(latest or "").casefold()
+    answer_text = str(reply or "").casefold()
+    human_request = any(token in value for token in (
+        "позови сотруд", "позвать сотруд", "нужен человек", "оператор", "с живым человеком",
+        "свяжи с поддержк", "подключи человека", "поговорить с человеком", "позови менедж",
+    ))
+    if human_request:
+        return True, "high"
+    critical = any(token in value for token in (
+        "списал деньги", "списали деньги", "двойное списание", "платёж прошёл дважды",
+        "пропали данные", "удалилась смета", "взлом", "чужой аккаунт", "утечка",
+        "не могу войти", "потерял доступ", "смета исчезла",
+    ))
+    if critical:
+        return True, "urgent"
+    broken = any(token in value for token in (
+        "пустая страница", "пустую страницу", "белый экран", "не открыва", "не работает",
+        "не получается", "ошибка", "не сохраня", "не загружа", "не отправля", "сломал",
+        "зависает", "пропал", "не запуска", "не вижу", "не отвечает",
+    ))
+    if broken and (not provider_ok or any(token in answer_text for token in (
+        "не уверен", "не могу определить", "недостаточно информации", "позовите сотрудника",
+        "позвать сотрудника", "не могу помочь",
+    ))):
+        return True, "high"
+    known_topic = any(token in value for token in (
+        "тариф", "подпис", "оплат", "смет", "предлож", "клиент", "соглас",
+        "вход", "парол", "аккаунт", "идентификатор", "публичный id", "профил",
+        "файл", "pdf", "эксел", "xlsx", "документ", "экспорт",
+    ))
+    uncertain = any(token in answer_text for token in (
+        "не уверен", "не могу определить", "недостаточно информации",
+        "не могу помочь", "позовите сотрудника", "позвать сотрудника",
+    ))
+    if uncertain:
+        return True, "high"
+    if not provider_ok and not known_topic:
+        return True, "high"
+    return False, "normal"
+
+
+def answer_result(messages, context=None):
+    """Return a customer-safe answer and whether a human agent should take over."""
+    latest = _last_user_message(messages)
     fallback = fallback_answer(latest)
     key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not key:
-        return fallback
-    model = os.getenv("SUPPORT_MODEL", os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")).strip()
+        escalate, priority = _escalation_for(latest, fallback, False)
+        return {"text": fallback, "needs_human": escalate, "priority": priority, "source": "fallback"}
+    model = os.getenv("SUPPORT_MODEL", "qwen/qwen3.8-27b:free").strip()
     if not re.fullmatch(r"[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+)?", model):
-        return fallback
+        escalate, priority = _escalation_for(latest, fallback, False)
+        return {"text": fallback, "needs_human": escalate, "priority": priority, "source": "fallback"}
     recent = []
     for row in messages[-12:]:
         role = row.get("sender_role")
         if role not in ("user", "ai", "admin"):
             continue
-        recent.append({"role": "assistant" if role in ("ai", "admin") else "user", "content": str(row.get("body", ""))[:4000]})
+        recent.append({
+            "role": "assistant" if role in ("ai", "admin") else "user",
+            "content": str(row.get("body", ""))[:4000],
+        })
     context = context if isinstance(context, dict) else {}
     safe_context = {
         "plan": str(context.get("plan", "free"))[:40],
@@ -82,9 +133,12 @@ def answer(messages, context=None):
                 "content": (
                     "Ты — дружелюбный помощник поддержки Сметры. Отвечай по-русски как живой специалист, "
                     "коротко, естественно и без канцелярита. Используй только достоверные сведения из справочника "
-                    "ниже и сообщения пользователя. Не выдумывай названия разделов и возможности. Если данных не хватает, "
-                    "задай один конкретный уточняющий вопрос или предложи пользователю нажать «Позвать сотрудника». "
-                    "Не проси секреты и не утверждай, что действие уже выполнено. Справочник продукта:\n"
+                    "ниже и сообщений пользователя. Не выдумывай названия разделов и возможности. "
+                    "Верни только JSON-объект с полями reply (строка) и needs_human (boolean), без Markdown и "
+                    "дополнительных полей. needs_human=true, если пользователь просит сотрудника, есть спор о деньгах, "
+                    "риск потери данных/доступа/безопасности, конкретная техническая ошибка, либо ты не можешь надёжно "
+                    "решить вопрос по имеющимся сведениям. Если можно дать конкретную проверяемую инструкцию, "
+                    "needs_human=false. Не проси секреты и не утверждай, что действие уже выполнено. Справочник продукта:\n"
                     + APP_KNOWLEDGE
                     + "\nКонтекст аккаунта (не является основанием для раскрытия данных): "
                     + json.dumps(safe_context, ensure_ascii=False)
@@ -112,10 +166,36 @@ def answer(messages, context=None):
         result = json.loads(raw)
         content = result["choices"][0]["message"]["content"]
         if isinstance(content, list):
-            content = "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
-        content = re.sub(r"<(?:script|iframe)[^>]*>.*?</(?:script|iframe)>", "", str(content), flags=re.I | re.S).strip()
+            content = "\n".join(
+                str(item.get("text", "")) for item in content if isinstance(item, dict)
+            )
+        content = str(content).strip()
+        needs_human = False
+        try:
+            structured = json.loads(content)
+            if isinstance(structured, dict) and isinstance(structured.get("reply"), str):
+                content = structured["reply"].strip()
+                needs_human = structured.get("needs_human") is True
+        except (ValueError, TypeError):
+            # Compatibility with providers that ignore JSON-only output instructions.
+            pass
+        content = re.sub(r"<(?:script|iframe)[^>]*>.*?</(?:script|iframe)>", "", content, flags=re.I | re.S).strip()
         if not 2 <= len(content) <= 3000:
-            return fallback
-        return content
+            escalate, priority = _escalation_for(latest, fallback, False)
+            return {"text": fallback, "needs_human": escalate, "priority": priority, "source": "fallback"}
+        inferred, priority = _escalation_for(latest, content, True)
+        needs_human = needs_human or inferred
+        return {
+            "text": content,
+            "needs_human": needs_human,
+            "priority": "urgent" if priority == "urgent" else ("high" if needs_human else "normal"),
+            "source": "model",
+        }
     except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError, urllib.error.HTTPError):
-        return fallback
+        escalate, priority = _escalation_for(latest, fallback, False)
+        return {"text": fallback, "needs_human": escalate, "priority": priority, "source": "fallback"}
+
+
+def answer(messages, context=None):
+    """Backward-compatible plain text helper."""
+    return answer_result(messages, context)["text"]

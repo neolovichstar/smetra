@@ -9,9 +9,9 @@ from urllib.parse import unquote
 from backend.business import DomainError, packed, transaction
 
 try:
-    from backend.support_ai import answer as support_answer
+    from backend.support_ai import answer_result as support_answer_result
 except ModuleNotFoundError:
-    from support_ai import answer as support_answer
+    from support_ai import answer_result as support_answer_result
 
 
 COMMUNITY = (
@@ -372,12 +372,23 @@ def _support_user_reply(con, user, ticket_id, message):
     if ticket["needs_human"]:
         return ticket, _support_messages(con, ticket)
     recent = _messages(con, ticket["conversation_id"], 12)
-    answer_text = support_answer(recent, _support_context(con, user))
-    _insert_message(con, ticket["conversation_id"], None, "ai", answer_text, {})
-    con.execute(
-        "UPDATE support SET updated_at=?,ai_state='active' WHERE id=?",
-        (_now(), ticket_id),
-    )
+    outcome = support_answer_result(recent, _support_context(con, user))
+    _insert_message(con, ticket["conversation_id"], None, "ai", outcome["text"], {})
+    if outcome["needs_human"]:
+        con.execute(
+            "UPDATE support SET needs_human=1,status='open',ai_state='human',priority=?,updated_at=? WHERE id=?",
+            (outcome["priority"], _now(), ticket_id),
+        )
+        _insert_message(
+            con, ticket["conversation_id"], None, "system",
+            "Помощник передал обращение сотруднику, потому что вопрос требует проверки человеком.",
+            {},
+        )
+    else:
+        con.execute(
+            "UPDATE support SET updated_at=?,ai_state='active' WHERE id=?",
+            (_now(), ticket_id),
+        )
     ticket = _ticket(con, ticket_id, user["id"])
     return ticket, _support_messages(con, ticket)
 
@@ -528,9 +539,20 @@ def handle(handler, con, user, method, path, query):
             with transaction(con):
                 ticket = _make_support_ticket(con, user, data)
                 recent = _messages(con, ticket["conversation_id"], 12)
-                answer_text = support_answer(recent, _support_context(con, user))
-                _insert_message(con, ticket["conversation_id"], None, "ai", answer_text, {})
-                con.execute("UPDATE support SET updated_at=? WHERE id=?", (_now(), ticket["id"]))
+                outcome = support_answer_result(recent, _support_context(con, user))
+                _insert_message(con, ticket["conversation_id"], None, "ai", outcome["text"], {})
+                if outcome["needs_human"]:
+                    con.execute(
+                        "UPDATE support SET needs_human=1,status='open',ai_state='human',priority=?,updated_at=? WHERE id=?",
+                        (outcome["priority"], _now(), ticket["id"]),
+                    )
+                    _insert_message(
+                        con, ticket["conversation_id"], None, "system",
+                        "Помощник передал обращение сотруднику, потому что вопрос требует проверки человеком.",
+                        {},
+                    )
+                else:
+                    con.execute("UPDATE support SET updated_at=?,ai_state='active' WHERE id=?", (_now(), ticket["id"]))
                 ticket = _ticket(con, ticket["id"], user_id)
             return {"ticket": _ticket_view(ticket), "messages": _support_messages(con, ticket)}
 

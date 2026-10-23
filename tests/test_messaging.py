@@ -118,6 +118,23 @@ class CommunicationTests(unittest.TestCase):
             self.assertEqual(status, 200, items)
             self.assertTrue(any(item["id"] == ticket_id and item["needs_human"] for item in items["items"]))
 
+    def test_support_ai_escalates_when_unresolved_and_keeps_simple_faq_automatic(self):
+        from backend.support_ai import answer_result
+
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}):
+            known = answer_result([{"sender_role": "user", "body": "Где посмотреть мой публичный ID?"}])
+            self.assertFalse(known["needs_human"])
+            requested = answer_result([{"sender_role": "user", "body": "Пожалуйста, позови сотрудника поддержки."}])
+            self.assertTrue(requested["needs_human"])
+            self.assertEqual(requested["priority"], "high")
+            broken = answer_result([{"sender_role": "user", "body": "После нажатия белый экран, смета не открывается."}])
+            self.assertTrue(broken["needs_human"])
+            self.assertEqual(broken["priority"], "high")
+            critical = answer_result([{"sender_role": "user", "body": "Списали деньги дважды, помогите."}])
+            self.assertTrue(critical["needs_human"])
+            self.assertEqual(critical["priority"], "urgent")
+
+
     def test_community_rooms_are_joined_before_reading_and_posting(self):
         member, _ = self.account("community-member")
         stranger, _ = self.account("community-stranger")
