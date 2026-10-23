@@ -14,7 +14,7 @@ function setup(){
  w.api=async path=>path==='/workspace'?{workspace:{id:'qa-workspace',name:'QA',role:'owner',currency:'RUB',settings:{}},workspaces:[]}:{items:[]};
  w.load(fs.readFileSync('apps/web/workspace.js','utf8'));
  w.load(fs.readFileSync('apps/web/growth.js','utf8'));
- for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
+ for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js','communications-ui.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
  return {dom,w,doc:w.document,close:()=>dom.window.close()};
 }
 (async()=>{
@@ -24,7 +24,7 @@ function setup(){
   const request=deferred();const original=w.api;w.api=path=>path==='/billing'?request.promise:original(path);
   w.eval("tab='billing'");const pending=w.render();await sleep(0);w.eval("tab='support'");await w.render();
   request.resolve({email_verified:true,checkout_mode:'off',payments:[]});await pending;
-  assert.ok(doc.querySelector('#support-form'));assert.equal(doc.querySelector('.billing-hero'),null);
+  assert.ok(doc.querySelector('.comms-support-layout'));assert.equal(doc.querySelector('.billing-hero'),null);
  });
  await test('logout invalidates pending rendering',async({w,doc})=>{
   const request=deferred();const original=w.api;w.api=path=>path==='/billing'?request.promise:original(path);
