@@ -543,6 +543,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("chat-markdown.js", "text/javascript"),
             ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
             ("assistant-studio.css", "text/css"),
+            ("premium-tools.css", "text/css"),
+            ("premium-tools.js", "text/javascript"),
             ("landing.js", "text/javascript"),
             ("assets/black/unfold.png", "image/png"),
             ("assets/black/flight.png", "image/png"),
