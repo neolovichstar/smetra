@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS product_sources (
  created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  url TEXT NOT NULL, normalized_url TEXT NOT NULL, hostname TEXT NOT NULL,
  product_title TEXT NOT NULL DEFAULT '', brand TEXT NOT NULL DEFAULT '', sku TEXT NOT NULL DEFAULT '',
- image_url TEXT NOT NULL DEFAULT '', price_kopecks INTEGER CHECK(price_kopecks IS NULL OR price_kopecks>=0),
+ provider_mime TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '', price_kopecks INTEGER CHECK(price_kopecks IS NULL OR price_kopecks>=0),
  currency TEXT NOT NULL DEFAULT 'RUB', unit TEXT NOT NULL DEFAULT '',
  availability TEXT NOT NULL DEFAULT 'unknown' CHECK(availability IN ('in_stock','out_of_stock','preorder','backorder','unknown')),
  product_attributes TEXT NOT NULL DEFAULT '{}',
