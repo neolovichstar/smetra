@@ -72,7 +72,7 @@ WHERE u.deleted_at IS NULL AND u.plan='pro'
     WHERE s.workspace_id=w.id AND s.status IN ('active','succeeded')
       AND s.current_period_end>floor(extract(epoch FROM now()))::bigint
   )
-ON CONFLICT(provider_subscription_id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 UPDATE smetra.workspaces w
 SET plan='pro_solo',subscription_status='active',seat_limit=1,
