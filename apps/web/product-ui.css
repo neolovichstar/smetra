@@ -918,3 +918,11 @@
     box-sizing:border-box!important;flex:none!important;
   }
 }
+
+@media(max-width:700px){
+  .workspace-page .workspace-home .capture-actions>button{
+    width:44px!important;min-width:44px!important;max-width:44px!important;
+    height:44px!important;min-height:44px!important;max-height:44px!important;
+    padding:0!important;box-sizing:border-box!important;flex:none!important;
+  }
+}
