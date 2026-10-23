@@ -1267,6 +1267,9 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(self.call(path + "/compare?from=1", token=other)[0], 404)
         self.assertEqual(self.call(path + "/compare?from=1")[0], 401)
         wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?",
+                        (int(__import__('time').time()) + 86400, wid))
         self.assertEqual(self.call("/workspace/members", "POST", {"email": "compare-other@test.invalid", "role": "viewer"}, owner)[0], 200)
         status, readable = self.call(path + "/compare?from=1", token=other, workspace=wid)
         self.assertEqual(status, 200)
@@ -1345,6 +1348,9 @@ class BusinessFlows(unittest.TestCase):
         owner, _ = self.account("team-owner")
         viewer, viewer_id = self.account("team-viewer")
         wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?",
+                        (int(__import__('time').time()) + 86400, wid))
         q = self.quote(owner)
         self.assertEqual(self.call("/quotes/" + q["id"], token=viewer)[0], 404)
         self.assertEqual(self.call("/workspace", token=viewer, workspace=wid)[0], 404)

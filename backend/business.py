@@ -2140,8 +2140,8 @@ class Service:
                         "SELECT COUNT(*) AS count FROM workspace_members WHERE workspace_id=?",
                         (self.wid,),
                     ).fetchone()["count"]
-                    if int(member_count) >= int(team_workspace["seat_limit"] or 6):
-                        raise DomainError(409, "В PRO Team максимум 6 участников, включая владельца")
+                    if int(member_count) >= min(5, int(team_workspace["seat_limit"] or 5)):
+                        raise DomainError(409, "В TEAM максимум 5 участников, включая владельца")
                 self.con.execute(
                     "INSERT INTO workspace_members VALUES(?,?,?) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
                     (self.wid, member["id"], role),

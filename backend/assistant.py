@@ -569,6 +569,8 @@ def _store_cached_response(payload, answer):
 
 def query_model(messages):
     model = configured_model()
+    if not available():
+        raise DomainError(503, "Ассистент временно недоступен: не настроен ключ OpenRouter")
     payload = {
         "model": model,
         "messages": messages,

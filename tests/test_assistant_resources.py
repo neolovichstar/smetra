@@ -212,6 +212,9 @@ class AssistantResourceTests(unittest.TestCase):
         viewer, _ = self.account("resource-viewer-role")
         file = self.file(owner)
         workspace = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?",
+                        (int(__import__('time').time()) + 86400, workspace))
         invited = self.call("/workspace/members", "POST", {"email": "resource-viewer-role@test.invalid", "role": "viewer"}, owner)
         self.assertEqual(invited[0], 200, invited)
         meta = self.call("/files/" + file["id"] + "/metadata", token=viewer, workspace=workspace)
