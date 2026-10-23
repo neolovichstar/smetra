@@ -87,6 +87,57 @@ class RevenueTests(unittest.TestCase):
         test_payment,_=self.purchase(tester,key='test_bonus_checkout',test=True,plan='pro_year')
         self.assertIsNone(self.con.execute('SELECT id FROM assistant_bonus_grants WHERE payment_id=?',(test_payment['id'],)).fetchone(),'test checkouts do not mint purchase bonuses')
 
+    def test_four_tier_catalog_has_monthly_and_annual_checkout_products(self):
+        offer = revenue.pricing(self.con, self.user)
+        catalog = {item["id"]: item for item in offer["catalog"]}
+        self.assertEqual(set(catalog), {"pro_solo", "pro_plus", "team_company", "business_partner"})
+        expected = {
+            "pro_month": 49000,
+            "pro_year": 490000,
+            "pro_plus_month": 69000,
+            "pro_plus_year": 690000,
+            "team_month": 399000,
+            "team_year": 3990000,
+            "business_month": 999000,
+            "business_year": 9990000,
+        }
+        self.assertEqual({key: value["amount_kopecks"] for key, value in offer["plans"].items()}, expected)
+        for item in catalog.values():
+            self.assertIn(item["plan"], offer["plans"])
+            self.assertIn(item["annual_plan"], offer["plans"])
+            self.assertLess(offer["plans"][item["annual_plan"]]["amount_kopecks"],
+                            offer["plans"][item["plan"]]["amount_kopecks"] * 12)
+        self.assertEqual(catalog["team_company"]["seat_limit"], 5)
+        self.assertEqual(catalog["business_partner"]["seat_limit"], 15)
+        self.assertEqual(offer["limits"]["pro_quotes"], 10000)
+
+    def test_confirmed_paid_product_sets_workspace_tier_and_test_flag(self):
+        cases = [
+            ("solo-live", "pro_month", "pro_solo", 1, False),
+            ("plus-live", "pro_plus_month", "pro_plus", 1, False),
+            ("team-live", "team_month", "team", 5, False),
+            ("business-live", "business_year", "business", 15, False),
+            ("team-test", "team_month", "free", 1, True),
+        ]
+        for uid, plan, expected_tier, expected_seats, test_mode in cases:
+            user = self.account(uid)
+            local, _ = self.purchase(user, key="checkout_"+uid, plan=plan, test=test_mode)
+            workspace = self.con.execute(
+                "SELECT * FROM workspaces WHERE owner_id=?", (uid,)
+            ).fetchone()
+            self.assertIsNotNone(workspace)
+            self.assertEqual(workspace["plan"], expected_tier)
+            self.assertEqual(workspace["seat_limit"], expected_seats)
+            subscription = self.con.execute(
+                "SELECT product_code,is_test,status,current_period_end FROM billing_subscriptions "
+                "WHERE provider_subscription_id=?", (local["provider_id"],)
+            ).fetchone()
+            self.assertIsNotNone(subscription)
+            self.assertEqual(subscription["product_code"], plan)
+            self.assertEqual(bool(subscription["is_test"]), test_mode)
+            self.assertEqual(subscription["status"], "active")
+            self.assertGreater(subscription["current_period_end"], revenue.now())
+
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}
         with patch.dict(os.environ,config):
