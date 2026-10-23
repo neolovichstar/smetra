@@ -541,6 +541,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("landing-refinement.css", "text/css"),
             ("cabinet-refinement.css", "text/css"),
             ("workspace-layout-v3.css", "text/css"),
+            ("cabinet-alignment-v4.css", "text/css"),
             ("cabinet.css", "text/css"),
             ("product-ui.css", "text/css"),
             ("product-ui.js", "text/javascript"),

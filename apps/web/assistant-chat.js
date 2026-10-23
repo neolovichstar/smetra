@@ -57,7 +57,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
           <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="База знаний" title="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel"><span class="icon assistant-tool-icon assistant-icon-knowledge" aria-hidden="true"></span><span class="assistant-tool-label">Знания</span></button>
         </div>
         <section class="assistant-history-panel" id="assistant-history-panel" aria-label="История диалогов">
-          <div class="assistant-history-heading" id="assistant-history-heading"><span>ИСТОРИЯ</span><span class="assistant-history-count">${threadIndex.items.length}</span></div>
+          <div class="assistant-history-heading" id="assistant-history-heading"><span>Диалоги</span><span class="assistant-history-count">${threadIndex.items.length}</span></div>
           <div class="assistant-history-list" id="assistant-history-list" role="list" aria-label="История диалогов">
             <div class="assistant-conversation-row assistant-conversation-general${!activeConversation?' is-active':''}" data-thread-row data-thread-id="" data-pinned="0" role="listitem">
               <button class="assistant-conversation-open" type="button" data-conversation="" aria-pressed="${!activeConversation}" title="Общий диалог">
@@ -100,14 +100,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const assistantContentHost=assistantStudioRoot?.querySelector('.assistant-content');
   const assistantAppShell=document.querySelector('.app-shell');
   const assistantMainHost=document.querySelector('#content.main');
+  // Keep the rail in the same grid as the composer. Reparenting it to
+  // #shell produced competing grid tracks, detached sidebars and overflow.
   const positionAssistantToolRail=()=>{
     if(!assistantStudioRoot?.isConnected||!assistantToolRail?.isConnected)return;
-    const compact=window.matchMedia?window.matchMedia('(max-width:800px)').matches:window.innerWidth<=800;
-    if(compact){
-      if(assistantMainColumn&&assistantContentHost&&assistantToolRail.parentElement!==assistantMainColumn)assistantMainColumn.insertBefore(assistantToolRail,assistantContentHost);
-    }else if(assistantAppShell&&assistantMainHost&&assistantToolRail.parentElement!==assistantAppShell){
-      assistantAppShell.insertBefore(assistantToolRail,assistantMainHost);
-    }
+    if(assistantToolRail.parentElement!==assistantStudioRoot)
+      assistantStudioRoot.appendChild(assistantToolRail);
   };
   const cleanupAssistantToolRail=()=>{
     window.removeEventListener('resize',positionAssistantToolRail);
