@@ -525,7 +525,9 @@ def migrate(con):
             "renewal_consent_at,renewal_consent_version,current_period_start,current_period_end,"
             "next_charge_at,cancel_at_period_end,canceled_at,last_payment_id,created_at,updated_at) "
             "VALUES(?,?,?,?,?,?,?,?,?,'active',0,0,NULL,NULL,?,?,NULL,0,NULL,NULL,?,?) "
-            "ON CONFLICT(provider_subscription_id) DO NOTHING",
+            "ON CONFLICT(provider_subscription_id) DO UPDATE SET status='active',"
+            "current_period_start=excluded.current_period_start,"
+            "current_period_end=excluded.current_period_end,updated_at=excluded.updated_at",
             (
                 "legacy-" + legacy["workspace_id"], legacy["user_id"], legacy["workspace_id"],
                 "pro_month", "legacy", provider_id, "", 0, "RUB", moment,
