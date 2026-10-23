@@ -902,15 +902,33 @@ class Service:
             raise DomainError(400, "В одной смете может быть до 200 расценок")
         catalog_ids = list(dict.fromkeys(string(value, "Расценка", 80, True) for value in catalog_ids))
         owner = self.con.execute(
-            "SELECT u.id,u.entitlement_until FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
+            "SELECT u.id,u.plan,u.entitlement_until FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
             (self.wid,),
         ).fetchone()
+        current_time = stamp()
+        workspace_subscription = self.con.execute(
+            "SELECT plan,subscription_status,entitlement_until FROM workspaces WHERE id=?",
+            (self.wid,),
+        ).fetchone()
+        solo_paid = (
+            (self.user["plan"] == "pro" and int(self.user["entitlement_until"] or 0) > current_time)
+            or (owner["plan"] == "pro" and int(owner["entitlement_until"] or 0) > current_time)
+        )
+        team_paid = bool(
+            workspace_subscription
+            and workspace_subscription["plan"] == "pro_team"
+            and workspace_subscription["subscription_status"] == "active"
+            and int(workspace_subscription["entitlement_until"] or 0) > current_time
+        )
         count = self.con.execute(
             "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'",
             (owner["id"],),
         ).fetchone()[0]
-        if count >= (10 if (owner["entitlement_until"] or 0) <= stamp() else 10000):
-            raise DomainError(402, "Достигнут лимит смет текущего тарифа")
+        if not solo_paid and not team_paid and count >= 10:
+            raise DomainError(
+                402,
+                "Вы использовали 10 бесплатных смет. Подключите PRO, чтобы продолжить работу",
+            )
         values, items = self.quote_data(data)
         ai_generated = 0
         ai_draft_usage_id = data.get("ai_draft_usage_id")

@@ -1587,5 +1587,36 @@ class BusinessFlows(unittest.TestCase):
         )
 
 
+    def test_free_tier_has_ten_quotes_and_paid_solo_or_team_is_unlimited(self):
+        body = {"title": "Estimate", "client": "QA", "amount": 10000}
+
+        free_token, _ = self.account("free-quotes-exactly-ten")
+        for index in range(10):
+            status, result = self.call("/quotes", "POST", {**body, "title": f"Free {index}"}, free_token)
+            self.assertEqual(status, 201, result)
+        status, result = self.call("/quotes", "POST", {**body, "title": "Free 11"}, free_token)
+        self.assertEqual(status, 402, result)
+
+        paid_token, paid_id = self.account("paid-solo-unlimited-quotes")
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE users SET plan='pro',entitlement_until=? WHERE id=?",
+                (int(__import__("time").time()) + 86400, paid_id),
+            )
+        for index in range(11):
+            status, result = self.call("/quotes", "POST", {**body, "title": f"Solo {index}"}, paid_token)
+            self.assertEqual(status, 201, result)
+
+        team_token, _ = self.account("paid-team-unlimited-quotes")
+        team_id = self.call("/workspace", token=team_token)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE workspaces SET plan='pro_team',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?",
+                (int(__import__("time").time()) + 86400, team_id),
+            )
+        for index in range(11):
+            status, result = self.call("/quotes", "POST", {**body, "title": f"Team {index}"}, team_token)
+            self.assertEqual(status, 201, result)
+
 if __name__ == "__main__":
     unittest.main()
