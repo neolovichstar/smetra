@@ -379,6 +379,13 @@ class _SafeDownloadRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def _safe_download_open(request, timeout=15):
+    # Provider URLs may redirect to signed download hosts. Validate each redirect
+    # rather than allowing urllib's default handler to follow arbitrary destinations.
+    opener = urllib.request.build_opener(_SafeDownloadRedirect())
+    return opener.open(request, timeout=timeout)
+
+
 def _safe_cloud_href(value):
     try:
         parts = urllib.parse.urlsplit(value)
@@ -424,7 +431,7 @@ def _download(con, connection, file_row):
             headers={"Authorization": "Bearer " + token, "Accept": "*/*", "User-Agent": "SmetraCloudSync/1.0"},
         )
         try:
-            with urllib.request.urlopen(response, timeout=15) as result:
+            with _safe_download_open(response, timeout=15) as result:
                 raw = result.read(MAX_FILE_BYTES + 1)
                 if len(raw) > MAX_FILE_BYTES:
                     raise business.DomainError(413, "Файл больше 5 МБ; автоматический разбор пропущен")
@@ -440,7 +447,7 @@ def _download(con, connection, file_row):
         raise business.DomainError(502, "Яндекс.Диск вернул небезопасную ссылку скачивания")
     request = urllib.request.Request(href, headers={"User-Agent": "SmetraCloudSync/1.0"}, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=15) as result:
+        with _safe_download_open(request, timeout=15) as result:
             raw = result.read(MAX_FILE_BYTES + 1)
             if len(raw) > MAX_FILE_BYTES:
                 raise business.DomainError(413, "Файл больше 5 МБ; автоматический разбор пропущен")
