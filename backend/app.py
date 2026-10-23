@@ -1369,6 +1369,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         moment = now()
                         test_mode = bool(terms["is_test"]) if terms else False
                         grant_days = terms["duration_days"] if terms else PLANS[local["plan"]][1]
+                        paid_user = con.execute(
+                            "SELECT * FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()
+                        workspace_id = business.ensure_workspace(con, paid_user)
                         access = revenue.PRODUCT_ACCESS.get(local["plan"], ("pro_solo", 1, 1))
                         same_rank_codes = [
                             code for code, value in revenue.PRODUCT_ACCESS.items()
@@ -1377,30 +1381,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         placeholders = ",".join("?" for _ in same_rank_codes)
                         current_same_tier = con.execute(
                             "SELECT COALESCE(MAX(current_period_end),0) FROM billing_subscriptions "
-                            "WHERE workspace_id=(SELECT id FROM workspaces WHERE owner_id=? ORDER BY created_at LIMIT 1) "
-                            "AND status IN ('active','succeeded') AND current_period_end>? AND is_test=? "
+                            "WHERE workspace_id=? AND status IN ('active','succeeded') "
+                            "AND current_period_end>? AND is_test=? "
                             "AND product_code IN (" + placeholders + ")",
-                            (local["user_id"], moment, test_mode, *same_rank_codes),
+                            (workspace_id, moment, test_mode, *same_rank_codes),
                         ).fetchone()[0]
-                        # Stack a purchase behind an already active subscription at
-                        # the same tier, never behind a lower tier with a longer term.
+                        # Stack only with a current subscription at the same tier.
+                        # A long lower-tier plan must never prolong a higher tier.
                         product_period_start = max(moment, int(current_same_tier or 0))
                         product_period_end = product_period_start + grant_days * 86400
-                        # A legacy entitlement may predate billing_subscriptions. Preserve
-                        # it as an account-level fallback while new product periods stay separate.
                         has_prior_products = con.execute(
                             "SELECT 1 FROM billing_subscriptions WHERE user_id=? AND is_test=? LIMIT 1",
                             (local["user_id"], test_mode),
                         ).fetchone()
                         legacy_until = int(prior_user["entitlement_until"] or 0) if not has_prior_products else 0
-                        con.execute(
-                            "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                            (max(legacy_until, product_period_end), "pro", local["user_id"]),
-                        )
-                        paid_user = con.execute(
-                            "SELECT * FROM users WHERE id=?", (local["user_id"],)
-                        ).fetchone()
-                        workspace_id = business.ensure_workspace(con, paid_user)
                         con.execute(
                             "INSERT INTO billing_subscriptions("
                             "id,user_id,workspace_id,product_code,provider,provider_subscription_id,"
@@ -1421,11 +1415,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             (workspace_id, moment),
                         ).fetchall()
                         resolved = revenue.workspace_entitlement(active_products, moment)
+                        product_until = max(
+                            (int(row["current_period_end"] or 0) for row in active_products),
+                            default=0,
+                        )
+                        account_until = max(legacy_until, product_until)
+                        con.execute(
+                            "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
+                            (account_until, "pro" if account_until > moment else "free", local["user_id"]),
+                        )
                         if resolved:
                             con.execute(
                                 "UPDATE workspaces SET plan=?,subscription_status='active',"
                                 "entitlement_until=?,seat_limit=? WHERE id=?",
                                 (resolved["plan"], resolved["entitlement_until"], resolved["seat_limit"], workspace_id),
+                            )
+                        else:
+                            con.execute(
+                                "UPDATE workspaces SET plan='free',subscription_status='inactive',"
+                                "entitlement_until=0,seat_limit=1 WHERE id=?",
+                                (workspace_id,),
                             )
                         # Gift credits are issued only for a provider-confirmed live payment.
                         # The amount and expiry are fixed in the original payment intent.
