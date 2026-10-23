@@ -93,6 +93,13 @@ PRODUCT_CODE = {
     'business_month': 'business_month',
     'business_year': 'business_year',
 }
+STORAGE_LIMIT_BYTES = {
+    'free': 100_000_000,
+    'pro_solo': 500 * 1024 * 1024,
+    'pro_plus': 5 * 1024 * 1024 * 1024,
+    'team': 15 * 1024 * 1024 * 1024,
+    'business': 100 * 1024 * 1024 * 1024,
+}
 
 
 
@@ -151,13 +158,13 @@ def pricing(con, user):
         'business_year': {'name': 'BUSINESS / Партнёр', 'tier': 'business', 'period': 'year', 'amount_kopecks': business_year, 'duration_days': 366},
     }
     catalog = [
-        {'id': 'pro_solo', 'name': 'PRO Solo', 'price_kopecks': prices['month'], 'billing_period': 'monthly', 'plan': 'pro_month', 'annual_plan': 'pro_year', 'storage_bytes': 500 * 1024 * 1024, 'seat_limit': 1,
+        {'id': 'pro_solo', 'name': 'PRO Solo', 'price_kopecks': prices['month'], 'billing_period': 'monthly', 'plan': 'pro_month', 'annual_plan': 'pro_year', 'storage_bytes': STORAGE_LIMIT_BYTES['pro_solo'], 'seat_limit': 1,
          'features': ['Без рекламы', 'До 10 000 смет и предложений', '100 сообщений ИИ в месяц', 'Чистые PDF и XLSX', 'Облако чеков до 500 МБ']},
-        {'id': 'pro_plus', 'name': 'PRO Плюс / Снабженец', 'price_kopecks': plus_price, 'billing_period': 'monthly', 'plan': 'pro_plus_month', 'annual_plan': 'pro_plus_year', 'storage_bytes': 5 * 1024 * 1024 * 1024, 'seat_limit': 1,
+        {'id': 'pro_plus', 'name': 'PRO Плюс / Снабженец', 'price_kopecks': plus_price, 'billing_period': 'monthly', 'plan': 'pro_plus_month', 'annual_plan': 'pro_plus_year', 'storage_bytes': STORAGE_LIMIT_BYTES['pro_plus'], 'seat_limit': 1,
          'features': ['Всё из PRO Solo', 'Авансы, расходы и этапы сметы', 'Фирменные бланки', 'Облако до 5 ГБ']},
-        {'id': 'team_company', 'name': 'TEAM / Компания', 'price_kopecks': team_month, 'billing_period': 'monthly', 'plan': 'team_month', 'annual_plan': 'team_year', 'storage_bytes': 15 * 1024 * 1024 * 1024, 'seat_limit': 5,
+        {'id': 'team_company', 'name': 'TEAM / Компания', 'price_kopecks': team_month, 'billing_period': 'monthly', 'plan': 'team_month', 'annual_plan': 'team_year', 'storage_bytes': STORAGE_LIMIT_BYTES['team'], 'seat_limit': 5,
          'features': ['Общее пространство директора и 4 сотрудников', 'Общая база клиентов и объектов', 'Синхронизация рабочих данных', 'Групповые чаты объектов']},
-        {'id': 'business_partner', 'name': 'BUSINESS / Партнёр', 'price_kopecks': business_month, 'billing_period': 'monthly', 'plan': 'business_month', 'annual_plan': 'business_year', 'storage_bytes': 100 * 1024 * 1024 * 1024, 'seat_limit': 15,
+        {'id': 'business_partner', 'name': 'BUSINESS / Партнёр', 'price_kopecks': business_month, 'billing_period': 'monthly', 'plan': 'business_month', 'annual_plan': 'business_year', 'storage_bytes': STORAGE_LIMIT_BYTES['business'], 'seat_limit': 15,
          'features': ['Всё из TEAM', 'До 15 участников', 'Разделение ролей и зон ответственности', 'Приоритетная поддержка', 'Облако до 100 ГБ']},
     ]
     return {
