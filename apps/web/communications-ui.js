@@ -2,7 +2,7 @@
 window.SmetraCommunications = (() => {
   let timer = null;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  const time = value => value ? new Intl.DateTimeFormat('ru-RU',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}).format(new Date(Number(value)*1000)) : '';
+  const time = value => value ? new Intl.DateTimeFormat('ru-RU',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}).format(new Date(Number(value)>1e12?Number(value):Number(value)*1000)) : '';
   const stop = () => { if(timer!==null){clearInterval(timer);timer=null;} };
   const icon = name => name==='support'?'◌':name==='workspace'?'▦':name==='quote'?'▤':name==='community'?'◎':'↗';
   const roleName = role => ({user:'Вы',admin:'Поддержка',ai:'Помощник Сметры',system:'Сметра'}[role]||'Участник');

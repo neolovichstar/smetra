@@ -26,6 +26,10 @@ def _now():
     return int(time.time())
 
 
+def _now_ms():
+    return time.time_ns() // 1_000_000
+
+
 def _id():
     return str(uuid.uuid4())
 
@@ -124,13 +128,18 @@ def _messages(con, conversation_id, limit=100):
 
 
 def _insert_message(con, conversation_id, sender_id, role, body, payload=None):
-    moment = _now()
+    # Millisecond epoch plus a per-conversation monotonic fence keeps bursts ordered.
+    latest = con.execute(
+        "SELECT coalesce(max(created_at),0) FROM messages WHERE conversation_id=?",
+        (conversation_id,),
+    ).fetchone()[0]
+    message_time = max(_now_ms(), int(latest or 0) + 1)
     con.execute(
         "INSERT INTO messages(id,conversation_id,sender_id,sender_role,body,payload,created_at) VALUES(?,?,?,?,?,?,?)",
-        (_id(), conversation_id, sender_id, role, body, packed(payload or {}), moment),
+        (_id(), conversation_id, sender_id, role, body, packed(payload or {}), message_time),
     )
-    con.execute("UPDATE conversations SET updated_at=? WHERE id=?", (moment, conversation_id))
-    return moment
+    con.execute("UPDATE conversations SET updated_at=? WHERE id=?", (_now(), conversation_id))
+    return message_time
 
 
 def _add_member(con, conversation_id, user_id, role="member"):
@@ -289,7 +298,7 @@ def _messages_for_conversation(con, user, conversation_id, method, handler):
     if not row:
         raise _api_error(404, "Переписка не найдена")
     if method == "GET":
-        moment = _now()
+        moment = _now_ms()
         con.execute(
             "UPDATE conversation_members SET last_read_at=? WHERE conversation_id=? AND user_id=?",
             (moment, conversation_id, user["id"]),
@@ -528,7 +537,7 @@ def handle(handler, con, user, method, path, query):
             ticket = _ticket(con, ticket_id, user_id)
             con.execute(
                 "UPDATE conversation_members SET last_read_at=? WHERE conversation_id=? AND user_id=?",
-                (current, ticket["conversation_id"], user_id),
+                (_now_ms(), ticket["conversation_id"], user_id),
             )
             return {"ticket": _ticket_view(ticket), "messages": _support_messages(con, ticket)}
         if method == "POST":
@@ -554,7 +563,7 @@ def handle(handler, con, user, method, path, query):
         if method == "GET":
             con.execute(
                 "UPDATE conversation_members SET last_read_at=? WHERE conversation_id=? AND user_id=?",
-                (current, ticket["conversation_id"], user_id),
+                (_now_ms(), ticket["conversation_id"], user_id),
             )
             return {"ticket": _ticket_view(ticket), "messages": _support_messages(con, ticket)}
         if method == "POST":

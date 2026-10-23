@@ -4,7 +4,7 @@
   const actionNames = {block:'Заблокировать', unblock:'Разблокировать', grant:'Выдать Про на 31 день', revoke:'Отозвать Про'};
   const auditNames = {'admin.block':'Блокировка','admin.unblock':'Разблокировка','admin.grant':'Доступ Про выдан','admin.revoke':'Доступ Про отозван','admin.support.open':'Обращение открыто','admin.support.closed':'Обращение закрыто'};
   const paymentNames = {pending:'Ожидает',succeeded:'Оплачен',canceled:'Отменён',refunded:'Возврат'};
-  const time = seconds => seconds ? date(seconds) : '—';
+  const time = seconds => seconds ? date(Number(seconds)>1e12?Number(seconds)/1000:Number(seconds)) : '—';
   const label = value => escapeHtml(String(value ?? ''));
   const count = value => new Intl.NumberFormat('ru-RU').format(value || 0);
 
