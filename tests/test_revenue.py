@@ -178,6 +178,46 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(refreshed["seat_limit"], 1)
         self.assertEqual(refreshed["entitlement_until"], solo["current_period_end"])
 
+    def test_refunded_higher_tier_reverts_to_remaining_lower_tier(self):
+        user = self.account("tier-refund")
+        self.purchase(user, key="solo_annual_before_refund", plan="pro_year")
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE owner_id=?", (user["id"],)
+        ).fetchone()
+        solo = self.con.execute(
+            "SELECT current_period_end FROM billing_subscriptions WHERE workspace_id=? "
+            "AND product_code='pro_year' AND status='active'",
+            (workspace["id"],),
+        ).fetchone()
+        team_payment, team_remote = self.purchase(
+            user, key="team_refund_checkout", plan="team_month"
+        )
+
+        handler = object.__new__(Handler)
+        handler.apply_refund(self.con, {
+            "id": "refund-team-refund-checkout",
+            "payment_id": team_remote["id"],
+            "status": "succeeded",
+            "amount": team_remote["amount"],
+        })
+
+        refunded = self.con.execute(
+            "SELECT status FROM billing_subscriptions WHERE last_payment_id=?",
+            (team_payment["id"],),
+        ).fetchone()
+        self.assertEqual(refunded["status"], "refunded")
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE id=?", (workspace["id"],)
+        ).fetchone()
+        self.assertEqual(workspace["plan"], "pro_solo")
+        self.assertEqual(workspace["seat_limit"], 1)
+        self.assertEqual(workspace["entitlement_until"], solo["current_period_end"])
+        account = self.con.execute(
+            "SELECT plan,entitlement_until FROM users WHERE id=?", (user["id"],)
+        ).fetchone()
+        self.assertEqual(account["plan"], "pro")
+        self.assertEqual(account["entitlement_until"], solo["current_period_end"])
+
     def test_business_migration_upgrades_legacy_subscription_table(self):
         legacy_con = sqlite3.connect(":memory:", isolation_level=None)
         legacy_con.row_factory = sqlite3.Row
