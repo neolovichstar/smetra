@@ -25,7 +25,7 @@ const assert = require('node:assert/strict');
   await evaluate("document.querySelector('#email').focus()");
   assert.equal(await evaluate("{const s=getComputedStyle(document.querySelector('#email'));s.borderTopWidth==='0px'&&s.outlineWidth==='0px'&&s.boxShadow==='none'}"),true,'Focused registration field is borderless');
   await fill('#name','Проверка продукта');await fill('#email','browser-'+Date.now()+'@test.invalid');await fill('#password','long secure password');await click('#auth-submit');
-  await until("document.querySelector('[data-work=quote-new]')");
+  await until("document.querySelector('[data-activation=estimate]')");
   await until("document.querySelector('#capture-text')?.dataset.autogrow && document.querySelector('.sidebar-disclosure')");
   const navIconAudit=await evaluate("(()=>[...document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')].map(button=>({tab:button.dataset.tab,svg:button.querySelectorAll(':scope > svg').length,dataIcon:button.getAttribute('data-ui-icon'),before:getComputedStyle(button,'::before').content})))()");
   assert.ok(navIconAudit.length>=10,'Primary navigation items are present');
