@@ -40,6 +40,15 @@ def _now():
     return int(time.time())
 
 
+def authenticate_cron(handler):
+    """Use Vercel's CRON_SECRET bearer contract; reject unconfigured workers."""
+    from backend.app import ApiError
+    secret = (os.getenv("CRON_SECRET") or "").strip()
+    authorization = handler.headers.get("Authorization", "")
+    if len(secret) < 32 or not hmac.compare_digest(authorization, "Bearer " + secret):
+        raise ApiError(401, "Нет доступа")
+
+
 def _id():
     return str(uuid.uuid4())
 
@@ -301,8 +310,8 @@ def _oauth_callback(service, query):
         raise business.DomainError(400, "Некорректный ответ OAuth")
     state_hash = _hash(state)
     row = service.con.execute(
-        "SELECT * FROM cloud_oauth_states WHERE state_hash=? AND workspace_id=? AND user_id=? AND consumed_at IS NULL AND expires_at>?",
-        (state_hash, service.wid, service.user["id"], _now()),
+        "UPDATE cloud_oauth_states SET consumed_at=? WHERE state_hash=? AND workspace_id=? AND user_id=? AND consumed_at IS NULL AND expires_at>? RETURNING *",
+        (_now(), state_hash, service.wid, service.user["id"], _now()),
     ).fetchone()
     if not row:
         raise business.DomainError(400, "Ссылка авторизации устарела или уже использована")
@@ -341,7 +350,6 @@ def _oauth_callback(service, query):
     connection = _connection(service, saved["id"])
     if provider == "google_drive":
         _register_google_watch(service.con, connection, service.origin)
-    service.con.execute("UPDATE cloud_oauth_states SET consumed_at=? WHERE id=? AND consumed_at IS NULL", (now, row["id"]))
     return 302, RedirectResponse(service.origin.rstrip("/") + "/app?cloud=connected")
 
 
@@ -358,6 +366,8 @@ def _safe_cloud_href(value):
         except ValueError:
             pass
         if not (host.endswith(".yandex.net") or host == "yandex.net"
+                or host.endswith(".yandex.ru") or host == "yandex.ru"
+                or host.endswith(".yandex.com") or host == "yandex.com"
                 or host.endswith(".yandexcloud.net") or host.endswith(".googleusercontent.com")):
             return False
         for addr in {entry[4][0].split("%", 1)[0] for entry in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}:
@@ -693,7 +703,7 @@ def _document_job(con, job):
         retry = int(job.get("attempts") or 0) < 3 and getattr(error, "status", 502) in (429, 502, 503, 504)
         status = "retry" if retry else "failed"
         with business.transaction(con, lock_scopes=(f"document-job:{job['id']}",)):
-            con.execute("UPDATE document_processing_jobs SET status=?,progress=?,error=?,attempts=MIN(attempts+1,5),next_attempt_at=?,lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=?",
+            con.execute("UPDATE document_processing_jobs SET status=?,progress=?,error=?,next_attempt_at=?,lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=?",
                         (status, "Повторю позже" if retry else "Ошибка обработки", str(getattr(error, "message", "Ошибка обработки документа"))[:500],
                          now + min(21600, 60 * (3 ** int(job.get("attempts") or 0))), now, job["id"], job["lease_token"]))
             con.execute("UPDATE cloud_files SET processing_status=?,last_error=?,updated_at=? WHERE id=?",
