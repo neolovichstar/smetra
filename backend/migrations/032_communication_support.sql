@@ -2,10 +2,10 @@
 -- SQLite/local migration version 35.
 PRAGMA foreign_keys = ON;
 
-ALTER TABLE users ADD COLUMN public_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN public_id TEXT;
 UPDATE users
 SET public_id='SM-' || upper(substr(replace(id,'-',''),1,16))
-WHERE public_id='';
+WHERE public_id IS NULL OR public_id='';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_public_id ON users(public_id);
 
 CREATE TABLE IF NOT EXISTS user_directory (
@@ -18,6 +18,18 @@ CREATE TABLE IF NOT EXISTS user_directory (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT 0
 );
+CREATE TRIGGER IF NOT EXISTS trg_users_public_directory_after_insert
+AFTER INSERT ON users
+BEGIN
+  UPDATE users SET public_id=CASE
+    WHEN NEW.public_id IS NULL OR NEW.public_id='' THEN 'SM-' || upper(substr(hex(randomblob(8)),1,16))
+    ELSE NEW.public_id END
+  WHERE id=NEW.id;
+  INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
+  VALUES((SELECT public_id FROM users WHERE id=NEW.id),NEW.id,NEW.name,'','',1,NEW.created_at,0)
+  ON CONFLICT(user_id) DO UPDATE SET public_id=excluded.public_id,display_name=excluded.display_name;
+END;
+
 INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
 SELECT u.public_id,u.id,u.name,coalesce(p.profession,''),coalesce(p.company,''),1,u.created_at,coalesce(p.updated_at,0)
 FROM users u LEFT JOIN user_profiles p ON p.user_id=u.id

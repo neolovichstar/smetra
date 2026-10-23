@@ -743,7 +743,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 con.execute(
                     "INSERT INTO user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at) "
-                    "VALUES(?,?,?,'','',1,?,0)",
+                    "VALUES(?,?,?,'','',1,?,0) ON CONFLICT(user_id) DO UPDATE SET "
+                    "public_id=excluded.public_id,display_name=excluded.display_name",
                     (public_id, user_id, name, now()),
                 )
                 event(con, user_id, "signup_completed")

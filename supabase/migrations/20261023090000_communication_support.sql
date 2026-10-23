@@ -19,6 +19,42 @@ CREATE TABLE IF NOT EXISTS smetra.user_directory (
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL DEFAULT 0
 );
+CREATE OR REPLACE FUNCTION smetra.assign_public_user_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = smetra, pg_temp
+AS $public_id$
+BEGIN
+  IF NEW.public_id IS NULL OR NEW.public_id = '' THEN
+    NEW.public_id := 'SM-' || upper(substr(replace(NEW.id,'-',''),1,16));
+  END IF;
+  RETURN NEW;
+END
+$public_id$;
+DROP TRIGGER IF EXISTS users_assign_public_id ON smetra.users;
+CREATE TRIGGER users_assign_public_id
+BEFORE INSERT ON smetra.users
+FOR EACH ROW EXECUTE FUNCTION smetra.assign_public_user_id();
+
+CREATE OR REPLACE FUNCTION smetra.seed_user_directory()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = smetra, pg_temp
+AS $directory$
+BEGIN
+  INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
+  VALUES(NEW.public_id,NEW.id,NEW.name,'','',TRUE,NEW.created_at,0)
+  ON CONFLICT(user_id) DO UPDATE SET public_id=excluded.public_id,display_name=excluded.display_name;
+  RETURN NEW;
+END
+$directory$;
+DROP TRIGGER IF EXISTS users_seed_directory ON smetra.users;
+CREATE TRIGGER users_seed_directory
+AFTER INSERT ON smetra.users
+FOR EACH ROW EXECUTE FUNCTION smetra.seed_user_directory();
+
 INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
 SELECT u.public_id,u.id,u.name,coalesce(p.profession,''),coalesce(p.company,''),TRUE,u.created_at,coalesce(p.updated_at,0)
 FROM smetra.users u LEFT JOIN smetra.user_profiles p ON p.user_id=u.id
