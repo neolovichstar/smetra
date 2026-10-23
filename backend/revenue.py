@@ -14,7 +14,13 @@ import uuid
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300}
+PURCHASE_BONUS_MESSAGES = {
+    'pro_month': 50,
+    'pro_year': 300,
+    'pro_plus_month': 0,
+    'team_month': 0,
+    'team_year': 0,
+}
 
 
 def now():
@@ -71,14 +77,40 @@ def pricing(con, user):
         # Removing a live cohort cannot silently charge that user another price.
         raise ValueError('Assigned pricing variant is no longer configured')
     prices = variants[assigned['variant']]
+    plus_price = integer_env('PRO_PLUS_MONTH_PRICE_KOPECKS', 69000, 100)
+    team_month = integer_env('TEAM_MONTH_PRICE_KOPECKS', 399000, 100)
+    team_year = integer_env('TEAM_YEAR_PRICE_KOPECKS', 3990000, 100)
+    if team_year >= team_month * 12:
+        raise ValueError('Annual TEAM plan must offer real savings')
     launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
-    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': {
-        'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366}},
-        'annual_saving_kopecks': prices['month']*12-prices['year'],
-        'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
+    plans = {
+        'pro_month': {'name': 'PRO Solo', 'tier': 'solo', 'period': 'month', 'amount_kopecks': prices['month'], 'duration_days': 31},
+        'pro_year': {'name': 'PRO Solo', 'tier': 'solo', 'period': 'year', 'amount_kopecks': prices['year'], 'duration_days': 366},
+        'pro_plus_month': {'name': 'PRO Плюс / Снабженец', 'tier': 'plus', 'period': 'month', 'amount_kopecks': plus_price, 'duration_days': 31},
+        'team_month': {'name': 'TEAM / Компания', 'tier': 'team', 'period': 'month', 'amount_kopecks': team_month, 'duration_days': 31},
+        'team_year': {'name': 'TEAM / Компания', 'tier': 'team', 'period': 'year', 'amount_kopecks': team_year, 'duration_days': 366},
+    }
+    catalog = [
+        {'id': 'start', 'name': 'Старт', 'price_kopecks': 0, 'billing_period': 'free', 'plan': None,
+         'features': ['10 бесплатных смет', 'Доступ к базовым расчётам', 'Rewarded Video: +3 ИИ-токена за подтверждённый досмотр']},
+        {'id': 'pro_solo', 'name': 'PRO Solo', 'price_kopecks': prices['month'], 'billing_period': 'monthly', 'plan': 'pro_month', 'annual_plan': 'pro_year', 'storage_bytes': 500 * 1024 * 1024,
+         'features': ['Без рекламы', 'Безлимитные сметы', 'Приоритетная очередь ИИ', 'Чистые PDF и XLSX', 'Облако чеков до 500 МБ']},
+        {'id': 'pro_plus', 'name': 'PRO Плюс / Снабженец', 'price_kopecks': plus_price, 'billing_period': 'monthly', 'plan': 'pro_plus_month', 'storage_bytes': 5 * 1024 * 1024 * 1024,
+         'features': ['Всё из PRO Solo', 'Авансы, расходы и этапы сметы', 'Фирменные бланки', 'Облако до 5 ГБ']},
+        {'id': 'team_company', 'name': 'TEAM / Компания', 'price_kopecks': team_month, 'billing_period': 'monthly', 'plan': 'team_month', 'annual_plan': 'team_year', 'seat_limit': 5,
+         'features': ['Общее пространство директора и 4 сотрудников', 'Общая база клиентов и объектов', 'Синхронизация рабочих данных', 'Групповые чаты объектов']},
+    ]
+    return {
+        'experiment': experiment,
+        'variant': assigned['variant'],
+        'plans': plans,
+        'catalog': catalog,
+        'annual_saving_kopecks': prices['month'] * 12 - prices['year'],
+        'team_annual_saving_kopecks': team_month * 12 - team_year,
+        'purchase_bonus': {**PURCHASE_BONUS_MESSAGES},
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
-        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
+        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': None},
+    }
 
 
 def record(con, uid, name, origin='', variant='', key=None):
