@@ -39,7 +39,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 49
+REQUIRED_CLOUD_SCHEMA_VERSION = 50
 # Includes private legacy codes only for existing-payment reconciliation/refunds.
 # Public checkout validates against CHECKOUT_PLAN_CODES from the canonical catalogue.
 PLANS = BILLING_PLANS
@@ -896,6 +896,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(400, "Неизвестное событие")
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
+        if path == "/api/realtime/config" and method == "GET":
+            directory = con.execute("SELECT inbox_topic FROM user_directory WHERE user_id=?", (user["id"],)).fetchone()
+            inbox_topic = directory["inbox_topic"] if directory else None
+            if directory and not inbox_topic:
+                inbox_topic = secrets.token_urlsafe(32)
+                con.execute("UPDATE user_directory SET inbox_topic=?,updated_at=? WHERE user_id=?", (inbox_topic, now(), user["id"]))
+            realtime_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+            publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+            enabled = bool(realtime_url.startswith("https://") and publishable_key)
+            return self.send_json(200, {"enabled":enabled,"url":realtime_url if enabled else "",
+                                        "key":publishable_key if enabled else "", "inbox_topic":inbox_topic})
         if (
             path in ("/api/people", "/api/conversations", "/api/community", "/api/support")
             or path.startswith("/api/conversations/")

@@ -1,6 +1,7 @@
 """Private chats, workspace conversations, user directory and ticketed AI support."""
 import json
 import re
+import secrets
 import time
 import uuid
 from urllib.parse import unquote
@@ -32,6 +33,10 @@ def _now_ms():
 
 def _id():
     return str(uuid.uuid4())
+
+
+def _topic():
+    return secrets.token_urlsafe(32)
 
 
 def _api_error(status, message):
@@ -68,8 +73,8 @@ def _public_user(row):
 
 def _ticket(con, ticket_id, user_id=None):
     query = (
-        "SELECT s.*,u.name AS user_name,u.email AS user_email,u.public_id "
-        "FROM support s JOIN users u ON u.id=s.user_id WHERE s.id=?"
+        "SELECT s.*,u.name AS user_name,u.email AS user_email,u.public_id,c.realtime_topic "
+        "FROM support s JOIN users u ON u.id=s.user_id LEFT JOIN conversations c ON c.id=s.conversation_id WHERE s.id=?"
     )
     params = [ticket_id]
     if user_id is not None:
@@ -92,6 +97,7 @@ def _ticket_view(row):
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "conversation_id": row["conversation_id"],
+        "realtime_topic": row["realtime_topic"] if row["realtime_topic"] else None,
         "user_id": row["user_id"],
         "user_name": row["user_name"],
         "user_email": row["user_email"],
@@ -173,9 +179,9 @@ def ensure_quote_conversation(con, quote, user, workspace_id):
     conversation_id = _id()
     title = _clean(str(quote.get("title") or "Обсуждение сметы"), "Тема", 180)
     con.execute(
-        "INSERT INTO conversations(id,kind,title,workspace_id,quote_id,created_by,status,created_at,updated_at) "
-        "VALUES(?,?,?,?,?,?,'active',?,?)",
-        (conversation_id, "quote", title, workspace_id, quote["id"], user["id"], moment, moment),
+        "INSERT INTO conversations(id,kind,title,workspace_id,quote_id,created_by,status,created_at,updated_at,realtime_topic) "
+        "VALUES(?,?,?,?,?,?,'active',?,?,?)",
+        (conversation_id, "quote", title, workspace_id, quote["id"], user["id"], moment, moment, _topic()),
     )
     _add_member(con, conversation_id, user["id"], "owner")
     # If the quote names an existing account's email, invite that account into this estimate-only chat.
@@ -201,15 +207,15 @@ def _ensure_community(con):
     moment = _now()
     for room_id, title, category in COMMUNITY:
         con.execute(
-            "INSERT INTO conversations(id,kind,title,category,created_by,status,created_at,updated_at) "
-            "VALUES(?,'community',?,?,NULL,'active',?,?) ON CONFLICT(id) DO NOTHING",
-            (room_id, title, category, moment, moment),
+            "INSERT INTO conversations(id,kind,title,category,created_by,status,created_at,updated_at,realtime_topic) "
+            "VALUES(?,'community',?,?,NULL,'active',?,?,?) ON CONFLICT(id) DO NOTHING",
+            (room_id, title, category, moment, moment, _topic()),
         )
 
 
 def _conversations_for_user(con, user_id):
     rows = con.execute(
-        "SELECT c.id,c.kind,c.title,c.workspace_id,c.quote_id,c.object_id,c.category,c.status,c.created_at,c.updated_at,"
+        "SELECT c.id,c.kind,c.title,c.workspace_id,c.quote_id,c.object_id,c.category,c.status,c.created_at,c.updated_at,c.realtime_topic,"
         "cm.role AS member_role,cm.last_read_at,"
         "(SELECT m.body FROM messages m WHERE m.conversation_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_at DESC,m.id DESC LIMIT 1) AS last_message,"
         "(SELECT m.created_at FROM messages m WHERE m.conversation_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_at DESC,m.id DESC LIMIT 1) AS last_message_at,"
@@ -269,9 +275,9 @@ def _ensure_workspace_chat(con, user, workspace_id, object_id):
         moment = _now()
         conversation_id = _id()
         con.execute(
-            "INSERT INTO conversations(id,kind,title,workspace_id,object_id,created_by,status,created_at,updated_at) "
-            "VALUES(?,'workspace',?,?,?,?,'active',?,?)",
-            (conversation_id, project["name"], workspace_id, object_id, user["id"], moment, moment),
+            "INSERT INTO conversations(id,kind,title,workspace_id,object_id,created_by,status,created_at,updated_at,realtime_topic) "
+            "VALUES(?,'workspace',?,?,?,?, 'active',?,?,?)",
+            (conversation_id, project["name"], workspace_id, object_id, user["id"], moment, moment, _topic()),
         )
     members = con.execute(
         "SELECT user_id,role FROM workspace_members WHERE workspace_id=?",
@@ -340,8 +346,8 @@ def _make_support_ticket(con, user, data):
     moment = _now()
     ticket_id, conversation_id = _id(), _id()
     con.execute(
-        "INSERT INTO conversations(id,kind,title,created_by,status,created_at,updated_at) VALUES(?,'support',?,?,'active',?,?)",
-        (conversation_id, subject, user["id"], moment, moment),
+        "INSERT INTO conversations(id,kind,title,created_by,status,created_at,updated_at,realtime_topic) VALUES(?,'support',?,?,'active',?,?,?)",
+        (conversation_id, subject, user["id"], moment, moment, _topic()),
     )
     con.execute(
         "INSERT INTO support(id,user_id,message,status,created_at,subject,needs_human,conversation_id,updated_at,priority,ai_state) "
@@ -465,8 +471,8 @@ def handle(handler, con, user, method, path, query):
                 return {"conversation_id": existing["conversation_id"], "created": False}
             moment, conversation_id = current, _id()
             con.execute(
-                "INSERT INTO conversations(id,kind,title,created_by,status,created_at,updated_at) VALUES(?,'direct',?,?, 'active',?,?)",
-                (conversation_id, target["name"], user_id, moment, moment),
+                "INSERT INTO conversations(id,kind,title,created_by,status,created_at,updated_at,realtime_topic) VALUES(?,'direct',?,?, 'active',?,?,?)",
+                (conversation_id, target["name"], user_id, moment, moment, _topic()),
             )
             _add_member(con, conversation_id, user_id, "owner")
             _add_member(con, conversation_id, target["id"], "member")
