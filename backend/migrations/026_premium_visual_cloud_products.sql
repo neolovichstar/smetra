@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS product_sources (
  id TEXT PRIMARY KEY,
  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
  quote_id TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
- quote_item_id TEXT NOT NULL REFERENCES quote_items(id) ON DELETE CASCADE,
+ quote_item_id TEXT NOT NULL, -- stable line_id from quote_items.data
  created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  url TEXT NOT NULL, normalized_url TEXT NOT NULL, hostname TEXT NOT NULL,
  product_title TEXT NOT NULL DEFAULT '', brand TEXT NOT NULL DEFAULT '', sku TEXT NOT NULL DEFAULT '',
@@ -99,3 +99,5 @@ CREATE TABLE IF NOT EXISTS cloud_watch_channels (
  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cloud_watch_expiry ON cloud_watch_channels(status,expires_at);
+
+INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(29,CAST(strftime('%s','now') AS INTEGER));
