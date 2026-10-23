@@ -1506,25 +1506,62 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             now(),
                         ),
                     )
-                    # Rebuild remaining paid time without the refunded grant.
-                    grants = con.execute(
-                        """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
-                        WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
-                        AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
-                        ORDER BY p.activated_at,p.created_at,p.id""",
-                        (payment["user_id"],),
+                    # Revoke the exact product period tied to this fully refunded payment.
+                    # Keep lower-tier/other-workspace subscriptions intact.
+                    revoked_subscriptions = con.execute(
+                        "SELECT DISTINCT workspace_id FROM billing_subscriptions "
+                        "WHERE last_payment_id=? OR (provider='yookassa' AND provider_subscription_id=?)",
+                        (payment["id"], payment["provider_id"]),
                     ).fetchall()
-                    until, plan = 0, "free"
-                    for grant in grants:
-                        until = (
-                            max(until, grant["activated_at"])
-                            + (grant['duration_days'] or PLANS[grant["plan"]][1]) * 86400
-                        )
-                        plan = "pro"
+                    con.execute(
+                        "UPDATE billing_subscriptions SET status='refunded',auto_renew=?,"
+                        "cancel_at_period_end=?,canceled_at=?,updated_at=? "
+                        "WHERE last_payment_id=? OR (provider='yookassa' AND provider_subscription_id=?)",
+                        (False, False, now(), now(), payment["id"], payment["provider_id"]),
+                    )
+                    subscription_exists = con.execute(
+                        "SELECT 1 FROM billing_subscriptions WHERE user_id=? LIMIT 1",
+                        (payment["user_id"],),
+                    ).fetchone()
+                    if subscription_exists:
+                        active_until = int(con.execute(
+                            "SELECT COALESCE(MAX(current_period_end),0) FROM billing_subscriptions "
+                            "WHERE user_id=? AND status IN ('active','succeeded') AND current_period_end>?",
+                            (payment["user_id"], now()),
+                        ).fetchone()[0] or 0)
+                    else:
+                        # Backwards compatibility for old payment rows that predate
+                        # the subscription catalog and have no preserved legacy row.
+                        grants = con.execute(
+                            """SELECT p.plan,p.activated_at,b.duration_days FROM payments p
+                            LEFT JOIN billing_intents b ON b.payment_id=p.id
+                            WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
+                            AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
+                            ORDER BY p.activated_at,p.created_at,p.id""",
+                            (payment["user_id"],),
+                        ).fetchall()
+                        active_until = 0
+                        for grant in grants:
+                            active_until = (
+                                max(active_until, int(grant["activated_at"] or 0))
+                                + (grant["duration_days"] or PLANS[grant["plan"]][1]) * 86400
+                            )
                     con.execute(
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                        (until, plan if until > now() else "free", payment["user_id"]),
+                        (active_until, "pro" if active_until > now() else "free", payment["user_id"]),
                     )
+                    from backend.community import _refresh_workspace_entitlement
+
+                    workspace_ids = {
+                        row["workspace_id"] for row in revoked_subscriptions if row["workspace_id"]
+                    }
+                    workspace_ids.update(
+                        row["id"] for row in con.execute(
+                            "SELECT id FROM workspaces WHERE owner_id=?", (payment["user_id"],)
+                        ).fetchall()
+                    )
+                    for workspace_id in workspace_ids:
+                        _refresh_workspace_entitlement(con, workspace_id)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
                     event(con, payment["user_id"], "payment_refunded")
