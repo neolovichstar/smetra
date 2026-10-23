@@ -353,6 +353,18 @@ def _oauth_callback(service, query):
     return 302, RedirectResponse(service.origin.rstrip("/") + "/app?cloud=connected")
 
 
+class _SafeDownloadRedirect(urllib.request.HTTPRedirectHandler):
+    def __init__(self):
+        super().__init__()
+        self.count = 0
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.count += 1
+        if self.count > 4 or not _safe_cloud_href(newurl):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _safe_cloud_href(value):
     try:
         parts = urllib.parse.urlsplit(value)
@@ -384,8 +396,17 @@ def _download(con, connection, file_row):
         raise business.DomainError(413, "Файл больше 5 МБ; автоматический разбор пропущен")
     token = _access_token(con, connection)
     if provider == "google_drive":
+        native_mime = file_row.get("provider_mime", "")
+        is_native_doc = native_mime in (
+            "application/vnd.google-apps.document", "application/vnd.google-apps.spreadsheet",
+            "application/vnd.google-apps.presentation",
+        )
+        endpoint = ("?mimeType=application/pdf" if is_native_doc else "?alt=media")
+        path_part = "/files/" + urllib.parse.quote(file_row["provider_file_id"], safe="")
+        if is_native_doc:
+            path_part += "/export"
         response = urllib.request.Request(
-            GOOGLE_API + "/files/" + urllib.parse.quote(file_row["provider_file_id"], safe="") + "?alt=media",
+            GOOGLE_API + path_part + endpoint,
             headers={"Authorization": "Bearer " + token, "Accept": "*/*", "User-Agent": "SmetraCloudSync/1.0"},
         )
         try:
@@ -564,11 +585,17 @@ def _google_files(con, connection, folder_id, recursive):
                     if recursive:
                         pending.append(item["id"])
                     continue
+                provider_mime = str(item.get("mimeType") or "application/octet-stream")
+                native_doc = provider_mime in (
+                    "application/vnd.google-apps.document", "application/vnd.google-apps.spreadsheet",
+                    "application/vnd.google-apps.presentation",
+                )
                 result.append({
                     "provider_file_id": item.get("id", ""),
                     "parent_folder_id": parent, "name": str(item.get("name") or "Файл")[:250],
-                    "mime": _mime_for(item.get("name"), item.get("mimeType", "application/octet-stream")),
-                    "size": int(item.get("size") or 0),
+                    "mime": "application/pdf" if native_doc else _mime_for(item.get("name"), provider_mime),
+                    "provider_mime": provider_mime,
+                    "size": max(1, int(item.get("size") or 0)) if native_doc else int(item.get("size") or 0),
                     "modified_at": str(item.get("modifiedTime") or ""),
                     "fingerprint": str(item.get("md5Checksum") or hashlib.sha256(
                         (str(item.get("modifiedTime")) + ":" + str(item.get("size"))).encode()).hexdigest()),
@@ -612,6 +639,7 @@ def _yandex_files(con, connection, folder_path, recursive):
                 fp = str(item.get("resource_id") or hashlib.sha256((path+modified+str(size)).encode()).hexdigest())
                 result.append({
                     "provider_file_id": path, "parent_folder_id": parent, "name": name, "mime": mime,
+                    "provider_mime": str(item.get("mime_type") or "application/octet-stream"),
                     "size": size, "modified_at": modified, "fingerprint": fp,
                     "web_view_url": str(item.get("file") or "")[:2048],
                 })
@@ -644,10 +672,10 @@ def _sync_binding(con, binding):
             "ignored" if item["mime"] not in SUPPORTED_FILES or item["size"] > MAX_FILE_BYTES else "processed")
         file_id = old["id"] if old else _id()
         con.execute(
-            "INSERT INTO cloud_files(id,workspace_id,binding_id,connection_id,provider_file_id,parent_folder_id,name,mime,size,modified_at,source_fingerprint,web_view_url,trashed,processing_status,last_error,first_seen_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,?,'',?,?) ON CONFLICT(connection_id,provider_file_id) DO UPDATE SET binding_id=excluded.binding_id,parent_folder_id=excluded.parent_folder_id,name=excluded.name,mime=excluded.mime,size=excluded.size,modified_at=excluded.modified_at,source_fingerprint=excluded.source_fingerprint,web_view_url=excluded.web_view_url,trashed=0,processing_status=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint THEN excluded.processing_status ELSE cloud_files.processing_status END,last_error=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint THEN '' ELSE cloud_files.last_error END,updated_at=excluded.updated_at",
+            "INSERT INTO cloud_files(id,workspace_id,binding_id,connection_id,provider_file_id,parent_folder_id,name,mime,provider_mime,size,modified_at,source_fingerprint,web_view_url,trashed,processing_status,last_error,first_seen_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,'',?,?) ON CONFLICT(connection_id,provider_file_id) DO UPDATE SET binding_id=excluded.binding_id,parent_folder_id=excluded.parent_folder_id,name=excluded.name,mime=excluded.mime,provider_mime=excluded.provider_mime,size=excluded.size,modified_at=excluded.modified_at,source_fingerprint=excluded.source_fingerprint,web_view_url=excluded.web_view_url,trashed=0,processing_status=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint THEN excluded.processing_status ELSE cloud_files.processing_status END,last_error=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint THEN '' ELSE cloud_files.last_error END,updated_at=excluded.updated_at",
             (file_id, binding["workspace_id"], binding["id"], connection["id"], item["provider_file_id"],
-             item["parent_folder_id"], item["name"], item["mime"], max(0, item["size"]), item["modified_at"],
-             fp, item["web_view_url"], status, now, now),
+             item["parent_folder_id"], item["name"], item["mime"], item.get("provider_mime", item["mime"]),
+             max(0, item["size"]), item["modified_at"], fp, item["web_view_url"], status, now, now),
         )
         saved = con.execute("SELECT id,source_fingerprint,processing_status FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
                             (connection["id"], item["provider_file_id"])).fetchone()
@@ -662,7 +690,7 @@ def _sync_binding(con, binding):
 
 def _document_job(con, job):
     row = con.execute(
-        "SELECT j.*,f.provider_file_id,f.name,f.mime,f.size,f.connection_id,f.workspace_id,b.quote_id,b.project_id,c.provider,c.access_token_enc,c.refresh_token_enc,c.token_expires_at,c.status AS connection_status FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id JOIN cloud_connections c ON c.id=f.connection_id WHERE j.id=?",
+        "SELECT j.*,f.provider_file_id,f.name,f.mime,f.provider_mime,f.size,f.connection_id,f.workspace_id,b.quote_id,b.project_id,c.provider,c.access_token_enc,c.refresh_token_enc,c.token_expires_at,c.status AS connection_status FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id JOIN cloud_connections c ON c.id=f.connection_id WHERE j.id=?",
         (job["id"],),
     ).fetchone()
     if not row:
@@ -675,7 +703,7 @@ def _document_job(con, job):
         # The connector's user ID is required for a provider refresh update.
         conn_row = con.execute("SELECT * FROM cloud_connections WHERE id=?", (row["connection_id"],)).fetchone()
         connection = dict(conn_row)
-        file_row = {key: row[key] for key in ("provider_file_id", "name", "mime", "size")}
+        file_row = {key: row[key] for key in ("provider_file_id", "name", "mime", "provider_mime", "size")}
         raw = _download(con, connection, file_row)
         proposal = _model_extract(row["mime"], row["name"], raw)
         proposal["cloud_file_id"] = row["cloud_file_id"]
