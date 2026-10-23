@@ -838,7 +838,7 @@ class Service:
             return
         self.con.execute("DELETE FROM quote_items WHERE quote_id=?", (qid,))
         self.con.executemany(
-            "INSERT INTO quote_items VALUES(?,?,?,?)",
+            "INSERT INTO quote_items(id,quote_id,position,data) VALUES(?,?,?,?)",
             [(identity(), qid, i, packed(item)) for i, item in enumerate(items)],
         )
 

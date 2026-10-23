@@ -480,7 +480,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {
                         "time": now(),
                         "error": type(err).__name__,
-                        "diagnostic": str(err)[:300] if os.getenv("CI") == "true" else None,
                         "request_id": self.request_id,
                     }
                 ),

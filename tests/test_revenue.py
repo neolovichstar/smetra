@@ -193,7 +193,7 @@ class RevenueApiTests(unittest.TestCase):
         self.assertEqual(self.request('/api/billing/events','POST',{'name':'paywall_viewed','source':'ai_limit','user_id':'somebody-else','variant':'invented'},token)[0],200)
         with self.mod.db() as con:
             row=con.execute("SELECT * FROM growth_events WHERE user_id=? AND name='paywall_viewed'",(uid,)).fetchone()
-            self.assertEqual(row['variant'],'baseline:baseline')
+            self.assertEqual(row['variant'],'subscription-catalog-v2:fixed')
         self.assertEqual(self.request('/api/billing/pricing')[0],200)
         status,data=self.request('/api/admin/revenue',token=self.account(True)[0])
         self.assertEqual(status,200)
