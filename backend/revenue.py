@@ -67,6 +67,40 @@ def configuration():
     return experiment, variants
 
 
+PRODUCT_ACCESS = {
+    'pro_month': ('pro_solo', 1, 1),
+    'pro_year': ('pro_solo', 1, 1),
+    'pro_plus_month': ('pro_plus', 1, 2),
+    'pro_plus_year': ('pro_plus', 1, 2),
+    'team_month': ('team', 5, 3),
+    'team_year': ('team', 5, 3),
+    'business_month': ('business', 15, 4),
+    'business_year': ('business', 15, 4),
+}
+
+
+def workspace_entitlement(subscriptions, moment=None):
+    """Resolve tier and expiry from confirmed subscription rows; test mode still grants QA access."""
+    moment = now() if moment is None else int(moment)
+    active = [
+        row for row in subscriptions
+        if row['status'] in ('active', 'succeeded') and int(row['current_period_end'] or 0) > moment
+    ]
+    if not active:
+        return None
+    def access(row):
+        return PRODUCT_ACCESS.get(row['product_code'], ('pro_solo', 1, 1))
+    best_rank = max(access(row)[2] for row in active)
+    highest = [row for row in active if access(row)[2] == best_rank]
+    best_tier, seats, _ = access(highest[0])
+    return {
+        'plan': best_tier,
+        'seat_limit': seats,
+        'entitlement_until': max(int(row['current_period_end'] or 0) for row in highest),
+        'subscription_count': len(highest),
+    }
+
+
 def pricing(con, user):
     experiment, variants = configuration()
     uid = user['id']
