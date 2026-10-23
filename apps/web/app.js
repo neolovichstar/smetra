@@ -155,14 +155,15 @@ function syncMobileSidebarGeometry(){
 }
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
 function showAuth() { stopWorkspaceRealtime();window.SmetraCommunications?.leave?.();window.SmetraRealtime?.close?.();window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
-let workspaceRealtimeOwner=null,workspaceRealtimeSelection=null,workspaceRealtimeReady=false;
+let workspaceRealtimeOwner=null,workspaceRealtimeSelection=null,workspaceRealtimeReady=false,workspaceRealtimePromise=null,workspaceRealtimeGeneration=0;
 const workspaceRealtimeUnsubscribers=new Set();
 let workspaceRealtimeRefreshTimer=null,lastWorkspaceRealtimeNotice=0;
 function stopWorkspaceRealtime(){
+  workspaceRealtimeGeneration++;
   for(const off of workspaceRealtimeUnsubscribers){try{off()}catch{}}
   workspaceRealtimeUnsubscribers.clear();
   if(workspaceRealtimeRefreshTimer!==null)clearTimeout(workspaceRealtimeRefreshTimer);
-  workspaceRealtimeRefreshTimer=null;
+  workspaceRealtimeRefreshTimer=null;workspaceRealtimePromise=null;
   workspaceRealtimeOwner=null;workspaceRealtimeSelection=null;workspaceRealtimeReady=false;
 }
 function workspaceRealtimePageIsSafe(){
@@ -172,48 +173,58 @@ function workspaceRealtimePageIsSafe(){
   if(document.querySelector('#quote-form,.editor-panel form,[role="dialog"]:not([hidden]),dialog[open],[data-workspace-editor="true"]'))return false;
   return true;
 }
-async function ensureWorkspaceRealtime(owner=user){
-  if(!owner||owner!==user){stopWorkspaceRealtime();return;}
+function ensureWorkspaceRealtime(owner=user){
+  if(!owner||owner!==user){stopWorkspaceRealtime();return Promise.resolve();}
   const selected=sessionStorage.getItem('workspace_id')||'';
-  if(workspaceRealtimeOwner===owner&&workspaceRealtimeSelection===selected&&workspaceRealtimeReady)return;
-  stopWorkspaceRealtime();workspaceRealtimeOwner=owner;workspaceRealtimeSelection=selected;
-  try{
-    const config=await api('/realtime/config');
-    if(user!==owner||workspaceRealtimeOwner!==owner||workspaceRealtimeSelection!==selected)return;
-    if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);
-    if(config.inbox_topic&&window.SmetraRealtime){
-      const off=window.SmetraRealtime.subscribe(config.inbox_topic,(eventName)=>{
-        if(user!==owner||!['inbox_changed','support_escalated'].includes(eventName))return;
-        if(tab==='admin')window.SmetraAdmin?.refresh?.();
-      });
-      workspaceRealtimeUnsubscribers.add(off);
-    }
-    if(config.workspace_topic&&window.SmetraRealtime){
-      const off=window.SmetraRealtime.subscribe(config.workspace_topic,(eventName)=>{
-        if(eventName!=='workspace_changed'||user!==owner)return;
-        clearApiCache();
-        if(workspaceRealtimeRefreshTimer!==null)clearTimeout(workspaceRealtimeRefreshTimer);
-        if(workspaceRealtimePageIsSafe()){
-          const currentTab=tab;
-          workspaceRealtimeRefreshTimer=setTimeout(()=>{
-            workspaceRealtimeRefreshTimer=null;
-            if(user===owner&&tab===currentTab&&workspaceRealtimePageIsSafe())render();
-          },180);
-        }else{
-          const now=Date.now();
-          if(now-lastWorkspaceRealtimeNotice>15000){
-            lastWorkspaceRealtimeNotice=now;
-            const content=$('#content');
-            if(content)content.dataset.workspaceUpdatesPending='true';
-          }
-        }
-      });
-      workspaceRealtimeUnsubscribers.add(off);
-    }
-    workspaceRealtimeReady=true;
-  }catch{
-    if(user===owner&&workspaceRealtimeOwner===owner)workspaceRealtimeReady=true;
+  if(workspaceRealtimeOwner===owner&&workspaceRealtimeSelection===selected){
+    if(workspaceRealtimeReady)return Promise.resolve();
+    if(workspaceRealtimePromise)return workspaceRealtimePromise;
   }
+  stopWorkspaceRealtime();
+  const generation=workspaceRealtimeGeneration;
+  workspaceRealtimeOwner=owner;workspaceRealtimeSelection=selected;
+  workspaceRealtimePromise=(async()=>{
+    try{
+      const config=await api('/realtime/config');
+      if(generation!==workspaceRealtimeGeneration||user!==owner||workspaceRealtimeOwner!==owner||workspaceRealtimeSelection!==selected)return;
+      if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);
+      if(config.inbox_topic&&window.SmetraRealtime){
+        const off=window.SmetraRealtime.subscribe(config.inbox_topic,(eventName)=>{
+          if(generation!==workspaceRealtimeGeneration||user!==owner||!['inbox_changed','support_escalated'].includes(eventName))return;
+          if(tab==='admin')window.SmetraAdmin?.refresh?.();
+        });
+        workspaceRealtimeUnsubscribers.add(off);
+      }
+      if(config.workspace_topic&&window.SmetraRealtime){
+        const off=window.SmetraRealtime.subscribe(config.workspace_topic,(eventName)=>{
+          if(eventName!=='workspace_changed'||generation!==workspaceRealtimeGeneration||user!==owner)return;
+          clearApiCache();
+          if(workspaceRealtimeRefreshTimer!==null)clearTimeout(workspaceRealtimeRefreshTimer);
+          if(workspaceRealtimePageIsSafe()){
+            const currentTab=tab;
+            workspaceRealtimeRefreshTimer=setTimeout(()=>{
+              workspaceRealtimeRefreshTimer=null;
+              if(user===owner&&tab===currentTab&&workspaceRealtimePageIsSafe())render();
+            },180);
+          }else{
+            const now=Date.now();
+            if(now-lastWorkspaceRealtimeNotice>15000){
+              lastWorkspaceRealtimeNotice=now;
+              const content=$('#content');
+              if(content)content.dataset.workspaceUpdatesPending='true';
+            }
+          }
+        });
+        workspaceRealtimeUnsubscribers.add(off);
+      }
+    }catch{}
+    finally{
+      if(generation===workspaceRealtimeGeneration&&workspaceRealtimeOwner===owner){
+        workspaceRealtimeReady=true;workspaceRealtimePromise=null;
+      }
+    }
+  })();
+  return workspaceRealtimePromise;
 }
 async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');if(profileName)profileName.textContent=user.name;if(avatar)avatar.textContent=(user.name||'С').trim().slice(0,1).toLocaleUpperCase('ru-RU');$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;void ensureWorkspaceRealtime(owner);const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }

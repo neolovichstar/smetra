@@ -51,9 +51,38 @@ BEGIN
 END
 $directory$;
 DROP TRIGGER IF EXISTS users_seed_directory ON smetra.users;
+REVOKE ALL ON FUNCTION smetra.assign_public_user_id() FROM PUBLIC;
+DROP TRIGGER IF EXISTS users_seed_directory ON smetra.users;
 CREATE TRIGGER users_seed_directory
 AFTER INSERT ON smetra.users
 FOR EACH ROW EXECUTE FUNCTION smetra.seed_user_directory();
+REVOKE ALL ON FUNCTION smetra.seed_user_directory() FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION smetra.sync_user_directory_profile()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = smetra, pg_temp
+AS $directory_profile$
+DECLARE
+  v_public_id TEXT;
+  v_name TEXT;
+  v_created_at BIGINT;
+  v_display_name TEXT;
+BEGIN
+  SELECT public_id,name,created_at INTO v_public_id,v_name,v_created_at
+  FROM smetra.users WHERE id=NEW.user_id;
+  v_display_name := coalesce(nullif(btrim(concat_ws(' ',NEW.first_name,NEW.last_name)),''),v_name);
+  INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
+  VALUES(v_public_id,NEW.user_id,v_display_name,coalesce(NEW.profession,''),coalesce(NEW.company,''),TRUE,v_created_at,coalesce(NEW.updated_at,0))
+  ON CONFLICT(user_id) DO UPDATE SET
+    public_id=excluded.public_id,display_name=excluded.display_name,
+    profession=excluded.profession,company=excluded.company,updated_at=excluded.updated_at;
+  RETURN NEW;
+END
+$directory_profile$;
+REVOKE ALL ON FUNCTION smetra.sync_user_directory_profile() FROM PUBLIC;
+DROP TRIGGER IF EXISTS user_profiles_sync_directory ON smetra.user_profiles;
+CREATE TRIGGER user_profiles_sync_directory
+AFTER INSERT OR UPDATE OF first_name,last_name,profession,company,updated_at ON smetra.user_profiles
+FOR EACH ROW EXECUTE FUNCTION smetra.sync_user_directory_profile();
 
 INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
 SELECT u.public_id,u.id,u.name,coalesce(p.profession,''),coalesce(p.company,''),TRUE,u.created_at,coalesce(p.updated_at,0)
