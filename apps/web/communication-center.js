@@ -244,7 +244,7 @@ async function adminPage(){
  panel.querySelector('[data-admin-metrics]').innerHTML=rows.map(r=>'<div class="comms-admin-metric"><span>'+esc(r[0])+'</span><strong>'+(typeof r[1]==='number'?num(r[1]):esc(r[1]))+'</strong></div>').join('');
  panel.querySelector('[data-admin-queue]').innerHTML=icon('support')+' Открыть очередь поддержки'+(d.support_waiting_human?' · '+num(d.support_waiting_human)+' ожидают':'');
  }catch(error){panel.querySelector('p').textContent='Не удалось обновить статистику: '+error.message}
- }finally{state.adminLoading=false}
+ finally{state.adminLoading=false}
 }
 function watch(){
  const root=$('#content');if(!root||state.observer)return;
