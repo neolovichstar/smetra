@@ -133,7 +133,7 @@ class RevenueTests(unittest.TestCase):
                 "WHERE provider_subscription_id=?", (local["provider_id"],)
             ).fetchone()
             self.assertIsNotNone(subscription)
-            self.assertEqual(subscription["product_code"], plan)
+            self.assertEqual(subscription["product_code"], revenue.PRODUCT_CODE[plan])
             self.assertEqual(bool(subscription["is_test"]), test_mode)
             self.assertEqual(subscription["status"], "active")
             self.assertGreater(subscription["current_period_end"], revenue.now())
@@ -146,7 +146,7 @@ class RevenueTests(unittest.TestCase):
         ).fetchone()
         solo = self.con.execute(
             "SELECT current_period_end FROM billing_subscriptions WHERE workspace_id=? "
-            "AND product_code='pro_year' AND status='active'",
+            "AND product_code='pro_solo_year' AND status='active'",
             (workspace["id"],),
         ).fetchone()
         self.assertIsNotNone(solo)
@@ -250,7 +250,7 @@ class RevenueTests(unittest.TestCase):
                 (workspace["id"],),
             ).fetchone()
             self.assertIsNotNone(subscription)
-            self.assertEqual(subscription["product_code"], "pro_month")
+            self.assertEqual(subscription["product_code"], "pro_solo_month")
             self.assertEqual(subscription["current_period_end"], legacy_expiry - 10)
             self.assertEqual(workspace["plan"], "pro_solo")
             self.assertEqual(workspace["seat_limit"], 1)
