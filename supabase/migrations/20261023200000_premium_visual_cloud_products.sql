@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS smetra.product_sources (
  id TEXT PRIMARY KEY,
  workspace_id TEXT NOT NULL REFERENCES smetra.workspaces(id) ON DELETE CASCADE,
  quote_id TEXT NOT NULL REFERENCES smetra.quotes(id) ON DELETE CASCADE,
- quote_item_id TEXT NOT NULL REFERENCES smetra.quote_items(id) ON DELETE CASCADE,
+ quote_item_id TEXT NOT NULL, -- stable line_id from quote_items.data; DB row IDs are replaced on every quote save
  created_by TEXT NOT NULL REFERENCES smetra.users(id) ON DELETE CASCADE,
  url TEXT NOT NULL,
  normalized_url TEXT NOT NULL,
