@@ -460,6 +460,16 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    # Keep SQLite workspace shape aligned with the cloud entitlement columns.
+    workspace_columns = {row["name"] for row in con.execute("PRAGMA table_info(workspaces)")}
+    for column, definition in {
+        "plan": "TEXT NOT NULL DEFAULT 'free'",
+        "subscription_status": "TEXT NOT NULL DEFAULT 'inactive'",
+        "entitlement_until": "INTEGER NOT NULL DEFAULT 0",
+        "seat_limit": "INTEGER NOT NULL DEFAULT 1",
+    }.items():
+        if column not in workspace_columns:
+            con.execute(f"ALTER TABLE workspaces ADD COLUMN {column} {definition}")
     con.executescript(
         (Path(__file__).parent / "migrations" / "026_subscription_access.sql").read_text(
             encoding="utf-8"
