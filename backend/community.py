@@ -121,7 +121,28 @@ def ensure_sqlite_schema(con):
       CREATE INDEX IF NOT EXISTS idx_chat_member_user ON chat_members(user_id, joined_at DESC);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id, created_at, id);
       CREATE INDEX IF NOT EXISTS idx_chat_support_queue ON chat_conversations(kind, needs_human, status, updated_at DESC);
+      CREATE TABLE IF NOT EXISTS billing_subscriptions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT '',
+        workspace_id TEXT NOT NULL DEFAULT '',
+        product_code TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        current_period_end INTEGER NOT NULL DEFAULT 0
+      );
     """)
+    # The lightweight SQLite fixture predates paid workspace subscriptions.
+    # Add only missing optional columns so local/dev paths fail closed, not 500.
+    if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspaces'").fetchone():
+        workspace_columns = {row["name"] for row in con.execute("PRAGMA table_info(workspaces)")}
+        additions = {
+            "plan": "TEXT NOT NULL DEFAULT 'free'",
+            "subscription_status": "TEXT NOT NULL DEFAULT 'inactive'",
+            "entitlement_until": "INTEGER NOT NULL DEFAULT 0",
+            "seat_limit": "INTEGER NOT NULL DEFAULT 1",
+        }
+        for column, definition in additions.items():
+            if column not in workspace_columns:
+                con.execute(f"ALTER TABLE workspaces ADD COLUMN {column} {definition}")
 
 
 def _table(con, name):
