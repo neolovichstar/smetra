@@ -1,12 +1,11 @@
 """Private chats, workspace conversations, user directory and ticketed AI support."""
 import json
 import re
-import secrets
 import time
 import uuid
 from urllib.parse import unquote
 
-from backend.business import DomainError, packed, transaction
+from backend.business import packed, transaction
 
 try:
     from backend.support_ai import answer as support_answer
