@@ -70,8 +70,9 @@ function setup(){
   const pending=w.Workspace.render('files');await sleep(0);w.eval("tab='assistant'");doc.querySelector('#content').textContent='Assistant';request.resolve({items:[]});await pending;
   assert.equal(doc.querySelector('#content').textContent,'Assistant');
  });
- await test('support does not fetch unrelated workspace data',async({w})=>{
-  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};w.eval("tab='support'");await w.render();assert.deepEqual(requests,[]);
+ await test('support loads only its own ticket list and no unrelated workspace data',async({w})=>{
+  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};w.eval("tab='support'");await w.render();
+  assert.deepEqual(requests.map(path=>path.split('?')[0]),['/support']);
  });
  await test('quote editor initialization cannot replace a page opened later',async({w,doc})=>{
   await w.Workspace.render('files');const request=deferred();w.api=()=>request.promise;
