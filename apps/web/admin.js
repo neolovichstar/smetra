@@ -250,6 +250,25 @@
       if(element)element.textContent=rub(stats[key]||0);
     }
   }
+  let adminRealtimeOff=null;
+  async function startAdminRealtime() {
+    const owner=user;
+    try {
+      const config=await api('/realtime/config');
+      if(user!==owner||tab!=='admin'||owner?.role!=='admin'||!config.enabled||!config.inbox_topic||!window.SmetraRealtime)return;
+      window.SmetraRealtime.configure(config.url,config.key);adminRealtimeOff?.();
+      adminRealtimeOff=window.SmetraRealtime.subscribe(config.inbox_topic,async eventName=>{
+        if(eventName!=='support_escalated'||user!==owner||tab!=='admin')return;
+        try{
+          const next=await api('/admin/overview?refresh='+Date.now());if(user!==owner||tab!=='admin')return;
+          const previous=state.escalationSeen||new Set(),escalated=(next.tickets||[]).filter(t=>t.status==='open'&&t.needs_human),added=escalated.filter(t=>!previous.has(t.id));
+          state.overview=next;syncMetrics(next);state.escalationSeen=new Set(escalated.map(t=>t.id));
+          if(added.length)notify('Новый запрос в поддержку: '+(added[0].subject||added[0].user_name||'нужен сотрудник'));
+          if(state.section==='support'){const target=document.querySelector('#admin-section');if(target){target.innerHTML=supportSection();if(state.selectedSupportId)loadSupportChat(state.selectedSupportId);}}
+        }catch{}
+      });
+    }catch{}
+  }
   function startAdminPolling() {
     if(state.pollTimer)clearInterval(state.pollTimer);
     state.pollTimer=setInterval(async()=>{
@@ -316,5 +335,6 @@
     renderSection();
     if(!state.escalationSeen)state.escalationSeen=new Set((state.overview.tickets||[]).filter(ticket=>ticket.status==='open'&&ticket.needs_human).map(ticket=>ticket.id));
     startAdminPolling();
+    startAdminRealtime();
   };
 })();

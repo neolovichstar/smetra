@@ -1,9 +1,23 @@
 'use strict';
 window.SmetraCommunications = (() => {
-  let timer = null;
+  let timer = null, realtimeUserId = '', realtimeConfig = null, realtimePromise = null;
+  const subscriptions = new Set();
+  const subscribeTopic = (topic, callback) => {
+    if(!topic||!window.SmetraRealtime)return null;
+    const off=window.SmetraRealtime.subscribe(topic,callback);
+    subscriptions.add(off);
+    return ()=>{off();subscriptions.delete(off);};
+  };
+  async function prepareRealtime(api, user) {
+    if(realtimeUserId===user?.id&&realtimeConfig)return realtimeConfig;
+    if(realtimeUserId===user?.id&&realtimePromise)return realtimePromise;
+    realtimeUserId=user?.id||'';realtimeConfig=null;
+    realtimePromise=(async()=>{try{const config=await api('/realtime/config');if(config.enabled&&window.SmetraRealtime)window.SmetraRealtime.configure(config.url,config.key);realtimeConfig=config;return config;}catch{realtimeConfig={enabled:false};return realtimeConfig;}})();
+    return realtimePromise;
+  }
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const time = value => value ? new Intl.DateTimeFormat('ru-RU',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}).format(new Date(Number(value)>1e12?Number(value):Number(value)*1000)) : '';
-  const stop = () => { if(timer!==null){clearInterval(timer);timer=null;} };
+  const stop = () => { if(timer!==null){clearInterval(timer);timer=null;} for(const off of subscriptions){try{off();}catch{}} subscriptions.clear(); };
   const icon = name => name==='support'?'◌':name==='workspace'?'▦':name==='quote'?'▤':name==='community'?'◎':'↗';
   const roleName = role => ({user:'Вы',admin:'Поддержка',ai:'Помощник Сметры',system:'Сметра'}[role]||'Участник');
   function messageMarkup(messages, ownId, emptyText='Здесь начнётся переписка.') {
@@ -31,7 +45,7 @@ window.SmetraCommunications = (() => {
   async function support(ctx) {
     stop();
     const {api,view,header,notify,user,active}=ctx;
-    let items=[],selectedId=null,selectedTicket=null,isNew=false,busy=false;
+    let items=[],selectedId=null,selectedTicket=null,isNew=false,busy=false,realtime=null,ticketOff=null,inboxOff=null,watchedTicketTopic='';
     view(header('Поддержка','Помощник Сметры ответит сразу. Если потребуется человек, передадим обращение сотруднику.')+
       '<div class="comms-support-layout"><aside class="comms-sidebar">'+
         '<div class="comms-sidebar-head"><div><span class="overline">ВАШИ ОБРАЩЕНИЯ</span><h2>Поддержка</h2></div><button class="btn small primary" type="button" id="support-new">Новое</button></div>'+
@@ -63,6 +77,13 @@ window.SmetraCommunications = (() => {
     }
     function renderTicket(ticket,messages) {
       selectedTicket=ticket;selectedId=ticket.id;isNew=false;
+      if(ticket?.realtime_topic&&ticket.realtime_topic!==watchedTicketTopic){
+        ticketOff?.();watchedTicketTopic=ticket.realtime_topic;
+        ticketOff=subscribeTopic(watchedTicketTopic,async eventName=>{
+          if(eventName!=='message_changed'||!active()||selectedId!==ticket.id)return;
+          try{const update=await api('/support/'+encodeURIComponent(ticket.id)+'/messages?refresh='+Date.now());if(active()&&selectedId===ticket.id)renderTicket(update.ticket,update.messages||[]);}catch{}
+        });
+      }
       panel.innerHTML='<header class="comms-chat-head"><span class="comms-chat-avatar">✳</span><div class="comms-chat-head-copy"><h2>'+esc(ticket.subject||'Вопрос в поддержку')+'</h2><p>'+(ticket.needs_human?'<span class="comms-live-dot warning"></span>Передано сотруднику':ticket.status==='closed'?'Обращение закрыто':'<span class="comms-live-dot"></span>ИИ-помощник онлайн')+'</p></div><button type="button" class="btn small ghost" id="support-escalate" '+(ticket.needs_human||ticket.status==='closed'?'disabled':'')+'>'+(ticket.needs_human?'Сотрудник вызван':'Позвать сотрудника')+'</button></header>'+
         '<div class="comms-messages" id="support-messages" role="log" aria-live="polite">'+messageMarkup(messages,user.id,'Напишите сообщение, чтобы начать.')+'</div>'+
         (ticket.status==='closed'?'<div class="comms-closed-note">Обращение закрыто. Новое сообщение откроет его снова.</div>':'')+composer(ticket.status==='closed'?'Напишите, чтобы снова открыть обращение':'Напишите сообщение…');
@@ -93,19 +114,27 @@ window.SmetraCommunications = (() => {
       if(openSelected&&selectedId&&!isNew)await openTicket(selectedId);
       else if(!selectedId&&!isNew&&items.length){selectedId=items[0].id;await openTicket(selectedId);}
     }
-    document.querySelector('#support-new').onclick=renderNew;
+    document.querySelector('#support-new').onclick=()=>{ticketOff?.();ticketOff=null;watchedTicketTopic='';renderNew();};
     list.onclick=event=>{const button=event.target.closest('[data-support-open]');if(button)openTicket(button.dataset.supportOpen);};
+    realtime=await prepareRealtime(api,user);
+    if(realtime?.inbox_topic)inboxOff=subscribeTopic(realtime.inbox_topic,eventName=>{
+      if(['inbox_changed','support_escalated'].includes(eventName)&&active())refresh(false).then(renderItems).catch(()=>{});
+    });
     await refresh(true);
+    let lastRefresh=0;
     if(active())timer=setInterval(async()=>{
       if(!active()||busy)return;
-      try{const current=selectedId;await refresh(false);if(current&&!isNew&&selectedId===current){const result=await api('/support/'+encodeURIComponent(current)+'/messages?refresh='+Date.now());if(active()&&selectedId===current)renderTicket(result.ticket,result.messages||[]);}}
-      catch{}
+      try{
+        const current=selectedId,now=Date.now(),live=Boolean(selectedTicket?.realtime_topic&&window.SmetraRealtime?.isSubscribed(selectedTicket.realtime_topic));
+        if(now-lastRefresh>=(realtime?.enabled?30000:5000)){await refresh(false);lastRefresh=now;}
+        if(current&&!isNew&&selectedId===current&&(!live||now-lastRefresh>=30000)){const result=await api('/support/'+encodeURIComponent(current)+'/messages?refresh='+Date.now());if(active()&&selectedId===current)renderTicket(result.ticket,result.messages||[]);}
+      }catch{}
     },5000);
   }
   async function messaging(ctx) {
     stop();
     const {api,view,header,notify,user,active}=ctx;
-    let chats=[],communities=[],projects=[],activeId=null,activeConversation=null,messages=[],people=[],loading=false,searchTimer=null,workspaceId='';
+    let chats=[],communities=[],projects=[],activeId=null,activeConversation=null,messages=[],people=[],loading=false,searchTimer=null,workspaceId='',realtime=null,activeOff=null,inboxOff=null,watchedConversationTopic='',lastListRefresh=0,lastMessagesRefresh=0;
     view(header('Почта и чаты','Личные переписки, согласование смет и рабочие чаты объектов — внутри Сметры.')+
       '<div class="comms-layout"><aside class="comms-sidebar">'+
         '<section class="comms-directory"><span class="overline">НАЙТИ ЧЕЛОВЕКА</span><form id="comms-search-form"><input id="comms-search" type="search" maxlength="80" placeholder="Имя или ID · SM-…" aria-label="Поиск людей"><button class="btn small" type="submit">Найти</button></form><div id="comms-people" class="comms-people-results"></div></section>'+
@@ -140,9 +169,19 @@ window.SmetraCommunications = (() => {
       },()=>active()&&!!activeId);
     }
     function composerChat(placeholder){return '<form class="comms-composer" id="comms-send-form"><textarea name="message" rows="1" maxlength="4000" required placeholder="'+esc(placeholder)+'" '+(activeConversation?.status==='closed'?'disabled':'')+'></textarea><button class="btn primary" type="submit" '+(activeConversation?.status==='closed'?'disabled':'')+'>Отправить <span aria-hidden="true">↗</span></button></form>';}
+    function watchConversation(conversation) {
+      if(conversation?.realtime_topic&&conversation.realtime_topic===watchedConversationTopic)return;
+      activeOff?.();activeOff=null;watchedConversationTopic=conversation?.realtime_topic||'';
+      if(!watchedConversationTopic)return;
+      activeOff=subscribeTopic(watchedConversationTopic,async eventName=>{
+        if(eventName!=='message_changed'||!active()||!activeId)return;
+        const current=activeId;
+        try{const update=await api('/conversations/'+encodeURIComponent(current)+'/messages?refresh='+Date.now());if(active()&&activeId===current){activeConversation=update.conversation;messages=update.messages||[];renderChats();renderActive();await refreshLists(false);lastMessagesRefresh=Date.now();}}catch{}
+      });
+    }
     async function openChat(id) {
       if(loading||!active())return;loading=true;activeId=id;renderChats();
-      try{const result=await api('/conversations/'+encodeURIComponent(id)+'/messages?refresh='+Date.now());if(!active()||activeId!==id)return;activeConversation=result.conversation;messages=result.messages||[];renderChats();renderActive();}
+      try{const result=await api('/conversations/'+encodeURIComponent(id)+'/messages?refresh='+Date.now());if(!active()||activeId!==id)return;activeConversation=result.conversation;messages=result.messages||[];renderChats();renderActive();watchConversation(activeConversation);lastMessagesRefresh=Date.now();}
       catch(error){if(active())panel.innerHTML='<div class="comms-error">'+esc(error.message)+'</div>';}
       finally{loading=false;}
     }
@@ -199,12 +238,19 @@ window.SmetraCommunications = (() => {
       finally{if(button.isConnected)button.disabled=false;}
     };
     document.querySelector('#comms-refresh').onclick=()=>refreshLists(true);
+    realtime=await prepareRealtime(api,user);
+    if(realtime?.inbox_topic)inboxOff=subscribeTopic(realtime.inbox_topic,eventName=>{
+      if(eventName==='inbox_changed'&&active()){refreshLists(false).catch(()=>{});lastListRefresh=Date.now();}
+    });
     await refreshLists(true,true);
     if(active())timer=setInterval(async()=>{
       if(!active()||loading)return;
-      try{await refreshLists(false);if(activeId){const current=activeId;const result=await api('/conversations/'+encodeURIComponent(current)+'/messages?refresh='+Date.now());if(active()&&activeId===current){activeConversation=result.conversation;messages=result.messages||[];renderActive();}}}
-      catch{}
-    },10000);
+      try{
+        const now=Date.now(),current=activeId,live=Boolean(activeConversation?.realtime_topic&&window.SmetraRealtime?.isSubscribed(activeConversation.realtime_topic));
+        if(now-lastListRefresh>=(realtime?.enabled?30000:10000)){await refreshLists(false);lastListRefresh=now;}
+        if(current&&(!live||now-lastMessagesRefresh>30000)){const result=await api('/conversations/'+encodeURIComponent(current)+'/messages?refresh='+Date.now());if(active()&&activeId===current){activeConversation=result.conversation;messages=result.messages||[];renderActive();watchConversation(activeConversation);lastMessagesRefresh=now;}}
+      }catch{}
+    },5000);
   }
   return {support,messaging,leave:stop};
 })();
