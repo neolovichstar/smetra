@@ -87,6 +87,15 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     if(route==='support'){
       await evaluate("document.querySelector('[data-support-topic]').click()");
       assert.equal(await evaluate("document.querySelector('#message').value.length>0"),true);
+      assert.equal(await evaluate("!document.querySelector('a[href^=\\\"mailto:\\"]')"),true,'Support contact remains inside Smetra');
+    }
+    if(route==='profile'){
+      assert.equal(await evaluate("!!document.querySelector('.profile-public-id')&&document.querySelector('#profile-public-id-value').textContent.startsWith('SM-')"),true,'Profile exposes a searchable public ID');
+      await click('#sidebar-open-comms');
+      await until("document.querySelector('#communication-center.is-open')");
+      assert.equal(await evaluate("!!document.querySelector('#comms-id')&&document.querySelector('#communication-center [data-tab=direct].active')"),true,'Public-ID search is available in the chat center');
+      await click('#communication-center [data-close]');
+      await until("!document.querySelector('#communication-center').classList.contains('is-open')");
     }
   }
   if(await evaluate("user.role==='admin'")){
