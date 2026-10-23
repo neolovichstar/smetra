@@ -103,10 +103,10 @@ def _decrypt(value):
         raise business.DomainError(503, "Не удалось открыть OAuth-токен. Переподключите облако.") from None
 
 
-def _http(url, method="GET", token=None, payload=None, form=None, basic=None, limit=1_000_000, timeout=12):
+def _http(url, method="GET", token=None, payload=None, form=None, basic=None, limit=1_000_000, timeout=12, auth_scheme="Bearer"):
     headers = {"Accept": "application/json", "User-Agent": "SmetraCloudSync/1.0"}
     if token:
-        headers["Authorization"] = "Bearer " + token
+        headers["Authorization"] = auth_scheme + " " + token
     if basic:
         headers["Authorization"] = "Basic " + base64.b64encode((basic[0] + ":" + basic[1]).encode()).decode()
     body = None
@@ -149,11 +149,18 @@ def _token_url(provider):
 
 def _credentials(provider):
     if provider == "google_drive":
-        client_id, secret = os.getenv("GOOGLE_DRIVE_CLIENT_ID", ""), os.getenv("GOOGLE_DRIVE_CLIENT_SECRET", "")
+        client_id = os.getenv("GOOGLE_DRIVE_CLIENT_ID", "")
+        secret = os.getenv("GOOGLE_DRIVE_CLIENT_SECRET", "")
         redirect = os.getenv("GOOGLE_DRIVE_REDIRECT_URI", "")
     else:
-        client_id, secret = os.getenv("YANDEX_DISK_CLIENT_ID", ""), os.getenv("YANDEX_DISK_CLIENT_SECRET", "")
-        redirect = os.getenv("YANDEX_DISK_REDIRECT_URI", "")
+        # Reuse the existing Yandex ID OAuth app unless a dedicated Disk app is configured.
+        # The app must have the cloud_api:disk.read permission enabled in Yandex OAuth.
+        client_id = os.getenv("YANDEX_DISK_CLIENT_ID") or os.getenv("YANDEX_CLIENT_ID", "")
+        secret = os.getenv("YANDEX_DISK_CLIENT_SECRET") or os.getenv("YANDEX_CLIENT_SECRET", "")
+        origin = (os.getenv("PUBLIC_ORIGIN") or "https://smetra.online").rstrip("/")
+        redirect = os.getenv("YANDEX_DISK_REDIRECT_URI") or (
+            origin + "/api/auth/oauth/yandex/callback"
+        )
     if not client_id or not secret or not redirect.startswith("https://"):
         raise business.DomainError(503, "Для этого облака не настроены OAuth-реквизиты и HTTPS callback")
     return client_id, secret, redirect
@@ -224,7 +231,7 @@ def _yandex_api(con, connection, path, params=None, method="GET", payload=None):
     url = YANDEX_API + path
     if params:
         url += "?" + urllib.parse.urlencode(params, doseq=True)
-    return _http(url, method, token=token, payload=payload, limit=2_000_000)
+    return _http(url, method, token=token, payload=payload, limit=2_000_000, auth_scheme="OAuth")
 
 
 def _folder_metadata(con, connection, folder_id):
@@ -277,8 +284,15 @@ def _provider_start_url(provider, client_id, redirect, state):
             "scope": scope, "access_type": "offline", "prompt": "consent", "state": state,
         }
         return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-    params = {"client_id": client_id, "response_type": "code", "state": state,
-              "force_confirm": "yes"}
+    scope = (os.getenv("YANDEX_DISK_SCOPE") or "cloud_api:disk.read").strip()
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect,
+        "scope": scope,
+        "state": state,
+        "force_confirm": "yes",
+    }
     return "https://oauth.yandex.ru/authorize?" + urllib.parse.urlencode(params)
 
 
@@ -332,7 +346,7 @@ def _oauth_callback(service, query):
             user = about.get("user") or {}
             label = str(user.get("displayName") or user.get("emailAddress") or label)[:250]
         else:
-            about = _http("https://cloud-api.yandex.net/v1/disk", token=access_token, limit=100_000)
+            about = _http("https://cloud-api.yandex.net/v1/disk", token=access_token, limit=100_000, auth_scheme="OAuth")
             label = str(about.get("user", {}).get("display_name") or about.get("user", {}).get("login") or label)[:250]
     except Exception:
         pass
