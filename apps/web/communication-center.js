@@ -29,6 +29,9 @@ function style(){
  if($('#communication-center-style'))return;
  const css=[
  '.comms-trigger{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 12px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:12px;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}',
+ '.workspace-page .sidebar-group .comms-sidebar-trigger{display:flex;justify-content:flex-start;gap:10px;align-items:center;color:#a6aab3;padding:8px 12px;min-height:37px}',
+ '.workspace-page .sidebar-group .comms-sidebar-trigger svg{width:17px;height:17px;flex:none}',
+ '@media(max-width:700px){.app-nav-actions #open-comms{display:none}}',
  '.comms-trigger svg,.comms-btn svg,.comms-tab svg{width:17px;height:17px;flex:none}',
  '.comms-shell{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.62);backdrop-filter:blur(10px);opacity:0;visibility:hidden;transition:opacity .18s,visibility .18s}',
  '.comms-shell.is-open{opacity:1;visibility:visible}.comms-window{width:min(1100px,100%);height:min(760px,calc(100dvh - 40px));min-height:420px;display:grid;grid-template-rows:auto 1fr;overflow:hidden;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:22px;background:var(--panel,#111);color:var(--text,#f3f3f3);box-shadow:0 30px 90px rgba(0,0,0,.38)}',
@@ -168,7 +171,20 @@ async function handoff(){
  }catch(error){notify(error.message)}
 }
 function addTrigger(){
- if(!$('#open-comms')){const actions=$('.app-nav-actions');if(actions){const b=document.createElement('button');b.id='open-comms';b.type='button';b.className='comms-trigger';b.innerHTML=icon('chat')+'<span>Чаты</span>';b.onclick=()=>open('direct');const ref=$('#command-open',actions);if(ref)ref.insertAdjacentElement('afterend',b);else actions.prepend(b)}}
+ if(!$('#open-comms')){
+  const actions=$('.app-nav-actions');
+  if(actions){
+   const b=document.createElement('button');b.id='open-comms';b.type='button';b.className='comms-trigger';b.innerHTML=icon('chat')+'<span>Чаты</span>';b.onclick=()=>open('direct');
+   const ref=$('#command-open',actions);if(ref)ref.insertAdjacentElement('afterend',b);else actions.prepend(b);
+  }
+ }
+ const support=$('#sidebar [data-tab="support"]');
+ if(support&&!$('#sidebar-open-comms')){
+  const b=document.createElement('button');b.id='sidebar-open-comms';b.type='button';b.className='comms-sidebar-trigger';
+  b.innerHTML=icon('chat')+'<span>Чаты и сообщения</span>';b.setAttribute('aria-label','Открыть чаты и сообщения');
+  b.addEventListener('click',()=>open('direct'));
+  support.insertAdjacentElement('afterend',b);
+ }
 }
 function supportPage(){
  const content=$('#content');
