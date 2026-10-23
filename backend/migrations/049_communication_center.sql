@@ -71,3 +71,5 @@ CREATE POLICY smetra_runtime_chat_messages ON smetra.chat_messages
 DROP POLICY IF EXISTS smetra_runtime_app_presence ON smetra.app_presence;
 CREATE POLICY smetra_runtime_app_presence ON smetra.app_presence
   FOR ALL TO smetra_runtime USING (true) WITH CHECK (true);
+
+INSERT INTO smetra.schema_migrations(version,applied_at) VALUES(49,extract(epoch FROM now())::bigint) ON CONFLICT(version) DO NOTHING;
