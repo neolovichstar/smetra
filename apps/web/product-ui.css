@@ -898,3 +898,14 @@
   inset:auto!important;
   transform:none!important;
 }
+
+/* Keep the Smetra mode switch out of the compact header collision zone. */
+@media (max-width:700px){
+  .workspace-page:not(.auth-mode) .app-nav-inner{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-rows:56px 48px!important;gap:0 12px!important;padding:0 16px 8px!important}
+  .workspace-page:not(.auth-mode) .app-nav-brand{grid-column:1!important;grid-row:1!important}
+  .workspace-page:not(.auth-mode) .app-nav-actions{grid-column:2!important;grid-row:1!important}
+  .workspace-page:not(.auth-mode) .workspace-modes{display:flex!important;position:static!important;transform:none!important;grid-column:1/-1!important;grid-row:2!important;width:100%!important;margin:0!important;box-sizing:border-box!important}
+}
+@media (min-width:701px) and (max-width:800px){
+  .workspace-page:not(.auth-mode) .workspace-modes{display:none!important}
+}
