@@ -13,7 +13,7 @@ from backend.app import ApiError, ORIGIN, audit, now, uid
 try:
     from backend import postgres as _postgres
     _postgres.TABLES = _postgres.TABLES | frozenset(
-        {"chat_conversations", "chat_members", "chat_messages"}
+        {"chat_conversations", "chat_members", "chat_messages", "app_presence"}
     )
 except (ImportError, AttributeError):
     pass
