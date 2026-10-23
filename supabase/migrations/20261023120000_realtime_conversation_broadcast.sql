@@ -134,7 +134,7 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $realtime_support$
 DECLARE v_topic TEXT;
 BEGIN
-  IF NEW.needs_human IS TRUE AND OLD.needs_human IS DISTINCT FROM TRUE THEN
+  IF NEW.needs_human=1 AND OLD.needs_human IS DISTINCT FROM 1 THEN
     FOR v_topic IN
       SELECT d.inbox_topic FROM smetra.users u JOIN smetra.user_directory d ON d.user_id=u.id
       WHERE u.role='admin' AND u.blocked=0 AND u.deleted_at IS NULL

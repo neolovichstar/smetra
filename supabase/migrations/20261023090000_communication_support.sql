@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS smetra.user_directory (
   display_name TEXT NOT NULL,
   profession TEXT NOT NULL DEFAULT '',
   company TEXT NOT NULL DEFAULT '',
-  visible BOOLEAN NOT NULL DEFAULT TRUE,
+  visible INTEGER NOT NULL DEFAULT 1 CHECK(visible IN (0,1)),
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL DEFAULT 0
 );
@@ -45,7 +45,7 @@ SET search_path = smetra, pg_temp
 AS $directory$
 BEGIN
   INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
-  VALUES(NEW.public_id,NEW.id,NEW.name,'','',TRUE,NEW.created_at,0)
+  VALUES(NEW.public_id,NEW.id,NEW.name,'','',1,NEW.created_at,0)
   ON CONFLICT(user_id) DO UPDATE SET public_id=excluded.public_id,display_name=excluded.display_name;
   RETURN NEW;
 END
@@ -71,7 +71,7 @@ BEGIN
   FROM smetra.users WHERE id=NEW.user_id;
   v_display_name := coalesce(nullif(btrim(concat_ws(' ',NEW.first_name,NEW.last_name)),''),v_name);
   INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
-  VALUES(v_public_id,NEW.user_id,v_display_name,coalesce(NEW.profession,''),coalesce(NEW.company,''),TRUE,v_created_at,coalesce(NEW.updated_at,0))
+  VALUES(v_public_id,NEW.user_id,v_display_name,coalesce(NEW.profession,''),coalesce(NEW.company,''),1,v_created_at,coalesce(NEW.updated_at,0))
   ON CONFLICT(user_id) DO UPDATE SET
     public_id=excluded.public_id,display_name=excluded.display_name,
     profession=excluded.profession,company=excluded.company,updated_at=excluded.updated_at;
@@ -85,14 +85,14 @@ AFTER INSERT OR UPDATE OF first_name,last_name,profession,company,updated_at ON 
 FOR EACH ROW EXECUTE FUNCTION smetra.sync_user_directory_profile();
 
 INSERT INTO smetra.user_directory(public_id,user_id,display_name,profession,company,visible,created_at,updated_at)
-SELECT u.public_id,u.id,u.name,coalesce(p.profession,''),coalesce(p.company,''),TRUE,u.created_at,coalesce(p.updated_at,0)
+SELECT u.public_id,u.id,u.name,coalesce(p.profession,''),coalesce(p.company,''),1,u.created_at,coalesce(p.updated_at,0)
 FROM smetra.users u LEFT JOIN smetra.user_profiles p ON p.user_id=u.id
 ON CONFLICT(user_id) DO NOTHING;
 CREATE INDEX IF NOT EXISTS idx_user_directory_name ON smetra.user_directory(lower(display_name));
 CREATE INDEX IF NOT EXISTS idx_user_directory_profession ON smetra.user_directory(lower(profession));
 
 ALTER TABLE smetra.support ADD COLUMN IF NOT EXISTS subject TEXT NOT NULL DEFAULT 'Вопрос в поддержку';
-ALTER TABLE smetra.support ADD COLUMN IF NOT EXISTS needs_human BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE smetra.support ADD COLUMN IF NOT EXISTS needs_human INTEGER NOT NULL DEFAULT 0 CHECK(needs_human IN (0,1));
 ALTER TABLE smetra.support ADD COLUMN IF NOT EXISTS conversation_id TEXT;
 ALTER TABLE smetra.support ADD COLUMN IF NOT EXISTS updated_at BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE smetra.support ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
@@ -179,7 +179,7 @@ SELECT s.conversation_id,s.user_id,'owner',s.created_at,0 FROM smetra.support s
 WHERE s.conversation_id IS NOT NULL
 ON CONFLICT(conversation_id,user_id) DO NOTHING;
 INSERT INTO smetra.messages(id,conversation_id,sender_id,sender_role,body,payload,created_at)
-SELECT 'support-first-' || s.id,s.conversation_id,s.user_id,'user',s.message,'{}'::jsonb,s.created_at
+SELECT 'support-first-' || s.id,s.conversation_id,s.user_id,'user',s.message,'{}'::text,s.created_at
 FROM smetra.support s
 ON CONFLICT(id) DO NOTHING;
 CREATE INDEX IF NOT EXISTS idx_support_status_updated ON smetra.support(status,updated_at DESC);
@@ -209,7 +209,7 @@ ALTER TABLE smetra.messages FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS user_directory_public_read ON smetra.user_directory;
 CREATE POLICY user_directory_public_read ON smetra.user_directory FOR SELECT
-USING (visible OR user_id=(SELECT smetra.runtime_user_id()));
+USING (visible=1 OR user_id=(SELECT smetra.runtime_user_id()));
 DROP POLICY IF EXISTS user_directory_self_insert ON smetra.user_directory;
 CREATE POLICY user_directory_self_insert ON smetra.user_directory FOR INSERT
 WITH CHECK (user_id=(SELECT smetra.runtime_user_id()));
@@ -224,24 +224,51 @@ USING (
   kind='community' OR created_by=(SELECT smetra.runtime_user_id()) OR
   EXISTS (SELECT 1 FROM smetra.conversation_members cm
           WHERE cm.conversation_id=conversations.id AND cm.user_id=(SELECT smetra.runtime_user_id())) OR
-  (kind='support' AND EXISTS (SELECT 1 FROM smetra.users u
-                               WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin'))
+  (workspace_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM smetra.workspace_members wm
+    WHERE wm.workspace_id=conversations.workspace_id AND wm.user_id=(SELECT smetra.runtime_user_id())
+      AND smetra.runtime_workspace_allowed(wm.workspace_id)
+  )) OR
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
 );
 DROP POLICY IF EXISTS conversations_creator_insert ON smetra.conversations;
 CREATE POLICY conversations_creator_insert ON smetra.conversations FOR INSERT
-WITH CHECK (created_by=(SELECT smetra.runtime_user_id()));
+WITH CHECK (
+  created_by=(SELECT smetra.runtime_user_id()) OR
+  (kind='community' AND created_by IS NULL AND id IN (
+    'community_general','community_finishing','community_electrical',
+    'community_plumbing','community_subcontract'
+  ))
+);
 DROP POLICY IF EXISTS conversations_member_update ON smetra.conversations;
 CREATE POLICY conversations_member_update ON smetra.conversations FOR UPDATE
-USING (created_by=(SELECT smetra.runtime_user_id()) OR EXISTS(
-  SELECT 1 FROM smetra.conversation_members cm WHERE cm.conversation_id=conversations.id
-  AND cm.user_id=(SELECT smetra.runtime_user_id()) AND cm.role IN ('owner','admin')))
-WITH CHECK (created_by=(SELECT smetra.runtime_user_id()) OR EXISTS(
-  SELECT 1 FROM smetra.conversation_members cm WHERE cm.conversation_id=conversations.id
-  AND cm.user_id=(SELECT smetra.runtime_user_id()) AND cm.role IN ('owner','admin')));
+USING (
+  created_by=(SELECT smetra.runtime_user_id()) OR
+  EXISTS (SELECT 1 FROM smetra.conversation_members cm
+          WHERE cm.conversation_id=conversations.id AND cm.user_id=(SELECT smetra.runtime_user_id())) OR
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
+)
+WITH CHECK (
+  created_by=(SELECT smetra.runtime_user_id()) OR
+  EXISTS (SELECT 1 FROM smetra.conversation_members cm
+          WHERE cm.conversation_id=conversations.id AND cm.user_id=(SELECT smetra.runtime_user_id())) OR
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
+);
 
 DROP POLICY IF EXISTS conversation_members_read ON smetra.conversation_members;
 CREATE POLICY conversation_members_read ON smetra.conversation_members FOR SELECT
-USING (user_id=(SELECT smetra.runtime_user_id()));
+USING (
+  user_id=(SELECT smetra.runtime_user_id()) OR
+  conversation_id IN ('community_general','community_finishing','community_electrical','community_plumbing','community_subcontract') OR
+  EXISTS (SELECT 1 FROM smetra.direct_chat_pairs p
+          WHERE p.conversation_id=conversation_members.conversation_id
+            AND (p.user_low=(SELECT smetra.runtime_user_id()) OR p.user_high=(SELECT smetra.runtime_user_id()))) OR
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
+);
 DROP POLICY IF EXISTS conversation_members_insert ON smetra.conversation_members;
 CREATE POLICY conversation_members_insert ON smetra.conversation_members FOR INSERT
 WITH CHECK (
@@ -270,8 +297,8 @@ CREATE POLICY messages_member_read ON smetra.messages FOR SELECT
 USING (
   EXISTS (SELECT 1 FROM smetra.conversation_members cm
           WHERE cm.conversation_id=messages.conversation_id AND cm.user_id=(SELECT smetra.runtime_user_id())) OR
-  EXISTS (SELECT 1 FROM smetra.conversations c JOIN smetra.users u ON u.id=(SELECT smetra.runtime_user_id())
-          WHERE c.id=messages.conversation_id AND c.kind='support' AND u.role='admin')
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
 );
 DROP POLICY IF EXISTS messages_member_insert ON smetra.messages;
 CREATE POLICY messages_member_insert ON smetra.messages FOR INSERT
@@ -282,7 +309,25 @@ WITH CHECK (
    EXISTS (SELECT 1 FROM smetra.conversations c JOIN smetra.users u ON u.id=(SELECT smetra.runtime_user_id())
            WHERE c.id=messages.conversation_id AND c.kind='support' AND u.role='admin'))
 );
-GRANT SELECT,INSERT,UPDATE,DELETE ON smetra.user_directory,smetra.conversations,smetra.conversation_members,smetra.direct_chat_pairs,smetra.messages TO service_role,postgres,smetra_runtime;
+ALTER TABLE smetra.support ENABLE ROW LEVEL SECURITY;
+ALTER TABLE smetra.support FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS support_owner_admin_access ON smetra.support;
+CREATE POLICY support_owner_admin_access ON smetra.support FOR ALL
+USING (
+  user_id=(SELECT smetra.runtime_user_id()) OR
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
+)
+WITH CHECK (
+  user_id=(SELECT smetra.runtime_user_id()) OR
+  EXISTS (SELECT 1 FROM smetra.users u
+          WHERE u.id=(SELECT smetra.runtime_user_id()) AND u.role='admin')
+);
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON smetra.support TO service_role,postgres,smetra_runtime;
+GRANT SELECT,INSERT,DELETE ON smetra.user_directory,smetra.conversations,smetra.conversation_members,smetra.direct_chat_pairs,smetra.messages TO service_role,postgres,smetra_runtime;
+GRANT UPDATE ON smetra.user_directory, smetra.conversation_members TO service_role,postgres,smetra_runtime;
+GRANT UPDATE(updated_at,status) ON smetra.conversations TO service_role,postgres,smetra_runtime;
 
 DO $realtime$
 BEGIN
