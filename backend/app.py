@@ -38,7 +38,13 @@ _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
 REQUIRED_CLOUD_SCHEMA_VERSION = 49
-PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
+PLANS = {
+    "pro_month": (49000, 31),
+    "pro_year": (490000, 366),
+    "pro_plus_month": (69000, 31),
+    "team_month": (399000, 31),
+    "team_year": (3990000, 366),
+}
 
 
 def yookassa_mode(user=None):
