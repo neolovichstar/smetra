@@ -1367,6 +1367,54 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
                             (entitlement_until, "pro", local["user_id"]),
                         )
+                        # Store the confirmed product as a non-renewing entitlement. A
+                        # checkout return URL or client-side status never creates this row.
+                        paid_user = con.execute(
+                            "SELECT * FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()
+                        workspace_id = business.ensure_workspace(con, paid_user)
+                        con.execute(
+                            "INSERT INTO billing_subscriptions("
+                            "id,user_id,workspace_id,product_code,provider,provider_subscription_id,"
+                            "provider_payment_method_id,amount_kopecks,currency,status,auto_renew,"
+                            "current_period_start,current_period_end,cancel_at_period_end,last_payment_id,"
+                            "created_at,updated_at) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,'active',0,?,?,0,?,?,?) "
+                            "ON CONFLICT(provider_subscription_id) DO NOTHING",
+                            (
+                                uid(), local["user_id"], workspace_id, local["plan"], "yookassa",
+                                local["provider_id"], "", int(local["amount_kopecks"]), "RUB",
+                                now(), entitlement_until, local["id"], now(), now(),
+                            ),
+                        )
+                        product_tiers = {
+                            "pro_month": ("pro_solo", 1),
+                            "pro_year": ("pro_solo", 1),
+                            "pro_plus_month": ("pro_plus", 2),
+                            "team_month": ("team", 3),
+                            "team_year": ("team", 3),
+                        }
+                        active_products = con.execute(
+                            "SELECT product_code,current_period_end FROM billing_subscriptions "
+                            "WHERE workspace_id=? AND status IN ('active','succeeded') "
+                            "AND current_period_end>?",
+                            (workspace_id, now()),
+                        ).fetchall()
+                        if active_products:
+                            best_code, _best_rank = max(
+                                (
+                                    (row["product_code"], product_tiers.get(row["product_code"], ("pro_solo", 1))[1])
+                                    for row in active_products
+                                ),
+                                key=lambda item: item[1],
+                            )
+                            best_tier = product_tiers.get(best_code, ("pro_solo", 1))[0]
+                            workspace_expiry = max(int(row["current_period_end"] or 0) for row in active_products)
+                            con.execute(
+                                "UPDATE workspaces SET plan=?,subscription_status='active',"
+                                "entitlement_until=?,seat_limit=? WHERE id=?",
+                                (best_tier, workspace_expiry, 5 if best_tier == "team" else 1, workspace_id),
+                            )
                         # Gift credits are issued only for a provider-confirmed live payment.
                         # The amount and expiry are fixed in the original payment intent.
                         bonus = int(terms['bonus_ai_messages'] or 0) if terms else 0
