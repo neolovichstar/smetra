@@ -1,6 +1,6 @@
 /* Owner console: compact, task-oriented, and deliberately separate from the customer workspace. */
 (() => {
-  const state = {section:'users', search:'', status:'all', offset:0, support:'open', overview:null, users:[], total:0, request:0};
+  const state = {section:'users', search:'', status:'all', offset:0, support:'open', overview:null, users:[], total:0, request:0, selectedSupportId:null, pollTimer:null, escalationSeen:null};
   const actionNames = {block:'Заблокировать', unblock:'Разблокировать', grant:'Выдать Про на 31 день', revoke:'Отозвать Про'};
   const auditNames = {'admin.block':'Блокировка','admin.unblock':'Разблокировка','admin.grant':'Доступ Про выдан','admin.revoke':'Доступ Про отозван','admin.support.open':'Обращение открыто','admin.support.closed':'Обращение закрыто'};
   const paymentNames = {pending:'Ожидает',succeeded:'Оплачен',canceled:'Отменён',refunded:'Возврат'};
@@ -18,10 +18,24 @@
     return `<div class="admin-head"><div><span class="admin-kicker"><i></i> СМЕТРА / УПРАВЛЕНИЕ</span><h1>Пульс платформы<span>.</span></h1><p>Пользователи, обращения и оплаты.</p></div><button class="admin-refresh" type="button" data-admin-refresh aria-label="Обновить данные"><span aria-hidden="true">↻</span> Обновить</button></div>
       <div class="admin-dateline"><span>Операционная сводка</span><time>${label(dateLabel)}</time></div>
       <div class="admin-metrics" aria-label="Показатели платформы">
-        <div><span>Пользователи</span><strong>${count(stats.users)}</strong><small>всего активных аккаунтов</small></div>
-        <div><span>Доступ Про</span><strong>${count(stats.subscriptions)}</strong><small>действует сейчас</small></div>
-        <div><span>Создано смет</span><strong>${count(stats.quotes)}</strong><small>за всё время</small></div>
-        <div><span>Оплачено</span><strong>${rub(stats.revenue_kopecks)}</strong><small>успешные платежи без возвратов</small></div>
+        <div><span>Пользователи</span><strong data-admin-metric="users">${count(stats.users)}</strong><small>всего активных аккаунтов</small></div>
+        <div><span>Доступ Про</span><strong data-admin-metric="subscriptions">${count(stats.subscriptions)}</strong><small>действует сейчас</small></div>
+        <div><span>Создано смет</span><strong data-admin-metric="quotes">${count(stats.quotes)}</strong><small>за всё время</small></div>
+        <div><span>Оплачено</span><strong data-admin-metric="revenue_kopecks">${rub(stats.revenue_kopecks)}</strong><small>успешные платежи без возвратов</small></div>
+      </div>
+      <div class="admin-ops-metrics" aria-label="Операционные показатели">
+        <div><span>Активны за 24 часа</span><strong data-admin-metric="active_24h">${count(stats.active_24h)}</strong></div>
+        <div><span>Активны за 30 дней</span><strong data-admin-metric="active_30d">${count(stats.active_30d)}</strong></div>
+        <div><span>Новые за сутки</span><strong data-admin-metric="new_users_24h">${count(stats.new_users_24h)}</strong></div>
+        <div><span>Сметы за сутки</span><strong data-admin-metric="new_quotes_24h">${count(stats.new_quotes_24h)}</strong></div>
+        <div><span>Рабочие пространства</span><strong data-admin-metric="workspaces">${count(stats.workspaces)}</strong></div>
+        <div><span>Проекты / задачи</span><strong data-admin-metric="projects">${count(stats.projects)} / ${count(stats.tasks)}</strong></div>
+        <div><span>Файлы</span><strong data-admin-metric="files">${count(stats.files)}</strong></div>
+        <div><span>Платежи в ожидании</span><strong data-admin-metric="payments_pending">${count(stats.payments_pending)}</strong></div>
+        <div><span>Выручка за 24 часа</span><strong data-admin-money="revenue_24h_kopecks">${rub(stats.revenue_24h_kopecks)}</strong></div>
+        <div><span>Выручка за 30 дней</span><strong data-admin-money="revenue_30d_kopecks">${rub(stats.revenue_30d_kopecks)}</strong></div>
+        <div><span>Поддержка / человек</span><strong data-admin-metric="support_open">${count(stats.support_open)} / ${count(stats.support_human)}</strong></div>
+        <div><span>Задачи ИИ за 30 дней</span><strong data-admin-metric="assistant_jobs_30d">${count(stats.assistant_jobs_30d)}</strong></div>
       </div>
       <nav class="admin-tabs" aria-label="Разделы администрирования">
         <button data-admin-section="users" type="button">Пользователи</button>
@@ -36,7 +50,7 @@
   function userRows() {
     return state.users.map(u => {
       const activePro = u.entitlement_until > Date.now()/1000;
-      return `<tr><td><div class="admin-person"><span class="admin-avatar" aria-hidden="true">${label((u.name||u.email||'?').slice(0,1).toUpperCase())}</span><span><strong>${label(u.name||'Без имени')}</strong><small>${label(u.email)}${u.role==='admin'?' · Администратор':''}</small></span></div></td>
+      return `<tr><td><div class="admin-person"><span class="admin-avatar" aria-hidden="true">${label((u.name||u.email||'?').slice(0,1).toUpperCase())}</span><span><strong>${label(u.name||'Без имени')}</strong><small>${label(u.email)} · ID ${label(u.public_id||'—')}${u.role==='admin'?' · Администратор':''}</small></span></div></td>
         <td><span class="admin-state ${u.blocked?'admin-state-red':'admin-state-green'}"><i></i>${u.blocked?'Заблокирован':'Активен'}</span></td>
         <td><span class="admin-plan ${activePro?'is-pro':''}">${activePro?'Про':'Старт'}</span>${activePro?`<small class="admin-subline">до ${time(u.entitlement_until)}</small>`:''}</td>
         <td class="admin-date">${time(u.created_at)}</td>
@@ -78,9 +92,51 @@
 
   function supportSection() {
     const tickets = state.overview.tickets.filter(t=>t.status===state.support);
-    return `<div class="admin-section-head"><div><span class="admin-section-index">02 / ОБРАЩЕНИЯ</span><h2>Поддержка</h2><p>Очередь обращений за последнее время.</p></div><span class="admin-section-count">${count(tickets.length)} в списке</span></div>
+    const selected=state.overview.tickets.find(t=>t.id===state.selectedSupportId);
+    return `<div class="admin-section-head"><div><span class="admin-section-index">02 / ОБРАЩЕНИЯ</span><h2>Поддержка</h2><p>Переписки пользователей, ответы ИИ и запросы на подключение сотрудника.</p></div><span class="admin-section-count">${count(tickets.length)} в списке · ${count(state.overview.stats.support_human)} ждут сотрудника</span></div>
       <div class="admin-switch" role="group" aria-label="Статус обращения"><button type="button" data-admin-support-filter="open" class="${state.support==='open'?'active':''}">Открытые</button><button type="button" data-admin-support-filter="closed" class="${state.support==='closed'?'active':''}">Закрытые</button></div>
-      <div class="admin-ticket-list">${tickets.length?tickets.map(t=>`<article class="admin-ticket"><div class="admin-ticket-top"><span>${label(t.email)}</span><time>${time(t.created_at)}</time></div><p>${label(t.message)}</p><div class="admin-ticket-actions"><span class="admin-state ${t.status==='open'?'admin-state-blue':''}"><i></i>${t.status==='open'?'Требует ответа':'Закрыто'}</span><button type="button" data-admin-ticket="${label(t.id)}" data-status="${t.status==='open'?'closed':'open'}">${t.status==='open'?'Закрыть обращение':'Открыть снова'} <span aria-hidden="true">↗</span></button></div></article>`).join(''):empty(state.support==='open'?'Открытых обращений нет':'Закрытых обращений нет','Новые сообщения появятся здесь.')}</div>`;
+      <div class="admin-support-workspace">
+        <div class="admin-ticket-list">${tickets.length?tickets.map(t=>`<article class="admin-ticket ${t.id===state.selectedSupportId?'is-selected':''} ${t.needs_human?'is-escalated':''}">
+          <button class="admin-ticket-open" type="button" data-admin-chat-open="${label(t.id)}">
+            <span class="admin-ticket-top"><strong>${label(t.subject||'Вопрос в поддержку')}</strong><time>${time(t.updated_at||t.created_at)}</time></span>
+            <span class="admin-ticket-requester">${label(t.user_name||t.email)} · ${label(t.public_id||'')}</span>
+            <span class="admin-ticket-message-preview">${label(t.message)}</span>
+            <span class="admin-ticket-flags"><small class="${t.needs_human?'is-human':''}">${t.needs_human?'⚑ Нужен сотрудник':t.ai_state==='resolved'?'Решено':'ИИ-поддержка'}</small><small>${label(t.priority||'normal')}</small></span>
+          </button>
+          <div class="admin-ticket-actions"><button type="button" data-admin-ticket="${label(t.id)}" data-status="${t.status==='open'?'closed':'open'}">${t.status==='open'?'Закрыть обращение':'Открыть снова'}</button></div>
+        </article>`).join(''):empty(state.support==='open'?'Открытых обращений нет':'Закрытых обращений нет','Новые сообщения появятся здесь.')}</div>
+        <section class="admin-support-chat" id="admin-support-chat" aria-live="polite">${selected?'<div class="admin-loading">Загружаем переписку…</div>':empty('Выберите обращение','Переписка появится здесь. Сообщения других пользователей не выводятся.')}</section>
+      </div>`;
+  }
+
+  function renderSupportChat(ticket,messages) {
+    const pane=document.querySelector('#admin-support-chat');if(!pane)return;
+    pane.innerHTML=`<header class="admin-support-chat-head"><div><span class="admin-section-index">${ticket.needs_human?'ЭСКАЛАЦИЯ':'ОБРАЩЕНИЕ'} · ${label(ticket.public_id||'')}</span><h3>${label(ticket.subject||'Вопрос в поддержку')}</h3><p>${label(ticket.user_name||'Пользователь')} · ${label(ticket.user_email||'')}</p></div><span class="admin-state ${ticket.needs_human?'admin-state-amber':'admin-state-blue'}"><i></i>${ticket.needs_human?'Ждёт сотрудника':ticket.status==='closed'?'Закрыто':'В работе'}</span></header>
+      <div class="admin-support-messages" id="admin-support-messages">${messages.length?messages.map(m=>`<article class="admin-support-message ${m.sender_role==='admin'?'is-admin':m.sender_role==='ai'?'is-ai':m.sender_role==='system'?'is-system':''}"><div><strong>${label(m.sender_name||({ai:'ИИ-помощник',system:'Сметра'}[m.sender_role]||'Пользователь'))}</strong><time>${time(m.created_at)}</time></div><p>${label(m.body).replace(/\n/g,'<br>')}</p></article>`).join(''):'<p class="admin-loading">Сообщений пока нет.</p>'}</div>
+      <form id="admin-support-reply" class="admin-support-reply"><textarea name="message" rows="2" maxlength="4000" required placeholder="Ответить пользователю…"></textarea><button class="btn primary" type="submit">Отправить ответ ↗</button></form>`;
+    const root=pane.querySelector('#admin-support-messages');if(root)root.scrollTop=root.scrollHeight;
+    pane.querySelector('#admin-support-reply').onsubmit=async event=>{
+      event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),input=form.querySelector('textarea'),message=input.value.trim();
+      if(button.disabled||!message)return;button.disabled=true;
+      try{
+        await api('/admin/support/'+encodeURIComponent(ticket.id)+'/messages',{method:'POST',body:JSON.stringify({message})});
+        if(tab!=='admin'||state.section!=='support'||state.selectedSupportId!==ticket.id)return;
+        state.overview=await api('/admin/overview');
+        const target=document.querySelector('#admin-section');
+        if(target)target.innerHTML=supportSection();
+        await loadSupportChat(ticket.id);
+      }catch(error){notify(error.message);if(button.isConnected)button.disabled=false;}
+    };
+  }
+  async function loadSupportChat(id) {
+    const pane=document.querySelector('#admin-support-chat');if(!pane||!id)return;
+    const owner=user;
+    pane.innerHTML='<div class="admin-loading">Загружаем переписку…</div>';
+    try{
+      const result=await api('/admin/support/'+encodeURIComponent(id)+'/messages?refresh='+Date.now());
+      if(user!==owner||tab!=='admin'||state.section!=='support'||state.selectedSupportId!==id)return;
+      renderSupportChat(result.ticket,result.messages||[]);
+    }catch(error){if(user===owner&&pane.isConnected)pane.innerHTML='<p class="admin-error">'+label(error.message)+'</p>';}
   }
 
   function paymentsSection() {
@@ -110,6 +166,7 @@
       api('/admin/revenue').then(data=>{if(user!==owner||tab!=='admin'||state.section!=='revenue'||current!==state.request)return;target.innerHTML=revenueSection(data)}).catch(error=>{if(user===owner&&state.section==='revenue'&&current===state.request)target.innerHTML=`<p class="admin-error">${label(error.message)}</p>`});return;
     }
     target.innerHTML = ({users:usersSection,support:supportSection,payments:paymentsSection,audit:auditSection})[state.section]();
+    if(state.section==='support'&&state.selectedSupportId)loadSupportChat(state.selectedSupportId);
     if (state.section==='users') {
       document.querySelector('#admin-user-filter').value = state.status;
       loadUsers();
@@ -160,6 +217,45 @@
     dialog.showModal();dialog.querySelector('#admin-reason').focus();
   }
 
+  function syncMetrics(data) {
+    const stats=data.stats||{};
+    for(const key of ['users','subscriptions','quotes','active_24h','active_30d','new_users_24h','new_quotes_24h','workspaces','files','payments_pending','support_open','support_human','assistant_jobs_30d']) {
+      const element=document.querySelector('[data-admin-metric="'+key+'"]');
+      if(element)element.textContent=count(stats[key]||0);
+    }
+    const projectMetric=document.querySelector('[data-admin-metric="projects"]');
+    if(projectMetric)projectMetric.textContent=count(stats.projects)+' / '+count(stats.tasks);
+    for(const key of ['revenue_kopecks','revenue_24h_kopecks','revenue_30d_kopecks']){
+      const element=document.querySelector('[data-admin-metric="'+key+'"],[data-admin-money="'+key+'"]');
+      if(element)element.textContent=rub(stats[key]||0);
+    }
+  }
+  function startAdminPolling() {
+    if(state.pollTimer)clearInterval(state.pollTimer);
+    state.pollTimer=setInterval(async()=>{
+      if(user?.role!=='admin'||tab!=='admin'){clearInterval(state.pollTimer);state.pollTimer=null;return;}
+      try{
+        const next=await api('/admin/overview?refresh='+Date.now());
+        if(user?.role!=='admin'||tab!=='admin')return;
+        const previous=state.escalationSeen;
+        state.overview=next;
+        syncMetrics(next);
+        const escalated=(next.tickets||[]).filter(ticket=>ticket.status==='open'&&ticket.needs_human);
+        if(previous){
+          const added=escalated.filter(ticket=>!previous.has(ticket.id));
+          if(added.length)notify('Новое обращение просит сотрудника: '+(added[0].subject||added[0].user_name||'поддержка'));
+        }
+        state.escalationSeen=new Set(escalated.map(ticket=>ticket.id));
+        const supportBadge=document.querySelector('[data-admin-section="support"] span');
+        if(supportBadge)supportBadge.textContent=count(escalated.length);
+        if(state.section==='support'){
+          const target=document.querySelector('#admin-section');
+          if(target){target.innerHTML=supportSection();if(state.selectedSupportId)loadSupportChat(state.selectedSupportId);}
+        }
+      }catch{}
+    },15000);
+  }
+
   window.SmetraAdmin = async function (overview=null) {
     if (user?.role!=='admin') return;
     const owner=user;
@@ -182,6 +278,8 @@
       if(manageButton){manage(manageButton.dataset.adminManage);return;}
       const page=event.target.closest('[data-admin-page]');
       if(page){state.offset+=page.dataset.adminPage==='next'?25:-25;loadUsers();return;}
+      const openChat=event.target.closest('[data-admin-chat-open]');
+      if(openChat){state.selectedSupportId=openChat.dataset.adminChatOpen;renderSection();return;}
       const filter=event.target.closest('[data-admin-support-filter]');
       if(filter){state.support=filter.dataset.adminSupportFilter;renderSection();return;}
       const ticket=event.target.closest('[data-admin-ticket]');
@@ -196,5 +294,7 @@
       if(event.target.id==='admin-user-filter'){state.status=event.target.value;state.offset=0;loadUsers();}
     };
     renderSection();
+    if(!state.escalationSeen)state.escalationSeen=new Set((state.overview.tickets||[]).filter(ticket=>ticket.status==='open'&&ticket.needs_human).map(ticket=>ticket.id));
+    startAdminPolling();
   };
 })();

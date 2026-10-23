@@ -165,6 +165,7 @@ function quoteCard(q) {
 function quoteList() { return quotes.length?quotes.map(quoteCard).join(''):'<div class="empty"><h3>Здесь пока пусто</h3><p>Создайте первое предложение, чтобы отправить клиенту точную стоимость.</p></div>'; }
 async function render() {
   window.SmetraQuoteEditor?.leave();
+  window.SmetraCommunications?.leave();
   if(!user)return;
   const owner=user,section=tab,mine=++renderRevision;
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
@@ -177,6 +178,7 @@ async function render() {
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
+    if(tab==='messages' && window.SmetraCommunications){await window.SmetraCommunications.messaging({api,view,header,escapeHtml,notify,user,active,date});return;}
     const handled=window.Workspace && await window.Workspace.render(tab);
     if(!active()||handled)return;
     if(tab==='dashboard'||tab==='quotes') {
@@ -192,10 +194,9 @@ async function render() {
     } else if(tab==='billing') {
       await window.SmetraGrowth.billing(active);
     } else if(tab==='support') {
-      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:reyzin378@gmail.com">Написать на почту ↗</a></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
-      const topics=[...document.querySelectorAll('[data-support-topic]')];let selectedTopic='';
-      topics.forEach(button=>{button.setAttribute('aria-pressed','false');button.onclick=()=>{const input=$('#message');const prefix=selectedTopic+': ';const text=selectedTopic&&input.value.startsWith(prefix)?input.value.slice(prefix.length):input.value;selectedTopic=button.dataset.supportTopic;input.value=selectedTopic+': '+text;topics.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));input.focus()}});
-      $('#support-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('[type=submit],button:not([type])'),input=form.querySelector('#message'),message=input.value;if(button.disabled)return;button.disabled=true;try{await api('/support',{method:'POST',body:JSON.stringify({message})});if(input.value===message)input.value='';if(user===owner)notify('Сообщение отправлено')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+      if(!window.SmetraCommunications)throw Error('Модуль поддержки не загрузился. Обновите страницу.');
+      await window.SmetraCommunications.support({api,view,header,escapeHtml,notify,user,active,date});
+      return;
     } else if(tab==='settings') {
       view(header('Настройки','Отображение и поведение ассистента.')+`<div class="panel"><h3>Аккаунт</h3><p>${escapeHtml(user.email)}</p><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Переключить тему</button></div><section id="settings-personalization"></section><section id="settings-export"></section><div class="panel"><h3>Удалить аккаунт</h3><p class="muted">Предложения и доступ будут удалены без возможности восстановления.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div>`);
       $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
@@ -208,7 +209,7 @@ async function render() {
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);}
 }
 window.render=render;
-const appSections=new Set(['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+const appSections=new Set(['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','messages','profile','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;

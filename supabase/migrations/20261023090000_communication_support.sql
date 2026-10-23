@@ -5,7 +5,7 @@ SET LOCAL statement_timeout='30s';
 
 ALTER TABLE smetra.users ADD COLUMN IF NOT EXISTS public_id TEXT NOT NULL DEFAULT '';
 UPDATE smetra.users
-SET public_id='SM-' || upper(substr(replace(id,'-',''),1,10))
+SET public_id='SM-' || upper(substr(replace(id,'-',''),1,16))
 WHERE public_id='';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_public_id ON smetra.users(public_id);
 
@@ -120,8 +120,17 @@ ON CONFLICT(id) DO NOTHING;
 CREATE INDEX IF NOT EXISTS idx_support_status_updated ON smetra.support(status,updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_support_human_open ON smetra.support(needs_human,status,updated_at DESC);
 
+INSERT INTO smetra.conversations(id,kind,title,category,created_by,status,created_at,updated_at) VALUES
+('community_general','community','Общий чат','general',NULL,'active',EXTRACT(EPOCH FROM NOW())::BIGINT,EXTRACT(EPOCH FROM NOW())::BIGINT),
+('community_finishing','community','Отделка','finishing',NULL,'active',EXTRACT(EPOCH FROM NOW())::BIGINT,EXTRACT(EPOCH FROM NOW())::BIGINT),
+('community_electrical','community','Электрика','electrical',NULL,'active',EXTRACT(EPOCH FROM NOW())::BIGINT,EXTRACT(EPOCH FROM NOW())::BIGINT),
+('community_plumbing','community','Сантехника','plumbing',NULL,'active',EXTRACT(EPOCH FROM NOW())::BIGINT,EXTRACT(EPOCH FROM NOW())::BIGINT),
+('community_subcontract','community','Биржа субподряда','subcontract',NULL,'active',EXTRACT(EPOCH FROM NOW())::BIGINT,EXTRACT(EPOCH FROM NOW())::BIGINT)
+ON CONFLICT(id) DO NOTHING;
+
 -- All communication remains server-authenticated. These policies are defense in depth for
 -- the custom Smetra session context used by the backend and do not expose user email.
+GRANT SELECT(public_id,role,created_at) ON smetra.users TO smetra_runtime;
 ALTER TABLE smetra.user_directory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE smetra.user_directory FORCE ROW LEVEL SECURITY;
 ALTER TABLE smetra.conversations ENABLE ROW LEVEL SECURITY;
@@ -136,6 +145,9 @@ ALTER TABLE smetra.messages FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS user_directory_public_read ON smetra.user_directory;
 CREATE POLICY user_directory_public_read ON smetra.user_directory FOR SELECT
 USING (visible OR user_id=(SELECT smetra.runtime_user_id()));
+DROP POLICY IF EXISTS user_directory_self_insert ON smetra.user_directory;
+CREATE POLICY user_directory_self_insert ON smetra.user_directory FOR INSERT
+WITH CHECK (user_id=(SELECT smetra.runtime_user_id()));
 DROP POLICY IF EXISTS user_directory_self_insert ON smetra.user_directory;
 CREATE POLICY user_directory_self_insert ON smetra.user_directory FOR INSERT
 WITH CHECK (user_id=(SELECT smetra.runtime_user_id()));
@@ -208,7 +220,7 @@ WITH CHECK (
    EXISTS (SELECT 1 FROM smetra.conversations c JOIN smetra.users u ON u.id=(SELECT smetra.runtime_user_id())
            WHERE c.id=messages.conversation_id AND c.kind='support' AND u.role='admin'))
 );
-GRANT SELECT,INSERT,UPDATE,DELETE ON smetra.user_directory,smetra.conversations,smetra.conversation_members,smetra.direct_chat_pairs,smetra.messages TO service_role,postgres;
+GRANT SELECT,INSERT,UPDATE,DELETE ON smetra.user_directory,smetra.conversations,smetra.conversation_members,smetra.direct_chat_pairs,smetra.messages TO service_role,postgres,smetra_runtime;
 
 DO $realtime$
 BEGIN

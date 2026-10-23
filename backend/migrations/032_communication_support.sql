@@ -4,7 +4,7 @@ PRAGMA foreign_keys = ON;
 
 ALTER TABLE users ADD COLUMN public_id TEXT NOT NULL DEFAULT '';
 UPDATE users
-SET public_id='SM-' || upper(substr(replace(id,'-',''),1,10))
+SET public_id='SM-' || upper(substr(replace(id,'-',''),1,16))
 WHERE public_id='';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_public_id ON users(public_id);
 

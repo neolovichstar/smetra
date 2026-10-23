@@ -476,7 +476,7 @@ def handle(handler, con, user, method, path, query):
             return {"conversation_id": pair["conversation_id"], "created": pair["conversation_id"] == conversation_id}
 
         if kind == "workspace":
-            workspace_id = _clean(data.get("workspace_id", ""), "Рабочее пространство", 100)
+            workspace_id = _clean(data.get("workspace_id") or handler.headers.get("X-Workspace-ID", ""), "Рабочее пространство", 100)
             object_id = _clean(data.get("object_id", ""), "Объект", 100)
             conversation_id = _ensure_workspace_chat(con, user, workspace_id, object_id)
             return {"conversation_id": conversation_id, "created": True}
