@@ -1648,6 +1648,10 @@
  .workspace-page .assistant-studio .assistant-composer-foot{gap:8px;font-size:10px!important}
  .workspace-page .assistant-studio .assistant-composer-foot #assistant-delivery-hint{max-width:52%;text-align:right}
 }
+/* Tablet drawer backdrop follows the actual floating glass header: top 10px + height 62px. */
+@media(max-width:800px) and (min-width:701px){
+ .workspace-page.nav-open .nav-backdrop{top:72px!important}
+}
 @media(prefers-reduced-motion:reduce){
  .workspace-page *, .workspace-page *::before, .workspace-page *::after,.black-landing *, .black-landing *::before, .black-landing *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
