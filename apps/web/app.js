@@ -63,7 +63,7 @@ document.documentElement.dataset.theme=document.body.classList.contains('dark')?
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
 function loadingView(section){
-  const names={dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
+  const names={dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
   const title=names[section]||'Рабочее пространство';
   return `<section class="page-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Загрузка раздела"><div class="page-loading-head"><span class="page-skeleton page-skeleton-kicker"></span><span class="page-skeleton page-skeleton-title"></span><span class="page-skeleton page-skeleton-copy"></span></div><div class="page-loading-metrics"><span class="page-skeleton"></span><span class="page-skeleton"></span><span class="page-skeleton"></span></div><section class="page-loading-card"><span class="page-skeleton page-skeleton-heading"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row short"></span></section><span class="sr-only">Открываем раздел «${escapeHtml(title)}»</span></section>`;
 }
@@ -81,6 +81,7 @@ const sidebarIcons={
  assistant:'<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
  finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
  catalog:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 4.5V22M8 7h8M8 11h8"/>',
+ premium:'<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/>',
  files:'<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
  documents:'<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/><path d="M3 7v14"/>',
  team:'<circle cx="9" cy="8" r="3.5"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M16 5.5a3.5 3.5 0 0 1 0 6.8M19 15a5 5 0 0 1 3 4.5V21"/>',
@@ -172,11 +173,12 @@ async function render() {
   $('#sidebar-profile')?.classList.toggle('active',tab==='profile');
   const loadingTimer=setTimeout(()=>{if(active())view(loadingView(section))},80);
   try {
-    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth'})[section];
+    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth',premium:'premiumTools'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
+    if(tab==='premium' && window.SmetraPremiumTools){await window.SmetraPremiumTools.render(active);return;}
     const handled=window.Workspace && await window.Workspace.render(tab);
     if(!active()||handled)return;
     if(tab==='dashboard'||tab==='quotes') {
