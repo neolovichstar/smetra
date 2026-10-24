@@ -36,7 +36,7 @@
     for (let index=0; index<Math.min(rows.length, 200); index++) {
       const row=rows[index] || {};
       const name=nameKey(row.name), unit=normalize(row.unit), display=index+1;
-      const included=row.included!==false || row.optional!==true;
+      const included=row.included!==false;
       const add=(level,code,title,description,field)=>issues.push(issue(level,code,title,description,index,field));
       if (!name) {
         add('error','empty-name','Позиция '+display+': нет названия','Добавьте название работы или материала.','name');
