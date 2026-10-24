@@ -78,6 +78,20 @@ class PriceImpactTests(unittest.TestCase):
                 self.assertEqual(actual["comparable_delta_kopecks"], 0)
                 self.assertEqual(actual["indicative_total_kopecks"], 120000)
 
+    def test_exact_unit_aliases_allowed_without_conversion(self):
+        sample = calculate_price_impact(
+            quote(items=[line(unit="шт.")]), [source(unit="штук")], NOW
+        )
+        self.assertEqual(sample["comparable_lines"], 1)
+        squared = calculate_price_impact(
+            quote(items=[line(unit="м²")]), [source(unit="м2")], NOW
+        )
+        self.assertEqual(squared["comparable_lines"], 1)
+        wrong_dimension = calculate_price_impact(
+            quote(items=[line(unit="м²")]), [source(unit="м")], NOW
+        )
+        self.assertEqual(wrong_dimension["lines"][0]["status"], "unit_mismatch")
+
     def test_skips_excluded_lines(self):
         actual = calculate_price_impact(quote(items=[line(included=False)]), [source()], NOW)
         self.assertEqual(actual["lines"][0]["status"], "skipped")
