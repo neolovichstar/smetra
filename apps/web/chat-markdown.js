@@ -61,6 +61,29 @@ window.SmetraCopyText=async value=>{
       token.children.unshift(marker);
     }
   });
+  // Callouts are parsed from Markdown blockquotes, never rendered as raw model HTML.
+  md.core.ruler.after('smetra_tasks','smetra_callouts',state=>{
+    const labels={NOTE:'Примечание',TIP:'Совет',WARNING:'Внимание',IMPORTANT:'Важно',CAUTION:'Осторожно'};
+    for(let index=0;index<state.tokens.length-2;index++){
+      const opening=state.tokens[index];
+      if(opening.type!=='blockquote_open')continue;
+      let inline=null;
+      for(let step=index+1;step<Math.min(index+6,state.tokens.length);step++){
+        if(state.tokens[step].type==='inline'){inline=state.tokens[step];break}
+        if(state.tokens[step].type==='blockquote_close')break;
+      }
+      const first=inline?.children?.[0];
+      if(!first||first.type!=='text')continue;
+      const found=/^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\](?:\s|$)/i.exec(first.content);
+      if(!found)continue;
+      const kind=found[1].toUpperCase();
+      opening.attrSet('class','assistant-callout assistant-callout--'+kind.toLowerCase());
+      first.content=first.content.slice(found[0].length).trimStart();
+      const title=new state.Token('html_inline','',0);
+      title.content='<span class="assistant-callout-title">'+labels[kind]+'</span>';
+      inline.children.unshift(title);
+    }
+  });
   window.SmetraMarkdown={render:source=>md.render(String(source||'')),inline:source=>md.renderInline(String(source||''))};
   if(typeof document!=='undefined')document.addEventListener('click',async event=>{
     const button=event.target.closest?.('[data-copy-code]');
