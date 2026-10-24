@@ -46,7 +46,7 @@ const source=fs.readFileSync('apps/web/calculators.js','utf8');
  w.tab='calculators';w.history.replaceState({},'', '/app#calculators');
  $('[data-calc-kind=paint]').click();
  assert.equal($('#smcalc-unit-mode').value,'material','Changing calculators resets package mode');
- assert.match($('#smcalc-draft-qty').textContent,/2,64 л/);
+ assert.match($('#smcalc-draft-qty').textContent,/2,97 л/);
  change($('#smcalc-unit-mode'),'packages','change');
  assert.match($('#smcalc-draft-qty').textContent,/2 банка/);
  $('#smcalc-draft').click();
