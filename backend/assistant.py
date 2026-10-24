@@ -490,11 +490,11 @@ def assistant_model(service, has_image=False):
     return name, False
 
 
-def query_model(messages, model):
+def query_model(messages, model, paid_model=False):
     payload = {
         "model": model,
         "messages": messages,
-        **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools(), "tool_choice": "auto"}),
+        **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3}}] if paid_model else []), "tool_choice": "auto"}),
         "max_tokens": 3500,
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
@@ -536,14 +536,14 @@ def query_model(messages, model):
         ) from None
 
 
-def query_model_stream(messages, on_delta, model):
+def query_model_stream(messages, on_delta, model, paid_model=False, on_source=None):
     """Relay provider SSE deltas while assembling fragmented tool calls."""
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         packed({
             "model": model,
             "messages": messages,
-            **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools(), "tool_choice": "auto"}),
+            **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3}}] if paid_model else []), "tool_choice": "auto"}),
             "max_tokens": 3500,
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
@@ -558,6 +558,7 @@ def query_model_stream(messages, on_delta, model):
         method="POST",
     )
     pieces, calls, total_bytes, done, usage = [], {}, 0, False, None
+    seen_sources = set()
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
             for raw in response:
@@ -580,6 +581,20 @@ def query_model_stream(messages, on_delta, model):
                 choice = (event.get("choices") or [{}])[0]
                 delta = choice.get("delta") or {}
                 content = delta.get("content")
+                # Provider-issued citations only; never fabricate source domains.
+                for annotation in (delta.get("annotations") or choice.get("annotations") or []):
+                    if not isinstance(annotation, dict) or not on_source:
+                        continue
+                    source = annotation.get("url_citation") if isinstance(annotation.get("url_citation"), dict) else annotation
+                    url = source.get("url") if isinstance(source, dict) else None
+                    if not isinstance(url, str) or url in seen_sources or len(seen_sources) >= 3:
+                        continue
+                    from urllib.parse import urlsplit
+                    parsed = urlsplit(url)
+                    if parsed.scheme not in ("https", "http") or not parsed.hostname or len(url) > 1500:
+                        continue
+                    seen_sources.add(url)
+                    on_source({"url": url, "domain": parsed.hostname[:120]})
                 if isinstance(content, str) and content:
                     if sum(map(len, pieces)) + len(content) > 12000:
                         raise ValueError("answer too large")
@@ -934,7 +949,7 @@ def _confirm(service, action_id):
         return result
 
 
-def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None):
+def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None):
     if conversation_id:
         history_sql = "SELECT role,content FROM assistant_messages WHERE workspace_id=? AND user_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 8"
         history_args = (service.wid, service.user["id"], conversation_id)
@@ -998,8 +1013,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     actions, answer, remembered = [], "", False
     for turn in range(2):
         if on_commit and on_status:
-            on_status("Формулирую ответ…")
-        response = query_model_stream(messages, on_delta, model) if on_delta else query_model(messages, model)
+            on_status("Думаю…")
+        response = query_model_stream(messages, on_delta, model, paid_model, on_source) if on_delta else query_model(messages, model, paid_model)
         usage=response.pop('_usage',None)
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -1099,7 +1114,7 @@ class ChatStream:
             send("done", answer_chat(
                 self.service, self.prompt, delta, self.context,
                 self.conversation_id, lambda message: send("status", {"text": message}),
-                image_url=self.image_url,
+                image_url=self.image_url, on_source=lambda source: (send("status", {"text": "Проверяю источники…"}), send("web_source", source)),
             ))
         except DomainError as error:
             if not emitted:
