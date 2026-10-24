@@ -52,6 +52,19 @@ class PriceImpactTests(unittest.TestCase):
         self.assertFalse(actual["financial_price_changed"])
         self.assertTrue(actual["observation_only"])
 
+    def test_matches_canonical_quote_rounding_and_tax_rules(self):
+        row = line(quantity="2.3333", coefficient="1.25", markup="14.5",
+                   discount="7.25", tax="20", unit_price=13245, subtotal=0)
+        stored, _, _ = business.calculate([row])
+        row["subtotal"] = stored[0]["subtotal"]
+        q = quote(items=[row], amount_kopecks=row["subtotal"])
+        actual = calculate_price_impact(q, [source(price_kopecks=16543)], NOW)
+        changed, _, _ = business.calculate([{**row, "unit_price": 16543}])
+        self.assertEqual(actual["lines"][0]["indicative_subtotal_kopecks"],
+                         changed[0]["subtotal"])
+        self.assertEqual(actual["comparable_delta_kopecks"],
+                         changed[0]["subtotal"] - stored[0]["subtotal"])
+
     def test_price_declines_are_not_hidden(self):
         actual = calculate_price_impact(quote(), [source(price_kopecks=9000)], NOW)
         self.assertEqual(actual["comparable_delta_kopecks"], -6600)
