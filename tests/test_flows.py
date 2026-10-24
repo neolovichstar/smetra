@@ -18,6 +18,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class FlowTests(unittest.TestCase):
+    def test_app_csp_permits_only_approved_search_favicon_source(self):
+        with urllib.request.urlopen(self.base + "/app") as response:
+            csp = response.headers.get("Content-Security-Policy", "")
+        self.assertIn("img-src 'self' data: blob:", csp)
+        self.assertIn("https://www.google.com/s2/favicons", csp)
+        self.assertNotIn("img-src *", csp)
+
     def test_admin_console_search_triage_and_audit(self):
         def register(name, email):
             token, user_id = secrets.token_urlsafe(32), self.mod.uid()
