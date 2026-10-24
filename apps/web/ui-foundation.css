@@ -1651,3 +1651,89 @@
  .workspace-page *, .workspace-page *::before, .workspace-page *::after,.black-landing *, .black-landing *::before, .black-landing *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
 
+
+
+/* 2026-10: deterministic rail motion. Animate track sizes, never the rail contents. */
+@media (min-width:701px) {
+ .workspace-page .assistant-studio {
+  transition:grid-template-columns 360ms cubic-bezier(.22,1,.36,1)!important;
+ }
+ .workspace-page .assistant-studio>.assistant-toolrail {
+  min-width:0!important;
+  overflow:hidden!important;
+  transition:none!important;
+  contain:layout style;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail-body,
+ .workspace-page .assistant-studio .assistant-workbar {
+  min-width:0;
+ }
+ .workspace-page .assistant-studio .assistant-tool-label {
+  display:block!important;
+  flex:0 1 auto;
+  width:auto;
+  min-width:0;
+  max-width:155px;
+  opacity:1;
+  visibility:visible;
+  white-space:nowrap;
+  overflow:hidden;
+  transition:max-width 320ms cubic-bezier(.22,1,.36,1),opacity 180ms ease,visibility 0s linear!important;
+ }
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-tool-label {
+  display:block!important;
+  max-width:0!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  transition:max-width 320ms cubic-bezier(.22,1,.36,1),opacity 130ms ease,visibility 0s linear 320ms!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar>button {
+  gap:10px;
+  white-space:nowrap;
+  transition:background-color 160ms ease,color 160ms ease!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar .assistant-tool-icon,
+ .workspace-page .assistant-studio .assistant-toolrail-toggle svg {
+  flex-shrink:0!important;
+  transform:none!important;
+  transition:color 160ms ease!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail-toggle {
+  transform:none!important;
+  transition:background-color 160ms ease,color 160ms ease,border-color 160ms ease!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar {
+  transition:none!important;
+ }
+ .workspace-page .assistant-studio .assistant-history-panel {
+  min-width:0;
+ }
+}
+@media (prefers-reduced-motion:reduce) {
+ .workspace-page .assistant-studio,
+ .workspace-page .assistant-studio .assistant-tool-label {transition:none!important}
+}
+
+/* Markdown reading rhythm: quiet surfaces, stable tables, consistent headings. */
+.workspace-page .assistant-studio .assistant-message.assistant .assistant-markdown {
+ font-size:14px;line-height:1.78;letter-spacing:0;overflow-wrap:anywhere;
+}
+.workspace-page .assistant-studio .assistant-markdown :is(h3,h4,h5,h6) {
+ font-weight:620;letter-spacing:-.025em;line-height:1.35;
+ margin:1.6em 0 .6em;
+}
+.workspace-page .assistant-studio .assistant-markdown :is(p,ul,ol,blockquote,pre,.assistant-table-scroll) {
+ margin-block:0 1em;
+}
+.workspace-page .assistant-studio .assistant-markdown :is(ul,ol) {padding-inline-start:1.6em}
+.workspace-page .assistant-studio .assistant-markdown li {margin:.3em 0}
+.workspace-page .assistant-studio .assistant-markdown .assistant-table-scroll {
+ max-width:100%;overflow-x:auto;scrollbar-width:thin;border-radius:12px;
+}
+.workspace-page .assistant-studio .assistant-markdown table {border-collapse:collapse;min-width:100%;font-size:13px}
+.workspace-page .assistant-studio .assistant-markdown :is(th,td) {padding:10px 13px;text-align:left;border-bottom:1px solid var(--smetra-line)}
+.workspace-page .assistant-studio .assistant-markdown th {font-weight:650}
+.workspace-page .assistant-studio .assistant-markdown .assistant-code {overflow:hidden;border-radius:13px}
+.workspace-page .assistant-studio .assistant-markdown .assistant-code header {
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
