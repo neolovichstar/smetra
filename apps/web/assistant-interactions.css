@@ -1,57 +1,65 @@
-/* Smetra interaction layer: stable native disclosure tracks and readable AI activity. */
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-group:has(>.sidebar-section-toggle){
-  display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;
-}
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-toggle{
+/* One disclosure component: no hidden/display toggles, no timeouts, no transforms. */
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure{
   display:flex!important;align-items:center!important;justify-content:space-between!important;
-  width:100%!important;min-width:0!important;min-height:43px!important;
-  margin:0!important;padding:10px 12px!important;border:0!important;border-radius:8px!important;
-  box-shadow:none!important;background:transparent!important;
-  color:#b7b7bf!important;text-align:left!important;font:600 12px/1.3 inherit!important;
-  transform:none!important;transition:color 200ms ease,background-color 200ms ease!important;
+  box-sizing:border-box!important;width:100%!important;min-width:0!important;height:44px!important;
+  min-height:44px!important;margin:0!important;padding:0 12px!important;
+  color:#bfc0c5!important;font:600 12px/1.35 inherit!important;
+  background:transparent!important;border:0!important;border-radius:9px!important;
+  box-shadow:none!important;transform:none!important;
+  transition:background-color 180ms ease,color 180ms ease!important;
 }
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-toggle:hover{
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure:hover{
   background:rgba(255,255,255,.035)!important;color:#f4f4f6!important;
 }
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-name{
-  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure::after{
+  content:''!important;flex:0 0 7px!important;width:7px!important;height:7px!important;
+  margin:0 4px 3px 10px!important;border:0!important;
+  border-right:1.8px solid currentColor!important;border-bottom:1.8px solid currentColor!important;
+  transform:rotate(45deg)!important;
+  transition:transform 370ms cubic-bezier(.22,.8,.24,1)!important;
 }
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-chevron{
-  display:block!important;flex:0 0 18px!important;width:18px!important;height:18px!important;
-  color:#d0d0d6!important;transform:rotate(0)!important;
-  transition:transform 350ms cubic-bezier(.22,.8,.24,1),color 180ms ease!important;
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure[aria-expanded="true"]::after{
+  transform:rotate(225deg)!important;
 }
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-group.is-section-open>.sidebar-section-toggle .sidebar-section-chevron{
-  transform:rotate(180deg)!important;
-}
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-panel{
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-items{
   display:grid!important;grid-template-rows:0fr!important;
-  opacity:0;visibility:hidden;
-  transition:grid-template-rows 410ms cubic-bezier(.22,.8,.24,1),opacity 240ms ease,visibility 0s linear 410ms!important;
+  min-height:0!important;max-height:none!important;
+  overflow:hidden!important;gap:0!important;padding:0!important;
+  opacity:0!important;visibility:hidden!important;transform:none!important;
+  animation:none!important;pointer-events:none!important;
+  transition:grid-template-rows 390ms cubic-bezier(.22,.8,.24,1),opacity 200ms ease,visibility 0s linear 390ms!important;
 }
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-group.is-section-open>.sidebar-section-panel{
-  grid-template-rows:1fr!important;opacity:1;visibility:visible;
-  transition:grid-template-rows 410ms cubic-bezier(.22,.8,.24,1),opacity 240ms ease 65ms,visibility 0s!important;
-}
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-inner{
-  display:flex;flex-direction:column;gap:3px;min-height:0!important;
-  overflow:hidden!important;padding-inline:0!important;
-}
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-inner button[data-tab]{
-  display:flex!important;flex:0 0 auto!important;align-items:center!important;
-}
-body.workspace-page.sidebar-compact #sidebar .sidebar-section-toggle{
-  height:0!important;min-height:0!important;padding:0!important;opacity:0!important;
-  pointer-events:none!important;overflow:hidden!important;
-}
-body.workspace-page.sidebar-compact #sidebar .sidebar-section-panel{
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-items.is-open{
   grid-template-rows:1fr!important;opacity:1!important;visibility:visible!important;
+  pointer-events:auto!important;
+  transition:grid-template-rows 390ms cubic-bezier(.22,.8,.24,1),opacity 200ms ease 40ms,visibility 0s!important;
 }
-body.workspace-page.sidebar-compact #sidebar .sidebar-section-panel .sidebar-section-inner{
-  gap:5px!important;
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-inner{
+  min-height:0!important;overflow:hidden!important;
+  display:flex!important;flex-direction:column!important;
+  gap:3px!important;padding:4px 0 0!important;
 }
-body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-toggle:focus-visible{
-  outline:2px solid #dddde2!important;outline-offset:2px!important;
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-inner button[data-tab]{
+  flex:0 0 43px!important;min-height:43px!important;max-height:43px!important;
+  transform:none!important;
+}
+body.workspace-page.sidebar-compact:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-items{
+  grid-template-rows:1fr!important;opacity:1!important;visibility:visible!important;
+  pointer-events:auto!important;
+}
+body.workspace-page.sidebar-compact:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure{
+  font-size:0!important;height:12px!important;min-height:12px!important;
+  padding:0!important;opacity:.5!important;pointer-events:none!important;
+}
+body.workspace-page.sidebar-compact:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure::after{
+  opacity:0!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure:focus-visible{
+  outline:2px solid #dedee2!important;outline-offset:2px!important;
+}
+@media(prefers-reduced-motion:reduce){
+ body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure::after,
+ body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-items{transition:none!important}
 }
 /* Unobtrusive activity information that follows actual server events. */
 body.workspace-page .assistant-activity{
