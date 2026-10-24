@@ -435,6 +435,7 @@ def route(service, method, parts, query, data):
         raise business.DomainError(404, "Не найдено")
     access = _premium_access(service)
     if parts == ["price-impact"] and method == "GET":
+        service.h.throttle("price-impact:" + service.wid + ":" + service.user["id"], 30, 60)
         from backend.price_impact import calculate_price_impact
         quote_id = str(query.get("quote_id", [""])[0]).strip()
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", quote_id):
