@@ -1,0 +1,122 @@
+/* Smetra interaction layer: stable native disclosure tracks and readable AI activity. */
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group:has(>.sidebar-section-toggle){
+  display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-toggle{
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  width:100%!important;min-width:0!important;min-height:43px!important;
+  margin:0!important;padding:10px 12px!important;border:0!important;border-radius:8px!important;
+  box-shadow:none!important;background:transparent!important;
+  color:#b7b7bf!important;text-align:left!important;font:600 12px/1.3 inherit!important;
+  transform:none!important;transition:color 200ms ease,background-color 200ms ease!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-toggle:hover{
+  background:rgba(255,255,255,.035)!important;color:#f4f4f6!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-name{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-chevron{
+  display:block!important;flex:0 0 18px!important;width:18px!important;height:18px!important;
+  color:#d0d0d6!important;transform:rotate(0)!important;
+  transition:transform 350ms cubic-bezier(.22,.8,.24,1),color 180ms ease!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group.is-section-open>.sidebar-section-toggle .sidebar-section-chevron{
+  transform:rotate(180deg)!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-panel{
+  display:grid!important;grid-template-rows:0fr!important;
+  opacity:0;visibility:hidden;
+  transition:grid-template-rows 410ms cubic-bezier(.22,.8,.24,1),opacity 240ms ease,visibility 0s linear 410ms!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group.is-section-open>.sidebar-section-panel{
+  grid-template-rows:1fr!important;opacity:1;visibility:visible;
+  transition:grid-template-rows 410ms cubic-bezier(.22,.8,.24,1),opacity 240ms ease 65ms,visibility 0s!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-inner{
+  display:flex;flex-direction:column;gap:3px;min-height:0!important;
+  overflow:hidden!important;padding-inline:0!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-inner button[data-tab]{
+  display:flex!important;flex:0 0 auto!important;align-items:center!important;
+}
+body.workspace-page.sidebar-compact #sidebar .sidebar-section-toggle{
+  height:0!important;min-height:0!important;padding:0!important;opacity:0!important;
+  pointer-events:none!important;overflow:hidden!important;
+}
+body.workspace-page.sidebar-compact #sidebar .sidebar-section-panel{
+  grid-template-rows:1fr!important;opacity:1!important;visibility:visible!important;
+}
+body.workspace-page.sidebar-compact #sidebar .sidebar-section-panel .sidebar-section-inner{
+  gap:5px!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-section-toggle:focus-visible{
+  outline:2px solid #dddde2!important;outline-offset:2px!important;
+}
+/* Unobtrusive activity information that follows actual server events. */
+body.workspace-page .assistant-activity{
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  min-height:26px;margin:0 0 12px;color:#aaaab2;
+  font-size:12px;line-height:1.4;font-weight:550;
+}
+body.workspace-page .assistant-activity-indicator{
+  flex:0 0 7px;width:7px;height:7px;background:#c4c4cb;border-radius:50%;
+  animation:smetra-thinking 1.5s ease-in-out infinite;
+}
+body.workspace-page .assistant-activity.is-complete .assistant-activity-indicator{animation:none;background:#87bda0}
+body.workspace-page .assistant-activity-sources{display:flex;align-items:center;gap:5px;min-width:0}
+body.workspace-page .assistant-source{
+  display:inline-flex;gap:5px;align-items:center;max-width:180px;min-height:25px;
+  border:1px solid #363638;border-radius:6px;padding:3px 7px;
+  color:#d2d2d8;text-decoration:none;background:transparent;font-size:11px;
+}
+body.workspace-page .assistant-source:hover{border-color:#76767b;color:white}
+body.workspace-page .assistant-source img{
+  width:15px;height:15px;object-fit:contain;flex:none;border-radius:3px;
+}
+body.workspace-page .assistant-source-fallback{
+  display:inline-grid;place-items:center;width:15px;height:15px;border-radius:3px;
+  background:#323237;color:#dbdbe1;font-size:9px;flex:none;
+}
+body.workspace-page .assistant-source-name{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+@keyframes smetra-thinking{0%,100%{opacity:.42;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}
+/* Professional estimate typography: quieter long-form reading, no neon/pill clutter. */
+body.workspace-page .assistant-studio .assistant-message.assistant .assistant-markdown{
+  max-width:82ch!important;font-size:14.5px!important;line-height:1.78!important;
+}
+body.workspace-page .assistant-studio .assistant-markdown :is(h1,h2,h3,h4){
+  scroll-margin-top:20px;letter-spacing:-.025em!important;
+}
+body.workspace-page .assistant-studio .assistant-markdown .assistant-callout{
+  margin:17px 0!important;padding:11px 15px!important;background:rgba(255,255,255,.025)!important;
+  border-left:2px solid #a4a4ad!important;border-radius:0 8px 8px 0!important;
+  color:#d6d6dd!important;
+}
+body.workspace-page .assistant-studio .assistant-markdown .assistant-callout-title{
+  font-size:12px;font-weight:750;line-height:1.5;margin:0 0 6px;color:#f0f0f3;
+}
+body.workspace-page .assistant-studio .assistant-markdown .assistant-callout--warning{
+  border-left-color:#dbbc82!important;
+}
+body.workspace-page .assistant-studio .assistant-markdown .assistant-callout--tip{
+  border-left-color:#8ebaa0!important;
+}
+body.workspace-page .assistant-studio .assistant-markdown .assistant-table-scroll{
+  border-color:#343437!important;background:#131315!important;
+}
+body.workspace-page .assistant-studio .assistant-markdown :is(th,td).align-right{
+  text-align:right!important;font-variant-numeric:tabular-nums;
+}
+body.workspace-page .assistant-studio .assistant-markdown table tbody tr:hover{
+  background:rgba(255,255,255,.022)!important;
+}
+@media(max-width:800px){
+ body.workspace-page #sidebar .sidebar-section-toggle{min-height:46px!important}
+}
+@media(prefers-reduced-motion:reduce){
+ body.workspace-page #sidebar .sidebar-section-chevron,
+ body.workspace-page #sidebar .sidebar-section-panel{transition:none!important}
+ body.workspace-page .assistant-activity-indicator{animation:none!important}
+}
