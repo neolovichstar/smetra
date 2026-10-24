@@ -120,6 +120,25 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(doc.querySelector('#assistant-input').disabled,true);assert.equal(doc.querySelector('#assistant-send').disabled,true);assert.equal(doc.querySelector('#assistant-background').disabled,true);
   doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(calls,1);task.resolve({job:{id:'qa'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});await tick();
  });
+ await test('a photo without text changes microphone into Send and can be removed',async({w,doc})=>{
+  let revoked=0;
+  w.URL.createObjectURL=()=> 'blob:https://example.test/qa-photo';
+  w.URL.revokeObjectURL=()=>{revoked++};
+  const input=doc.querySelector('#assistant-attach-input');
+  const photo=new w.File(['image bytes'],'example.jpg',{type:'image/jpeg'});
+  Object.defineProperty(input,'files',{configurable:true,value:[photo]});
+  await input.onchange();await tick();
+  const send=doc.querySelector('#assistant-send');
+  assert.equal(send.type,'submit','Image-only messages must be sendable');
+  assert.equal(send.dataset.uiIcon,'arrow-up');
+  assert.equal(doc.querySelector('#assistant-input').required,false);
+  assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,1);
+  doc.querySelector('.assistant-attachment-remove').click();
+  assert.equal(send.type,'button','Removing the last image restores the microphone');
+  assert.equal(send.dataset.uiIcon,'microphone');
+  assert.equal(doc.querySelector('#assistant-input').required,true);
+  assert.equal(revoked,1);
+ });
  await test('hidden mode and stop controls stay hidden under the shipped CSS',async({w,doc})=>{
   const style=doc.createElement('style');style.textContent=fs.readFileSync('apps/web/product-ui.css','utf8');doc.head.append(style);
   assert.equal(w.getComputedStyle(doc.querySelector('#assistant-background')).display,'none');assert.equal(w.getComputedStyle(doc.querySelector('#assistant-stop')).display,'none');
