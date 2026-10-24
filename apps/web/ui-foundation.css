@@ -1736,3 +1736,67 @@
 .workspace-page .assistant-studio .assistant-markdown .assistant-code header {
  display:flex;align-items:center;justify-content:space-between;gap:12px;
 }
+
+/* Rail geometry: position icons on a fixed baseline in both states.
+   Only the outer grid width changes; no flex/grid display swaps on children. */
+@media (min-width:701px){
+ .workspace-page .assistant-studio .assistant-toolrail{
+   align-items:stretch!important;
+   padding:8px 6px!important;
+ }
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail{
+   align-items:stretch!important;
+   padding:8px 6px!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail-toggle,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail-toggle{
+   display:grid!important;place-items:center!important;
+   width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;
+   margin:0 0 12px 0!important;padding:0!important;
+   transform:none!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail-body,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail-body{
+   width:100%!important;min-width:0!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar{
+   display:flex!important;flex-direction:column!important;align-items:stretch!important;
+   width:100%!important;gap:5px!important;padding:0!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar>:is(button,#assistant-history-toggle),
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar>:is(button,#assistant-history-toggle){
+   display:flex!important;align-items:center!important;justify-content:flex-start!important;
+   box-sizing:border-box!important;
+   width:100%!important;min-width:0!important;height:44px!important;min-height:44px!important;
+   margin:0!important;padding:0 0 0 12px!important;gap:10px!important;
+   flex-shrink:0!important;transform:none!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar .assistant-tool-icon,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar .assistant-tool-icon{
+   display:block!important;flex:0 0 18px!important;width:18px!important;height:18px!important;
+   min-width:18px!important;min-height:18px!important;margin:0!important;
+   transform:none!important;transition:none!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail .assistant-tool-label{
+   display:block!important;flex:0 1 auto!important;
+   white-space:nowrap!important;overflow:hidden!important;
+   transition:opacity 180ms ease,max-width 320ms cubic-bezier(.22,1,.36,1)!important;
+ }
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail .assistant-tool-label{
+   display:block!important;max-width:0!important;opacity:0!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail .assistant-history-panel{
+   transition:opacity 150ms ease!important;
+ }
+ /* The launcher keeps its row in both states, so knowledge never jumps up/down. */
+ .workspace-page .assistant-studio:not(.assistant-tools-collapsed) .assistant-workbar #assistant-history-toggle{
+   display:flex!important;visibility:hidden!important;pointer-events:none!important;
+ }
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar #assistant-history-toggle{
+   display:flex!important;visibility:visible!important;
+ }
+ .workspace-page .assistant-studio .assistant-history-panel{
+   min-width:0!important;
+ }
+}
