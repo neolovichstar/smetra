@@ -34,7 +34,7 @@ run('empty fields, bad quantities, raw price edits and negative prices are caugh
 run('zero is a possible free position, not a blocking error',()=>{
  const paid=scan([row('Доставка','1','усл.',0)]);
  assert.equal(paid.errorCount,0);assert.ok(flags(paid).includes('zero-price'));
- const excluded=scan([row('Доставка','1','усл.',0,{optional:true,included:false})]);
+ const excluded=scan([row('Доставка','1','усл.',0,{optional:false,included:false})]);
  assert.ok(!flags(excluded).includes('zero-price'));
 });
 run('decimal and scientific numbers are supported while invalid extremes fail',()=>{
