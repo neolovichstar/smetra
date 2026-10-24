@@ -19,6 +19,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await until("[...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Предпросмотр PDF')");
  assert.equal((await evaluate("api('/documents').then(r=>r.items)")).length,0);
  await evaluate("window.resourcePdfResults=[];const originalFetch=window.fetch;window.fetch=async(...args)=>{const r=await originalFetch(...args);if(String(args[0]).includes('/preview.pdf')){const bytes=new Uint8Array(await r.clone().arrayBuffer());window.resourcePdfResults.push({status:r.status,prefix:String.fromCharCode(...bytes.slice(0,4))})}return r};[...document.querySelectorAll('#assistant-actions button')].find(b=>b.textContent==='Предпросмотр PDF').click()");
+ await until("document.querySelector('dialog.estimate-review-dialog')?.open");
+ await evaluate("document.querySelector('dialog.estimate-review-dialog [data-review-confirm]').click()");
  await until('window.resourcePdfResults.length===1');assert.deepEqual(await evaluate('window.resourcePdfResults[0]'),{status:200,prefix:'%PDF'});
  await screenshot('resources-document-preview');
  await evaluate("document.querySelector('[data-confirm]').click()");
