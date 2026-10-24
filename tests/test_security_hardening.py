@@ -171,7 +171,8 @@ class SecurityHardeningTests(unittest.TestCase):
         ):
             headers={"Content-Type":"application/json",
                      "Sec-Fetch-Site":fetch_site}
-            if origin:headers["Origin"]=origin
+            if origin:
+                headers["Origin"] = origin
             with self.subTest(origin=origin,fetch_site=fetch_site):
                 status,_,_ = self.request("POST","/api/auth/login",body,headers)
                 self.assertEqual(status,403)

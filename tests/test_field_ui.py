@@ -1,5 +1,4 @@
 """Stable interface wiring, security and visual alignment guards."""
-import re
 import unittest
 from pathlib import Path
 

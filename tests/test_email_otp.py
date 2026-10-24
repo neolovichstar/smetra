@@ -1,12 +1,12 @@
 """Real HTTP tests of email OTP; never call external SMTP."""
-import json
 import os
 import unittest
 from unittest.mock import patch
 
 from tests import test_business
-BusinessFlows=test_business.BusinessFlows
 from backend import email_otp
+
+BusinessFlows = test_business.BusinessFlows
 
 
 CONFIG = {

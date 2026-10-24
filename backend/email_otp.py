@@ -10,7 +10,6 @@ import os
 import re
 import secrets
 import smtplib
-import sqlite3
 import ssl
 from email.message import EmailMessage
 from html import escape

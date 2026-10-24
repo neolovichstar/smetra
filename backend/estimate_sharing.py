@@ -105,9 +105,7 @@ def sender_route(service,method,parts,data):
             "AND email_verified_at IS NOT NULL",(to,),
         ).fetchone()
         if recipient:
-            via="push"
         else:
-            via="email"
             # SMTP failures roll back share creation. This bounded synchronous
             # delivery is a transitional path; the next iteration moves email
             # to an outbox to avoid network calls while holding write locks.

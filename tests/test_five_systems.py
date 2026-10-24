@@ -1,6 +1,5 @@
 """Five backend systems: privacy, measured quantities and immutable quotes."""
 import base64
-import io
 import json
 import os
 import unittest
@@ -89,14 +88,16 @@ class FiveSystemsTests(unittest.TestCase):
         owner,_=self.account("five-sender")
         recipient,recipient_id=self.account("five-recipient")
         outsider,_=self.account("five-outsider")
-        item=lambda name,cost,optional:{"name":name,"quantity":"1","unit":"шт.","unit_price":cost,
-                                       "optional":optional}
+        def item(name, cost, optional):
+            return {"name": name, "quantity": "1", "unit": "шт.", "unit_price": cost,
+                    "optional": optional}
         code,res=self.call("/quotes","POST",{
             "title":"Ремонт ванной","client":"Клиент","items":[
                 item("Основание",10000,False),item("Тёплый пол",5000,True)]
         },owner)
         self.assertEqual(code,201,res)
-        quote=res["quote"];qid=quote["id"]
+        quote = res["quote"]
+        qid = quote["id"]
         published=self.call("/quotes/"+qid+"/publish","POST",{
             "review_confirmed":True,"revision":quote["revision"]
         },owner)
@@ -227,7 +228,8 @@ class FiveSystemsTests(unittest.TestCase):
         recipient,_=self.account("five-second-recipient")
         _,res=self.call("/quotes","POST",{"title":"Отделка","client":"Заказчик",
             "items":[{"name":"Плитка","quantity":"1","unit":"шт.","unit_price":1100}]},owner)
-        q=res["quote"];qid=q["id"]
+        q = res["quote"]
+        qid = q["id"]
         self.assertEqual(self.call("/quotes/"+qid+"/publish","POST",{
             "review_confirmed":True,"revision":q["revision"]
         },owner)[0],200)

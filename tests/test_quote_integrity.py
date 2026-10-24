@@ -1,6 +1,5 @@
 """Published estimate financial integrity and fingerprint contract."""
 import copy
-import re
 import unittest
 
 from backend.business import calculate

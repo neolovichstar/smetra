@@ -1,7 +1,6 @@
 """Expiry cleanup and protected cron tests across local database backend."""
 import json
 import os
-import secrets
 import unittest
 from unittest.mock import patch
 
