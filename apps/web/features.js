@@ -7,6 +7,7 @@
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,files:['/construction.js']},
+    calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js']},
     growth:{ready:()=>!!window.SmetraGrowth,files:['/growth.js']},
     quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js']},
