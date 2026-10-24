@@ -1,6 +1,8 @@
 /* Optional screens load when opened; failed loads remain retryable. */
 (() => {
   const pending=new Map();
+  for(const file of ['sidebar-motion-layout.css','sidebar-motion-assistant.css','assistant-markdown-typography.css','assistant-markdown-code.css']){const link=document.createElement('link');link.rel='stylesheet';link.href='/'+file+'?v=20261024-v2';document.head.append(link);}
+
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js?v=20261024-md-v2']},
     assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js?v=20261024-sse-sidebar-v2','/ai-workspace.js']},
