@@ -151,7 +151,7 @@
       logForm.querySelector('.btn').textContent='Сохранить запись';logForm.querySelector('#construction-log-cancel').hidden=false;revealForm(logForm);
     });
     document.querySelector('#construction-log-cancel').onclick=()=>{delete logForm.dataset.edit;logForm.reset();logForm.querySelector('.btn').textContent='Записать день';logForm.querySelector('#construction-log-cancel').hidden=true};
-    document.querySelectorAll('[data-log-delete]').forEach(button=>button.onclick=async()=>{if(!confirm('Удалить запись журнала и связанный фактический объём?'))return;
+    document.querySelectorAll('[data-log-delete]').forEach(button=>button.onclick=async()=>{if(!(await window.SmetraDialog.confirm({title:'Удалить запись журнала?',message:'Связанный фактический объём тоже будет удалён.',confirmLabel:'Удалить',danger:true})))return;
       try{await api(`/construction/objects/${selected}/logs/${button.dataset.logDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}
     });
     const supplierForm=document.querySelector('#construction-supplier');supplierForm.onsubmit=event=>{event.preventDefault();return request('/construction/suppliers',{name:val(supplierForm,'name'),phone:val(supplierForm,'phone'),email:val(supplierForm,'email')},detail)};
@@ -193,7 +193,7 @@
       ocrKey=null;refreshOcr();
     });
     document.querySelector('#construction-purchase-cancel').onclick=()=>{delete purchaseForm.dataset.edit;purchaseForm.reset();purchaseForm.querySelector('.btn').textContent='Записать закупку';purchaseForm.querySelector('#construction-purchase-cancel').hidden=true};
-    document.querySelectorAll('[data-purchase-delete]').forEach(button=>button.onclick=async()=>{if(!confirm('Удалить запись о закупке?'))return;try{await api(`/construction/objects/${selected}/purchases/${button.dataset.purchaseDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}});
+    document.querySelectorAll('[data-purchase-delete]').forEach(button=>button.onclick=async()=>{if(!(await window.SmetraDialog.confirm({title:'Удалить запись о закупке?',confirmLabel:'Удалить',danger:true})))return;try{await api(`/construction/objects/${selected}/purchases/${button.dataset.purchaseDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}});
     const changeForm=document.querySelector('#construction-change'),changeLines=document.querySelector('#construction-change-lines');
     document.querySelector('#construction-change-add').onclick=()=>{if(changeLines.children.length>=20){notify('Не больше 20 позиций в одной форме');return}changeLines.insertAdjacentHTML('beforeend',changeLine())};
     changeLines.onclick=event=>{if(event.target.closest('[data-change-remove]')&&changeLines.children.length>1)event.target.closest('.construction-change-line').remove()};
@@ -205,9 +205,9 @@
       changeLines.innerHTML=item.items.map(changeLine).join('');changeForm.querySelector('button[type="submit"]').textContent='Сохранить версию';document.querySelector('#construction-change-cancel').hidden=false;revealForm(changeForm);
     });
     document.querySelector('#construction-change-cancel').onclick=()=>{delete changeForm.dataset.edit;changeForm.reset();changeLines.innerHTML=changeLine();changeForm.querySelector('button[type="submit"]').textContent='Сохранить черновик';document.querySelector('#construction-change-cancel').hidden=true};
-    document.querySelectorAll('[data-change-send]').forEach(button=>button.onclick=()=>{if(confirm('Отправить эту версию на отдельное согласование клиенту?'))request(`/construction/objects/${selected}/changes/${button.dataset.changeSend}/send`,{},detail)});
-    document.querySelectorAll('[data-change-delete]').forEach(button=>button.onclick=async()=>{if(!confirm('Удалить черновик допработ?'))return;try{await api(`/construction/objects/${selected}/changes/${button.dataset.changeDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}});
-    document.querySelectorAll('[data-change-revoke]').forEach(button=>button.onclick=()=>{if(confirm('Отозвать ссылку? Клиент больше не сможет согласовать эту версию.'))request(`/construction/objects/${selected}/changes/${button.dataset.changeRevoke}/revoke`,{},detail)});
+    document.querySelectorAll('[data-change-send]').forEach(button=>button.onclick=async()=>{if((await window.SmetraDialog.confirm({title:'Отправить клиенту на согласование?',message:'Клиент получит отдельную ссылку на эту версию допработ.',confirmLabel:'Отправить'})))request(`/construction/objects/${selected}/changes/${button.dataset.changeSend}/send`,{},detail)});
+    document.querySelectorAll('[data-change-delete]').forEach(button=>button.onclick=async()=>{if(!(await window.SmetraDialog.confirm({title:'Удалить черновик допработ?',confirmLabel:'Удалить',danger:true})))return;try{await api(`/construction/objects/${selected}/changes/${button.dataset.changeDelete}`,{method:'DELETE'});await detail()}catch(error){notify(error.message)}});
+    document.querySelectorAll('[data-change-revoke]').forEach(button=>button.onclick=async()=>{if((await window.SmetraDialog.confirm({title:'Отозвать ссылку?',message:'Клиент больше не сможет согласовать эту версию.',confirmLabel:'Отозвать',danger:true})))request(`/construction/objects/${selected}/changes/${button.dataset.changeRevoke}/revoke`,{},detail)});
     document.querySelectorAll('[data-change-revise]').forEach(button=>button.onclick=()=>request(`/construction/objects/${selected}/changes/${button.dataset.changeRevise}/revise`,{},detail));
     document.querySelectorAll('[data-change-link]').forEach(button=>button.onclick=async()=>{const item=changes.find(row=>row.id===button.dataset.changeLink);const link=location.origin+'/change.html?token='+encodeURIComponent(item.public_token);
       try{await navigator.clipboard.writeText(link);notify('Ссылка скопирована')}catch(error){const input=document.createElement('input');input.value=link;document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();notify('Ссылка скопирована')}

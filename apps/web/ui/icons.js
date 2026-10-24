@@ -40,7 +40,14 @@
     folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2.5h7.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>',
     send:'<path d="M12 19V5m-6 6 6-6 6 6"/>',
     logout:'<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>',
-    menu:'<path d="M4 7h16M4 12h16M4 17h16"/>'
+    menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+    user:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>',
+    users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>',
+    key:'<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M18 5l2 2"/>',
+    headset:'<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 14a2 2 0 0 1 2-2h1v7H6a2 2 0 0 1-2-2zm16 0a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2z"/><path d="M17 19a4 4 0 0 1-4 2h-1"/>',
+    'send-plane':'<path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z"/>',
+    hash:'<path d="M5 9h15M4 15h15M10 3 8 21M16 3l-2 18"/>',
+    'check-double':'<path d="m2 12.5 4.5 4.5L15 8.5M9.5 16.5l.5.5L21 6"/>'
   };
   const svg = (name, size = 18, className = 'icon-svg') => {
     const body = paths[name] || paths['file-text'];

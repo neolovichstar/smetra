@@ -38,5 +38,5 @@ window.SmetraKnowledgePanel=async function(root){
     finally{delete root.dataset.saving;root.querySelectorAll('button,input,textarea,select').forEach(control=>control.disabled=false)}
   };
   form.onsubmit=event=>{event.preventDefault();const payload={title:form.elements.title.value.trim(),content:form.elements.content.value.trim(),enabled:form.elements.enabled.checked?1:0};if(!payload.title||!payload.content){status.textContent='Заполните название и содержание';return}if(!isPersonal)payload.kind=form.elements.kind.value;return save(()=>api(endpoint+(selected?'/'+encodeURIComponent(selected):''),{method:selected?'PATCH':'POST',body:JSON.stringify(payload)}))};
-  root.querySelector('#knowledge-delete').onclick=()=>{if(!selected||root.dataset.saving==='true'||!confirm('Удалить запись из знаний?'))return;return save(()=>api(endpoint+'/'+encodeURIComponent(selected),{method:'DELETE'}))};
+  root.querySelector('#knowledge-delete').onclick=async()=>{if(!selected||root.dataset.saving==='true'||!(await window.SmetraDialog.confirm({title:'Удалить запись из знаний?',message:'Ассистент перестанет учитывать эту запись.',confirmLabel:'Удалить',danger:true})))return;return save(()=>api(endpoint+'/'+encodeURIComponent(selected),{method:'DELETE'}))};
 };

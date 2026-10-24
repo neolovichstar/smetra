@@ -205,10 +205,10 @@ table td small{display:block;margin-top:2px;color:var(--text-3);font-size:var(--
 .quote-summary strong{font-size:var(--fs-24);font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 
 /* ───────── Tabs and segmented controls ───────── */
-[role=tablist],.segmented,.knowledge-tabs,.admin-tabs,.comms-tabs,.billing-periods{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--surface-1);max-width:100%;overflow-x:auto}
-[role=tablist]>button,.segmented>button,.knowledge-tabs>button,.admin-tabs>button,.comms-tabs>button,.billing-periods>button{min-height:30px;padding:0 12px;border-radius:6px;font-size:var(--fs-13);font-weight:500;color:var(--text-2);white-space:nowrap;transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+[role=tablist],.segmented,.knowledge-tabs,.admin-tabs,.billing-periods{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--surface-1);max-width:100%;overflow-x:auto}
+[role=tablist]>button,.segmented>button,.knowledge-tabs>button,.admin-tabs>button,.billing-periods>button{min-height:30px;padding:0 12px;border-radius:6px;font-size:var(--fs-13);font-weight:500;color:var(--text-2);white-space:nowrap;transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 [role=tablist]>button:hover,.segmented>button:hover{color:var(--text)}
-[role=tablist]>button[aria-selected="true"],.segmented>button[aria-pressed="true"],.knowledge-tabs>button[aria-selected="true"],.knowledge-tabs>button.active,.admin-tabs>button.active,.admin-tabs>button[aria-selected="true"],.comms-tabs>button.active,.comms-tabs>.comms-tab.active,.billing-periods>button[aria-pressed="true"],.billing-periods>.is-active{background:var(--surface-4);color:var(--text)}
+[role=tablist]>button[aria-selected="true"],.segmented>button[aria-pressed="true"],.knowledge-tabs>button[aria-selected="true"],.knowledge-tabs>button.active,.admin-tabs>button.active,.admin-tabs>button[aria-selected="true"],.billing-periods>button[aria-pressed="true"],.billing-periods>.is-active{background:var(--surface-4);color:var(--text)}
 [role=group].row:has(>.btn[aria-pressed]){display:inline-flex;align-self:flex-start;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--surface-1)}
 [role=group].row>.btn[aria-pressed]{--btn-bg:transparent;--btn-line:transparent;min-height:30px;font-size:var(--fs-13);color:var(--text-2)}
 [role=group].row>.btn[aria-pressed="true"]{--btn-bg:var(--surface-4);color:var(--text)}
@@ -343,3 +343,27 @@ body.modal-open{overflow:hidden}
 input[type="file"]{min-height:var(--control);padding:4px;color:var(--text-2);font-size:var(--fs-13);cursor:pointer}
 input[type="file"]::file-selector-button{margin-right:10px;min-height:28px;padding:0 12px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);color:var(--text);font:inherit;font-weight:500;cursor:pointer;transition:background-color var(--t-fast) var(--ease)}
 input[type="file"]:hover::file-selector-button{background:var(--surface-3)}
+
+/* ───────── Confirmation dialog ───────── */
+.sm-dialog{width:min(420px,calc(100vw - 24px))}
+.sm-dialog-body{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:var(--s-6)}
+.sm-dialog-mark{display:grid;place-items:center;width:40px;height:40px;margin-bottom:var(--s-2);border-radius:12px;background:var(--surface-3);color:var(--text)}
+.sm-dialog-mark svg{width:20px;height:20px}
+.sm-dialog.is-danger .sm-dialog-mark{background:var(--danger-soft);color:var(--danger)}
+.sm-dialog h2{font-size:var(--fs-18);font-weight:600;letter-spacing:var(--tracking-tight);line-height:var(--lh-snug)}
+.sm-dialog-text{color:var(--text-2);font-size:var(--fs-14);line-height:1.5}
+.sm-dialog-field{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:var(--s-3);color:var(--text-2);font-size:var(--fs-13)}
+.sm-dialog-actions{display:flex;justify-content:flex-end;gap:var(--s-2);width:100%;margin-top:var(--s-5)}
+.sm-dialog-actions .btn{min-width:104px;justify-content:center}
+.sm-dialog .btn.danger{--btn-bg:var(--danger);--btn-fg:#fff;--btn-line:transparent;--btn-hover:color-mix(in srgb,var(--danger) 86%,#000)}
+
+/* Phones: dialogs rise from the bottom edge like native sheets. */
+@media (max-width:640px){
+  .sm-dialog,.workspace-dialog,.experience-dialog,.estimate-safety-dialog,.admin-dialog{width:100%;max-width:100%;margin:auto 0 0;border-width:1px 0 0;border-radius:var(--r-4) var(--r-4) 0 0;max-height:92dvh;padding-bottom:env(safe-area-inset-bottom)}
+  :is(.sm-dialog,.workspace-dialog,.experience-dialog,.estimate-safety-dialog,.admin-dialog)[open]{animation:sheet-in var(--t-slow) var(--ease)}
+  :is(.sm-dialog,.workspace-dialog,.experience-dialog,.estimate-safety-dialog,.admin-dialog).is-closing{animation:sheet-out 180ms ease-in forwards}
+  .sm-dialog-actions{flex-direction:column-reverse}
+  .sm-dialog-actions .btn{width:100%;min-height:44px}
+}
+@keyframes sheet-in{from{transform:translateY(100%)}to{transform:none}}
+@keyframes sheet-out{to{transform:translateY(100%)}}

@@ -10,7 +10,7 @@ function setup(saved){
  const source=fs.readFileSync('apps/web/app.js','utf8');w.load(source.slice(0,source.indexOf("if($('#auth')){")));
  w.eval("user={id:'qa',name:'QA',email:'qa@example.test',role:'user',email_verified:true,quote_count:0,plan:'free'};tab='settings'");
  w.Workspace={render:async()=>false,reset(){}};w.api=async()=>({});
- w.load(fs.readFileSync('apps/web/growth.js','utf8'));
+ for(const file of ['ui/icons.js','ui/dialog.js','ui/chat-kit.js','support-chat.js','growth.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
  return {w,doc,close:()=>dom.window.close()};
 }
 (async()=>{
@@ -23,9 +23,9 @@ function setup(saved){
   assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/);doc.querySelector('#theme').click();assert.equal(doc.documentElement.dataset.theme,'dark');assert.equal(w.getComputedStyle(doc.documentElement).getPropertyValue('--bg').trim(),'#0a0a0b');
  });
  await test('saved light theme survives rerender',async({w,doc})=>{await w.render();assert.equal(doc.documentElement.dataset.theme,'light');assert.notEqual(w.getComputedStyle(doc.documentElement).getPropertyValue('--bg').trim(),'#0a0a0b');await w.render();assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/)},'light');
- await test('cancelled account deletion makes no request',async({w,doc})=>{let calls=0;w.api=async()=>{calls++;return {}};await w.render();doc.querySelector('#delete-account').click();await tick();assert.equal(calls,0);assert.ok(doc.querySelector('#delete-account'))});
+ await test('cancelled account deletion makes no request',async({w,doc})=>{let calls=0;w.api=async(path,options={})=>{if(options.method==='DELETE')calls++;return {}};await w.render();doc.querySelector('#delete-account').click();await tick();const cancel=doc.querySelector('dialog.sm-dialog [data-dialog-cancel]');assert.ok(cancel,'Deletion asks for confirmation in a dialog');cancel.click();await tick();assert.equal(calls,0);assert.ok(doc.querySelector('#delete-account'));assert.equal(doc.querySelector('#delete-account').disabled,false)});
  await test('failed account deletion prevents duplicate requests and enables retry',async({w,doc})=>{
-  w.confirm=()=>true;let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};await w.render();const button=doc.querySelector('#delete-account');button.click();button.click();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);
+  let reject,calls=0;await w.render();w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};const button=doc.querySelector('#delete-account');button.click();button.click();await tick();doc.querySelector('dialog.sm-dialog [data-dialog-confirm]').click();await tick();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);
  });
  await test('support topic buttons change selection and retain the written question',async({w,doc})=>{
   w.eval("tab='support'");await w.render();const topics=[...doc.querySelectorAll('[data-support-topic]')];topics[0].click();doc.querySelector('#message').value+='My question';topics[1].click();assert.equal(doc.querySelector('#message').value,topics[1].dataset.supportTopic+': My question');assert.equal(topics[1].getAttribute('aria-pressed'),'true');

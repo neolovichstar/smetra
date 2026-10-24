@@ -60,12 +60,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         <section class="assistant-history-panel" id="assistant-history-panel" aria-label="История диалогов">
           <div class="assistant-history-heading" id="assistant-history-heading"><span>Диалоги</span><span class="assistant-history-count">${threadIndex.items.length}</span></div>
           <div class="assistant-history-list" id="assistant-history-list" role="list" aria-label="История диалогов">
-            <div class="assistant-conversation-row assistant-conversation-general${!activeConversation?' is-active':''}" data-thread-row data-thread-id="" data-pinned="0" role="listitem">
+            <div class="assistant-conversation-row assistant-conversation-general${!activeConversation?' is-active':''}" data-thread-row data-thread-id="" data-pinned="0" role="listitem"${data.messages?.length?'':' hidden'}>
               <button class="assistant-conversation-open" type="button" data-conversation="" aria-pressed="${!activeConversation}" title="Общий диалог">
                 ${assistantIcon('chat',16)}<span class="assistant-conversation-title">Общий диалог</span>
               </button>
               <div class="assistant-conversation-actions">
-                <button class="assistant-conversation-icon-button assistant-conversation-delete" type="button" data-thread-delete aria-label="Очистить общий диалог" title="Очистить общий диалог">${assistantIcon('trash',16)}</button>
+                <button class="assistant-conversation-icon-button assistant-conversation-delete" type="button" data-thread-delete aria-label="Удалить общий диалог" title="Удалить диалог">${assistantIcon('trash',16)}</button>
               </div>
             </div>
             ${threadIndex.items.map(item=>`<div class="assistant-conversation-row${item.id===activeConversation?' is-active':''}" data-thread-row data-thread-id="${escapeHtml(item.id)}" data-pinned="${item.pinned?'1':'0'}" role="listitem">
@@ -137,6 +137,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const syncAssistantConversationState=()=>{
     if(!assistantStudioRoot||!messages?.isConnected)return;
     const next=Boolean(messages.querySelector('.assistant-message.user'));
+    if(next&&!activeConversation)assistantStudioRoot.querySelector('.assistant-conversation-general')?.removeAttribute('hidden');
     if(next===assistantStudioRoot.classList.contains('has-conversation'))return;
     const dock=assistantStudioRoot.querySelector('.assistant-composer');
     const before=dock?.getBoundingClientRect().top;
@@ -313,15 +314,21 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       event.preventDefault();event.stopPropagation();
       if(working||threadBusy)return;
       const general=!id;
-      const message=general?'Очистить сообщения общего диалога? Остальные диалоги сохранятся.':'Удалить этот диалог и его сообщения?';
-      if(!confirm(message))return;
-      return threadAction(event.currentTarget,async()=>{
-        await api(path,{method:'DELETE'});
+      const button=event.currentTarget;
+      const message=general?'Сообщения общего диалога будут удалены. Остальные диалоги сохранятся.':'Диалог и все его сообщения будут удалены.';
+      return (async()=>{
+        if(!(await window.SmetraDialog.confirm({title:'Удалить диалог?',message,confirmLabel:'Удалить',danger:true})))return;
+        // A refresh started by the previous action may still hold the rail; wait for it briefly.
+        for(let attempt=0;attempt<50&&active()&&(working||threadBusy||button.disabled);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
         if(!active())return;
-        const deletingActive=general?!activeConversation:id===activeConversation;
-        if(deletingActive){clearLocalDraft();sessionStorage.removeItem('smetra.assistant.conversation');}
-        await window.SmetraAssistant();
-      });
+        await threadAction(button,async()=>{
+          await api(path,{method:'DELETE'});
+          if(!active())return;
+          const deletingActive=general?!activeConversation:id===activeConversation;
+          if(deletingActive){clearLocalDraft();sessionStorage.removeItem('smetra.assistant.conversation');}
+          await window.SmetraAssistant();
+        });
+      })();
     });
     row.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&menu&&!menu.hidden){event.preventDefault();closeRowMenu();more?.focus();}

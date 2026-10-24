@@ -339,7 +339,56 @@ window.SmetraCompleteAuth=async profile=>{
   await showApp();
 };
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
-function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
+// Profile and settings share one hub with its own section rail, like the assistant.
+const accountHubTabs=[['profile','Профиль','user'],['account','Аккаунт и вход','key'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
+function accountHubTab(){
+  if(tab==='profile')return 'profile';
+  try{const saved=sessionStorage.getItem('smetra.settings.tab');if(saved&&saved!=='profile'&&accountHubTabs.some(item=>item[0]===saved))return saved}catch{}
+  return 'account';
+}
+async function renderAccountHub(active){
+  const owner=user,current=accountHubTab(),icon=name=>window.SmetraIcons?.svg(name,18)||'';
+  const yandexPhoto=user.avatar_url?'Фото подтянуто из Яндекс ID.':'Фото подтянется из Яндекс ID после подтверждения доступа.';
+  view(`<section class="hub" aria-label="Профиль и настройки">
+    <nav class="hub-rail" aria-label="Разделы настроек">
+      <div class="hub-identity"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></div></div>
+      <div class="hub-tabs" role="tablist" aria-orientation="vertical">${accountHubTabs.map(([id,label,name])=>`<button type="button" role="tab" id="hub-tab-${id}" class="hub-tab${id==='danger'?' is-danger':''}" data-hub-tab="${id}" aria-controls="hub-panel-${id}" aria-selected="${id===current}" tabindex="${id===current?0:-1}">${icon(name)}<span>${label}</span></button>`).join('')}</div>
+    </nav>
+    <div class="hub-main">
+      <section class="hub-panel" id="hub-panel-profile" role="tabpanel" aria-labelledby="hub-tab-profile"${current==='profile'?'':' hidden'}><header class="hub-head"><h1>Профиль</h1><p>Как к вам обращаться и чем вы занимаетесь — ассистент учитывает это в работе.</p></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
+      <section class="hub-panel" id="hub-panel-account" role="tabpanel" aria-labelledby="hub-tab-account"${current==='account'?'':' hidden'}><header class="hub-head"><h1>Аккаунт и вход</h1><p>Почта, публичный ID и фото профиля.</p></header>
+        <div class="hub-card"><div class="hub-row"><div><strong>Электронная почта</strong><small>${escapeHtml(user.email)}</small></div><span class="pill ${user.email_verified?'status-accepted':'status-draft'}">${user.email_verified?'Подтверждена':'Не подтверждена'}</span></div>
+        <div class="hub-row"><div><strong>Публичный ID</strong><small>По нему вас находят в центре общения. Почта не раскрывается.</small></div><span class="hub-id"><code id="hub-public-id">…</code><button class="icon-button" type="button" id="hub-copy-id" aria-label="Скопировать ID" title="Скопировать ID">${icon('copy')}</button></span></div>
+        <div class="hub-row"><div class="hub-photo"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>Фото профиля</strong><small>${yandexPhoto}</small></div></div><a class="btn" id="hub-yandex-photo" href="/api/auth/oauth/yandex/start?link=1">${icon('refresh')}Подтянуть из Яндекса</a></div></div>
+      </section>
+      <section class="hub-panel" id="hub-panel-assistant" role="tabpanel" aria-labelledby="hub-tab-assistant"${current==='assistant'?'':' hidden'}><header class="hub-head"><h1>Ассистент</h1><p>Стиль ответов и личная память.</p></header><div class="settings-page"><section id="settings-personalization" class="settings-personalization-host"></section></div></section>
+      <section class="hub-panel" id="hub-panel-appearance" role="tabpanel" aria-labelledby="hub-tab-appearance"${current==='appearance'?'':' hidden'}><header class="hub-head"><h1>Внешний вид</h1><p>Тема кабинета сохраняется на этом устройстве.</p></header><div class="hub-card"><div class="hub-row"><div><strong>Тема</strong><small>Тёмная бережёт глаза вечером, светлая удобнее на ярком солнце.</small></div><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></div></section>
+      <section class="hub-panel" id="hub-panel-data" role="tabpanel" aria-labelledby="hub-tab-data"${current==='data'?'':' hidden'}><header class="hub-head"><h1>Данные и экспорт</h1><p>Архив смет, клиентов, проектов и файлов.</p></header><div class="settings-page"><section id="settings-export" class="settings-export-host"></section></div></section>
+      <section class="hub-panel" id="hub-panel-danger" role="tabpanel" aria-labelledby="hub-tab-danger"${current==='danger'?'':' hidden'}><header class="hub-head"><h1>Удаление аккаунта</h1><p>Необратимое действие — сметы и доступ будут удалены.</p></header><div class="hub-card hub-danger"><p>Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></section>
+    </div>
+  </section>`);
+  const tabs=[...document.querySelectorAll('[data-hub-tab]')];
+  const select=(id,focus=false)=>{
+    tabs.forEach(button=>{const on=button.dataset.hubTab===id;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;if(on&&focus)button.focus()});
+    document.querySelectorAll('.hub-panel').forEach(panel=>panel.hidden=panel.id!=='hub-panel-'+id);
+    if(id!=='profile')try{sessionStorage.setItem('smetra.settings.tab',id)}catch{}
+    const route=id==='profile'?'profile':'settings';
+    if(tab!==route){tab=route;history.replaceState({},'',location.pathname+location.search+'#'+route);document.querySelectorAll('#sidebar [data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab===route));$('#sidebar-profile')?.classList.toggle('active',route==='profile')}
+  };
+  tabs.forEach(button=>button.onclick=()=>select(button.dataset.hubTab));
+  document.querySelector('.hub-tabs').addEventListener('keydown',event=>{const index=tabs.findIndex(button=>button.getAttribute('aria-selected')==='true');const step={ArrowDown:1,ArrowRight:1,ArrowUp:-1,ArrowLeft:-1}[event.key];if(!step)return;event.preventDefault();select(tabs[(index+step+tabs.length)%tabs.length].dataset.hubTab,true)});
+  syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);
+  const deleteAccountButton=$('#delete-account');
+  if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;let confirmed=false;try{confirmed=await window.SmetraDialog.confirm({title:'Удалить аккаунт?',message:'Аккаунт, сметы и доступ будут удалены без возможности восстановления.',confirmLabel:'Удалить аккаунт',danger:true});if(!confirmed||user!==owner)return;await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+  api('/profile/id').then(result=>{const code=$('#hub-public-id');if(code&&active())code.textContent=result.public_id||'не задан'}).catch(()=>{const code=$('#hub-public-id');if(code)code.textContent='недоступен'});
+  $('#hub-copy-id')?.addEventListener('click',async()=>{const value=$('#hub-public-id')?.textContent||'';try{await navigator.clipboard.writeText(value);notify('ID скопирован')}catch{notify('Ваш ID: '+value)}});
+  if(window.SmetraProfile){await window.SmetraProfile.render(active,$('#hub-profile-host'));if(!active())return;await window.SmetraProfile.settings(active);if(!active())return;}
+  if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
+}
+function emailNotice(){return user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel email-notice"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}
+function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${emailNotice()}`; }
+// Mailboxes for questions that do not fit a chat (documents, company contracts).
+const supportContacts='<p class="support-contacts">Почта: <a href="mailto:support@smetra.online">support@smetra.online</a><span aria-hidden="true"> · </span>Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span>Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p>';
 function quoteCard(q) {
   const label={draft:'Черновик',sent:'Отправлено',accepted:'Согласовано',declined:'Отказ',completed:'Завершено'}[q.status];
   return `<div class="quote"><div><strong>${escapeHtml(q.title)}</strong><small>${escapeHtml(q.client)} · ${date(q.created_at)} · <span class="pill status-pill status-${escapeHtml(q.status)}">${label}</span></small></div><div class="quote-actions"><b>${rub(q.amount_kopecks)}</b>${q.status==='draft'?`<button class="btn small" data-action="send" data-id="${q.id}">Отправить</button>`:''}${q.status==='sent'?`<button class="btn small" data-action="copy" data-url="${escapeHtml(q.public_url)}">Ссылка</button><button class="btn small" data-action="decline" data-id="${q.id}">Отказ</button>`:''}${q.status==='accepted'?`<button class="btn small" data-action="complete" data-id="${q.id}">Завершить</button>`:''}<button class="btn small danger" data-action="remove" data-id="${q.id}" title="Удалить">Удалить</button></div></div>`;
@@ -365,7 +414,7 @@ async function render() {
     const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',calculators:'calculators',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
-    if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
+    if(tab==='profile'||tab==='settings'){await renderAccountHub(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
     if(tab==='calculators' && window.SmetraCalculators){window.SmetraCalculators.render();return;}
     if(tab==='premium' && window.SmetraPremiumTools){await window.SmetraPremiumTools.render(active);return;}
@@ -386,21 +435,7 @@ async function render() {
     } else if(tab==='billing') {
       await window.SmetraGrowth.billing(active);
     } else if(tab==='support') {
-      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:support@smetra.online">Написать в поддержку</a><p class="support-secondary-contact">Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span> Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
-      const topics=[...document.querySelectorAll('[data-support-topic]')];let selectedTopic='';
-      topics.forEach(button=>{button.setAttribute('aria-pressed','false');button.onclick=()=>{const input=$('#message');const prefix=selectedTopic+': ';const text=selectedTopic&&input.value.startsWith(prefix)?input.value.slice(prefix.length):input.value;selectedTopic=button.dataset.supportTopic;input.value=selectedTopic+': '+text;topics.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));input.focus()}});
-      $('#support-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('[type=submit],button:not([type])'),input=form.querySelector('#message'),message=input.value;if(button.disabled)return;button.disabled=true;try{await api('/support',{method:'POST',body:JSON.stringify({message})});if(input.value===message)input.value='';if(user===owner)notify('Сообщение отправлено')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
-    } else if(tab==='settings') {
-      view(header('Настройки','Аккаунт, персонализация и данные.')+`<div class="settings-page">
-        <section class="panel settings-account-panel"><div class="settings-account-copy"><span class="settings-section-kicker">АККАУНТ</span><h2>Ваш профиль</h2><p>${escapeHtml(user.email)}</p></div><div class="settings-account-actions"><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></section>
-        <section id="settings-personalization" class="settings-personalization-host"></section>
-        <section id="settings-export" class="settings-export-host"></section>
-        <details class="panel settings-danger-zone"><summary><span><strong>Удаление аккаунта</strong><small>Необратимое действие — сметы и доступ будут удалены.</small></span><span aria-hidden="true">⌄</span></summary><div class="settings-danger-body"><p class="muted">Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></details>
-      </div>`);
-      $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
-      if(window.SmetraProfile){await window.SmetraProfile.settings(active);if(!active())return;}
-      if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
-      syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);const deleteAccountButton=$('#delete-account');if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+      await window.SmetraSupport.render(active);
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
     } else {tab='dashboard';history.replaceState({},'',location.pathname+location.search+'#dashboard');return render()}

@@ -38,7 +38,7 @@
 .assistant-conversation-pinned svg{width:13px;height:13px}
 .assistant-conversation-actions{display:flex;gap:0;padding-right:4px;opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .assistant-conversation-row:hover .assistant-conversation-actions,.assistant-conversation-row:focus-within .assistant-conversation-actions,.assistant-conversation-row.is-menu-open .assistant-conversation-actions{opacity:1}
-@media (hover:none){.assistant-conversation-actions{opacity:1}.assistant-conversation-delete{display:none}}
+@media (hover:none){.assistant-conversation-actions{opacity:1}}
 .assistant-conversation-icon-button{display:grid;place-items:center;width:28px;height:28px;border-radius:var(--r-1);color:var(--text-3)}
 .assistant-conversation-icon-button:hover{background:var(--surface-4);color:var(--text)}
 .assistant-conversation-delete:hover{color:var(--danger)}
