@@ -554,100 +554,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),
-            "/change.js": ("change.js", "text/javascript"),
-            "/style.css": ("style.css", "text/css"),
-            "/app.js": ("app.js", "text/javascript"),
-            "/experience.js": ("experience.js", "text/javascript"),
-            "/assets/obsidian-folio.png": ("assets/obsidian-folio.png", "image/png"),
-            "/assets/black-titanium.png": ("assets/black-titanium.png", "image/png"),
             "/favicon.ico": ("favicon.ico", "image/x-icon"),
+            "/favicon.png": ("favicon.png", "image/png"),
             "/robots.txt": ("robots.txt", "text/plain"),
             "/sitemap.xml": ("sitemap.xml", "application/xml"),
             "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
-            "/service-worker.js": ("service-worker.js", "text/javascript"),
-            "/pwa.js": ("pwa.js", "text/javascript"),
             "/offline.html": ("offline.html", "text/html"),
             "/offline.css": ("offline.css", "text/css"),
-            "/theme-init.js": ("theme-init.js", "text/javascript"),
-            "/themes.css": ("themes.css", "text/css"),
             "/assets/fonts/onest-variable.woff2": ("assets/fonts/onest-variable.woff2", "font/woff2"),
+            "/vendor/markdown-it-15.0.2.min.js": ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
         }
-        for weight in (400, 500, 600, 700, 800):
-            font = f"assets/fonts/manrope-{weight}.ttf"
-            public["/" + font] = (font, "font/ttf")
-        for name, mime in (
-            ("black.css", "text/css"),
-            ("auth-email.css", "text/css"),
-            ("auth-email.js", "text/javascript"),
-            ("auth-layout-v2.css", "text/css"),
-            ("landing-refinement.css", "text/css"),
-            ("cabinet-refinement.css", "text/css"),
-            ("workspace-layout-v3.css", "text/css"),
-            ("cabinet-alignment-v4.css", "text/css"),
-            ("cabinet.css", "text/css"),
-            ("product-ui.css", "text/css"),
-            ("product-ui.js", "text/javascript"),
-            ("assistant.css", "text/css"),
-            ("construction.css", "text/css"),
-            ("construction.js", "text/javascript"),
-            ("field-flows.js", "text/javascript"),
-            ("field-flows.css", "text/css"),
-            ("interface-audit.css", "text/css"),
-            ("auth-motion-fix.css", "text/css"),
-            ("sidebar-motion-v2.css", "text/css"),
-            ("assistant-markdown-modern.css", "text/css"),
-            ("assistant-interactions.css", "text/css"),
-            ("quote-visual-core.css", "text/css"),
-            ("dashboard-reference.css", "text/css"),
-            ("quote-visual-core.js", "text/javascript"),
-            ("quote-layout-renderer.js", "text/javascript"),
-            ("ai-workspace.js", "text/javascript"),
-            ("file-editor.css", "text/css"),
-            ("file-editor.js", "text/javascript"),
-            ("file-preview.css", "text/css"),
-            ("file-preview.js", "text/javascript"),
-            ("black.js", "text/javascript"),
-            ("assistant-chat.js", "text/javascript"),
-            ("profile-ui.js", "text/javascript"),
-            ("features.js", "text/javascript"),
-            ("chat-markdown.js", "text/javascript"),
-            ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
-            ("assistant-studio.css", "text/css"),
-            ("premium-tools.css", "text/css"),
-            ("premium-tools.js", "text/javascript"),
-            ("communication-center.js", "text/javascript"),
-            ("communication-center.css", "text/css"),
-            ("ecosystem-billing.js", "text/javascript"),
-            ("object-chats.js", "text/javascript"),
-            ("landing.js", "text/javascript"),
-            ("assets/black/unfold.png", "image/png"),
-            ("assets/black/flight.png", "image/png"),
-        ):
-            public["/" + name] = (name, mime)
-        public["/workspace.js"] = ("workspace.js", "text/javascript")
-        public["/admin.js"] = ("admin.js", "text/javascript")
-        public["/admin.css"] = ("admin.css", "text/css")
-        public["/growth.js"] = ("growth.js", "text/javascript")
-        public["/quote-review.js"] = ("quote-review.js", "text/javascript")
-        public["/quote-editor-state.js"] = ("quote-editor-state.js", "text/javascript")
-        public["/select-menu.js"] = ("select-menu.js", "text/javascript")
-        public["/select-menu.css"] = ("select-menu.css", "text/css")
-        public["/data-export.js"] = ("data-export.js", "text/javascript")
-        public["/data-export.css"] = ("data-export.css", "text/css")
-        public["/quote-review.css"] = ("quote-review.css", "text/css")
-        public["/design-system.css"] = ("design-system.css", "text/css")
-        public["/ui-foundation.css"] = ("ui-foundation.css", "text/css")
-        public["/quote-editor.css"] = ("quote-editor.css", "text/css")
-        public["/dashboard-polish.css"] = ("dashboard-polish.css", "text/css")
-        for name in (
-            "reference-hero",
-            "reference-sphere",
-            "reference-cube",
-            "reference-pyramid",
-            "reference-ribbon",
-        ):
-            asset = f"assets/{name}.png"
-            public["/" + asset] = (asset, "image/png")
+        # Every top-level script is public; the build validates them with node --check.
+        js_asset = re.fullmatch(r"/([a-z0-9-]{1,40})\.js", path)
+        if js_asset and (WEB / f"{js_asset[1]}.js").is_file():
+            public[path] = (f"{js_asset[1]}.js", "text/javascript")
         for name in (
             "arrow-up-right",
             "arrow-up",
@@ -693,6 +613,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             icon = f"assets/icons/{name}.svg"
             public["/" + icon] = (icon, "image/svg+xml")
+        # The shared interface system lives in apps/web/ui as flat CSS/JS files.
+        ui_asset = re.fullmatch(r"/ui/([a-z0-9-]{1,40})\.(css|js)", path)
+        if ui_asset and (WEB / "ui" / f"{ui_asset[1]}.{ui_asset[2]}").is_file():
+            public[path] = (
+                f"ui/{ui_asset[1]}.{ui_asset[2]}",
+                "text/css" if ui_asset[2] == "css" else "text/javascript",
+            )
         if path not in public:
             raise ApiError(404, "Страница не найдена")
         file, typ = public[path]
@@ -725,7 +652,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == '/api/billing/pricing' and method == 'GET':
             experiment,variants=revenue.configuration()
             cheapest=min(variants.values(),key=lambda v:v['month'])
-            return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment})
+            # Public plan list for the landing page. Prices come from the server
+            # catalog; PRO Solo follows the active pricing experiment.
+            from backend.plan_catalog import public_catalog
+            plans=[]
+            for code,plan in public_catalog().items():
+                month,year=plan['monthly_kopecks'],plan['yearly_kopecks']
+                if code=='pro_solo':
+                    month,year=cheapest['month'],cheapest['year']
+                plans.append({'code':code,'name':plan['name'].split(' / ')[0],'month':month,'year':year,
+                              'seats':plan['seats'],'storage_bytes':plan['storage_bytes'],'free_quotes':plan['free_quotes']})
+            return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment,'plans':plans})
         if path == "/api/cron/assistant" and method == "GET":
             from backend.assistant_jobs import run_one
 

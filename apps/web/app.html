@@ -9,38 +9,16 @@
   <script src="/pwa.js" defer></script>
   <script src="/theme-init.js"></script>
   <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/black.css?v=20261023-workspace-canvas-v1">
-  <link rel="stylesheet" href="/cabinet.css">
-  <link rel="stylesheet" href="/assistant.css">
-  <link rel="stylesheet" href="/admin.css">
-  <link rel="stylesheet" href="/file-preview.css">
-  <link rel="stylesheet" href="/construction.css">
-  <link rel="stylesheet" href="/file-editor.css">
-  <link rel="stylesheet" href="/quote-review.css">
-  <link rel="stylesheet" href="/product-ui.css">
-  <link rel="stylesheet" href="/themes.css">
-  <link rel="stylesheet" href="/assistant-studio.css?v=20261022-glass-composer-v1">
-  <link rel="stylesheet" href="/select-menu.css">
-  <link rel="stylesheet" href="/data-export.css">
-  <link rel="stylesheet" href="/design-system.css">
-  <link rel="stylesheet" href="/ui-foundation.css?v=20261024-visible-icons-v8">
-  <link rel="stylesheet" href="/quote-editor.css?v=20261022-quote-editor-v1">
-  <link rel="stylesheet" href="/premium-tools.css">
-  <link rel="stylesheet" href="/dashboard-polish.css?v=20261024-minimal-v1">
-  <link rel="stylesheet" href="/auth-layout-v2.css?v=20261024-v2">
-  <link rel="stylesheet" href="/cabinet-refinement.css?v=20261024-v1">
-  <link rel="stylesheet" href="/workspace-layout-v3.css?v=20261024-v3">
-  <link rel="stylesheet" href="/cabinet-alignment-v4.css?v=20261024-flat-v4">
-  <link rel="stylesheet" href="/auth-email.css?v=20261024-v2">
-  <link rel="stylesheet" href="/field-flows.css?v=20261024-v1">
-  <link rel="stylesheet" href="/interface-audit.css?v=20261024-v1">
-  <link rel="stylesheet" href="/auth-motion-fix.css?v=20261024-alignment-v2">
-  <link rel="stylesheet" href="/sidebar-motion-v2.css?v=20261024-v3">
-  <link rel="stylesheet" href="/assistant-markdown-modern.css?v=20261024-v3">
-  <link rel="stylesheet" href="/assistant-interactions.css?v=20261024-mobile-history-v5">
-  <link rel="stylesheet" href="/quote-visual-core.css?v=20261024-live-v1">
-  <link rel="stylesheet" href="/dashboard-reference.css?v=20261024-reference-cards-v3">
+  <link rel="stylesheet" href="/ui/tokens.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/base.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/components.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/shell.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/workspace.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/editor.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/assistant.css?v=20261025-1">
+  <link rel="stylesheet" href="/ui/modules.css?v=20261025-1">
+  <script src="/ui/icons.js?v=20261025-1"></script>
+  <script src="/ui/plans.js?v=20261025-1"></script>
 </head>
 <body class="workspace-page smetra-app-booting" data-app-state="boot">
   <div id="app-startup" class="app-startup" role="status" aria-live="polite">
@@ -58,13 +36,11 @@
         <button id="sidebar-collapse" class="desktop-menu-toggle" type="button" aria-label="Свернуть меню" aria-controls="sidebar" aria-expanded="true"><span></span><span></span></button>
         <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Открыть разделы" aria-controls="sidebar" aria-expanded="false"><span></span><span></span></button>
         <a class="brand" href="/">сметра<span class="brand-mark">.</span></a>
-        <span class="app-nav-caption">рабочее пространство</span>
-      </div>
+              </div>
       <div class="app-nav-center-spacer" aria-hidden="true"></div>
       <div class="app-nav-actions">
-        <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
-        
-        <button class="btn small" id="theme" type="button">Тема</button>
+        <button class="nav-search" id="command-open" type="button" aria-label="Поиск по Сметре"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span>Поиск</span><kbd>Ctrl K</kbd></button>
+        <button id="theme" type="button" aria-label="Сменить тему"></button>
       </div>
     </div>
   </header>
@@ -83,13 +59,21 @@
   <main id="auth" class="auth-wrap hidden">
     <section class="auth-story" aria-label="О Сметре">
       <div class="auth-story-content">
-        <span class="auth-story-kicker">ВСЁ ДЛЯ ВАШЕЙ РАБОТЫ</span>
-        <h2>От идеи<br>до результата<span>.</span></h2>
-        <p>Сметы, клиенты и управление объектами в одном понятном пространстве.</p>
-        <div class="auth-story-art" aria-hidden="true">
-          <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
-        </div>
-        <div class="auth-story-foot"><span>СМЕТРА</span><span>РАБОТА ПОД КОНТРОЛЕМ</span></div>
+        <h2>От первой заявки до оплаты<span>.</span></h2>
+        <p>Сметы, клиенты, объекты и платежи — в одном рабочем пространстве на сайте и в Android-приложении.</p>
+        <figure class="auth-sample" aria-label="Пример сметы в Сметре">
+          <figcaption><span>Пример сметы</span><span class="pill status-sent">Отправлена</span></figcaption>
+          <strong class="auth-sample-title">Ванная, ул. Садовая 5</strong>
+          <div class="auth-sample-line"><span>Демонтаж плитки</span><span>24 м²</span><b>10 800 ₽</b></div>
+          <div class="auth-sample-line"><span>Гидроизоляция</span><span>8,5 м²</span><b>6 375 ₽</b></div>
+          <div class="auth-sample-line"><span>Укладка керамогранита</span><span>24 м²</span><b>43 200 ₽</b></div>
+          <div class="auth-sample-total"><span>Итого</span><b>60 375 ₽</b></div>
+        </figure>
+        <ul class="auth-points">
+          <li>Клиент согласует смету по ссылке, без регистрации</li>
+          <li>ИИ-ассистент готовит черновик по описанию и фото</li>
+          <li>Суммы и итоги всегда считает Сметра</li>
+        </ul>
       </div>
     </section>
 

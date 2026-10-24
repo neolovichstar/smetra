@@ -103,8 +103,8 @@
     panel.hidden=true;
     const header=el('header','smetra-quote-preview-header');
     const titleWrap=el('div','smetra-quote-preview-heading');
-    titleWrap.append(el('small','','СМЕТРА / ПРЕДПРОСМОТР'),el('h2','','Редактор сметы'));
-    const close=el('button','smetra-quote-preview-close','×');
+    titleWrap.append(el('small','','Предпросмотр'),el('h2','','Смета'));
+    const close=el('button','smetra-quote-preview-close icon-button');close.innerHTML=window.SmetraIcons?window.SmetraIcons.svg('x',18):'×';
     close.type='button';close.setAttribute('aria-label','Закрыть предпросмотр');
     close.onclick=()=>setOpen(false);
     header.append(titleWrap,close);panel.append(header);
@@ -125,7 +125,8 @@
       const quote=current;
       if(!layout)layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),quote.id);
       const title=el('div','smetra-quote-preview-title');
-      title.append(el('h3','',quote.title||'Смета'),el('span','',quote.approval_state==='draft'?'Черновик':'Только просмотр'));
+      title.append(el('h3','',quote.title||'Смета'),el('span','smetra-quote-preview-state',pending?'Есть предложение ИИ':quote.approval_state==='draft'?'Черновик · сохранено':'Только просмотр'));
+      if(pending)content.append(el('p','smetra-quote-preview-pending','Ниже показан вариант с изменениями ассистента. Итог пересчитан сервером; в смету он попадёт только после «Применить» в чате.'));
       content.append(title);
       const bar=el('div','smetra-quote-preview-controls');
       const tune=el('button','smetra-quote-preview-tune',configureVisible?'Закрыть настройки':'Настроить вид');

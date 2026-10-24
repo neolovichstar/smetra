@@ -5,7 +5,7 @@ function setup(saved){
  const dom=new JSDOM('<body class="workspace-page"><button id="theme"></button><main id="content"></main><div id="toast"></div><section id="auth"></section><section id="shell"></section></body>',{url:'https://example.test/app',runScripts:'dangerously'}),w=dom.window,doc=w.document;
  w.load=source=>{const script=doc.createElement('script');script.textContent=source;doc.head.append(script)};
  if(saved)w.localStorage.setItem('smetra_theme',saved);
- for(const file of ['style.css','black.css','cabinet.css','product-ui.css','themes.css'])if(fs.existsSync('apps/web/'+file)){const style=doc.createElement('style');style.textContent=fs.readFileSync('apps/web/'+file,'utf8');doc.head.append(style)}
+ for(const file of ['ui/tokens.css','ui/base.css','ui/components.css','ui/shell.css','ui/workspace.css'])if(fs.existsSync('apps/web/'+file)){const style=doc.createElement('style');style.textContent=fs.readFileSync('apps/web/'+file,'utf8');doc.head.append(style)}
  w.matchMedia=()=>({matches:false,addEventListener(){}});w.confirm=()=>false;
  const source=fs.readFileSync('apps/web/app.js','utf8');w.load(source.slice(0,source.indexOf("if($('#auth')){")));
  w.eval("user={id:'qa',name:'QA',email:'qa@example.test',role:'user',email_verified:true,quote_count:0,plan:'free'};tab='settings'");
@@ -18,11 +18,11 @@ function setup(saved){
  await test('settings remove identity linking and placeholder providers',async({w,doc})=>{await w.render();assert.equal(doc.querySelector('#identity-link'),null);assert.ok(!doc.querySelector('#content').textContent.includes('Привяжите'))});
  await test('unconfigured email service never displays a nonworking resend action',async({w,doc})=>{w.eval("user.email_verified=false;tab='support'");await w.render();assert.equal(doc.querySelector('[data-resend]'),null);w.SmetraEmailDeliveryAvailable=true;await w.render();assert.ok(doc.querySelector('[data-resend]'))});
  await test('theme button changes actual page color and updates both controls',async({w,doc})=>{
-  await w.render();assert.equal(w.getComputedStyle(doc.body).backgroundColor,'rgb(0, 0, 0)');doc.querySelector('#theme-alt').click();
-  assert.equal(doc.documentElement.dataset.theme,'light');assert.notEqual(w.getComputedStyle(doc.body).backgroundColor,'rgb(0, 0, 0)');assert.equal(w.localStorage.getItem('smetra_theme'),'light');
-  assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/);doc.querySelector('#theme').click();assert.equal(doc.documentElement.dataset.theme,'dark');assert.equal(w.getComputedStyle(doc.body).backgroundColor,'rgb(0, 0, 0)');
+  await w.render();assert.equal(w.getComputedStyle(doc.documentElement).getPropertyValue('--bg').trim(),'#0a0a0b');doc.querySelector('#theme-alt').click();
+  assert.equal(doc.documentElement.dataset.theme,'light');assert.notEqual(w.getComputedStyle(doc.documentElement).getPropertyValue('--bg').trim(),'#0a0a0b');assert.equal(w.localStorage.getItem('smetra_theme'),'light');
+  assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/);doc.querySelector('#theme').click();assert.equal(doc.documentElement.dataset.theme,'dark');assert.equal(w.getComputedStyle(doc.documentElement).getPropertyValue('--bg').trim(),'#0a0a0b');
  });
- await test('saved light theme survives rerender',async({w,doc})=>{await w.render();assert.equal(doc.documentElement.dataset.theme,'light');assert.notEqual(w.getComputedStyle(doc.body).backgroundColor,'rgb(0, 0, 0)');await w.render();assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/)},'light');
+ await test('saved light theme survives rerender',async({w,doc})=>{await w.render();assert.equal(doc.documentElement.dataset.theme,'light');assert.notEqual(w.getComputedStyle(doc.documentElement).getPropertyValue('--bg').trim(),'#0a0a0b');await w.render();assert.match(doc.querySelector('#theme-alt').getAttribute('aria-label'),/тёмную/)},'light');
  await test('cancelled account deletion makes no request',async({w,doc})=>{let calls=0;w.api=async()=>{calls++;return {}};await w.render();doc.querySelector('#delete-account').click();await tick();assert.equal(calls,0);assert.ok(doc.querySelector('#delete-account'))});
  await test('failed account deletion prevents duplicate requests and enables retry',async({w,doc})=>{
   w.confirm=()=>true;let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};await w.render();const button=doc.querySelector('#delete-account');button.click();button.click();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);

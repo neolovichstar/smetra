@@ -18,7 +18,8 @@ class SupportEmailTests(unittest.TestCase):
         self.assertNotIn("guide?.querySelector(", text)
 
     def test_js_cache_version(self):
-        for name in ("app.html", "index.html"):
+        # The landing page loads app.js lazily (only for client quote links) from landing.js.
+        for name in ("app.html", "landing.js"):
             self.assertRegex((WEB/name).read_text(encoding="utf-8"), r"/app\.js\?v=[A-Za-z0-9_-]+")
 
     def test_each_mailbox_has_the_right_purpose(self):

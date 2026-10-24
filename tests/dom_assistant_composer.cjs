@@ -140,7 +140,7 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(revoked,1);
  });
  await test('hidden mode and stop controls stay hidden under the shipped CSS',async({w,doc})=>{
-  const style=doc.createElement('style');style.textContent=fs.readFileSync('apps/web/product-ui.css','utf8');doc.head.append(style);
+  const style=doc.createElement('style');style.textContent=['ui/tokens.css','ui/base.css','ui/components.css','ui/assistant.css'].map(file=>fs.readFileSync('apps/web/'+file,'utf8')).join('\n');doc.head.append(style);
   assert.equal(w.getComputedStyle(doc.querySelector('#assistant-background')).display,'none');assert.equal(w.getComputedStyle(doc.querySelector('#assistant-stop')).display,'none');
  },false);
  assert.deepEqual(failures,[]);

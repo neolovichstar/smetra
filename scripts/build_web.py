@@ -24,8 +24,9 @@ def build():
                 and not (WEB / url.lstrip("/")).is_file()
             ):
                 raise RuntimeError(f"Missing asset: {source.name}: {url}")
-    DIST.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(WEB, DIST, dirs_exist_ok=True)
+    # Start from an empty bundle so deleted sources never linger in a deploy.
+    shutil.rmtree(DIST, ignore_errors=True)
+    shutil.copytree(WEB, DIST)
     manifest = {
         str(p.relative_to(DIST)).replace("\\", "/"): hashlib.sha256(
             p.read_bytes()

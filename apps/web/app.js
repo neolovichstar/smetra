@@ -124,7 +124,7 @@ window.SmetraEstimateSafety=(()=>{
   return {version:LEGAL_CONSENT_VERSION,disclaimer:AI_ESTIMATE_DISCLAIMER,bannerHtml,ensureConsent,confirmReview};
 })();
 
-function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';button.innerHTML='<img class="icon" src="/assets/icons/'+(dark?'sun':'moon')+'.svg" alt="">'+(id==='theme-alt'?label:'');button.setAttribute('aria-label',label);button.title=label;} }
+function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';const icon=window.SmetraIcons?window.SmetraIcons.svg(dark?'sun':'moon',18):'';button.innerHTML=icon+(id==='theme-alt'?'<span>'+label+'</span>':'');button.setAttribute('aria-label',label);button.title=label;} }
 function theme() { const dark=document.body.classList.toggle('dark');document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('smetra_theme',dark?'dark':'light');}catch{} syncThemeLabel(); }
 let savedTheme;try{savedTheme=localStorage.getItem('smetra_theme');}catch{}
 document.body.classList.toggle('dark',document.body.classList.contains('landing-page') || savedTheme!=='light');
@@ -191,7 +191,7 @@ function enhanceSidebarNavigation(){
   button.removeAttribute('data-ui-icon');button.removeAttribute('data-ui-icon-only');button.style.removeProperty('--ui-icon');
   // Replace every legacy child in one operation. The nav item has one canonical SVG, never an appended second icon.
   button.replaceChildren(icon,text);
-  button.dataset.navLabel=label;button.title=label;
+  button.dataset.navLabel=label;button.removeAttribute('title');
  };
  sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(normalizeButton);
 
@@ -211,6 +211,23 @@ function enhanceSidebarNavigation(){
   observer.observe(sidebar,{subtree:true,childList:true});
   sidebar.dataset.iconObserver='true';
  }
+ if(!sidebar.dataset.tooltips){
+  sidebar.dataset.tooltips='true';
+  let tip=null;
+  const hide=()=>{tip?.remove();tip=null};
+  const show=event=>{
+   const button=event.target.closest?.('button[data-nav-label],#sidebar-profile,.comms-sidebar-trigger');
+   if(!button||!document.body.classList.contains('sidebar-compact')||matchMedia('(max-width:800px)').matches)return;
+   hide();
+   const text=button.dataset.navLabel||button.getAttribute('aria-label')||button.textContent.trim();
+   if(!text)return;
+   tip=document.createElement('div');tip.className='nav-tooltip';tip.setAttribute('role','tooltip');tip.textContent=text;document.body.append(tip);
+   const r=button.getBoundingClientRect();tip.style.left=Math.round(r.right+10)+'px';tip.style.top=Math.round(r.top+r.height/2-tip.offsetHeight/2)+'px';
+  };
+  sidebar.addEventListener('pointerover',show);sidebar.addEventListener('focusin',show);
+  sidebar.addEventListener('pointerleave',hide);sidebar.addEventListener('focusout',hide);sidebar.addEventListener('click',hide);
+  sidebar.querySelector('.sidebar-scroll')?.addEventListener('scroll',hide,{passive:true});
+ }
  const logout=$('#logout');
  if(logout){
   const icon=makeSvg('sidebar-logout-icon','<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>');
@@ -225,19 +242,8 @@ function syncSidebarCollapseButton(){
  button.setAttribute('aria-expanded',String(!collapsed));button.setAttribute('aria-label',collapsed?'Развернуть меню':'Свернуть меню');button.title=collapsed?'Развернуть меню':'Свернуть меню';
  button.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';
 }
-function syncMobileSidebarGeometry(){
- const sidebar=$('#sidebar'),header=document.querySelector('.app-nav');
- if(!sidebar||!header)return;
- if(matchMedia('(max-width:800px)').matches){
-  const top=Math.max(0,Math.round(header.getBoundingClientRect().bottom));
-  // The legacy stylesheets have several historical mobile offsets. Align the drawer to the actual header.
-  sidebar.style.setProperty('top',top+'px','important');
-  $('#nav-backdrop')?.style.setProperty('top',top+'px','important');
-  sidebar.style.setProperty('height','calc(100dvh - '+top+'px)','important');
- }else{
-  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');$('#nav-backdrop')?.style.removeProperty('top');
- }
-}
+// The drawer geometry is owned by CSS (top bar height is a token); nothing to measure.
+function syncMobileSidebarGeometry(){}
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
 function setAppState(state){
   document.body.dataset.appState=state;
@@ -370,7 +376,7 @@ async function render() {
       if(!active())return;
       const counts={sent:quotes.filter(x=>x.status==='sent').length,accepted:quotes.filter(x=>x.status==='accepted').length};
       const stats=tab==='dashboard'?`<div class="stats"><div class="stat"><strong>${user.quote_count}</strong><span>Создано всего</span></div><div class="stat"><strong>${counts.sent}</strong><span>Ожидают ответа</span></div><div class="stat"><strong>${counts.accepted}</strong><span>Согласованы</span></div></div>`:'';
-      view(header(tab==='dashboard'?'Обзор':'Предложения',`Здравствуйте, ${escapeHtml(user.name)}. Всё по текущим клиентам здесь.`, '<button class="btn primary" id="new-quote">+ Предложение</button>')+stats+`<section class="panel"><div class="toolbar"><h3>Ваши предложения</h3><input id="search" type="search" placeholder="Найти по названию или клиенту" aria-label="Поиск" class="search-input"></div><div id="quote-list">${quoteList()}</div><button class="btn small" id="next-page">Показать ещё</button></section>`);
+      view(header(tab==='dashboard'?'Обзор':'Предложения',`Здравствуйте, ${escapeHtml(user.name)}. Всё по текущим клиентам здесь.`, '<button class="btn primary" id="new-quote">Создать предложение</button>')+stats+`<section class="panel"><div class="toolbar"><h3>Ваши предложения</h3><input id="search" type="search" placeholder="Найти по названию или клиенту" aria-label="Поиск" class="search-input"></div><div id="quote-list">${quoteList()}</div><button class="btn small" id="next-page">Показать ещё</button></section>`);
       let searchTimer;$('#search').addEventListener('input',(e)=>{clearTimeout(searchTimer);searchTimer=setTimeout(async()=>{try{await loadQuotes(e.target.value);$('#quote-list').innerHTML=quoteList();}catch(err){notify(err.message)}},250)});
       $('#next-page').addEventListener('click',async()=>{try{const r=await api('/quotes?offset='+quotes.length+'&q='+encodeURIComponent($('#search').value));quotes.push(...r.quotes);$('#quote-list').innerHTML=quoteList();if(!r.quotes.length)notify('Больше предложений нет')}catch(err){notify(err.message)}});
       $('#new-quote').addEventListener('click',showNewQuote);
@@ -378,7 +384,7 @@ async function render() {
     } else if(tab==='billing') {
       await window.SmetraGrowth.billing(active);
     } else if(tab==='support') {
-      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:support@smetra.online">Написать в поддержку ↗</a><p class="support-secondary-contact">Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span> Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
+      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:support@smetra.online">Написать в поддержку</a><p class="support-secondary-contact">Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span> Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
       const topics=[...document.querySelectorAll('[data-support-topic]')];let selectedTopic='';
       topics.forEach(button=>{button.setAttribute('aria-pressed','false');button.onclick=()=>{const input=$('#message');const prefix=selectedTopic+': ';const text=selectedTopic&&input.value.startsWith(prefix)?input.value.slice(prefix.length):input.value;selectedTopic=button.dataset.supportTopic;input.value=selectedTopic+': '+text;topics.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));input.focus()}});
       $('#support-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('[type=submit],button:not([type])'),input=form.querySelector('#message'),message=input.value;if(button.disabled)return;button.disabled=true;try{await api('/support',{method:'POST',body:JSON.stringify({message})});if(input.value===message)input.value='';if(user===owner)notify('Сообщение отправлено')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
@@ -399,7 +405,7 @@ async function render() {
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
-const appSections=new Set(['fieldwork','inbox','chats','dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+const appSections=new Set(['fieldwork','inbox','chats','premium','dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;

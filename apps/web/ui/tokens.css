@@ -1,0 +1,131 @@
+/* Сметра design tokens.
+   One palette, one accent, one type scale. Every other stylesheet reads these
+   variables; components never hard-code colours, radii or durations. */
+@font-face{font-family:Onest;src:url('/assets/fonts/onest-variable.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+
+:root{
+  color-scheme:dark;
+  --smetra-system:2;
+
+  /* Neutral graphite ramp. Surfaces step up in small, even increments. */
+  --bg:#0a0a0b;
+  --bg-sunken:#070708;
+  --surface-1:#111113;
+  --surface-2:#161618;
+  --surface-3:#1c1c1f;
+  --surface-4:#242428;
+  --surface-inverse:#ededef;
+  --overlay:rgba(4,4,5,.72);
+
+  --line:rgba(255,255,255,.075);
+  --line-strong:rgba(255,255,255,.13);
+  --line-focus:rgba(110,168,255,.55);
+
+  --text:#ededef;
+  --text-2:#a7a7b0;
+  --text-3:#83838c;
+  --text-inverse:#0b0b0c;
+  --text-disabled:#5b5b62;
+
+  /* The single accent: brand blue. Used for focus, selection, links,
+     progress and the active place in navigation — never for decoration. */
+  --accent:#6ea8ff;
+  --accent-strong:#3d86ff;
+  --accent-soft:rgba(110,168,255,.12);
+  --accent-softer:rgba(110,168,255,.07);
+  --accent-text:#9cc4ff;
+
+  /* Semantic colours appear only inside statuses and messages. */
+  --success:#5ccf8f;
+  --success-soft:rgba(92,207,143,.12);
+  --warning:#e8b45a;
+  --warning-soft:rgba(232,180,90,.13);
+  --danger:#f2766c;
+  --danger-soft:rgba(242,118,108,.13);
+  --info:var(--accent);
+  --info-soft:var(--accent-soft);
+
+  /* Primary action: high-contrast light fill with dark content. */
+  --action:#ededef;
+  --action-hover:#ffffff;
+  --action-text:#0b0b0c;
+
+  /* Type */
+  --font:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --font-mono:ui-monospace,'SFMono-Regular','JetBrains Mono',Menlo,Consolas,monospace;
+  --fs-11:11px;--fs-12:12px;--fs-13:13px;--fs-14:14px;--fs-15:15px;--fs-16:16px;
+  --fs-18:18px;--fs-20:20px;--fs-24:24px;--fs-28:28px;--fs-32:32px;--fs-40:40px;
+  --fs-48:48px;--fs-64:64px;--fs-80:80px;
+  --lh-tight:1.12;--lh-snug:1.3;--lh-body:1.5;
+  --tracking-tight:-.025em;--tracking-display:-.035em;--tracking-caps:.06em;
+
+  /* Spacing (4px grid) */
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;--s-7:32px;
+  --s-8:40px;--s-9:48px;--s-10:64px;--s-11:80px;--s-12:120px;
+
+  /* Control sizes */
+  --control-sm:32px;--control:38px;--control-lg:46px;--touch:44px;
+
+  /* Radii: small and consistent. Pills are reserved for status labels. */
+  --r-1:6px;--r-2:8px;--r-3:12px;--r-4:16px;--r-pill:999px;
+
+  /* Elevation is expressed by surface + line; shadows only for floating layers. */
+  --shadow-float:0 16px 48px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.35);
+  --shadow-pop:0 8px 24px rgba(0,0,0,.4);
+
+  /* Motion */
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --ease-in-out:cubic-bezier(.65,0,.35,1);
+  --t-fast:120ms;--t-base:180ms;--t-slow:320ms;--t-reveal:600ms;
+
+  /* Layout */
+  --topbar-h:56px;
+  --sidebar-w:248px;
+  --sidebar-rail:64px;
+  --content-max:1240px;
+  --content-pad:clamp(16px,3vw,40px);
+  --focus-ring:0 0 0 2px var(--bg),0 0 0 4px var(--accent);
+}
+
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f6f6f4;
+  --bg-sunken:#efefec;
+  --surface-1:#ffffff;
+  --surface-2:#fbfbfa;
+  --surface-3:#f1f1ef;
+  --surface-4:#e8e8e5;
+  --surface-inverse:#18181b;
+  --overlay:rgba(24,24,27,.42);
+
+  --line:rgba(20,20,24,.09);
+  --line-strong:rgba(20,20,24,.16);
+  --line-focus:rgba(31,99,224,.5);
+
+  --text:#17171a;
+  --text-2:#55555d;
+  --text-3:#6c6c74;
+  --text-inverse:#fafafa;
+  --text-disabled:#a6a6ad;
+
+  --accent:#1f63e0;
+  --accent-strong:#1550bd;
+  --accent-soft:rgba(31,99,224,.1);
+  --accent-softer:rgba(31,99,224,.06);
+  --accent-text:#1a56c4;
+
+  --success:#16834a;--success-soft:rgba(22,131,74,.1);
+  --warning:#9a6200;--warning-soft:rgba(176,113,0,.12);
+  --danger:#c9372c;--danger-soft:rgba(201,55,44,.1);
+
+  --action:#17171a;
+  --action-hover:#000000;
+  --action-text:#fafafa;
+
+  --shadow-float:0 18px 48px rgba(20,20,24,.14),0 2px 8px rgba(20,20,24,.08);
+  --shadow-pop:0 8px 24px rgba(20,20,24,.12);
+}
+
+@media (prefers-reduced-motion:reduce){
+  :root{--t-fast:0ms;--t-base:0ms;--t-slow:0ms;--t-reveal:0ms}
+}
