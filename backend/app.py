@@ -594,6 +594,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("calculators.css", "text/css"),
             ("estimate-audit.js", "text/javascript"),
             ("estimate-audit.css", "text/css"),
+            ("smart-timeline.js", "text/javascript"),
+            ("smart-timeline.css", "text/css"),
             ("construction.js", "text/javascript"),
             ("field-flows.js", "text/javascript"),
             ("field-flows.css", "text/css"),

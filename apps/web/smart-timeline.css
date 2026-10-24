@@ -1,0 +1,45 @@
+/* Smart construction timeline — neutral surfaces, compact hierarchy, mobile safe. */
+#smetra-timeline{max-width:1260px;margin:0 auto;padding:20px 0 72px;color:var(--smetra-text,var(--ink))}
+#smetra-timeline .stl-head{margin:10px 0 26px}
+#smetra-timeline .stl-eyebrow,#smetra-timeline .stl-section-title>span{font-size:10px;letter-spacing:.1em;color:var(--smetra-text-muted,var(--muted));font-weight:650}
+#smetra-timeline h1{font-size:clamp(29px,3vw,42px);font-weight:570;letter-spacing:-.045em;line-height:1.12;margin:12px 0}
+#smetra-timeline .stl-head p{margin:0;max-width:720px;font-size:13px;line-height:1.65;color:var(--smetra-text-muted,var(--muted))}
+#smetra-timeline .stl-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+#smetra-timeline .stl-pane,#smetra-timeline .stl-locked{border:1px solid var(--smetra-line,var(--line));border-radius:17px;padding:clamp(16px,2.4vw,26px);background:var(--smetra-surface,var(--paper));min-width:0}
+#smetra-timeline .stl-results{position:sticky;top:22px}
+#smetra-timeline .stl-section-title{padding-bottom:17px;border-bottom:1px solid var(--smetra-line,var(--line));margin-bottom:18px}
+#smetra-timeline h2{font-size:21px;font-weight:550;letter-spacing:-.03em;margin:7px 0 0}
+#smetra-timeline label{display:flex;flex-direction:column;gap:7px;font-size:11px;line-height:1.4;color:var(--smetra-text-muted,var(--muted));min-width:0}
+#smetra-timeline input:not([type=checkbox]),#smetra-timeline select{min-width:0;width:100%;min-height:42px;border:1px solid var(--smetra-line,var(--line));border-radius:10px;padding:9px 11px;background:var(--smetra-input,var(--paper));color:var(--smetra-text,var(--ink));font-size:13px;font-variant-numeric:tabular-nums}
+#smetra-timeline input:focus-visible,#smetra-timeline select:focus-visible,#smetra-timeline button:focus-visible{outline:2px solid var(--smetra-text,var(--ink));outline-offset:2px}
+#smetra-timeline .stl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+#smetra-timeline .stl-grid-three{grid-template-columns:repeat(3,minmax(0,1fr))}
+#smetra-timeline .stl-checkbox{display:flex;flex-direction:row;align-items:center;gap:9px;font-size:11px;cursor:pointer;line-height:1.5;margin:9px 0 15px}
+#smetra-timeline .stl-checkbox input{width:16px;height:16px;flex:none;accent-color:#c6c6c6}
+#smetra-timeline .stl-stage{border:1px solid var(--smetra-line,var(--line));border-radius:13px;padding:15px;margin:0 0 10px;display:flex;flex-direction:column;gap:11px}
+#smetra-timeline .stl-stage-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#smetra-timeline .stl-stage-head strong{font-size:12px;font-weight:600}
+#smetra-timeline .stl-stage-head button{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--smetra-line,var(--line));border-radius:8px;color:var(--smetra-text,var(--ink));background:transparent}
+#smetra-timeline .stl-stage-head button svg{width:15px;height:15px}
+#smetra-timeline .stl-stage-head button:disabled{opacity:.35}
+#smetra-timeline .stl-add{display:block;padding:11px 12px;border:1px dashed var(--smetra-line,var(--line));color:var(--smetra-text,var(--ink));border-radius:10px;background:transparent;width:100%;font-size:12px}
+#smetra-timeline .stl-footnote,#smetra-timeline .stl-disclaimer{font-size:11px;color:var(--smetra-text-muted,var(--muted));line-height:1.6;margin:15px 0}
+#smetra-timeline .stl-run{width:100%;min-height:46px;margin-top:2px}
+#smetra-timeline .stl-error{font-size:11px;line-height:1.5;color:var(--smetra-danger,#dca4a4);margin:12px 0 0}
+#smetra-timeline [hidden]{display:none!important}
+#smetra-timeline .stl-empty{font-size:12px;line-height:1.7;color:var(--smetra-text-muted,var(--muted))}
+#smetra-timeline .stl-summary{display:flex;flex-direction:column;gap:7px;border-bottom:1px solid var(--smetra-line,var(--line));padding:0 0 22px}
+#smetra-timeline .stl-summary span,#smetra-timeline .stl-summary small{font-size:11px;color:var(--smetra-text-muted,var(--muted))}
+#smetra-timeline .stl-summary strong{font-size:clamp(24px,3vw,34px);font-weight:650;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+#smetra-timeline .stl-chart{margin:0;padding:0;list-style:none}
+#smetra-timeline .stl-timeline-row{border-bottom:1px solid var(--smetra-line,var(--line));padding:14px 0;display:flex;flex-direction:column;gap:9px;min-width:0}
+#smetra-timeline .stl-timeline-row>div:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+#smetra-timeline .stl-timeline-row strong{font-size:12px;font-weight:580;overflow-wrap:anywhere}
+#smetra-timeline .stl-timeline-row span,#smetra-timeline .stl-timeline-row small{font-size:10px;color:var(--smetra-text-muted,var(--muted))}
+#smetra-timeline .stl-track{position:relative;height:9px;border-radius:20px;overflow:hidden;background:var(--smetra-surface-raised,var(--soft))}
+#smetra-timeline .stl-bar{position:absolute;top:0;bottom:0;background:#a4a4a4;border-radius:20px}
+#smetra-timeline .stl-locked{max-width:600px}
+#smetra-timeline .stl-locked p{font-size:13px;color:var(--smetra-text-muted,var(--muted));line-height:1.6}
+@media(max-width:1020px){#smetra-timeline .stl-layout{grid-template-columns:1fr}#smetra-timeline .stl-results{position:static}}
+@media(max-width:460px){#smetra-timeline{padding:14px 0 60px}#smetra-timeline .stl-grid-three{grid-template-columns:repeat(2,minmax(0,1fr))}#smetra-timeline .stl-timeline-row>div:first-child{flex-direction:column;gap:3px}#smetra-timeline .stl-stage{padding:12px}}
+@media(prefers-reduced-motion:reduce){#smetra-timeline *{scroll-behavior:auto!important}}
