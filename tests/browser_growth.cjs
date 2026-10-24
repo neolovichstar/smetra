@@ -37,7 +37,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
   await send('Page.navigate',{url:site+'/app#dashboard'});
  }
- await until("document.querySelector('[data-activation=estimate]')");await shot('growth-first-run-mobile');await click('[data-activation=estimate]');
+ await until("typeof user==='object'&&user?.id&&document.querySelector('#content')");
+ // The compact dashboard no longer displays the older onboarding banner.
+ // Exercise the starter catalog directly instead of requiring a retired CTA.
+ await evaluate("SmetraLoadFeature('growth').then(()=>SmetraGrowth.start('estimate'))");
+ await until("document.querySelector('[data-starter=repair]')");await shot('growth-first-run-mobile');
  await until("document.querySelector('[data-starter=repair]')");assert.equal(await evaluate("document.querySelectorAll('[data-starter]').length"),7);
  await click('[data-starter=repair]');await until("document.querySelector('#estimate-editor')");
  assert.equal(await evaluate("api('/quotes').then(r=>r.quotes.length)"),0,'Picking a starter must not activate or create a quote');
