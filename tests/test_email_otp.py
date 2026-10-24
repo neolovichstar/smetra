@@ -73,6 +73,49 @@ class EmailOTPTests(unittest.TestCase):
             with self.mod.db() as con:
                 self.assertEqual(con.execute("SELECT count(*) FROM users WHERE email=?",(email,)).fetchone()[0],1)
 
+    def test_smtp_failure_keeps_previous_unexpired_code_valid(self):
+        from smtplib import SMTPException
+        email="otp-mail-outage@local.test"
+        request={
+            "email":email,"intent":"register","name":"Монтажник",
+            "legal_acceptance":True,"legal_version":"2026-10-19-registration-v1",
+        }
+        with patch.dict(os.environ,CONFIG),patch(
+            "backend.email_otp.secrets.randbelow",return_value=246810
+        ),patch("backend.email_otp.deliver"):
+            status,first=self.call("/auth/email/start","POST",request)
+            self.assertEqual(status,200,first)
+        with patch.dict(os.environ,CONFIG),patch(
+            "backend.email_otp.deliver",side_effect=SMTPException("temporary outage")
+        ):
+            self.assertEqual(self.call("/auth/email/start","POST",request)[0],503)
+        with patch.dict(os.environ,CONFIG):
+            result,data=self.call("/auth/email/confirm","POST",{
+                "challenge_id":first["challenge_id"],"code":"246810",
+            })
+        self.assertEqual(result,200,data)
+
+    def test_successful_resend_revokes_old_code(self):
+        email="otp-resend@local.test"
+        request={
+            "email":email,"intent":"register","name":"Монтажник",
+            "legal_acceptance":True,"legal_version":"2026-10-19-registration-v1",
+        }
+        with patch.dict(os.environ,CONFIG),patch(
+            "backend.email_otp.deliver"
+        ),patch("backend.email_otp.secrets.randbelow",side_effect=(111111,222222)):
+            status,first=self.call("/auth/email/start","POST",request)
+            self.assertEqual(status,200)
+            status,second=self.call("/auth/email/start","POST",request)
+            self.assertEqual(status,200)
+        with patch.dict(os.environ,CONFIG):
+            self.assertEqual(self.call("/auth/email/confirm","POST",{
+                "challenge_id":first["challenge_id"],"code":"111111",
+            })[0],400)
+            self.assertEqual(self.call("/auth/email/confirm","POST",{
+                "challenge_id":second["challenge_id"],"code":"222222",
+            })[0],200)
+
     def test_wrong_code_burns_limited_attempts(self):
         with patch.dict(os.environ,CONFIG),patch(
             "backend.email_otp.secrets.randbelow",return_value=123456

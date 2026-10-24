@@ -52,7 +52,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 53
+REQUIRED_CLOUD_SCHEMA_VERSION = 54
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -142,6 +142,7 @@ def migrate():
         con.execute("DELETE FROM email_tokens WHERE expires_at<?", (now() - 86400,))
         business.migrate(con)
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
+        con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
 
 
 def now():
@@ -463,12 +464,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
-                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync"):
+                    if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
                         raise ApiError(404, "Не найдено")
                     if path == "/api/cron/assistant":
                         from backend.assistant_jobs import authenticate
 
                         authenticate(self)
+                    elif path == "/api/cron/maintenance":
+                        # Reject anonymous and incorrect cron tokens BEFORE
+                        # allocating a Supabase connection from the serverless pool.
+                        from backend.maintenance import authenticate
+                        authenticate(self, ApiError)
+                    elif path == "/api/cron/product-monitor":
+                        from backend.product_sources import authenticate_cron
+                        authenticate_cron(self)
+                    elif path == "/api/cron/cloud-sync":
+                        from backend.cloud_drives import authenticate_cron
+                        authenticate_cron(self)
                     # /api/cron/push verifies its own dedicated server secret.
                 if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
@@ -711,6 +723,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             authenticate_cron(self)
             return self.send_json(200, run_cloud_batch(con))
+        if path == "/api/cron/maintenance" and method == "GET":
+            from backend.maintenance import run as run_maintenance
+            return self.send_json(200, run_maintenance(self, con))
         if path == "/api/webhooks/google-drive" and method == "POST":
             from backend.cloud_drives import webhook
 

@@ -136,10 +136,8 @@ def start(handler, con, app):
     identifier = app.uid()
     code = f"{secrets.randbelow(1_000_000):06d}"
     moment = app.now()
-    con.execute(
-        "UPDATE email_login_challenges SET consumed_at=? WHERE email=? "
-        "AND consumed_at IS NULL", (moment, email)
-    )
+    # Keep earlier still-valid codes until SMTP actually accepts the new
+    # message. A transient mail outage must not lock someone out.
     con.execute(
         "INSERT INTO email_login_challenges "
         "(id,email,code_hash,intent,name,legal_version,attempts,expires_at,created_at,consumed_at) "
@@ -186,6 +184,14 @@ def start(handler, con, app):
                     503, "Почтовый сервер отклонил авторизацию отправителя. Попробуйте позже"
                 ) from None
             raise app.ApiError(503, "Не удалось отправить письмо. Попробуйте позже") from None
+        # The new code was delivered; only now invalidate previous challenges.
+        # Exclude the new ID so the same database update works across SQLite
+        # and PostgreSQL (which commits individual statements in autocommit).
+        con.execute(
+            "UPDATE email_login_challenges SET consumed_at=? "
+            "WHERE email=? AND id<>? AND consumed_at IS NULL",
+            (app.now(), email, identifier),
+        )
     return handler.send_json(200, {
         "ok": True, "challenge_id": identifier, "expires_in": TTL_SECONDS,
         "retry_after": 60, "message": "Если адрес доступен для этого действия, письмо отправлено",

@@ -81,6 +81,10 @@
     {
       "path": "/api/cron/cloud-sync",
       "schedule": "20 3 * * *"
+    },
+    {
+      "path": "/api/cron/maintenance",
+      "schedule": "10 4 * * *"
     }
   ]
 }
