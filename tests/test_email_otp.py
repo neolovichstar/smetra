@@ -117,6 +117,32 @@ class EmailOTPTests(unittest.TestCase):
                     "SELECT count(*) FROM email_login_challenges WHERE email=?",
                     ("otp-failed@local.test",)).fetchone()[0],0)
 
+    def test_smtp_auth_failure_is_classified_without_logging_secrets(self):
+        from smtplib import SMTPAuthenticationError
+        email="otp-smtp-diagnostics@local.test"
+        payload={
+            "email":email,"intent":"register","name":"Диагностика",
+            "legal_acceptance":True,
+            "legal_version":"2026-10-19-registration-v1",
+        }
+        with patch.dict(os.environ,CONFIG), patch(
+            "backend.email_otp.deliver",
+            side_effect=SMTPAuthenticationError(535,b"super-secret-provider-message"),
+        ), patch("backend.email_otp.logger.warning") as log:
+            status,body=self.call("/auth/email/start","POST",payload)
+        self.assertEqual(status,503,body)
+        self.assertIn("авторизацию отправителя",body["error"])
+        log.assert_called_once()
+        rendered=repr(log.call_args)
+        self.assertIn("authentication",rendered)
+        self.assertIn("535",rendered)
+        self.assertNotIn("super-secret-provider-message",rendered)
+        self.assertNotIn(email,rendered)
+        with self.mod.db() as con:
+            self.assertEqual(con.execute(
+                "SELECT count(*) FROM email_login_challenges WHERE email=?",(email,)
+            ).fetchone()[0],0)
+
     def test_malformed_code_consent_and_missing_smtp(self):
         with patch.dict(os.environ,CONFIG):
             self.assertEqual(self.call("/auth/email/start","POST",{

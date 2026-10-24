@@ -29,3 +29,12 @@
 .workspace-page.auth-mode #email-disclosure:not([open]) #auth-form{display:none!important}
 @media(max-width:420px){.workspace-page.auth-mode .email-code-flow .email-code-cells{gap:5px}.workspace-page.auth-mode .email-code-flow .email-code-cells input{height:52px;font-size:23px!important}}
 @media(prefers-reduced-motion:reduce){.workspace-page.auth-mode .email-code-flow *{transition:none!important}}
+
+/* Keep Chromium's autofill consistent with the dark authentication form. */
+.workspace-page.auth-mode .email-code-flow input:-webkit-autofill,
+.workspace-page.auth-mode .email-code-flow input:-webkit-autofill:hover,
+.workspace-page.auth-mode .email-code-flow input:-webkit-autofill:focus{
+ -webkit-box-shadow:0 0 0 1000px #101013 inset!important;
+ -webkit-text-fill-color:#f7f7f8!important;
+ caret-color:#f7f7f8;
+}

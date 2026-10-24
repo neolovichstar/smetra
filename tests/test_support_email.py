@@ -19,7 +19,7 @@ class SupportEmailTests(unittest.TestCase):
 
     def test_js_cache_version(self):
         for name in ("app.html", "index.html"):
-            self.assertIn("/app.js?v=20261024-mail-channels-v2",
+            self.assertIn("/app.js?v=20261024-presence-p1",
                           (WEB/name).read_text(encoding="utf-8"))
 
     def test_each_mailbox_has_the_right_purpose(self):

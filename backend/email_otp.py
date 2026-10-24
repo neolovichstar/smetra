@@ -4,6 +4,7 @@ A code proves access to a mailbox, not possession of a user-supplied name.
 No code, mailbox password, or bearer token is exposed in logs or databases.
 """
 import hashlib
+import logging
 import hmac
 import os
 import re
@@ -13,6 +14,8 @@ import sqlite3
 import ssl
 from email.message import EmailMessage
 from html import escape
+
+logger = logging.getLogger("smetra.email")
 
 TTL_SECONDS = 600
 MAX_ATTEMPTS = 5
@@ -150,8 +153,37 @@ def start(handler, con, app):
     if should_send:
         try:
             deliver(email,code,real_intent)
-        except (OSError, smtplib.SMTPException, TimeoutError, ValueError):
+        except (OSError, smtplib.SMTPException, TimeoutError, ValueError) as exc:
+            # Never log exception strings, raw SMTP responses, email addresses,
+            # OTPs or credentials. Only a safe error category and numeric code
+            # are needed to identify TLS, network and login failures.
+            if isinstance(exc, smtplib.SMTPAuthenticationError):
+                category = "authentication"
+            elif isinstance(exc, smtplib.SMTPRecipientsRefused):
+                category = "recipient_refused"
+            elif isinstance(exc, smtplib.SMTPSenderRefused):
+                category = "sender_refused"
+            elif isinstance(exc, ssl.SSLError):
+                category = "tls"
+            elif isinstance(exc, (TimeoutError, ConnectionError)):
+                category = "network"
+            elif isinstance(exc, smtplib.SMTPException):
+                category = "smtp_protocol"
+            elif isinstance(exc, ValueError):
+                category = "configuration"
+            else:
+                category = "transport"
+            smtp_code = getattr(exc, "smtp_code", None)
+            logger.warning(
+                "email_otp_delivery_failed category=%s smtp_code=%s request_id=%s",
+                category, smtp_code if isinstance(smtp_code, int) else "-",
+                getattr(handler, "request_id", "-"),
+            )
             con.execute("DELETE FROM email_login_challenges WHERE id=?", (identifier,))
+            if category == "authentication":
+                raise app.ApiError(
+                    503, "Почтовый сервер отклонил авторизацию отправителя. Попробуйте позже"
+                ) from None
             raise app.ApiError(503, "Не удалось отправить письмо. Попробуйте позже") from None
     return handler.send_json(200, {
         "ok": True, "challenge_id": identifier, "expires_in": TTL_SECONDS,

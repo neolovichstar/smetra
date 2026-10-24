@@ -538,7 +538,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/experience.js": ("experience.js", "text/javascript"),
             "/assets/obsidian-folio.png": ("assets/obsidian-folio.png", "image/png"),
             "/assets/black-titanium.png": ("assets/black-titanium.png", "image/png"),
-            "/favicon.ico": ("favicon.png", "image/png"),
+            "/favicon.ico": ("favicon.ico", "image/x-icon"),
             "/robots.txt": ("robots.txt", "text/plain"),
             "/sitemap.xml": ("sitemap.xml", "application/xml"),
             "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),

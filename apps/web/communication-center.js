@@ -30,7 +30,7 @@ async function api(path,options={}) {
 function notify(message){const e=$('#toast');if(e){e.textContent=message;e.classList.remove('hidden');setTimeout(()=>e.classList.add('hidden'),3500)}else alert(message)}
 function style(){
  if(document.querySelector('link[data-comms-style]'))return;
- const link=document.createElement('link');link.rel='stylesheet';link.href='/communication-center.css';link.dataset.commsStyle='1';document.head.append(link);
+ const link=document.createElement('link');link.rel='stylesheet';link.href='/communication-center.css?v=20261024-csp-p1';link.dataset.commsStyle='1';document.head.append(link);
 }
 function mount(){
  style();if($('#communication-center'))return;
@@ -48,12 +48,12 @@ function mount(){
 }
 async function open(tab='direct'){
  mount();state.open=true;state.tab=tabs.some(t=>t[0]===tab)?tab:'direct';
- $('#communication-center').classList.add('is-open');$('#communication-center').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
+ $('#communication-center').classList.add('is-open');$('#communication-center').setAttribute('aria-hidden','false');document.body.classList.add('comms-scroll-locked');
  clearInterval(state.poll);await refresh(true);
  let lastRefresh=Date.now();state.poll=setInterval(async()=>{if(state.open&&!state.busy&&!document.hidden){if(Date.now()-lastRefresh>=30000){await refresh(false);lastRefresh=Date.now()}if(state.current)await loadMessages(false)}},8000);
  $('#communication-center [data-close]')?.focus();
 }
-function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.style.overflow=''}
+function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.classList.remove('comms-scroll-locked')}
 function renderTools(){
  const el=$('#comms-tools');if(!el)return;
  if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form>';
@@ -66,11 +66,11 @@ function renderTools(){
 function renderList(){
  const el=$('#comms-list');if(!el)return;
  const rows=state.tab==='community'?state.channels:state.chats;
- if(!rows.length){el.innerHTML='<div class="comms-empty" style="padding:22px 8px"><div class="comms-empty-icon">'+icon(state.tab==='support'?'support':'chat')+'</div><h3>Пока пусто</h3><p>'+(state.tab==='direct'?'Найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Создайте новое обращение.')+'</p></div>';return}
+ if(!rows.length){el.innerHTML='<div class="comms-empty comms-empty-list"><div class="comms-empty-icon">'+icon(state.tab==='support'?'support':'chat')+'</div><h3>Пока пусто</h3><p>'+(state.tab==='direct'?'Найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Создайте новое обращение.')+'</p></div>';return}
  el.innerHTML=rows.map(row=>{
  const title=(row.kind==='direct'&&row.partner_name)||row.subject||row.partner_name||row.label||row.name||'Переписка',id=row.id;
  const preview=row.last_message|| (row.needs_human?'Ожидает сотрудника':row.kind==='community'?'Профессиональный канал':'Открыть переписку');
- return '<button type="button" class="comms-row '+(state.current&&state.current.id===id?'active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar">'+esc(title.slice(0,1).toUpperCase())+'</span><span class="comms-copy"><span class="comms-label">'+esc(title)+'</span><span class="comms-preview">'+esc(preview)+'</span></span><span class="comms-time">'+esc(time(row.last_message_at||row.updated_at||row.created_at))+'</span>'+(row.needs_human?'<i style="width:6px;height:6px;border-radius:50%;background:#d7a459" aria-label="Требуется сотрудник"></i>':'')+'</button>';
+ return '<button type="button" class="comms-row '+(state.current&&state.current.id===id?'active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar">'+esc(title.slice(0,1).toUpperCase())+'</span><span class="comms-copy"><span class="comms-label">'+esc(title)+'</span><span class="comms-preview">'+esc(preview)+'</span></span><span class="comms-time">'+esc(time(row.last_message_at||row.updated_at||row.created_at))+'</span>'+(row.needs_human?'<i class="comms-human-needed" aria-label="Требуется сотрудник"></i>':'')+'</button>';
  }).join('');
 }
 function renderMessages(){
@@ -78,7 +78,7 @@ function renderMessages(){
  if(!state.current){el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Вся рабочая переписка здесь</h3><p>Сметы, объекты и обращения собраны в одном месте.</p></div>';head.innerHTML='<div class="comms-avatar">'+icon('chat')+'</div><div><h3 class="comms-name">Центр общения</h3><div class="comms-sub">Выберите или создайте переписку</div></div>';box.disabled=true;send.disabled=true;compose.querySelector('.comms-banner')?.remove();return}
  const c=state.current;
  const subtitle=c.kind==='estimate'?'Обсуждение привязано к смете '+c.quote_id:c.kind==='object'?'Команда рабочего пространства':c.kind==='community'?'Открытый профессиональный канал':state.tab==='support'&&state.mode==='admin'?'Обращение пользователя':state.tab==='support'?'Бесплатный ИИ-помощник поддержки':(c.partner_public_id?'Публичный ID '+c.partner_public_id:'Личная переписка');
- head.innerHTML='<div class="comms-avatar">'+icon(c.kind==='support'?'support':c.kind==='object'?'users':'chat')+'</div><div style="min-width:0"><h3 class="comms-name">'+esc(c.subject||c.partner_name||c.label||'Переписка')+'</h3><div class="comms-sub">'+esc(subtitle)+'</div></div><span class="comms-status">'+(c.status==='closed'?'Закрыт':c.needs_human?'Нужен сотрудник':'Доступ открыт')+'</span>';
+ head.innerHTML='<div class="comms-avatar">'+icon(c.kind==='support'?'support':c.kind==='object'?'users':'chat')+'</div><div class="comms-head-copy"><h3 class="comms-name">'+esc(c.subject||c.partner_name||c.label||'Переписка')+'</h3><div class="comms-sub">'+esc(subtitle)+'</div></div><span class="comms-status">'+(c.status==='closed'?'Закрыт':c.needs_human?'Нужен сотрудник':'Доступ открыт')+'</span>';
  if(state.tab==='support'&&c.needs_human){if(!compose.querySelector('.comms-banner')){const n=document.createElement('div');n.className='comms-banner';n.textContent='Обращение передано сотруднику. История останется здесь.';compose.prepend(n)}}else compose.querySelector('.comms-banner')?.remove();
  box.disabled=c.status==='closed'||(state.tab==='support'&&c.needs_human&&state.mode==='user');box.placeholder=box.disabled?'Ожидайте ответа сотрудника…':'Написать сообщение…';send.disabled=box.disabled||state.busy;
  if(!state.messages.length)el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Начните разговор</h3><p>История сохранится в этой переписке.</p></div>';
@@ -88,7 +88,7 @@ function renderMessages(){
  return '<article class="comms-message '+(mine?'mine ':'')+(m.sender_type==='system'?'system':'')+'"><span class="comms-author">'+esc(author)+'</span><p>'+esc(m.body)+'</p><time>'+esc(time(m.created_at))+'</time></article>';
  }).join('');
  if(state.tab==='support'&&state.mode==='user'&&!c.needs_human&&c.status!=='closed'){
- if(!compose.querySelector('[data-call-staff]')){const b=document.createElement('button');b.type='button';b.className='comms-btn';b.dataset.callStaff='1';b.textContent='Позвать сотрудника';b.style.marginBottom='8px';b.onclick=handoff;compose.prepend(b)}
+ if(!compose.querySelector('[data-call-staff]')){const b=document.createElement('button');b.type='button';b.className='comms-btn';b.dataset.callStaff='1';b.textContent='Позвать сотрудника';b.classList.add('comms-staff-action');b.onclick=handoff;compose.prepend(b)}
  }else compose.querySelector('[data-call-staff]')?.remove();
  el.scrollTop=el.scrollHeight;
 }
@@ -129,7 +129,7 @@ async function sendMessage(e){
 }
 async function findPerson(){
  const value=$('#comms-id')?.value.trim();const out=$('#comms-found');if(!value||!out)return;out.textContent='Ищем…';
- try{const d=await api('/profile/directory?q='+encodeURIComponent(value));const p=d.user;out.innerHTML='<div style="padding-top:8px;font-size:12px">'+esc(p.name)+' <code style="opacity:.55;font-size:10px">'+esc(p.public_id)+'</code> <button class="comms-btn" type="button" id="comms-start-chat">Написать</button></div>';$('#comms-start-chat').onclick=async()=>{try{const x=await api('/profile/chats',{method:'POST',body:JSON.stringify({public_id:p.public_id})});state.tab='direct';state.current=null;await refresh(true);await select(x.chat.id)}catch(error){notify(error.message)}}
+ try{const d=await api('/profile/directory?q='+encodeURIComponent(value));const p=d.user;out.innerHTML='<div class="comms-found-person">'+esc(p.name)+' <code class="comms-found-id">'+esc(p.public_id)+'</code> <button class="comms-btn" type="button" id="comms-start-chat">Написать</button></div>';$('#comms-start-chat').onclick=async()=>{try{const x=await api('/profile/chats',{method:'POST',body:JSON.stringify({public_id:p.public_id})});state.tab='direct';state.current=null;await refresh(true);await select(x.chat.id)}catch(error){notify(error.message)}}
  }catch(error){out.innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
 }
 async function createQuoteChat(){
@@ -180,14 +180,14 @@ function supportPage(){
   const button=document.createElement('button');
   button.type='button';button.className='comms-btn';button.dataset.commsOpenSupport='1';
   button.textContent='Открыть историю обращений';
-  button.style.marginTop='10px';button.onclick=()=>open('support');
+  button.classList.add('comms-support-launch');button.onclick=()=>open('support');
   const topics=actions.querySelector('.support-topics');
   if(topics)topics.insertAdjacentElement('afterend',button);else actions.append(button);
  }
  const panel=content.querySelector('.support-panel')||form.parentElement;
  if(panel&&!panel.querySelector('[data-comms-support-note]')){
   const note=document.createElement('p');note.dataset.commsSupportNote='1';note.className='comms-note';
-  note.style.marginBottom='12px';
+  note.classList.add('comms-support-note');
   note.textContent='Бесплатный ИИ поддержки отвечает в чате. Если он не справится или вы позовёте сотрудника, обращение попадёт в очередь команды, а история сохранится.';
   panel.insertBefore(note,form);
  }
@@ -232,10 +232,37 @@ function watch(){
  state.observer.observe(root,{childList:true,subtree:true});addTrigger();
  if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin')adminPage();
 }
-document.addEventListener('DOMContentLoaded',()=>{mount();watch();const heartbeat=()=>api('/profile/presence',{method:'POST',body:'{}'}).catch(()=>{});heartbeat();setInterval(heartbeat,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)heartbeat()});setInterval(()=>{if(location.hash==='#admin')adminPage()},30000);});
+let presenceTimer=null;
+let presenceBusy=false;
+let presenceEnabled=false;
+function stopPresence(){
+ presenceEnabled=false;
+ if(presenceTimer){clearInterval(presenceTimer);presenceTimer=null}
+}
+async function heartbeat(){
+ if(!presenceEnabled||presenceBusy||document.hidden||document.body.classList.contains('auth-mode'))return;
+ const auth=$('#auth');
+ if(auth&&!auth.classList.contains('hidden'))return;
+ presenceBusy=true;
+ try{await api('/profile/presence',{method:'POST',body:'{}'})}
+ catch(error){if(/401|авторизац|сессия изменилась/i.test(error.message||''))stopPresence()}
+ finally{presenceBusy=false}
+}
+function startPresence(){
+ if(presenceEnabled)return;
+ presenceEnabled=true;
+ void heartbeat();
+ presenceTimer=setInterval(()=>{void heartbeat()},60000);
+}
+document.addEventListener('DOMContentLoaded',()=>{
+ mount();watch();
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)void heartbeat()});
+ setInterval(()=>{if(!document.body.classList.contains('auth-mode')&&location.hash==='#admin')adminPage()},30000);
+});
 function reset(){
+ stopPresence();
  sessionEpoch++;close();state.current=null;state.messages=[];state.chats=[];state.channels=[];state.workspaces=[];state.userId='';state.publicId='';state.role='user';state.mode='user';state.busy=false;state.adminLoading=false;state.lastWaitingHuman=null;
  if($('#communication-center')){renderList();renderMessages();$('#comms-tools')?.replaceChildren();$('#comms-my-id code').textContent='';}
 }
-window.SmetraCommunication={open,close,reset,refresh:()=>refresh(true)};
+window.SmetraCommunication={open,close,reset,startPresence,refresh:()=>refresh(true)};
 })();
