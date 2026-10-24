@@ -9,10 +9,12 @@
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261024-yandex-avatar-v1']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261024-rooms-v1']},
+    calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261024-v1']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js']},
     growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261024-pricing-unified-v4','/growth.js']},
     quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js']},
-    quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState,files:['/quote-editor-state.js']},
+    estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261024-v1']},
+    quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js']},
     objectChats:{ready:()=>!!window.SmetraObjectChats,files:['/object-chats.js']},
     premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js']},
   };

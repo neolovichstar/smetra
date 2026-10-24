@@ -19,7 +19,20 @@
         const host=select.closest('dialog[open]')||document.body;
         if(typeof panel.showPopover==='function'){panel.setAttribute('popover','manual');host.append(panel);panel.showPopover()}else host.append(panel);
         let choices=[],index=0;
-        const position=()=>{if(!select.isConnected){close();return}const r=trigger.getBoundingClientRect(),width=Math.min(Math.max(r.width,240),innerWidth-24);panel.style.width=width+'px';panel.style.left=Math.max(12,Math.min(r.left,innerWidth-width-12))+'px';const height=Math.min(330,innerHeight-24),below=innerHeight-r.bottom-12,above=r.top-12;const up=below<height&&above>below;panel.style.maxHeight=Math.max(100,Math.min(height,up?above:below))+'px';panel.style.top=up?'auto':Math.min(r.bottom+6,innerHeight-100)+'px';panel.style.bottom=up?Math.max(12,innerHeight-r.top+6)+'px':'auto'};
+        const position=()=>{if(!select.isConnected){close();return}
+          const r=trigger.getBoundingClientRect(),margin=12,viewportWidth=Math.max(1,innerWidth),viewportHeight=Math.max(1,innerHeight);
+          const width=Math.min(Math.max(r.width,240),Math.max(1,viewportWidth-margin*2));
+          panel.style.width=width+'px';
+          panel.style.left=Math.max(0,Math.min(Math.max(margin,r.left),viewportWidth-width-margin))+'px';
+          panel.style.bottom='auto';
+          panel.style.maxHeight=Math.max(1,Math.min(330,viewportHeight-margin*2))+'px';
+          panel.style.top=margin+'px';
+          const panelHeight=panel.offsetHeight;
+          const spaceBelow=viewportHeight-r.bottom-margin,spaceAbove=r.top-margin;
+          const opensAbove=spaceBelow<panelHeight+6&&spaceAbove>spaceBelow;
+          const desiredTop=opensAbove?r.top-panelHeight-6:r.bottom+6;
+          panel.style.top=Math.max(0,Math.min(Math.max(margin,desiredTop),viewportHeight-panelHeight-margin))+'px';
+        };
         const highlight=()=>{choices.forEach((choice,n)=>{choice.button.classList.toggle('select-option-active',n===index)});const choice=choices[index];if(choice){search.setAttribute('aria-activedescendant',choice.button.id);choice.button.scrollIntoView({block:'nearest'})}else search.removeAttribute('aria-activedescendant')};
         const choose=option=>{if(option.disabled)return;select.value=option.value;select.dispatchEvent(new Event('input',{bubbles:true}));select.dispatchEvent(new Event('change',{bubbles:true}));sync();close(true)};
         const render=()=>{list.replaceChildren();choices=[];const query=search.value.trim().toLocaleLowerCase('ru');Array.from(select.options).forEach((option,n)=>{if(option.hidden||!option.textContent.toLocaleLowerCase('ru').includes(query))return;const button=document.createElement('button');button.type='button';button.className='select-option';button.id=panel.id+'-'+n;button.tabIndex=-1;button.setAttribute('role','option');button.setAttribute('aria-selected',String(option.selected));button.disabled=option.disabled||option.parentElement?.disabled===true;const text=document.createElement('span');text.textContent=option.textContent;button.append(text);if(option.selected){const mark=document.createElement('span');mark.textContent='✓';mark.setAttribute('aria-hidden','true');button.append(mark)}button.onclick=()=>choose(option);list.append(button);if(!button.disabled)choices.push({option,button})});index=Math.max(0,choices.findIndex(choice=>choice.option.selected));if(!choices.length){const empty=document.createElement('p');empty.className='select-menu-empty';empty.textContent='Ничего не найдено';list.append(empty)}highlight();position()};
