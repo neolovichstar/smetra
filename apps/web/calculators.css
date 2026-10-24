@@ -34,3 +34,17 @@
 @media(max-width:780px){#smetra-calculators{padding:18px 0 50px}#smetra-calculators .smcalc-layout{grid-template-columns:minmax(0,1fr);gap:12px}#smetra-calculators .smcalc-result{position:static}#smetra-calculators .smcalc-card{padding:20px}}
 @media(max-width:390px){#smetra-calculators .smcalc-fields{grid-template-columns:minmax(0,1fr)}#smetra-calculators .smcalc-tab{padding:9px 13px}}
 @media(prefers-reduced-motion:reduce){#smetra-calculators .smcalc-tab,#smetra-calculators .smcalc-field input{transition:none}}
+
+#smetra-calculators .smcalc-transfer{margin-top:22px;padding:18px 0 0;border-top:1px solid var(--smetra-line,var(--line));display:flex;flex-direction:column;gap:11px}
+#smetra-calculators .smcalc-transfer-label{font-size:10px;letter-spacing:.1em;font-weight:650;color:var(--smetra-text-muted,var(--muted))}
+#smetra-calculators .smcalc-transfer-method{display:flex;flex-direction:column;gap:8px;color:var(--smetra-text-muted,var(--muted));font-size:11px}
+#smetra-calculators .smcalc-transfer-method select{width:100%;min-height:44px;background:var(--smetra-input,var(--paper));color:var(--smetra-text,var(--ink));border:1px solid var(--smetra-line,var(--line));border-radius:10px;padding:8px 12px}
+#smetra-calculators .smcalc-transfer-method .select-trigger{min-height:44px;border:1px solid var(--smetra-line,var(--line));border-radius:10px}
+#smetra-calculators .smcalc-transfer-method :disabled{opacity:.55;cursor:not-allowed}
+#smetra-calculators .smcalc-transfer-preview{display:flex;flex-direction:column;gap:5px;border-radius:11px;padding:13px 14px;border:1px solid var(--smetra-line,var(--line));background:var(--smetra-surface-raised,var(--paper));min-width:0}
+#smetra-calculators .smcalc-transfer-preview>span{color:var(--smetra-text-muted,var(--muted));font-size:11px;overflow-wrap:anywhere}
+#smetra-calculators .smcalc-transfer-preview strong{color:var(--smetra-text,var(--ink));font-weight:600;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+#smetra-calculators .smcalc-transfer-note{color:var(--smetra-text-muted,var(--muted));font-size:11px;line-height:1.6;margin:0}
+#smetra-calculators .smcalc-draft{width:100%;min-height:46px;justify-content:center;border-radius:11px}
+#smetra-calculators .smcalc-draft:disabled{opacity:.45;cursor:not-allowed}
+#smetra-calculators .smcalc-copy{margin-top:5px}

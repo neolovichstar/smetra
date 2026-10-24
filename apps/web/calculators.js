@@ -116,6 +116,34 @@
     return new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 3}).format(value);
   }
 
+  // Hand off quantity only. The user enters the unit price and client in the editor;
+  // this helper never calculates money or sends requests to the backend.
+  function estimateDraft(kind, raw, mode='material') {
+    const result=calculate(kind,raw);
+    if (!['material','packages'].includes(mode)) throw new Error('Выберите способ учёта материала.');
+    if (mode==='packages' && kind==='concrete') throw new Error('Бетон учитывается по объёму в м³.');
+    const packageUnits={tile:'упак.',laminate:'упак.',paint:'банка',plaster:'мешок'};
+    const byPackage=mode==='packages';
+    const quantity=byPackage?result.secondary.value:Math.ceil(result.primary.value*10000-1e-9)/10000;
+    if (!Number.isFinite(quantity)||quantity<=0||quantity>1000000) {
+      throw new Error('Количество для сметы выходит за допустимые пределы. Измените размеры.');
+    }
+    const unit=byPackage?packageUnits[kind]:result.primary.unit;
+    const name='Материал: '+kinds[kind].name;
+    const method=byPackage?'Целые упаковки по введённому объёму упаковки.':'Материал с учётом запаса.';
+    const description=[result.description,method,result.note].join(' ');
+    return {
+      title:'Расчёт материалов · '+kinds[kind].name,
+      client:'',
+      description:'Позиция создана из калькулятора «'+kinds[kind].name+'». Уточните объёмы, клиента и цену за '+unit+'.',
+      items:[{
+        name, description, quantity:String(quantity), unit,
+        unit_price:0, cost_price:0, tax:'0', discount:'0', markup:'0',
+        coefficient:'1', category:'Материалы', optional:false, included:true
+      }]
+    };
+  }
+
   function fieldsHtml(spec) {
     return spec.fields.map(field =>
       '<label class="smcalc-field"><span>' + field[1] + ' <small>' + field[2] + '</small></span>' +
@@ -127,7 +155,7 @@
   function render() {
     view('<section id="smetra-calculators" class="smcalc">' +
       '<header class="smcalc-header"><div><span class="smcalc-kicker">ИНСТРУМЕНТЫ / БЕСПЛАТНО</span>' +
-      '<h1>Калькуляторы</h1><p>Быстрый расчёт количества материалов без ИИ, лимитов и создания сметы.</p></div></header>' +
+      '<h1>Калькуляторы</h1><p>Быстрый расчёт без ИИ и лимитов. Переносите количество материала в новую смету.</p></div></header>' +
       '<nav class="smcalc-tabs" aria-label="Вид расчёта">' +
       Object.entries(kinds).map(pair =>
         '<button type="button" class="smcalc-tab" data-calc-kind="' + pair[0] + '" aria-pressed="' + (pair[0] === selected) + '">' +
@@ -146,17 +174,28 @@
       '<strong><span id="smcalc-secondary"></span> <small id="smcalc-secondary-unit"></small></strong></div></div>' +
       '<p class="smcalc-formula" id="smcalc-formula"></p>' +
       '<p class="smcalc-note" id="smcalc-note"></p>' +
+      '<div class="smcalc-transfer" id="smcalc-transfer">' +
+      '<span class="smcalc-transfer-label">ПОЗИЦИЯ ДЛЯ СМЕТЫ</span>' +
+      '<label class="smcalc-transfer-method" for="smcalc-unit-mode">Как учитывать материал' +
+      '<select id="smcalc-unit-mode" aria-label="Единица учёта материала">' +
+      '<option value="material">По площади, весу или объёму</option>' +
+      '<option value="packages">По целым упаковкам</option></select></label>' +
+      '<div class="smcalc-transfer-preview" aria-live="polite"><span>В новую смету</span>' +
+      '<strong id="smcalc-draft-name"></strong><span id="smcalc-draft-qty"></span></div>' +
+      '<p class="smcalc-transfer-note">Цена за единицу остаётся нулевой. Перед сохранением укажите цену и клиента в редакторе. Существующие сметы не изменятся.</p>' +
+      '<button type="button" class="btn primary smcalc-draft" id="smcalc-draft">Открыть в новой смете</button></div>' +
       '<button type="button" class="btn smcalc-copy" id="smcalc-copy">Скопировать расчёт</button>' +
       '</aside></div></section>');
 
     const root = document.querySelector('#smetra-calculators');
     const $ = selector => root.querySelector(selector);
     const form = $('#smcalc-form');
-    let copyText = '';
+    let copyText = '',draft=null;
     const update = () => {
       const values = Object.fromEntries(new FormData(form).entries());
       try {
         const result = calculate(selected, values);
+        draft=estimateDraft(selected,values,$('#smcalc-unit-mode').value);
         $('#smcalc-error').hidden = true;
         $('#smcalc-values').hidden = false;
         $('#smcalc-primary-label').textContent = result.primary.label;
@@ -168,17 +207,24 @@
         $('#smcalc-formula').textContent = result.description;
         $('#smcalc-note').textContent = result.note;
         $('#smcalc-copy').disabled = false;
+        $('#smcalc-draft').disabled = false;
+        $('#smcalc-draft-name').textContent=draft.items[0].name;
+        $('#smcalc-draft-qty').textContent=format(Number(draft.items[0].quantity))+' '+draft.items[0].unit+' · цена 0';
         copyText = kinds[selected].name + '\n' +
           result.primary.label + ': ' + format(result.primary.value) + ' ' + result.primary.unit + '\n' +
           result.secondary.label + ': ' + format(result.secondary.value) + ' ' + result.secondary.unit + '\n' +
           result.description + '\n' + result.note;
       } catch (error) {
+        draft=null;
         $('#smcalc-error').textContent = error.message;
         $('#smcalc-error').hidden = false;
         $('#smcalc-values').hidden = true;
         $('#smcalc-formula').textContent = '';
         $('#smcalc-note').textContent = '';
         $('#smcalc-copy').disabled = true;
+        $('#smcalc-draft').disabled = true;
+        $('#smcalc-draft-name').textContent='—';
+        $('#smcalc-draft-qty').textContent='Исправьте параметры расчёта';
         copyText = '';
       }
     };
@@ -191,12 +237,44 @@
       $('#smcalc-heading').textContent = kinds[kind].name;
       $('#smcalc-description').textContent = kinds[kind].description;
       $('#smcalc-fields').innerHTML = fieldsHtml(kinds[kind]);
+      $('#smcalc-unit-mode').value='material';
+      $('#smcalc-unit-mode').disabled=kind==='concrete';
+      $('#smcalc-transfer').dataset.calcKind=kind;
       update();
     };
     root.querySelectorAll('[data-calc-kind]').forEach(button => {
       button.addEventListener('click', () => activate(button.dataset.calcKind));
     });
     form.addEventListener('input', update);
+    $('#smcalc-unit-mode').addEventListener('change',update);
+    $('#smcalc-draft').addEventListener('click',async()=>{
+      if(!draft)return;
+      const next=structuredClone(draft);
+      const button=$('#smcalc-draft');
+      button.disabled=true;
+      try{
+        if(typeof window.Workspace?.editor!=='function')throw Error('Редактор сметы недоступен. Обновите страницу.');
+        // Keep the global navigation and editor's route guard in sync.
+        // replaceState avoids a hashchange rerender while the editor is opening.
+        const previousTab=typeof tab==='string'?tab:null;
+        if(previousTab!==null){
+          tab='quotes';
+          history.replaceState({},'',location.pathname+location.search+'#quotes');
+          document.querySelectorAll('[data-tab]').forEach(item=>item.classList.toggle('active',item.dataset.tab==='quotes'));
+        }
+        try{await window.Workspace.editor(next)}
+        catch(error){
+          if(previousTab!==null&&root.isConnected){
+            tab=previousTab;
+            history.replaceState({},'',location.pathname+location.search+'#'+previousTab);
+            document.querySelectorAll('[data-tab]').forEach(item=>item.classList.toggle('active',item.dataset.tab===previousTab));
+          }
+          throw error;
+        }
+      }catch(error){
+        if(root.isConnected)notify(error.message||'Не удалось открыть редактор сметы.');
+      }finally{if(root.isConnected)button.disabled=false;}
+    });
     $('#smcalc-copy').addEventListener('click', async () => {
       if (!copyText) return;
       try {
@@ -209,5 +287,5 @@
     activate(selected);
   }
 
-  window.SmetraCalculators = Object.freeze({calculate, render, kinds: Object.keys(kinds)});
+  window.SmetraCalculators = Object.freeze({calculate, estimateDraft, render, kinds: Object.keys(kinds)});
 })();

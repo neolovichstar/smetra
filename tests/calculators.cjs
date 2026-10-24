@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.resolve(__dirname, '../apps/web/calculators.js'), 'utf8');
 const sandbox = {window: {}, Intl};
 vm.runInNewContext(source, sandbox, {filename: 'calculators.js'});
-const {calculate, kinds} = sandbox.window.SmetraCalculators;
+const {calculate, estimateDraft, kinds} = sandbox.window.SmetraCalculators;
 const approx = (actual, expected) => assert.ok(Math.abs(actual - expected) <= 1e-9,
   'Expected ' + expected + ', got ' + actual);
 const tile = {length:'4',width:'3',openings:'0',waste:'10',pack:'1.44'};
@@ -50,4 +50,38 @@ for (const [type,values] of [
 ]) assert.throws(()=>calculate(type,values), {name:'Error'}, 'Invalid value should fail in ' + type);
 assert.throws(()=>calculate('unknown',{}),{name:'Error'});
 assert.throws(()=>calculate('tile',{}),{name:'Error'});
-console.log('PASS: 5 free material calculators, unit conversion, pack rounding and invalid-input guards');
+
+const cases=[
+  ['tile',tile,'13.2','м²','10','упак.'],
+  ['laminate',laminate,'21.6','м²','10','упак.'],
+  ['paint',paint,'2.64','л','2','банка'],
+  ['plaster',plaster,'118.8','кг','4','мешок']
+];
+for(const [kind,raw,materialQty,materialUnit,packageQty,packageUnit] of cases){
+  const original=JSON.stringify(raw);
+  const draft=estimateDraft(kind,raw);
+  assert.equal(draft.items.length,1);
+  assert.equal(draft.items[0].unit,materialUnit);
+  assert.equal(draft.items[0].quantity,materialQty);
+  assert.equal(draft.items[0].unit_price,0);
+  assert.equal(draft.items[0].cost_price,0);
+  assert.equal(draft.items[0].included,true);
+  assert.equal(draft.client,'','Client is intentionally not filled');
+  assert.ok(draft.description.includes('Уточните'));
+  assert.ok(draft.items[0].description.includes('запас'));
+  const packaged=estimateDraft(kind,raw,'packages');
+  assert.equal(packaged.items[0].unit,packageUnit);
+  assert.equal(packaged.items[0].quantity,packageQty);
+  assert.equal(packaged.items[0].unit_price,0);
+  assert.equal(JSON.stringify(raw),original,'Calculators must not mutate inputs');
+}
+const concreteDraft=estimateDraft('concrete',concrete);
+assert.equal(concreteDraft.items[0].unit,'м³');
+assert.equal(concreteDraft.items[0].quantity,'1.575');
+assert.throws(()=>estimateDraft('concrete',concrete,'packages'),{name:'Error'});
+assert.throws(()=>estimateDraft('tile',tile,'invalid'),{name:'Error'});
+assert.throws(()=>estimateDraft('tile',{...tile,length:'10000',width:'10000',openings:'0'}),{name:'Error'});
+const underPrecision=estimateDraft('concrete',{length:'0.01',width:'0.01',thickness:'0.1',waste:'0'});
+assert.ok(Number(underPrecision.items[0].quantity)>0,'tiny quantities must not round down to zero');
+console.log('PASS: 5 free material calculators, unit conversion, pack rounding, invalid-input guards and safe estimate handoff');
+
