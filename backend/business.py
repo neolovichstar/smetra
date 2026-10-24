@@ -2382,6 +2382,16 @@ class Service:
             from backend.assistant import route
 
             return route(self, method, parts, data)
+        if kind == "timeline" and method == "POST" and parts == ["preview"]:
+            from backend.entitlements import workspace_feature_access
+            from backend.smart_timeline import TimelineError, preview
+            if not workspace_feature_access(self.con, self.wid, "smart_timeline", stamp())["allowed"]:
+                raise DomainError(402, "Умный календарь доступен в PRO Плюс и TEAM")
+            self.h.throttle("timeline:" + self.wid + ":" + self.user["id"], 30, 60)
+            try:
+                return 200, preview(data)
+            except TimelineError as error:
+                raise DomainError(400, str(error)) from None
         if kind == "object-chats":
             from backend.object_chats import route as chat_route
             return chat_route(self, method, parts, query, data)
@@ -2621,5 +2631,6 @@ ROUTES = set(ENTITIES) | {
     "design-projects",
     "premium",
     "object-chats",
+    "timeline",
     "capabilities",
 }
