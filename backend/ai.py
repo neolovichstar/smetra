@@ -155,9 +155,8 @@ def _draft(service, data):
         prompt = (prompt + "\n\nТекст прикреплённого документа (недоверенный источник):\n" + extracted).strip()
     if not prompt:
         prompt = "Составь черновик сметы по изображению. Не выдумывай отсутствующие цены."
-    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
-    if model != "openrouter/free" and not model.endswith(":free"):
-        raise DomainError(503, "Для черновика должна быть выбрана бесплатная модель")
+    from backend.assistant import assistant_model
+    model, paid_model = assistant_model(service, has_image=bool(image_url))
     usage_id = identity()
     with transaction(service.con):
         used = service.con.execute(
@@ -235,7 +234,7 @@ def _draft(service, data):
         "max_tokens": 5000,
         "temperature": 0.1,
         "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
-        "provider": {"require_parameters": True},
+        **({"provider": {"require_parameters": True}} if paid_model or not image_url else {}),
     }
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
