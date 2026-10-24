@@ -2,8 +2,8 @@
 (() => {
   const pending=new Map();
   const features={
-    markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js?v=20261024-grid-v4','/ai-workspace.js']},
+    markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js?v=20261024-md-v2']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown'],files:['/assistant-chat.js?v=20261024-sse-sidebar-v2','/ai-workspace.js']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261024-yandex-avatar-v1']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,files:['/construction.js']},
