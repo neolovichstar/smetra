@@ -267,6 +267,12 @@ def tools():
     text = {"type": "string"}
     result = [
         function(
+            "report_progress",
+            "Установить краткий статус текущего действия, видимый пользователю. Вызывай при смене этапа, не изображай поиск или проверку, которые не выполняешь.",
+            {"stage": {"type": "string", "enum": ["thinking", "reading_documents", "estimating", "materials", "reviewing", "writing"]}},
+            ("stage",),
+        ),
+        function(
             "bulk_quote_items",
             "Предложить массовую правку 1–50 строк черновика сметы. Сначала get_record quotes: "
             "номера строк с 1. set заменяет значение, multiply умножает текущее числовое значение. "
@@ -1028,7 +1034,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         for call in calls[:4]:
             try:
                 name = call["function"]["name"]
-                if on_status:
+                if on_status and name != "report_progress":
                     on_status({
                         "read_file": "Читаю файл…", "read_markdown": "Читаю документ…", "list_files": "Ищу файлы…",
                         "search_file_content": "Ищу в документах…",
@@ -1040,7 +1046,22 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 args = json.loads(call["function"]["arguments"])
                 if not isinstance(args, dict):
                     raise ValueError("arguments")
-                if name == "remember_knowledge":
+                if name == "report_progress":
+                    labels = {
+                        "thinking": "Думаю…",
+                        "reading_documents": "Изучаю документы…",
+                        "estimating": "Составляю смету…",
+                        "materials": "Подбираю материалы…",
+                        "reviewing": "Проверяю данные…",
+                        "writing": "Готовлю ответ…",
+                    }
+                    stage = str(args.get("stage", ""))
+                    if stage not in labels:
+                        raise ValueError("stage")
+                    if on_status:
+                        on_status(labels[stage])
+                    result = {"ok": True}
+                elif name == "remember_knowledge":
                     from backend.profile_memory import remember
 
                     result = remember(service, args, prompt)
