@@ -154,6 +154,55 @@ class CommunicationApiTests(unittest.TestCase):
             self.assertIn(public_token,saved["body"])
             self.assertEqual(json.loads(saved["metadata"])["quote_id"],quote_id)
 
+    def test_object_chat_revocation_does_not_revoke_private_chats(self):
+        with app.db() as con:
+            workspace_id = con.execute(
+                "SELECT id FROM workspaces WHERE owner_id=? LIMIT 1",
+                (self.alice_id,),
+            ).fetchone()["id"]
+            con.execute(
+                "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,?) "
+                "ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
+                (workspace_id, self.bob_id, "member"),
+            )
+            object_id = community._new_conversation(
+                con, "object", "Рабочий чат", self.alice_id,
+                workspace_id=workspace_id, direct_key="object:test:" + app.uid(),
+            )
+            private_id = community._new_conversation(
+                con, "direct", "Личное сообщение", self.alice_id,
+                direct_key="direct:test:" + app.uid(),
+            )
+            for chat_id in (object_id, private_id):
+                community._add_member(con, chat_id, self.alice_id)
+                community._add_member(con, chat_id, self.bob_id)
+                community._add_message(con, chat_id, self.alice_id, "user", "Тест")
+
+        url = f"/api/profile/chats/{object_id}/messages"
+        status, _ = self.request(url, token=self.bob_token)
+        self.assertEqual(status, 200, "Current workspace member must be able to read")
+        with app.db() as con:
+            con.execute(
+                "DELETE FROM workspace_members WHERE workspace_id=? AND user_id=?",
+                (workspace_id, self.bob_id),
+            )
+        status, _ = self.request(url, token=self.bob_token)
+        self.assertEqual(status, 403, "Removed member must not read old object chat")
+        status, _ = self.request(url, "POST", {"message": "Запись после отзыва"}, self.bob_token)
+        self.assertEqual(status, 403, "Removed member must not write to old object chat")
+
+        status, result = self.request("/api/profile/chats", token=self.bob_token)
+        self.assertEqual(status, 200)
+        visible = {item["id"] for item in result["chats"]}
+        self.assertNotIn(object_id, visible, "Revoked object chat should not leak in lists")
+        self.assertIn(private_id, visible, "Personal chats are not workspace-owned")
+        status, _ = self.request(
+            f"/api/profile/chats/{private_id}/messages", token=self.bob_token
+        )
+        self.assertEqual(status, 200)
+        status, _ = self.request(url, token=self.alice_token)
+        self.assertEqual(status, 200, "Owner must retain object access")
+
     def test_support_escalation_is_visible_to_admin_and_user_cannot_read_admin_queue(self):
         mocked = {"reply": "Подключаю сотрудника поддержки.", "escalate": True,
                   "reason": "user_requested_human"}
