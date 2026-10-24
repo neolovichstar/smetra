@@ -82,20 +82,20 @@ const assert = require('node:assert/strict');
   await evaluate('history.forward()');await until("location.hash==='#support'&&document.querySelector('#support-form')");
   await evaluate("location.hash='content'");await wait(100);assert.equal(await evaluate("!!document.querySelector('#support-form')"),true,'Skip link keeps current section');
   await click('[data-tab=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
-  await click('[data-mode=assistant]');await until("document.querySelector('.assistant-page')");
+  await click('[data-tab=assistant]');await until("document.querySelector('.assistant-page')");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-thread-select')).display"),'none','Hidden compatibility select does not duplicate the history control');
    assert.equal(await evaluate("!document.querySelector('.assistant-brand-dot')"),true,'Legacy assistant heading marker is absent from the uncluttered workspace');
   assert.equal(await evaluate("(()=>{const rail=document.querySelector('.assistant-toolrail'),main=document.querySelector('.assistant-main-column'),newBtn=document.querySelector('#assistant-new-thread'),knowledge=document.querySelector('#assistant-knowledge'),panel=document.querySelector('#assistant-history-panel'),list=document.querySelector('#assistant-history-list'),r=rail.getBoundingClientRect(),m=main.getBoundingClientRect(),p=panel.getBoundingClientRect(),l=list.getBoundingClientRect();return r.right<=m.left+1&&[newBtn,knowledge].every(el=>{const b=el.getBoundingClientRect();return b.left>=r.left-1&&b.right<=r.right+1})&&p.height>100&&l.height>80&&list.querySelectorAll('.assistant-conversation-row').length>=1&&panel.offsetHeight>0})()"),true,'Persistent chat history is scrollable inside the left assistant rail');
   await evaluate("(()=>{const input=document.querySelector('#assistant-form textarea');input.disabled=false;input.removeAttribute('disabled');input.focus()})()");
   await until("document.activeElement===document.querySelector('#assistant-form textarea')");
   assert.equal(await evaluate("{const s=getComputedStyle(document.querySelector('#assistant-form textarea')),f=getComputedStyle(document.querySelector('#assistant-form'));s.borderTopWidth==='0px'&&s.outlineWidth==='0px'&&s.boxShadow==='none'&&f.borderTopWidth==='1px'&&parseFloat(f.borderTopLeftRadius)>=16&&f.outlineStyle==='solid'&&f.boxShadow!=='none'}"),true,'Assistant composer has exactly one rounded outer focus surface and a keyboard-visible focus indicator');
-  assert.equal(await evaluate("document.querySelector('[data-mode=assistant]').getAttribute('aria-pressed')"),'true');
+  assert.equal(await evaluate("document.querySelector('[data-tab=assistant]').classList.contains('active')"),true);
   await wait(300);await shot('assistant-refined-desktop');
   assert.notEqual(await evaluate("getComputedStyle(document.querySelector('[data-prompt]'),'::before').maskImage"),'none');
   assert.equal(await evaluate("new DOMParser().parseFromString(assistantMarkdown('| Item | Price |\\n| --- | ---: |\\n| **Work** | 100 |'),'text/html').querySelectorAll('tbody td').length"),2);
   assert.equal(await evaluate("new DOMParser().parseFromString(assistantMarkdown('| Item | Price |\\n| --- | --- |\\n| <img src=x onerror=alert(1)> | 100 |'),'text/html').querySelector('img')===null"),true);
-  await click('[data-mode=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
-  assert.equal(await evaluate("document.querySelector('[data-mode=dashboard]').getAttribute('aria-pressed')"),'true');
+  await click('[data-tab=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
+  assert.equal(await evaluate("document.querySelector('[data-tab=dashboard]').classList.contains('active')"),true);
   for(const width of [320,390]){
     await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await wait(200);
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
@@ -113,7 +113,7 @@ const assert = require('node:assert/strict');
     assert.equal(await evaluate("document.querySelector('#sidebar').inert"),true);
     assert.equal(await evaluate("getComputedStyle(document.querySelector('#nav-backdrop')).display"),'block','Backdrop stays mounted during fading');
     await until("getComputedStyle(document.querySelector('#nav-backdrop')).visibility==='hidden'&&document.querySelector('#sidebar').getBoundingClientRect().right<=0");await shot('mobile-brand-dashboard-'+width);
-    await click('[data-mode=assistant]');await until("document.querySelector('.assistant-refined')");
+    await click('[data-tab=assistant]');await until("document.querySelector('.assistant-refined')");
     assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-thread-select')).display"),'none');
     assert.equal(await evaluate("(()=>{const h=document.querySelector('#assistant-history-toggle'),r=h.getBoundingClientRect();return r.width>=40&&r.width<=55&&getComputedStyle(h).display!=='none'&&!!h.querySelector('.assistant-icon-chat')})()"),true,'Mobile history has a compact chat icon');
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
@@ -125,7 +125,7 @@ const assert = require('node:assert/strict');
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
     await evaluate("document.querySelector('#assistant-history-toggle').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
     assert.equal(await evaluate("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')"),false);
-    await click('[data-mode=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
+    await click('[data-tab=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
   }
   // Tablet navigation must switch controls at the same 800px breakpoint as the drawer.
   for (const width of [720, 800]) {
