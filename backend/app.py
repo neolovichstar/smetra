@@ -43,7 +43,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 51
+REQUIRED_CLOUD_SCHEMA_VERSION = 53
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -132,6 +132,7 @@ def migrate():
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         con.execute("DELETE FROM email_tokens WHERE expires_at<?", (now() - 86400,))
         business.migrate(con)
+        con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
 
 
 def now():
@@ -149,6 +150,10 @@ def mail(to, subject, message):
     email = EmailMessage()
     email["From"], email["To"], email["Subject"] = os.environ["SMTP_FROM"], to, subject
     email.set_content(message)
+    email["Reply-To"] = "support@smetra.online"
+    from backend.mail_templates import action_html
+    if message.startswith(("https://", "http://localhost:")):
+        email.add_alternative(action_html(subject, message), subtype="html")
     port = int(os.getenv("SMTP_PORT", "587"))
     context = ssl.create_default_context()
     options = {"timeout": 12}
@@ -537,6 +542,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             public["/" + font] = (font, "font/ttf")
         for name, mime in (
             ("black.css", "text/css"),
+            ("auth-email.css", "text/css"),
+            ("auth-email.js", "text/javascript"),
             ("auth-layout-v2.css", "text/css"),
             ("landing-refinement.css", "text/css"),
             ("cabinet-refinement.css", "text/css"),
@@ -789,7 +796,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(payload.data)
                 return
             return self.send_json(status, payload)
+        if path in ("/api/auth/email/start", "/api/auth/email/confirm") and method == "POST":
+            from backend import email_otp
+            from types import SimpleNamespace
+            app_context = SimpleNamespace(
+                ApiError=ApiError, uid=uid, now=now, hash_password=hash_password,
+                REGISTRATION_CONSENT_VERSION=REGISTRATION_CONSENT_VERSION,
+                event=event, revenue=revenue,
+            )
+            handler = email_otp.start if path.endswith("/start") else email_otp.confirm
+            return handler(self, con, app_context)
         if path == "/api/auth/register" and method == "POST":
+            # When passwordless registration is live, no client may bypass
+            # mailbox verification through the legacy password endpoint.
+            from backend.email_otp import configured as otp_configured
+            if otp_configured() and not ORIGIN.startswith("http://localhost:"):
+                raise ApiError(409, "Для регистрации по почте используйте код из письма")
             self.throttle("register:" + self.client_address[0], 5, 3600)
             data = self.body()
             if (

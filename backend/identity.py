@@ -119,10 +119,9 @@ def route(h, con, method, path, query, origin):
         return h.send_json(
             200, {
                 "providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", ""),
-                "email_delivery_available": all(os.getenv(key) for key in ("SMTP_HOST", "SMTP_FROM", "SMTP_USER", "SMTP_PASSWORD")),
-                "email_signup_available": os.getenv("PUBLIC_ORIGIN", "http://localhost:8080").startswith("http://localhost:")
-                    or os.getenv("ALLOW_UNVERIFIED_SIGNUP") == "1"
-                    or all(os.getenv(key) for key in ("SMTP_HOST", "SMTP_FROM", "SMTP_USER", "SMTP_PASSWORD")),
+                "email_delivery_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
+                "email_code_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
+                "email_signup_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
             }
         )
     if path == "/api/auth/native/exchange" and method == "POST":

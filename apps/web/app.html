@@ -32,6 +32,7 @@
   <link rel="stylesheet" href="/cabinet-refinement.css?v=20261024-v1">
   <link rel="stylesheet" href="/workspace-layout-v3.css?v=20261024-v3">
   <link rel="stylesheet" href="/cabinet-alignment-v4.css?v=20261024-flat-v4">
+  <link rel="stylesheet" href="/auth-email.css?v=20261024-v1">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#content">К содержимому</a>
@@ -85,6 +86,30 @@
           <button id="auth-login-tab" type="button" role="tab" aria-selected="true">Войти</button>
           <button id="auth-register-tab" type="button" role="tab" aria-selected="false">Регистрация</button>
         </div>
+        <section id="email-code-flow" class="email-code-flow hidden" aria-label="Вход по коду из письма">
+          <form id="email-code-start" class="email-code-start">
+            <div class="field hidden" id="email-code-name-field"><label for="email-code-name">Как к вам обращаться</label><input id="email-code-name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
+            <div class="field"><label for="email-code-address">Электронная почта</label><input id="email-code-address" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="name@example.ru" required></div>
+            <button type="submit" id="email-code-start-button" class="btn primary full-width">Получить код <span aria-hidden="true">↗</span></button>
+            <p class="email-code-help">Отправим одноразовый код на вашу почту. Никаких паролей.</p>
+          </form>
+          <form id="email-code-confirm" class="email-code-confirm hidden" aria-label="Подтверждение адреса">
+            <div class="email-code-step-head"><button id="email-code-back" class="email-code-back" type="button" aria-label="Изменить почту">←</button><div><strong>Проверьте почту</strong><p id="email-code-destination" class="email-code-destination"></p></div></div>
+            <label id="email-code-label">Код подтверждения</label>
+            <div class="email-code-cells" role="group" aria-labelledby="email-code-label">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Цифра 1">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 2">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 3">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 4">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 5">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 6">
+            </div>
+            <button type="submit" id="email-code-confirm-button" class="btn primary full-width">Подтвердить и продолжить <span aria-hidden="true">↗</span></button>
+            <div class="email-code-meta"><span id="email-code-countdown" aria-live="polite">Код действует 10 минут</span><button type="button" id="email-code-resend" disabled>Отправить ещё раз</button></div>
+            <p class="email-code-help">Можно вставить все шесть цифр сразу.</p>
+          </form>
+          <p id="email-code-error" class="auth-form-error" role="alert"></p>
+        </section>
         <details class="email-disclosure" id="email-disclosure" open>
           <summary>Продолжить по почте</summary>
           <form id="auth-form">
@@ -140,7 +165,8 @@
   <script src="/select-menu.js" defer></script>
   <script src="/app.js?v=20261024-mail-channels-v2" defer></script>
   <script src="/workspace.js?v=20261024-p0-integrity-v1" defer></script>
-  <script src="/black.js?v=20261024-auth-v2" defer></script>
+  <script src="/black.js?v=20261024-email-otp-v1" defer></script>
+  <script src="/auth-email.js?v=20261024-v1" defer></script>
   <script src="/file-preview.js" defer></script>
   <script src="/file-editor.js" defer></script>
   <script src="/product-ui.js?v=20261022-outline-icons-v7" defer></script>

@@ -22,6 +22,7 @@
  try{
   const data=await api('/auth/providers');
   window.SmetraEmailDeliveryAvailable=data.email_delivery_available===true;
+  window.SmetraEmailCodeAvailable=data.email_code_available===true;
   window.SmetraEmailSignupAvailable=data.email_signup_available!==false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
   const enabled=data.providers.filter(provider=>provider.enabled&&provider.id==='yandex');
@@ -38,6 +39,7 @@
    note.textContent='Один профиль для сайта и приложения.';
   } }catch{
   window.SmetraEmailDeliveryAvailable=false;
+  window.SmetraEmailCodeAvailable=false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
   // Keep pre-rendered OAuth links available during capability API outages.
   host.closest('.auth-provider-block')?.classList.remove('hidden');
