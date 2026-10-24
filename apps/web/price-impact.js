@@ -3,6 +3,7 @@
  'use strict';
  const escape=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
  const amount=(value,currency)=>value==null?'Не рассчитано':new Intl.NumberFormat('ru-RU',{style:'currency',currency:currency||'RUB',maximumFractionDigits:2}).format(Number(value)/100);
+ const checked=timestamp=>timestamp?new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'}).format(new Date(Number(timestamp)*1000)):'—';
  const reasons={stale:'Нужно обновить цену',currency_mismatch:'Другая валюта',unit_mismatch:'Единицы не совпадают',ambiguous:'Несколько поставщиков',out_of_stock:'Нет в наличии',skipped:'Не учитывается в смете',invalid_price:'Нет достоверной цены',unavailable:'Нет подходящей цены'};
  function renderReport(result,target){
    const rows=Array.isArray(result.lines)?result.lines:[];
@@ -21,7 +22,7 @@
       (row.status==='comparable'
        ?'<div class="spi-line-values"><strong>'+(Number(row.delta_kopecks)>0?'+':'')+escape(amount(row.delta_kopecks,currency))+'</strong><small>'+
          escape(amount(row.quote_unit_price_kopecks,currency))+' → '+escape(amount(row.supplier_unit_price_kopecks,currency))+
-         (row.delta_percent!=null?' · '+escape(row.delta_percent)+'%':'')+'</small></div>'
+         (row.delta_percent!=null?' · '+escape(row.delta_percent)+'%':'')+' · Проверено: '+escape(checked(row.checked_at))+'</small></div>'
        :'<span class="spi-reason">'+escape(reasons[row.status]||row.reason||'Невозможно сравнить')+'</span>')+
        '</div>').join('')+'</div>':'<p class="spi-empty">Связанных источников цен пока нет. Привяжите товары к позициям сметы в разделе выше.</p>')+
     '<p class="spi-disclaimer">Это ориентировочный прогноз только по сопоставимым позициям, а не общий индекс инфляции. Смета, цена договора и согласование заказчика не изменяются автоматически.</p>';
