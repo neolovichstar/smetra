@@ -194,42 +194,6 @@ function enhanceSidebarNavigation(){
   button.dataset.navLabel=label;button.title=label;
  };
  sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(normalizeButton);
- // Disclosure groups have one stable DOM tree: animate the content track, never display:none.
- sidebar.querySelectorAll('.sidebar-group').forEach((group,index)=>{
-  if(group.dataset.disclosureReady)return;
-  const heading=group.querySelector(':scope > .sidebar-heading');
-  if(!heading||index===0)return;
-  const title=heading.textContent.trim(),key='smetra.sidebar.section.'+title;
-  const rows=[...group.querySelectorAll(':scope > button[data-tab]')];
-  if(!rows.length)return;
-  const panel=document.createElement('div');panel.className='sidebar-section-panel';
-  panel.id='sidebar-section-'+index;
-  const inner=document.createElement('div');inner.className='sidebar-section-inner';
-  rows.forEach(button=>inner.append(button));panel.append(inner);
-  const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-section-toggle';
-  toggle.setAttribute('aria-controls',panel.id);
-  toggle.innerHTML='<span class="sidebar-section-name"></span><svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
-  toggle.querySelector('.sidebar-section-name').textContent=title;
-  let stored=null;try{stored=localStorage.getItem(key)}catch{}
-  let expanded=stored===null?rows.some(button=>button.classList.contains('active')):stored==='true';
-  const update=open=>{
-   group.classList.toggle('is-section-open',open);
-   toggle.setAttribute('aria-expanded',String(open));
-   panel.setAttribute('aria-hidden',String(!open));
-   if('inert' in panel)panel.inert=!open&&!document.body.classList.contains('sidebar-compact');
-  };
-  toggle.addEventListener('click',()=>{
-   expanded=!expanded;update(expanded);
-   try{localStorage.setItem(key,String(expanded))}catch{}
-  });
-  heading.replaceWith(toggle);group.append(panel);
-  update(expanded);group.dataset.disclosureReady='true';
-  // Keep selection reachable when a tab is opened from another route.
-  group.addEventListener('click',event=>{
-   if(!event.target.closest('[data-tab]')||expanded)return;
-   expanded=true;update(true);
-  });
- });
 
  // Defense in depth: a later legacy script must not be able to append a second navigation icon.
  const removeDuplicates=()=>{
