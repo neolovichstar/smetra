@@ -32,8 +32,8 @@ window.SmetraCopyText=async value=>{
     return linkOpen(tokens,index,options,env,self);
   };
   md.renderer.rules.image=(tokens,index)=>`<span class="assistant-image-alt">${escape(tokens[index].content||'Изображение')}</span>`;
-  md.renderer.rules.heading_open=(tokens,index)=>`<h${Math.min(6,Number(tokens[index].tag.slice(1))+1)}>`;
-  md.renderer.rules.heading_close=(tokens,index)=>`</h${Math.min(6,Number(tokens[index].tag.slice(1))+1)}>\n`;
+  md.renderer.rules.heading_open=(tokens,index)=>`<h${Math.min(6,Number(tokens[index].tag.slice(1)))}>`;
+  md.renderer.rules.heading_close=(tokens,index)=>`</h${Math.min(6,Number(tokens[index].tag.slice(1)))}>\n`;
   md.renderer.rules.table_open=()=>'<div class="assistant-table-scroll" role="region" aria-label="Таблица в ответе" tabindex="0"><table>\n';
   md.renderer.rules.table_close=()=>'</table></div>\n';
   for(const type of ['th_open','td_open'])md.renderer.rules[type]=(tokens,index,options,env,self)=>{
@@ -67,7 +67,7 @@ window.SmetraCopyText=async value=>{
     if(!button||button.disabled)return;
     const code=button.closest('.assistant-code')?.querySelector('code');if(!code)return;
     const label=button.textContent;button.disabled=true;
-    try{await navigator.clipboard.writeText(code.textContent);button.textContent='Скопировано';setTimeout(()=>{button.textContent=label},1600)}
+    try{await window.SmetraCopyText(code.textContent);button.textContent='Скопировано';setTimeout(()=>{if(button.isConnected)button.textContent=label},1600)}
     catch{window.notify?.('Не удалось скопировать. Выделите код и скопируйте вручную.')}
     finally{button.disabled=false;button.focus({preventScroll:true})}
   });
