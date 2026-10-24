@@ -339,7 +339,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   try{input.value=sessionStorage.getItem(draftSlot())||''}catch{}
   try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
   saveDraft();
-  document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
+  document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();renderPhoto();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
   const attachmentInfo=attachmentBar.querySelector('span');
@@ -420,6 +420,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     finally{attachButton.disabled=false;fileInput.value=''}
   };
   fileInput.onchange=async()=>{const files=[...fileInput.files];for(const file of files){await uploadAttachment(file)}fileInput.value=''};
+  // The tray shows the already-linked file on initial load as well as new photos.
+  renderPhoto();
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
   composer.addEventListener('drop',async event=>{if(event.dataTransfer.files.length){event.preventDefault();for(const file of [...event.dataTransfer.files])await uploadAttachment(file)}});
   let quota=data.quota,working=false,threadBusy=false,requestController=null;
@@ -441,7 +443,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
     // The empty composer button is a microphone, not an AI request: dictation remains available at zero quota.
     const canRecordVoice=send.type==='button'&&!input.value.trim();
-    send.disabled=working||fileBlocking||!data.available||(!canRecordVoice&&(quotaBlocked||(!input.value.trim()&&!pendingPhoto)||(backgroundMode&&!backgroundEnabled)));
+    send.disabled=working||fileBlocking||!data.available||(!canRecordVoice&&(quotaBlocked||(!input.value.trim()&&!pendingPhotos.length)||(backgroundMode&&!backgroundEnabled)));
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
