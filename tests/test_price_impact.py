@@ -1,0 +1,105 @@
+"""Read-only supplier price impact calculations must not alter estimates."""
+import copy
+import unittest
+
+from backend.price_impact import calculate_price_impact
+
+NOW = 1_800_000_000
+
+
+def line(**updates):
+    item = {
+        "line_id": "line-1", "name": "Кабель", "quantity": "5", "unit": "м",
+        "unit_price": 10000, "subtotal": 66000, "coefficient": "1",
+        "markup": "10", "discount": "0", "tax": "20", "included": True,
+    }
+    item.update(updates)
+    return item
+
+
+def source(**updates):
+    entry = {
+        "id": "source-1", "quote_item_id": "line-1", "monitored": 1,
+        "source_status": "active", "price_kopecks": 12000, "currency": "RUB",
+        "unit": "м", "availability": "in_stock", "last_checked_at": NOW - 100,
+        "url": "https://example.test/supplier",
+    }
+    entry.update(updates)
+    return entry
+
+
+def quote(**updates):
+    item = {
+        "id": "quote-1", "revision": 7, "currency": "RUB",
+        "amount_kopecks": 120000, "items": [line()],
+    }
+    item.update(updates)
+    return item
+
+
+class PriceImpactTests(unittest.TestCase):
+    def test_modifier_aware_exact_kopeck_arithmetic(self):
+        actual = calculate_price_impact(quote(), [source()], NOW)
+        self.assertEqual(actual["comparable_lines"], 1)
+        self.assertEqual(actual["lines"][0]["quote_subtotal_kopecks"], 66000)
+        self.assertEqual(actual["lines"][0]["indicative_subtotal_kopecks"], 79200)
+        self.assertEqual(actual["comparable_delta_kopecks"], 13200)
+        self.assertEqual(actual["indicative_total_kopecks"], 133200)
+        self.assertEqual(actual["lines"][0]["delta_percent"], "20.00")
+        self.assertFalse(actual["financial_price_changed"])
+        self.assertTrue(actual["observation_only"])
+
+    def test_price_declines_are_not_hidden(self):
+        actual = calculate_price_impact(quote(), [source(price_kopecks=9000)], NOW)
+        self.assertEqual(actual["comparable_delta_kopecks"], -6600)
+        self.assertEqual(actual["lines"][0]["delta_percent"], "-10.00")
+
+    def test_zero_original_price_not_divided_by_zero(self):
+        original = quote(items=[line(unit_price=0, subtotal=0)])
+        actual = calculate_price_impact(original, [source(price_kopecks=100)], NOW)
+        self.assertEqual(actual["lines"][0]["delta_percent"], None)
+        self.assertEqual(actual["lines"][0]["indicative_subtotal_kopecks"], 660)
+
+    def test_skips_incompatible_or_stale_prices_without_changing_total(self):
+        candidates = (
+            (source(currency="USD"), "currency_mismatch"),
+            (source(unit="шт."), "unit_mismatch"),
+            (source(unit=""), "unit_mismatch"),
+            (source(last_checked_at=NOW - 40 * 86400), "stale"),
+            (source(last_checked_at=NOW + 10_000), "stale"),
+            (source(price_kopecks=None), "invalid_price"),
+            (source(availability="out_of_stock"), "out_of_stock"),
+        )
+        for supplier, status in candidates:
+            with self.subTest(status=status):
+                actual = calculate_price_impact(quote(), [supplier], NOW)
+                self.assertEqual(actual["lines"][0]["status"], status)
+                self.assertEqual(actual["comparable_lines"], 0)
+                self.assertEqual(actual["comparable_delta_kopecks"], 0)
+                self.assertEqual(actual["indicative_total_kopecks"], 120000)
+
+    def test_skips_excluded_lines(self):
+        actual = calculate_price_impact(quote(items=[line(included=False)]), [source()], NOW)
+        self.assertEqual(actual["lines"][0]["status"], "skipped")
+        self.assertEqual(actual["comparable_lines"], 0)
+
+    def test_multi_provider_is_ambiguous_not_average(self):
+        actual = calculate_price_impact(quote(), [source(), source(id="source-2", price_kopecks=8000)], NOW)
+        self.assertEqual(actual["lines"][0]["status"], "ambiguous")
+        self.assertEqual(actual["comparable_lines"], 0)
+
+    def test_does_not_mutate_quote_or_sources(self):
+        q, links = quote(), [source()]
+        before_q, before_links = copy.deepcopy(q), copy.deepcopy(links)
+        calculate_price_impact(q, links, NOW)
+        self.assertEqual(q, before_q)
+        self.assertEqual(links, before_links)
+
+    def test_only_matching_quote_lines_count(self):
+        actual = calculate_price_impact(quote(), [source(quote_item_id="unrelated")], NOW)
+        self.assertEqual(actual["linked_lines"], 0)
+        self.assertEqual(actual["comparable_lines"], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
