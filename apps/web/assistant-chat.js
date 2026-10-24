@@ -87,7 +87,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
                 </form>
               </div>
             </div>`).join('')}
-            ${threadIndex.items.length===0?'<div class="assistant-history-empty">Созданные диалоги будут здесь</div>':''}
+            
           </div>
         </section>
         <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
