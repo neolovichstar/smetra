@@ -272,10 +272,10 @@ class IdentityAssistantTests(unittest.TestCase):
             self.assertNotIn("never-expose", json.dumps(data))
 
     def test_email_delivery_capability_requires_complete_configuration(self):
-        values = dict(SMTP_HOST="", SMTP_FROM="", SMTP_USER="", SMTP_PASSWORD="")
+        values = dict(SMTP_HOST="", SMTP_FROM="", SMTP_USER="", SMTP_PASSWORD="", EMAIL_CODE_HMAC_SECRET="")
         with patch.dict(os.environ, values):
             self.assertFalse(self.call("/auth/providers")[1]["email_delivery_available"])
-        values.update(SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private")
+        values.update(SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private", EMAIL_CODE_HMAC_SECRET="fixture-secret-abcdefghijklmnopqrstuvwxyz-123456")
         with patch.dict(os.environ, values):
             data = self.call("/auth/providers")[1]
             self.assertTrue(data["email_delivery_available"])
@@ -285,13 +285,13 @@ class IdentityAssistantTests(unittest.TestCase):
             self.assertFalse(self.call("/auth/providers")[1]["email_delivery_available"])
 
     def test_email_signup_capability_matches_production_delivery(self):
-        values = dict(PUBLIC_ORIGIN="https://example.test", ALLOW_UNVERIFIED_SIGNUP="", SMTP_HOST="", SMTP_FROM="", SMTP_USER="", SMTP_PASSWORD="")
+        values = dict(PUBLIC_ORIGIN="https://example.test", ALLOW_UNVERIFIED_SIGNUP="", SMTP_HOST="", SMTP_FROM="", SMTP_USER="", SMTP_PASSWORD="", EMAIL_CODE_HMAC_SECRET="")
         with patch.dict(os.environ, values):
             self.assertFalse(self.call("/auth/providers")[1]["email_signup_available"])
         values["PUBLIC_ORIGIN"] = "http://localhost:8080"
         with patch.dict(os.environ, values):
             self.assertTrue(self.call("/auth/providers")[1]["email_signup_available"])
-        values.update(PUBLIC_ORIGIN="https://example.test", SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private")
+        values.update(PUBLIC_ORIGIN="https://example.test", SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private", EMAIL_CODE_HMAC_SECRET="fixture-secret-abcdefghijklmnopqrstuvwxyz-123456")
         with patch.dict(os.environ, values):
             self.assertTrue(self.call("/auth/providers")[1]["email_signup_available"])
 

@@ -1,6 +1,7 @@
 """Workspace-scoped assistant with persisted, reviewable and idempotent actions."""
 
 import json
+from contextvars import ContextVar
 import base64
 import hashlib
 import os
@@ -511,7 +512,23 @@ def assistant_model(service, has_image=False):
     return name, False
 
 
-def query_model(messages, model, paid_model=False):
+_MODEL_CONTEXT = ContextVar("smetra_model_context", default=None)
+
+
+def provider_selection(model, paid_model=False, on_source=None):
+    """Request-scoped selection lets legacy one/two-argument providers keep working."""
+    context = _MODEL_CONTEXT.get()
+    if model is None and context:
+        return context
+    if model is None:
+        model = os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free")
+    if not paid_model and model != "openrouter/free" and not model.endswith(":free"):
+        raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
+    return model, paid_model, on_source
+
+
+def query_model(messages, model=None, paid_model=False):
+    model, paid_model, _ = provider_selection(model, paid_model)
     payload = {
         "model": model,
         "messages": messages,
@@ -558,8 +575,9 @@ def query_model(messages, model, paid_model=False):
         ) from None
 
 
-def query_model_stream(messages, on_delta, model, paid_model=False, on_source=None):
+def query_model_stream(messages, on_delta, model=None, paid_model=False, on_source=None):
     """Relay provider SSE deltas while assembling fragmented tool calls."""
+    model, paid_model, on_source = provider_selection(model, paid_model, on_source)
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         packed({
@@ -1038,7 +1056,11 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     for turn in range(2):
         if on_status:
             on_status("Думаю…")
-        response = query_model_stream(messages, on_delta, model, paid_model, on_source) if on_delta else query_model(messages, model, paid_model)
+        selection = _MODEL_CONTEXT.set((model, paid_model, on_source))
+        try:
+            response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+        finally:
+            _MODEL_CONTEXT.reset(selection)
         usage=response.pop('_usage',None)
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -1128,7 +1150,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 "UPDATE assistant_conversations SET updated_at=? WHERE id=? AND workspace_id=? AND user_id=?",
                 (stamp(), conversation_id, service.wid, service.user["id"]),
             )
-    return {"answer": answer, "actions": actions, "quota": public_quota(service)}
+    return {"answer": answer, "actions": actions, "designs": designs, "quota": public_quota(service)}
 
 
 class ChatStream:

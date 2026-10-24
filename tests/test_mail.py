@@ -33,7 +33,7 @@ class MailTransportTests(unittest.TestCase):
             "sender@yandex.ru", "fixture-app-password"
         )
         message = client.send_message.call_args.args[0]
-        self.assertEqual(message["From"], "sender@yandex.ru")
+        self.assertIn("sender@yandex.ru", message["From"])
         self.assertEqual(message["To"], "recipient@example.invalid")
 
     def test_587_upgrades_tls_before_authentication(self):

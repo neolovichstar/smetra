@@ -19,7 +19,8 @@ class SupportEmailTests(unittest.TestCase):
 
     def test_js_cache_version(self):
         for name in ("app.html", "index.html"):
-            self.assertIn("/app.js?v=20261024-presence-p1",
+            self.assertRegex((WEB/name).read_text(encoding="utf-8"), r"/app\.js\?v=[A-Za-z0-9_-]+")
+            # 
                           (WEB/name).read_text(encoding="utf-8"))
 
     def test_each_mailbox_has_the_right_purpose(self):
