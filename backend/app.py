@@ -39,6 +39,15 @@ WEB = ROOT / "apps" / "web"
 PORT = int(os.getenv("PORT", "8080"))
 ORIGIN = os.getenv("PUBLIC_ORIGIN", "https://" + os.environ['VERCEL_URL'] if os.getenv('VERCEL_URL') else f"http://localhost:{PORT}").rstrip("/")
 COOKIE_SECURE = ORIGIN.startswith("https://")
+# Browser deployments may be reached through the canonical domain and the
+# historical Vercel alias. Origin checks must compare exact, trusted origins,
+# never a suffix match or an untrusted Host/X-Forwarded-Host header.
+BROWSER_ORIGINS = frozenset({
+    ORIGIN,
+    "https://smetra.online",
+    "https://www.smetra.online",
+    "https://smetra.vercel.app",
+})
 _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
@@ -405,10 +414,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def require_origin(self):
         origin = self.headers.get("Origin")
-        if origin and origin != ORIGIN:
-            raise ApiError(403, "Неверный источник запроса")
         fetch_site = self.headers.get("Sec-Fetch-Site")
-        if fetch_site in ("cross-site", "same-site"):
+        if origin and origin not in BROWSER_ORIGINS:
+            raise ApiError(403, "Неверный источник запроса")
+        # A browser may mark a request from www.smetra.online as same-site
+        # rather than same-origin. Accept only an explicitly trusted origin.
+        if fetch_site == "cross-site" or (
+            fetch_site == "same-site" and origin not in BROWSER_ORIGINS
+        ):
             raise ApiError(403, "Запрос отклонён")
         has_session_cookie = any(
             part.strip().startswith("session=")
@@ -1412,7 +1425,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         payload = {"user": user_view(row, con)}
         # Browsers use the HttpOnly cookie; only native/API clients need a
         # bearer token in JSON. Browser JavaScript cannot override Origin.
-        if self.headers.get("Origin") != ORIGIN and self.headers.get("Sec-Fetch-Site") != "same-origin":
+        if (
+            self.headers.get("Origin") not in BROWSER_ORIGINS
+            and self.headers.get("Sec-Fetch-Site") != "same-origin"
+        ):
             payload["token"] = token
         return self.send_json(200, payload, self.cookie(token, 30 * 86400))
 

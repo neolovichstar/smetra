@@ -108,6 +108,74 @@ class SecurityHardeningTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
 
+    def test_canonical_site_and_legacy_alias_are_trusted_without_leaking_session(self):
+        # PUBLIC_ORIGIN may reference a legacy Vercel hostname, but the
+        # production website uses the canonical domain.
+        registration={
+            "email":"canonical-origin@test.invalid","name":"Canonical",
+            "password":"secure twelve password","legal_acceptance":True,
+            "legal_version":"2026-10-19-registration-v1",
+        }
+        for index, browser_origin in enumerate(
+            ("https://smetra.online","https://www.smetra.online",
+             "https://smetra.vercel.app")
+        ):
+            payload=dict(registration,email=f"canonical-origin-{index}@test.invalid")
+            status, headers, response=self.request(
+                "POST", "/api/auth/register",json.dumps(payload).encode(),
+                {"Content-Type":"application/json", "Origin":browser_origin,
+                 "Sec-Fetch-Site":"same-site" if index else "same-origin"},
+            )
+            self.assertEqual(status, 200, response)
+            self.assertNotIn("token", response, "Browser session token must stay HttpOnly")
+            session=headers["Set-Cookie"].split(";",1)[0]
+            status, _, response=self.request("POST","/api/auth/logout",headers={
+                "Origin":browser_origin,"Sec-Fetch-Site":"same-site",
+                "Cookie":session,
+            })
+            self.assertEqual(status,200,response)
+
+    def test_email_code_can_be_requested_from_production_origin(self):
+        payload=json.dumps({
+            "email":"canonical-email-otp@test.invalid","intent":"register",
+            "name":"Проверка","legal_acceptance":True,
+            "legal_version":"2026-10-19-registration-v1",
+        }).encode()
+        with patch.dict(os.environ, {
+            "SMTP_HOST":"smtp.mail.ru","SMTP_PORT":"465",
+            "SMTP_FROM":"noreply@smetra.online",
+            "SMTP_USER":"noreply@smetra.online",
+            "SMTP_PASSWORD":"fixture-only-no-network",
+            "EMAIL_CODE_HMAC_SECRET":"fixture-test-hmac-secret-abcdefghijklmnopqrstuvwxyz",
+        }), patch("backend.email_otp.deliver") as delivery:
+            status,_,result=self.request(
+                "POST","/api/auth/email/start",payload,{
+                    "Content-Type":"application/json",
+                    "Origin":"https://smetra.online",
+                    "Sec-Fetch-Site":"same-origin",
+                },
+            )
+        self.assertEqual(status,200,result)
+        self.assertIn("challenge_id",result)
+        delivery.assert_called_once()
+
+    def test_cross_site_and_spoofed_origins_are_rejected(self):
+        body=b'{"email":"attacker@test.invalid","password":"secure password"}'
+        for origin,fetch_site in (
+            ("https://attacker.example","cross-site"),
+            ("https://smetra.online.attacker.example","same-site"),
+            ("http://smetra.online","same-site"),
+            ("https://smetra.online/","same-site"),
+            (None,"same-site"),
+            ("https://smetra.online","cross-site"),
+        ):
+            headers={"Content-Type":"application/json",
+                     "Sec-Fetch-Site":fetch_site}
+            if origin:headers["Origin"]=origin
+            with self.subTest(origin=origin,fetch_site=fetch_site):
+                status,_,_ = self.request("POST","/api/auth/login",body,headers)
+                self.assertEqual(status,403)
+
     def test_vercel_client_ip_uses_platform_forwarded_header(self):
         request = handler.__new__(handler)
         request.client_address = ("127.0.0.1", 0)
