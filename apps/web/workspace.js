@@ -407,7 +407,7 @@ window.Workspace = (() => {
       (index,field)=>{const row=rowContainer.querySelector('[data-row="'+index+'"]');if(!row)return;
         const control=row.querySelector('[data-key="'+field+'"]');if(!control)return;
         row.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});
-        control.focus({preventScroll:true});if(typeof control.select==='function')control.select();});
+        control.focus({preventScroll:true});if(control.tagName==='TEXTAREA'||['text','search'].includes(control.type))control.select();});
     rowContainer.oninput=ev=>{const key=ev.target.dataset.key;if(!key)return;const index=Number(ev.target.closest('[data-row]').dataset.row),row=rows[index];if(ev.target.type==='number'){row._raw??={};row._raw[key]=ev.target.value}try{row[key]=ev.target.type==='checkbox'?ev.target.checked:['unit_price','cost_price'].includes(key)?amount(ev.target.value):ev.target.value;ev.target.setCustomValidity('')}catch(error){ev.target.setCustomValidity(error.message);return}if(lastBulk?.field===key&&lastBulk.changes.some(change=>change.index===index))lastBulk=null;total();clearBulk()};
     rowContainer.onchange=ev=>{if(ev.target.dataset.bulkSelect===undefined)return;const index=Number(ev.target.dataset.bulkSelect);if(ev.target.checked){if(selectedRows.size>=50){ev.target.checked=false;notify('За один раз можно изменить до 50 строк');return}selectedRows.add(index)}else selectedRows.delete(index);clearBulk()};
     const changed=(group=null)=>{if(!history)return;history.push(snapshot(),group);historyState();writer?.changed()};
