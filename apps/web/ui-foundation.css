@@ -1816,3 +1816,49 @@
    padding-left:10px!important;
  }
 }
+
+/* Quiet navigation: remove tile-like backgrounds; brighten ALL navigation SVGs. */
+.workspace-page .sidebar :is(.sidebar-group button,.sidebar-disclosure,.sidebar-foot button),
+.workspace-page .assistant-studio .assistant-toolrail :is(.assistant-toolrail-toggle,.assistant-workbar>button,.assistant-conversation-open,.assistant-conversation-icon-button){
+  background:transparent!important;
+  background-image:none!important;
+  box-shadow:none!important;
+  border-color:transparent!important;
+}
+.workspace-page .sidebar :is(.sidebar-group button,.sidebar-disclosure,.sidebar-foot button):hover,
+.workspace-page .assistant-studio .assistant-toolrail :is(.assistant-toolrail-toggle,.assistant-workbar>button,.assistant-conversation-open,.assistant-conversation-icon-button):hover{
+  background:rgba(255,255,255,.045)!important;
+  background-image:none!important;
+  box-shadow:none!important;
+  border-color:transparent!important;
+}
+.workspace-page .sidebar .sidebar-group button.active,
+.workspace-page .assistant-studio .assistant-conversation-row.is-active,
+.workspace-page .assistant-studio .assistant-conversation-row.is-active .assistant-conversation-open{
+  background:rgba(255,255,255,.065)!important;
+  background-image:none!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
+}
+.workspace-page .sidebar :is(svg,.sidebar-item-icon,.sidebar-logout-icon),
+.workspace-page .assistant-studio .assistant-toolrail :is(svg,.icon,.assistant-tool-icon,.assistant-conversation-leading){
+  color:#d5d7dd!important;
+  opacity:1!important;
+  filter:none!important;
+}
+.workspace-page .sidebar :is(button:hover,button.active) :is(svg,.sidebar-item-icon,.sidebar-logout-icon),
+.workspace-page .assistant-studio .assistant-toolrail :is(button:hover,.is-active) :is(svg,.icon,.assistant-tool-icon,.assistant-conversation-leading){
+  color:#f3f4f6!important;
+}
+.workspace-page .sidebar [data-ui-icon]::before,
+.workspace-page .assistant-studio .assistant-toolrail [data-ui-icon]::before{
+  opacity:1!important;
+}
+:root[data-theme="light"] .workspace-page .sidebar :is(svg,.sidebar-item-icon,.sidebar-logout-icon),
+:root[data-theme="light"] .workspace-page .assistant-studio .assistant-toolrail :is(svg,.icon,.assistant-tool-icon,.assistant-conversation-leading){
+  color:#4f535c!important;
+}
+:root[data-theme="light"] .workspace-page .sidebar :is(button:hover,button.active) :is(svg,.sidebar-item-icon,.sidebar-logout-icon),
+:root[data-theme="light"] .workspace-page .assistant-studio .assistant-toolrail :is(button:hover,.is-active) :is(svg,.icon,.assistant-tool-icon,.assistant-conversation-leading){
+  color:#17191e!important;
+}
