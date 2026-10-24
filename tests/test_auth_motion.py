@@ -22,7 +22,8 @@ class AuthMotionTests(unittest.TestCase):
   self.assertNotIn("location.assign('/app#dashboard')",source)
  def test_sidebar_route_does_not_render_twice(self):
   source=(ROOT/'apps/web/app.js').read_text()
-  self.assertIn("else location.hash=next;",source)
+  self.assertIn("tab=next;if(location.hash.slice(1)!==next)location.hash=next;return renderNavigation()",source)
+  self.assertIn("if(!appSections.has(section)||section===tab)return;",source)
   self.assertNotIn("location.hash=tab;closeNavigation();return renderNavigation()",source)
  def test_motion_respects_reduced_preference(self):
   source=(ROOT/'apps/web/auth-motion-fix.css').read_text()
