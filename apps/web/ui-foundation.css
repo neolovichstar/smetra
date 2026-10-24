@@ -1862,3 +1862,74 @@
 :root[data-theme="light"] .workspace-page .assistant-studio .assistant-toolrail :is(button:hover,.is-active) :is(svg,.icon,.assistant-tool-icon,.assistant-conversation-leading){
   color:#17191e!important;
 }
+
+/* UI stability batch: layout-invariant controls, visible keyboard focus and no jumping icon slots. */
+@media(min-width:701px){
+ .workspace-page .assistant-studio .assistant-toolrail,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail{
+   box-sizing:border-box!important;
+   align-items:stretch!important;
+   padding:8px 6px!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar{
+   align-items:stretch!important;gap:5px!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar>button,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar>button{
+   display:flex!important;
+   align-items:center!important;
+   justify-content:flex-start!important;
+   height:44px!important;
+   min-height:44px!important;
+   border:0!important;
+   padding:0 0 0 12px!important;
+   margin:0!important;
+   gap:10px!important;
+   box-sizing:border-box!important;
+   transition:color 160ms ease,background-color 160ms ease!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail-toggle,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail-toggle{
+   margin:0 0 12px!important;
+   translate:0 0!important;
+   transform:none!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail .assistant-tool-label,
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail .assistant-tool-label{
+   display:block!important;
+   visibility:visible!important;
+   flex:0 1 auto!important;
+   margin:0!important;
+   padding:0!important;
+   overflow:hidden!important;
+   white-space:nowrap!important;
+   transition:max-width 320ms cubic-bezier(.22,1,.36,1),opacity 190ms ease!important;
+ }
+ .workspace-page .assistant-studio .assistant-toolrail .assistant-tool-label{
+   max-width:168px!important;opacity:1!important;
+ }
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-toolrail .assistant-tool-label{
+   max-width:0!important;opacity:0!important;
+ }
+ /* History heading can collapse without changing button heights above it. */
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-history-panel{
+   pointer-events:none!important;
+ }
+ .workspace-page .assistant-studio .assistant-workbar :is(svg,.icon,.assistant-tool-icon),
+ .workspace-page .assistant-studio.assistant-tools-collapsed .assistant-workbar :is(svg,.icon,.assistant-tool-icon){
+   display:block!important;
+   flex-shrink:0!important;
+   translate:0 0!important;
+   transform:none!important;
+ }
+}
+.workspace-page .sidebar :is(button,a):focus-visible,
+.workspace-page .assistant-studio .assistant-toolrail :is(button,a):focus-visible{
+ outline:2px solid #dadde3!important;outline-offset:2px!important;
+}
+@media(prefers-reduced-motion:reduce){
+ .workspace-page .assistant-studio .assistant-toolrail .assistant-tool-label{
+   transition:none!important;
+ }
+}
