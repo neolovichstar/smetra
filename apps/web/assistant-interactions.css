@@ -170,3 +170,12 @@ body.workspace-page .assistant-studio .assistant-history-empty{display:none!impo
 :root[data-theme="light"] body.workspace-page .assistant-studio .assistant-attachment-tile{
  background:#fff;border-color:#dadce2;color:#22232a;
 }
+
+/* A hidden entitlement/admin navigation item must not become an empty tile
+   when the section switches to display:flex. */
+body.workspace-page #sidebar .sidebar-group .sidebar-group-inner :is(button.hidden,button[hidden]){
+  display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;
+}
+body.workspace-page #sidebar .sidebar-group-inner button[data-tab]:empty{
+  display:none!important;
+}
