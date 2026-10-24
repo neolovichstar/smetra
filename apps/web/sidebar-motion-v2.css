@@ -81,3 +81,18 @@ body.workspace-page:not(.auth-mode) #content.main .assistant-studio,
 body.workspace-page:not(.auth-mode) #content.main .assistant-studio *{
   transition:none!important;animation:none!important}
 }
+/* Keep the rail contents mounted for the full 360ms width transition. */
+@media(min-width:801px){
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-history-panel,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed .assistant-history-panel{
+  display:flex!important;flex-direction:column!important;min-height:0!important;
+  overflow:hidden!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed.is-history-expanded .assistant-history-panel{
+  overflow:auto!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-toolrail-body,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed .assistant-toolrail-body{
+  display:flex!important;flex-direction:column!important;min-width:0!important;
+  overflow:hidden!important}
+}
+body.workspace-page:not(.auth-mode) .app-nav-center-spacer{flex:1 1 auto;min-width:0}
+body.workspace-page:not(.auth-mode) .app-nav-inner{min-width:0}
