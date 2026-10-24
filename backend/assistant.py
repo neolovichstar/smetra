@@ -471,10 +471,26 @@ def tools():
     return result
 
 
-def query_model(messages):
-    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
-    if model != "openrouter/free" and not model.endswith(":free"):
-        raise DomainError(503, "Для ассистента должна быть выбрана бесплатная модель")
+def assistant_model(service, has_image=False):
+    """Resolve the model from the *verified* workspace entitlement, not client input.
+
+    The free route is restricted to zero-price models. Image requests use a
+    vision-capable free model rather than silently sending images to a text LLM.
+    """
+    from backend.entitlements import workspace_feature_access
+    paid = (workspace_feature_access(service.con, service.wid, "clean_export", stamp())["allowed"]
+            if getattr(service, "wid", None) else
+            service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp())
+    if paid:
+        return os.getenv("OPENROUTER_PAID_MODEL", "google/gemini-2.5-flash"), True
+    name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free")
+            if has_image else os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free"))
+    if not (name == "openrouter/free" or name.endswith(":free")):
+        raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
+    return name, False
+
+
+def query_model(messages, model):
     payload = {
         "model": model,
         "messages": messages,
@@ -521,11 +537,8 @@ def query_model(messages):
         ) from None
 
 
-def query_model_stream(messages, on_delta):
+def query_model_stream(messages, on_delta, model):
     """Relay provider SSE deltas while assembling fragmented tool calls."""
-    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
-    if model != "openrouter/free" and not model.endswith(":free"):
-        raise DomainError(503, "Для ассистента должна быть выбрана бесплатная модель")
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         packed({
@@ -981,15 +994,16 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             if image_url else prompt
         )},
     ]
+    model, paid_model = assistant_model(service, has_image=bool(image_url))
     actions, answer, remembered = [], "", False
     for turn in range(2):
         if on_commit and on_status:
             on_status("Формулирую ответ…")
-        response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+        response = query_model_stream(messages, on_delta, model) if on_delta else query_model(messages, model)
         usage=response.pop('_usage',None)
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
-            (identity(),service.wid,service.user['id'],'assistant',os.getenv('OPENROUTER_MODEL','openrouter/free'),'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
+            (identity(),service.wid,service.user['id'],'assistant',model,'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
         answer = str(response.get("content") or "")[:12000]
         calls = response.get("tool_calls") or []
         if not calls:
