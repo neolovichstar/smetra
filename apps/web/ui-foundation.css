@@ -1660,9 +1660,8 @@
  }
  .workspace-page .assistant-studio>.assistant-toolrail {
   min-width:0!important;
-  overflow:hidden!important;
+  overflow:visible!important;
   transition:none!important;
-  contain:layout style;
  }
  .workspace-page .assistant-studio .assistant-toolrail-body,
  .workspace-page .assistant-studio .assistant-workbar {
