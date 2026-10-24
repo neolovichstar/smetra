@@ -155,7 +155,7 @@
   function render() {
     view('<section id="smetra-calculators" class="smcalc">' +
       '<header class="smcalc-header"><div><span class="smcalc-kicker">ИНСТРУМЕНТЫ / БЕСПЛАТНО</span>' +
-      '<h1>Калькуляторы</h1><p>Быстрый расчёт количества материалов без ИИ, лимитов и создания сметы.</p></div></header>' +
+      '<h1>Калькуляторы</h1><p>Быстрый расчёт без ИИ и лимитов. Переносите количество материала в новую смету.</p></div></header>' +
       '<nav class="smcalc-tabs" aria-label="Вид расчёта">' +
       Object.entries(kinds).map(pair =>
         '<button type="button" class="smcalc-tab" data-calc-kind="' + pair[0] + '" aria-pressed="' + (pair[0] === selected) + '">' +
