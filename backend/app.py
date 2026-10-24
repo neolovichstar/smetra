@@ -590,6 +590,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("product-ui.js", "text/javascript"),
             ("assistant.css", "text/css"),
             ("construction.css", "text/css"),
+            ("calculators.js", "text/javascript"),
+            ("calculators.css", "text/css"),
             ("construction.js", "text/javascript"),
             ("field-flows.js", "text/javascript"),
             ("field-flows.css", "text/css"),
