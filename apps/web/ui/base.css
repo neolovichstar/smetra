@@ -1,0 +1,71 @@
+/* Base: reset, document typography, focus and shared utilities. */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--bg);scroll-padding-top:calc(var(--topbar-h) + 16px)}
+body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);font-family:var(--font);font-size:var(--fs-15);line-height:var(--lh-body);font-weight:400;font-feature-settings:'cv11','ss01';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+img,svg,video,canvas{display:block;max-width:100%}
+img{height:auto}
+svg{flex-shrink:0}
+button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
+button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
+button:disabled{cursor:not-allowed}
+a{color:var(--accent-text);text-decoration:none;text-underline-offset:3px}
+a:hover{text-decoration:underline}
+p{margin:0}
+h1,h2,h3,h4,h5,h6{margin:0;font-weight:600;line-height:var(--lh-snug);letter-spacing:var(--tracking-tight);color:var(--text);text-wrap:balance}
+h1{font-size:var(--fs-28);line-height:var(--lh-tight)}
+h2{font-size:var(--fs-20)}
+h3{font-size:var(--fs-16)}
+h4{font-size:var(--fs-15)}
+small{font-size:var(--fs-13)}
+strong,b{font-weight:600}
+ul,ol{margin:0;padding-left:1.25em}
+hr{border:0;border-top:1px solid var(--line);margin:var(--s-6) 0}
+table{border-collapse:collapse;width:100%}
+kbd{font-family:var(--font);font-size:var(--fs-11);font-weight:500;color:var(--text-3);border:1px solid var(--line-strong);border-radius:5px;padding:1px 5px;line-height:1.5}
+code{font-family:var(--font-mono);font-size:.92em}
+::selection{background:var(--accent-soft);color:var(--text)}
+[hidden]{display:none!important}
+
+/* One visible, consistent focus indicator everywhere. Containers focused by
+   script (for screen readers) never draw a frame. */
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-1)}
+#content:focus,#content:focus-visible,main:focus,[tabindex="-1"]:focus-visible{outline:none}
+
+/* Scrollbars stay quiet. */
+*{scrollbar-width:thin;scrollbar-color:var(--surface-4) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--surface-4);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* Utilities referenced by scripts */
+.hidden{display:none!important}
+.sr-only,.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
+.muted{color:var(--text-2)}
+.note{color:var(--text-3);font-size:var(--fs-13)}
+.preserve-lines{white-space:pre-line}
+.row{display:flex;align-items:center;gap:var(--s-2)}
+.row.wrap,.wrap{flex-wrap:wrap}
+.full-width{width:100%}
+.skip-link{position:fixed;left:16px;top:-60px;z-index:1000;padding:10px 14px;border-radius:var(--r-2);background:var(--action);color:var(--action-text);font-weight:600;transition:top var(--t-base) var(--ease)}
+.skip-link:focus{top:12px;text-decoration:none}
+
+/* Small uppercase labels. Many modules use different names for the same idea. */
+.overline,.eyebrow,.kicker,[class$="-kicker"],[class*="-kicker "],.settings-section-kicker,.data-export-kicker,.editor-summary-kicker,.quotes-document-kicker,.billing-eyebrow,.premium-kicker,.ff-kicker,.admin-kicker,.comms-eyebrow{display:inline-block;font-size:var(--fs-12);font-weight:500;letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--text-3);line-height:1.4}
+
+/* Brand word-mark */
+.brand{display:inline-flex;align-items:baseline;font-size:20px;font-weight:650;letter-spacing:-.04em;color:var(--text);text-decoration:none;line-height:1}
+.brand:hover{text-decoration:none}
+.brand-mark,.brand>span:last-child{color:var(--accent)}
+
+/* Numbers align in columns */
+.num,[class*="-amount"],[class*="-price"],[class*="-total"],td,.money-row b,.record-meta b{font-variant-numeric:tabular-nums}
+
+@media (max-width:640px){
+  body{font-size:var(--fs-15)}
+  h1{font-size:var(--fs-24)}
+  input,select,textarea{font-size:16px}
+}
+/* Links inside running text are underlined, not identified by colour alone. */
+p a,li a,.merchant-identity a,.doc a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent)}
+.brand{padding:10px 0;margin:-10px 0}
