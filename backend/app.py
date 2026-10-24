@@ -592,6 +592,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("construction.css", "text/css"),
             ("calculators.js", "text/javascript"),
             ("calculators.css", "text/css"),
+            ("schedule-planner.js", "text/javascript"),
+            ("schedule-planner.css", "text/css"),
             ("estimate-audit.js", "text/javascript"),
             ("estimate-audit.css", "text/css"),
             ("construction.js", "text/javascript"),
