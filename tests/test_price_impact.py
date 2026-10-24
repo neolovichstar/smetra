@@ -135,7 +135,7 @@ class PriceImpactTests(unittest.TestCase):
 class PriceImpactRouteTests(unittest.TestCase):
     def test_quote_lookup_and_supplier_query_are_workspace_scoped(self):
         service = SimpleNamespace(
-            wid="workspace-1", con=MagicMock(),
+            wid="workspace-1", con=MagicMock(), h=MagicMock(), user={"id": "test-user"},
             get=MagicMock(return_value={"id": "quote-1"}),
             quote_view=MagicMock(return_value=quote()),
         )
@@ -148,6 +148,7 @@ class PriceImpactRouteTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(report["comparable_lines"], 1)
         service.get.assert_called_once_with("quotes", "quote-1")
+        service.h.throttle.assert_called_once()
         sql, params = service.con.execute.call_args.args
         self.assertIn("workspace_id=?", sql)
         self.assertIn("quote_id=?", sql)
@@ -166,7 +167,7 @@ class PriceImpactRouteTests(unittest.TestCase):
 
     def test_foreign_quote_is_not_read(self):
         service = SimpleNamespace(
-            wid="workspace-1", con=MagicMock(),
+            wid="workspace-1", con=MagicMock(), h=MagicMock(), user={"id": "test-user"},
             get=MagicMock(side_effect=business.DomainError(404, "Not found")),
         )
         with patch.object(product_sources, "_premium_access", return_value={"plan": "team"}):
