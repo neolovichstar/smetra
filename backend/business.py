@@ -2359,7 +2359,7 @@ class Service:
             _, overview = self.overview(limit=4)
             _, capabilities = self.route("GET", "capabilities", [], {}, {})
             rows = self.con.execute(
-                "SELECT id,title,client,amount_kopecks,currency,approval_state,published_version,expires_at FROM quotes WHERE workspace_id=? ORDER BY updated_at DESC,id LIMIT 5",
+                "SELECT id,title,client,amount_kopecks,currency,approval_state,published_version,expires_at,updated_at FROM quotes WHERE workspace_id=? ORDER BY updated_at DESC,id LIMIT 5",
                 (self.wid,),
             ).fetchall()
             recent = []
