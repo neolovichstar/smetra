@@ -24,7 +24,26 @@ const assert = require('node:assert/strict');
   await until("document.querySelector('#auth')&&!document.querySelector('#auth').classList.contains('hidden')");
   await evaluate("document.querySelector('#email').focus()");
   assert.equal(await evaluate("{const s=getComputedStyle(document.querySelector('#email'));s.borderTopWidth==='0px'&&s.outlineWidth==='0px'&&s.boxShadow==='none'}"),true,'Focused registration field is borderless');
-  await fill('#name','Проверка продукта');await fill('#email','browser-'+Date.now()+'@test.invalid');await fill('#password','long secure password');await click('#legal-consent');await click('#auth-submit');
+  // When mailbox verification is not configured, the production UI correctly
+  // hides password signup. Seed ONLY this isolated localhost QA browser session
+  // through the loopback legacy endpoint; never relax the actual auth UI.
+  const emailSignupShown=await evaluate("!document.querySelector('#email-disclosure').classList.contains('hidden')");
+  if(emailSignupShown){
+    await fill('#name','Проверка продукта');await fill('#email','browser-'+Date.now()+'@test.invalid');
+    await fill('#password','long secure password');await click('#legal-consent');await click('#auth-submit');
+  }else{
+    const registration=await fetch(site+'/api/auth/register',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:'Проверка продукта',email:'browser-'+Date.now()+'@test.invalid',
+        password:'long secure password',legal_acceptance:true,
+        legal_version:'2026-10-19-registration-v1'})
+    });
+    const account=await registration.json();
+    assert.equal(registration.status,200,'isolated browser fixture registration: '+JSON.stringify(account).slice(0,180));
+    assert.ok(account.token,'QA fixture needs a temporary session token');
+    await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
+    await send('Page.navigate',{url:site+'/app#dashboard'});
+  }
   await until("document.querySelector('[data-work=quote-new]')");
   await until("document.querySelector('#capture-text')?.dataset.autogrow && document.querySelector('.sidebar-disclosure')");
   const navIconAudit=await evaluate("(()=>[...document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')].map(button=>({tab:button.dataset.tab,svg:button.querySelectorAll(':scope > svg').length,dataIcon:button.getAttribute('data-ui-icon'),before:getComputedStyle(button,'::before').content})))()");
