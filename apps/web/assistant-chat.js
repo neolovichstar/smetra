@@ -376,6 +376,30 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     for(const entry of pendingPhotos)URL.revokeObjectURL(entry.url);
     pendingPhotos=[];renderPhoto();
   };
+  const compressPhoto=async file=>{
+    if(file.size<=420_000)return file;
+    if(typeof createImageBitmap!=='function')throw Error('Браузер не поддерживает уменьшение фотографий');
+    let bitmap;
+    try{
+      bitmap=await createImageBitmap(file);
+      const scale=Math.min(1,1280/Math.max(bitmap.width,bitmap.height));
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(bitmap.width*scale));
+      canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+      const ctx=canvas.getContext('2d',{alpha:false});
+      if(!ctx)throw Error('Не удалось обработать фотографию');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+      let blob=null;
+      for(const quality of [.78,.68,.56,.45]){
+        blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+        if(blob&&blob.size<=470_000)break;
+      }
+      if(!blob||blob.size>500_000)throw Error('Изображение слишком сложное для отправки — выберите фото меньшего размера');
+      const base=file.name.replace(/\.[^.]+$/,'').slice(0,140);
+      return new File([blob],base+'.jpg',{type:'image/jpeg',lastModified:file.lastModified});
+    }finally{bitmap?.close?.()}
+  };
   const encodePhoto=async file=>{
     const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
     for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
@@ -389,14 +413,16 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(['png','jpg','jpeg'].includes(extension)){
       if(backgroundMode){status.textContent='Фото доступно в обычном чате, не в фоновой задаче.';fileInput.value='';return}
       const expected=extension==='png'?'image/png':'image/jpeg';
-      if(file.size<1||file.size>2_000_000||file.type&&file.type!==expected){
-        status.textContent='Прикрепите корректное фото PNG/JPG размером до 2 МБ';fileInput.value='';return;
+      if(file.size<1||file.size>15_000_000||file.type&&file.type!==expected){
+        status.textContent='Прикрепите корректную фотографию PNG/JPG размером до 15 МБ';fileInput.value='';return;
       }
+      let optimized;
+      try{optimized=await compressPhoto(file)}catch(error){status.textContent=error.message;fileInput.value='';return}
       const currentBytes=pendingPhotos.reduce((sum,item)=>sum+item.file.size,0);
-      if(pendingPhotos.length>=3||currentBytes+file.size>1_500_000){
-        status.textContent='Максимум 3 изображения общим размером до 1,5 МБ';fileInput.value='';return;
+      if(pendingPhotos.length>=3||currentBytes+optimized.size>1_500_000){
+        status.textContent='Максимум 3 изображения общим размером до 1,5 МБ после сжатия';fileInput.value='';return;
       }
-      pendingPhotos.push({file,url:URL.createObjectURL(file)});renderPhoto();
+      pendingPhotos.push({file:optimized,url:URL.createObjectURL(optimized)});renderPhoto();
       status.textContent='Фото готовы к отправке вместе с сообщением.';
       input.focus();return;
     }
