@@ -118,7 +118,7 @@
       if(!quoteId){$('#sp-result').textContent='Выберите смету для расчёта.';return;}
       button.disabled=true;
       try{
-        if(!quote||stamp!==quoteId){const result=await api('/quotes/'+encodeURIComponent(quoteId));if(!guard())return;quote=result.quote;stamp=quoteId;}
+        if(!quote||stamp!==quoteId){const result=await api('/quotes/'+encodeURIComponent(quoteId));if(!guard()||$('#sp-quote').value!==quoteId)return;quote=result.quote;stamp=quoteId;}
         const settings={start:$('#sp-date').value,workdays:$('#sp-days').value==='weekdays',
           plasterPause:$('#sp-plaster-pause').value,screedPause:$('#sp-screed-pause').value,rates:{}};
         root.querySelectorAll('[data-sp-rate]').forEach(input=>settings.rates[input.dataset.spRate]=input.value);
