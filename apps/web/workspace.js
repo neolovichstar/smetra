@@ -71,11 +71,59 @@ window.Workspace = (() => {
       setWorkspace(response);
       const data=response.overview,actions=response.actions||{items:[],summary:{}},capabilities=response.capabilities,recent=response.quotes;
       const balance=data.currencies.find(c=>c.currency===workspace.currency)||{paid:0,unpaid:0,cash_profit:0,currency:workspace.currency};
-      html=`<div class="dashboard-intro"><h1>Сегодня</h1>${button('Создать смету','quote-new','','primary')}</div>`+
-        (roleCanWrite()?`<section class="capture-panel" aria-labelledby="capture-title"><div class="capture-heading"><h2 id="capture-title">Что нужно посчитать?</h2></div><form id="capture-form"><label for="capture-text">Запрос клиента</label><textarea id="capture-text" rows="1" maxlength="8000" placeholder="Опишите работы или вставьте сообщение клиента…" aria-describedby="capture-status"></textarea>${capabilities.ai_drafting?'<label class="capture-file" for="capture-file" title="Прикрепить файл · до 2 МБ" aria-label="Прикрепить файл · до 2 МБ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 11.5-7.9 7.9a5 5 0 0 1-7.1-7.1L14 3.3a3.5 3.5 0 0 1 5 5L9.7 17.6a2 2 0 0 1-2.8-2.8l8.1-8.1"/></svg></label><input id="capture-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.csv,.xlsx,.docx" aria-label="Прикрепить запрос клиента">':''}<div class="capture-actions">${capabilities.ai_drafting?'<button class="btn primary" type="submit">Составить черновик</button>':'<button class="btn primary" type="button" id="capture-manual">Открыть редактор</button>'}</div><p id="capture-status" role="status"></p></form><div class="capture-shortcuts">${button("Создать вручную","quote-new")}${button("Мои расценки","navigate","catalog")}${button("Спросить ассистента","navigate","assistant")}</div></section>`:'')+
-        `<div class="dashboard-metrics" aria-label="Показатели работы"><div class="dashboard-metric"><span>Активные проекты</span><strong>${actions.summary.active_projects||0}</strong></div><div class="dashboard-metric"><span>Ждут оплаты</span><strong>${actions.summary.waiting_payments||0}</strong></div><div class="dashboard-metric"><span>Согласовано за месяц</span><strong>${actions.summary.approved_this_month||0}</strong></div><div class="dashboard-metric"><span>Получено за месяц · ${e(balance.currency)}</span><strong>${money(actions.summary.received_this_month?.[balance.currency]||0,balance.currency)}</strong></div></div>`+
-        `<section class="today-actions" aria-labelledby="today-actions-title"><div class="section-top"><div><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2 id="today-actions-title">Требует внимания</h2></div></div>${actions.items.length?actions.items.map(item=>`<div class="today-action"><div><strong>${e(item.title)}</strong><small>${e(item.detail)}${item.due_date?' · '+e(item.due_date):''}${item.amount_kopecks?' · '+money(item.amount_kopecks,item.currency):''}</small></div><button class="btn small" data-work="${item.kind==='quote'?'quote':'entity'}" data-kind="${item.kind==='project'?'projects':item.kind==='lead'?'leads':'tasks'}" data-id="${e(item.entity_id)}">${e(item.action)} ↗</button></div>`).join(''):'<p class="muted today-clear">На сегодня срочных действий нет. Можно подготовить следующий запрос клиента.</p>'}</section>`+
-        `<div class="dashboard-work"><section class="panel"><div class="section-top"><h3>Сметы</h3>${button('Все сметы ↗','navigate','quotes')}</div>${recent.length?quoteRows(recent):empty('Пока нет смет','Создайте первую смету.')}</section><div class="dashboard-aside"><section class="panel"><div class="section-top"><h3>Сроки</h3>${button('Все задачи','navigate','tasks')}</div>${data.deadlines.length?data.deadlines.map(d=>`<div class="record-line"><div><strong>${e(d.name)}</strong><small>${e(d.due_date)} · ${d.kind==='task'?'Задача':'Заказ'}</small></div>${status(d.status)}</div>`).join(''):empty('Пока нет сроков','Добавьте дату к заказу или задаче.')}</section></div></div>`;
+      const todayLabel=new Intl.DateTimeFormat('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+      const iconPaths={
+        projects:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h6"/>',
+        waiting:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        approved:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>',
+        received:'<path d="M3 20h18M5 19v-5h4v5M11 19V8h4v11M17 19V4h4v15"/>',
+      };
+      const metric=(icon,label,value)=>`<article class="dashboard-metric">
+        <div class="dashboard-metric-label"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[icon]}</svg><span>${e(label)}</span></div>
+        <strong>${value}</strong>
+      </article>`;
+      const recentRows=recent.map((q,index)=>`<div class="dashboard-quote-row">
+        <span class="dashboard-quote-index">${e(String(q.id||'').slice(0,8).toUpperCase()||String(index+1))}</span>
+        <button type="button" class="dashboard-quote-name" data-work="quote" data-id="${e(q.id)}">${e(q.title||'Смета без названия')}</button>
+        <span class="dashboard-quote-client">${e(q.client||'Не указан')}</span>
+        <span class="dashboard-quote-project">${e(q.project_name||'—')}</span>
+        <strong class="dashboard-quote-amount">${money(q.amount_kopecks,q.currency)}</strong>
+        <span class="dashboard-quote-state">${status(q.approval_state)}</span>
+        <time class="dashboard-quote-date" datetime="${q.updated_at?new Date(q.updated_at*1000).toISOString():''}">${q.updated_at?new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short',year:'numeric'}).format(new Date(q.updated_at*1000)):'—'}</time>
+        <button type="button" class="dashboard-quote-menu" data-work="quote" data-id="${e(q.id)}" aria-label="Открыть смету ${e(q.title||'')}">···</button>
+      </div>`).join('');
+      html=`<div class="dashboard-intro">
+        <div class="dashboard-intro-copy"><h1>Сегодня</h1><span class="dashboard-date">${e(todayLabel)}</span></div>
+        ${button('＋  Создать смету','quote-new','','primary')}
+      </div>`+
+        (roleCanWrite()?`<section class="capture-panel" aria-labelledby="capture-title">
+          <div class="capture-heading"><h2 id="capture-title">Что нужно посчитать?</h2></div>
+          <form id="capture-form" class="dashboard-capture-form">
+            <label class="sr-only" for="capture-text">Опишите работы</label>
+            <textarea id="capture-text" rows="1" maxlength="8000" placeholder="Опишите работы или вставьте сообщение клиента" aria-describedby="capture-status"></textarea>
+            ${capabilities.ai_drafting?'<label class="capture-file" for="capture-file" title="Прикрепить файл" aria-label="Прикрепить файл"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></label><input id="capture-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.csv,.xlsx,.docx" aria-label="Прикрепить файл">':''}
+            <div class="capture-actions">${capabilities.ai_drafting?'<button class="btn primary" type="submit">Составить черновик</button>':'<button class="btn primary" type="button" id="capture-manual">Открыть редактор</button>'}</div>
+            <p id="capture-status" role="status"></p>
+          </form>
+          <div class="capture-shortcuts">${button('Создать вручную','quote-new')}${button('Мои расценки','navigate','catalog')}${button('Спросить ассистента','navigate','assistant')}</div>
+        </section>`:'')+
+        `<div class="dashboard-metrics" aria-label="Показатели работы">
+          ${metric('projects','Активные проекты',e(actions.summary.active_projects||0))}
+          ${metric('waiting','Ждут оплаты',e(actions.summary.waiting_payments||0))}
+          ${metric('approved','Согласовано за месяц',e(actions.summary.approved_this_month||0))}
+          ${metric('received','Получено за месяц',money(actions.summary.received_this_month?.[balance.currency]||0,balance.currency))}
+        </div>
+        <section class="dashboard-recent" aria-labelledby="dashboard-recent-title">
+          <header class="dashboard-recent-head"><h2 id="dashboard-recent-title">Последние сметы</h2>${button('Все сметы →','navigate','quotes')}</header>
+          ${recent.length?`<div class="dashboard-quote-list" role="table" aria-label="Последние сметы">
+            <div class="dashboard-quote-columns" aria-hidden="true"><span>№</span><span>Название</span><span>Клиент</span><span>Проект</span><span>Сумма</span><span>Статус</span><span>Обновлено</span><span></span></div>
+            ${recentRows}
+          </div>`:empty('Пока нет смет','Создайте первую смету, чтобы она появилась здесь.')}
+        </section>
+        <section class="today-actions dashboard-secondary" aria-labelledby="today-actions-title">
+          <div class="section-top"><div><span class="eyebrow">РАБОЧИЕ ЗАДАЧИ</span><h2 id="today-actions-title">Требует внимания</h2></div></div>
+          ${actions.items.length?actions.items.map(item=>`<div class="today-action"><div><strong>${e(item.title)}</strong><small>${e(item.detail)}${item.due_date?' · '+e(item.due_date):''}${item.amount_kopecks?' · '+money(item.amount_kopecks,item.currency):''}</small></div><button class="btn small" data-work="${item.kind==='quote'?'quote':'entity'}" data-kind="${item.kind==='project'?'projects':item.kind==='lead'?'leads':'tasks'}" data-id="${e(item.entity_id)}">${e(item.action)} ↗</button></div>`).join(''):'<p class="muted today-clear">Срочных действий пока нет.</p>'}
+        </section>`;
       html='<section class="workspace-home">'+html+'</section>';
     }else if(section==='quotes'){
       const result=await api('/quotes');if(!active())return true;
