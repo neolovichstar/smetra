@@ -8,7 +8,6 @@ No external AI, quotes, billing changes or server-side writes.
 from __future__ import annotations
 
 import datetime as dt
-import math
 import re
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 
