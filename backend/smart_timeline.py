@@ -156,7 +156,9 @@ def preview(data: dict) -> dict:
         return result
 
     ordered = [resolve(key) for key in stages]
-    final = max(item["_finish"] for item in ordered)
+    # Handover must also respect the final curing hold, even if no later task
+    # depends on it. Curing uses calendar days, so weekends may be included.
+    final = max(max(item["_finish"], item["_ready"] - dt.timedelta(days=1)) for item in ordered)
     return {
         "start_date": first.isoformat(),
         "end_date": final.isoformat(),
