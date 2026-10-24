@@ -35,4 +35,5 @@ def workspace_summary(con, workspace_id, now):
             "features": {name: evaluate_workspace_plan(row, name, now)["allowed"]
                          for name in ("clean_export", "finance", "document_branding",
                                       "team_management", "object_chats", "cloud_drives",
-                                      "visual_estimates", "product_monitor")}}
+                                      "visual_estimates", "product_monitor",
+                                      "smart_timeline", "material_inventory", "virtual_tours")}}
