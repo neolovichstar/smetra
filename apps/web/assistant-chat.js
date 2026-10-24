@@ -119,6 +119,20 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const input=document.querySelector('#assistant-input');
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
+  // Existing estimate engine and the chat share one revision-safe quote source.
+  const quotePreview=window.SmetraQuoteVisuals?.mountAssistant({
+    host:assistantStudioRoot,
+    getUserId:()=>user?.id,
+    fetchQuote:id=>api('/quotes/'+encodeURIComponent(id)),
+    onOpenEditor:async id=>{
+      try{
+        const {quote}=await api('/quotes/'+encodeURIComponent(id));
+        tab='quotes';location.hash='quotes';
+        await window.render();
+        if(tab==='quotes')await window.Workspace.editor(quote);
+      }catch(error){notify(error.message)}
+    },
+  });
   const syncAssistantConversationState=()=>{
     if(!assistantStudioRoot||!messages?.isConnected)return;
     assistantStudioRoot.classList.toggle('has-conversation',Boolean(messages.querySelector('.assistant-message.user')));
@@ -324,10 +338,22 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
   }
   if(!active())return;
+  const quoteViewToggle=document.createElement('button');
+  quoteViewToggle.className='btn small assistant-tool-quote';
+  quoteViewToggle.type='button';
+  quoteViewToggle.textContent='Предпросмотр сметы';
+  quoteViewToggle.setAttribute('aria-label','Открыть предпросмотр сметы');
+  quoteViewToggle.onclick=()=>{
+    if(quotePreview?.currentId)quotePreview.open();
+    else if(context?.entity==='quotes')quotePreview?.load(context.id).catch(()=>{});
+    else status.textContent='Откройте существующую смету и выберите «Спросить AI».';
+  };
+  document.querySelector('#assistant-workbar')?.append(quoteViewToggle);
   const contextBar=document.querySelector('#assistant-context');
   const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');contextBar.after(fileStatus);
   const renderContext=()=>{
     contextBar.classList.toggle('hidden',!context);
+    if(context?.entity==='quotes'&&context.id)quotePreview?.load(context.id).catch(()=>{});
     if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ',files:'Файл',documents:'Документ'})[context.entity]+': '+(context.label||context.id);
     else sessionStorage.removeItem('smetra.assistant.context');
   };
@@ -521,6 +547,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     messages.append(item);return {item,body};
   };
   const addAction=action=>{
+    if(action?.tool&&/quote/.test(action.tool))quotePreview?.propose(action).catch(()=>{});
     const item=document.createElement('section');item.className='assistant-proposal';
     const markdownEdit=action.tool==='replace_markdown_text';
     const detail=action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
@@ -530,7 +557,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
     }
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id);notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id);quotePreview?.refresh().catch(()=>{});notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
   };
   const renderSavedAction=(item,action,undoable,documentId)=>{
@@ -698,7 +725,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();setActivity('Пишу ответ…');status.textContent='Пишу ответ…'}
         if(kind==='status'){setActivity(payload.text);status.textContent=payload.text}
         if(kind==='web_source'){showSource(payload);setActivity('Проверяю источники…')}
-        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});setActivity('Конструирую смету…')}
+        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
