@@ -50,7 +50,10 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  }
  await fill('#review-target','1');await until("document.querySelector('.review-empty')");assert.ok(await evaluate("document.querySelector('#review-report').textContent.includes('Условия совпадают')"));
  await click('#review-back');await until("document.querySelector('#quote-controls [data-work=publish]')");await click('#quote-controls [data-work=publish]');await until("document.querySelector('#review-publish button')&&!document.querySelector('#review-publish button').disabled");
- await fill('#review-comment','Уточнили состав и срок');await click('#review-publish button');await until("document.querySelector('#quote-controls [data-work=link]')&&!document.querySelector('.quote-review')");
+ await fill('#review-comment','Уточнили состав и срок');await click('#review-publish button');
+ await until("document.querySelector('dialog.estimate-review-dialog')?.open");
+ await click('dialog.estimate-review-dialog [data-review-confirm]');
+ await until("document.querySelector('#quote-controls [data-work=link]')&&!document.querySelector('.quote-review')");
  const verified=await evaluate(`(async()=>{const q=(await api('/quotes/${id}')).quote;const versions=(await api('/quotes/${id}/versions')).versions;const diff=await api('/quotes/${id}/compare?from=1&to=2');let stale;try{await api('/public/accept',{method:'POST',body:JSON.stringify({token:new URL(q.public_url).searchParams.get('quote'),version:1})})}catch(error){stale=error.status}return {version:q.published_version,terms:versions.find(v=>v.version===1).snapshot.terms,summary:diff.summary,stale};})()`);
  assert.equal(verified.version,2);assert.equal(verified.terms,'Срок 10 дней');assert.equal(verified.summary.changed,1);assert.equal(verified.summary.added,1);assert.equal(verified.summary.removed,1);assert.equal(verified.stale,409);
  assert.deepEqual(errors,[]);console.log('PASS: immutable versions → responsive comparison → reviewed republication; old client approval rejected; 320/390/768/1440 widths');ws.close();
