@@ -40,6 +40,15 @@ class SmartTimelineTests(unittest.TestCase):
         self.assertEqual(report["stages"][1]["start_date"], "2026-10-29")
         self.assertEqual(report["end_date"], "2026-10-29")
 
+    def test_final_curing_counts_toward_handover(self):
+        report = preview({"start_date": "2026-10-26", "stages": [
+            {"id": "finish", "name": "Финишная отделка",
+             "duration_days": 5, "curing_days": 7}
+        ]})
+        self.assertEqual(report["stages"][0]["end_date"], "2026-10-30")
+        self.assertEqual(report["end_date"], "2026-11-06")
+        self.assertEqual(report["calendar_days"], 12)
+
     def test_quantities_round_up(self):
         r = preview({"start_date": "2026-10-26", "stages": [
             {"id": "x", "name": "Грунтование", "quantity": "10.01", "daily_output": "10"},
