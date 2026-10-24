@@ -27,7 +27,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   assert.equal(await evaluate("typeof window.SmetraAssistant"),'undefined','Assistant stays uninitialized until its section opens');
   const testTask=await evaluate("api('/tasks',{method:'POST',body:JSON.stringify({name:'Mobile deadline check',due_date:'2026-10-06'})}).then(result=>result.item)");
   fs.mkdirSync('data/qa',{recursive:true});
-  const routes=process.env.SMETRA_REVENUE_QA==='1'?['billing']:['dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','billing','support','profile','settings','activity'];
+  const routes=process.env.SMETRA_REVENUE_QA==='1'?['billing']:['dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','schedule','assistant','finance','catalog','files','documents','team','notifications','billing','support','profile','settings','activity'];
   if(await evaluate("user.role==='admin'"))routes.push('admin');
   for(const route of routes){
     await evaluate(`tab=${JSON.stringify(route)};render()`);
