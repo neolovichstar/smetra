@@ -182,7 +182,7 @@
       document.querySelectorAll('[data-period]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
       if (plans.length) render();
     }));
-    fetch('/api/billing/pricing', { credentials: 'same-origin' })
+    fetch('/api/billing/catalog', { credentials: 'same-origin' })
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(data => {
         if (!Array.isArray(data.plans) || !data.plans.length) throw Error();
