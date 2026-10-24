@@ -420,8 +420,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     finally{attachButton.disabled=false;fileInput.value=''}
   };
   fileInput.onchange=async()=>{const files=[...fileInput.files];for(const file of files){await uploadAttachment(file)}fileInput.value=''};
-  // The tray shows the already-linked file on initial load as well as new photos.
-  renderPhoto();
+
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
   composer.addEventListener('drop',async event=>{if(event.dataTransfer.files.length){event.preventDefault();for(const file of [...event.dataTransfer.files])await uploadAttachment(file)}});
   let quota=data.quota,working=false,threadBusy=false,requestController=null;
@@ -674,4 +673,6 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       try{renderQuota((await api('/assistant')).quota)}catch{}
     }finally{working=false;requestController=null;stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus()}
   };
+  // Initialize the tray after quota/state callbacks are constructed.
+  renderPhoto();
 };
