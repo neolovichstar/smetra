@@ -94,7 +94,7 @@ window.Workspace = (() => {
       </div>`).join('');
       html=`<div class="dashboard-intro">
         <div class="dashboard-intro-copy"><h1>Сегодня</h1><span class="dashboard-date">${e(todayLabel)}</span></div>
-        ${button('＋  Создать смету','quote-new','','primary')}
+        ${button('Создать смету','quote-new','','primary')}
       </div>`+
         (roleCanWrite()?`<section class="capture-panel" aria-labelledby="capture-title">
           <div class="capture-heading"><h2 id="capture-title">Что нужно посчитать?</h2></div>

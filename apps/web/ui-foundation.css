@@ -2474,3 +2474,43 @@ body.workspace-page{background:var(--smetra-bg)!important;color:var(--smetra-tex
  .workspace-page .assistant-studio .assistant-main-column>.assistant-composer{transition:none!important}
 }
 
+
+/* Late-loaded navigation entries use the same SVG/label contract as static ones. */
+body.workspace-page:not(.auth-mode) #sidebar #sidebar-open-comms{
+ display:flex!important;align-items:center!important;justify-content:flex-start!important;
+ gap:12px!important;padding:10px 12px!important;min-height:43px!important;
+ border:0!important;background:transparent!important;box-shadow:none!important;color:#bfc0c6!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar #sidebar-open-comms:hover{background:#202023!important;color:#fff!important}
+body.workspace-page:not(.auth-mode) #sidebar button:is([hidden],.hidden){display:none!important}
+body.workspace-page:not(.auth-mode) :is(#sidebar,.assistant-toolrail,.assistant-compose-tools) svg{
+ color:#ececf1!important;stroke:currentColor!important;opacity:1!important;
+}
+body.workspace-page:not(.auth-mode) :is(#sidebar,.assistant-toolrail) [data-ui-icon]::before{
+ color:#ececf1!important;background-color:#ececf1!important;opacity:1!important;
+}
+body.workspace-page:not(.auth-mode) .assistant-toolrail .assistant-tool-icon{
+ color:#ececf1!important;background-color:#ececf1!important;opacity:1!important;
+}
+body.workspace-page:not(.auth-mode) #content.main #assistant-status:not(:empty){color:#bfc0c8!important}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) :is(#sidebar,.assistant-toolrail,.assistant-compose-tools) svg{
+ color:#303038!important;
+}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) :is(#sidebar,.assistant-toolrail) [data-ui-icon]::before,
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) .assistant-toolrail .assistant-tool-icon{
+ color:#303038!important;background-color:#303038!important;
+}
+
+/* Mask icons already use a light foreground; bitmap inversion made them black. */
+body.workspace-page:not(.auth-mode) #content.main .assistant-toolrail :is(.assistant-tool-icon,.assistant-conversation-leading){
+ filter:none!important;background-color:#ececf1!important;color:#ececf1!important;opacity:1!important;
+}
+body.workspace-page:not(.auth-mode) #content.main button:not(.primary) svg{
+ color:#ececf1!important;stroke:currentColor!important;filter:none!important;
+}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) #content.main .assistant-toolrail :is(.assistant-tool-icon,.assistant-conversation-leading){
+ background-color:#303038!important;color:#303038!important;
+}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) #content.main button:not(.primary) svg{
+ color:#303038!important;
+}

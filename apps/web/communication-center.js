@@ -161,7 +161,8 @@ function addTrigger(){
  const support=$('#sidebar [data-tab="support"]');
  if(support&&!$('#sidebar-open-comms')){
   const b=document.createElement('button');b.id='sidebar-open-comms';b.type='button';b.className='comms-sidebar-trigger';
-  b.innerHTML=icon('chat')+'<span>Чаты и сообщения</span>';b.setAttribute('aria-label','Открыть чаты и сообщения');
+  b.innerHTML=icon('chat')+'<span class="sidebar-item-label">Чаты и сообщения</span>';
+  b.querySelector('svg')?.classList.add('sidebar-item-icon');b.setAttribute('aria-label','Открыть чаты и сообщения');
   b.addEventListener('click',()=>open('direct'));
   support.insertAdjacentElement('afterend',b);
  }

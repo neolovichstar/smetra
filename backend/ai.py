@@ -7,6 +7,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from backend.model_transport import open_completion
 import zipfile
 
 
@@ -253,7 +254,7 @@ def _draft(service, data):
         result = estimate_cache.read(service.wid, cache_payload)
         cache_hit = result is not None
         if not cache_hit:
-            with urllib.request.urlopen(request, timeout=45) as response:
+            with open_completion(request, timeout=45) as response:
                 raw = response.read(300001)
             if len(raw) > 300000:
                 raise ValueError("response too large")

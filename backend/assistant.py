@@ -8,6 +8,7 @@ import os
 import time
 import urllib.error
 import urllib.request
+from backend.model_transport import open_completion
 import datetime as dt
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 
@@ -505,8 +506,8 @@ def assistant_model(service, has_image=False):
             service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp())
     if paid:
         return os.getenv("OPENROUTER_PAID_MODEL", "google/gemini-3-flash-preview"), True
-    name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen3.8-27b:free")
-            if has_image else os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free"))
+    name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "openrouter/free")
+            if has_image else os.getenv("OPENROUTER_MODEL", "openrouter/free"))
     if not (name == "openrouter/free" or name.endswith(":free")):
         raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
     return name, False
@@ -521,7 +522,7 @@ def provider_selection(model, paid_model=False, on_source=None):
     if model is None and context:
         return context
     if model is None:
-        model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
+        model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     if not paid_model and model != "openrouter/free" and not model.endswith(":free"):
         raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
     return model, paid_model, on_source
@@ -550,7 +551,7 @@ def query_model(messages, model=None, paid_model=False):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=40) as response:
+        with open_completion(request, timeout=40) as response:
             raw = response.read(250001)
         if len(raw) > 250000:
             raise ValueError("response too large")
@@ -601,7 +602,7 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
     pieces, calls, total_bytes, done, usage = [], {}, 0, False, None
     seen_sources = set()
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
+        with open_completion(request, timeout=45) as response:
             for raw in response:
                 total_bytes += len(raw)
                 if total_bytes > 300_000:
