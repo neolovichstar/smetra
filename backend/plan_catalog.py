@@ -6,7 +6,7 @@ CATALOG = {
                 "seats": 1, "storage_bytes": 0, "free_quotes": 10, "priority": "standard"},
     "pro_solo": {"name": "PRO Solo", "monthly_kopecks": 79000, "yearly_kopecks": 790000,
                  "seats": 1, "storage_bytes": 500_000_000, "free_quotes": None, "priority": "turbo"},
-    "pro_plus": {"name": "PRO Плюс / Снабженец", "monthly_kopecks": 149000, "yearly_kopecks": None,
+    "pro_plus": {"name": "PRO Плюс / Снабженец", "monthly_kopecks": 149000, "yearly_kopecks": 1490000,
                  "seats": 1, "storage_bytes": 5_000_000_000, "free_quotes": None, "priority": "turbo"},
     "team": {"name": "TEAM / Компания", "monthly_kopecks": 699000, "yearly_kopecks": 6990000,
              "seats": 5, "storage_bytes": 5_000_000_000, "free_quotes": None, "priority": "turbo"},
@@ -16,6 +16,7 @@ PURCHASES = {
     "pro_month": ("pro_solo", 79000, 31),
     "pro_year": ("pro_solo", 790000, 366),
     "pro_plus_month": ("pro_plus", 149000, 31),
+    "pro_plus_year": ("pro_plus", 1490000, 366),
     "team_month": ("team", 699000, 31),
     "team_year": ("team", 6990000, 366),
 }
