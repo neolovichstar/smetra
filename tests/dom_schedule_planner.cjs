@@ -30,7 +30,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
  await new Promise(resolve=>setImmediate(resolve));
  assert.ok($('#sp-result .sp-gantt'),'Schedule must render timeline');
  assert.ok($('#sp-result').textContent.includes('4 нояб.'),'Calendar finish must account for drying and weekends');
- assert.equal($('#sp-result .sp-task').length,3);
+ assert.equal(w.document.querySelectorAll('#sp-result .sp-task').length,3);
  assert.ok($('#sp-result').textContent.includes('7 дн.'));
  assert.ok(!calls.some(s=>s!=='/quotes'&&s!=='/quotes/quote-a'),'Read-only plan uses GET only');
  assert.equal(calls.filter(p=>p==='/quotes/quote-a').length,1);
