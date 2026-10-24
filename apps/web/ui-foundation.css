@@ -1800,3 +1800,19 @@
    min-width:0!important;
  }
 }
+
+/* Consistent breathing room between primary navigation and assistant rail.
+   Keep the gap on the main container, not on the collapsing animated grid. */
+@media (min-width:701px){
+ .workspace-page:has(.assistant-studio) #content.main{
+   padding-left:14px!important;
+ }
+ .workspace-page:has(.assistant-studio) .assistant-studio>.assistant-toolrail{
+   margin-left:0!important;
+ }
+}
+@media (min-width:701px) and (max-width:900px){
+ .workspace-page:has(.assistant-studio) #content.main{
+   padding-left:10px!important;
+ }
+}
