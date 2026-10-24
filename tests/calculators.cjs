@@ -47,7 +47,7 @@ for (const [type,values] of [
   ['plaster',{...plaster,rate:''}],
   ['plaster',{...plaster,thickness:'-10'}],
   ['concrete',{...concrete,thickness:'0'}]
-]) assert.throws(()=>calculate(type,values), Error, 'Invalid value should fail in ' + type);
-assert.throws(()=>calculate('unknown',{}),Error);
-assert.throws(()=>calculate('tile',{}),Error);
+]) assert.throws(()=>calculate(type,values), {name:'Error'}, 'Invalid value should fail in ' + type);
+assert.throws(()=>calculate('unknown',{}),{name:'Error'});
+assert.throws(()=>calculate('tile',{}),{name:'Error'});
 console.log('PASS: 5 free material calculators, unit conversion, pack rounding and invalid-input guards');
