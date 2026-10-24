@@ -504,7 +504,7 @@ def assistant_model(service, has_image=False):
             if getattr(service, "wid", None) else
             service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp())
     if paid:
-        return os.getenv("OPENROUTER_PAID_MODEL", "google/gemini-2.5-flash"), True
+        return os.getenv("OPENROUTER_PAID_MODEL", "google/gemini-3-flash-preview"), True
     name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free")
             if has_image else os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free"))
     if not (name == "openrouter/free" or name.endswith(":free")):
