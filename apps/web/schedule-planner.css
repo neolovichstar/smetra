@@ -1,0 +1,41 @@
+/* SMETRA schedule preview — scoped, minimal, neutral. */
+#smetra-schedule{width:min(1180px,100%);margin:0 auto;padding:clamp(18px,3vw,36px) 0 60px;color:var(--smetra-text,var(--ink))}
+#smetra-schedule .sp-heading{margin:0 0 28px}
+#smetra-schedule .sp-kicker{display:block;font-size:10px;letter-spacing:.11em;font-weight:650;color:var(--smetra-text-muted,var(--muted));margin-bottom:10px}
+#smetra-schedule h1{font-size:clamp(30px,4vw,42px);letter-spacing:-.05em;line-height:1.15;font-weight:600;margin:0 0 10px}
+#smetra-schedule .sp-heading p{font-size:13px;color:var(--smetra-text-muted,var(--muted));line-height:1.65;max-width:700px;margin:0}
+#smetra-schedule .sp-controls,#smetra-schedule #sp-result:not(:empty){padding:clamp(18px,2.5vw,26px);border:1px solid var(--smetra-line,var(--line));border-radius:18px;background:var(--smetra-surface,var(--paper));margin:0 0 16px;min-width:0}
+#smetra-schedule .sp-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+#smetra-schedule .sp-fields label{display:flex;flex-direction:column;gap:7px;font-size:11px;line-height:1.4;color:var(--smetra-text-muted,var(--muted));min-width:0}
+#smetra-schedule .sp-fields input,#smetra-schedule .sp-fields select{width:100%;min-height:45px;min-width:0;border-radius:10px;border:1px solid var(--smetra-line,var(--line));background:var(--smetra-input,var(--paper));color:var(--smetra-text,var(--ink));padding:9px 12px;font-size:12px}
+#smetra-schedule .sp-fields :is(input,select):focus-visible{outline:2px solid var(--smetra-text,var(--ink));outline-offset:2px}
+#smetra-schedule .sp-advanced{margin-top:19px;border-top:1px solid var(--smetra-line,var(--line));padding-top:17px}
+#smetra-schedule .sp-advanced summary{cursor:pointer;color:var(--smetra-text,var(--ink));font-size:12px;font-weight:550}
+#smetra-schedule .sp-advanced>p{font-size:11px;line-height:1.65;color:var(--smetra-text-muted,var(--muted));margin:12px 0 18px;max-width:760px}
+#smetra-schedule .sp-advanced .sp-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+#smetra-schedule .sp-control-footer{display:flex;align-items:center;gap:17px;flex-wrap:wrap;margin-top:20px}
+#smetra-schedule .sp-control-footer button{min-height:43px;padding:11px 20px;font-size:12px}
+#smetra-schedule .sp-control-footer p{color:var(--smetra-text-muted,var(--muted));font-size:11px;line-height:1.5;margin:0}
+#smetra-schedule .sp-result-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:1px solid var(--smetra-line,var(--line));margin-bottom:20px;padding-bottom:20px}
+#smetra-schedule .sp-result-head h2{font-weight:600;letter-spacing:-.03em;font-size:20px;line-height:1.25;margin:0 0 8px}
+#smetra-schedule .sp-result-head p{font-size:11px;color:var(--smetra-text-muted,var(--muted));margin:0;line-height:1.6}
+#smetra-schedule .sp-result-metrics{display:flex;flex-direction:column;gap:5px;align-items:flex-end;min-width:160px}
+#smetra-schedule .sp-result-metrics strong{font-size:22px;letter-spacing:-.035em;font-weight:600;white-space:nowrap}
+#smetra-schedule .sp-result-metrics span,#smetra-schedule .sp-result-metrics small{font-size:11px;color:var(--smetra-text-muted,var(--muted))}
+#smetra-schedule .sp-gantt-axis{display:flex;justify-content:space-between;color:var(--smetra-text-muted,var(--muted));font-size:10px;padding:0 0 12px}
+#smetra-schedule .sp-task{display:grid;grid-template-columns:minmax(0,225px) minmax(0,1fr);gap:18px;align-items:center;min-height:50px;border-top:1px solid var(--smetra-line,var(--line));padding:8px 0}
+#smetra-schedule .sp-task-name{min-width:0;display:flex;flex-direction:column;gap:4px}
+#smetra-schedule .sp-task-name strong{font-size:11px;font-weight:550;overflow-wrap:anywhere;line-height:1.4}
+#smetra-schedule .sp-task-name small{font-size:10px;color:var(--smetra-text-muted,var(--muted));line-height:1.4}
+#smetra-schedule .sp-track{height:19px;border:1px solid var(--smetra-line,var(--line));background:var(--smetra-input,var(--paper));border-radius:5px;position:relative;overflow:hidden}
+#smetra-schedule .sp-bar{position:absolute;top:2px;bottom:2px;background:var(--smetra-text,var(--ink));border-radius:3px;opacity:.75}
+#smetra-schedule .sp-pause .sp-bar{background:var(--smetra-text-muted,var(--muted));opacity:.45}
+#smetra-schedule .sp-pause .sp-task-name strong{color:var(--smetra-text-muted,var(--muted))}
+#smetra-schedule .sp-notes{border-top:1px solid var(--smetra-line,var(--line));padding-top:15px;margin-top:12px;font-size:11px}
+#smetra-schedule .sp-notes summary{cursor:pointer;font-weight:550}
+#smetra-schedule .sp-notes ul{margin:12px 0;padding-left:20px;line-height:1.65;color:var(--smetra-text-muted,var(--muted))}
+#smetra-schedule .sp-notes li{margin:0 0 6px}
+#smetra-schedule .sp-empty,#smetra-schedule .sp-disclaimer{font-size:11px;line-height:1.65;color:var(--smetra-text-muted,var(--muted))}
+#smetra-schedule .sp-disclaimer{border-top:1px solid var(--smetra-line,var(--line));padding-top:16px;margin:18px 0 0}
+@media(max-width:800px){#smetra-schedule .sp-fields,#smetra-schedule .sp-advanced .sp-fields{grid-template-columns:repeat(2,minmax(0,1fr))}#smetra-schedule .sp-task{grid-template-columns:minmax(0,160px) minmax(0,1fr)}}
+@media(max-width:480px){#smetra-schedule .sp-fields,#smetra-schedule .sp-advanced .sp-fields{grid-template-columns:minmax(0,1fr)}#smetra-schedule .sp-task{grid-template-columns:minmax(0,120px) minmax(0,1fr);gap:9px}#smetra-schedule .sp-result-head{flex-direction:column;gap:14px}#smetra-schedule .sp-result-metrics{align-items:flex-start}#smetra-schedule .sp-controls,#smetra-schedule #sp-result:not(:empty){padding:16px}}
