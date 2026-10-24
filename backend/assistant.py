@@ -494,8 +494,7 @@ def query_model(messages, model):
     payload = {
         "model": model,
         "messages": messages,
-        "tools": [] if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else tools(),
-        "tool_choice": "auto",
+        **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools(), "tool_choice": "auto"}),
         "max_tokens": 3500,
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
@@ -544,8 +543,7 @@ def query_model_stream(messages, on_delta, model):
         packed({
             "model": model,
             "messages": messages,
-            "tools": [] if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else tools(),
-            "tool_choice": "auto",
+            **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools(), "tool_choice": "auto"}),
             "max_tokens": 3500,
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
