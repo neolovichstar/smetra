@@ -16,9 +16,10 @@ window.SmetraSupport = (() => {
     const active = () => parentActive() && mine === revision && owner === user && tab === 'support';
     const state = { threads: [], current: null, messages: [], sending: false, topic: '' };
 
-    view(`<section class="support-studio tg" aria-label="Поддержка">
+    const railCollapsed = (() => { try { return localStorage.getItem('smetra.support.rail-collapsed') === 'true'; } catch { return false; } })();
+    view(`<section class="support-studio tg${railCollapsed ? ' is-rail-collapsed' : ''}" aria-label="Поддержка">
       <aside class="tg-rail" aria-label="Обращения">
-        <header class="tg-rail-head"><h1>Поддержка</h1><button class="btn small" type="button" id="support-new" aria-label="Новое обращение" title="Новое обращение">${icon('pencil')}<span>Новое</span></button></header>
+        <header class="tg-rail-head">${typeof railToggleMarkup === 'function' ? railToggleMarkup(railCollapsed, 'support-rail-toggle') : ''}<h1>Поддержка</h1><button class="btn small" type="button" id="support-new" aria-label="Новое обращение" title="Новое обращение">${icon('pencil')}<span>Новое</span></button></header>
         <div class="tg-list" id="support-threads" role="list"></div>
         <footer class="tg-rail-foot">${typeof supportContacts === 'string' ? supportContacts : ''}</footer>
       </aside>
@@ -49,6 +50,7 @@ window.SmetraSupport = (() => {
     const status = root.querySelector('#support-status');
     const handoff = root.querySelector('#support-handoff');
     const grow = kit().composer(input, form);
+    if (typeof bindRailToggle === 'function') bindRailToggle(root.querySelector('#support-rail-toggle'), root, 'smetra.support.rail-collapsed');
 
     const welcome = () => `<div class="tg-welcome">
         <span class="tg-avatar tg-avatar-brand tg-avatar-lg" aria-hidden="true">${icon('headset', 28)}</span>
@@ -90,7 +92,7 @@ window.SmetraSupport = (() => {
       list.innerHTML = state.threads.map(t => {
         const preview = t.last_message || (t.needs_human ? 'Ожидает сотрудника' : 'Открыть переписку');
         const on = state.current?.id === t.id;
-        return `<button type="button" class="tg-row${on ? ' is-active' : ''}" data-thread="${kit().esc(t.id)}" role="listitem" aria-current="${on}">
+        return `<button type="button" class="tg-row${on ? ' is-active' : ''}" data-thread="${kit().esc(t.id)}" role="listitem" aria-current="${on}" title="${kit().esc(t.subject || 'Обращение')}">
           <span class="tg-avatar tg-avatar-brand" aria-hidden="true">${icon('headset', 18)}</span>
           <span class="tg-row-copy"><span class="tg-row-top"><strong>${kit().esc(t.subject || 'Обращение')}</strong><time>${kit().esc(kit().stamp(t.last_message_at || t.updated_at || t.created_at))}</time></span>
           <span class="tg-row-bottom"><span class="tg-preview">${kit().esc(preview)}</span>${t.status === 'closed' ? '<span class="tg-badge is-muted">закрыто</span>' : t.needs_human ? '<span class="tg-badge is-waiting">сотрудник</span>' : ''}</span></span>

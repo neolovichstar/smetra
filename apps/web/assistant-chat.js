@@ -574,6 +574,18 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id);quotePreview?.refresh().catch(()=>{});notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
   };
+  // Like ChatGPT's "Memory updated": a quiet note under the answer with a way to review it.
+  const showMemoryNote=(item,updates)=>{
+    if(!item||!Array.isArray(updates)||!updates.length)return;
+    const saved=updates.filter(update=>update.kind==='saved').map(update=>update.title);
+    const forgotten=updates.filter(update=>update.kind==='forgotten').map(update=>update.title);
+    const note=document.createElement('div');note.className='assistant-memory-note';
+    const text=document.createElement('span');
+    text.textContent=[saved.length?'Память обновлена: '+saved.join(', '):'',forgotten.length?'Удалено из памяти: '+forgotten.join(', '):''].filter(Boolean).join(' · ');
+    const manage=document.createElement('button');manage.type='button';manage.textContent='Управлять';
+    manage.onclick=()=>{const panel=document.querySelector('#assistant-knowledge-panel');if(panel)panel.dataset.scope='personal';document.querySelector('#assistant-knowledge')?.click()};
+    note.innerHTML=assistantIcon('book',14);note.append(text,manage);item.append(note);
+  };
   const renderSavedAction=(item,action,undoable,documentId)=>{
     item.replaceChildren();item.classList.add('is-saved');const title=document.createElement('p');title.className='assistant-saved-title';title.textContent='Сохранено · '+action.summary;item.append(title);
     if(documentId){const pdf=document.createElement('button');pdf.type='button';pdf.className='btn ghost';pdf.textContent='Скачать PDF';pdf.onclick=()=>Workspace.download('/documents/'+encodeURIComponent(documentId)+'/pdf','smetra-document.pdf').catch(error=>notify(error.message));item.append(pdf)}
@@ -740,7 +752,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(kind==='status'){setActivity(payload.text);status.textContent=payload.text}
         if(kind==='web_source'){showSource(payload);setActivity('Проверяю источники…')}
         if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});setActivity('Конструирую смету…')}
-        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}

@@ -367,3 +367,20 @@ input[type="file"]:hover::file-selector-button{background:var(--surface-3)}
 }
 @keyframes sheet-in{from{transform:translateY(100%)}to{transform:none}}
 @keyframes sheet-out{to{transform:translateY(100%)}}
+
+/* ───────── Context menu ───────── */
+.sm-context{position:fixed;inset:auto;z-index:2000;min-width:220px;max-width:300px;margin:0;padding:5px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface-2);color:var(--text);box-shadow:var(--shadow-float);animation:pop-in 120ms var(--ease)}
+.sm-context.is-closing{animation:pop-out 120ms ease-in forwards;pointer-events:none}
+.sm-context-item{display:flex;align-items:center;gap:10px;width:100%;min-height:32px;padding:0 10px;border-radius:8px;color:var(--text);font-size:var(--fs-13);text-align:left}
+.sm-context-item svg{flex:none;width:16px;height:16px;color:var(--text-2)}
+.sm-context-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-context-item kbd{flex:none;padding:0;border:0;background:none;color:var(--text-3);font-family:var(--font);font-size:var(--fs-11)}
+.sm-context-item:hover:not(:disabled),.sm-context-item:focus-visible{outline:none;background:var(--surface-4)}
+.sm-context-item:disabled{color:var(--text-disabled);cursor:default}
+.sm-context-item:disabled svg{color:var(--text-disabled)}
+.sm-context-sep{height:1px;margin:4px 6px;background:var(--line)}
+
+/* ───────── Section rail toggle (settings, support) ───────── */
+.rail-toggle{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:var(--r-2);color:var(--text-3);transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.rail-toggle:hover{background:var(--surface-2);color:var(--text)}
+.rail-toggle svg{width:18px;height:18px}

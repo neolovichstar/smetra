@@ -339,6 +339,21 @@ window.SmetraCompleteAuth=async profile=>{
   await showApp();
 };
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
+// Section rails (settings, support) collapse to icons like the assistant rail.
+function railToggleMarkup(collapsed,id){
+  const arrow=collapsed?'M12 9l3 3-3 3':'M15 9l-3 3 3 3';
+  return `<button class="rail-toggle" id="${id}" type="button" aria-expanded="${!collapsed}" aria-label="${collapsed?'Развернуть панель':'Свернуть панель'}" title="${collapsed?'Развернуть панель':'Свернуть панель'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16"/><path d="${arrow}"/></svg></button>`;
+}
+function bindRailToggle(button,root,key){
+  if(!button||!root)return;
+  button.onclick=()=>{
+    const collapsed=root.classList.toggle('is-rail-collapsed');
+    button.setAttribute('aria-expanded',String(!collapsed));
+    const label=collapsed?'Развернуть панель':'Свернуть панель';button.setAttribute('aria-label',label);button.title=label;
+    button.querySelector('path:last-child')?.setAttribute('d',collapsed?'M12 9l3 3-3 3':'M15 9l-3 3 3 3');
+    try{localStorage.setItem(key,String(collapsed))}catch{}
+  };
+}
 // Profile and settings share one hub with its own section rail, like the assistant.
 const accountHubTabs=[['profile','Профиль','user'],['account','Аккаунт и вход','key'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
 function accountHubTab(){
@@ -349,10 +364,12 @@ function accountHubTab(){
 async function renderAccountHub(active){
   const owner=user,current=accountHubTab(),icon=name=>window.SmetraIcons?.svg(name,18)||'';
   const yandexPhoto=user.avatar_url?'Фото подтянуто из Яндекс ID.':'Фото подтянется из Яндекс ID после подтверждения доступа.';
-  view(`<section class="hub" aria-label="Профиль и настройки">
+  const railCollapsed=(()=>{try{return localStorage.getItem('smetra.hub.rail-collapsed')==='true'}catch{return false}})();
+  view(`<section class="hub${railCollapsed?' is-rail-collapsed':''}" aria-label="Профиль и настройки">
     <nav class="hub-rail" aria-label="Разделы настроек">
+      ${railToggleMarkup(railCollapsed,'hub-rail-toggle')}
       <div class="hub-identity"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></div></div>
-      <div class="hub-tabs" role="tablist" aria-orientation="vertical">${accountHubTabs.map(([id,label,name])=>`<button type="button" role="tab" id="hub-tab-${id}" class="hub-tab${id==='danger'?' is-danger':''}" data-hub-tab="${id}" aria-controls="hub-panel-${id}" aria-selected="${id===current}" tabindex="${id===current?0:-1}">${icon(name)}<span>${label}</span></button>`).join('')}</div>
+      <div class="hub-tabs" role="tablist" aria-orientation="vertical">${accountHubTabs.map(([id,label,name])=>`<button type="button" role="tab" id="hub-tab-${id}" class="hub-tab${id==='danger'?' is-danger':''}" data-hub-tab="${id}" title="${label}" aria-controls="hub-panel-${id}" aria-selected="${id===current}" tabindex="${id===current?0:-1}">${icon(name)}<span>${label}</span></button>`).join('')}</div>
     </nav>
     <div class="hub-main">
       <section class="hub-panel" id="hub-panel-profile" role="tabpanel" aria-labelledby="hub-tab-profile"${current==='profile'?'':' hidden'}><header class="hub-head"><h1>Профиль</h1><p>Как к вам обращаться и чем вы занимаетесь — ассистент учитывает это в работе.</p></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
@@ -367,6 +384,7 @@ async function renderAccountHub(active){
       <section class="hub-panel" id="hub-panel-danger" role="tabpanel" aria-labelledby="hub-tab-danger"${current==='danger'?'':' hidden'}><header class="hub-head"><h1>Удаление аккаунта</h1><p>Необратимое действие — сметы и доступ будут удалены.</p></header><div class="hub-card hub-danger"><p>Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></section>
     </div>
   </section>`);
+  bindRailToggle(document.querySelector('#hub-rail-toggle'),document.querySelector('.hub'),'smetra.hub.rail-collapsed');
   const tabs=[...document.querySelectorAll('[data-hub-tab]')];
   const select=(id,focus=false)=>{
     tabs.forEach(button=>{const on=button.dataset.hubTab===id;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;if(on&&focus)button.focus()});

@@ -43,6 +43,9 @@ def profile_route(con, user, method, data):
     return {'profile': current}
 
 
+MEMORY_LIMIT = 50
+
+
 def memory_items(service):
     return [dict(row) for row in service.con.execute(
         'SELECT id,title,content,source,enabled,created_at,updated_at FROM assistant_memory '
@@ -60,7 +63,7 @@ def _save(service, data, source='manual'):
                                   (service.user['id'], service.wid, key)).fetchone()
         count = service.con.execute('SELECT count(*) FROM assistant_memory WHERE user_id=? AND workspace_id=?',
                                     (service.user['id'], service.wid)).fetchone()[0]
-        if not old and count >= 50:
+        if not old and count >= MEMORY_LIMIT:
             raise DomainError(409, 'В памяти максимум 50 записей. Удалите ненужные')
         item_id = old['id'] if old else identity()
         service.con.execute(
@@ -74,7 +77,13 @@ def _save(service, data, source='manual'):
 
 def memory_route(service, method, parts, data):
     if method == 'GET' and not parts:
-        return 200, {'items': memory_items(service), 'enabled': bool(profile(service.con, service.user)['memory_enabled'])}
+        return 200, {'items': memory_items(service), 'enabled': bool(profile(service.con, service.user)['memory_enabled']),
+                     'limit': MEMORY_LIMIT}
+    if method == 'DELETE' and not parts:
+        # "Clear memory" removes every personal record in this workspace at once.
+        removed = service.con.execute('DELETE FROM assistant_memory WHERE user_id=? AND workspace_id=?',
+                                      (service.user['id'], service.wid)).rowcount
+        return 200, {'ok': True, 'removed': max(0, removed or 0)}
     if method == 'POST' and not parts:
         return 201, _save(service, data)
     if len(parts) != 1:
@@ -113,10 +122,33 @@ def remember(service, args, prompt):
     return _save(service, args, 'assistant')
 
 
+def forget(service, args):
+    """Remove the records whose topic matches what the user asked to forget."""
+    title = string(args.get('title', ''), 'Тема', 120, True).casefold()
+    rows = service.con.execute('SELECT id,title,title_key FROM assistant_memory WHERE user_id=? AND workspace_id=?',
+                               (service.user['id'], service.wid)).fetchall()
+    matches = [row for row in rows if row['title_key'] == title] or [
+        row for row in rows if title in row['title_key'] or row['title_key'] in title]
+    for row in matches[:3]:
+        service.con.execute('DELETE FROM assistant_memory WHERE id=? AND user_id=? AND workspace_id=?',
+                            (row['id'], service.user['id'], service.wid))
+    return {'forgotten': len(matches[:3]), 'titles': [row['title'] for row in matches[:3]]}
+
+
 def assistant_context(service):
     from backend.assistant_files import _SECRET
 
     info = profile(service.con, service.user)
     info['about'] = info['about'][:1000]
-    facts = [{'title': item['title'], 'content': item['content'][:400]} for item in memory_items(service) if item['enabled']][:5] if info['memory_enabled'] else []
+    facts, budget = [], 6000
+    if info['memory_enabled']:
+        # Up to 30 active facts, newest first, within a fixed character budget.
+        for item in memory_items(service):
+            if not item['enabled'] or len(facts) >= 30:
+                continue
+            fact = {'title': item['title'], 'content': item['content'][:400]}
+            budget -= len(fact['title']) + len(fact['content'])
+            if budget < 0:
+                break
+            facts.append(fact)
     return _SECRET.sub('[секрет скрыт]', packed({'profile': info, 'memory': facts}))

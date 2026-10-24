@@ -99,6 +99,20 @@ def _conversations(service, method, parts, data):
             raise DomainError(400, "Неверный параметр сохранения общего диалога")
         if adopt:
             _ensure_general_idle(service)
+        elif title == "Новый диалог" and not context_entity:
+            # Repeated "new dialog" clicks reuse one untouched dialog instead of
+            # filling the history with empty copies.
+            empty = service.con.execute(
+                "SELECT * FROM assistant_conversations c WHERE c.workspace_id=? AND c.user_id=? "
+                "AND c.title='Новый диалог' AND c.context_entity='' AND NOT EXISTS("
+                "SELECT 1 FROM assistant_messages m WHERE m.conversation_id=c.id) "
+                "ORDER BY c.created_at DESC LIMIT 1",
+                (service.wid, service.user["id"]),
+            ).fetchone()
+            if empty:
+                service.con.execute(
+                    "UPDATE assistant_conversations SET updated_at=? WHERE id=?", (stamp(), empty["id"]))
+                return 200, {"conversation": {**dict(empty), "updated_at": stamp()}, "reused": True}
         row = dict(
             id=identity(), workspace_id=service.wid, user_id=service.user["id"],
             title=title, context_entity=context_entity, context_id=context_id,

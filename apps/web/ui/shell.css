@@ -43,6 +43,8 @@ body.sidebar-compact .app-shell{grid-template-columns:var(--sidebar-rail) minmax
 .main{min-width:0;padding:var(--s-7) var(--content-pad) var(--s-10);container-type:inline-size;container-name:content}
 .main{display:grid;grid-template-columns:minmax(0,var(--content-max));justify-content:center;align-content:start}
 .main>*{min-width:0}
+/* Pages with their own section rail sit flush against the main sidebar. */
+#content:is([data-section="assistant"],[data-section="support"],[data-section="profile"],[data-section="settings"]){padding:0;grid-template-columns:minmax(0,1fr);justify-content:stretch}
 .main.app-view-enter>*{animation:view-enter 260ms var(--ease)}
 @keyframes view-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 

@@ -21,7 +21,7 @@
       script.onload = resolve; script.onerror = () => reject(Error('Не удалось загрузить страницу'));
       document.head.append(script);
     });
-    Promise.all(['/ui/icons.js?v=20261025-r3', '/app.js?v=20261025-r3', '/workspace.js?v=20261025-r3'].map(load))
+    Promise.all(['/ui/icons.js?v=20261025-r4', '/app.js?v=20261025-r4', '/workspace.js?v=20261025-r4'].map(load))
       .then(() => { root.dataset.theme = 'light'; document.body.classList.remove('dark'); })
       .then(() => params.get('intake') ? window.Workspace.intakePage(params.get('intake')) : window.Workspace.publicPage(params.get('quote')))
       .catch(error => {

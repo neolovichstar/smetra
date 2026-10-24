@@ -157,10 +157,20 @@
 @media (max-width:700px){.object-chat-layout{grid-template-columns:1fr}.object-chat-list{max-height:200px;border-right:0;border-bottom:1px solid var(--line)}}
 
 /* ───────── Messenger (support page and communication center) ───────── */
-.tg{--tg-rail-w:320px;display:grid;grid-template-columns:var(--tg-rail-w) minmax(0,1fr);min-height:0;background:var(--bg)}
-.tg-rail{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line);background:var(--bg)}
-.tg-rail-head{display:flex;align-items:center;gap:8px;min-height:60px;padding:10px 12px 10px 16px}
-.tg-rail-head h1,.tg-rail-head h2{flex:1;min-width:0;font-size:var(--fs-18);font-weight:600;letter-spacing:var(--tracking-tight)}
+.tg{--tg-rail-w:320px;display:grid;grid-template-columns:var(--tg-rail-w) minmax(0,1fr);min-height:0;background:var(--bg);transition:grid-template-columns var(--t-slow) var(--ease)}
+.tg.is-rail-collapsed{--tg-rail-w:76px}
+.tg-rail{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line);background:var(--bg);overflow:hidden}
+.tg-rail-head{display:flex;align-items:center;gap:8px;min-height:60px;padding:10px 12px 10px 21px}
+.tg-rail-head .rail-toggle{margin-left:-8px}
+.tg-rail-head h1,.tg-rail-head h2{flex:1;min-width:0;overflow:hidden;white-space:nowrap;font-size:var(--fs-18);font-weight:600;letter-spacing:var(--tracking-tight)}
+.tg-row-copy,.tg-rail-head h1,.tg-rail-foot,.support-studio .tg-rail-head .btn span{transition:opacity var(--t-base) var(--ease)}
+.tg.is-rail-collapsed .tg-row-copy,.tg.is-rail-collapsed .tg-rail-head h1,.tg.is-rail-collapsed .tg-rail-foot,.tg.is-rail-collapsed .tg-list-empty{opacity:0;pointer-events:none}
+.tg.is-rail-collapsed .tg-rail-head{flex-wrap:wrap;justify-content:center;padding:10px 0;gap:6px}
+.tg.is-rail-collapsed .tg-rail-head h1{display:none}
+.tg.is-rail-collapsed .tg-rail-head .rail-toggle{margin:0}
+.tg.is-rail-collapsed .tg-rail-head .btn{width:36px;padding:0;justify-content:center}
+.tg.is-rail-collapsed .tg-rail-head .btn span{display:none}
+.tg.is-rail-collapsed .tg-row{padding:8px 16px}
 .tg-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 8px 8px}
 .tg-list-empty{padding:24px 12px;color:var(--text-3);font-size:var(--fs-13);text-align:center}
 .tg-row{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:8px 10px;border-radius:12px;text-align:left;transition:background-color var(--t-fast) var(--ease)}
@@ -236,7 +246,6 @@
 .tg-send svg{width:20px;height:20px}
 
 /* Support page fills the workspace like the assistant. */
-#content[data-section="support"]{padding:0}
 .support-studio{height:calc(100dvh - var(--topbar-h))}
 .support-studio .tg-rail-head .btn{gap:6px}
 
@@ -292,7 +301,12 @@ body.comms-scroll-locked{overflow:hidden}
 
 /* Phones: list and conversation take turns, like a native messenger. */
 @media (max-width:760px){
-  .tg{grid-template-columns:minmax(0,1fr)}
+  .tg,.tg.is-rail-collapsed{grid-template-columns:minmax(0,1fr)}
+  .tg-rail-head .rail-toggle{display:none}
+  .tg.is-rail-collapsed .tg-row-copy,.tg.is-rail-collapsed .tg-rail-foot,.tg.is-rail-collapsed .tg-list-empty{opacity:1;pointer-events:auto}
+  .tg.is-rail-collapsed .tg-rail-head{flex-wrap:nowrap;justify-content:flex-start;padding:10px 12px 10px 16px}
+  .tg.is-rail-collapsed .tg-rail-head h1{display:block}
+  .tg.is-rail-collapsed .tg-row{padding:8px 10px}
   .tg>.tg-chat{display:none}
   .tg.is-chat-open>.tg-rail,.comms-shell.is-chat-open .tg-rail{display:none}
   .tg.is-chat-open>.tg-chat,.comms-shell.is-chat-open .tg-chat{display:flex}
