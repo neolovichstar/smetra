@@ -258,3 +258,31 @@ body.workspace-page:not(.auth-mode).sidebar-compact #sidebar .sidebar-group .sid
 body.workspace-page:not(.auth-mode) #sidebar .sidebar-foot {
   flex:0 0 auto!important;
 }
+
+/* The history launcher is a stable 44px mobile control, never a full-width tile. */
+@media(max-width:700px){
+ body.workspace-page:not(.auth-mode) .assistant-studio .assistant-toolrail .assistant-workbar #assistant-history-toggle,
+ body.workspace-page:not(.auth-mode) .assistant-studio.assistant-tools-collapsed .assistant-toolrail .assistant-workbar #assistant-history-toggle{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  box-sizing:border-box!important;
+  flex:0 0 44px!important;
+  width:44px!important;min-width:44px!important;max-width:44px!important;
+  height:44px!important;min-height:44px!important;max-height:44px!important;
+  margin:0!important;padding:0!important;gap:0!important;
+  background:transparent!important;border:0!important;border-radius:9px!important;
+  transform:none!important;translate:0 0!important;
+ }
+ body.workspace-page:not(.auth-mode) .assistant-studio #assistant-history-toggle .assistant-icon-chat{
+  display:block!important;flex:0 0 18px!important;width:18px!important;height:18px!important;
+  color:#dedee5!important;background:currentColor!important;
+  mask-image:url('/assets/icons/chat-circle.svg')!important;
+  -webkit-mask-image:url('/assets/icons/chat-circle.svg')!important;
+  mask-position:center!important;-webkit-mask-position:center!important;
+  mask-size:contain!important;-webkit-mask-size:contain!important;
+  mask-repeat:no-repeat!important;-webkit-mask-repeat:no-repeat!important;
+  opacity:1!important;visibility:visible!important;transform:none!important;
+ }
+ body.workspace-page:not(.auth-mode) .assistant-studio #assistant-history-toggle .assistant-tool-label{
+  display:none!important;
+ }
+}
