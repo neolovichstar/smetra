@@ -43,6 +43,8 @@ TABLES = TABLES | frozenset(
     "product_sources product_price_observations cloud_connections cloud_oauth_states cloud_folder_bindings cloud_files document_processing_jobs cloud_watch_channels".split()
 )
 TABLES = TABLES | frozenset("object_chat_threads object_chat_messages project_cash_risks".split())
+# Communication and subscription tables must be registered before any request imports.
+TABLES = TABLES | frozenset("chat_conversations chat_members chat_messages app_presence billing_subscriptions".split())
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"

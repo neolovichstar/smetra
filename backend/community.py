@@ -9,16 +9,6 @@ import urllib.request
 from backend.app import ORIGIN, audit, now, uid, yookassa_mode
 from backend.business import DomainError as ApiError
 
-# PostgreSQL stores all application tables in a private schema. Registering the
-# extra names lets the existing parameterized SQL adapter apply its schema safely.
-try:
-    from backend import postgres as _postgres
-    _postgres.TABLES = _postgres.TABLES | frozenset(
-        {"chat_conversations", "chat_members", "chat_messages", "app_presence"}
-    )
-except (ImportError, AttributeError):
-    pass
-
 COMMUNITIES = {
     "general": "Общий чат",
     "finishing": "Отделка",
@@ -266,6 +256,14 @@ def _conversation_view(row):
 
 def _list_conversations(con, user_id, kinds, include_user=False):
     placeholders = ",".join("?" for _ in kinds)
+    # Revoked workspace members must not see object conversations even when
+    # their historical chat_members row still exists. Direct/support chats are unchanged.
+    object_scope = (
+        " AND (c.kind<>'object' OR EXISTS (SELECT 1 FROM workspaces w "
+        "LEFT JOIN workspace_members wm ON wm.workspace_id=w.id AND wm.user_id=? "
+        "WHERE w.id=c.workspace_id AND (wm.user_id IS NOT NULL OR w.owner_id=?)))"
+        if "object" in kinds else ""
+    )
     rows = con.execute(
         "SELECT c.*, "
         "(SELECT m.body FROM chat_messages m WHERE m.conversation_id=c.id "
@@ -285,9 +283,10 @@ def _list_conversations(con, user_id, kinds, include_user=False):
         "(SELECT u.name FROM users u WHERE u.id=c.created_by) AS user_name, "
         "(SELECT u.email FROM users u WHERE u.id=c.created_by) AS user_email "
         "FROM chat_conversations c JOIN chat_members mine ON mine.conversation_id=c.id "
-        "WHERE mine.user_id=? AND c.kind IN (" + placeholders + ") "
+        "WHERE mine.user_id=? AND c.kind IN (" + placeholders + ")" + object_scope + " "
         "ORDER BY c.updated_at DESC LIMIT 100",
-        (user_id, user_id, user_id, user_id, user_id, *kinds),
+        (user_id, user_id, user_id, user_id, user_id, *kinds,
+         *((user_id, user_id) if object_scope else ())),
     ).fetchall()
     return [_conversation_view(row) for row in rows]
 
@@ -803,7 +802,7 @@ def _public_id_route(handler, method, path, query, con, user):
     if match and method in ("GET", "POST"):
         conversation_id = match.group(1)
         conversation = con.execute(
-            "SELECT id,kind,status,category FROM chat_conversations WHERE id=?",
+            "SELECT id,kind,status,category,workspace_id FROM chat_conversations WHERE id=?",
             (conversation_id,),
         ).fetchone()
         if not conversation or conversation["kind"] not in ("direct", "object", "estimate", "community"):
@@ -812,6 +811,16 @@ def _public_id_route(handler, method, path, query, con, user):
             if conversation["kind"] != "community":
                 raise ApiError(403, "Нет доступа к этому чату")
             _add_member(con, conversation_id, user["id"], "member")
+        if conversation["kind"] == "object":
+            # chat_members is historical; current workspace access is authoritative.
+            allowed = con.execute(
+                "SELECT 1 FROM workspaces w LEFT JOIN workspace_members wm "
+                "ON wm.workspace_id=w.id AND wm.user_id=? "
+                "WHERE w.id=? AND (wm.user_id IS NOT NULL OR w.owner_id=?)",
+                (user["id"], conversation["workspace_id"], user["id"]),
+            ).fetchone()
+            if not allowed:
+                raise ApiError(403, "Нет доступа к рабочему пространству этого чата")
         if method == "GET":
             after = (query.get("after") or ["0"])[0]
             try:
@@ -843,8 +852,35 @@ def _public_id_route(handler, method, path, query, con, user):
     return None
 
 
+def _limit_support_creation(handler, user):
+    # Account and IP limits both matter: rotating accounts must not bypass abuse controls.
+    handler.throttle("support-thread:user:" + user["id"], 8, 3600)
+    handler.throttle("support-thread:day:" + user["id"], 24, 86400)
+    handler.throttle("support-thread:ip:" + handler.client_address[0], 32, 3600)
+
+
+def _support_ai_bounded(handler, user, user_stats, history, message):
+    if wants_human(message):
+        return {"reply": "Передал обращение сотруднику поддержки.", "escalate": True,
+                "reason": "user_requested_human"}
+    try:
+        # The ai: prefix fails closed when Redis is down; a human handoff stays available.
+        handler.throttle("ai:support:user:" + user["id"], 8, 600)
+        handler.throttle("ai:support:day:" + user["id"], 48, 86400)
+        handler.throttle("ai:support:ip:" + handler.client_address[0], 36, 600)
+    except Exception as error:
+        if getattr(error, "status", None) not in (429, 503):
+            raise
+        return {
+            "reply": "Автоматическая поддержка сейчас занята. Передал обращение сотруднику.",
+            "escalate": True, "reason": "support_ai_limited",
+        }
+    return _support_ai_reply(user, user_stats, history, message)
+
+
 def _support_route(handler, method, path, query, con, user):
     if path == "/api/support" and method == "POST":
+        _limit_support_creation(handler, user)
         data = handler.body()
         message = _text(data.get("message"), 4000, required=True)
         subject = _text(data.get("subject") or "Обращение в поддержку", 120)
@@ -855,7 +891,7 @@ def _support_route(handler, method, path, query, con, user):
             (conversation_id, user["id"], message, now()),
         )
         _add_message(con, conversation_id, user["id"], "user", message)
-        response = _support_ai_reply(user, _support_user_context(con, user), [], message)
+        response = _support_ai_bounded(handler, user, _support_user_context(con, user), [], message)
         if response["escalate"]:
             con.execute(
                 "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
@@ -871,6 +907,7 @@ def _support_route(handler, method, path, query, con, user):
             "threads": _list_conversations(con, user["id"], ("support",))
         })
     if path == "/api/support/threads" and method == "POST":
+        _limit_support_creation(handler, user)
         data = handler.body()
         subject = _text(data.get("subject") or "Новый вопрос", 120, required=True)
         conversation_id = _new_conversation(con, "support", subject, user["id"])
@@ -922,7 +959,7 @@ def _support_route(handler, method, path, query, con, user):
             if conversation["needs_human"]:
                 return handler.send_json(201, {"messages": [], "needs_human": True})
             user_stats = _support_user_context(con, user)
-            response = _support_ai_reply(user, user_stats, history, message)
+            response = _support_ai_bounded(handler, user, user_stats, history, message)
             if response["escalate"]:
                 con.execute(
                     "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
