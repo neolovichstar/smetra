@@ -11,12 +11,12 @@ import secrets
 import time
 import uuid
 
-from backend.plan_catalog import public_catalog
+from backend.plan_catalog import public_catalog, PURCHASES
 
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
 # One-time assistant credits granted only after a provider-confirmed live payment.
-PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_plus_month': 50, 'team_month': 250, 'team_year': 1500}
+PURCHASE_BONUS_MESSAGES = {'pro_month': 50, 'pro_year': 300, 'pro_plus_month': 50, 'pro_plus_year': 400, 'team_month': 250, 'team_year': 1500}
 
 
 def now():
@@ -38,8 +38,8 @@ def integer_env(key, default, minimum=0, maximum=100_000_000):
 
 
 def configuration():
-    month = integer_env('PRO_MONTH_PRICE_KOPECKS', 49000, 100)
-    year = integer_env('PRO_YEAR_PRICE_KOPECKS', 490000, 100)
+    month = integer_env('PRO_MONTH_PRICE_KOPECKS', PURCHASES['pro_month'][1], 100)
+    year = integer_env('PRO_YEAR_PRICE_KOPECKS', PURCHASES['pro_year'][1], 100)
     experiment = os.getenv('PRICING_EXPERIMENT_ID', 'baseline')
     if not experiment or len(experiment) > 50 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in experiment):
         raise ValueError('Invalid pricing experiment')
@@ -74,12 +74,17 @@ def pricing(con, user):
         raise ValueError('Assigned pricing variant is no longer configured')
     prices = variants[assigned['variant']]
     launch_until = integer_env('LAUNCH_OFFER_UNTIL', 0, 0, 4_000_000_000)
-    return {'experiment': experiment, 'variant': assigned['variant'], 'plans': {
-        'pro_month': {'amount_kopecks': prices['month'], 'duration_days': 31},
-        'pro_year': {'amount_kopecks': prices['year'], 'duration_days': 366},
-        'pro_plus_month': {'amount_kopecks': 69000, 'duration_days': 31},
-        'team_month': {'amount_kopecks': 399000, 'duration_days': 31},
-        'team_year': {'amount_kopecks': 3990000, 'duration_days': 366}},
+    # Single source of truth: catalog, displayed checkout options and payment intents.
+    # Existing Solo A/B assignments remain supported, all other products use
+    # verified server prices from the same PURCHASES catalog as checkout.
+    option_prices = {
+        code: {'amount_kopecks': amount, 'duration_days': days}
+        for code, (_, amount, days) in PURCHASES.items()
+    }
+    option_prices['pro_month']['amount_kopecks'] = prices['month']
+    option_prices['pro_year']['amount_kopecks'] = prices['year']
+    return {'experiment': experiment, 'variant': assigned['variant'],
+        'plans': option_prices,
         'catalog': public_catalog(),
         'annual_saving_kopecks': prices['month']*12-prices['year'],
         'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
