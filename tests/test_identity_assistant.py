@@ -290,7 +290,8 @@ class IdentityAssistantTests(unittest.TestCase):
             self.assertFalse(self.call("/auth/providers")[1]["email_signup_available"])
         values["PUBLIC_ORIGIN"] = "http://localhost:8080"
         with patch.dict(os.environ, values):
-            self.assertTrue(self.call("/auth/providers")[1]["email_signup_available"])
+            # Localhost is not sufficient to bypass verified email OTP.
+            self.assertFalse(self.call("/auth/providers")[1]["email_signup_available"])
         values.update(PUBLIC_ORIGIN="https://example.test", SMTP_HOST="smtp.example.test", SMTP_FROM="support@example.test", SMTP_USER="qa", SMTP_PASSWORD="fixture-private", EMAIL_CODE_HMAC_SECRET="fixture-secret-abcdefghijklmnopqrstuvwxyz-123456")
         with patch.dict(os.environ, values):
             self.assertTrue(self.call("/auth/providers")[1]["email_signup_available"])
