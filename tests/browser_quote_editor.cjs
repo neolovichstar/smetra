@@ -79,7 +79,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:width<768});await sleep(150);
   assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'No editor overflow at '+width);
   fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/quote-editor-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
-  await click('#f-currency + .select-trigger');await sleep(200);assert.equal(await evaluate("{const r=document.querySelector('.select-menu:not(.select-menu-closing)').getBoundingClientRect();r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight}"),true,'Menu inside viewport at '+width);
+  await click('#f-currency + .select-trigger');await sleep(200);{const geometry=await evaluate("(()=>{const p=document.querySelector('.select-menu:not(.select-menu-closing)'),r=p.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,viewportWidth:innerWidth,viewportHeight:innerHeight,panelHeight:p.offsetHeight,position:getComputedStyle(p).position}})()");assert.equal(geometry.left>=-0.5&&geometry.right<=geometry.viewportWidth+0.5&&geometry.top>=-0.5&&geometry.bottom<=geometry.viewportHeight+0.5,true,'Menu inside viewport at '+width+': '+JSON.stringify(geometry));}
   fs.writeFileSync('data/qa/quote-editor-menu-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));await evaluate('SmetraSelects.close()');await sleep(180);
  }
  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});
