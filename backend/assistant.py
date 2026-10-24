@@ -267,6 +267,21 @@ def tools():
     text = {"type": "string"}
     result = [
         function(
+            "design_quote_layout",
+            "Сконструировать персональный дизайн существующей сметы. Один декларативный JSON-план произвольной композиции из повторяемых блоков; можно менять стиль, порядок, заголовки и структуру без множества мелких инструментов. Только визуальное представление, цены и позиции берутся из серверной сметы. Показывается в правой панели сразу. Всегда включай items и summary.",
+            {"id": {"type": "string"},
+             "style": {"type": "string", "enum": ["editorial", "minimal", "technical", "compact"]},
+             "tone": {"type": "string", "enum": ["neutral", "warm", "graphite", "sage", "sand"]},
+             "blocks": {"type": "array", "minItems": 2, "maxItems": 24,
+                        "items": {"type": "object", "properties": {
+                            "kind": {"type": "string", "enum": ["title", "intro", "summary", "items", "breakdown", "notes", "divider", "section", "metrics", "terms", "rooms"]},
+                            "title": {"type": "string"},
+                            "description": {"type": "string"},
+                            "width": {"type": "string", "enum": ["full", "half"]}
+                        }, "required": ["kind", "title", "description", "width"], "additionalProperties": False}}},
+            ("id", "style", "tone", "blocks"),
+        ),
+        function(
             "report_progress",
             "Установить краткий статус текущего действия, видимый пользователю. Вызывай при смене этапа, не изображай поиск или проверку, которые не выполняешь.",
             {"stage": {"type": "string", "enum": ["thinking", "reading_documents", "estimating", "materials", "reviewing", "writing"]}},
@@ -955,7 +970,7 @@ def _confirm(service, action_id):
         return result
 
 
-def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None):
+def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None, on_design=None):
     if conversation_id:
         history_sql = "SELECT role,content FROM assistant_messages WHERE workspace_id=? AND user_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 8"
         history_args = (service.wid, service.user["id"], conversation_id)
@@ -969,7 +984,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     system = (
         "Ты — Ассистент Сметры. Пиши по-русски, ясно и структурно: заголовки, короткие абзацы, списки, аккуратные Markdown-таблицы по необходимости, без эмодзи. "
         "Ты — внимательный рабочий помощник по сметам, строительным объектам, клиентам, заказам, задачам, расходам, платежам, документам и данным рабочего пространства. "
-        "Твоя цель — решить конкретную задачу пользователя, а не выдавать общий текст вместо выполненной проверки. Сначала пойми требуемый результат и используй доступные инструменты, когда вопрос зависит от фактических данных Сметры. "
+        "Твоя цель — решить конкретную задачу пользователя, а не выдавать общий текст вместо выполненной проверки. Если пользователь просит необычное, индивидуальное оформление сметы, используй design_quote_layout: компонуй блоки в любом порядке, со своим заголовком и стилем. Не подменяй проверенные позиции и итоги сметы своими числами. Сначала пойми требуемый результат и используй доступные инструменты, когда вопрос зависит от фактических данных Сметры. "
         "Проверяй реальные записи перед ответами о клиентах, сметах, суммах, статусах, сроках, задачах, документах, платежах и показателях. Выбирай самый прямой подходящий инструмент: overview для сводки, list_records для поиска списка, get_record для конкретной записи, инструменты файлов и базы знаний — для поиска источников. Не называй запись найденной, пока инструмент не вернул её. "
         "Для составных запросов выполни последовательность необходимых чтений и проверок, опирайся на полученные результаты и лишь затем формулируй вывод. Не останавливайся на советах вроде проверьте в разделе, если можешь проверить данные сам. Не вызывай инструменты без необходимости для обычного разговора или общих знаний. "
         "Не выдумывай имена, контакты, идентификаторы, цены, количества, даты, статусы, условия, цитаты из документов и результаты действий. Если важного факта нет, прямо обозначь пробел и задай один конкретный уточняющий вопрос. Разделяй подтверждённые данные, расчёты и предположения; предположения никогда не выдавай за факты. "
@@ -1017,7 +1032,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         )},
     ]
     model, paid_model = assistant_model(service, has_image=bool(image_url))
-    actions, answer, remembered = [], "", False
+    actions, designs, answer, remembered = [], [], "", False
     for turn in range(2):
         if on_status:
             on_status("Думаю…")
@@ -1046,7 +1061,15 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 args = json.loads(call["function"]["arguments"])
                 if not isinstance(args, dict):
                     raise ValueError("arguments")
-                if name == "report_progress":
+                if name == "design_quote_layout":
+                    from backend.quote_layout import validate_layout
+                    result = validate_layout(service, args)
+                    designs.append(result)
+                    if on_status:
+                        on_status("Конструирую документ…")
+                    if on_design:
+                        on_design(result)
+                elif name == "report_progress":
                     labels = {
                         "thinking": "Думаю…",
                         "reading_documents": "Изучаю документы…",
@@ -1084,7 +1107,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     if not answer:
         answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
     with transaction(service.con):
-        result = {"answer": answer, "actions": actions, "quota": public_quota(service)}
+        result = {"answer": answer, "actions": actions, "designs": designs, "quota": public_quota(service)}
         if on_commit:
             on_commit(result)
         for values in getattr(service, "assistant_deferred_actions", []):
@@ -1137,6 +1160,7 @@ class ChatStream:
                 self.service, self.prompt, delta, self.context,
                 self.conversation_id, lambda message: send("status", {"text": message}),
                 image_url=self.image_url, on_source=lambda source: (send("status", {"text": "Проверяю источники…"}), send("web_source", source)),
+                on_design=lambda design: send("quote_design", design),
             ))
         except DomainError as error:
             if not emitted:
