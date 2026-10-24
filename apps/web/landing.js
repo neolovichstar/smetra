@@ -1,4 +1,25 @@
 'use strict';
+
+/* Recover from a transient failed stylesheet request (for example a stale
+   browser/network cache). Do not change the design or retry healthy CSS. */
+(() => {
+  const recoverStyles = () => {
+    const links = document.querySelectorAll('link[rel="stylesheet"][href^="/ui/"]');
+    for (const link of links) {
+      if (link.sheet || link.dataset.cssRetried) continue;
+      link.dataset.cssRetried = '1';
+      const retry = link.cloneNode(false);
+      const url = new URL(link.href);
+      url.searchParams.set('_css_retry', Date.now().toString(36));
+      retry.href = url.href;
+      retry.addEventListener('load', () => link.remove(), { once: true });
+      retry.addEventListener('error', () => retry.remove(), { once: true });
+      link.insertAdjacentElement('afterend', retry);
+    }
+  };
+  if (document.readyState === 'complete') setTimeout(recoverStyles, 200);
+  else window.addEventListener('load', () => setTimeout(recoverStyles, 200), { once: true });
+})();
 /* Landing page behaviour. Prices come from the server; demo panels are labelled
    as examples. Motion is progressive: without JS or with reduced motion the
    page is complete and static. */
