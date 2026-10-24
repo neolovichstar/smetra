@@ -590,6 +590,44 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertIn('event: done',text)
         self.assertEqual(self.call("/assistant",token=token)[1]["messages"][-1]["content"],"**Привет!**")
 
+    def test_free_image_assistant_can_prepare_quote_changes(self):
+        """The free vision route must not silently lose quote-editing tools."""
+        from types import SimpleNamespace
+        from backend.assistant import assistant_model, query_model
+
+        service = SimpleNamespace(wid=None, user={"plan": "free", "entitlement_until": 0})
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, _limit):
+                return b'{"choices":[{"message":{"content":"OK","tool_calls":[]}}]}'
+
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "fixture-key",
+                                    "OPENROUTER_FREE_VISION_MODEL": "qwen/qwen3.8-27b:free"}),
+            patch("backend.assistant.urllib.request.urlopen", return_value=FakeResponse()) as opener,
+        ):
+            model, paid = assistant_model(service, has_image=True)
+            self.assertEqual(model, "qwen/qwen3.8-27b:free")
+            self.assertFalse(paid)
+            result = query_model(
+                [{"role": "user", "content": [{"type": "text", "text": "Составь смету"},
+                                            {"type": "image_url", "image_url": {"url": "data:image/png;base64,YQ=="}}]}],
+                model,
+            )
+        self.assertEqual(result["content"], "OK")
+        sent = json.loads(opener.call_args.args[0].data)
+        self.assertEqual(sent["model"], "qwen/qwen3.8-27b:free")
+        self.assertIn("tools", sent)
+        self.assertTrue(any(tool.get("function", {}).get("name") == "design_quote_layout"
+                            for tool in sent["tools"]))
+        self.assertFalse(any(tool.get("type") == "openrouter:web_search" for tool in sent["tools"]))
+
     def test_provider_stream_reassembles_fragmented_tool_calls(self):
         from backend.assistant import query_model_stream
 
