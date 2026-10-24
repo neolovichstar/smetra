@@ -431,9 +431,26 @@ def route(service, method, parts, query, data):
     if parts[0] in ("cloud",):
         from backend import cloud_drives
         return cloud_drives.route(service, method, parts[1:], query, data)
-    if parts[0] not in ("products", "product-sources", "price-history"):
+    if parts[0] not in ("products", "product-sources", "price-history", "price-impact"):
         raise business.DomainError(404, "Не найдено")
     access = _premium_access(service)
+    if parts == ["price-impact"] and method == "GET":
+        from backend.price_impact import calculate_price_impact
+        quote_id = str(query.get("quote_id", [""])[0]).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", quote_id):
+            raise business.DomainError(400, "Выберите смету для сравнения")
+        # Workspace-scoped get() prevents cross-tenant quote reads.
+        quote_row = service.get("quotes", quote_id)
+        quote = service.quote_view(quote_row)
+        rows = service.con.execute(
+            "SELECT id,quote_item_id,price_kopecks,currency,unit,availability,"
+            "source_status,monitored,last_checked_at,url "
+            "FROM product_sources WHERE workspace_id=? AND quote_id=? "
+            "AND monitored=1 AND source_status='active' ORDER BY updated_at DESC LIMIT 300",
+            (service.wid, quote_id),
+        ).fetchall()
+        result = calculate_price_impact(quote, [dict(row) for row in rows], _now())
+        return 200, result
     if parts == ["products", "preview"] and method == "POST":
         service.h.throttle("product-preview:" + service.wid + ":" + service.user["id"], 12, 60)
         result = fetch_product(data.get("url"))
