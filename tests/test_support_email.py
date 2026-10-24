@@ -18,8 +18,10 @@ class SupportEmailTests(unittest.TestCase):
         self.assertNotIn("guide?.querySelector(", text)
 
     def test_js_cache_version(self):
-        for name in ("app.html", "index.html"):
-            self.assertRegex((WEB/name).read_text(encoding="utf-8"), r"/app\.js\?v=[A-Za-z0-9_-]+")
+        # The landing now lazy-loads the cabinet runtime only for shared client pages.
+        self.assertRegex((WEB/"app.html").read_text(encoding="utf-8"), r"/app\.js\?v=[A-Za-z0-9_-]+")
+        self.assertRegex((WEB/"index.html").read_text(encoding="utf-8"), r"/landing\.js\?v=[A-Za-z0-9_-]+")
+        self.assertRegex((WEB/"landing.js").read_text(encoding="utf-8"), r"/app\.js\?v=[A-Za-z0-9_-]+")
 
     def test_each_mailbox_has_the_right_purpose(self):
         contacts=(WEB/"contacts.html").read_text(encoding="utf-8")
