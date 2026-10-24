@@ -289,7 +289,7 @@ class FlowTests(unittest.TestCase):
                     "id": "refund-test-1",
                     "payment_id": "provider-test-1",
                     "status": "succeeded",
-                    "amount": {"value": "490.00", "currency": "RUB"},
+                    "amount": {"value": "790.00", "currency": "RUB"},
                 }
             return {
                 "id": "provider-test-1",
@@ -297,7 +297,7 @@ class FlowTests(unittest.TestCase):
                 "recipient": {"account_id": "test_shop"},
                 "status": "succeeded",
                 "paid": True,
-                "amount": {"value": "490.00", "currency": "RUB"},
+                "amount": {"value": "790.00", "currency": "RUB"},
                 "metadata": {"user_id": self.payment_user, "plan": "pro_month"},
             }
 

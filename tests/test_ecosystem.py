@@ -36,8 +36,8 @@ class EcosystemTests(unittest.TestCase):
         status, data = self.call("/billing", token=token)
         self.assertEqual(status, 200)
         self.assertEqual(set(data["pricing"]["catalog"]), {"starter", "pro_solo", "pro_plus", "team"})
-        self.assertEqual(data["plans"]["pro_plus_month"], 69000)
-        self.assertEqual(data["plans"]["team_year"], 3990000)
+        self.assertEqual(data["plans"]["pro_plus_month"], 149000)
+        self.assertEqual(data["plans"]["team_year"], 6990000)
         self.assertNotIn("business_month", data["plans"])
 
     def test_free_and_solo_cannot_add_staff_and_team_is_five_seats(self):
@@ -89,7 +89,7 @@ class EcosystemTests(unittest.TestCase):
             remote = {"id": "eco-provider", "confirmation": {"confirmation_url": "https://pay.example.test/eco"}}
             local, _ = revenue.persist_checkout(con, user, "team-payment-fixture", "team_month", intent, remote)
             remote.update(status="succeeded", paid=True, test=False, recipient={"account_id": "eco-shop"},
-                          amount={"value": "3990.00", "currency": "RUB"},
+                          amount={"value": "6990.00", "currency": "RUB"},
                           metadata={"user_id": user_id, "plan": "team_month"})
             handler = object.__new__(self.mod.Handler)
             env = {"YOOKASSA_MODE": "live", "YOOKASSA_SHOP_ID": "eco-shop",
@@ -101,7 +101,7 @@ class EcosystemTests(unittest.TestCase):
                 self.assertEqual(until, con.execute("SELECT entitlement_until FROM workspaces WHERE id=?", (intent["workspace_id"],)).fetchone()[0])
                 self.assertEqual(con.execute("SELECT plan,seat_limit FROM workspaces WHERE id=?", (intent["workspace_id"],)).fetchone()["seat_limit"], 5)
                 handler.apply_refund(con, {"id": "eco-refund", "payment_id": "eco-provider", "status": "succeeded",
-                                          "amount": {"value": "3990.00", "currency": "RUB"}})
+                                          "amount": {"value": "6990.00", "currency": "RUB"}})
             self.assertEqual(con.execute("SELECT plan FROM workspaces WHERE id=?", (intent["workspace_id"],)).fetchone()[0], "free")
 
     def test_cash_risk_uses_real_receipts_and_dedupes_retries(self):
