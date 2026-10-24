@@ -94,7 +94,7 @@
     container.append(wrap);
   };
 
-  function mountAssistant({host,fetchQuote,onOpenEditor}){
+  function mountAssistant({host,fetchQuote,onOpenEditor,getUserId}){
     if(!host||typeof fetchQuote!=='function')throw Error('Quote preview requires an authorized quote fetcher');
     const panel=el('aside','smetra-quote-preview');
     panel.id='smetra-quote-preview';
@@ -113,7 +113,7 @@
     host.append(panel);
     let current=null,pending=null,visible=false,seq=0;
     const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
-    const storageUser=()=>window.user?.id||'';
+    const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
     let layout=null,configureVisible=false;
     const render=()=>{
       if(!visible)return;
