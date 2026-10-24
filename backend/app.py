@@ -598,6 +598,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("assistant-markdown-modern.css", "text/css"),
             ("assistant-interactions.css", "text/css"),
             ("quote-visual-core.css", "text/css"),
+            ("dashboard-reference.css", "text/css"),
             ("quote-visual-core.js", "text/javascript"),
             ("quote-layout-renderer.js", "text/javascript"),
             ("ai-workspace.js", "text/javascript"),
