@@ -16,6 +16,14 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
 await send('Network.deleteCookies',{name:'session',url:site});await send('Page.navigate',{url:site+'/app'});
  await until("document.querySelector('#auth-form')?.onsubmit");await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('.workspace-home')");
  await visit('assistant');await until("document.querySelector('#assistant-input')");
+ const composerControls=await evaluate("(()=>{const ids=['assistant-attach','assistant-voice','assistant-send'];return ids.map(id=>{const button=document.getElementById(id),rect=button.getBoundingClientRect();return {id,svg:button.querySelectorAll(':scope > svg').length,y:Math.round(rect.y),height:Math.round(rect.height),width:Math.round(rect.width)}})})()");
+ assert.equal(composerControls.length,3);
+ assert.ok(composerControls.every(control=>control.svg===1&&control.width>=36&&control.height>=36),'Attachment, voice and send are visible SVG buttons: '+JSON.stringify(composerControls));
+ assert.ok(Math.max(...composerControls.map(control=>control.y))-Math.min(...composerControls.map(control=>control.y))<=2,'Composer controls stay on one row: '+JSON.stringify(composerControls));
+ await evaluate("document.querySelector('#assistant-input').value='Проверка кнопок';document.querySelector('#assistant-input').dispatchEvent(new Event('input',{bubbles:true}))");
+ assert.equal(await evaluate("document.querySelector('#assistant-send').disabled"),false,'Typing enables send');
+ assert.equal(await evaluate("document.querySelector('#assistant-voice').disabled"),false,'Voice stays available beside send');
+ await evaluate("document.querySelector('#assistant-input').value='';document.querySelector('#assistant-input').dispatchEvent(new Event('input',{bubbles:true}))");
  assert.equal(await evaluate("document.querySelector('#sidebar .workspace-label')===null"),true,'Sidebar no longer renders the redundant Сметра/C workspace block');
  assert.equal(await evaluate("document.querySelector('#assistant-thread-select')?.closest('.select-control')===null"),true,'Hidden compatibility select must not create a duplicate visible dropdown');
  assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display"),'none','Mobile layout hides the desktop collapse control');
@@ -60,7 +68,7 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
   assert.ok(iconAudit.masks.create.includes('/assets/icons/plus.svg'),'New-dialog icon uses the shared plus asset');
   assert.ok(iconAudit.masks.knowledge.includes('/assets/icons/book-open.svg'),'Knowledge icon uses the shared book asset');
   assert.ok(iconAudit.masks.history.includes('/assets/icons/chat-circle.svg'),'History icon uses the shared chat asset');
-  assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-history-toggle')).display!=='none'"),width<=700,'History launcher appears only on compact layouts at '+width+'px');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-history-toggle')).display!=='none'"),width<=800,'History launcher appears only on compact layouts at '+width+'px');
   assert.ok(iconAudit.masks.trash.includes('/assets/icons/trash.svg'),'Delete icon uses the shared trash asset');
   assert.ok(iconAudit.inlineButtons.every(item=>item.before==='none'),'Inline disclosure icon has no duplicate CSS pseudo-icon: '+JSON.stringify(iconAudit.inlineButtons));
   assert.equal(await evaluate("document.querySelector('.assistant-options')===null"),true,'No global ellipsis action remains in the assistant rail');
@@ -71,9 +79,9 @@ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.n
   if(width>900){
    const rail=await evaluate("(()=>{const main=document.querySelector('#content.main'),sidebar=document.querySelector('#sidebar'),root=document.querySelector('.assistant-studio'),rail=root?.querySelector('.assistant-toolrail'),column=root?.querySelector('.assistant-main-column');if(!main||!sidebar||!root||!rail||!column)return null;const m=main.getBoundingClientRect(),sb=sidebar.getBoundingClientRect(),s=root.getBoundingClientRect(),r=rail.getBoundingClientRect(),c=column.getBoundingClientRect();return {sidebarRight:Math.round(sb.right),mainLeft:Math.round(m.left),mainWidth:Math.round(m.width),rootLeft:Math.round(s.left),rootWidth:Math.round(s.width),railLeft:Math.round(r.left),railRight:Math.round(r.right),columnLeft:Math.round(c.left),viewport:innerWidth}})()");
    assert.ok(rail,'Assistant split layout nodes must exist');
-   assert.ok(Math.abs(rail.mainLeft-rail.sidebarRight)<=1,'Main workspace starts at the primary sidebar edge: '+JSON.stringify(rail));
-   assert.ok(Math.abs(rail.rootLeft-rail.sidebarRight)<=1,'Assistant layout starts flush against the primary sidebar, not centered inside the page: '+JSON.stringify(rail));
-   assert.ok(Math.abs(rail.railLeft-rail.sidebarRight)<=1,'Assistant tools rail sits directly beside the primary sidebar with no gap: '+JSON.stringify(rail));
+   assert.ok(rail.mainLeft>=rail.sidebarRight&&rail.mainLeft-rail.sidebarRight<=16,'Main workspace follows the primary sidebar: '+JSON.stringify(rail));
+   assert.ok(Math.abs(rail.rootLeft-rail.mainLeft)<=1,'Assistant layout starts at the main content edge: '+JSON.stringify(rail));
+   assert.ok(Math.abs(rail.railLeft-rail.rootLeft)<=1,'Assistant tools rail starts at the assistant layout edge: '+JSON.stringify(rail));
    assert.ok(rail.rootWidth>=rail.mainWidth-48,'Assistant layout uses the available main-column width, not a centered fixed-width box: '+JSON.stringify(rail));
    assert.ok(rail.columnLeft>=rail.railRight,'Assistant conversation starts after the tools rail: '+JSON.stringify(rail));
   }

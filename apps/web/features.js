@@ -5,7 +5,7 @@
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js','/chat-markdown.js?v=20261024-md-v3']},
     quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261024-live-v1','/quote-visual-core.js?v=20261024-live-v1']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-chat.js?v=20261024-live-v1','/ai-workspace.js']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-chat.js?v=20261024-controls-v1','/ai-workspace.js']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261024-yandex-avatar-v1']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js']},
     construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261024-rooms-v1']},

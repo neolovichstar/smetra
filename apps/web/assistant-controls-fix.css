@@ -1,0 +1,136 @@
+/* The assistant owns one sidebar inside the main content, and three explicit composer controls. */
+@media (min-width:801px) {
+  body.workspace-page:not(.auth-mode) #shell.app-shell:has(.assistant-studio),
+  body.workspace-page:not(.auth-mode).sidebar-compact #shell.app-shell:has(.assistant-studio) {
+    grid-template-columns:240px minmax(0,1fr)!important;
+    gap:16px!important;
+  }
+  body.workspace-page:not(.auth-mode).sidebar-compact #shell.app-shell:has(.assistant-studio) {
+    grid-template-columns:66px minmax(0,1fr)!important;
+  }
+  body.workspace-page:not(.auth-mode) #shell.app-shell:has(.assistant-studio)>#content.main {
+    grid-column:2!important;
+    padding:0!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio {
+    display:grid!important;
+    grid-template-columns:232px minmax(0,1fr)!important;
+    gap:0!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed {
+    grid-template-columns:58px minmax(0,1fr)!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio>.assistant-toolrail {
+    grid-column:1!important;grid-row:1!important;order:0!important;
+    height:100%!important;margin:0!important;padding:10px 8px!important;
+    border:0!important;border-right:1px solid rgba(255,255,255,.1)!important;
+    border-radius:0!important;background:#0c0c0e!important;
+    overflow:hidden!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio>.assistant-main-column {
+    grid-column:2!important;grid-row:1!important;min-width:0!important;
+    padding:0 16px!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-toolrail-toggle {
+    display:grid!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-workbar {
+    display:flex!important;flex-direction:column!important;align-items:stretch!important;
+    width:100%!important;margin:0 0 12px!important;padding:0 0 12px!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-workbar button {
+    min-height:40px!important;border-radius:9px!important;padding:8px 10px!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.assistant-tools-collapsed) .assistant-history-panel {
+    display:flex!important;flex-direction:column!important;flex:1 1 auto!important;
+    min-height:0!important;max-height:none!important;width:100%!important;
+    margin:0!important;padding:0!important;overflow:hidden!important;border:0!important;
+    background:transparent!important;box-shadow:none!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.assistant-tools-collapsed) .assistant-history-list {
+    display:flex!important;flex-direction:column!important;min-height:0!important;
+    max-height:none!important;overflow-y:auto!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed .assistant-tool-label,
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed .assistant-conversation-title {
+    display:none!important;
+  }
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-form {
+  display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+  gap:4px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-input {
+  grid-column:1!important;grid-row:1!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools {
+  display:flex!important;align-items:center!important;gap:5px!important;
+  width:100%!important;min-width:0!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools>.assistant-attachment-bar {
+  display:flex!important;flex:0 0 40px!important;width:40px!important;min-width:40px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools>.assistant-jobbar {
+  display:flex!important;flex:1 1 auto!important;width:auto!important;min-width:0!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-attach,#assistant-voice,#assistant-send,#assistant-stop) {
+  display:grid!important;place-items:center!important;flex:0 0 40px!important;
+  width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;
+  margin:0!important;padding:0!important;border:1px solid transparent!important;
+  border-radius:10px!important;background:transparent!important;color:#e7e7eb!important;
+  font-size:0!important;box-shadow:none!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-send,#assistant-stop) {
+  flex:0 0 40px!important;grid-column:auto!important;grid-row:auto!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-attach,#assistant-voice,#assistant-send,#assistant-stop) svg {
+  display:block!important;width:20px!important;height:20px!important;min-width:20px!important;
+  color:inherit!important;stroke:currentColor!important;fill:none!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-attach,#assistant-voice,#assistant-send)::before {
+  content:none!important;display:none!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools #assistant-send {
+  border-color:rgba(255,255,255,.15)!important;background:#e6e6e9!important;color:#171719!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools #assistant-send:disabled {
+  background:#29292c!important;color:#929298!important;border-color:transparent!important;opacity:1!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools #assistant-voice.is-recording {
+  background:rgba(255,255,255,.12)!important;outline:2px solid #bcbcc4!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-attach,#assistant-voice):hover,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools #assistant-send:hover:not(:disabled) {
+  border-color:rgba(255,255,255,.2)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-stop[hidden],#assistant-attach-input[hidden]) {display:none!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-form:has(#assistant-stop:not([hidden])) #assistant-send {display:none!important}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools :is(#assistant-attach,#assistant-voice) {color:#29292d!important}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools #assistant-send {background:#29292d!important;color:#fff!important}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools #assistant-send:disabled {background:#e6e6e9!important;color:#7b7b83!important}
+@media (max-width:800px) {
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools {
+    gap:2px!important;
+  }
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio>.assistant-toolrail {
+    grid-column:auto!important;
+  }
+}
+
+/* The form's older ID selector must not turn this toolbar back into a three-column grid. */
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-form .assistant-compose-tools {
+  display:flex!important;flex-direction:row!important;align-items:center!important;
+  gap:5px!important;width:100%!important;min-height:42px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-form .assistant-compose-tools #assistant-voice {
+  display:grid!important;place-items:center!important;flex:0 0 40px!important;
+  width:40px!important;height:40px!important;min-height:40px!important;
+  margin:0!important;padding:0!important;background:transparent!important;
+  border:1px solid transparent!important;border-radius:10px!important;color:#e7e7eb!important;
+}
+:root[data-theme="light"] body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-form .assistant-compose-tools #assistant-voice {color:#29292d!important}
+@media(min-width:1180px){
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview:has(>.smetra-quote-preview[hidden]) {
+    grid-template-columns:232px minmax(0,1fr)!important;
+  }
+}

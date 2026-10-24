@@ -44,7 +44,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" type="button" aria-label="Убрать контекст">×</button></div>
-        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button is-voice" id="assistant-send" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" data-ui-icon="microphone" data-ui-icon-only="true"><span class="visually-hidden">Голосовой ввод</span></button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
+        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg></button><button class="assistant-action-button" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V4M5 11l7-7 7 7"/></svg></button><button class="btn" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>Стоп</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про ↗</a>
       </div>
     </div>
@@ -141,7 +141,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   conversationObserver.observe(messages,{childList:true,subtree:true});
   syncAssistantConversationState();
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">Прикрепить файл или фото</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden><span></span>';
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5l-7.6 7.6a5 5 0 0 1-7.1-7.1l8.4-8.4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-2.8-2.8l7.8-7.8"/></svg></button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden><span></span>';
   attachmentBar.querySelector('span').textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
@@ -152,27 +152,26 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
   jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));
   const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
-  composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
+  composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-voice'),document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
   const assistantForm=document.querySelector('#assistant-form');
   assistantForm.append(composeTools);
   // Background jobs belong to the composer surface directly above the message field.
   assistantForm.insertBefore(jobList,input);
   const send=document.querySelector('#assistant-send');
+  const voiceButton=document.querySelector('#assistant-voice');
   const status=document.querySelector('#assistant-status');
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
   let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   const syncSendButton=()=>{
-    const hasText=Boolean(input.value.trim()),hasImage=pendingPhotos.length>0;
-    const canSend=hasText||hasImage,icon=canSend?'arrow-up':'microphone';
-    send.type=canSend?'submit':'button';
-    send.dataset.uiIcon=icon;
-    // CSP style-src self: icons selected with external stylesheet by data-ui-icon.
-    send.classList.toggle('is-voice',!canSend);
+    const canSend=Boolean(input.value.trim()||pendingPhotos.length);
+    const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
+    send.disabled=!canSend||working||threadBusy||fileBlocking||!data.available||quotaBlocked||(backgroundMode&&!backgroundEnabled);
+    voiceButton.disabled=working||threadBusy||fileBlocking||!data.available;
     send.classList.toggle('has-message',canSend);
-    send.classList.toggle('is-recording',voiceListening||voiceStarting);
-    send.setAttribute('aria-label',canSend?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
-    send.title=canSend?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
-    send.setAttribute('aria-pressed',String(!canSend&&voiceListening));
+    voiceButton.classList.toggle('is-recording',voiceListening||voiceStarting);
+    voiceButton.setAttribute('aria-label',voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
+    voiceButton.title=voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
+    voiceButton.setAttribute('aria-pressed',String(voiceListening));
   };
   const startVoiceInput=async()=>{
     if(voiceListening){try{voiceRecognition?.stop()}catch{};return}
@@ -236,7 +235,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         'Не удалось включить микрофон. Проверьте разрешения сайта и повторите попытку.';
     }
   };
-  send.addEventListener('click',()=>{if(send.type==='button')startVoiceInput()});
+  voiceButton.addEventListener('click',startVoiceInput);
   const quotaLabel=document.querySelector('#assistant-quota');
   const upgrade=document.querySelector('#assistant-upgrade');
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
@@ -494,9 +493,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const quotaBlocked=value.remaining<1&&value.plan!=='pro';
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
-    // The empty composer button is a microphone, not an AI request: dictation remains available at zero quota.
-    const canRecordVoice=send.type==='button'&&!input.value.trim();
-    send.disabled=working||fileBlocking||!data.available||(!canRecordVoice&&(quotaBlocked||(!input.value.trim()&&!pendingPhotos.length)||(backgroundMode&&!backgroundEnabled)));
+    syncSendButton();
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';

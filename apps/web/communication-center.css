@@ -25,3 +25,29 @@ body.comms-scroll-locked{overflow:hidden}
 .comms-found-id{opacity:.55;font-size:10px}
 .comms-support-launch{margin-top:10px}
 .comms-support-note{margin-bottom:12px!important}
+
+/* Keep the conversation list visible while secondary creation flows are closed. */
+#communication-center .comms-window{box-sizing:border-box;min-height:0}
+#communication-center .comms-body{min-height:0;overflow:hidden}
+#communication-center .comms-sidebar{grid-template-rows:auto minmax(0,auto) minmax(100px,1fr);min-width:0}
+#communication-center .comms-tools{min-height:0;max-height:min(52vh,340px);overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+#communication-center .comms-list{min-height:100px;overscroll-behavior:contain}
+#communication-center .comms-form{min-width:0;padding:10px 2px 12px;gap:8px}
+#communication-center .comms-form :is(input,select,button){min-width:0;max-width:100%;box-sizing:border-box}
+#communication-center .comms-form button{white-space:normal;text-align:center}
+#communication-center .comms-quote-details{border-bottom:1px solid rgba(255,255,255,.1)}
+#communication-center .comms-quote-details>summary{list-style:none;cursor:pointer;padding:12px 4px;color:#c8c8ce;font-size:11px;font-weight:600}
+#communication-center .comms-quote-details>summary::-webkit-details-marker{display:none}
+#communication-center .comms-quote-details>summary::after{content:'+';float:right;font-size:16px;line-height:10px}
+#communication-center .comms-quote-details[open]>summary::after{content:'−'}
+#communication-center .comms-my-id{min-width:0;max-width:min(320px,36vw)}
+#communication-center .comms-my-id code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+#communication-center .comms-btn.primary{background:#e5e5e8;color:#1a1a1c}
+#communication-center .comms-btn.primary:disabled{opacity:.45}
+#communication-center .comms-top-actions>.comms-btn:focus-visible,#communication-center :is(button,input,textarea,summary):focus-visible{outline:2px solid #d4d4d8;outline-offset:2px}
+@media(max-width:700px){
+ #communication-center .comms-body{grid-template-rows:minmax(210px,44%) minmax(0,1fr)}
+ #communication-center .comms-tools{max-height:clamp(120px,22dvh,220px)}
+ #communication-center .comms-sidebar{grid-template-rows:auto minmax(0,auto) minmax(70px,1fr)}
+ #communication-center .comms-list{min-height:70px}
+}
