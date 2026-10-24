@@ -1,7 +1,10 @@
 """Read-only supplier price impact calculations must not alter estimates."""
 import copy
 import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
+from backend import business, product_sources
 from backend.price_impact import calculate_price_impact
 
 NOW = 1_800_000_000
@@ -113,6 +116,54 @@ class PriceImpactTests(unittest.TestCase):
         actual = calculate_price_impact(quote(), [source(quote_item_id="unrelated")], NOW)
         self.assertEqual(actual["linked_lines"], 0)
         self.assertEqual(actual["comparable_lines"], 0)
+
+
+
+class PriceImpactRouteTests(unittest.TestCase):
+    def test_quote_lookup_and_supplier_query_are_workspace_scoped(self):
+        service = SimpleNamespace(
+            wid="workspace-1", con=MagicMock(),
+            get=MagicMock(return_value={"id": "quote-1"}),
+            quote_view=MagicMock(return_value=quote()),
+        )
+        service.con.execute.return_value.fetchall.return_value = [source()]
+        with patch.object(product_sources, "_premium_access", return_value={"plan": "pro_plus"}), \
+                patch.object(product_sources, "_now", return_value=NOW):
+            status, report = product_sources.route(
+                service, "GET", ["price-impact"], {"quote_id": ["quote-1"]}, {}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(report["comparable_lines"], 1)
+        service.get.assert_called_once_with("quotes", "quote-1")
+        sql, params = service.con.execute.call_args.args
+        self.assertIn("workspace_id=?", sql)
+        self.assertIn("quote_id=?", sql)
+        self.assertEqual(params, ("workspace-1", "quote-1"))
+
+    def test_downgraded_plans_fail_before_quote_access(self):
+        service = SimpleNamespace(wid="workspace-1", con=MagicMock(), get=MagicMock())
+        with patch.object(product_sources, "_premium_access",
+                          side_effect=business.DomainError(402, "Upgrade")):
+            with self.assertRaises(business.DomainError) as error:
+                product_sources.route(
+                    service, "GET", ["price-impact"], {"quote_id": ["quote-1"]}, {}
+                )
+        self.assertEqual(error.exception.status, 402)
+        service.get.assert_not_called()
+
+    def test_foreign_quote_is_not_read(self):
+        service = SimpleNamespace(
+            wid="workspace-1", con=MagicMock(),
+            get=MagicMock(side_effect=business.DomainError(404, "Not found")),
+        )
+        with patch.object(product_sources, "_premium_access", return_value={"plan": "team"}):
+            with self.assertRaises(business.DomainError) as error:
+                product_sources.route(
+                    service, "GET", ["price-impact"], {"quote_id": ["quote-foreign"]}, {}
+                )
+        self.assertEqual(error.exception.status, 404)
+        service.con.execute.assert_not_called()
+
 
 
 if __name__ == "__main__":
