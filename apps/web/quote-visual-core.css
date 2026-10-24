@@ -1,0 +1,135 @@
+/* Quote composer — a resizable-feeling, stable third rail; no cartoon cards. */
+.workspace-page .assistant-studio.has-quote-preview{
+ --smetra-document-sep:rgba(255,255,255,.1);
+}
+@media(min-width:1180px){
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview,
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview.assistant-tools-collapsed{
+  grid-template-columns:var(--quote-rail-size,190px) minmax(320px,1fr) minmax(340px,42%)!important;
+  gap:12px!important;
+  transition:grid-template-columns 350ms cubic-bezier(.22,.82,.26,1)!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview.assistant-tools-collapsed{
+  --quote-rail-size:54px;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview>.assistant-main-column{
+  grid-column:2!important;min-width:0!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview>.smetra-quote-preview{
+  grid-column:3!important;grid-row:1!important;
+  min-width:0!important;min-height:0!important;max-height:calc(100dvh - 110px)!important;
+  margin:8px 8px 8px 0!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-quote-preview>.assistant-toolrail{
+  grid-column:1!important;grid-row:1!important;
+ }
+}
+.workspace-page .assistant-studio .smetra-quote-preview{
+ display:flex;flex-direction:column;min-width:0;overflow:hidden;
+ background:#101011;border:1px solid #303034;border-radius:14px;
+ color:#e4e4e7;box-shadow:0 12px 38px rgba(0,0,0,.12);
+}
+.workspace-page .assistant-studio .smetra-quote-preview[hidden]{display:none!important}
+.smetra-quote-preview-header{
+ display:flex;align-items:center;justify-content:space-between;gap:12px;
+ padding:16px 17px;border-bottom:1px solid #29292c;
+}
+.smetra-quote-preview-heading{min-width:0}
+.smetra-quote-preview-heading>small{display:block;font-size:10px;letter-spacing:.08em;color:#888891;margin-bottom:4px}
+.smetra-quote-preview-heading h2{font-size:15px;font-weight:650;letter-spacing:-.02em;margin:0}
+.smetra-quote-preview-close{display:grid;place-items:center;font-size:21px;flex:0 0 32px;height:32px;
+ background:transparent;color:#bcbcc3;border:0;border-radius:8px}
+.smetra-quote-preview-close:hover{background:#27272a;color:#fff}
+.smetra-quote-preview-content{min-height:0;overflow-y:auto;overflow-x:hidden;padding:13px 16px 22px;scrollbar-width:thin}
+.smetra-quote-preview-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.smetra-quote-preview-title h3{margin:0;font-size:13px;font-weight:650}
+.smetra-quote-preview-title span{font-size:10px;color:#a9a9ae}
+.smetra-quote-preview-controls{display:flex;justify-content:flex-end;padding:6px 0 10px}
+.smetra-quote-preview-tune,.smetra-quote-open-editor{background:transparent;border:1px solid #38383b;
+ color:#d9d9df;padding:8px 11px;border-radius:8px;font-size:11px;font-weight:600}
+.smetra-quote-preview-tune:hover,.smetra-quote-open-editor:hover{border-color:#73737a}
+.smetra-quote-preview-actions{display:flex;flex-direction:column;gap:12px;padding:15px 0 0}
+.smetra-document{
+ --smetra-document-accent:#babac2;
+ --smetra-document-room:#1d1d21;--smetra-visual-room:#252528;
+ --smetra-visual-outline:#9a9aa2;--smetra-visual-muted:#83838a;
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;
+ background:#151517;border:1px solid #303033;border-radius:11px;
+ padding:16px;min-width:0;overflow:hidden;
+}
+.smetra-document-tone--warm{--smetra-document-accent:#d6bea7}
+.smetra-document-tone--sage{--smetra-document-accent:#a9bdb0}
+.smetra-document-tone--sand{--smetra-document-accent:#c8c1aa}
+.smetra-document-tone--graphite{--smetra-document-accent:#d7d7df}
+.smetra-document--minimal{background:#111113;border-color:transparent;gap:16px}
+.smetra-document--technical{background:#171719;gap:9px;border-radius:4px}
+.smetra-document--compact{gap:6px;padding:11px}
+.smetra-document-block{min-width:0;grid-column:1/-1}
+.smetra-document-block.is-half{grid-column:auto}
+.smetra-document h2{font-size:19px;line-height:1.26;letter-spacing:-.03em;margin:5px 0 8px}
+.smetra-document h3{font-size:13px;line-height:1.3;letter-spacing:-.012em;margin:0 0 9px}
+.smetra-document p{font-size:12px;line-height:1.6;margin:4px 0;color:#b0b0b7}
+.smetra-document-title{border-bottom:1px solid #39393d;padding-bottom:12px}
+.smetra-document-title>small{font-size:9px;letter-spacing:.095em;color:var(--smetra-document-accent)}
+.smetra-document-lead{margin-top:8px!important}
+.smetra-document-summary{display:flex;flex-direction:column;gap:5px;padding:10px 0 12px;border-bottom:1px solid #3b3b3e}
+.smetra-document-summary span{font-size:11px;color:#b9b9bf}
+.smetra-document-summary strong{font-size:clamp(20px,2vw,27px);font-variant-numeric:tabular-nums;letter-spacing:-.045em;font-weight:660}
+.smetra-document-warning{font-size:10px;color:#d9bf8e}
+.smetra-document-lines{display:flex;flex-direction:column}
+.smetra-document-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:9px;
+ align-items:center;padding:10px 0;border-bottom:1px solid #313135;font-size:11px}
+.smetra-document-line:last-child{border-bottom:0}
+.smetra-document-line-caption{min-width:0;display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.smetra-document-line-caption>small{font-size:10px;color:#81818b}
+.smetra-document-line-caption>span{min-width:0;flex:1;font-weight:600;overflow-wrap:anywhere}
+.smetra-document-line-caption p{flex:1 0 100%;font-size:10px;margin:0 0 0 23px}
+.smetra-document-line-quantity{color:#b5b5bc;white-space:nowrap;font-variant-numeric:tabular-nums}
+.smetra-document-line strong{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+.smetra-document-divider{height:1px;width:100%;border:0;background:#343439}
+.smetra-document-notes,.smetra-document-terms,.smetra-document-section{padding:7px 0;border-top:1px solid #353539}
+.smetra-document-config{display:flex;flex-direction:column;gap:10px;border:1px solid #333338;border-radius:9px;
+ padding:13px;background:#1a1a1d;margin:0 0 12px}
+.smetra-document-config h3{margin:0;font-size:12px}
+.smetra-document-config-styles{display:flex;flex-wrap:wrap;gap:5px}
+.smetra-document-config-styles button,.smetra-document-config-row button{
+ background:#242427;color:#d5d5db;border:1px solid #39393e;border-radius:6px;padding:6px 8px;font-size:11px}
+.smetra-document-config-styles button[aria-pressed=true]{border-color:#c8c8d0;color:white}
+.smetra-document-config-rows{display:flex;flex-direction:column;gap:5px}
+.smetra-document-config-row{display:flex;align-items:center;gap:6px}
+.smetra-document-config-row span{flex:1;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.smetra-document-config-row button{padding:3px 8px}
+.smetra-document-config-add{width:100%;background:#26262a;color:#e4e4e9;border:1px solid #38383d;padding:9px;border-radius:7px}
+.smetra-visual-heading,.smetra-visual-bar-label{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.smetra-visual-heading{margin-bottom:10px;font-size:12px}
+.smetra-visual-heading small{font-size:10px;color:#95959d}
+.smetra-visual-bar-row{margin:9px 0}
+.smetra-visual-bar-label{font-size:10.5px;margin-bottom:6px;color:#d4d4da}
+.smetra-visual-bar-track{height:5px;background:#303036;border-radius:3px;overflow:hidden}
+.smetra-visual-bar-fill{height:100%;display:block;background:var(--smetra-document-accent,#d1d1d8);border-radius:3px}
+.smetra-visual-footnote{font-size:10px!important;line-height:1.5!important;color:#9898a2!important}
+.smetra-visual-empty{padding:18px 0;font-size:12px;color:#a7a7b0}
+.smetra-room-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.smetra-room-header h3{margin:0;font-size:14px}
+.smetra-room-header small{font-size:10px;color:#9999a2}
+.smetra-room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:10px;padding:10px 0}
+.smetra-room-card{margin:0;border:1px solid #343439;border-radius:10px;background:#161619;padding:10px;min-width:0}
+.smetra-room-card svg{display:block;width:100%;height:auto;max-height:175px}
+.smetra-room-caption{display:flex;justify-content:space-between;gap:8px;font-size:11px}
+.smetra-room-caption span{color:#d1d1d7;font-variant-numeric:tabular-nums}
+.smetra-room-visuals{margin:18px 0;padding:15px;background:#111113;border:1px solid #343439;border-radius:12px;
+ --smetra-visual-room:#252528;--smetra-visual-outline:#b0b0ba;--smetra-visual-muted:#9999a2}
+.smetra-room-visuals .smetra-room-card svg{color:#bebec5}
+@media(max-width:1179px){
+ .workspace-page .assistant-studio .smetra-quote-preview{
+  position:fixed;z-index:160;right:12px;top:70px;bottom:12px;width:min(520px,calc(100vw - 24px));
+  max-height:none;box-shadow:0 18px 70px rgba(0,0,0,.55)
+ }
+}
+@media(max-width:640px){
+ .workspace-page .assistant-studio .smetra-quote-preview{top:50px;right:0;bottom:0;width:100%;border-radius:12px 12px 0 0}
+ .smetra-document-block.is-half{grid-column:1/-1}
+}
+@media(prefers-reduced-motion:reduce){
+ .workspace-page .assistant-studio.has-quote-preview{transition:none!important}
+}
