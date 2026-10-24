@@ -635,6 +635,24 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(sentPhotos.length){const attached=document.createElement('small');attached.className='assistant-message-attachment';attached.textContent='Фото: '+sentPhotos.map(file=>file.name).join(', ');userMessage.body.append(attached)}
     const assistantMessage=addMessage('assistant','');
     assistantMessage.item.classList.add('streaming');
+    const activity=document.createElement('div');activity.className='assistant-activity';activity.setAttribute('role','status');
+    const pulse=document.createElement('span');pulse.className='assistant-activity-indicator';pulse.setAttribute('aria-hidden','true');
+    const activityLabel=document.createElement('span');activityLabel.className='assistant-activity-label';activityLabel.textContent='Думаю…';
+    const sources=document.createElement('div');sources.className='assistant-activity-sources';
+    activity.append(pulse,activityLabel,sources);assistantMessage.item.prepend(activity);
+    const setActivity=value=>{activityLabel.textContent=String(value||'Думаю…').slice(0,100)};
+    const showSource=item=>{
+      if(!item||typeof item.url!=='string'||sources.children.length>=3)return;
+      let url;try{url=new URL(item.url)}catch{return}
+      if(!['http:','https:'].includes(url.protocol)||!url.hostname||url.username||url.password)return;
+      if([...sources.querySelectorAll('a')].some(a=>a.href===url.href))return;
+      const chip=document.createElement('a');chip.className='assistant-source';chip.href=url.href;chip.target='_blank';chip.rel='noopener noreferrer';
+      const icon=document.createElement('img');icon.alt='';icon.loading='lazy';
+      icon.src='https://www.google.com/s2/favicons?domain='+encodeURIComponent(url.hostname)+'&sz=32';
+      icon.onerror=()=>{const fallback=document.createElement('span');fallback.className='assistant-source-fallback';fallback.textContent=url.hostname[0].toUpperCase();icon.replaceWith(fallback)};
+      const name=document.createElement('span');name.className='assistant-source-name';name.textContent=url.hostname;
+      chip.append(icon,name);sources.append(chip);
+    };
     scrollBottom();
     let generated='',paintPending=false,completed=false,paintFrame=0,lastPaint=0;
     const paint=()=>{const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
@@ -650,10 +668,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
-        if(kind==='ready'){renderQuota(payload.quota);status.textContent='Формулирую ответ…'}
-        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();status.textContent='Пишу ответ…'}
-        if(kind==='status')status.textContent=payload.text;
-        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent=''}
+        if(kind==='ready'){renderQuota(payload.quota);setActivity('Думаю…');status.textContent='Формулирую ответ…'}
+        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();setActivity('Пишу ответ…');status.textContent='Пишу ответ…'}
+        if(kind==='status'){setActivity(payload.text);status.textContent=payload.text}
+        if(kind==='web_source'){showSource(payload);setActivity('Проверяю источники…')}
+        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
