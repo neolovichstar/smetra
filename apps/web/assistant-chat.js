@@ -752,4 +752,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   // Initialize the tray after quota/state callbacks are constructed.
   renderPhoto();
+  // A different route destroys this view. Release observers, preview listeners,
+  // and object URLs instead of retaining whole conversations in memory.
+  const disposeAssistantView=()=>{
+    conversationObserver.disconnect();
+    quotePreview?.destroy();
+    for(const entry of pendingPhotos)URL.revokeObjectURL(entry.url);
+    pendingPhotos=[];
+    document.removeEventListener('smetra:before-view',disposeAssistantView);
+  };
+  document.addEventListener('smetra:before-view',disposeAssistantView,{once:true});
 };
