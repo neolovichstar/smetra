@@ -194,6 +194,34 @@ class FiveSystemsTests(unittest.TestCase):
         self.assertEqual(response["selected_total_kopecks"],5700)
         self.assertEqual(self.call("/quotes/"+quote["id"],token=owner)[1]["quote"]["amount_kopecks"],5700)
 
+    def test_equally_priced_optional_lines_cannot_change_scope_on_approval(self):
+        owner,_=self.account("same-price-owner")
+        recipient,_=self.account("same-price-client")
+        rows=[
+            {"name":"Основная работа","quantity":"1","unit":"шт.","unit_price":1000},
+            {"name":"Вариант A","quantity":"1","unit":"шт.","unit_price":2000,"optional":True,"included":True},
+            {"name":"Вариант B","quantity":"1","unit":"шт.","unit_price":2000,"optional":True,"included":False},
+        ]
+        _,created=self.call("/quotes","POST",{"title":"Варианты","client":"Заказчик","items":rows},owner)
+        q=created["quote"]
+        self.assertEqual(self.call("/quotes/"+q["id"]+"/publish","POST",{
+            "review_confirmed":True,"revision":q["revision"]
+        },owner)[0],200)
+        share=self.call("/shares","POST",{
+            "quote_id":q["id"],"email":"same-price-client@test.invalid"
+        },owner)[1]["id"]
+        changed=self.call("/shared-inbox/"+share+"/selection","POST",{
+            "revision":0,"included_optional":[2]
+        },recipient)
+        self.assertEqual(changed[0],200,changed)
+        self.assertEqual(changed[1]["selected_total_kopecks"],3000)
+        approved=self.call("/shared-inbox/"+share+"/approve","POST",{
+            "revision":1,"action":"approve"
+        },recipient)
+        self.assertEqual(approved[0],200,approved)
+        self.assertEqual(approved[1]["status"],"changes_requested")
+        self.assertNotEqual(self.call("/quotes/"+q["id"],token=owner)[1]["quote"]["approval_state"],"approved")
+
     def test_unedited_selection_can_approve_original_quote(self):
         owner,_=self.account("five-second-sender")
         recipient,_=self.account("five-second-recipient")

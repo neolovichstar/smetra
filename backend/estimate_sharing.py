@@ -232,7 +232,11 @@ def recipient_route(handler,con,method,path):
         status="draft"
     else:
         selected_total=total
-        status="approved" if data.get("action")=="approve" and total==snapshot["amount_kopecks"] else "changes_requested"
+        # Equal totals are not equal scopes: clients can swap identically
+        # priced optional lines. Only the exact published set may be approved
+        # without a new contractor-reviewed version.
+        unchanged = selection == _existing_selection(snapshot)
+        status="approved" if data.get("action")=="approve" and unchanged and total==snapshot["amount_kopecks"] else "changes_requested"
         if data.get("action") not in ("approve","request_changes"):
             raise DomainError(400,"Выберите действие по согласованию")
     now=stamp()
