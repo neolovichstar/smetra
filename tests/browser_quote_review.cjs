@@ -16,7 +16,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
  await send('Page.navigate',{url:site+'/app?register=1'});
  await until("document.querySelector('#auth-submit')&&typeof api==='function'");
- const emailSignupShown=await evaluate("!document.querySelector('#email-disclosure').classList.contains('hidden')");
+ const emailSignupShown=await evaluate("(()=>{const el=document.querySelector('#email-disclosure');return !!el&&!el.classList.contains('hidden')&&getComputedStyle(el).display!=='none'&&el.getClientRects().length>0})()");
  if(emailSignupShown){
   await fill('#name','Проверка версий');
   await fill('#email','versions-'+Date.now()+'@test.invalid');
