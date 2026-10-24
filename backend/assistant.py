@@ -506,7 +506,7 @@ def assistant_model(service, has_image=False):
     if paid:
         return os.getenv("OPENROUTER_PAID_MODEL", "google/gemini-2.5-flash"), True
     name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free")
-            if has_image else os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free"))
+            if has_image else os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free"))
     if not (name == "openrouter/free" or name.endswith(":free")):
         raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
     return name, False
@@ -521,7 +521,7 @@ def provider_selection(model, paid_model=False, on_source=None):
     if model is None and context:
         return context
     if model is None:
-        model = os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free")
+        model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
     if not paid_model and model != "openrouter/free" and not model.endswith(":free"):
         raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
     return model, paid_model, on_source
