@@ -8,7 +8,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
  await new Promise(resolve=>setTimeout(resolve,0));
  const providerHost=doc.querySelector('#provider-buttons');
  const providerLinks=[...providerHost.querySelectorAll('a[data-provider]')];
- assert.deepEqual(providerLinks.map(link=>link.dataset.provider),['yandex','vk','mail','ok'],'OAuth buttons are present in initial HTML, before environment capability checks');
+ assert.deepEqual(providerLinks.map(link=>link.dataset.provider),['yandex'],'The enabled OAuth provider is visible before environment capability checks');
  assert.ok(providerLinks.every(link=>!link.hidden&&!link.classList.contains('hidden')&&link.getAttribute('href')==='/api/auth/oauth/'+link.dataset.provider+'/start'),'OAuth links are immediately visible and point directly to server-side routes');
  const disclosure=doc.querySelector('#email-disclosure'),name=doc.querySelector('#name'),tabs=doc.querySelector('.auth-tabs');
  assert.ok(disclosure.classList.contains('hidden'));assert.equal(name.required,false);assert.match(doc.querySelector('#auth-copy').textContent,/доступный сервис/);
