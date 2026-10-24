@@ -249,3 +249,14 @@ body.workspace-page:not(.auth-mode) .workspace-home .dashboard-secondary{
     padding:12px 13px 7px;border-radius:10px;
   }
 }
+
+/* Consistent 44px touch targets on narrow screens, after older 35/36px overrides. */
+@media(max-width:800px){
+ body.workspace-page:not(.auth-mode) #nav-toggle,
+ body.workspace-page:not(.auth-mode) #command-open {
+   display:inline-flex!important;align-items:center!important;justify-content:center!important;
+   width:44px!important;min-width:44px!important;max-width:44px!important;
+   height:44px!important;min-height:44px!important;max-height:44px!important;
+   padding:0!important;box-sizing:border-box!important;
+ }
+}
