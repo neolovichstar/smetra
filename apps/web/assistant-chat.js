@@ -341,7 +341,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const quoteViewToggle=document.createElement('button');
   quoteViewToggle.className='btn small assistant-tool-quote';
   quoteViewToggle.type='button';
-  quoteViewToggle.textContent='Предпросмотр сметы';
+  quoteViewToggle.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 16h6"/></svg><span class="assistant-tool-label">Смета</span>';
   quoteViewToggle.setAttribute('aria-label','Открыть предпросмотр сметы');
   quoteViewToggle.onclick=()=>{
     if(quotePreview?.currentId)quotePreview.open();
