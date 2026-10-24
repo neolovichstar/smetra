@@ -87,7 +87,8 @@ def deliver(address, code, intent):
     subject, plain, html = email_content(code, intent)
     msg = EmailMessage()
     msg["To"] = address
-    msg["From"] = os.environ["SMTP_FROM"]
+    from backend.mail_headers import configure
+    configure(msg, os.environ["SMTP_FROM"])
     msg["Subject"] = subject
     msg["Reply-To"] = "support@smetra.online"
     msg.set_content(plain)

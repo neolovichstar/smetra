@@ -157,7 +157,9 @@ def mail(to, subject, message):
     if any(not os.getenv(name) for name in required):
         raise ApiError(503, "Почта сервиса временно недоступна")
     email = EmailMessage()
-    email["From"], email["To"], email["Subject"] = os.environ["SMTP_FROM"], to, subject
+    from backend.mail_headers import configure
+    configure(email, os.environ["SMTP_FROM"])
+    email["To"], email["Subject"] = to, subject
     email.set_content(message)
     email["Reply-To"] = "support@smetra.online"
     from backend.mail_templates import action_html

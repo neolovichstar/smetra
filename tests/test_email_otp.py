@@ -160,6 +160,23 @@ class EmailOTPTests(unittest.TestCase):
                 "email":"otp-disabled@local.test","intent":"login",
             })[0],503)
 
+    def test_smtp_mail_has_stable_sender_identity_and_standard_headers(self):
+        from email.utils import parseaddr
+        with patch.dict(os.environ,CONFIG),patch(
+            "backend.email_otp.smtplib.SMTP_SSL"
+        ) as transport:
+            email_otp.deliver("user@example.org","047281","register")
+        message=transport.return_value.__enter__.return_value.send_message.call_args.args[0]
+        self.assertEqual(parseaddr(message["From"])[1],"noreply@smetra.online")
+        self.assertIn("Сметра",str(message["From"]))
+        self.assertIn("@smetra.online>",str(message["Message-ID"]))
+        self.assertEqual(message["Auto-Submitted"],"auto-generated")
+        self.assertEqual(message["Reply-To"],"support@smetra.online")
+        self.assertIsNotNone(message["Date"])
+        self.assertTrue(message.is_multipart())
+        self.assertIn("047281",message.get_body(preferencelist=("plain",)).get_content())
+        self.assertIn("047281",message.get_body(preferencelist=("html",)).get_content())
+
     def test_email_template_has_code_boxes_and_selectable_code(self):
         subject,text,html=email_otp.email_content("036925","register")
         self.assertEqual(html.count('font:700 28px/52px'),6)
