@@ -242,7 +242,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   const closeHistoryPanel=()=>{toolrail.classList.remove('is-history-expanded');historyToggle.setAttribute('aria-expanded','false')};
   historyToggle.onclick=event=>{event.stopPropagation();const open=toolrail.classList.toggle('is-history-expanded');historyToggle.setAttribute('aria-expanded',String(open));if(open)closeConversationMenus()};
-  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');closeHistoryPanel();toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';toolrailToggle.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
+  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');closeHistoryPanel();toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';const arrow=toolrailToggle.querySelector('svg path');if(arrow)arrow.setAttribute('d',collapsed?'M9 8l4 4-4 4M7 4v16':'M15 8l-4 4 4 4M7 4v16');try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
   document.querySelectorAll('[data-conversation]').forEach(button=>{button.onclick=()=>{
     const select=document.querySelector('#assistant-thread-select');select.value=button.dataset.conversation||'';select.dispatchEvent(new Event('change'));
   }});
@@ -620,9 +620,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const assistantMessage=addMessage('assistant','');
     assistantMessage.item.classList.add('streaming');
     scrollBottom();
-    let generated='',paintPending=false,completed=false;
-    const paint=()=>{const follow=nearBottom();paintPending=false;assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
-    const schedule=()=>{if(!paintPending){paintPending=true;requestAnimationFrame(paint)}};
+    let generated='',paintPending=false,completed=false,paintFrame=0,lastPaint=0;
+    const paint=()=>{const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
+    const schedule=()=>{if(!paintPending){paintPending=true;const frame=()=>{if(performance.now()-lastPaint<32)paintFrame=requestAnimationFrame(frame);else paint()};paintFrame=requestAnimationFrame(frame)}};
     try{
       const image=sentPhoto?await encodePhoto(sentPhoto):null;
       const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(image?{image}:{}),...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
@@ -635,17 +635,25 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
         if(kind==='ready'){renderQuota(payload.quota);status.textContent='Формулирую ответ…'}
-        if(kind==='delta'){generated+=payload.text;schedule();status.textContent='Пишу ответ…'}
+        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();status.textContent='Пишу ответ…'}
         if(kind==='status')status.textContent=payload.text;
-        if(kind==='done'){generated=payload.answer;paint();payload.actions.forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent=''}
+        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent=''}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
-      if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.');
+      if(!completed){if(buffer.trim())eventBlock(buffer.trim());if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.')}
       assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);clearPhoto();resize();syncSendButton();
     }catch(error){
-      if(error.name==='AbortError'){assistantMessage.item.classList.remove('streaming');if(!generated){assistantMessage.item.remove();userMessage.item.remove()}status.textContent='Ответ остановлен.'}
-      else{userMessage.item.remove();assistantMessage.item.remove();status.textContent=error.message}
+      cancelAnimationFrame(paintFrame);
+      assistantMessage.item.classList.remove('streaming');
+      if(generated&&assistantMessage.item.isConnected)paint();
+      if(error.name==='AbortError'){
+        if(!generated)assistantMessage.item.remove();
+        status.textContent='Ответ остановлен.';
+      }else{
+        if(!generated)assistantMessage.item.remove();
+        status.textContent=(generated?'Ответ прервался: ':'')+error.message;
+      }
       try{renderQuota((await api('/assistant')).quota)}catch{}
     }finally{working=false;requestController=null;stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus()}
   };
