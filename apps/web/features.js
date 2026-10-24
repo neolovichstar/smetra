@@ -16,7 +16,7 @@
     estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261024-v1']},
     quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js']},
     objectChats:{ready:()=>!!window.SmetraObjectChats,files:['/object-chats.js']},
-    premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js']},
+    premiumTools:{ready:()=>!!window.SmetraPremiumTools&&!!window.SmetraPriceImpact,files:['/price-impact.js?v=20261024-v1','/premium-tools.js?v=20261024-impact-v1']},
   };
   const load=source=>{
     if(pending.has(source))return pending.get(source);
