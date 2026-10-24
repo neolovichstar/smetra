@@ -254,7 +254,23 @@
       button.disabled=true;
       try{
         if(typeof window.Workspace?.editor!=='function')throw Error('Редактор сметы недоступен. Обновите страницу.');
-        await window.Workspace.editor(next);
+        // Keep the global navigation and editor's route guard in sync.
+        // replaceState avoids a hashchange rerender while the editor is opening.
+        const previousTab=typeof tab==='string'?tab:null;
+        if(previousTab!==null){
+          tab='quotes';
+          history.replaceState({},'',location.pathname+location.search+'#quotes');
+          document.querySelectorAll('[data-tab]').forEach(item=>item.classList.toggle('active',item.dataset.tab==='quotes'));
+        }
+        try{await window.Workspace.editor(next)}
+        catch(error){
+          if(previousTab!==null&&root.isConnected){
+            tab=previousTab;
+            history.replaceState({},'',location.pathname+location.search+'#'+previousTab);
+            document.querySelectorAll('[data-tab]').forEach(item=>item.classList.toggle('active',item.dataset.tab===previousTab));
+          }
+          throw error;
+        }
       }catch(error){
         if(root.isConnected)notify(error.message||'Не удалось открыть редактор сметы.');
       }finally{if(root.isConnected)button.disabled=false;}
