@@ -240,3 +240,60 @@ body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-t
 body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-toolrail-body{
  min-width:0!important;
 }
+
+
+/* Alignment invariant: the welcome headline, quick prompts and text composer
+   must share exactly the same centered column on every viewport. Previously
+   the thread had a 740px max-width but margin:0, so its headline was anchored
+   to the left while the composer was centered via margin:auto. */
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio {
+  --assistant-dialog-width: 740px;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-content {
+  width:100%!important;
+  min-width:0!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-messages.assistant-thread,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-actions,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-main-column>.assistant-composer {
+  box-sizing:border-box!important;
+  width:min(100%,var(--assistant-dialog-width))!important;
+  max-width:var(--assistant-dialog-width)!important;
+  margin-inline:auto!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) #assistant-messages.assistant-thread:has(.assistant-welcome) {
+  margin:0 auto!important;
+  padding-inline:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+  justify-content:center!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-welcome {
+  box-sizing:border-box!important;
+  width:100%!important;
+  max-width:none!important;
+  min-width:0!important;
+  margin-inline:auto!important;
+  padding-inline:0!important;
+  align-self:center!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-welcome :is(h2,p,.assistant-suggestions) {
+  box-sizing:border-box!important;
+  width:100%!important;
+  max-width:100%!important;
+  margin-inline:auto!important;
+  text-align:center!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-suggestions {
+  display:flex!important;
+  flex-wrap:wrap!important;
+  justify-content:center!important;
+  align-items:center!important;
+  gap:8px 14px!important;
+}
+@media(max-width:680px){
+  body.workspace-page:not(.auth-mode) #content.main .assistant-studio {
+    --assistant-dialog-width:100%;
+  }
+}

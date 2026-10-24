@@ -29,6 +29,16 @@ class AuthMotionTests(unittest.TestCase):
   self.assertIn('prefers-reduced-motion:reduce',source)
   self.assertIn('assistant-composer',source)
   self.assertIn('grid-template-columns',source)
+ def test_assistant_empty_state_shares_centered_composer_column(self):
+  css=(ROOT/'apps/web/auth-motion-fix.css').read_text()
+  html=(ROOT/'apps/web/app.html').read_text()
+  self.assertIn('--assistant-dialog-width: 740px',css)
+  self.assertIn('width:min(100%,var(--assistant-dialog-width))!important',css)
+  self.assertIn('#assistant-messages.assistant-thread',css)
+  self.assertIn('.assistant-main-column>.assistant-composer',css)
+  self.assertIn('margin-inline:auto!important',css)
+  self.assertIn('align-items:stretch!important',css)
+  self.assertIn('auth-motion-fix.css?v=20261024-alignment-v2',html)
  def test_oauth_start_cover_and_back_navigation(self):
   source=(ROOT/'apps/web/black.js').read_text()
   self.assertIn("smetra-app-transitioning",source)
