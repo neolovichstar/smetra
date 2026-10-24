@@ -4,6 +4,7 @@
 #estimate-editor .anti-estimate-head h3{margin:4px 0 6px;font-size:18px;font-weight:620;line-height:1.3;letter-spacing:-.035em;color:inherit}
 #estimate-editor .anti-estimate-head p{margin:0;color:var(--smetra-text-muted,#9999a1);font-size:11px;line-height:1.5}
 #estimate-editor .anti-estimate-kicker{color:var(--smetra-text-muted,#9999a1);font-size:10px;font-weight:600;letter-spacing:.1em}
+#estimate-editor .anti-estimate-symbol svg{width:17px;height:17px;display:block}
 #estimate-editor .anti-estimate-symbol{display:grid;place-items:center;width:30px;height:30px;flex:none;border:1px solid var(--smetra-line,#36363a);border-radius:9px;color:var(--smetra-text,#eee);font-size:14px}
 #estimate-editor .anti-estimate-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;border-bottom:1px solid var(--smetra-line,#303036);padding-bottom:16px}
 #estimate-editor .anti-count{display:flex;flex-direction:column;gap:5px;color:var(--smetra-text-muted,#9999a1);font-size:10px;line-height:1.4}
