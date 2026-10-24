@@ -31,6 +31,29 @@ class PostgresQueryTests(unittest.TestCase):
             "INSERT INTO smetra.files(id) VALUES(%s) ON CONFLICT DO NOTHING",
         )
 
+    def test_communication_and_subscription_tables_are_schema_qualified(self):
+        # Must work before importing backend.community; imports must not mutate SQL.
+        from backend.postgres import TABLES
+
+        tables = ("chat_conversations", "chat_members", "chat_messages",
+                  "app_presence", "billing_subscriptions")
+        self.assertTrue(set(tables).issubset(TABLES))
+        for table in tables:
+            with self.subTest(table=table):
+                self.assertEqual(
+                    translate(f"SELECT id FROM {table} WHERE id=?", "smetra", True),
+                    f"SELECT id FROM smetra.{table} WHERE id=%s",
+                )
+        self.assertEqual(
+            translate(
+                "SELECT COUNT(*) FROM billing_subscriptions b "
+                "JOIN users u ON b.user_id=u.id WHERE b.current_period_end>?",
+                "smetra", True,
+            ),
+            "SELECT COUNT(*) FROM smetra.billing_subscriptions b "
+            "JOIN smetra.users u ON b.user_id=u.id WHERE b.current_period_end>%s",
+        )
+
     def test_monthly_quota_upsert_targets_existing_counter(self):
         sql = (
             "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
