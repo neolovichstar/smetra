@@ -29,6 +29,7 @@ jobs:
           node tests/pwa_cache.cjs
           node tests/quote_money.cjs
           node tests/calculators.cjs
+          node tests/estimate_audit.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_communication.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_api_transport.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_capability.cjs
