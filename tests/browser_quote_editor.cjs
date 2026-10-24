@@ -15,7 +15,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
  await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-submit')&&typeof api==='function'");
- await fill('#name','Проверка редактора');await fill('#email','editor-'+Date.now()+'@test.invalid');await fill('#password','secure comparison password');await click('#auth-submit');await until("document.querySelector('#capture-text')");
+ await fill('#name','Проверка редактора');await fill('#email','editor-'+Date.now()+'@test.invalid');await fill('#password','secure comparison password');await click('#legal-consent');await click('#auth-submit');await until("document.querySelector('#capture-text')");
  const id=await evaluate("api('/quotes',{method:'POST',body:JSON.stringify({title:'Ремонт кухни',client:'Клиент',items:[{name:'Подготовка',unit_price:10000},{name:'Покраска',unit_price:20000}]})}).then(r=>r.quote.id)");
  const catalogId=await evaluate("api('/catalog',{method:'POST',body:JSON.stringify({name:'Монтаж плинтуса QA',price:12500,unit:'м'})}).then(r=>r.item.id)");
  const clientId=await evaluate("api('/clients',{method:'POST',body:JSON.stringify({name:'Клиент редактора QA'})}).then(r=>r.item.id)");

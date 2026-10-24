@@ -1,10 +1,23 @@
 const $ = (s) => document.querySelector(s);
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function userAvatarMarkup(person) {
+  const safeName=String(person?.name||'Сметра');
+  const first=escapeHtml(safeName.trim().slice(0,1).toLocaleUpperCase('ru-RU'));
+  const value=String(person?.avatar_url||'');
+  const valid=/^https:\/\/avatars\.yandex\.net\/get-yapic\/[a-zA-Z0-9_/-]{1,150}\/islands-200$/.test(value);
+  return valid?'<span class="user-avatar-fallback">'+first+'</span><img class="user-avatar-image" src="'+escapeHtml(value)+'" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">':'<span class="user-avatar-fallback">'+first+'</span>';
+}
+window.SmetraUserAvatar=userAvatarMarkup;
+// Failed remote images reveal the neutral initial without inline event handlers.
+document.addEventListener('error',event=>{
+  if(event.target?.matches?.('.user-avatar-image'))event.target.remove();
+},true);
+
 const rubFormatter=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:0,maximumFractionDigits:2});
 const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
-let user = null, quotes = [], tab = location.hash.slice(1) || 'dashboard', registering = false, toastTimer, renderRevision=0, authRevision=0;
+let user = null, quotes = [], tab = location.hash.slice(1) || (new URLSearchParams(location.search).get('cloud') === 'connected' ? 'premium' : 'dashboard'), registering = false, toastTimer, renderRevision=0, authRevision=0;
 try{sessionStorage.removeItem('mobile_token');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 const apiResponseCache=new Map();
@@ -33,12 +46,18 @@ async function api(path, options = {}) {
   const cacheEpoch=apiCacheEpoch;
   const request=(async()=>{
     const controller=options.signal?null:new AbortController();
-    const slow=method!=='GET'&&/^\/(assistant|ai|files)(\/|$)/.test(path);
+    const slow=method!=='GET'&&/^\/(assistant|ai|files|voice|design-projects)(\/|$)/.test(path);
     const timer=controller?setTimeout(()=>controller.abort(),slow?120000:30000):null;
     try{
-      const response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
+      let response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
       let result;
       try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
+      if(response.status===428&&(path==='/ai/draft'||path==='/assistant'||path.startsWith('/assistant/'))&&window.SmetraEstimateSafety){
+        if(await window.SmetraEstimateSafety.ensureConsent()){
+          response=await fetch('/api'+path,{credentials:'same-origin',...options,headers,signal:options.signal||controller.signal});
+          try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
+        }
+      }
       if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
       if(cacheable&&cacheEpoch===apiCacheEpoch&&user===owner){
         if(apiResponseCache.size>=100){const oldest=apiResponseCache.keys().next().value;if(oldest!==undefined)apiResponseCache.delete(oldest)}
@@ -55,6 +74,56 @@ async function api(path, options = {}) {
   try{return await request}finally{if(apiRequests.get(key)===request)apiRequests.delete(key)}
 }
 function notify(message) { const el=$('#toast'); if(!el){alert(message);return;} el.textContent=message;el.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.add('hidden'),4500); }
+const LEGAL_CONSENT_VERSION='2026-10-19-ai-estimate-v1';
+const REGISTRATION_CONSENT_VERSION='2026-10-19-registration-v1';
+const AI_ESTIMATE_DISCLAIMER='Расчет сгенерирован ИИ-ассистентом "сметра." и является предварительным черновиком. Обязательно проверьте объемы, технологию и цены перед подписанием. Сервис не несет ответственности за финансовые риски сторон.';
+window.SmetraEstimateSafety=(()=>{
+  let consentPromise=null;
+  const bannerHtml=()=>'<aside class="estimate-ai-warning" role="note"><strong>Предварительный расчёт</strong><p>'+escapeHtml(AI_ESTIMATE_DISCLAIMER)+'</p></aside>';
+  const ensureConsent=()=>{
+    if(consentPromise)return consentPromise;
+    consentPromise=(async()=>{
+      const current=await api('/me/legal-consent');
+      if(current.accepted&&current.version===LEGAL_CONSENT_VERSION)return true;
+      return new Promise(resolve=>{
+        const dialog=document.createElement('dialog');
+        dialog.className='estimate-safety-dialog';
+        dialog.setAttribute('aria-labelledby','estimate-consent-title');
+        dialog.innerHTML='<div class="estimate-safety-heading"><span class="overline">СМЕТРА / УСЛОВИЯ</span><h2 id="estimate-consent-title">Перед использованием AI</h2><p>AI создаёт только предварительные черновики. Объёмы, технология и цены требуют проверки.</p></div><label class="estimate-consent-check"><input type="checkbox" id="estimate-consent-check"><span>Я согласен с <a href="/terms" target="_blank" rel="noopener noreferrer">Пользовательским соглашением</a> и <a href="/disclaimer" target="_blank" rel="noopener noreferrer">Политикой отказа от ответственности (As Is)</a> и понимаю, что результат AI нужно проверить.</span></label><div class="estimate-safety-actions"><button type="button" class="btn" data-consent-cancel>Не сейчас</button><button type="button" class="btn primary" data-consent-accept disabled>Принять и продолжить</button></div><p class="form-error" role="alert" data-consent-error></p>';
+        let settled=false;
+        const finish=value=>{if(settled)return;settled=true;if(dialog.open)dialog.close();dialog.remove();resolve(value)};
+        const checkbox=dialog.querySelector('#estimate-consent-check'),accept=dialog.querySelector('[data-consent-accept]');
+        checkbox.addEventListener('change',()=>{accept.disabled=!checkbox.checked});
+        dialog.querySelector('[data-consent-cancel]').addEventListener('click',()=>finish(false));
+        dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false)});
+        accept.addEventListener('click',async()=>{
+          if(!checkbox.checked||accept.disabled)return;
+          accept.disabled=true;dialog.querySelector('[data-consent-error]').textContent='';
+          try{
+            const saved=await api('/me/legal-consent',{method:'POST',body:JSON.stringify({accepted:true,version:LEGAL_CONSENT_VERSION})});
+            finish(saved.accepted===true&&saved.version===LEGAL_CONSENT_VERSION);
+          }catch(error){dialog.querySelector('[data-consent-error]').textContent=error.message;accept.disabled=!checkbox.checked}
+        });
+        document.body.append(dialog);dialog.showModal();checkbox.focus();
+      });
+    })();
+    return consentPromise.finally(()=>{consentPromise=null});
+  };
+  const confirmReview=()=>new Promise(resolve=>{
+    const dialog=document.createElement('dialog');
+    dialog.className='estimate-safety-dialog estimate-review-dialog';
+    dialog.setAttribute('aria-labelledby','estimate-review-title');
+    dialog.innerHTML='<div class="estimate-safety-heading"><span class="overline">ПРОВЕРКА СМЕТЫ</span><h2 id="estimate-review-title">Вы проверили объёмы и цены?</h2><p>Перед экспортом PDF или отправкой клиенту убедитесь, что позиции, единицы, технология и цены соответствуют объекту.</p></div>'+bannerHtml()+'<div class="estimate-safety-actions"><button type="button" class="btn" data-review-cancel>Вернуться к проверке</button><button type="button" class="btn primary" data-review-confirm>Да, всё верно</button></div>';
+    let settled=false;
+    const finish=value=>{if(settled)return;settled=true;if(dialog.open)dialog.close();dialog.remove();resolve(value)};
+    dialog.querySelector('[data-review-cancel]').addEventListener('click',()=>finish(false));
+    dialog.querySelector('[data-review-confirm]').addEventListener('click',()=>finish(true));
+    dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false)});
+    document.body.append(dialog);dialog.showModal();dialog.querySelector('[data-review-cancel]').focus();
+  });
+  return {version:LEGAL_CONSENT_VERSION,disclaimer:AI_ESTIMATE_DISCLAIMER,bannerHtml,ensureConsent,confirmReview};
+})();
+
 function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';button.innerHTML='<img class="icon" src="/assets/icons/'+(dark?'sun':'moon')+'.svg" alt="">'+(id==='theme-alt'?label:'');button.setAttribute('aria-label',label);button.title=label;} }
 function theme() { const dark=document.body.classList.toggle('dark');document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('smetra_theme',dark?'dark':'light');}catch{} syncThemeLabel(); }
 let savedTheme;try{savedTheme=localStorage.getItem('smetra_theme');}catch{}
@@ -63,13 +132,26 @@ document.documentElement.dataset.theme=document.body.classList.contains('dark')?
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
 function loadingView(section){
-  const names={dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
+  const names={fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
   const title=names[section]||'Рабочее пространство';
   return `<section class="page-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Загрузка раздела"><div class="page-loading-head"><span class="page-skeleton page-skeleton-kicker"></span><span class="page-skeleton page-skeleton-title"></span><span class="page-skeleton page-skeleton-copy"></span></div><div class="page-loading-metrics"><span class="page-skeleton"></span><span class="page-skeleton"></span><span class="page-skeleton"></span></div><section class="page-loading-card"><span class="page-skeleton page-skeleton-heading"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row short"></span></section><span class="sr-only">Открываем раздел «${escapeHtml(title)}»</span></section>`;
 }
-function view(html) { window.Workspace?.cancelLoading?.();window.SmetraSelects?.close();window.SmetraQuoteEditor?.leave();window.SmetraDataExport?.cancel();const content=$('#content');content.dataset.section=tab;content.setAttribute('aria-busy','false');content.innerHTML=html;content.classList.remove('app-view-enter'); }
+let pendingPageLoadingTimer=null;
+function view(html) {
+  if(pendingPageLoadingTimer!==null){clearTimeout(pendingPageLoadingTimer);pendingPageLoadingTimer=null;}
+  document.dispatchEvent(new CustomEvent('smetra:before-view'));
+  window.SmetraObjectChats?.stop();
+  window.Workspace?.cancelLoading?.();window.SmetraSelects?.close();window.SmetraQuoteEditor?.leave();window.SmetraDataExport?.cancel();
+  document.querySelector('.app-shell > .assistant-toolrail')?.remove();
+  const content=$('#content');if(!content)return;
+  content.dataset.section=tab;content.setAttribute('aria-busy','false');content.classList.remove('app-view-enter');
+  content.innerHTML=html;void content.offsetWidth;content.classList.add('app-view-enter');
+}
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):false;const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 const sidebarIcons={
+ fieldwork:'<path d="M9 18v-3M15 18v-3M12 3v11M8 8l4-5 4 5M4 21h16"/>',
+ inbox:'<path d="M4 5h16v14H4zM4 15h5l2 3h2l2-3h5M8 9h8"/>',
+ chats:'<path d="M21 11a8 8 0 0 1-8 8H5l-4 3 2-7a8 8 0 1 1 18-4Z"/><path d="M7 10h10M7 14h6"/>',
  dashboard:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/>',
  clients:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
  quotes:'<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/>',
@@ -81,6 +163,7 @@ const sidebarIcons={
  assistant:'<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
  finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
  catalog:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 4.5V22M8 7h8M8 11h8"/>',
+ premium:'<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/>',
  files:'<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
  documents:'<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/><path d="M3 7v14"/>',
  team:'<circle cx="9" cy="8" r="3.5"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M16 5.5a3.5 3.5 0 0 1 0 6.8M19 15a5 5 0 0 1 3 4.5V21"/>',
@@ -148,14 +231,105 @@ function syncMobileSidebarGeometry(){
   const top=Math.max(0,Math.round(header.getBoundingClientRect().bottom));
   // The legacy stylesheets have several historical mobile offsets. Align the drawer to the actual header.
   sidebar.style.setProperty('top',top+'px','important');
+  $('#nav-backdrop')?.style.setProperty('top',top+'px','important');
   sidebar.style.setProperty('height','calc(100dvh - '+top+'px)','important');
  }else{
-  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');
+  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');$('#nav-backdrop')?.style.removeProperty('top');
  }
 }
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
-function showAuth() { window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden'); }
-async function showApp() { closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#header-user').textContent=user.name;const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');if(profileName)profileName.textContent=user.name;if(avatar)avatar.textContent=(user.name||'С').trim().slice(0,1).toLocaleUpperCase('ru-RU');$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
+function setAppState(state){
+  document.body.dataset.appState=state;
+  if(state!=='boot'){
+    document.body.classList.remove('smetra-app-booting','smetra-app-transitioning');
+    $('#app-startup')?.setAttribute('aria-hidden','true');
+  }
+}
+function showBootError(message){
+  document.body.dataset.appState='boot';
+  document.body.classList.add('smetra-app-booting');
+  const label=$('#app-startup-label');
+  if(label)label.textContent=message||'Не удалось проверить соединение.';
+  const button=$('#app-startup-retry');
+  if(button)button.hidden=false;
+}
+function showAuth(){
+  window.SmetraFieldFlows?.stop?.();
+  window.SmetraCommunication?.reset();
+  window.SmetraQuoteEditor?.leave();
+  authRevision++;renderRevision++;clearApiCache();closeNavigation();
+  $('#content')?.replaceChildren();
+  document.body.classList.add('auth-mode');
+  $('.skip-link')?.setAttribute('href','#auth-title');
+  $('#shell').classList.add('hidden');$('#shell').setAttribute('inert','');
+  $('#auth').classList.remove('hidden');
+  $('#nav-backdrop')?.classList.add('hidden');
+  setAppState('guest');
+}
+async function showApp(){
+  const attempt=authRevision;
+  const owner=user;
+  if(!owner)return;
+  // Keep the previously rendered auth scene underneath a covering transition
+  // until the authorized route has finished constructing its first frame.
+  document.body.classList.add('smetra-app-transitioning');
+  document.body.dataset.appState='authorizing';
+  window.SmetraCommunication?.reset();
+  closeNavigation();
+  $('.skip-link')?.setAttribute('href','#content');
+  document.body.classList.remove('auth-mode');
+  $('#shell').classList.remove('hidden');
+  $('#shell').removeAttribute('inert');
+  const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');
+  if(profileName)profileName.textContent=owner.name;
+  if(avatar)avatar.innerHTML=userAvatarMarkup(owner);
+  $('#admin-nav').classList.toggle('hidden',owner.role!=='admin');
+  const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');
+  if(ref){
+    sessionStorage.setItem('smetra.referral',ref);
+    api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})})
+      .then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});
+  }
+  try{
+    await render();
+    if(user!==owner||authRevision!==attempt)return;
+    $('#auth').classList.add('hidden');
+    setAppState('authorized');
+    window.SmetraCommunication?.startPresence?.();
+    window.SmetraWarmFeatures?.();
+    try{
+      const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');
+      if(draft&&window.Workspace){
+        await window.Workspace.editor(draft);
+        sessionStorage.removeItem('smetra.previewDraft');
+      }
+    }catch(error){notify(error.message)}
+  }catch(error){
+    if(user===owner&&authRevision===attempt){
+      // A loading error must not be reclassified as a failed login.
+      setAppState('authorized');
+      $('#auth').classList.add('hidden');
+      notify('Не удалось открыть раздел. Попробуйте обновить страницу.');
+    }
+  }
+}
+window.addEventListener('pageshow',event=>{
+  // Returning via the browser back-forward cache must reveal auth again.
+  if(event.persisted&&document.body.dataset.appState==='authorizing'){
+    document.body.classList.remove('smetra-app-transitioning');
+    document.body.dataset.appState='guest';
+  }
+});
+window.SmetraCompleteAuth=async profile=>{
+  if(!profile?.id)throw Error('Не удалось подтвердить профиль.');
+  ++authRevision;
+  user=profile;clearApiCache();
+  sessionStorage.removeItem('workspace_id');
+  window.Workspace?.reset();
+  const hash=/^#[a-z-]+$/.test(location.hash)?location.hash:'#dashboard';
+  history.replaceState({},'', '/app'+hash);
+  await showApp();
+};
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
 function quoteCard(q) {
@@ -164,19 +338,30 @@ function quoteCard(q) {
 }
 function quoteList() { return quotes.length?quotes.map(quoteCard).join(''):'<div class="empty"><h3>Здесь пока пусто</h3><p>Создайте первое предложение, чтобы отправить клиенту точную стоимость.</p></div>'; }
 async function render() {
+  if(pendingPageLoadingTimer!==null){clearTimeout(pendingPageLoadingTimer);pendingPageLoadingTimer=null;}
   window.SmetraQuoteEditor?.leave();
   if(!user)return;
   const owner=user,section=tab,mine=++renderRevision;
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
   $('#sidebar-profile')?.classList.toggle('active',tab==='profile');
-  const loadingTimer=setTimeout(()=>{if(active())view(loadingView(section))},80);
+  const contentBefore=$('#content');
+  const initialMarkup=contentBefore?.innerHTML;
+  const initialSection=contentBefore?.dataset.section;
+  const loadingTimer=setTimeout(()=>{
+    const content=$('#content');
+    // Never replace a section that has already rendered while a lazy module is still resolving.
+    if(active()&&content&&content.innerHTML===initialMarkup&&initialSection!==section)view(loadingView(section));
+  },180);pendingPageLoadingTimer=loadingTimer;
   try {
-    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth'})[section];
+    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
+    if(tab==='premium' && window.SmetraPremiumTools){await window.SmetraPremiumTools.render(active);return;}
+    if(tab==='chats'&&window.SmetraObjectChats){await window.SmetraObjectChats.render(active);return;}
+    if(['fieldwork','inbox'].includes(tab)&&window.SmetraFieldFlows){await window.SmetraFieldFlows.render(tab,active);return;}
     const handled=window.Workspace && await window.Workspace.render(tab);
     if(!active()||handled)return;
     if(tab==='dashboard'||tab==='quotes') {
@@ -192,23 +377,28 @@ async function render() {
     } else if(tab==='billing') {
       await window.SmetraGrowth.billing(active);
     } else if(tab==='support') {
-      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:reyzin378@gmail.com">Написать на почту ↗</a></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
+      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:support@smetra.online">Написать в поддержку ↗</a><p class="support-secondary-contact">Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span> Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
       const topics=[...document.querySelectorAll('[data-support-topic]')];let selectedTopic='';
       topics.forEach(button=>{button.setAttribute('aria-pressed','false');button.onclick=()=>{const input=$('#message');const prefix=selectedTopic+': ';const text=selectedTopic&&input.value.startsWith(prefix)?input.value.slice(prefix.length):input.value;selectedTopic=button.dataset.supportTopic;input.value=selectedTopic+': '+text;topics.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));input.focus()}});
       $('#support-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('[type=submit],button:not([type])'),input=form.querySelector('#message'),message=input.value;if(button.disabled)return;button.disabled=true;try{await api('/support',{method:'POST',body:JSON.stringify({message})});if(input.value===message)input.value='';if(user===owner)notify('Сообщение отправлено')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='settings') {
-      view(header('Настройки','Отображение и поведение ассистента.')+`<div class="panel"><h3>Аккаунт</h3><p>${escapeHtml(user.email)}</p><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Переключить тему</button></div><section id="settings-personalization"></section><section id="settings-export"></section><div class="panel"><h3>Удалить аккаунт</h3><p class="muted">Предложения и доступ будут удалены без возможности восстановления.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div>`);
+      view(header('Настройки','Аккаунт, персонализация и данные.')+`<div class="settings-page">
+        <section class="panel settings-account-panel"><div class="settings-account-copy"><span class="settings-section-kicker">АККАУНТ</span><h2>Ваш профиль</h2><p>${escapeHtml(user.email)}</p></div><div class="settings-account-actions"><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></section>
+        <section id="settings-personalization" class="settings-personalization-host"></section>
+        <section id="settings-export" class="settings-export-host"></section>
+        <details class="panel settings-danger-zone"><summary><span><strong>Удаление аккаунта</strong><small>Необратимое действие — сметы и доступ будут удалены.</small></span><span aria-hidden="true">⌄</span></summary><div class="settings-danger-body"><p class="muted">Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></details>
+      </div>`);
       $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
       if(window.SmetraProfile){await window.SmetraProfile.settings(active);if(!active())return;}
       if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
-      syncThemeLabel();$('#theme-alt').onclick=theme;$('#delete-account').onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+      syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);const deleteAccountButton=$('#delete-account');if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
     } else {tab='dashboard';history.replaceState({},'',location.pathname+location.search+'#dashboard');return render()}
-  } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);}
+  } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
-const appSections=new Set(['dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+const appSections=new Set(['fieldwork','inbox','chats','dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;
@@ -226,7 +416,7 @@ function showNewQuote(){
   $('#cancel-new').onclick=render;
   $('#quote-form').onsubmit=async(e)=>{e.preventDefault();const amount=Math.round(Number($('#amount').value)*100);if(!Number.isSafeInteger(amount)){notify('Некорректная сумма');return;}try{await api('/quotes',{method:'POST',body:JSON.stringify({title:$('#title').value,client:$('#client').value,description:$('#description').value,amount})});user.quote_count++;tab='quotes';render();notify('Черновик создан')}catch(err){notify(err.message)}};
 }
-async function quoteAction(e){const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;try{if(action==='copy'){await navigator.clipboard.writeText(b.dataset.url);notify('Ссылка скопирована');return;}if(action==='remove'){if(!confirm('Удалить предложение?'))return;await api('/quotes/'+b.dataset.id,{method:'DELETE'});user.quote_count--;}else{const status={send:'sent',decline:'declined',complete:'completed'}[action];const result=await api('/quotes/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status})});if(action==='send'){try{await navigator.clipboard.writeText(result.quote.public_url);notify('Отправлено. Ссылка скопирована')}catch{notify('Отправлено. Ссылка: '+result.quote.public_url)}}}await render()}catch(err){notify(err.message)}}
+async function quoteAction(e){const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;try{if(action==='send'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;if(action==='copy'){await navigator.clipboard.writeText(b.dataset.url);notify('Ссылка скопирована');return;}if(action==='remove'){if(!confirm('Удалить предложение?'))return;await api('/quotes/'+b.dataset.id,{method:'DELETE'});user.quote_count--;}else{const status={send:'sent',decline:'declined',complete:'completed'}[action];const result=await api('/quotes/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status})});if(action==='send'){try{await navigator.clipboard.writeText(result.quote.public_url);notify('Отправлено. Ссылка скопирована')}catch{notify('Отправлено. Ссылка: '+result.quote.public_url)}}}await render()}catch(err){notify(err.message)}}
 if($('#auth')){
   const syncEmailActions=()=>{
     if(new URLSearchParams(location.search).has('reset')){$('#forgot').classList.add('hidden');$('#name').required=false;return;}
@@ -235,18 +425,24 @@ if($('#auth')){
     $('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);
     $('#email-disclosure').classList.toggle('hidden',providerOnly);
     $('#name').required=registering&&!providerOnly;
+    $('#auth').dataset.mode=registering?'register':'login';
+    $('#legal-consent-field').classList.toggle('hidden',!registering);
+    $('#legal-consent').required=registering;
+    $('#auth-submit').disabled=registering&&!$('#legal-consent').checked;
+    document.querySelectorAll('#provider-buttons button').forEach(button=>{button.disabled=registering&&!$('#legal-consent').checked;});
     if(providerOnly)$('#auth-copy').textContent='Создайте аккаунт через доступный сервис ниже. Один профиль для сайта и приложения.';
   };
+  $('#legal-consent').addEventListener('change',syncEmailActions);
   document.addEventListener('smetra:email-capability',syncEmailActions);syncEmailActions();
-  const setAuthMode=(mode)=>{registering=mode==='register';$('#auth-title').textContent=registering?'Ваша работа начинается здесь.':'С возвращением.';$('#auth-copy').textContent=registering?'Создайте пространство для смет, клиентов и заказов. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';$('#auth-submit').innerHTML=registering?'Создать пространство <span aria-hidden="true">↗</span>':'Войти в пространство <span aria-hidden="true">↗</span>';$('#name-field').classList.toggle('hidden',!registering);$('#name').required=registering;$('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);$('#password').value='';$('#password').autocomplete=registering?'new-password':'current-password';$('#auth-login-tab').setAttribute('aria-selected',String(!registering));$('#auth-register-tab').setAttribute('aria-selected',String(registering));$('#auth-login-tab').tabIndex=registering?-1:0;$('#auth-register-tab').tabIndex=registering?0:-1;$('#auth-form-error').textContent='';$('#email-disclosure').open=true};
+  const setAuthMode=(mode)=>{registering=mode==='register';$('#auth').dataset.mode=registering?'register':'login';$('#legal-consent').checked=false;$('#legal-consent').required=registering;$('#legal-consent-field').classList.toggle('hidden',!registering);$('#auth-submit').disabled=registering;$('#auth-title').textContent=registering?'Ваша работа начинается здесь.':'С возвращением.';$('#auth-copy').textContent=registering?'Создайте пространство для смет, клиентов и заказов. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';$('#auth-submit').innerHTML=registering?'Создать пространство <span aria-hidden="true">↗</span>':'Войти в пространство <span aria-hidden="true">↗</span>';$('#name-field').classList.toggle('hidden',!registering);$('#name').required=registering;$('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);$('#password').value='';$('#password').autocomplete=registering?'new-password':'current-password';$('#auth-login-tab').setAttribute('aria-selected',String(!registering));$('#auth-register-tab').setAttribute('aria-selected',String(registering));$('#auth-login-tab').tabIndex=registering?-1:0;$('#auth-register-tab').tabIndex=registering?0:-1;$('#auth-form-error').textContent='';$('#email-disclosure').open=true};
   $('#auth-login-tab').onclick=()=>{setAuthMode('login');syncEmailActions()};
   $('#auth-register-tab').onclick=()=>{setAuthMode('register');syncEmailActions()};
   $('.auth-tabs').onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const mode=event.key==='Home'?'login':event.key==='End'?'register':registering?'login':'register';setAuthMode(mode);syncEmailActions();$(mode==='login'?'#auth-login-tab':'#auth-register-tab').focus()};
-  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim()})});if(attempt!==authRevision)return;user=result.user;sessionStorage.removeItem('workspace_id');window.Workspace?.reset();await showApp()}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
+  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;if(registering&&!$('#legal-consent').checked){$('#auth-form-error').textContent='Примите условия и предупреждение перед регистрацией.';return}const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim(),...(registering?{legal_acceptance:$('#legal-consent').checked,legal_version:REGISTRATION_CONSENT_VERSION}:{})})});if(attempt!==authRevision)return;await window.SmetraCompleteAuth(result.user)}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
-   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();return renderNavigation()});
-  $('#sidebar-profile').onclick=()=>{if(tab==='profile'){closeNavigation();return}tab='profile';location.hash=tab;closeNavigation();return renderNavigation()};
+   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{const next=b.dataset.tab;if(tab===next){closeNavigation();return;}closeNavigation();if(location.hash.slice(1)===next){tab=next;void renderNavigation();}else location.hash=next;});
+  $('#sidebar-profile').onclick=()=>{if(tab==='profile'){closeNavigation();return;}closeNavigation();if(location.hash.slice(1)==='profile'){tab='profile';void renderNavigation();}else location.hash='profile';};
   $('#nav-backdrop').classList.remove('hidden');
   $('#nav-toggle').onclick=()=>{syncMobileSidebarGeometry();const open=!document.body.classList.contains('nav-open');document.body.classList.toggle('nav-open',open);$('#nav-toggle').setAttribute('aria-expanded',String(open));$('#nav-toggle').setAttribute('aria-label',open?'Закрыть разделы':'Открыть разделы');syncSidebarAccess()};
   try{document.body.classList.toggle('sidebar-compact',localStorage.getItem('smetra.sidebar-compact')==='true'&&!matchMedia('(max-width:800px)').matches)}catch{}
@@ -257,8 +453,11 @@ if($('#auth')){
   syncMobileSidebarGeometry();syncSidebarAccess();
   $('#nav-backdrop').onclick=closeNavigation;
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('nav-open')){closeNavigation();$('#nav-toggle').focus()}});
-  $('#logout').onclick=async()=>{const button=$('#logout');if(button.disabled)return;button.disabled=true;const attempt=++authRevision;try{await api('/auth/logout',{method:'POST'})}catch{}finally{button.disabled=false}if(attempt!==authRevision)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()};
+  $('#logout').onclick=async()=>{window.SmetraFieldFlows?.stop?.();const button=$('#logout');if(button.disabled)return;button.disabled=true;const attempt=++authRevision;try{await api('/auth/logout',{method:'POST'})}catch{}finally{button.disabled=false}if(attempt!==authRevision)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()};
   const params=new URLSearchParams(location.search);
+  if(/^[a-f0-9-]{36}$/.test(params.get('share')||'')){
+    try{sessionStorage.setItem('smetra.pendingShare',params.get('share'))}catch{}
+  }
   if(params.has('register') && !params.has('reset')) {setAuthMode('register');syncEmailActions()}
   if(params.has('reset')){
     showAuth();$('#auth-title').textContent='Новый пароль';$('#auth-copy').textContent='Придумайте новый пароль для вашего пространства.';
@@ -269,17 +468,31 @@ if($('#auth')){
   }else{
     const verification=params.get('verify');
     const verificationTask=verification?api('/auth/verify',{method:'POST',body:JSON.stringify({token:verification})}).then(()=>{history.replaceState({},'', '/app');notify('Почта подтверждена')}).catch(e=>notify(e.message)):Promise.resolve();
+    let pendingShare='';
+    try{pendingShare=sessionStorage.getItem('smetra.pendingShare')||''}catch{}
+    if(params.has('share')||/^[a-f0-9-]{36}$/.test(pendingShare)){tab='inbox';}
     const bootRevision=authRevision;
-    verificationTask.then(async()=>{
+    const boot=async()=>{
+      const label=$('#app-startup-label');
+      if(label)label.textContent='Проверяем сессию…';
+      if($('#app-startup-retry'))$('#app-startup-retry').hidden=true;
+      await verificationTask;
       if(bootRevision!==authRevision)return;
-      try{
-        const result=await api('/me');
+      let result;
+      try{result=await api('/me')}
+      catch(error){
         if(bootRevision!==authRevision)return;
-        user=result.user;
-        if(params.has('payment')){tab='billing';history.replaceState({},'',location.pathname+location.search+'#billing')}
-        await showApp();
-      }catch{if(bootRevision===authRevision){user=null;showAuth()}}
-    });
+        if(error.status===401||error.status===403){user=null;showAuth();return}
+        showBootError('Соединение не удалось. Повторите попытку.');
+        return;
+      }
+      if(bootRevision!==authRevision)return;
+      user=result.user;
+      if(params.has('payment')){tab='billing';history.replaceState({},'',location.pathname+location.search+'#billing')}
+      await showApp();
+    };
+    $('#app-startup-retry')?.addEventListener('click',()=>{void boot()});
+    void boot();
   }
 }
 document.addEventListener('DOMContentLoaded',()=>{const params=new URLSearchParams(location.search),intake=params.get('intake'),quote=params.get('quote');if(intake&&document.querySelector('#public-quote'))window.Workspace.intakePage(intake);else if(quote&&document.querySelector('#public-quote'))window.Workspace.publicPage(quote)});

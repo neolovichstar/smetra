@@ -185,15 +185,80 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertTrue(any(item.get("kind") == "file" and item.get("page") == 1 for item in found))
         self.assertFalse(self.call("/search?q=24", token=outsider)[1]["items"])
 
-    def get_redirect(self, path, cookie=""):
+    def get_redirect(self, path, cookie="", host=None):
         connection = http.client.HTTPConnection(
             "127.0.0.1", self.server.server_address[1]
         )
-        connection.request("GET", path, headers={"Cookie": cookie})
+        headers = {"Cookie": cookie}
+        if host is not None:
+            headers["Host"] = host
+        connection.request("GET", path, headers=headers)
         response = connection.getresponse()
         result = response.status, dict(response.getheaders()), response.read()
         connection.close()
         return result
+
+    def test_yandex_avatar_claim_is_propagated_without_trusting_picture_urls(self):
+        from backend.identity import profile
+        from backend.app import user_view
+        avatar = {"id": "1000034426", "display_name": "Кирилл",
+                  "default_email": "kirill@example.test",
+                  "default_avatar_id": "131652443",
+                  "is_avatar_empty": False}
+        token = {"access_token": "test-token"}
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-client"), patch(
+            "backend.identity.remote", side_effect=[token, avatar]
+        ):
+            subject, name, email, avatar_id = profile(
+                "yandex", "test-code", "test-state", "test-verifier",
+                "https://smetra.online/api/auth/oauth/yandex/callback", "",
+            )
+        self.assertEqual((subject, name, email, avatar_id),
+                         ("1000034426", "Кирилл", "kirill@example.test", "131652443"))
+        with self.mod.db() as con:
+            row = con.execute("SELECT * FROM users LIMIT 1").fetchone()
+            if row:
+                con.execute("UPDATE users SET avatar_id=? WHERE id=?", (avatar_id, row["id"]))
+                updated = con.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+                self.assertEqual(
+                    user_view(updated, con)["avatar_url"],
+                    "https://avatars.yandex.net/get-yapic/131652443/islands-200",
+                )
+
+    def test_yandex_avatar_missing_uses_initials(self):
+        from backend.identity import profile
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-client"), patch(
+            "backend.identity.remote",
+            side_effect=[{"access_token": "test-token"}, {
+                "id": "123", "display_name": "Олег",
+                "is_avatar_empty": True, "default_avatar_id": "123"
+            }],
+        ):
+            self.assertEqual(
+                profile("yandex", "code", "state", "verifier",
+                        "https://smetra.online/api/auth/oauth/yandex/callback", "")[3], ""
+            )
+
+    def test_yandex_callback_stays_on_verified_start_host(self):
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"):
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=login", host="smetra.online"
+            )
+            self.assertEqual(status, 303)
+            params = parse_qs(urlsplit(headers["Location"]).query)
+            self.assertEqual(
+                params["redirect_uri"],
+                ["https://smetra.online/api/auth/oauth/yandex/callback"],
+            )
+            self.assertIn("smetra_oauth=", headers["Set-Cookie"])
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=login", host="www.smetra.online"
+            )
+            self.assertEqual(status, 303)
+            self.assertEqual(
+                headers["Location"],
+                "https://smetra.online/api/auth/oauth/yandex/start?intent=login",
+            )
 
     def test_provider_list_has_no_external_credentials(self):
         with patch.dict(
@@ -246,6 +311,52 @@ class IdentityAssistantTests(unittest.TestCase):
                     self.assertEqual(len(params["code_challenge"][0]), 43)
                     self.assertIn("HttpOnly", headers["Set-Cookie"])
 
+    def test_oauth_cannot_create_new_account_without_registration_consent(self):
+        with patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"):
+            status, headers, _ = self.get_redirect("/api/auth/oauth/yandex/start?intent=register")
+            self.assertEqual(status, 303)
+            self.assertIn("auth_error=registration_consent_required", headers["Location"])
+
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=register&legal_acceptance=1"
+                "&legal_version=outdated"
+            )
+            self.assertEqual(status, 303)
+            self.assertIn("auth_error=registration_consent_required", headers["Location"])
+
+            status, headers, _ = self.get_redirect(
+                "/api/auth/oauth/yandex/start?intent=register&legal_acceptance=1"
+                "&legal_version=2026-10-19-registration-v1"
+            )
+            self.assertEqual(status, 303)
+            state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
+            cookie = headers["Set-Cookie"].split(";")[0]
+
+            with patch(
+                "backend.identity.profile",
+                return_value=("new-consent-subject", "OAuth без согласия", "oauth-consent@test.invalid"),
+            ):
+                status, response, _ = self.get_redirect(
+                    "/api/auth/oauth/yandex/callback?code=provider-code&state=" + state,
+                    cookie,
+                )
+            self.assertTrue(response["Location"].endswith("/app?auth_error=registration_consent_required") is False)
+            self.assertEqual(status, 303)
+            with self.mod.db() as con:
+                account = con.execute(
+                    "SELECT id FROM users WHERE email=?",
+                    ("oauth-consent@test.invalid",),
+                ).fetchone()
+                self.assertIsNotNone(account)
+                accepted = con.execute(
+                    "SELECT document_version,source FROM legal_acceptances WHERE user_id=?",
+                    (account["id"],),
+                ).fetchall()
+            self.assertEqual(
+                [(row["document_version"], row["source"]) for row in accepted],
+                [("2026-10-19-registration-v1", "registration")],
+            )
+
     def test_oauth_browser_binding_and_native_pkce_one_use(self):
         verifier = "a" * 64
         with (
@@ -256,7 +367,7 @@ class IdentityAssistantTests(unittest.TestCase):
             ) as provider,
         ):
             code, headers, _ = self.get_redirect(
-                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier)
+                "/api/auth/oauth/yandex/start?app_challenge=" + challenge(verifier) + "&intent=register&legal_acceptance=1&legal_version=2026-10-19-registration-v1"
             )
             self.assertEqual(code, 303)
             state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]

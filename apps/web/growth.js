@@ -44,6 +44,7 @@
   const owner=user,revision=sessionRevision(),[b,space]=await Promise.all([api('/billing'),api('/workspace')]);if(!active()||sessionRevision()!==revision)return;
   const pricing=b.pricing;
   if(!pricing)throw Error('Не удалось получить условия тарифа. Повторите загрузку.');
+  if(pricing.catalog&&window.SmetraBillingCatalog)return window.SmetraBillingCatalog(active,b,space,owner,revision);
   const source=sessionStorage.getItem('smetra.paywall.source')||'pricing_page';
   const pro=owner.plan==='pro'&&owner.entitlement_until>Date.now()/1000;
   const ready=b.email_verified&&['test','live'].includes(b.checkout_mode);

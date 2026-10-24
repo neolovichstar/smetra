@@ -19,8 +19,8 @@ try:
 except ImportError:  # The direct-connection fallback keeps local/minimal tools usable.
     ConnectionPool = None
 
-TABLES = frozenset(
-    "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits".split()
+TABLES = frozenset(["email_login_challenges","estimate_shares","estimate_share_responses"]) | frozenset(
+    "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits legal_acceptances".split()
 )
 TABLES = TABLES | frozenset(
     "external_identities oauth_states oauth_tickets assistant_messages assistant_actions".split()
@@ -34,10 +34,15 @@ TABLES = TABLES | frozenset("construction_price_batches".split())
 TABLES = TABLES | frozenset("quote_creation_requests".split())
 TABLES = TABLES | frozenset(["assistant_jobs"])
 TABLES = TABLES | frozenset(["creation_requests"])
+TABLES = TABLES | frozenset(["assistant_ad_rewards", "assistant_ad_attempts", "assistant_ad_reward_credits", "assistant_ad_reward_usage"])
 TABLES = TABLES | frozenset("push_devices push_outbox push_deliveries".split())
 TABLES = TABLES | frozenset(
     "construction_objects construction_zones construction_measurements construction_quantities construction_facts construction_defects construction_daily_logs construction_log_photos construction_suppliers construction_purchases construction_changes".split()
 )
+TABLES = TABLES | frozenset(
+    "product_sources product_price_observations cloud_connections cloud_oauth_states cloud_folder_bindings cloud_files document_processing_jobs cloud_watch_channels".split()
+)
+TABLES = TABLES | frozenset("object_chat_threads object_chat_messages project_cash_risks".split())
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"

@@ -10,7 +10,7 @@
   <script src="/theme-init.js"></script>
   <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/black.css?v=20261022-glass-ui-v1">
+  <link rel="stylesheet" href="/black.css?v=20261023-workspace-canvas-v1">
   <link rel="stylesheet" href="/cabinet.css">
   <link rel="stylesheet" href="/assistant.css">
   <link rel="stylesheet" href="/admin.css">
@@ -24,11 +24,30 @@
   <link rel="stylesheet" href="/select-menu.css">
   <link rel="stylesheet" href="/data-export.css">
   <link rel="stylesheet" href="/design-system.css">
-  <link rel="stylesheet" href="/ui-foundation.css?v=20261022-glass-ui-v5">
+  <link rel="stylesheet" href="/ui-foundation.css?v=20261023-workspace-unified-v7">
   <link rel="stylesheet" href="/quote-editor.css?v=20261022-quote-editor-v1">
-  <link rel="stylesheet" href="/dashboard-polish.css?v=20261022-dashboard-layout-v2">
+  <link rel="stylesheet" href="/premium-tools.css">
+  <link rel="stylesheet" href="/dashboard-polish.css?v=20261024-minimal-v1">
+  <link rel="stylesheet" href="/auth-layout-v2.css?v=20261024-v2">
+  <link rel="stylesheet" href="/cabinet-refinement.css?v=20261024-v1">
+  <link rel="stylesheet" href="/workspace-layout-v3.css?v=20261024-v3">
+  <link rel="stylesheet" href="/cabinet-alignment-v4.css?v=20261024-flat-v4">
+  <link rel="stylesheet" href="/auth-email.css?v=20261024-v2">
+  <link rel="stylesheet" href="/field-flows.css?v=20261024-v1">
+  <link rel="stylesheet" href="/interface-audit.css?v=20261024-v1">
+  <link rel="stylesheet" href="/auth-motion-fix.css?v=20261024-alignment-v2">
+  <link rel="stylesheet" href="/sidebar-motion-v2.css?v=20261024-v3">
+  <link rel="stylesheet" href="/assistant-markdown-modern.css?v=20261024-v3">
 </head>
-<body class="workspace-page">
+<body class="workspace-page smetra-app-booting" data-app-state="boot">
+  <div id="app-startup" class="app-startup" role="status" aria-live="polite">
+    <div class="app-startup-inner">
+      <span class="app-startup-brand">сметра<span>.</span></span>
+      <div class="app-startup-progress" aria-hidden="true"><span></span></div>
+      <p id="app-startup-label">Открываем ваше пространство…</p>
+      <button id="app-startup-retry" class="app-startup-retry" type="button" hidden>Повторить подключение</button>
+    </div>
+  </div>
   <a class="skip-link" href="#content">К содержимому</a>
   <header class="nav app-nav">
     <div class="app-nav-inner">
@@ -38,51 +57,98 @@
         <a class="brand" href="/">сметра<span class="brand-mark">.</span></a>
         <span class="app-nav-caption">рабочее пространство</span>
       </div>
-      <nav class="workspace-modes" aria-label="Режим работы"><button type="button" data-mode="dashboard" aria-pressed="true">Сметы</button><button type="button" data-mode="assistant" aria-pressed="false">Ассистент</button></nav>
+      <div class="app-nav-center-spacer" aria-hidden="true"></div>
       <div class="app-nav-actions">
         <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
-        <span id="header-user" class="nav-user"></span>
+        
         <button class="btn small" id="theme" type="button">Тема</button>
       </div>
     </div>
   </header>
 
+  <header class="auth-site-header" aria-label="Навигация Сметры">
+    <div class="auth-site-inner">
+      <a class="brand" href="/" aria-label="Сметра — на главную">сметра<span class="brand-mark">.</span></a>
+      <nav class="auth-site-links" aria-label="Разделы сайта">
+        <a href="/#product">Возможности</a>
+        <a href="/#assistant">Ассистент</a>
+        <a href="/#pricing">Тарифы</a>
+      </nav>
+      <a class="auth-site-return" href="/">На главную <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
   <main id="auth" class="auth-wrap hidden">
-    <section class="auth-story" aria-label="О продукте">
-      <div class="auth-story-top"><span class="overline">ПРОСТРАНСТВО ДЛЯ РАБОТЫ</span><span class="auth-story-index">01 / 04</span></div>
-      <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
-      <h2>От идеи<br>до оплаты<span>.</span></h2>
-      <p>Смета, клиент и каждый следующий шаг — в одном рабочем пространстве.</p>
-      <div class="auth-proof" aria-hidden="true">
-        <div class="auth-proof-head"><span>ПРЕДЛОЖЕНИЕ / 024</span><span>СОГЛАСОВАНО</span></div>
-        <div class="auth-proof-title">Сайт для студии Север</div>
-        <div class="auth-proof-line"><span>Исследование</span><span>35 000 ₽</span></div>
-        <div class="auth-proof-line"><span>Дизайн и разработка</span><span>63 000 ₽</span></div>
-        <div class="auth-proof-total"><span>Итого</span><strong>98 000 ₽</strong></div>
+    <section class="auth-story" aria-label="О Сметре">
+      <div class="auth-story-content">
+        <span class="auth-story-kicker">ВСЁ ДЛЯ ВАШЕЙ РАБОТЫ</span>
+        <h2>От идеи<br>до результата<span>.</span></h2>
+        <p>Сметы, клиенты и управление объектами в одном понятном пространстве.</p>
+        <div class="auth-story-art" aria-hidden="true">
+          <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
+        </div>
+        <div class="auth-story-foot"><span>СМЕТРА</span><span>РАБОТА ПОД КОНТРОЛЕМ</span></div>
       </div>
     </section>
 
     <section class="auth-flow" aria-labelledby="auth-title">
-      <div class="auth-flow-top"><span class="overline">СМЕТРА / АККАУНТ</span><span class="auth-flow-step">ДЛЯ САЙТА И ANDROID</span></div>
-      <h1 id="auth-title">С возвращением.</h1>
-      <p id="auth-copy" class="auth-intro">Продолжите работу с того места, где остановились.</p>
-      <div class="auth-tabs" role="tablist" aria-label="Действие с аккаунтом">
-        <button id="auth-login-tab" type="button" role="tab" aria-selected="true">Войти</button>
-        <button id="auth-register-tab" type="button" role="tab" aria-selected="false">Создать аккаунт</button>
+      <div class="auth-flow-inner">
+        <div class="auth-flow-top"><span class="overline">ВАШЕ ПРОСТРАНСТВО</span><span class="auth-flow-step">САЙТ И ANDROID</span></div>
+        <h1 id="auth-title">С возвращением.</h1>
+        <p id="auth-copy" class="auth-intro">Войдите в Сметру и продолжайте с того места, где остановились.</p>
+        <div class="auth-tabs" role="tablist" aria-label="Вход и регистрация">
+          <button id="auth-login-tab" type="button" role="tab" aria-selected="true">Войти</button>
+          <button id="auth-register-tab" type="button" role="tab" aria-selected="false">Регистрация</button>
+        </div>
+        <section id="email-code-flow" class="email-code-flow hidden" aria-label="Вход по коду из письма">
+          <form id="email-code-start" class="email-code-start">
+            <div class="field hidden" id="email-code-name-field"><label for="email-code-name">Как к вам обращаться</label><input id="email-code-name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
+            <div class="field"><label for="email-code-address">Электронная почта</label><input id="email-code-address" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="name@example.ru" required></div>
+            <button type="submit" id="email-code-start-button" class="btn primary full-width">Получить код <span aria-hidden="true">↗</span></button>
+            <p class="email-code-help">Отправим одноразовый код на вашу почту. Никаких паролей.</p>
+          </form>
+          <form id="email-code-confirm" class="email-code-confirm hidden" aria-label="Подтверждение адреса">
+            <div class="email-code-step-head"><button id="email-code-back" class="email-code-back" type="button" aria-label="Изменить почту">←</button><div><strong>Проверьте почту</strong><p id="email-code-destination" class="email-code-destination"></p></div></div>
+            <label id="email-code-label">Код подтверждения</label>
+            <div class="email-code-cells" role="group" aria-labelledby="email-code-label">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Цифра 1">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 2">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 3">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 4">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 5">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Цифра 6">
+            </div>
+            <button type="submit" id="email-code-confirm-button" class="btn primary full-width">Подтвердить и продолжить <span aria-hidden="true">↗</span></button>
+            <div class="email-code-meta"><span id="email-code-countdown" aria-live="polite">Код действует 10 минут</span><button type="button" id="email-code-resend" disabled>Отправить ещё раз</button></div>
+            <p class="email-code-help">Можно вставить все шесть цифр сразу.</p>
+          </form>
+          <p id="email-code-error" class="auth-form-error" role="alert"></p>
+        </section>
+        <details class="email-disclosure" id="email-disclosure" open>
+          <summary>Продолжить по почте</summary>
+          <form id="auth-form">
+            <div class="field hidden" id="name-field"><label for="name">Имя</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
+            <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
+            <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
+            <p id="auth-form-error" class="auth-form-error" role="alert"></p>
+            <button class="btn primary full-width" id="auth-submit" type="submit">Продолжить <span aria-hidden="true">↗</span></button>
+          </form>
+        </details>
+        <div class="field hidden" id="legal-consent-field">
+          <label class="estimate-consent-check" for="legal-consent">
+            <input id="legal-consent" type="checkbox">
+            <span>Принимаю <a href="/terms" target="_blank" rel="noopener noreferrer">условия использования</a> и <a href="/disclaimer" target="_blank" rel="noopener noreferrer">предупреждение об ответственности</a>.</span>
+          </label>
+        </div>
+        <div class="auth-provider-block">
+          <div class="auth-provider-divider" aria-hidden="true"><span>Быстрый и безопасный вход</span></div>
+          <div id="provider-buttons" class="provider-buttons single" aria-label="Вход через Яндекс ID">
+            <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+          </div>
+          <p id="provider-note" class="auth-provider-pending">Один аккаунт для сайта и приложения.</p>
+        </div>
+        <p id="auth-status" class="auth-status" role="status"></p>
+        <p class="auth-legal">Используя Сметру, вы принимаете <a href="/terms">условия сервиса</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
       </div>
-      <details class="email-disclosure" id="email-disclosure" open>
-        <summary>Продолжить по почте</summary>
-        <form id="auth-form">
-          <div class="field hidden" id="name-field"><label for="name">Как к вам обращаться</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
-          <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
-          <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
-          <p id="auth-form-error" class="auth-form-error" role="alert"></p>
-          <button class="btn primary full-width" id="auth-submit" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button>
-        </form>
-      </details>
-      <div class="auth-provider-block"><div class="auth-provider-divider"><span>или используйте российский сервис</span></div><div id="provider-buttons" class="provider-buttons" aria-label="Способ входа"></div><p id="provider-note" class="auth-provider-pending"></p></div>
-      <p id="auth-status" class="auth-status" role="status"></p>
-      <p class="auth-legal">Продолжая, вы принимаете <a href="/terms">условия использования</a> и <a href="/privacy">политику конфиденциальности</a>.</p>
     </section>
   </main>
 
@@ -91,8 +157,8 @@
     <aside id="sidebar" class="sidebar" aria-label="Рабочие разделы">
       <div class="sidebar-scroll">
         <div class="sidebar-group"><span class="sidebar-heading">Основное</span><button data-tab="dashboard" class="active">Сегодня</button><button data-tab="assistant">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="projects">Проекты</button><button data-tab="clients">Клиенты</button></div>
-        <div class="sidebar-group"><span class="sidebar-heading">Работа</span><button data-tab="construction">Объекты и замеры</button><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="finance">Платежи</button></div>
-        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Работа</span><button data-tab="construction">Объекты и замеры</button><button data-tab="fieldwork">Инструменты смет</button><button data-tab="inbox">Полученные сметы</button><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="finance">Платежи</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="premium">Материалы</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button><button data-tab="chats">Чаты объектов</button></div>
         <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
       </div>
       <div class="sidebar-foot">
@@ -108,13 +174,16 @@
     <main class="main" id="content" tabindex="-1"></main>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261022-glass-voice-v2" defer></script>
+  <script src="/features.js?v=20261024-avatar-v1" defer></script>
   <script src="/select-menu.js" defer></script>
-  <script src="/app.js?v=20261022-glass-status-v6" defer></script>
-  <script src="/workspace.js" defer></script>
-  <script src="/black.js" defer></script>
+  <script src="/app.js?v=20261024-auth-motion-v1" defer></script>
+  <script src="/workspace.js?v=20261024-p0-integrity-v1" defer></script>
+  <script src="/field-flows.js?v=20261024-v1" defer></script>
+  <script src="/black.js?v=20261024-oauth-motion-v1" defer></script>
+  <script src="/auth-email.js?v=20261024-auth-motion-v1" defer></script>
   <script src="/file-preview.js" defer></script>
   <script src="/file-editor.js" defer></script>
   <script src="/product-ui.js?v=20261022-outline-icons-v7" defer></script>
+<script src="/communication-center.js?v=20261024-csp-p1" defer></script>
 </body>
 </html>

@@ -3,8 +3,20 @@ CREATE TABLE IF NOT EXISTS users (
  name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user','admin')),
  blocked INTEGER NOT NULL DEFAULT 0 CHECK(blocked IN (0,1)),
  plan TEXT NOT NULL DEFAULT 'free', entitlement_until INTEGER NOT NULL DEFAULT 0,
- created_at INTEGER NOT NULL, deleted_at INTEGER, email_verified_at INTEGER
+ created_at INTEGER NOT NULL, deleted_at INTEGER, email_verified_at INTEGER,
+ avatar_id TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ document_version TEXT NOT NULL,
+ accepted_at INTEGER NOT NULL,
+ source TEXT NOT NULL CHECK(source IN ('registration','first_estimate')),
+ UNIQUE(user_id,document_version)
+);
+CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user_version
+ ON legal_acceptances(user_id,document_version);
+
 CREATE TABLE IF NOT EXISTS sessions (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL
@@ -21,7 +33,8 @@ CREATE TABLE IF NOT EXISTS quotes (
  title TEXT NOT NULL, client TEXT NOT NULL, description TEXT NOT NULL,
  amount_kopecks INTEGER NOT NULL CHECK(amount_kopecks > 0),
  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','sent','accepted','declined','completed')),
- public_token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+ public_token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+ ai_generated INTEGER NOT NULL DEFAULT 0 CHECK(ai_generated IN (0,1))
 );
 CREATE INDEX IF NOT EXISTS idx_quotes_user_created ON quotes(user_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS payments (

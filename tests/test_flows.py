@@ -213,7 +213,7 @@ class FlowTests(unittest.TestCase):
         status, reg = self.request(
             "/api/auth/register",
             "POST",
-            {"email": email, "password": "a secure password", "name": "Тест"},
+            {"email": email, "password": "a secure password", "name": "Тест", "legal_acceptance": True, "legal_version": "2026-10-19-registration-v1"},
         )
         self.assertEqual(status, 200)
         token = reg["token"]
@@ -233,7 +233,7 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(status, 201)
         qid = result["quote"]["id"]
         status, _ = self.request(
-            "/api/quotes/" + qid + "/status", "POST", {"status": "sent"}, token
+            "/api/quotes/" + qid + "/status", "POST", {"status": "sent", "review_confirmed": True}, token
         )
         self.assertEqual(status, 200)
         public = result["quote"]["public_url"].split("quote=")[1]
@@ -310,6 +310,8 @@ class FlowTests(unittest.TestCase):
                     "email": "billing@sample.test",
                     "password": "secure password twelve",
                     "name": "Биллинг",
+                    "legal_acceptance": True,
+                    "legal_version": "2026-10-19-registration-v1",
                 },
             )
             self.assertEqual(status, 200)
@@ -440,6 +442,8 @@ class FlowTests(unittest.TestCase):
                 "email": "owner@sample.test",
                 "password": "secure password twelve",
                 "name": "Владелец",
+                "legal_acceptance": True,
+                "legal_version": "2026-10-19-registration-v1",
             },
         )
         _, second = self.request(
@@ -449,6 +453,8 @@ class FlowTests(unittest.TestCase):
                 "email": "other@sample.test",
                 "password": "secure password twelve",
                 "name": "Другой",
+                "legal_acceptance": True,
+                "legal_version": "2026-10-19-registration-v1",
             },
         )
         payload = {
@@ -497,6 +503,8 @@ class FlowTests(unittest.TestCase):
                     "email": "verify@sample.test",
                     "password": "old password secure",
                     "name": "Проверка",
+                    "legal_acceptance": True,
+                    "legal_version": "2026-10-19-registration-v1",
                 },
             )
             self.assertFalse(registered["user"]["email_verified"])

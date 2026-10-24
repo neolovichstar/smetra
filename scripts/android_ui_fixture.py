@@ -95,13 +95,19 @@ def main():
                 "email": "android-design@test.invalid",
                 "password": "android design test only",
                 "name": "Александр",
+                "legal_acceptance": True,
+                "legal_version": "2026-10-19-registration-v1",
             },
         )
         token = account["token"]
+        call("/me/legal-consent", {"accepted": True, "version": "2026-10-19-ai-estimate-v1"}, token)
         if os.getenv('SMETRA_ACTION_QA') == '1':
             with app.db() as con:
                 con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (int(time.time())+3600,int(time.time()),account['user']['id']))
-            call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member'})
+            with app.db() as con:
+                wid = app.business.ensure_workspace(con, account['user'])
+                con.execute("UPDATE workspaces SET plan='team_month',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (int(time.time())+3600,wid))
+            call('/auth/register', {'email': 'ui-member@test.invalid', 'password': 'isolated member test password', 'name': 'UI member', 'legal_acceptance': True, 'legal_version': '2026-10-19-registration-v1'})
         from PIL import Image
         receipt_object = call('/construction/objects', {'name': 'Проверка чека'}, token)['object']['id']
         receipt_zone = call('/construction/objects/' + receipt_object + '/zones', {'name': 'Комната', 'length': '2', 'width': '1'}, token)['zone']['id']
@@ -171,7 +177,7 @@ def main():
             if index < 2:
                 quote = call(
                     "/quotes/" + quote["id"] + "/publish",
-                    {"revision": quote["revision"]},
+                    {"revision": quote["revision"], "review_confirmed": True},
                     token,
                 )["quote"]
             if index == 0:
@@ -312,7 +318,7 @@ def main():
         if os.getenv('SMETRA_QUOTE_REVIEW_QA') == '1':
             quote_review = call('/quotes', {'title': 'Сравнение условий', 'client': 'Тестовый клиент', 'terms': 'Срок 10 дней',
                                            'items': [{'name': 'Подготовка', 'unit_price': 10000}, {'name': 'Покраска', 'unit_price': 20000}, {'name': 'Доставка', 'unit_price': 3000}]}, token)['quote']
-            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision']}, token)['quote']
+            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision'], 'review_confirmed': True}, token)['quote']
 
             def revise_review(quote, terms, items):
                 payload = json.dumps({'revision': quote['revision'], 'terms': terms, 'items': items}).encode()
@@ -323,7 +329,7 @@ def main():
 
             quote_review = revise_review(quote_review, 'Срок 7 дней', [{**quote_review['items'][0], 'name': 'Подготовка поверхности', 'unit_price': 12000},
                                                                      quote_review['items'][1], {'name': 'Защита мебели', 'unit_price': 4000}])
-            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision']}, token)['quote']
+            quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision'], 'review_confirmed': True}, token)['quote']
             revise_review(quote_review, 'Срок 5 дней', quote_review['items'])
         print("ANDROID_UI_FIXTURE_READY " + base_url, flush=True)
         try:

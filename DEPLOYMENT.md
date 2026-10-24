@@ -1,11 +1,22 @@
 # Развёртывание Сметры
 
-Рабочий сайт: `https://smetra.vercel.app`. Исходный код подготовлен в локальном Git-коммите; предоставленный GitHub-токен пока не даёт запись в целевой репозиторий. Vercel исполняет Python API из `api/index.py` и отдаёт статические файлы из `apps/web`. Данные хранятся в приватной схеме `smetra` предоставленного Supabase Postgres. Схема `smetra_qa_20260928` изолирована для проверок; не подключайте её к рабочему сайту. Миграции лежат в `supabase/migrations`.
+Рабочий сайт: `https://smetra.online`. Исходный код подготовлен в локальном Git-коммите; предоставленный GitHub-токен пока не даёт запись в целевой репозиторий. Vercel исполняет Python API из `api/index.py` и отдаёт статические файлы из `apps/web`. Данные хранятся в приватной схеме `smetra` предоставленного Supabase Postgres. Схема `smetra_qa_20260928` изолирована для проверок; не подключайте её к рабочему сайту. Миграции лежат в `supabase/migrations`.
 
-Для повторного развёртывания настройте в Vercel зашифрованные переменные `DATABASE_URL`, `OPENROUTER_API_KEY`, `PUBLIC_ORIGIN=https://smetra.vercel.app`, `SMETRA_DB_SCHEMA=smetra`, `OPENROUTER_MODEL=openrouter/free`. Временная регистрация по почте без проверки разрешена флагом `ALLOW_UNVERIFIED_SIGNUP=1` до подключения SMTP. После настройки SMTP уберите этот флаг; переменные перечислены в `.env.example`. Храните секреты только в Vercel, не в Git.
+Для повторного развёртывания настройте в Vercel зашифрованные переменные `DATABASE_URL`, `OPENROUTER_API_KEY`, `PUBLIC_ORIGIN=https://smetra.online`, `SMETRA_DB_SCHEMA=smetra`, `OPENROUTER_MODEL=openrouter/free`. Временная регистрация по почте без проверки разрешена флагом `ALLOW_UNVERIFIED_SIGNUP=1` до подключения SMTP. После настройки SMTP уберите этот флаг; переменные перечислены в `.env.example`. Храните секреты только в Vercel, не в Git.
 
 `vercel deploy --prod` публикует текущую версию. Проверки после публикации: `/health`, `/api/auth/providers`, открытие `/`, `/app`, создание тестовой сметы, клиентской ссылки и просмотр на телефоне. Административный доступ назначается отдельно через `backend/admin.py`; его нельзя получать регистрацией.
 
 Веб и Android имеют одинаковую базу и профили. Если у пользователя уже есть аккаунт по почте, он сначала входит на сайте и привязывает Яндекс/VK/Mail в настройках. Вход через российский сервис с тем же адресом почты сам по себе не объединяет аккаунты.
 
 Настройку OAuth, адресов обратного вызова, ссылки RuStore, SMTP и оплат описывает [docs/CONNECT_SERVICES.md](docs/CONNECT_SERVICES.md). Политики `/privacy` и `/terms` перед коммерческим запуском должны содержать реквизиты владельца и проверенные условия. Для персональных данных и платежей проведите отдельную юридическую проверку.
+
+
+## Расширенные материалы и облака
+
+Для версии с материалами, мониторингом цен и импортом облачных документов сначала примените миграцию `supabase/migrations/20261023200000_premium_visual_cloud_products.sql` **до** публикации API-кода: приложение проверяет номер схемы и не запускает новые маршруты без миграции 49. Обычный frontend bundle собирается командой `python scripts/build_web.py`.
+
+В Vercel задайте стабильный `CLOUD_TOKEN_ENCRYPTION_KEY`, сгенерированный локально командой `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Храните его только в переменных окружения. При его замене зашифрованные токены старых облачных подключений потребуют переподключения.
+
+Яндекс.Диск использует `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` как запасной вариант. В OAuth-приложении Яндекс ID необходимо разрешить `cloud_api:disk.read`; callback — `https://smetra.online/api/auth/oauth/yandex/callback`. Отдельные `YANDEX_DISK_CLIENT_ID/SECRET` и `YANDEX_DISK_REDIRECT_URI` можно задать, если используется отдельный клиент. Google Drive требует собственного OAuth-клиента и callback `https://smetra.online/api/premium/cloud/oauth/callback`.
+
+Проверьте наличие `CRON_SECRET` в Production перед включением мониторинга цен и плановой синхронизации. Новые возможности остаются закрытыми без действующего premium entitlement. **Миграцию и Production deployment выполняйте только после прохождения CI, smoke-проверок OAuth и проверки доступа по тарифам**.

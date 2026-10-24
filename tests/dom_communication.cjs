@@ -1,0 +1,27 @@
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
+const dom=new JSDOM('<!doctype html><head></head><body><div id="toast"></div><div id="content"></div></body>',{url:'https://smetra.test/app',runScripts:'outside-only'});
+const w=dom.window;
+w.alert=()=>{};
+w.fetch=async url=>({ok:true,json:async()=>url.includes('/profile/id')?{id:'user-1',public_id:'SM-TEST',role:'user'}:{chats:[{id:'chat-1',kind:'direct',partner_name:'Заказчик',last_message:'Проверить объём'}]}});
+w.eval(fs.readFileSync('apps/web/communication-center.js','utf8'));
+(async()=>{
+ await w.SmetraCommunication.open();
+ assert.match(w.document.querySelector('#comms-list').textContent,/Заказчик/);
+ assert.equal(w.document.querySelector('link[data-comms-style]').getAttribute('href'),'/communication-center.css');
+ w.SmetraCommunication.reset();
+ assert.doesNotMatch(w.document.querySelector('#comms-list').textContent,/Заказчик/);
+ assert.equal(w.document.querySelector('#communication-center').getAttribute('aria-hidden'),'true');
+ let resolve;
+ w.fetch=()=>new Promise(r=>resolve=r);
+ const pending=w.SmetraCommunication.refresh();
+ await Promise.resolve();
+ w.SmetraCommunication.reset();
+ resolve({ok:true,json:async()=>({id:'old-user',public_id:'OLD',role:'admin'})});
+ await pending;
+ assert.equal(w.document.querySelector('#comms-my-id code').textContent,'');
+ assert.doesNotMatch(w.document.querySelector('#comms-list').textContent,/Заказчик/);
+ console.log('PASS: communication opens, external CSP style loads, logout clears private data and rejects stale identity');
+ dom.window.close();
+})().catch(e=>{dom.window.close();console.error(e);process.exitCode=1});

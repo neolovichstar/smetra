@@ -28,6 +28,7 @@ jobs:
           node tests/assistant_markdown.cjs
           node tests/pwa_cache.cjs
           node tests/quote_money.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_communication.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_api_transport.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_capability.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_session_races.cjs
@@ -149,14 +150,14 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: bash apps/mobile/gradlew -p apps/mobile assembleDebug lintDebug -PapiBaseUrl=https://example.invalid
-      - run: bash apps/mobile/gradlew -p apps/mobile assembleRelease lintRelease -PapiBaseUrl=https://smetra.vercel.app -PverifyUnsignedRelease=true
+      - run: bash apps/mobile/gradlew -p apps/mobile assembleRelease lintRelease -PapiBaseUrl=https://smetra.online -PverifyUnsignedRelease=true
       - uses: actions/upload-artifact@v4
         with:
           name: android-debug
           path: apps/mobile/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Build installable Android APK for production API
-        run: bash apps/mobile/gradlew -p apps/mobile assembleDebug -PapiBaseUrl=https://smetra.vercel.app
+        run: bash apps/mobile/gradlew -p apps/mobile assembleDebug -PapiBaseUrl=https://smetra.online
       - uses: actions/upload-artifact@v4
         with:
           name: smetra-android-apk

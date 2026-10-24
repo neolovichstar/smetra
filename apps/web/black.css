@@ -23,7 +23,7 @@ html{background:#000;scrollbar-width:none}html::-webkit-scrollbar,body::-webkit-
 
 /* Product surfaces share the same true-black language as the landing. */
 .workspace-page,.workspace-page.dark{--bg:#000;--panel:transparent;--text:#f5f5f7;--muted:#aaaab3;--line:#27272d;background:#000;color:var(--text)}
-.workspace-page .main{background:#000}
+ .workspace-page .main{background:transparent!important}
 .workspace-page .panel{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:24px 0;margin-bottom:18px}
 .workspace-page .business-stats{gap:24px}
 .workspace-page .business-stats .stat{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;padding:18px 0;gap:8px}
@@ -203,3 +203,72 @@ body.public-quote-mode .nav .links,body.public-quote-mode .nav .btn{display:none
 .black-landing :is(.document-total,.document-top,.open-price){font-variant-numeric:tabular-nums}.black-landing :is(.overline,.feature-number){letter-spacing:.09em}
 @media(max-width:760px){.black-landing .nav{width:calc(100% - 20px);top:7px;margin-top:7px;border-radius:24px}.black-landing .nav-inner{min-height:58px!important}.black-landing .nav .container{padding-inline:12px}.black-landing .nav .links{gap:3px}.black-landing .nav .links a{font-size:11px;padding:8px 7px}.black-landing .nav .brand{font-size:21px}.black-landing .nav .btn{min-height:38px;padding:8px 12px;font-size:11px}}
 
+
+/* Keep client-facing approval actions readable even when workspace theme variables are loaded. */
+body.public-quote-mode #public-quote .btn.primary{background:#181818!important;border-color:#181818!important;color:#fff!important;box-shadow:none!important}
+body.public-quote-mode #public-quote .btn.primary:hover:not(:disabled){background:#383838!important;border-color:#383838!important;color:#fff!important}
+
+/* AI-estimate safety, consent and review dialogs */
+.estimate-ai-warning{margin:16px 0;padding:14px 16px;border:1px solid #8f6b2b;border-radius:14px;background:rgba(255,190,70,.08);color:inherit}
+.estimate-ai-warning strong{display:block;font-size:13px;margin-bottom:5px}
+.estimate-ai-warning p{margin:0;font-size:13px;line-height:1.55}
+.estimate-safety-dialog{width:min(560px,calc(100% - 28px));max-height:min(86vh,760px);overflow:auto;border:1px solid var(--line,#333);border-radius:20px;background:var(--panel,#111);color:var(--text,#fff);padding:24px;box-shadow:0 24px 90px #0008}
+.estimate-safety-dialog::backdrop{background:rgba(0,0,0,.7);backdrop-filter:blur(5px)}
+.estimate-safety-heading h2{margin:10px 0;font-size:24px;line-height:1.2}
+.estimate-safety-heading p{margin:0 0 18px;color:var(--muted,#aaa);font-size:14px;line-height:1.6}
+.estimate-consent-check{display:flex;align-items:flex-start;gap:10px;line-height:1.5;font-size:14px}
+.estimate-consent-check input{flex:0 0 auto;margin-top:4px;width:18px;height:18px;accent-color:var(--accent,#fff)}
+.estimate-consent-check a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.estimate-safety-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:22px}
+.estimate-safety-actions button{min-height:44px}
+.estimate-safety-dialog .form-error{color:#e0a7a7;font-size:13px;margin-top:10px}
+#legal-consent-field{margin-top:4px}
+#legal-consent-field .estimate-consent-check{font-size:12px}
+@media(max-width:560px){.estimate-safety-dialog{padding:20px 16px}.estimate-safety-heading h2{font-size:21px}.estimate-safety-actions{display:grid;grid-template-columns:1fr}.estimate-safety-actions button{width:100%}}
+
+/* AI estimate photo picker and compact image preview */
+.estimate-photo-upload{margin:16px 0;padding:16px;border:1px solid var(--line,#333);border-radius:14px}
+.estimate-photo-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+.estimate-photo-heading strong{font-size:14px}
+.estimate-photo-heading span{font-size:12px;color:var(--muted,#999)}
+.estimate-photo-preview{margin-top:12px}
+.estimate-photo-card{display:flex;align-items:center;gap:14px;min-width:0;padding:10px;border:1px solid var(--line,#333);border-radius:12px}
+.estimate-photo-card img{display:block;width:100px;height:78px;flex:0 0 100px;object-fit:cover;border-radius:8px;background:var(--surface,#222)}
+.estimate-photo-file{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
+.estimate-photo-file strong{display:block;max-width:100%;overflow-wrap:anywhere;font-size:13px}
+.estimate-photo-file span{font-size:12px;color:var(--muted,#999)}
+.estimate-photo-file button{margin-top:5px}
+@media(max-width:560px){.estimate-photo-upload{padding:12px}.estimate-photo-heading{align-items:flex-start;flex-direction:column;gap:4px}.estimate-photo-card img{width:76px;height:68px;flex-basis:76px}}
+
+/* Four current tariffs inside the restored classic public landing. */
+.black-landing #pricing .section-heading{margin-bottom:34px}
+.black-landing .landing-plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch;gap:clamp(12px,1.3vw,20px)}
+.black-landing .landing-plan{display:flex;flex-direction:column;min-width:0;padding:clamp(19px,1.7vw,30px);border:1px solid #28282d;border-radius:14px;background:#0b0b0d}
+.black-landing .landing-plan h3{font-size:clamp(19px,1.5vw,25px);line-height:1.3;font-weight:600;letter-spacing:-.035em;margin:0 0 9px}
+.black-landing .landing-plan>p{min-height:36px;margin:0;color:#9e9ea8;font-size:12px;line-height:1.5}
+.black-landing .landing-price{font-size:clamp(27px,2.1vw,39px);font-weight:600;letter-spacing:-.045em;line-height:1.2;white-space:nowrap;margin:24px 0 19px}
+.black-landing .landing-price small{font-size:12px;font-weight:400;letter-spacing:0;color:#9898a1}
+.black-landing .landing-plan ul{list-style:none;padding:18px 0 24px;border-top:1px solid #27272d;color:#c3c3ca;font-size:12px;line-height:1.65;flex:1;margin:0}
+.black-landing .landing-plan li{position:relative;padding:7px 0 7px 19px}
+.black-landing .landing-plan li:before{position:absolute;top:7px;left:0;content:"✓";color:#b5b5bd}
+.black-landing .landing-plan .btn{display:flex;align-items:center;justify-content:center;min-height:48px;width:100%;min-width:0;white-space:normal;padding-inline:14px;text-align:center;font-size:12px}
+.black-landing .landing-plan .btn.primary{background:#e4e4e4!important;color:#111!important;border-color:#e4e4e4!important;box-shadow:none!important}
+.black-landing .landing-plan .btn.primary:hover{background:#fff!important}
+.black-landing .landing-plan:nth-child(2){border-color:#5b5b62}
+.black-landing #pricing>.document-note{margin-top:22px;line-height:1.75;max-width:970px}
+@media(max-width:1160px){.black-landing .landing-plans{grid-template-columns:repeat(2,minmax(0,1fr))}.black-landing .landing-plan>p{min-height:0}}
+@media(max-width:660px){.black-landing .landing-plans{grid-template-columns:1fr}.black-landing .landing-plan{padding:21px}.black-landing .landing-price{font-size:31px}.black-landing #pricing .section-heading{margin-bottom:28px}}
+
+
+/* Contact channels: one typographic directory, not a row of cards. */
+.doc .contact-channels{margin:20px 0 36px;border-top:1px solid rgba(255,255,255,.12)}
+.doc .contact-channel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px 32px;padding:18px 0;border-bottom:1px solid rgba(255,255,255,.10)}
+.doc .contact-channel h3{font-size:15px;font-weight:600;line-height:1.4;margin:0 0 5px;color:#f2f2f3}
+.doc .contact-channel p{margin:0;max-width:46ch;font-size:12px;line-height:1.65}
+.doc .contact-channel>a{color:#e6e6e9;text-decoration:none;font-size:13px;overflow-wrap:anywhere}
+.doc .contact-channel>a:hover,.doc .contact-channel>a:focus-visible{text-decoration:underline;text-underline-offset:4px}
+.doc strong{color:#ececee;font-weight:600}
+.black-footer .footer-mail-links{display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px}
+.black-footer .footer-mail-links>a{color:#d6d6dc;text-decoration:none;white-space:nowrap}
+.black-footer .footer-mail-links>a:hover{text-decoration:underline;text-underline-offset:4px}
+@media(max-width:700px){.doc .contact-channel{grid-template-columns:minmax(0,1fr);gap:8px;padding:16px 0}}

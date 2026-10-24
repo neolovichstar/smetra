@@ -1,0 +1,42 @@
+/* Classic Smetra registration: preserve the two-column composition and remove demo panels. */
+.workspace-page.auth-mode .app-nav{position:relative!important;top:0!important;left:auto!important;width:100%!important;max-width:none!important;margin:0!important;border-radius:0!important;box-shadow:none!important}
+.workspace-page.auth-mode .app-nav-inner{max-width:none!important;padding-inline:clamp(20px,4vw,72px)!important}
+.workspace-page.auth-mode :is(.desktop-menu-toggle,.nav-toggle,.workspace-modes,.app-nav-caption,.app-nav-actions){display:none!important}
+.workspace-page.auth-mode .auth-story{justify-content:center;gap:0;background:radial-gradient(ellipse at 45% 30%,#171717,#070707 62%,#030303)!important}
+.workspace-page.auth-mode .auth-story-top{margin-bottom:16px}
+.workspace-page.auth-mode .auth-story .auth-art{display:block;width:min(64%,310px);height:auto;max-width:310px;max-height:310px;object-fit:contain;margin:8px auto 20px;filter:none!important;animation:none!important}
+.workspace-page.auth-mode .auth-story h2{font-size:clamp(42px,4.4vw,76px);line-height:1.08;letter-spacing:-.06em;margin:6px 0 18px}
+.workspace-page.auth-mode .auth-story h2 span{color:#e8e8e8}
+.workspace-page.auth-mode .auth-story>p{max-width:510px;line-height:1.8;color:#acacb0;margin:0}
+.workspace-page.auth-mode .auth-proof{display:none!important}
+.workspace-page.auth-mode .auth-wrap{min-width:0}
+.workspace-page.auth-mode .auth-flow{width:min(100%,610px);max-width:none;padding:clamp(36px,4.6vw,72px) clamp(26px,4.5vw,70px)}
+.workspace-page.auth-mode .auth-flow h1{font-size:clamp(36px,3.25vw,53px);line-height:1.13;letter-spacing:-.048em}
+.workspace-page.auth-mode .auth-flow .auth-intro{line-height:1.75;font-size:14px}
+.workspace-page.auth-mode .auth-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;border-bottom:1px solid #313135;margin-bottom:28px}
+.workspace-page.auth-mode .auth-tabs button{width:100%;min-height:47px;padding:12px 6px;text-align:center;color:#95959c;border:0;border-bottom:2px solid transparent;background:transparent;font-size:13px}
+.workspace-page.auth-mode .auth-tabs button[aria-selected=true]{color:#f5f5f5;border-bottom-color:#e7e7e7}
+.workspace-page.auth-mode:not(.auth-password-reset) .email-disclosure{display:none!important}
+.workspace-page.auth-mode .auth-provider-block{margin-top:0}
+.workspace-page.auth-mode .auth-provider-divider{margin-bottom:18px;font-size:11px;line-height:1.5}
+.workspace-page.auth-mode .auth-provider-divider span{background:#000;padding-inline:12px}
+.workspace-page.auth-mode #provider-buttons{grid-template-columns:minmax(0,1fr);width:100%;gap:0;margin:0}
+.workspace-page.auth-mode #provider-buttons .yandex-id-button{display:flex;align-items:center;justify-content:center;gap:16px;min-height:56px;width:100%;padding:13px 20px;border-radius:11px!important;background:#eaeaea!important;border:1px solid #eaeaea!important;color:#171717!important;box-shadow:none!important;font-size:14px;font-weight:600;line-height:1.4;white-space:normal;text-align:center;transform:none!important}
+.workspace-page.auth-mode #provider-buttons .yandex-id-button:hover{background:#fff!important;border-color:#fff!important}
+.workspace-page.auth-mode .yandex-id-symbol{display:inline-grid;place-items:center;flex:0 0 25px;width:25px;height:25px;border-radius:6px;color:#eb3030;background:#fff;font-size:22px;font-weight:800;line-height:1}
+.workspace-page.auth-mode .auth-provider-pending{margin:14px 0 0;text-align:center;color:#96969c;font-size:11px;line-height:1.6}
+.workspace-page.auth-mode #legal-consent-field{margin:0 0 24px}
+.workspace-page.auth-mode #legal-consent-field .estimate-consent-check{display:flex;gap:12px;align-items:flex-start;font-size:12px;line-height:1.65;color:#c7c7ca}
+.workspace-page.auth-mode #legal-consent-field input{flex:0 0 19px;width:19px;height:19px;min-height:19px;margin:2px 0 0;accent-color:#ddd}
+.workspace-page.auth-mode #legal-consent-field a{color:#f1f1f1;text-decoration:underline;text-underline-offset:3px}
+.workspace-page.auth-mode .auth-status{min-height:0;line-height:1.6;font-size:12px;color:#e6b6b6}
+.workspace-page.auth-mode .auth-status:empty{display:none}
+.workspace-page.auth-mode .auth-legal{max-width:420px;margin:24px auto 0;text-align:center;font-size:11px!important;line-height:1.75;color:#8e8e95!important}
+.workspace-page.auth-mode .auth-legal a{color:#d1d1d1}
+.workspace-page.auth-mode.auth-password-reset .email-disclosure{display:block!important;margin:0 0 20px}
+.workspace-page.auth-mode.auth-password-reset .auth-provider-block{display:none!important}
+.workspace-page.auth-mode.auth-password-reset .auth-tabs{display:none!important}
+@media(max-width:900px){.workspace-page.auth-mode .auth-flow{padding-inline:clamp(22px,4vw,46px)}}
+@media(max-width:760px){.workspace-page.auth-mode .auth-story{display:none!important}.workspace-page.auth-mode .auth-wrap{grid-template-columns:minmax(0,1fr)!important;min-height:calc(100svh - 64px)}.workspace-page.auth-mode .auth-flow{width:min(100%,540px);min-height:calc(100svh - 64px);padding:42px 23px 64px}.workspace-page.auth-mode .auth-flow h1{font-size:clamp(33px,8vw,43px)}}
+@media(max-width:380px){.workspace-page.auth-mode .auth-flow{padding-inline:18px}.workspace-page.auth-mode #provider-buttons .yandex-id-button{gap:10px;padding-inline:12px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){.workspace-page.auth-mode .auth-flow,.workspace-page.auth-mode .auth-story .auth-art{animation:none!important}}

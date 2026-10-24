@@ -684,6 +684,11 @@ def route(service, method, parts, query, data):
             )
             service.insert("construction_objects", values)
             service.emit("construction_object", values["id"], "Объект создан", values["name"])
+            from backend.entitlements import workspace_feature_access
+            if workspace_feature_access(service.con, service.wid, "object_chats", stamp())["allowed"]:
+                service.insert("object_chat_threads", dict(
+                    id=identity(), workspace_id=service.wid, object_id=values["id"],
+                    title=values["name"], created_by=service.user["id"], created_at=stamp()))
             return 201, {"object": values}
         raise DomainError(405, "Метод не поддерживается")
     obj = service.get("construction_objects", parts[1])
@@ -697,6 +702,9 @@ def route(service, method, parts, query, data):
             service.update("construction_objects", obj["id"], dict(name=name,description=description,updated_at=stamp()))
             return 200, {"object": dict(obj, name=name, description=description)}
         raise DomainError(405, "Метод не поддерживается")
+    if len(rest) == 2 and rest[0] == "scan":
+        from backend.room_scans import handle as handle_scan
+        return handle_scan(service,obj,method,rest,data)
     if rest == ["zones"] and method == "POST":
         return add_zone(service, obj, data)
     if len(rest) == 2 and rest[0] == "zones" and method == "PATCH":
@@ -876,6 +884,11 @@ def route(service, method, parts, query, data):
     if rest == ["quote"] and method == "POST":
         return to_quote(service, obj)
     if rest == ["act"] and method == "POST":
+        if data.get("review_confirmed") is not True:
+            raise DomainError(
+                400,
+                "Перед созданием акта подтвердите проверку фактических объёмов и цен",
+            )
         return create_fact_act(service, obj)
     if rest == ["receipt-ocr"] and method == "POST":
         from backend.receipt_ocr import recognize
@@ -885,6 +898,11 @@ def route(service, method, parts, query, data):
         from backend.receipt_ocr import route as receipt_route
         return receipt_route(service, obj, method, rest[1])
     if rest == ["report.pdf"] and method == "GET":
+        if query.get("review_confirmed") != ["1"]:
+            raise DomainError(
+                400,
+                "Перед экспортом подтвердите проверку объёмов, технологии и цен",
+            )
         from backend.construction_report import report
         return 200, report(service, obj, detail(service, obj))
     if rest and rest[0] == "changes":

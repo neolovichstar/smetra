@@ -36,7 +36,7 @@
   function userRows() {
     return state.users.map(u => {
       const activePro = u.entitlement_until > Date.now()/1000;
-      return `<tr><td><div class="admin-person"><span class="admin-avatar" aria-hidden="true">${label((u.name||u.email||'?').slice(0,1).toUpperCase())}</span><span><strong>${label(u.name||'Без имени')}</strong><small>${label(u.email)}${u.role==='admin'?' · Администратор':''}</small></span></div></td>
+      return `<tr><td><div class="admin-person"><span class="admin-avatar" aria-hidden="true">${u.id===user?.id&&window.SmetraUserAvatar?window.SmetraUserAvatar(user):label((u.name||u.email||'?').slice(0,1).toUpperCase())}</span><span><strong>${label(u.name||'Без имени')}</strong><small>${label(u.email)}${u.role==='admin'?' · Администратор':''}</small></span></div></td>
         <td><span class="admin-state ${u.blocked?'admin-state-red':'admin-state-green'}"><i></i>${u.blocked?'Заблокирован':'Активен'}</span></td>
         <td><span class="admin-plan ${activePro?'is-pro':''}">${activePro?'Про':'Старт'}</span>${activePro?`<small class="admin-subline">до ${time(u.entitlement_until)}</small>`:''}</td>
         <td class="admin-date">${time(u.created_at)}</td>

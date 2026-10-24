@@ -1,0 +1,86 @@
+/* Quiet long-form assistant answers, inspired by contemporary ChatGPT readability. */
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-message.assistant{
+  background:transparent!important;border:0!important;box-shadow:none!important;padding:16px 0 25px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-message.assistant .assistant-markdown{
+  max-width:100%!important;border:0!important;background:transparent!important;
+  font-size:15px!important;font-weight:450!important;line-height:1.77!important;
+  letter-spacing:0!important;color:#ededf0!important;overflow-wrap:anywhere!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown >:first-child{margin-top:0!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown >:last-child{margin-bottom:0!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown p{
+  margin:0 0 16px!important;line-height:1.77!important;color:inherit!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown :is(h1,h2,h3,h4,h5,h6){
+  border:0!important;padding:0!important;margin:25px 0 12px!important;line-height:1.35!important;
+  letter-spacing:-.026em!important;font-weight:690!important;color:#fcfcfc!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown h1{font-size:25px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown h2{font-size:21px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown h3{font-size:18px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown :is(h4,h5,h6){font-size:15px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown strong{color:#fff!important;font-weight:720!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown a{
+  color:#dfdfe4!important;text-decoration:underline!important;
+  text-decoration-color:#7f7f87!important;text-underline-offset:3px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown a:hover{
+  color:#fff!important;text-decoration-color:#fff!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown :is(ul,ol){
+  padding-left:26px!important;margin:10px 0 18px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown li{
+  margin:5px 0!important;padding-left:3px!important;line-height:1.69!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown li::marker{color:#c8c8cc!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown li :is(ul,ol){margin:6px 0!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown blockquote{
+  margin:18px 0!important;padding:2px 0 2px 16px!important;
+  border-left:2px solid #77777f!important;background:transparent!important;color:#b8b8c0!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown hr{
+  margin:25px 0!important;border:0!important;border-top:1px solid #353539!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown :not(pre)>code{
+  font:500 .89em/1.5 ui-monospace,SFMono-Regular,Consolas,monospace!important;
+  color:#efeff1!important;background:#29292d!important;border:0!important;
+  padding:2px 6px!important;border-radius:6px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code{
+  margin:19px 0 22px!important;background:#171719!important;
+  border:1px solid #35353a!important;border-radius:12px!important;
+  overflow:hidden!important;box-shadow:none!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code>header{
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  gap:10px!important;min-height:40px!important;padding:8px 14px!important;
+  border:0!important;background:#242427!important;color:#aaaab2!important;
+  font-size:11px!important;font-weight:600!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code-copy{
+  min-height:29px!important;display:inline-flex!important;align-items:center!important;
+  border:0!important;border-radius:6px!important;padding:5px 8px!important;
+  background:transparent!important;color:#ededf0!important;font-size:11px!important;cursor:pointer!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code-copy:hover{
+  color:#fff!important;background:rgba(255,255,255,.10)!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code pre{
+  margin:0!important;max-height:560px!important;padding:16px 18px!important;
+  border:0!important;border-radius:0!important;background:transparent!important;
+  overflow-x:auto!important;scrollbar-width:thin}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code pre code{
+  padding:0!important;border:0!important;background:transparent!important;color:#ebebef!important;
+  font:400 12.5px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace!important;white-space:pre!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-table-scroll{
+  max-width:100%!important;margin:17px 0 22px!important;overflow-x:auto!important;
+  border:1px solid #37373c!important;border-radius:10px!important;scrollbar-width:thin}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown table{
+  width:100%!important;min-width:max-content!important;border-collapse:collapse!important;
+  background:transparent!important;color:#dedee2!important;font-size:13px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown :is(td,th){
+  padding:11px 14px!important;max-width:420px!important;vertical-align:top!important;
+  border:0!important;border-bottom:1px solid #36363a!important;text-align:left!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown th{
+  background:#242426!important;color:#f5f5f6!important;font-weight:680!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown tr:last-child td{border-bottom:0!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .align-right{text-align:right!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .align-center{text-align:center!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-task{
+  width:15px!important;height:15px!important;display:inline-flex!important;vertical-align:-2px!important;
+  margin-right:7px!important;border:1px solid #a9a9af!important;border-radius:4px!important;background:transparent!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-task.is-done{
+  background:#d9d9dc!important;border-color:#d9d9dc!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-task.is-done:after{
+  content:"✓";font-size:12px;line-height:12px;color:#171719;padding-left:2px}
+@media(max-width:680px){
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown{font-size:14px!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-markdown .assistant-code pre{padding:13px!important}
+}

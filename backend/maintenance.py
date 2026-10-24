@@ -1,0 +1,54 @@
+"""Bounded retention for expired authentication artifacts and old rate-limit keys.
+
+No quotes, estimates, billing, audit, jobs or active tokens are deleted.
+Only the Vercel CRON_SECRET holder may run this endpoint.
+"""
+import hmac
+import os
+import time
+
+# Keep expired login links for a short diagnostic buffer, but never indefinitely.
+RETENTION = (
+    ("email_login_challenges", "id", "expires_at", 2 * 86400),
+    ("email_tokens", "id", "expires_at", 7 * 86400),
+    ("oauth_states", "state_hash", "expires_at", 2 * 86400),
+    ("oauth_tickets", "ticket_hash", "expires_at", 2 * 86400),
+    ("sessions", "id", "expires_at", 7 * 86400),
+    # The same table also holds monthly AI quota counters. Do NOT delete
+    # current or recent counters; only keys untouched for four months.
+    ("rate_limits", "key", "started", 120 * 86400),
+)
+
+def authenticate(handler, error_class=None):
+    if error_class is None:
+        from backend.app import ApiError
+        error_class = ApiError
+    secret = os.getenv("CRON_SECRET", "")
+    auth = handler.headers.get("Authorization", "")
+    if len(secret) < 32 or not hmac.compare_digest(auth, "Bearer " + secret):
+        raise error_class(401, "Нет доступа")
+
+
+def cleanup(con, *, now=None, per_table=4000):
+    """Run predictable batches using already indexed expiration columns.
+
+    A single invocation deletes at most 6 x 4000 records. Batches use
+    subselects to support both PostgreSQL and local SQLite.
+    """
+    timestamp = int(time.time()) if now is None else int(now)
+    limit = max(1, min(int(per_table), 4000))
+    counts = {}
+    for table, primary_key, column, grace_period in RETENTION:
+        sql = (
+            f"DELETE FROM {table} WHERE {primary_key} IN "
+            f"(SELECT {primary_key} FROM {table} "
+            f"WHERE {column}<? ORDER BY {column},{primary_key} LIMIT ?)"
+        )
+        affected = con.execute(sql, (timestamp - grace_period, limit))
+        counts[table] = max(0, affected.rowcount)
+    return {"ok": True, "removed": counts, "batch_limit": limit}
+
+
+def run(handler, con):
+    authenticate(handler)
+    return cleanup(con)

@@ -1,0 +1,5 @@
+/* Copyable code blocks */
+body.workspace-page:not(.auth-mode) .assistant-markdown .assistant-code{margin:17px 0 22px!important;border:1px solid #37373d!important;border-radius:12px!important;overflow:hidden!important;background:#171719!important}
+body.workspace-page:not(.auth-mode) .assistant-markdown .assistant-code>header{display:flex!important;justify-content:space-between!important;align-items:center!important;padding:10px 14px!important;background:#232326!important;color:#aaaab2!important}
+body.workspace-page:not(.auth-mode) .assistant-markdown .assistant-code pre{margin:0!important;padding:16px!important;border:0!important;background:transparent!important;overflow-x:auto!important}
+body.workspace-page:not(.auth-mode) .assistant-markdown .assistant-code pre code{font:400 12px/1.7 ui-monospace,Consolas,monospace!important;color:#ededf0!important;background:transparent!important}

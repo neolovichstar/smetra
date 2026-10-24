@@ -1,0 +1,40 @@
+/* Smetra email-code authentication — one surface, six calm code boxes. */
+.workspace-page.auth-mode .email-code-flow{display:block!important;margin:20px 0 0}
+.workspace-page.auth-mode .email-code-flow.hidden{display:none!important}
+.workspace-page.auth-mode .email-code-flow :is(.email-code-start.hidden,.email-code-confirm.hidden){display:none!important}
+.workspace-page.auth-mode .email-code-flow .field{margin-bottom:18px}
+.workspace-page.auth-mode .email-code-flow .field.hidden{display:none!important}
+.workspace-page.auth-mode .email-code-flow label{display:block;color:#c5c5cb;font-size:12px;font-weight:600;margin:0 0 9px}
+.workspace-page.auth-mode .email-code-flow .field input{display:block;width:100%;min-width:0;min-height:52px;padding:13px 15px;border:1px solid #323237!important;background:#101013!important;border-radius:9px!important;color:#fff;font:inherit}
+.workspace-page.auth-mode .email-code-flow .field input:focus{border-color:#97979e!important;outline:0!important;box-shadow:0 0 0 3px #fff1!important}
+.workspace-page.auth-mode .email-code-flow .btn.primary{display:flex;justify-content:center;align-items:center;gap:10px;width:100%;min-height:50px;border:0!important;border-radius:9px!important;background:#ededee!important;color:#0c0c0d!important;box-shadow:none!important;font-size:13px;font-weight:700;transition:background .18s ease}
+.workspace-page.auth-mode .email-code-flow .btn.primary:hover{background:#fff!important}
+.workspace-page.auth-mode .email-code-flow .btn.primary:disabled{opacity:.55;cursor:progress}
+.workspace-page.auth-mode .email-code-flow .email-code-help{font-size:11px;color:#8e8e96;line-height:1.6;margin:12px 0 0;text-align:center}
+.workspace-page.auth-mode .email-code-flow .email-code-step-head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.workspace-page.auth-mode .email-code-flow .email-code-step-head strong{font-size:15px;letter-spacing:-.02em}
+.workspace-page.auth-mode .email-code-flow .email-code-destination{margin:6px 0 0;color:#a8a8b0;font-size:12px;overflow-wrap:anywhere}
+.workspace-page.auth-mode .email-code-flow .email-code-back{display:grid;place-items:center;width:38px;height:38px;min-width:38px;border:0;background:#161619;color:#ddd;border-radius:9px;font-size:18px}
+.workspace-page.auth-mode .email-code-flow .email-code-cells{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:12px 0 22px}
+.workspace-page.auth-mode .email-code-flow .email-code-cells input{min-width:0;width:100%;height:58px;text-align:center;appearance:none;background:#17171b!important;color:#fafafa!important;border:1px solid #35353b!important;border-radius:9px!important;font-size:25px!important;font-weight:700!important;font-variant-numeric:tabular-nums!important;line-height:1!important;padding:0!important;box-shadow:none!important}
+.workspace-page.auth-mode .email-code-flow .email-code-cells input:focus{border-color:#e0e0e5!important;outline:0!important;box-shadow:0 0 0 2px #ffffff24!important}
+.workspace-page.auth-mode .email-code-flow .email-code-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:15px;font-size:11px;color:#91919a}
+.workspace-page.auth-mode .email-code-flow .email-code-meta button{border:0;background:transparent;color:#ccc;cursor:pointer;font:inherit;padding:6px 0}
+.workspace-page.auth-mode .email-code-flow .email-code-meta button:disabled{opacity:.46;cursor:default}
+.workspace-page.auth-mode .email-code-flow .auth-form-error{margin:9px 0 0;min-height:0;color:#f1a7a7;font-size:12px;line-height:1.6}
+.workspace-page.auth-mode .email-code-flow .auth-form-error:empty{display:none}
+.workspace-page.auth-mode.email-password-login .email-disclosure{display:block!important;margin-top:18px}
+.workspace-page.auth-mode.email-password-login .email-disclosure summary{font-size:12px;color:#aaaab1;cursor:pointer;text-align:center}
+.workspace-page.auth-mode.email-password-login .email-disclosure:not([open]) #auth-form{display:none!important}
+.workspace-page.auth-mode #email-disclosure:not([open]) #auth-form{display:none!important}
+@media(max-width:420px){.workspace-page.auth-mode .email-code-flow .email-code-cells{gap:5px}.workspace-page.auth-mode .email-code-flow .email-code-cells input{height:52px;font-size:23px!important}}
+@media(prefers-reduced-motion:reduce){.workspace-page.auth-mode .email-code-flow *{transition:none!important}}
+
+/* Keep Chromium's autofill consistent with the dark authentication form. */
+.workspace-page.auth-mode .email-code-flow input:-webkit-autofill,
+.workspace-page.auth-mode .email-code-flow input:-webkit-autofill:hover,
+.workspace-page.auth-mode .email-code-flow input:-webkit-autofill:focus{
+ -webkit-box-shadow:0 0 0 1000px #101013 inset!important;
+ -webkit-text-fill-color:#f7f7f8!important;
+ caret-color:#f7f7f8;
+}

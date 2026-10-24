@@ -12,6 +12,11 @@ import urllib.request
 from http.cookies import SimpleCookie
 from backend.business import DomainError, identity, stamp, transaction
 
+try:
+    from backend.estimate_safety import REGISTRATION_CONSENT_VERSION
+except ModuleNotFoundError:
+    from estimate_safety import REGISTRATION_CONSENT_VERSION
+
 
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
@@ -80,10 +85,14 @@ def profile(provider, code, state, verifier, callback, device):
         )
         if user.get("client_id") and str(user["client_id"]) != client:
             raise ValueError("wrong client")
+        avatar_id = str(user.get("default_avatar_id") or "")
+        if user.get("is_avatar_empty") or not re.fullmatch(r"[A-Za-z0-9_/-]{1,150}", avatar_id):
+            avatar_id = ""
         return (
             str(user["id"]),
             user.get("real_name") or user.get("display_name") or "Пользователь",
             user.get("default_email", ""),
+            avatar_id,
         )
     if not device:
         raise ValueError('missing VK device binding')
@@ -110,10 +119,9 @@ def route(h, con, method, path, query, origin):
         return h.send_json(
             200, {
                 "providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", ""),
-                "email_delivery_available": all(os.getenv(key) for key in ("SMTP_HOST", "SMTP_FROM", "SMTP_USER", "SMTP_PASSWORD")),
-                "email_signup_available": os.getenv("PUBLIC_ORIGIN", "http://localhost:8080").startswith("http://localhost:")
-                    or os.getenv("ALLOW_UNVERIFIED_SIGNUP") == "1"
-                    or all(os.getenv(key) for key in ("SMTP_HOST", "SMTP_FROM", "SMTP_USER", "SMTP_PASSWORD")),
+                "email_delivery_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
+                "email_code_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
+                "email_signup_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
             }
         )
     if path == "/api/auth/native/exchange" and method == "POST":
@@ -145,12 +153,34 @@ def route(h, con, method, path, query, origin):
     if len(parts) != 5 or parts[2] != "oauth" or method != "GET":
         raise DomainError(404, "Страница входа не найдена")
     provider, action = parts[3:]
+    # Keep the state cookie, authorization redirect and token exchange on
+    # the same verified host. PUBLIC_ORIGIN may point at a legacy Vercel alias.
+    if provider == "yandex":
+        host = h.headers.get("Host", "").strip().lower()
+        if host == "www.smetra.online" and action == "start":
+            safe_query = {key: value for key, value in query.items() if key != "path"}
+            target = "https://smetra.online/api/auth/oauth/yandex/start"
+            if safe_query:
+                target += "?" + urllib.parse.urlencode(safe_query, doseq=True)
+            return redirect(h, target)
+        if host in ("smetra.online", "smetra.vercel.app"):
+            origin = "https://" + host
     client, _ = config(provider)
     if not client:
         return redirect(h, origin + "/app?auth_error=unavailable")
     callback = origin + "/api/auth/oauth/" + provider + "/callback"
     if action == "start":
         h.throttle("oauth:" + h.client_address[0], 20, 600)
+        intent = query.get("intent", ["login"])[0]
+        if intent not in ("login", "register"):
+            return redirect(h, origin + "/app?auth_error=expired")
+        legal_accepted = (
+            intent == "register"
+            and query.get("legal_acceptance", [""])[0] == "1"
+            and query.get("legal_version", [""])[0] == REGISTRATION_CONSENT_VERSION
+        )
+        if intent == "register" and not legal_accepted:
+            return redirect(h, origin + "/app?auth_error=registration_consent_required")
         app_challenge = query.get("app_challenge", [""])[0]
         if app_challenge and not re.fullmatch(r"[A-Za-z0-9_-]{43}", app_challenge):
             raise DomainError(400, "Неверный запрос приложения")
@@ -161,7 +191,7 @@ def route(h, con, method, path, query, origin):
             secrets.token_urlsafe(32),
         )
         con.execute(
-            "INSERT INTO oauth_states(state_hash,provider,verifier,browser_hash,app_challenge,link_user_id,expires_at) VALUES(?,?,?,?,?,?,?)",
+            "INSERT INTO oauth_states(state_hash,provider,verifier,browser_hash,app_challenge,link_user_id,expires_at,registration_intent,legal_acceptance,legal_version) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
                 digest(state),
                 provider,
@@ -170,6 +200,9 @@ def route(h, con, method, path, query, origin):
                 app_challenge,
                 linked,
                 stamp() + 600,
+                intent == "register",
+                bool(legal_accepted),
+                REGISTRATION_CONSENT_VERSION if legal_accepted else "",
             ),
         )
         params = dict(
@@ -182,7 +215,7 @@ def route(h, con, method, path, query, origin):
         )
         if provider == "yandex":
             url = "https://oauth.yandex.ru/authorize"
-            params["scope"] = "login:info login:email"
+            params["scope"] = "login:info login:email login:avatar"
         else:
             url = "https://id.vk.com/authorize"
             params.update(scope="vkid.personal_info email", code_challenge_method='s256', provider={"mail": "mail_ru", "ok": "ok_ru"}.get(provider, "vkid"))
@@ -217,7 +250,7 @@ def route(h, con, method, path, query, origin):
     if query.get("error"):
         return redirect(h, origin + "/app?auth_error=cancelled")
     try:
-        subject, name, email = profile(
+        details = profile(
             provider,
             query.get("code", [""])[0],
             state,
@@ -225,6 +258,9 @@ def route(h, con, method, path, query, origin):
             callback,
             query.get("device_id", [""])[0],
         )
+        # Backward compatible with three-field VK provider responses.
+        subject, name, email = details[:3]
+        avatar_id = details[3] if len(details) > 3 and provider == "yandex" else None
     except Exception:
         return redirect(h, origin + "/app?auth_error=provider")
     # All VK ID methods use the same VK application identity namespace.
@@ -248,6 +284,12 @@ def route(h, con, method, path, query, origin):
         elif account:
             user_id = account["id"]
         else:
+            if (
+                row["registration_intent"] != 1
+                or row["legal_acceptance"] != 1
+                or row["legal_version"] != REGISTRATION_CONSENT_VERSION
+            ):
+                return redirect(h, origin + "/app?auth_error=registration_consent_required")
             # Never merge accounts just because provider emails match.
             if (
                 email
@@ -275,6 +317,18 @@ def route(h, con, method, path, query, origin):
                     stamp(),
                     stamp() if not email.endswith('@identity.smetra.invalid') else None,
                 ),
+            )
+        if avatar_id is not None:
+            con.execute("UPDATE users SET avatar_id=? WHERE id=?", (avatar_id, user_id))
+        if (
+            row["legal_acceptance"] == 1
+            and row["legal_version"] == REGISTRATION_CONSENT_VERSION
+            and not row["link_user_id"]
+        ):
+            con.execute(
+                "INSERT INTO legal_acceptances(id,user_id,document_version,accepted_at,source) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(user_id,document_version) DO NOTHING",
+                (identity(), user_id, REGISTRATION_CONSENT_VERSION, stamp(), "registration"),
             )
         if not account and not row['link_user_id']:
             from backend.revenue import record
