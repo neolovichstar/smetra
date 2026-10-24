@@ -112,52 +112,41 @@
     const hostRoot=host.closest('.assistant-studio');
     host.append(panel);
     let current=null,pending=null,visible=false,seq=0;
+    const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
+    const storageUser=()=>window.user?.id||'';
+    let layout=null,configureVisible=false;
     const render=()=>{
       if(!visible)return;
       content.replaceChildren();
-      if(!current){content.append(el('p','smetra-visual-empty','Выберите смету, чтобы посмотреть позиции и изменения.'));return}
+      if(!current){
+        content.append(el('p','smetra-visual-empty','Выберите смету для живого предпросмотра.'));
+        return;
+      }
       const quote=current;
+      if(!layout)layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),quote.id);
       const title=el('div','smetra-quote-preview-title');
       title.append(el('h3','',quote.title||'Смета'),el('span','',quote.approval_state==='draft'?'Черновик':'Только просмотр'));
       content.append(title);
-      const preview=pending?.preview||null;
-      const ready=preview&&['quote_items','quote_structure','fields'].includes(preview.kind);
-      const stagedItems=ready && Array.isArray(pending.arguments?.items)?pending.arguments.items:null;
-      const rows=stagedItems||quote.items||[];
-      const total=ready&&Number.isSafeInteger(preview.after_total)?preview.after_total:quote.amount_kopecks;
-      if(preview&&pending.arguments?.id!==quote.id)pending=null;
-      const summary=el('div','smetra-quote-preview-total');
-      summary.append(el('span','',ready?'После подтверждения':'По сохранённой смете'),el('strong','',money(total,quote.currency)));
-      content.append(summary);
-      if(ready){
-        const notification=el('section','smetra-quote-preview-pending');
-        notification.append(el('strong','','Предложение ИИ · не сохранено'),el('p','',pending.summary||'Проверьте изменения в чате перед применением.'));
-        if(preview.before_total!==undefined&&preview.after_total!==undefined){
-          notification.append(el('div','smetra-quote-difference',
-            'Было '+money(preview.before_total,quote.currency)+' → '+money(preview.after_total,quote.currency)));
-        }
-        content.append(notification);
+      const bar=el('div','smetra-quote-preview-controls');
+      const tune=el('button','smetra-quote-preview-tune',configureVisible?'Закрыть настройки':'Настроить вид');
+      tune.type='button';tune.setAttribute('aria-expanded',String(configureVisible));
+      tune.onclick=()=>{configureVisible=!configureVisible;render()};
+      bar.append(tune);content.append(bar);
+      if(configureVisible&&window.SmetraQuoteLayout){
+        const controls=el('div','smetra-quote-layout-controls');content.append(controls);
+        window.SmetraQuoteLayout.configure({container:controls,value:layout,onChange:newLayout=>{
+          layout=newLayout;
+          window.SmetraQuoteLayout.save(storageSpace(),storageUser(),quote.id,layout);
+          render();
+        }});
       }
-      const listing=el('section','smetra-quote-lines');
-      const h=el('div','smetra-visual-heading');
-      h.append(el('strong','','Позиции'),el('small','',String(rows.length)));listing.append(h);
-      const table=el('div','smetra-quote-lines-table');
-      rows.slice(0,100).forEach((item,index)=>{
-        const row=el('div','smetra-quote-line');
-        const info=el('div','smetra-quote-line-name');
-        info.append(el('small','',String(index+1).padStart(2,'0')),el('span','',item.name||'Без названия'));
-        const qty=el('div','smetra-quote-line-qty',(item.quantity||'—')+' '+(item.unit||''));
-        const subtotal=Number.isSafeInteger(item.subtotal)?money(item.subtotal,quote.currency):'Не рассчитано';
-        row.append(info,qty,el('strong','',subtotal));table.append(row);
-      });
-      listing.append(table);if(rows.length>100)listing.append(el('p','smetra-visual-footnote','Показаны первые 100 позиций.'));
-      content.append(listing);
-      content.append(breakdown(rows,quote.currency));
+      const doc=window.SmetraQuoteLayout?.render({quote,layout,pending})||el('p','','Предпросмотр пока недоступен.');
+      content.append(doc);
       const foot=el('div','smetra-quote-preview-actions');
-      const edit=el('button','smetra-quote-open-editor','Открыть редактор');
+      const edit=el('button','smetra-quote-open-editor','Открыть полный редактор');
       edit.type='button';edit.onclick=()=>{if(quote.id)onOpenEditor?.(quote.id)};
       foot.append(edit);
-      if(ready)foot.append(el('p','smetra-visual-footnote','Применить или отклонить предложение можно в чате.'));
+      if(pending)foot.append(el('p','smetra-visual-footnote','Предложения по позициям применяются только после подтверждения в чате.'));
       content.append(foot);
     };
     function setOpen(open){
@@ -174,7 +163,7 @@
         if(request!==seq||!host.isConnected)return;
         current=response?.quote||response;
         if(!current||current.id!==id)throw Error('Смета недоступна');
-        pending=null;render();
+        pending=null;layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();
       }catch(error){
         if(request===seq)content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'));
       }
@@ -189,11 +178,21 @@
       if(!current||current.id!==id)return;
       pending=action;setOpen(true);render();
     };
+    const design=async payload=>{
+      if(!payload||!payload.id||!window.SmetraQuoteLayout)return;
+      const validated=window.SmetraQuoteLayout.safeLayout(payload.layout);
+      if(!validated)return;
+      if(!current||current.id!==payload.id)await load(payload.id);
+      if(!current||current.id!==payload.id)return;
+      layout=validated;
+      window.SmetraQuoteLayout.save(storageSpace(),storageUser(),payload.id,validated);
+      setOpen(true);
+    };
     const refresh=async()=>{
       if(!current)return;
       const id=current.id;await load(id);
     };
-    return {load,propose,refresh,close:()=>setOpen(false),open:()=>setOpen(true),
+    return {load,propose,design,refresh,close:()=>setOpen(false),open:()=>setOpen(true),
       destroy:()=>{seq++;hostRoot?.classList.remove('has-quote-preview');panel.remove()},
       get currentId(){return current?.id||''}};
   }
