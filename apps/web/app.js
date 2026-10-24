@@ -160,6 +160,7 @@ const sidebarIcons={
  leads:'<path d="M4 4h16l-6 7v6l-4 3v-9z"/>',
  tasks:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m7 12 3 3 7-7"/>',
  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+ schedule:'<path d="M3 20h18M5 5v12M5 8h7v3H5M12 13h7v3h-7M19 5v12"/>',
  assistant:'<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
  finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
  calculators:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 17h2M14 17h2"/>',
