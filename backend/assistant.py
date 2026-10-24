@@ -515,7 +515,8 @@ def query_model(messages, model, paid_model=False):
     payload = {
         "model": model,
         "messages": messages,
-        **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3}}] if paid_model else []), "tool_choice": "auto"}),
+        **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
+        "max_tool_calls": 4,
         "max_tokens": 3500,
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
@@ -564,7 +565,8 @@ def query_model_stream(messages, on_delta, model, paid_model=False, on_source=No
         packed({
             "model": model,
             "messages": messages,
-            **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3}}] if paid_model else []), "tool_choice": "auto"}),
+            **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
+            "max_tool_calls": 4,
             "max_tokens": 3500,
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
