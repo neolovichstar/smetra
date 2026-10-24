@@ -3,7 +3,7 @@ body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure{
   display:flex!important;align-items:center!important;justify-content:space-between!important;
   box-sizing:border-box!important;width:100%!important;min-width:0!important;height:44px!important;
   min-height:44px!important;margin:0!important;padding:0 12px!important;
-  color:#bfc0c5!important;font:600 12px/1.35 inherit!important;
+  color:#bfc0c5!important;font-family:inherit!important;font-size:12px!important;font-weight:600!important;line-height:1.35!important;
   background:transparent!important;border:0!important;border-radius:9px!important;
   box-shadow:none!important;transform:none!important;
   transition:background-color 180ms ease,color 180ms ease!important;
@@ -103,7 +103,7 @@ body.workspace-page .assistant-studio .assistant-markdown .assistant-callout{
   color:#d6d6dd!important;
 }
 body.workspace-page .assistant-studio .assistant-markdown .assistant-callout-title{
-  font-size:12px;font-weight:750;line-height:1.5;margin:0 0 6px;color:#f0f0f3;
+  display:block;font-size:12px;font-weight:750;line-height:1.5;margin:0 0 6px;color:#f0f0f3;
 }
 body.workspace-page .assistant-studio .assistant-markdown .assistant-callout--warning{
   border-left-color:#dbbc82!important;
