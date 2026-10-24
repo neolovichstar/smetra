@@ -179,3 +179,82 @@ body.workspace-page #sidebar .sidebar-group .sidebar-group-inner :is(button.hidd
 body.workspace-page #sidebar .sidebar-group-inner button[data-tab]:empty{
   display:none!important;
 }
+
+/* Navigation geometry hotfix — all groups follow intrinsic content height.
+   A previous full-height grid/flex track spread three groups over the viewport
+   and left hundreds of pixels blank between their disclosure headers. */
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-scroll,
+body.workspace-page:not(.auth-mode).sidebar-compact #sidebar .sidebar-scroll {
+  display:block!important;
+  flex:1 1 auto!important;
+  min-height:0!important;
+  height:auto!important;
+  align-content:start!important;
+  grid-template-columns:none!important;
+  grid-template-rows:none!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior-y:contain;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group,
+body.workspace-page:not(.auth-mode).sidebar-compact #sidebar .sidebar-group {
+  display:flex!important;
+  flex-direction:column!important;
+  flex:0 0 auto!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  align-content:start!important;
+  align-self:stretch!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  grid-template-rows:none!important;
+  overflow:visible!important;
+  margin:0!important;
+  padding:6px 0 9px!important;
+  gap:2px!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group:first-child{
+  padding-top:2px!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-disclosure {
+  flex:0 0 44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  align-self:stretch!important;
+  margin:0!important;
+  transform:none!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-items {
+  flex:0 0 auto!important;
+  align-self:stretch!important;
+  width:100%!important;
+  min-width:0!important;
+  height:auto!important;
+  min-height:0!important;
+  align-content:start!important;
+  grid-auto-rows:minmax(0,auto)!important;
+  justify-items:stretch!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group .sidebar-group-inner {
+  box-sizing:border-box!important;
+  flex:0 0 auto!important;
+  align-self:stretch!important;
+  width:100%!important;
+  height:auto!important;
+  max-height:none!important;
+  min-height:0!important;
+  justify-content:flex-start!important;
+  align-content:start!important;
+  gap:3px!important;
+  padding:4px 0 0!important;
+}
+body.workspace-page:not(.auth-mode).sidebar-compact #sidebar .sidebar-group .sidebar-disclosure {
+  flex:0 0 12px!important;
+  height:12px!important;
+  min-height:12px!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-foot {
+  flex:0 0 auto!important;
+}
