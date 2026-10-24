@@ -102,10 +102,10 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#capture-text')).resize"),'none','Mobile input has no manual resize grip');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('#capture-text')).fontSize)>=16"),true,'Mobile input text stays readable');
 
-    assert.equal(await evaluate("document.querySelector('.workspace-modes').getBoundingClientRect().top >= document.querySelector('.app-nav-brand').getBoundingClientRect().bottom"),true);
+    assert.equal(await evaluate("(()=>{const n=document.querySelector('.app-nav').getBoundingClientRect(),b=document.querySelector('#nav-toggle').getBoundingClientRect();return b.top>=n.top-1&&b.bottom<=n.bottom+1})()"),true);
     assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44 && document.querySelector('#command-open').getBoundingClientRect().height >= 44"),true);
     assert.equal(await evaluate("document.querySelector('.capture-actions button').getBoundingClientRect().width >= 44"),true);
-    assert.equal(await evaluate("(()=>{const input=document.querySelector('#capture-text'),button=document.querySelector('.capture-actions button');if(!input||!button)return false;const a=input.getBoundingClientRect(),b=button.getBoundingClientRect();return a.width>=100&&a.right<=b.left+1&&b.width<=52&&getComputedStyle(input).visibility!=='hidden'})()"),true,'Mobile estimate input remains visible and does not overlap the compact send button');
+    assert.equal(await evaluate("(()=>{const input=document.querySelector('#capture-text'),button=document.querySelector('.capture-actions button');if(!input||!button)return false;const a=input.getBoundingClientRect(),b=button.getBoundingClientRect();return a.width>=100&&b.width>=150&&b.top>=a.bottom-2&&getComputedStyle(input).visibility!=='hidden'})()"),true,'Mobile estimate input remains visible and does not overlap the compact send button');
     await click('#nav-toggle');assert.equal(await evaluate("document.querySelector('#nav-toggle').getAttribute('aria-expanded')"),'true');
     assert.equal(await evaluate("document.querySelector('#sidebar').getBoundingClientRect().top >= document.querySelector('.app-nav').getBoundingClientRect().bottom"),true);
     await wait(300);await shot('mobile-brand-menu-'+width);

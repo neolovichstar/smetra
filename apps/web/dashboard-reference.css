@@ -231,6 +231,9 @@ body.workspace-page:not(.auth-mode) .workspace-home .dashboard-secondary{
     grid-template-areas:"attach input" "submit submit" "status status"!important;
     gap:9px 8px!important;
   }
+  body.workspace-page:not(.auth-mode) .workspace-home #capture-text{
+    font-size:16px!important;
+  }
   body.workspace-page:not(.auth-mode) .workspace-home .capture-actions>.btn{
     width:100%!important;
   }
