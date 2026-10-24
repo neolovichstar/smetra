@@ -15,7 +15,28 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
  await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-submit')&&typeof api==='function'");
- await fill('#name','Проверка редактора');await fill('#email','editor-'+Date.now()+'@test.invalid');await fill('#password','secure comparison password');await click('#legal-consent');await click('#auth-submit');await until("document.querySelector('#capture-text')");
+ const emailSignupShown=await evaluate("(()=>{const el=document.querySelector('#email-disclosure');return !!el&&!el.classList.contains('hidden')&&getComputedStyle(el).display!=='none'&&el.getClientRects().length>0})()");
+ if(emailSignupShown){
+  await fill('#name','Проверка редактора');
+  await fill('#email','editor-'+Date.now()+'@test.invalid');
+  await fill('#password','secure comparison password');
+  await click('#legal-consent');await click('#auth-submit');
+ }else{
+  // Seed an isolated localhost QA session without enabling unverified signup
+  // in the public registration form or weakening production authentication.
+  const registration=await fetch(site+'/api/auth/register',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({name:'Проверка редактора',email:'editor-'+Date.now()+'@test.invalid',
+    password:'secure comparison password',legal_acceptance:true,
+    legal_version:'2026-10-19-registration-v1'})
+  });
+  const account=await registration.json();
+  assert.equal(registration.status,200,'QA account: '+JSON.stringify(account).slice(0,180));
+  assert.ok(account.token,'QA session token must exist');
+  await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
+  await send('Page.navigate',{url:site+'/app#dashboard'});
+ }
+ await until("document.querySelector('#capture-text')");
  const id=await evaluate("api('/quotes',{method:'POST',body:JSON.stringify({title:'Ремонт кухни',client:'Клиент',items:[{name:'Подготовка',unit_price:10000},{name:'Покраска',unit_price:20000}]})}).then(r=>r.quote.id)");
  const catalogId=await evaluate("api('/catalog',{method:'POST',body:JSON.stringify({name:'Монтаж плинтуса QA',price:12500,unit:'м'})}).then(r=>r.item.id)");
  const clientId=await evaluate("api('/clients',{method:'POST',body:JSON.stringify({name:'Клиент редактора QA'})}).then(r=>r.item.id)");
