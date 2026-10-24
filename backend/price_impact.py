@@ -29,6 +29,20 @@ def _nonnegative_int(value: Any) -> int | None:
     return n if 0 <= n <= 10**12 else None
 
 
+def _unit(value: object) -> str:
+    value = str(value or "").strip().lower().replace(" ", "").rstrip(".")
+    aliases = {
+        "штук": "шт", "штука": "шт", "шт": "шт",
+        "м2": "м²", "м^2": "м²", "кв.м": "м²", "м²": "м²",
+        "м3": "м³", "м^3": "м³", "куб.м": "м³", "м³": "м³",
+        "л": "л", "литр": "л", "литров": "л",
+        "кг": "кг", "килограмм": "кг",
+        "упак": "упак", "упаковка": "упак",
+        "меш": "мешок", "мешок": "мешок",
+    }
+    return aliases.get(value, value)
+
+
 def _estimate_subtotal(item: dict, override_price: int) -> int | None:
     """Use the same per-line price modifiers and HALF_UP rules as business.calculate."""
     try:
@@ -108,8 +122,8 @@ def calculate_price_impact(
         if str(source.get("currency") or "").upper() != currency:
             result.update(status="currency_mismatch", reason="Валюта поставщика отличается от валюты сметы")
             continue
-        unit = str(item.get("unit") or "").strip().lower()
-        src_unit = str(source.get("unit") or "").strip().lower()
+        unit = _unit(item.get("unit"))
+        src_unit = _unit(source.get("unit"))
         if not src_unit or src_unit != unit:
             result.update(status="unit_mismatch", reason="Единицы измерения различаются или не указаны")
             continue
