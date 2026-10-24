@@ -1,0 +1,21 @@
+/* Price impact: restrained read-only comparison against monitored sources. */
+.spi .spi-form{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:18px 0}
+.spi .spi-form label{display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--muted);flex:1 1 260px}
+.spi .spi-form select{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:10px;min-height:43px;padding:9px 12px;width:100%;min-width:0}
+.spi .spi-form button{min-height:43px;flex:none}
+.spi .spi-report{border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.spi .spi-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:15px;row-gap:11px;font-size:11px;color:var(--muted);padding-bottom:14px;border-bottom:1px solid var(--line)}
+.spi .spi-summary strong,.spi .spi-summary b{font-size:18px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.025em;text-align:right}
+.spi .spi-summary .spi-rise{color:#d5a0a0}
+.spi .spi-summary .spi-fall{color:#a3c7af}
+.spi .spi-coverage{margin:14px 0 6px;font-size:11px;color:var(--muted)}
+.spi .spi-line{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:12px 0;border-bottom:1px solid var(--line)}
+.spi .spi-line:last-child{border-bottom:0}
+.spi .spi-line>div:first-child{display:flex;flex-direction:column;min-width:0;gap:4px}
+.spi .spi-line strong{font-size:12px;font-weight:600;overflow-wrap:anywhere;color:var(--ink)}
+.spi .spi-line small,.spi .spi-reason{font-size:11px;color:var(--muted);line-height:1.4}
+.spi .spi-line-values{display:flex;flex-direction:column;gap:4px;align-items:flex-end;text-align:right}
+.spi .spi-reason{max-width:45%;text-align:right}
+.spi .spi-empty,.spi .spi-disclaimer{color:var(--muted);font-size:11px;line-height:1.65;margin:13px 0 0}
+.spi .spi-disclaimer{margin-top:18px;border-top:1px solid var(--line);padding-top:13px}
+@media(max-width:520px){.spi .spi-form button{width:100%}.spi .spi-report{padding:14px}.spi .spi-summary strong,.spi .spi-summary b{font-size:16px}.spi .spi-line{align-items:flex-start}}
