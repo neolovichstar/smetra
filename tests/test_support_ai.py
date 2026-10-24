@@ -4,7 +4,7 @@ import json
 import os
 import unittest
 import urllib.error
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from backend import community
 
@@ -19,6 +19,61 @@ class FakeResponse(io.BytesIO):
 
 def reply(content):
     return FakeResponse(json.dumps({"choices": [{"message": {"content": content}}]}).encode())
+
+
+class SupportBudgetTests(unittest.TestCase):
+    def test_ticket_creation_limits_apply_per_account_and_ip(self):
+        handler = Mock()
+        handler.client_address = ("198.51.100.42", 1234)
+        community._limit_support_creation(handler, {"id": "alice"})
+        self.assertEqual(handler.throttle.call_args_list, [
+            unittest.mock.call("support-thread:user:alice", 8, 3600),
+            unittest.mock.call("support-thread:day:alice", 24, 86400),
+            unittest.mock.call("support-thread:ip:198.51.100.42", 32, 3600),
+        ])
+
+    def test_ai_guard_hands_off_to_human_on_limit_or_redis_outage(self):
+        from backend.app import ApiError
+
+        for status in (429, 503):
+            with self.subTest(status=status):
+                handler = Mock()
+                handler.client_address = ("198.51.100.42", 1234)
+                handler.throttle.side_effect = ApiError(status, "limited")
+                with patch.object(community, "_support_ai_reply",
+                                  side_effect=AssertionError("AI must not be called")):
+                    result = community._support_ai_bounded(
+                        handler, {"id": "alice"}, {}, [], "Подскажите по смете"
+                    )
+                self.assertTrue(result["escalate"])
+                self.assertEqual(result["reason"], "support_ai_limited")
+                self.assertIn("сотруднику", result["reply"])
+
+    def test_ai_guard_checks_user_daily_ip_before_provider_request(self):
+        handler = Mock()
+        handler.client_address = ("198.51.100.42", 1234)
+        expected = {"reply": "Ответ", "escalate": False, "reason": ""}
+        with patch.object(community, "_support_ai_reply", return_value=expected) as call:
+            result = community._support_ai_bounded(
+                handler, {"id": "alice"}, {"account": {}}, [], "Как создать смету?"
+            )
+        self.assertEqual(result, expected)
+        self.assertEqual(handler.throttle.call_args_list, [
+            unittest.mock.call("ai:support:user:alice", 8, 600),
+            unittest.mock.call("ai:support:day:alice", 48, 86400),
+            unittest.mock.call("ai:support:ip:198.51.100.42", 36, 600),
+        ])
+        call.assert_called_once()
+
+    def test_explicit_human_request_skips_ai(self):
+        handler = Mock()
+        with patch.object(community, "_support_ai_reply",
+                          side_effect=AssertionError("Must not call AI")):
+            result = community._support_ai_bounded(
+                handler, {"id": "alice"}, {}, [], "Позови сотрудника поддержки"
+            )
+        self.assertEqual(result["reason"], "user_requested_human")
+        handler.throttle.assert_not_called()
 
 
 class SupportReplyParsingTests(unittest.TestCase):
