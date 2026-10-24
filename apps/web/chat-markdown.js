@@ -32,8 +32,8 @@ window.SmetraCopyText=async value=>{
     return linkOpen(tokens,index,options,env,self);
   };
   md.renderer.rules.image=(tokens,index)=>`<span class="assistant-image-alt">${escape(tokens[index].content||'Изображение')}</span>`;
-  md.renderer.rules.heading_open=(tokens,index)=>`<h${Math.min(6,Number(tokens[index].tag.slice(1))+2)}>`;
-  md.renderer.rules.heading_close=(tokens,index)=>`</h${Math.min(6,Number(tokens[index].tag.slice(1))+2)}>\n`;
+  md.renderer.rules.heading_open=(tokens,index)=>`<h${Math.min(6,Number(tokens[index].tag.slice(1))+1)}>`;
+  md.renderer.rules.heading_close=(tokens,index)=>`</h${Math.min(6,Number(tokens[index].tag.slice(1))+1)}>\n`;
   md.renderer.rules.table_open=()=>'<div class="assistant-table-scroll" role="region" aria-label="Таблица в ответе" tabindex="0"><table>\n';
   md.renderer.rules.table_close=()=>'</table></div>\n';
   for(const type of ['th_open','td_open'])md.renderer.rules[type]=(tokens,index,options,env,self)=>{
