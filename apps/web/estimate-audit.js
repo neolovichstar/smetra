@@ -75,13 +75,14 @@
       }
     }
     const all=named.join(' | ');
+    const coverage=all+' | '+normalize(context?.description||'');
     const suggestions=[
       {use:/(покраск|окраск|штукатурк|шпаклевк|шпаклёвк)/,has:/(грунтовк|грунтован|грунт глубок)/,title:'Возможно, нужна грунтовка',description:'Для отделки иногда учитывают грунтование отдельной работой. Проверьте состав работ.'},
       {use:/(укладк.{0,25}плитк|облицовк.{0,25}плитк)/,has:/(затирк|фуговк)/,title:'Проверьте затирку швов',description:'При облицовке плиткой затирку иногда учитывают отдельной позицией.'},
       {use:/(укладк.{0,25}ламинат|настил.{0,25}ламинат)/,has:/(подложк)/,title:'Проверьте подложку',description:'Для ламината может потребоваться подложка; её стоимость не всегда включена.'}
     ];
     for (const suggestion of suggestions) {
-      if (suggestion.use.test(all) && !suggestion.has.test(all)) {
+      if (suggestion.use.test(all) && !suggestion.has.test(coverage)) {
         const rowIndex=named.length ? rows.findIndex(r=>suggestion.use.test(nameKey(r?.name))) : -1;
         issues.push(issue('tip','possible-omission',suggestion.title,suggestion.description,rowIndex,'name'));
       }
