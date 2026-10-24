@@ -162,16 +162,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
   let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   const syncSendButton=()=>{
-    const hasText=Boolean(input.value.trim()),icon=hasText?'arrow-up':'microphone';
-    send.type=hasText?'submit':'button';
+    const hasText=Boolean(input.value.trim()),hasImage=pendingPhotos.length>0;
+    const canSend=hasText||hasImage,icon=canSend?'arrow-up':'microphone';
+    send.type=canSend?'submit':'button';
     send.dataset.uiIcon=icon;
     // CSP style-src self: icons selected with external stylesheet by data-ui-icon.
-    send.classList.toggle('is-voice',!hasText);
-    send.classList.toggle('has-message',hasText);
+    send.classList.toggle('is-voice',!canSend);
+    send.classList.toggle('has-message',canSend);
     send.classList.toggle('is-recording',voiceListening||voiceStarting);
-    send.setAttribute('aria-label',hasText?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
-    send.title=hasText?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
-    send.setAttribute('aria-pressed',String(!hasText&&voiceListening));
+    send.setAttribute('aria-label',canSend?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
+    send.title=canSend?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
+    send.setAttribute('aria-pressed',String(!canSend&&voiceListening));
   };
   const startVoiceInput=async()=>{
     if(voiceListening){try{voiceRecognition?.stop()}catch{};return}
@@ -397,6 +398,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     previewTray.hidden=!previewTray.children.length;
     attachmentInfo.textContent=hasFiles?pendingPhotos.length+' фото выбрано · до 3, общим размером до 1,5 МБ':'Файлы и фото';
     if(typeof renderQuota==='function')renderQuota(quota);
+    syncSendButton();
   };
   const clearPhoto=()=>{
     for(const entry of pendingPhotos)URL.revokeObjectURL(entry.url);
@@ -735,11 +737,13 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }catch(error){
       cancelAnimationFrame(paintFrame);
       assistantMessage.item.classList.remove('streaming');
-      if(generated&&assistantMessage.item.isConnected)paint();
+      if(error.name!=='AbortError'&&generated&&assistantMessage.item.isConnected)paint();
       if(error.name==='AbortError'){
-        if(!generated)assistantMessage.item.remove();
+        assistantMessage.item.remove();
         status.textContent='Ответ остановлен.';
       }else{
+        activity.classList.add('is-complete');
+        setActivity('Генерация прервана');
         if(!generated)assistantMessage.item.remove();
         status.textContent=(generated?'Ответ прервался: ':'')+error.message;
       }
