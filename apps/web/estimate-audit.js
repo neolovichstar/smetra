@@ -98,13 +98,14 @@
     };
   }
 
+  const plural=(count,one,few,many)=>{const rem100=count%100,rem10=count%10;return rem100>=11&&rem100<=14?many:rem10===1?one:rem10>=2&&rem10<=4?few:many};
   const escape = text => String(text).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function mount(root, getData, navigate) {
     if (!root || typeof getData!=='function') throw Error('Антисмета: не задан редактор.');
     let timer=null, disposed=false, latest=null, expanded=false;
     root.innerHTML='<div class="anti-estimate-head"><div><span class="anti-estimate-kicker">ПРОВЕРКА ЧЕРНОВИКА</span>'+
       '<h3>Антисмета</h3><p>Замечания к составу работ и введённым данным.</p></div>'+
-      '<span class="anti-estimate-symbol" aria-hidden="true">✓</span></div>'+
+      '<span class="anti-estimate-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></div>'+
       '<div class="anti-estimate-stats" id="anti-estimate-stats" role="status" aria-live="polite"></div>'+
       '<div id="anti-estimate-issues"></div>'+
       '<p class="anti-estimate-disclaimer">Проверка автоматическая и ориентировочная. Не заменяет экспертизу сметы. Никакие позиции не меняются.</p>';
@@ -118,9 +119,9 @@
       const key=result.errorCount+'|'+result.warningCount+'|'+result.tipCount;
       if (summary.dataset.key!==key) {
         summary.dataset.key=key;
-        summary.innerHTML='<span class="anti-count anti-errors"><strong>'+result.errorCount+'</strong> ошибок</span>'+
-          '<span class="anti-count anti-warnings"><strong>'+result.warningCount+'</strong> замечаний</span>'+
-          '<span class="anti-count anti-tips"><strong>'+result.tipCount+'</strong> советов</span>';
+        summary.innerHTML='<span class="anti-count anti-errors"><strong>'+result.errorCount+'</strong> '+plural(result.errorCount,'ошибка','ошибки','ошибок')+'</span>'+
+          '<span class="anti-count anti-warnings"><strong>'+result.warningCount+'</strong> '+plural(result.warningCount,'замечание','замечания','замечаний')+'</span>'+
+          '<span class="anti-count anti-tips"><strong>'+result.tipCount+'</strong> '+plural(result.tipCount,'совет','совета','советов')+'</span>';
       }
       const shown=expanded?result.issues:result.issues.slice(0,6);
       list.innerHTML=shown.length?'<ol class="anti-issue-list">'+shown.map(x=>
