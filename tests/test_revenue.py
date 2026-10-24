@@ -106,9 +106,9 @@ class RevenueTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             revenue.prepare_intent(self.con,self.user,'mismatch_price_key','pro_month','pricing_page',False,49900)
         self.assertEqual(self.con.execute('SELECT count(*) FROM billing_intents').fetchone()[0],0)
-        intent=revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,49000)
+        intent=revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,79000)
         with patch.dict(os.environ,{'PRO_MONTH_PRICE_KOPECKS':'59900','PRO_YEAR_PRICE_KOPECKS':'599000'}):
-            self.assertEqual(revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,49000)['id'],intent['id'])
+            self.assertEqual(revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,79000)['id'],intent['id'])
         with self.assertRaises(ValueError):
             revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,59900)
 
@@ -118,12 +118,12 @@ class RevenueTests(unittest.TestCase):
         manual=self.account('manual')
         self.con.execute("UPDATE users SET plan='pro',entitlement_until=? WHERE id=?",(revenue.now()+86400,manual['id']))
         data=revenue.dashboard(self.con)
-        self.assertEqual(data['revenue_30d'],49000)
+        self.assertEqual(data['revenue_30d'],79000)
         self.assertEqual(data['paid_users'],1)
         self.assertEqual(data['funnel']['payment_success'],1)
         self.assertEqual(data['funnel']['subscription_started'],1)
         self.assertEqual(self.con.execute("SELECT count(*) FROM growth_events WHERE name='payment_success'").fetchone()[0],1)
-        self.con.execute('INSERT INTO refunds(id,payment_id,provider_id,amount_kopecks,status,created_at) VALUES(?,?,?,?,?,?)',('refund',local['id'],'refund-provider',49000,'succeeded',revenue.now()))
+        self.con.execute('INSERT INTO refunds(id,payment_id,provider_id,amount_kopecks,status,created_at) VALUES(?,?,?,?,?,?)',('refund',local['id'],'refund-provider',79000,'succeeded',revenue.now()))
         self.assertEqual(revenue.dashboard(self.con)['revenue_30d'],0)
         self.assertEqual(revenue.dashboard(self.con)['mrr_kopecks'],0)
 
