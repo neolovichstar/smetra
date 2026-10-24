@@ -2342,6 +2342,9 @@ class Service:
                 except ModuleNotFoundError:
                     from ai import draft
                 return draft(self, data)
+            if kind in ("voice", "design-projects"):
+                # AI/API calls must never happen while a DB write lock is held.
+                return self.route(method, kind, rest, query, data)
             self.h.throttle("write:" + self.user["id"], 120, 60)
             with transaction(
                 self.con,
@@ -2366,6 +2369,15 @@ class Service:
                     quote["approval_state"] = "expired"
                 recent.append(quote)
             return 200, {**context, "overview": overview, "actions": self.action_center(), "capabilities": capabilities, "quotes": recent}
+        if kind == "shares":
+            from backend.estimate_sharing import sender_route
+            return sender_route(self,method,parts,data)
+        if kind == "voice" and method == "POST" and parts == ["draft"]:
+            from backend.voice_estimates import draft
+            return draft(self, data)
+        if kind == "design-projects" and method == "POST" and parts == ["draft"]:
+            from backend.design_project_draft import draft
+            return draft(self, data)
         if kind == "assistant":
             from backend.assistant import route
 
@@ -2604,6 +2616,9 @@ ROUTES = set(ENTITIES) | {
     "export",
     "construction",
     "ai",
+    "voice",
+    "shares",
+    "design-projects",
     "premium",
     "object-chats",
     "capabilities",

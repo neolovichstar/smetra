@@ -702,6 +702,9 @@ def route(service, method, parts, query, data):
             service.update("construction_objects", obj["id"], dict(name=name,description=description,updated_at=stamp()))
             return 200, {"object": dict(obj, name=name, description=description)}
         raise DomainError(405, "Метод не поддерживается")
+    if len(rest) == 2 and rest[0] == "scan":
+        from backend.room_scans import handle as handle_scan
+        return handle_scan(service,obj,method,rest,data)
     if rest == ["zones"] and method == "POST":
         return add_zone(service, obj, data)
     if len(rest) == 2 and rest[0] == "zones" and method == "PATCH":

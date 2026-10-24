@@ -19,7 +19,7 @@ try:
 except ImportError:  # The direct-connection fallback keeps local/minimal tools usable.
     ConnectionPool = None
 
-TABLES = frozenset(["email_login_challenges"]) | frozenset(
+TABLES = frozenset(["email_login_challenges","estimate_shares","estimate_share_responses"]) | frozenset(
     "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits legal_acceptances".split()
 )
 TABLES = TABLES | frozenset(

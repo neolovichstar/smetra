@@ -52,7 +52,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 54
+REQUIRED_CLOUD_SCHEMA_VERSION = 56
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -143,6 +143,7 @@ def migrate():
         business.migrate(con)
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
+        con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
 
 
 def now():
@@ -165,7 +166,14 @@ def mail(to, subject, message):
     email["Reply-To"] = "support@smetra.online"
     from backend.mail_templates import action_html
     if message.startswith(("https://", "http://localhost:")):
-        email.add_alternative(action_html(subject, message), subtype="html")
+        # An invitation may append explanatory text after a single trusted
+        # first-line URL. Never turn the entire multiline message into href.
+        link = message.splitlines()[0].strip()
+        parsed = urllib.parse.urlsplit(link)
+        if parsed.scheme in ("https", "http") and parsed.hostname in (
+            "smetra.online", "www.smetra.online", "smetra.vercel.app", "localhost"
+        ) and not parsed.username and not parsed.password:
+            email.add_alternative(action_html(subject, link), subtype="html")
     port = int(os.getenv("SMTP_PORT", "587"))
     context = ssl.create_default_context()
     options = {"timeout": 12}
@@ -339,7 +347,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":
@@ -461,7 +469,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron"}:
+                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
@@ -694,6 +702,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def api(self, method, path, query, con):
+        if path == "/api/shared-inbox" or path.startswith("/api/shared-inbox/"):
+            from backend.estimate_sharing import recipient_route
+            return self.send_json(*recipient_route(self,con,method,path))
         from backend.community import handles, route as communication_route
         if handles(path):
             result = communication_route(self, method, path, query, con)
