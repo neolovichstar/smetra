@@ -540,16 +540,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
         if(kind==='ready'){renderQuota(payload.quota);status.textContent='Формулирую ответ…'}
-        if(kind==='delta'){generated+=payload.text;schedule();status.textContent='Пишу ответ…'}
+        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();status.textContent='Пишу ответ…'}
         if(kind==='status')status.textContent=payload.text;
-        if(kind==='done'){generated=payload.answer;paint();payload.actions.forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent=''}
+        if(kind==='done'){generated=typeof payload.answer==='string'?payload.answer:generated;paint();(payload.actions||[]).forEach(addAction);renderQuota(payload.quota);completed=true;status.textContent=''}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
-      while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
+      while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();break}buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
+      if(buffer.trim())eventBlock(buffer);
       if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.');
       assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);resize();syncSendButton();
     }catch(error){
-      if(error.name==='AbortError'){assistantMessage.item.classList.remove('streaming');if(!generated){assistantMessage.item.remove();userMessage.item.remove()}status.textContent='Ответ остановлен.'}
+      if(error.name==='AbortError'){assistantMessage.item.remove();status.textContent='Ответ остановлен.'}
       else{userMessage.item.remove();assistantMessage.item.remove();status.textContent=error.message}
       try{renderQuota((await api('/assistant')).quota)}catch{}
     }finally{working=false;requestController=null;stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus()}
