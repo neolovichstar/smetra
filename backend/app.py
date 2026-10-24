@@ -626,6 +626,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("ecosystem-billing.js", "text/javascript"),
             ("object-chats.js", "text/javascript"),
             ("landing.js", "text/javascript"),
+            ("ui/tokens.css", "text/css"),
+            ("ui/base.css", "text/css"),
+            ("ui/components.css", "text/css"),
+            ("ui/site.css", "text/css"),
+            ("ui/plans.js", "text/javascript"),
+            ("ui/icons.js", "text/javascript"),
             ("assets/black/unfold.png", "image/png"),
             ("assets/black/flight.png", "image/png"),
         ):
