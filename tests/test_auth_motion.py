@@ -7,7 +7,7 @@ class AuthMotionTests(unittest.TestCase):
   html=(ROOT/'apps/web/app.html').read_text()
   self.assertIn('data-app-state="boot"',html)
   self.assertIn('id="app-startup"',html)
-  self.assertIn('auth-motion-fix.css',html)
+  self.assertIn('/ui/shell.css',html)
  def test_boot_does_not_confuse_network_failure_with_logout(self):
   source=(ROOT/'apps/web/app.js').read_text()
   self.assertIn("if(error.status===401||error.status===403)",source)
@@ -26,20 +26,13 @@ class AuthMotionTests(unittest.TestCase):
   self.assertIn("if(!appSections.has(section)||section===tab)return;",source)
   self.assertNotIn("location.hash=tab;closeNavigation();return renderNavigation()",source)
  def test_motion_respects_reduced_preference(self):
-  source=(ROOT/'apps/web/auth-motion-fix.css').read_text()
-  self.assertIn('prefers-reduced-motion:reduce',source)
-  self.assertIn('assistant-composer',source)
-  self.assertIn('grid-template-columns',source)
+  for name in ('tokens.css','components.css','site.css'):
+   self.assertIn('prefers-reduced-motion',(ROOT/'apps/web/ui'/name).read_text())
  def test_assistant_empty_state_shares_centered_composer_column(self):
-  css=(ROOT/'apps/web/auth-motion-fix.css').read_text()
-  html=(ROOT/'apps/web/app.html').read_text()
-  self.assertIn('--assistant-dialog-width: 740px',css)
-  self.assertIn('width:min(100%,var(--assistant-dialog-width))!important',css)
-  self.assertIn('#assistant-messages.assistant-thread',css)
-  self.assertIn('.assistant-main-column>.assistant-composer',css)
-  self.assertIn('margin-inline:auto!important',css)
-  self.assertIn('align-items:stretch!important',css)
-  self.assertIn('auth-motion-fix.css?v=20261024-alignment-v2',html)
+  css=(ROOT/'apps/web/ui/assistant.css').read_text()
+  self.assertIn('.assistant-thread,#assistant-actions{width:100%;max-width:760px;margin:0 auto}',css)
+  self.assertIn('.assistant-studio:not(.has-conversation) .assistant-main-column{justify-content:center}',css)
+  self.assertIn('.assistant-composer{position:relative;z-index:2;width:100%;max-width:808px;margin:0 auto',css)
  def test_oauth_start_cover_and_back_navigation(self):
   source=(ROOT/'apps/web/black.js').read_text()
   self.assertIn("smetra-app-transitioning",source)

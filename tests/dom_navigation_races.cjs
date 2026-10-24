@@ -14,7 +14,7 @@ function setup(){
  w.api=async path=>path==='/workspace'?{workspace:{id:'qa-workspace',name:'QA',role:'owner',currency:'RUB',settings:{}},workspaces:[]}:{items:[]};
  w.load(fs.readFileSync('apps/web/workspace.js','utf8'));
  w.load(fs.readFileSync('apps/web/growth.js','utf8'));
- for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
+ for(const file of ['ui/icons.js','ui/dialog.js','ui/chat-kit.js','support-chat.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
  return {dom,w,doc:w.document,close:()=>dom.window.close()};
 }
 (async()=>{
@@ -71,7 +71,8 @@ function setup(){
   assert.equal(doc.querySelector('#content').textContent,'Assistant');
  });
  await test('support does not fetch unrelated workspace data',async({w})=>{
-  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};w.eval("tab='support'");await w.render();assert.deepEqual(requests,[]);
+  // Support reads only the user's own support threads, never workspace records.
+  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};w.eval("tab='support'");await w.render();assert.deepEqual(requests,['/support/threads']);
  });
  await test('quote editor initialization cannot replace a page opened later',async({w,doc})=>{
   await w.Workspace.render('files');const request=deferred();w.api=()=>request.promise;

@@ -40,10 +40,10 @@ const assert = require('node:assert/strict');
   await send('Page.navigate', {url:site + '/app?register=1'});
   await until("(document.querySelector('#auth')&&!document.querySelector('#auth').classList.contains('hidden'))||document.querySelector('[data-work=quote-new]')");
   if (await evaluate("!document.querySelector('#auth').classList.contains('hidden')")) {
-    await evaluate(`document.querySelector('#name').value='Проверка расценок';document.querySelector('#email').value='bulk-browser-${Date.now()}@test.invalid';document.querySelector('#password').value='long secure password';document.querySelector('#auth-submit').click()`);
+    await evaluate("fetch('/api/auth/register',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Проверка расценок',email:'bulk-browser-'+Date.now()+'@test.invalid',password:'long secure password',legal_acceptance:true,legal_version:'2026-10-19-registration-v1'})}).then(r=>r.status)");await send('Page.navigate',{url:site+'/app#dashboard'});
   }
   await until("document.querySelector('[data-work=quote-new]')");
-  assert.deepEqual(await evaluate("Promise.all(['/construction.js','/construction.css','/ai-workspace.js','/file-editor.js','/file-editor.css'].map(path=>fetch(path).then(response=>response.status)))"), [200,200,200,200,200]);
+  assert.deepEqual(await evaluate("Promise.all(['/construction.js','/ui/modules.css','/ai-workspace.js','/file-editor.js','/ui/components.css'].map(path=>fetch(path).then(response=>response.status)))"), [200,200,200,200,200]);
   const objectId = await evaluate(`(async()=>{
     const object=(await api('/construction/objects',{method:'POST',body:JSON.stringify({name:'Проверка расценок'})})).object;
     const zone=(await api('/construction/objects/'+object.id+'/zones',{method:'POST',body:JSON.stringify({name:'Комната',length:'5',width:'4'})})).zone;

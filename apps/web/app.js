@@ -124,7 +124,7 @@ window.SmetraEstimateSafety=(()=>{
   return {version:LEGAL_CONSENT_VERSION,disclaimer:AI_ESTIMATE_DISCLAIMER,bannerHtml,ensureConsent,confirmReview};
 })();
 
-function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';button.innerHTML='<img class="icon" src="/assets/icons/'+(dark?'sun':'moon')+'.svg" alt="">'+(id==='theme-alt'?label:'');button.setAttribute('aria-label',label);button.title=label;} }
+function syncThemeLabel() { const dark=document.body.classList.contains('dark'); for(const id of ['theme','theme-alt']){const button=$('#'+id);if(!button)continue;const label=dark?'Включить светлую тему':'Включить тёмную тему';const icon=window.SmetraIcons?window.SmetraIcons.svg(dark?'sun':'moon',18):'';button.innerHTML=icon+(id==='theme-alt'?'<span>'+label+'</span>':'');button.setAttribute('aria-label',label);button.title=label;} }
 function theme() { const dark=document.body.classList.toggle('dark');document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('smetra_theme',dark?'dark':'light');}catch{} syncThemeLabel(); }
 let savedTheme;try{savedTheme=localStorage.getItem('smetra_theme');}catch{}
 document.body.classList.toggle('dark',document.body.classList.contains('landing-page') || savedTheme!=='light');
@@ -132,7 +132,7 @@ document.documentElement.dataset.theme=document.body.classList.contains('dark')?
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
 function loadingView(section){
-  const names={fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
+  const names={fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',calculators:'Калькуляторы',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
   const title=names[section]||'Рабочее пространство';
   return `<section class="page-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Загрузка раздела"><div class="page-loading-head"><span class="page-skeleton page-skeleton-kicker"></span><span class="page-skeleton page-skeleton-title"></span><span class="page-skeleton page-skeleton-copy"></span></div><div class="page-loading-metrics"><span class="page-skeleton"></span><span class="page-skeleton"></span><span class="page-skeleton"></span></div><section class="page-loading-card"><span class="page-skeleton page-skeleton-heading"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row short"></span></section><span class="sr-only">Открываем раздел «${escapeHtml(title)}»</span></section>`;
 }
@@ -162,6 +162,7 @@ const sidebarIcons={
  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
  assistant:'<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
  finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+ calculators:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 17h2M14 17h2"/>',
  catalog:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 4.5V22M8 7h8M8 11h8"/>',
  premium:'<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/>',
  files:'<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
@@ -191,7 +192,7 @@ function enhanceSidebarNavigation(){
   button.removeAttribute('data-ui-icon');button.removeAttribute('data-ui-icon-only');button.style.removeProperty('--ui-icon');
   // Replace every legacy child in one operation. The nav item has one canonical SVG, never an appended second icon.
   button.replaceChildren(icon,text);
-  button.dataset.navLabel=label;button.title=label;
+  button.dataset.navLabel=label;button.removeAttribute('title');
  };
  sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(normalizeButton);
 
@@ -211,6 +212,23 @@ function enhanceSidebarNavigation(){
   observer.observe(sidebar,{subtree:true,childList:true});
   sidebar.dataset.iconObserver='true';
  }
+ if(!sidebar.dataset.tooltips){
+  sidebar.dataset.tooltips='true';
+  let tip=null;
+  const hide=()=>{tip?.remove();tip=null};
+  const show=event=>{
+   const button=event.target.closest?.('button[data-nav-label],#sidebar-profile,.comms-sidebar-trigger');
+   if(!button||!document.body.classList.contains('sidebar-compact')||matchMedia('(max-width:800px)').matches)return;
+   hide();
+   const text=button.dataset.navLabel||button.getAttribute('aria-label')||button.textContent.trim();
+   if(!text)return;
+   tip=document.createElement('div');tip.className='nav-tooltip';tip.setAttribute('role','tooltip');tip.textContent=text;document.body.append(tip);
+   const r=button.getBoundingClientRect();tip.style.left=Math.round(r.right+10)+'px';tip.style.top=Math.round(r.top+r.height/2-tip.offsetHeight/2)+'px';
+  };
+  sidebar.addEventListener('pointerover',show);sidebar.addEventListener('focusin',show);
+  sidebar.addEventListener('pointerleave',hide);sidebar.addEventListener('focusout',hide);sidebar.addEventListener('click',hide);
+  sidebar.querySelector('.sidebar-scroll')?.addEventListener('scroll',hide,{passive:true});
+ }
  const logout=$('#logout');
  if(logout){
   const icon=makeSvg('sidebar-logout-icon','<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>');
@@ -223,21 +241,10 @@ function syncSidebarCollapseButton(){
  const button=$('#sidebar-collapse');if(!button)return;
  const collapsed=document.body.classList.contains('sidebar-compact');
  button.setAttribute('aria-expanded',String(!collapsed));button.setAttribute('aria-label',collapsed?'Развернуть меню':'Свернуть меню');button.title=collapsed?'Развернуть меню':'Свернуть меню';
- button.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 8 4 4-4 4M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m15 8-4 4 4 4M7 4v16"/></svg>';
+ button.innerHTML=collapsed?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 9l3 3-3 3M7 4v16"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 9l-3 3 3 3M7 4v16"/></svg>';
 }
-function syncMobileSidebarGeometry(){
- const sidebar=$('#sidebar'),header=document.querySelector('.app-nav');
- if(!sidebar||!header)return;
- if(matchMedia('(max-width:800px)').matches){
-  const top=Math.max(0,Math.round(header.getBoundingClientRect().bottom));
-  // The legacy stylesheets have several historical mobile offsets. Align the drawer to the actual header.
-  sidebar.style.setProperty('top',top+'px','important');
-  $('#nav-backdrop')?.style.setProperty('top',top+'px','important');
-  sidebar.style.setProperty('height','calc(100dvh - '+top+'px)','important');
- }else{
-  sidebar.style.removeProperty('top');sidebar.style.removeProperty('height');$('#nav-backdrop')?.style.removeProperty('top');
- }
-}
+// The drawer geometry is owned by CSS (top bar height is a token); nothing to measure.
+function syncMobileSidebarGeometry(){}
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
 function setAppState(state){
   document.body.dataset.appState=state;
@@ -332,7 +339,74 @@ window.SmetraCompleteAuth=async profile=>{
   await showApp();
 };
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
-function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
+// Section rails (settings, support) collapse to icons like the assistant rail.
+function railToggleMarkup(collapsed,id){
+  const arrow=collapsed?'M12 9l3 3-3 3':'M15 9l-3 3 3 3';
+  return `<button class="rail-toggle" id="${id}" type="button" aria-expanded="${!collapsed}" aria-label="${collapsed?'Развернуть панель':'Свернуть панель'}" title="${collapsed?'Развернуть панель':'Свернуть панель'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16"/><path d="${arrow}"/></svg></button>`;
+}
+function bindRailToggle(button,root,key){
+  if(!button||!root)return;
+  button.onclick=()=>{
+    const collapsed=root.classList.toggle('is-rail-collapsed');
+    button.setAttribute('aria-expanded',String(!collapsed));
+    const label=collapsed?'Развернуть панель':'Свернуть панель';button.setAttribute('aria-label',label);button.title=label;
+    button.querySelector('path:last-child')?.setAttribute('d',collapsed?'M12 9l3 3-3 3':'M15 9l-3 3 3 3');
+    try{localStorage.setItem(key,String(collapsed))}catch{}
+  };
+}
+// Profile and settings share one hub with its own section rail, like the assistant.
+const accountHubTabs=[['profile','Профиль','user'],['account','Аккаунт и вход','key'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
+function accountHubTab(){
+  if(tab==='profile')return 'profile';
+  try{const saved=sessionStorage.getItem('smetra.settings.tab');if(saved&&saved!=='profile'&&accountHubTabs.some(item=>item[0]===saved))return saved}catch{}
+  return 'account';
+}
+async function renderAccountHub(active){
+  const owner=user,current=accountHubTab(),icon=name=>window.SmetraIcons?.svg(name,18)||'';
+  const yandexPhoto=user.avatar_url?'Фото подтянуто из Яндекс ID.':'Фото подтянется из Яндекс ID после подтверждения доступа.';
+  const railCollapsed=(()=>{try{return localStorage.getItem('smetra.hub.rail-collapsed')==='true'}catch{return false}})();
+  view(`<section class="hub${railCollapsed?' is-rail-collapsed':''}" aria-label="Профиль и настройки">
+    <nav class="hub-rail" aria-label="Разделы настроек">
+      ${railToggleMarkup(railCollapsed,'hub-rail-toggle')}
+      <div class="hub-identity"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></div></div>
+      <div class="hub-tabs" role="tablist" aria-orientation="vertical">${accountHubTabs.map(([id,label,name])=>`<button type="button" role="tab" id="hub-tab-${id}" class="hub-tab${id==='danger'?' is-danger':''}" data-hub-tab="${id}" title="${label}" aria-controls="hub-panel-${id}" aria-selected="${id===current}" tabindex="${id===current?0:-1}">${icon(name)}<span>${label}</span></button>`).join('')}</div>
+    </nav>
+    <div class="hub-main">
+      <section class="hub-panel" id="hub-panel-profile" role="tabpanel" aria-labelledby="hub-tab-profile"${current==='profile'?'':' hidden'}><header class="hub-head"><h1>Профиль</h1><p>Как к вам обращаться и чем вы занимаетесь — ассистент учитывает это в работе.</p></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
+      <section class="hub-panel" id="hub-panel-account" role="tabpanel" aria-labelledby="hub-tab-account"${current==='account'?'':' hidden'}><header class="hub-head"><h1>Аккаунт и вход</h1><p>Почта, публичный ID и фото профиля.</p></header>
+        <div class="hub-card"><div class="hub-row"><div><strong>Электронная почта</strong><small>${escapeHtml(user.email)}</small></div><span class="pill ${user.email_verified?'status-accepted':'status-draft'}">${user.email_verified?'Подтверждена':'Не подтверждена'}</span></div>
+        <div class="hub-row"><div><strong>Публичный ID</strong><small>По нему вас находят в центре общения. Почта не раскрывается.</small></div><span class="hub-id"><code id="hub-public-id">…</code><button class="icon-button" type="button" id="hub-copy-id" aria-label="Скопировать ID" title="Скопировать ID">${icon('copy')}</button></span></div>
+        <div class="hub-row"><div class="hub-photo"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>Фото профиля</strong><small>${yandexPhoto}</small></div></div><a class="btn" id="hub-yandex-photo" href="/api/auth/oauth/yandex/start?link=1">${icon('refresh')}Подтянуть из Яндекса</a></div></div>
+      </section>
+      <section class="hub-panel" id="hub-panel-assistant" role="tabpanel" aria-labelledby="hub-tab-assistant"${current==='assistant'?'':' hidden'}><header class="hub-head"><h1>Ассистент</h1><p>Стиль ответов и личная память.</p></header><div class="settings-page"><section id="settings-personalization" class="settings-personalization-host"></section></div></section>
+      <section class="hub-panel" id="hub-panel-appearance" role="tabpanel" aria-labelledby="hub-tab-appearance"${current==='appearance'?'':' hidden'}><header class="hub-head"><h1>Внешний вид</h1><p>Тема кабинета сохраняется на этом устройстве.</p></header><div class="hub-card"><div class="hub-row"><div><strong>Тема</strong><small>Тёмная бережёт глаза вечером, светлая удобнее на ярком солнце.</small></div><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></div></section>
+      <section class="hub-panel" id="hub-panel-data" role="tabpanel" aria-labelledby="hub-tab-data"${current==='data'?'':' hidden'}><header class="hub-head"><h1>Данные и экспорт</h1><p>Архив смет, клиентов, проектов и файлов.</p></header><div class="settings-page"><section id="settings-export" class="settings-export-host"></section></div></section>
+      <section class="hub-panel" id="hub-panel-danger" role="tabpanel" aria-labelledby="hub-tab-danger"${current==='danger'?'':' hidden'}><header class="hub-head"><h1>Удаление аккаунта</h1><p>Необратимое действие — сметы и доступ будут удалены.</p></header><div class="hub-card hub-danger"><p>Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></section>
+    </div>
+  </section>`);
+  bindRailToggle(document.querySelector('#hub-rail-toggle'),document.querySelector('.hub'),'smetra.hub.rail-collapsed');
+  const tabs=[...document.querySelectorAll('[data-hub-tab]')];
+  const select=(id,focus=false)=>{
+    tabs.forEach(button=>{const on=button.dataset.hubTab===id;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;if(on&&focus)button.focus()});
+    document.querySelectorAll('.hub-panel').forEach(panel=>panel.hidden=panel.id!=='hub-panel-'+id);
+    if(id!=='profile')try{sessionStorage.setItem('smetra.settings.tab',id)}catch{}
+    const route=id==='profile'?'profile':'settings';
+    if(tab!==route){tab=route;history.replaceState({},'',location.pathname+location.search+'#'+route);document.querySelectorAll('#sidebar [data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab===route));$('#sidebar-profile')?.classList.toggle('active',route==='profile')}
+  };
+  tabs.forEach(button=>button.onclick=()=>select(button.dataset.hubTab));
+  document.querySelector('.hub-tabs').addEventListener('keydown',event=>{const index=tabs.findIndex(button=>button.getAttribute('aria-selected')==='true');const step={ArrowDown:1,ArrowRight:1,ArrowUp:-1,ArrowLeft:-1}[event.key];if(!step)return;event.preventDefault();select(tabs[(index+step+tabs.length)%tabs.length].dataset.hubTab,true)});
+  syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);
+  const deleteAccountButton=$('#delete-account');
+  if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;let confirmed=false;try{confirmed=await window.SmetraDialog.confirm({title:'Удалить аккаунт?',message:'Аккаунт, сметы и доступ будут удалены без возможности восстановления.',confirmLabel:'Удалить аккаунт',danger:true});if(!confirmed||user!==owner)return;await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+  api('/profile/id').then(result=>{const code=$('#hub-public-id');if(code&&active())code.textContent=result.public_id||'не задан'}).catch(()=>{const code=$('#hub-public-id');if(code)code.textContent='недоступен'});
+  $('#hub-copy-id')?.addEventListener('click',async()=>{const value=$('#hub-public-id')?.textContent||'';try{await navigator.clipboard.writeText(value);notify('ID скопирован')}catch{notify('Ваш ID: '+value)}});
+  if(window.SmetraProfile){await window.SmetraProfile.render(active,$('#hub-profile-host'));if(!active())return;await window.SmetraProfile.settings(active);if(!active())return;}
+  if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
+}
+function emailNotice(){return user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel email-notice"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}
+function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${emailNotice()}`; }
+// Mailboxes for questions that do not fit a chat (documents, company contracts).
+const supportContacts='<p class="support-contacts">Почта: <a href="mailto:support@smetra.online">support@smetra.online</a><span aria-hidden="true"> · </span>Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span>Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p>';
 function quoteCard(q) {
   const label={draft:'Черновик',sent:'Отправлено',accepted:'Согласовано',declined:'Отказ',completed:'Завершено'}[q.status];
   return `<div class="quote"><div><strong>${escapeHtml(q.title)}</strong><small>${escapeHtml(q.client)} · ${date(q.created_at)} · <span class="pill status-pill status-${escapeHtml(q.status)}">${label}</span></small></div><div class="quote-actions"><b>${rub(q.amount_kopecks)}</b>${q.status==='draft'?`<button class="btn small" data-action="send" data-id="${q.id}">Отправить</button>`:''}${q.status==='sent'?`<button class="btn small" data-action="copy" data-url="${escapeHtml(q.public_url)}">Ссылка</button><button class="btn small" data-action="decline" data-id="${q.id}">Отказ</button>`:''}${q.status==='accepted'?`<button class="btn small" data-action="complete" data-id="${q.id}">Завершить</button>`:''}<button class="btn small danger" data-action="remove" data-id="${q.id}" title="Удалить">Удалить</button></div></div>`;
@@ -355,11 +429,12 @@ async function render() {
     if(active()&&content&&content.innerHTML===initialMarkup&&initialSection!==section)view(loadingView(section));
   },180);pendingPageLoadingTimer=loadingTimer;
   try {
-    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
+    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',calculators:'calculators',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
-    if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
+    if(tab==='profile'||tab==='settings'){await renderAccountHub(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
+    if(tab==='calculators' && window.SmetraCalculators){window.SmetraCalculators.render();return;}
     if(tab==='premium' && window.SmetraPremiumTools){await window.SmetraPremiumTools.render(active);return;}
     if(tab==='chats'&&window.SmetraObjectChats){await window.SmetraObjectChats.render(active);return;}
     if(['fieldwork','inbox'].includes(tab)&&window.SmetraFieldFlows){await window.SmetraFieldFlows.render(tab,active);return;}
@@ -370,7 +445,7 @@ async function render() {
       if(!active())return;
       const counts={sent:quotes.filter(x=>x.status==='sent').length,accepted:quotes.filter(x=>x.status==='accepted').length};
       const stats=tab==='dashboard'?`<div class="stats"><div class="stat"><strong>${user.quote_count}</strong><span>Создано всего</span></div><div class="stat"><strong>${counts.sent}</strong><span>Ожидают ответа</span></div><div class="stat"><strong>${counts.accepted}</strong><span>Согласованы</span></div></div>`:'';
-      view(header(tab==='dashboard'?'Обзор':'Предложения',`Здравствуйте, ${escapeHtml(user.name)}. Всё по текущим клиентам здесь.`, '<button class="btn primary" id="new-quote">+ Предложение</button>')+stats+`<section class="panel"><div class="toolbar"><h3>Ваши предложения</h3><input id="search" type="search" placeholder="Найти по названию или клиенту" aria-label="Поиск" class="search-input"></div><div id="quote-list">${quoteList()}</div><button class="btn small" id="next-page">Показать ещё</button></section>`);
+      view(header(tab==='dashboard'?'Обзор':'Предложения',`Здравствуйте, ${escapeHtml(user.name)}. Всё по текущим клиентам здесь.`, '<button class="btn primary" id="new-quote">Создать предложение</button>')+stats+`<section class="panel"><div class="toolbar"><h3>Ваши предложения</h3><input id="search" type="search" placeholder="Найти по названию или клиенту" aria-label="Поиск" class="search-input"></div><div id="quote-list">${quoteList()}</div><button class="btn small" id="next-page">Показать ещё</button></section>`);
       let searchTimer;$('#search').addEventListener('input',(e)=>{clearTimeout(searchTimer);searchTimer=setTimeout(async()=>{try{await loadQuotes(e.target.value);$('#quote-list').innerHTML=quoteList();}catch(err){notify(err.message)}},250)});
       $('#next-page').addEventListener('click',async()=>{try{const r=await api('/quotes?offset='+quotes.length+'&q='+encodeURIComponent($('#search').value));quotes.push(...r.quotes);$('#quote-list').innerHTML=quoteList();if(!r.quotes.length)notify('Больше предложений нет')}catch(err){notify(err.message)}});
       $('#new-quote').addEventListener('click',showNewQuote);
@@ -378,28 +453,14 @@ async function render() {
     } else if(tab==='billing') {
       await window.SmetraGrowth.billing(active);
     } else if(tab==='support') {
-      view(header('Давайте разберёмся.','Поддержка Сметры — рядом.')+`<div class="support-layout"><aside class="support-guide"><span class="support-symbol" aria-hidden="true"></span><h2>Что случилось?</h2><p>Выберите тему или сразу напишите вопрос.</p><div class="support-topics"><button type="button" data-support-topic="Вход в аккаунт">Вход в аккаунт</button><button type="button" data-support-topic="Оплата и подписка">Оплата и подписка</button><button type="button" data-support-topic="Работа со сметой">Работа со сметой</button></div><a href="mailto:support@smetra.online">Написать в поддержку ↗</a><p class="support-secondary-contact">Документы: <a href="mailto:docs@smetra.online">docs@smetra.online</a><span aria-hidden="true"> · </span> Для компаний: <a href="mailto:sales@smetra.online">sales@smetra.online</a></p></aside><div class="support-panel"><form id="support-form"><div class="field"><label for="message">Ваш вопрос</label><textarea id="message" rows="7" minlength="5" maxlength="2000" placeholder="Расскажите, что не получается…" required></textarea></div><button class="btn primary">Отправить сообщение</button></form></div></div>`);
-      const topics=[...document.querySelectorAll('[data-support-topic]')];let selectedTopic='';
-      topics.forEach(button=>{button.setAttribute('aria-pressed','false');button.onclick=()=>{const input=$('#message');const prefix=selectedTopic+': ';const text=selectedTopic&&input.value.startsWith(prefix)?input.value.slice(prefix.length):input.value;selectedTopic=button.dataset.supportTopic;input.value=selectedTopic+': '+text;topics.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));input.focus()}});
-      $('#support-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('[type=submit],button:not([type])'),input=form.querySelector('#message'),message=input.value;if(button.disabled)return;button.disabled=true;try{await api('/support',{method:'POST',body:JSON.stringify({message})});if(input.value===message)input.value='';if(user===owner)notify('Сообщение отправлено')}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
-    } else if(tab==='settings') {
-      view(header('Настройки','Аккаунт, персонализация и данные.')+`<div class="settings-page">
-        <section class="panel settings-account-panel"><div class="settings-account-copy"><span class="settings-section-kicker">АККАУНТ</span><h2>Ваш профиль</h2><p>${escapeHtml(user.email)}</p></div><div class="settings-account-actions"><button class="btn" id="profile-open" type="button">Редактировать профиль</button><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></section>
-        <section id="settings-personalization" class="settings-personalization-host"></section>
-        <section id="settings-export" class="settings-export-host"></section>
-        <details class="panel settings-danger-zone"><summary><span><strong>Удаление аккаунта</strong><small>Необратимое действие — сметы и доступ будут удалены.</small></span><span aria-hidden="true">⌄</span></summary><div class="settings-danger-body"><p class="muted">Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></details>
-      </div>`);
-      $('#profile-open').onclick=()=>{tab='profile';location.hash=tab;render()};
-      if(window.SmetraProfile){await window.SmetraProfile.settings(active);if(!active())return;}
-      if(window.SmetraLoadFeature){await window.SmetraLoadFeature('dataExport');if(!active())return;window.SmetraDataExport.render();}
-      syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);const deleteAccountButton=$('#delete-account');if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled||!confirm('Удалить аккаунт и все предложения без восстановления?'))return;button.disabled=true;try{await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+      await window.SmetraSupport.render(active);
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
     } else {tab='dashboard';history.replaceState({},'',location.pathname+location.search+'#dashboard');return render()}
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
-const appSections=new Set(['fieldwork','inbox','chats','dashboard','clients','quotes','projects','construction','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+const appSections=new Set(['fieldwork','inbox','chats','premium','dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;

@@ -5,7 +5,8 @@ window.SmetraBillingCatalog=async function(active,b,space,owner,revision){
  const owns=workspace?.owner_id===owner.id;
  const available=b.email_verified&&['live','test'].includes(b.checkout_mode)&&owns;
  const names={starter:'Старт',pro_solo:'PRO Solo',pro_plus:'PRO Плюс',team:'TEAM'};
- const features={
+ // Shared with the landing page (ui/plans.js); this copy is only a fallback.
+ const features=window.SmetraPlanFeatures||{
   starter:['10 бесплатных смет','Согласование по клиентской ссылке','История ваших документов'],
   pro_solo:['Безлимитные сметы','PDF и Excel без отметки Сметры','500 МБ для рабочих файлов','Gemini 3 Flash с анализом фотографий','Ассистент: 100 сообщений в месяц'],
   pro_plus:['Всё из PRO Solo','Учёт поступлений и расходов','Предупреждения о кассовом разрыве','Визуальные позиции и мониторинг материалов','5 ГБ для рабочих файлов'],

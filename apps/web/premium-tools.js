@@ -104,13 +104,13 @@
     document.querySelector('.premium-tools-page')?.addEventListener('click',async ev=>{
       const b=ev.target.closest('button');if(!b)return;
       if(b.dataset.premiumDisconnect){
-        if(!confirm('Отключить облако и его синхронизации?'))return;b.disabled=true;
+        if(!(await window.SmetraDialog.confirm({title:'Отключить облако?',message:'Синхронизации с ним тоже остановятся.',confirmLabel:'Отключить',danger:true})))return;b.disabled=true;
         try{await api('/premium/cloud/connections',{method:'DELETE',body:JSON.stringify({connection_id:b.dataset.premiumDisconnect})});notify('Облако отключено.');await render(active)}catch(error){notify(error.message);b.disabled=false}
       } else if(b.dataset.premiumDisableSource){
-        if(!confirm('Остановить мониторинг этой цены?'))return;b.disabled=true;
+        if(!(await window.SmetraDialog.confirm({title:'Остановить мониторинг цены?',confirmLabel:'Остановить',danger:true})))return;b.disabled=true;
         try{await api('/premium/product-sources/'+encodeURIComponent(b.dataset.premiumDisableSource),{method:'DELETE',body:JSON.stringify({})});notify('Мониторинг остановлен.');await render(active)}catch(error){notify(error.message);b.disabled=false}
       } else if(b.dataset.premiumDisableFolder){
-        if(!confirm('Отключить эту папку?'))return;b.disabled=true;
+        if(!(await window.SmetraDialog.confirm({title:'Отключить эту папку?',confirmLabel:'Отключить',danger:true})))return;b.disabled=true;
         try{await api('/premium/cloud/folders/'+encodeURIComponent(b.dataset.premiumDisableFolder),{method:'DELETE',body:JSON.stringify({})});notify('Синхронизация папки остановлена.');await render(active)}catch(error){notify(error.message);b.disabled=false}
       } else if(b.dataset.premiumResync){
         b.disabled=true;try{const r=await api('/premium/cloud/sync',{method:'POST',body:JSON.stringify({})});notify('Запрошена синхронизация: '+(r.queued||0)+' папок.');await render(active)}catch(error){notify(error.message);b.disabled=false}
@@ -128,7 +128,7 @@
       } else if(b.dataset.premiumConfirmImport){
         const id=b.dataset.premiumConfirmImport,card=document.querySelector('[data-premium-job-card="'+CSS.escape(id)+'"]'),check=card?.querySelector('[data-premium-confirm-check]');
         if(!check?.checked){notify('Сначала подтвердите, что проверили позиции.');return}
-        if(!confirm('Добавить распознанные позиции в черновик сметы?'))return;b.disabled=true;
+        if(!(await window.SmetraDialog.confirm({title:'Добавить позиции в черновик?',message:'Распознанные позиции попадут в черновик сметы. Проверьте их перед отправкой клиенту.',confirmLabel:'Добавить'})))return;b.disabled=true;
         try{const r=await api('/premium/cloud/jobs/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({})});notify('Добавлено позиций: '+(r.imported_items||0)+'. Проверьте итоговую сумму.');await render(active)}catch(error){notify(error.message);b.disabled=false}
       }
     });

@@ -9,10 +9,10 @@ class FieldUIRegressionTests(unittest.TestCase):
     def test_assets_load_and_are_served_by_standalone_backend(self):
         html=(WEB/"app.html").read_text(encoding="utf-8")
         server=(ROOT/"backend"/"app.py").read_text(encoding="utf-8")
-        for filename in ("field-flows.js","field-flows.css","interface-audit.css"):
-            self.assertIn('/'+filename,html)
-            self.assertIn('("'+filename+'",',server)
-            self.assertTrue((WEB/filename).stat().st_size>100)
+        self.assertIn('/field-flows.js',html)
+        self.assertIn('js_asset = re.fullmatch',server)
+        self.assertTrue((WEB/"field-flows.js").stat().st_size>100)
+        self.assertIn('/ui/modules.css',html)
     def test_navigation_and_private_inbox(self):
         html=(WEB/"app.html").read_text(encoding="utf-8")
         js=(WEB/"app.js").read_text(encoding="utf-8")
@@ -36,14 +36,13 @@ class FieldUIRegressionTests(unittest.TestCase):
         self.assertNotIn(".style.",js)
         self.assertIn("if(!isCurrent())return",js)
     def test_global_icons_and_mobile_layout(self):
-        css=(WEB/"interface-audit.css").read_text(encoding="utf-8")
-        feature=(WEB/"field-flows.css").read_text(encoding="utf-8")
-        self.assertIn("#sidebar .sidebar-item-icon",css)
-        self.assertIn("svg",css)
-        self.assertIn("repeat(2,minmax(0,1fr))",feature)
-        self.assertIn("prefers-reduced-motion",feature)
-        self.assertIn("focus-visible",css)
-        self.assertIn("ff-offer-line",feature)
+        shell=(WEB/"ui"/"shell.css").read_text(encoding="utf-8")
+        modules=(WEB/"ui"/"modules.css").read_text(encoding="utf-8")
+        base=(WEB/"ui"/"base.css").read_text(encoding="utf-8")
+        self.assertIn(".sidebar-item-icon",shell)
+        self.assertIn("focus-visible",base)
+        self.assertIn(".ff-field-grid",modules)
+        self.assertIn("ff-offer-line",modules)
 
 if __name__=="__main__":
     unittest.main()

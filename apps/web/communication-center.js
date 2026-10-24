@@ -7,7 +7,11 @@ const num = v => new Intl.NumberFormat('ru-RU').format(Number(v||0));
 const time = v => v ? new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(Number(v)*1000)) : '';
 const state = {open:false,tab:'direct',current:null,messages:[],chats:[],channels:[],workspaces:[],role:'user',userId:'',publicId:'',mode:'user',busy:false,poll:null,observer:null,adminLoading:false,lastWaitingHuman:null};
 let sessionEpoch=0;
-const tabs = [['direct','Личные'],['object','Объекты'],['community','Сообщество'],['support','Поддержка']];
+// Support has its own page; the admin queue appears here only for staff.
+const tabs = [['direct','Личные'],['object','Объекты'],['community','Сообщество']];
+const adminTab = ['support','Очередь поддержки'];
+const visibleTabs = () => state.role==='admin'?[...tabs,adminTab]:tabs;
+const kit = () => window.SmetraChatKit;
 const ico = {
  chat:'<path d="M21 11.5a8.5 8.5 0 0 1-12.9 7.3L3 20l1.2-4.1A8.5 8.5 0 1 1 21 11.5Z"/>',
  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
@@ -16,7 +20,9 @@ const ico = {
  plus:'<path d="M12 5v14M5 12h14"/>',
  close:'<path d="m18 6-12 12M6 6l12 12"/>',
  support:'<path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M4 13a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v-6Zm16 0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2v-6Z"/>',
- search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>'
+ search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+ back:'<path d="M19 12H5m6-6-6 6 6 6"/>',
+ pencil:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'
 };
 const icon = n => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ico[n]||ico.chat)+'</svg>';
 async function api(path,options={}) {
@@ -28,26 +34,41 @@ async function api(path,options={}) {
  return data;
 }
 function notify(message){const e=$('#toast');if(e){e.textContent=message;e.classList.remove('hidden');setTimeout(()=>e.classList.add('hidden'),3500)}else alert(message)}
-function style(){
- if(document.querySelector('link[data-comms-style]'))return;
- const link=document.createElement('link');link.rel='stylesheet';link.href='/communication-center.css?v=20261024-csp-p1';link.dataset.commsStyle='1';document.head.append(link);
-}
+// Styles live in the shared interface system (ui/modules.css); nothing to inject.
+function style(){}
 function mount(){
  style();if($('#communication-center'))return;
  const shell=document.createElement('div');shell.id='communication-center';shell.className='comms-shell';shell.setAttribute('aria-hidden','true');
- shell.innerHTML='<section class="comms-window" role="dialog" aria-modal="true" aria-labelledby="comms-heading"><header class="comms-top"><div class="comms-brand"><div class="comms-brand-mark">'+icon('chat')+'</div><div><div class="comms-eyebrow">сметра. / связь</div><h2 class="comms-title" id="comms-heading">Центр общения</h2></div></div><div class="comms-top-actions"><div class="comms-my-id" id="comms-my-id"><span>Ваш ID</span><code>Загрузка…</code><button class="comms-btn" type="button" data-copy-id aria-label="Скопировать ID">'+icon('copy')+'</button></div><button class="comms-btn" type="button" data-close aria-label="Закрыть">'+icon('close')+'</button></div></header><div class="comms-body"><aside class="comms-sidebar"><nav class="comms-tabs" aria-label="Типы общения">'+tabs.map(t=>'<button type="button" class="comms-tab" data-tab="'+t[0]+'">'+icon(t[0]==='support'?'support':t[0]==='object'?'users':'chat')+'<span>'+t[1]+'</span></button>').join('')+'</nav><div class="comms-tools" id="comms-tools"></div><div class="comms-list" id="comms-list"></div></aside><section class="comms-main"><header class="comms-conversation-head" id="comms-conversation-head"><div class="comms-avatar">'+icon('chat')+'</div><div><h3 class="comms-name">Выберите переписку</h3><div class="comms-sub">Рабочие обсуждения в одном месте</div></div></header><div class="comms-messages" id="comms-messages"><div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Рабочие разговоры рядом</h3><p>Выберите чат слева или начните новую переписку.</p></div></div><div class="comms-compose-wrap" id="comms-compose-wrap"><form class="comms-compose" id="comms-compose"><textarea id="comms-message" rows="1" maxlength="4000" placeholder="Написать сообщение…" aria-label="Текст сообщения" disabled></textarea><button class="comms-btn primary" type="submit" aria-label="Отправить" disabled>'+icon('send')+'</button></form></div></section></div></section>';
+ shell.innerHTML='<section class="comms-window tg" role="dialog" aria-modal="true" aria-labelledby="comms-heading">'
+  +'<aside class="comms-sidebar tg-rail">'
+   +'<header class="comms-top tg-rail-head"><button class="comms-btn" type="button" data-close aria-label="Закрыть сообщения" title="Закрыть">'+icon('back')+'</button><h2 class="comms-title" id="comms-heading">Сообщения</h2><button class="comms-btn" type="button" data-new-chat aria-label="Новая переписка" aria-expanded="false" title="Новая переписка">'+icon('pencil')+'</button></header>'
+   +'<label class="comms-search"><span class="visually-hidden">Поиск по перепискам</span>'+icon('search')+'<input id="comms-search" type="search" placeholder="Поиск" autocomplete="off"></label>'
+   +'<nav class="comms-tabs" id="comms-tabs" aria-label="Папки"></nav>'
+   +'<div class="comms-tools" id="comms-tools" hidden></div>'
+   +'<div class="comms-list" id="comms-list" role="list"></div>'
+   +'<footer class="comms-my-id" id="comms-my-id"><span>Ваш ID</span><code>Загрузка…</code><button class="comms-btn" type="button" data-copy-id aria-label="Скопировать ID" title="Скопировать ID">'+icon('copy')+'</button></footer>'
+  +'</aside>'
+  +'<section class="comms-main tg-chat">'
+   +'<header class="comms-conversation-head tg-head" id="comms-conversation-head"></header>'
+   +'<div class="comms-messages tg-messages" id="comms-messages" role="log" aria-live="polite"></div>'
+   +'<div class="comms-compose-wrap" id="comms-compose-wrap"><form class="comms-compose tg-compose" id="comms-compose"><label class="visually-hidden" for="comms-message">Сообщение</label><textarea id="comms-message" rows="1" maxlength="4000" placeholder="Сообщение…" disabled></textarea><button class="tg-send" type="submit" aria-label="Отправить" title="Отправить" disabled>'+icon('send')+'</button></form></div>'
+  +'</section></section>';
  document.body.append(shell);
- shell.addEventListener('click',e=>{if(e.target===shell||e.target.closest('[data-close]'))close()});
- shell.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{state.tab=b.dataset.tab;state.current=null;state.messages=[];await refresh(true)});
+ shell.addEventListener('click',e=>{if(e.target.closest('[data-close]'))close()});
+ $('#comms-tabs').addEventListener('click',async e=>{const b=e.target.closest('[data-tab]');if(!b)return;state.tab=b.dataset.tab;state.current=null;state.messages=[];shell.classList.remove('is-chat-open');await refresh(true)});
+ shell.querySelector('[data-new-chat]').onclick=e=>{const tools=$('#comms-tools');tools.hidden=!tools.hidden;e.currentTarget.setAttribute('aria-expanded',String(!tools.hidden));if(!tools.hidden)tools.querySelector('input,select')?.focus()};
+ $('#comms-search').addEventListener('input',renderList);
  $('#comms-tools').addEventListener('submit',async e=>{e.preventDefault();if(e.target.id==='comms-direct-form')await findPerson();if(e.target.id==='comms-object-form')await createObjectChat();if(e.target.id==='comms-quote-form')await createQuoteChat()});
- $('#comms-tools').addEventListener('click',async e=>{const b=e.target.closest('[data-new-ticket],[data-handoff],[data-join]');if(!b)return;if(b.hasAttribute('data-new-ticket'))await newTicket();if(b.hasAttribute('data-handoff'))await handoff();if(b.hasAttribute('data-join'))await joinCommunity(b.dataset.join)});
+ $('#comms-tools').addEventListener('click',async e=>{const b=e.target.closest('[data-handoff],[data-join]');if(!b)return;if(b.hasAttribute('data-handoff'))await handoff();if(b.hasAttribute('data-join'))await joinCommunity(b.dataset.join)});
  $('#comms-list').addEventListener('click',e=>{const b=e.target.closest('[data-conv]');if(b)select(b.dataset.conv)});
  $('#comms-compose').onsubmit=sendMessage;
+ const box=$('#comms-message');if(kit())kit().composer(box,$('#comms-compose'));
+ box.addEventListener('input',()=>{const send=$('#comms-compose button[type="submit"]');if(send)send.disabled=box.disabled||state.busy||!box.value.trim()});
  shell.querySelector('[data-copy-id]').onclick=async()=>{try{await navigator.clipboard.writeText(state.publicId);notify('ID скопирован')}catch{notify('Ваш ID: '+state.publicId)}};
- shell.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.open)close()});
+ shell.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.open){if(shell.classList.contains('is-chat-open')&&matchMedia?.('(max-width:760px)')?.matches){shell.classList.remove('is-chat-open');return}close()}});
 }
 async function open(tab='direct'){
- mount();state.open=true;state.tab=tabs.some(t=>t[0]===tab)?tab:'direct';
+ mount();state.open=true;state.tab=[...tabs,adminTab].some(t=>t[0]===tab)?tab:'direct';
  $('#communication-center').classList.add('is-open');$('#communication-center').setAttribute('aria-hidden','false');document.body.classList.add('comms-scroll-locked');
  clearInterval(state.poll);await refresh(true);
  let lastRefresh=Date.now();state.poll=setInterval(async()=>{if(state.open&&!state.busy&&!document.hidden){if(Date.now()-lastRefresh>=30000){await refresh(false);lastRefresh=Date.now()}if(state.current)await loadMessages(false)}},8000);
@@ -56,40 +77,49 @@ async function open(tab='direct'){
 function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.classList.remove('comms-scroll-locked')}
 function renderTools(){
  const el=$('#comms-tools');if(!el)return;
- if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form>';
+ if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form><details class="comms-quote-details"><summary>Создать чат по смете</summary><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form></details>';
  else if(state.tab==='object'){
  const enabled=state.workspaces.filter(w=>w.enabled);
  el.innerHTML=enabled.length?'<form class="comms-form" id="comms-object-form"><label for="comms-workspace">Рабочее пространство TEAM</label><select id="comms-workspace">'+enabled.map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join('')+'</select><label for="comms-object-name">Название объекта или бригады</label><input id="comms-object-name" maxlength="120" placeholder="Например, ЖК Октябрьский"><button class="comms-btn" type="submit">'+icon('plus')+' Создать чат объекта</button><p class="comms-note">Участники добавятся из списка команды.</p></form>':'<div class="comms-form"><p class="comms-note">Объектные чаты доступны рабочим пространствам с активным тарифом TEAM / Компания.</p></div>';
- }else if(state.tab==='community')el.innerHTML='<div class="comms-form"><label>Сообщество мастеров СНГ</label><p class="comms-note">Открытые профессиональные каналы: обсуждайте работу, обменивайтесь опытом, не публикуйте данные клиентов.</p></div>';
- else el.innerHTML=state.mode==='admin'?'<div class="comms-form"><label>Очередь команды поддержки</label><p class="comms-note">Сначала обращения, которым требуется человек.</p><button class="comms-btn" data-handoff type="button">Обновить очередь</button></div>':'<div class="comms-form"><label>Поддержка Сметры</label><p class="comms-note">Бесплатный ИИ-помощник. Сложный вопрос или просьба о сотруднике попадёт в очередь.</p><button class="comms-btn" data-new-ticket type="button">'+icon('plus')+' Новое обращение</button></div>';
+ }else if(state.tab==='community')el.innerHTML='<div class="comms-form"><p class="comms-note">Открытые профессиональные каналы: обсуждайте работу и обменивайтесь опытом. Не публикуйте данные клиентов.</p></div>';
+ else el.innerHTML='<div class="comms-form"><p class="comms-note">Очередь команды поддержки: сначала обращения, которым требуется человек.</p><button class="comms-btn" data-handoff type="button">Обновить очередь</button></div>';
 }
+function renderTabs(){
+ const el=$('#comms-tabs');if(!el)return;
+ el.innerHTML=visibleTabs().map(t=>'<button type="button" class="comms-tab'+(t[0]===state.tab?' active':'')+'" data-tab="'+t[0]+'" aria-pressed="'+(t[0]===state.tab)+'">'+esc(t[1])+'</button>').join('');
+}
+const rowTitle=row=>(row.kind==='direct'&&row.partner_name)||row.subject||row.partner_name||row.label||row.name||'Переписка';
 function renderList(){
  const el=$('#comms-list');if(!el)return;
- const rows=state.tab==='community'?state.channels:state.chats;
- if(!rows.length){el.innerHTML='<div class="comms-empty comms-empty-list"><div class="comms-empty-icon">'+icon(state.tab==='support'?'support':'chat')+'</div><h3>Пока пусто</h3><p>'+(state.tab==='direct'?'Найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Создайте новое обращение.')+'</p></div>';return}
+ const all=state.tab==='community'?state.channels:state.chats;
+ const query=($('#comms-search')?.value||'').trim().toLocaleLowerCase('ru');
+ const rows=query?all.filter(row=>(rowTitle(row)+' '+(row.last_message||'')).toLocaleLowerCase('ru').includes(query)):all;
+ if(!rows.length){el.innerHTML='<div class="comms-empty comms-empty-list"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>'+(query?'Ничего не найдено':'Пока пусто')+'</h3><p>'+(query?'Попробуйте другое имя.':state.tab==='direct'?'Нажмите карандаш и найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Очередь пуста.')+'</p></div>';return}
  el.innerHTML=rows.map(row=>{
- const title=(row.kind==='direct'&&row.partner_name)||row.subject||row.partner_name||row.label||row.name||'Переписка',id=row.id;
+ const title=rowTitle(row),id=row.id,K=kit();
  const preview=row.last_message|| (row.needs_human?'Ожидает сотрудника':row.kind==='community'?'Профессиональный канал':'Открыть переписку');
- return '<button type="button" class="comms-row '+(state.current&&state.current.id===id?'active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar">'+esc(title.slice(0,1).toUpperCase())+'</span><span class="comms-copy"><span class="comms-label">'+esc(title)+'</span><span class="comms-preview">'+esc(preview)+'</span></span><span class="comms-time">'+esc(time(row.last_message_at||row.updated_at||row.created_at))+'</span>'+(row.needs_human?'<i class="comms-human-needed" aria-label="Требуется сотрудник"></i>':'')+'</button>';
+ const unread=Number(row.unread_count||0);
+ const avatar=row.kind==='object'?icon('users'):row.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1).toUpperCase()));
+ return '<button type="button" role="listitem" class="comms-row tg-row'+(state.current&&state.current.id===id?' active is-active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><span class="comms-copy tg-row-copy"><span class="tg-row-top"><span class="comms-label">'+esc(title)+'</span><time class="comms-time">'+esc(K?K.stamp(row.last_message_at||row.updated_at||row.created_at):time(row.last_message_at||row.updated_at||row.created_at))+'</time></span><span class="tg-row-bottom"><span class="comms-preview tg-preview">'+esc(preview)+'</span>'+(row.needs_human?'<i class="comms-human-needed tg-badge is-waiting" aria-label="Требуется сотрудник">сотрудник</i>':unread?'<span class="tg-unread">'+unread+'</span>':'')+'</span></span></button>';
  }).join('');
 }
 function renderMessages(){
- const el=$('#comms-messages'),head=$('#comms-conversation-head'),compose=$('#comms-compose-wrap'),box=$('#comms-message'),send=$('#comms-compose button[type="submit"]');
- if(!state.current){el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Вся рабочая переписка здесь</h3><p>Сметы, объекты и обращения собраны в одном месте.</p></div>';head.innerHTML='<div class="comms-avatar">'+icon('chat')+'</div><div><h3 class="comms-name">Центр общения</h3><div class="comms-sub">Выберите или создайте переписку</div></div>';box.disabled=true;send.disabled=true;compose.querySelector('.comms-banner')?.remove();return}
- const c=state.current;
- const subtitle=c.kind==='estimate'?'Обсуждение привязано к смете '+c.quote_id:c.kind==='object'?'Команда рабочего пространства':c.kind==='community'?'Открытый профессиональный канал':state.tab==='support'&&state.mode==='admin'?'Обращение пользователя':state.tab==='support'?'Бесплатный ИИ-помощник поддержки':(c.partner_public_id?'Публичный ID '+c.partner_public_id:'Личная переписка');
- head.innerHTML='<div class="comms-avatar">'+icon(c.kind==='support'?'support':c.kind==='object'?'users':'chat')+'</div><div class="comms-head-copy"><h3 class="comms-name">'+esc(c.subject||c.partner_name||c.label||'Переписка')+'</h3><div class="comms-sub">'+esc(subtitle)+'</div></div><span class="comms-status">'+(c.status==='closed'?'Закрыт':c.needs_human?'Нужен сотрудник':'Доступ открыт')+'</span>';
- if(state.tab==='support'&&c.needs_human){if(!compose.querySelector('.comms-banner')){const n=document.createElement('div');n.className='comms-banner';n.textContent='Обращение передано сотруднику. История останется здесь.';compose.prepend(n)}}else compose.querySelector('.comms-banner')?.remove();
- box.disabled=c.status==='closed'||(state.tab==='support'&&c.needs_human&&state.mode==='user');box.placeholder=box.disabled?'Ожидайте ответа сотрудника…':'Написать сообщение…';send.disabled=box.disabled||state.busy;
- if(!state.messages.length)el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Начните разговор</h3><p>История сохранится в этой переписке.</p></div>';
- else el.innerHTML=state.messages.map(m=>{
- const mine=m.sender_id&&m.sender_id===state.userId;
- const author=m.sender_type==='assistant'?'ИИ поддержки':m.sender_type==='admin'?'Сотрудник поддержки':m.sender_type==='system'?'Система':mine?'Вы':(c.partner_name||'Участник');
- return '<article class="comms-message '+(mine?'mine ':'')+(m.sender_type==='system'?'system':'')+'"><span class="comms-author">'+esc(author)+'</span><p>'+esc(m.body)+'</p><time>'+esc(time(m.created_at))+'</time></article>';
- }).join('');
- if(state.tab==='support'&&state.mode==='user'&&!c.needs_human&&c.status!=='closed'){
- if(!compose.querySelector('[data-call-staff]')){const b=document.createElement('button');b.type='button';b.className='comms-btn';b.dataset.callStaff='1';b.textContent='Позвать сотрудника';b.classList.add('comms-staff-action');b.onclick=handoff;compose.prepend(b)}
- }else compose.querySelector('[data-call-staff]')?.remove();
+ const el=$('#comms-messages'),head=$('#comms-conversation-head'),compose=$('#comms-compose-wrap'),box=$('#comms-message'),send=$('#comms-compose button[type="submit"]'),shell=$('#communication-center');
+ if(!el||!head||!box||!send)return;
+ const back='<button class="comms-btn tg-back" type="button" data-chat-back aria-label="К списку переписок">'+icon('back')+'</button>';
+ if(!state.current){shell?.classList.remove('is-chat-open');el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Выберите переписку</h3><p>Личные сообщения, чаты объектов и сообщество — в одном месте.</p></div>';head.innerHTML='';head.hidden=true;box.disabled=true;send.disabled=true;compose.hidden=true;compose.querySelector('.comms-banner')?.remove();return}
+ const c=state.current,title=rowTitle(c),K=kit();
+ shell?.classList.add('is-chat-open');head.hidden=false;compose.hidden=false;
+ const subtitle=c.kind==='estimate'?'Обсуждение сметы':c.kind==='object'?'Команда рабочего пространства':c.kind==='community'?'Открытый профессиональный канал':state.tab==='support'?'Обращение пользователя'+(c.user_email?' · '+c.user_email:''):(c.partner_public_id?'ID '+c.partner_public_id:'Личная переписка');
+ const avatar=c.kind==='object'?icon('users'):c.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1)));
+ head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+esc(title)+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
+ head.querySelector('[data-chat-back]').onclick=()=>{state.current=null;state.messages=[];renderList();renderMessages()};
+ compose.querySelector('.comms-banner')?.remove();
+ box.disabled=c.status==='closed';box.placeholder=box.disabled?'Переписка закрыта':'Сообщение…';send.disabled=box.disabled||state.busy||!box.value.trim();
+ if(!state.messages.length){el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Начните разговор</h3><p>История сохранится в этой переписке.</p></div>';return}
+ const rows=state.messages.map(m=>{const mine=Boolean(m.sender_id&&m.sender_id===state.userId);return {id:m.id,body:m.body,created_at:Number(m.created_at||0),mine,kind:m.sender_type==='system'?'system':m.sender_type,author:m.sender_type==='assistant'?'ИИ поддержки':m.sender_type==='admin'?'Сотрудник поддержки':mine?'Вы':(m.sender_name||c.partner_name||'Участник')}});
+ const group=c.kind==='object'||c.kind==='community'||state.tab==='support';
+ el.innerHTML=K?K.thread(rows,{showAuthors:group}):rows.map(m=>'<article class="comms-message'+(m.mine?' mine':'')+'"><p>'+esc(m.body)+'</p></article>').join('');
  el.scrollTop=el.scrollHeight;
 }
 async function refresh(reset){
@@ -97,12 +127,13 @@ async function refresh(reset){
  try{
  const me=await api('/profile/id');state.userId=me.id;state.role=me.role||'user';state.publicId=me.public_id||'';state.mode=state.tab==='support'&&state.role==='admin'?'admin':'user';
  $('#comms-my-id code').textContent=state.publicId||'не задан';
- document.querySelectorAll('#communication-center [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.tab));
+ if(state.tab==='support'&&state.role!=='admin')state.tab='direct';
+ renderTabs();
  if(state.tab==='direct'){const d=await api('/profile/chats');state.chats=d.chats||[];state.channels=[]}
  else if(state.tab==='object'){const d=await api('/profile/object-chats');state.chats=d.chats||[];state.workspaces=d.workspaces||[];state.channels=[]}
  else if(state.tab==='community'){const d=await api('/profile/communities');state.channels=(d.channels||[]).map(c=>({...c,subject:c.label,kind:'community'}));state.chats=[]}
  else if(state.mode==='admin'){const d=await api('/admin/communication/threads');state.chats=d.threads||[];state.channels=[]}
- else{const d=await api('/support/threads');state.chats=d.threads||[];state.channels=[]}
+ else{state.chats=[];state.channels=[]}
  renderTools();renderList();
  if(reset){const rows=state.tab==='community'?state.channels:state.chats;state.current=rows.find(x=>state.current&&x.id===state.current.id)||null;state.messages=[];renderMessages();if(!state.current&&rows.length&&state.tab==='community'){state.current=rows[0];await loadMessages(true)}}
  else if(state.current){const rows=state.tab==='community'?state.channels:state.chats;const newer=rows.find(x=>x.id===state.current.id);if(newer)state.current=newer;renderList();renderMessages()}
@@ -124,7 +155,7 @@ async function sendMessage(e){
  let path='/profile/chats/'+id+'/messages';
  if(state.tab==='support'&&state.mode==='admin')path='/admin/communication/threads/'+id+'/messages';
  else if(state.tab==='support')path='/support/threads/'+id+'/messages';
- await api(path,{method:'POST',body:JSON.stringify({message})});box.value='';await loadMessages(true);await refresh(false)
+ await api(path,{method:'POST',body:JSON.stringify({message})});box.value='';box.dispatchEvent(new Event('input'));await loadMessages(true);await refresh(false)
  }catch(error){notify(error.message)}finally{state.busy=false;renderMessages()}
 }
 async function findPerson(){
@@ -145,10 +176,6 @@ async function createObjectChat(){
 async function joinCommunity(category){
  try{const d=await api('/profile/communities',{method:'POST',body:JSON.stringify({category})});await refresh(true);await select(d.chat.id)}catch(error){notify(error.message)}
 }
-async function newTicket(){
- const subject=prompt('Тема обращения','Новый вопрос в поддержку');if(subject===null)return;
- try{const d=await api('/support/threads',{method:'POST',body:JSON.stringify({subject:subject.trim()||'Новый вопрос'})});await refresh(true);await select(d.thread.id)}catch(error){notify(error.message)}
-}
 async function handoff(){
  if(!state.current)return;
  try{if(state.mode==='admin'){await refresh(true);return}
@@ -166,48 +193,6 @@ function addTrigger(){
   b.addEventListener('click',()=>open('direct'));
   support.insertAdjacentElement('afterend',b);
  }
-}
-function supportPage(){
- const content=$('#content');
- if(!content||content.dataset.section!=='support')return;
- // Retain the existing support page markup/topics so older web and Android
- // navigation flows keep their selectors and history behavior.
- const form=content.querySelector('#support-form');
- if(!form||state.supportForm===form)return;
- state.supportForm=form;
- const guide=content.querySelector('.support-guide');
- const actions=guide||form.parentElement||content;
- if(!actions.querySelector('[data-comms-open-support]')){
-  const button=document.createElement('button');
-  button.type='button';button.className='comms-btn';button.dataset.commsOpenSupport='1';
-  button.textContent='Открыть историю обращений';
-  button.classList.add('comms-support-launch');button.onclick=()=>open('support');
-  const topics=actions.querySelector('.support-topics');
-  if(topics)topics.insertAdjacentElement('afterend',button);else actions.append(button);
- }
- const panel=content.querySelector('.support-panel')||form.parentElement;
- if(panel&&!panel.querySelector('[data-comms-support-note]')){
-  const note=document.createElement('p');note.dataset.commsSupportNote='1';note.className='comms-note';
-  note.classList.add('comms-support-note');
-  note.textContent='Бесплатный ИИ поддержки отвечает в чате. Если он не справится или вы позовёте сотрудника, обращение попадёт в очередь команды, а история сохранится.';
-  panel.insertBefore(note,form);
- }
- form.onsubmit=async event=>{
-  event.preventDefault();
-  const button=form.querySelector('[type=submit],button:not([type])');
-  const input=form.querySelector('#message');
-  const message=input?.value.trim();
-  if(!message||!button||button.disabled)return;
-  button.disabled=true;
-  try{
-   const data=await api('/support',{method:'POST',body:JSON.stringify({message})});
-   if(input.value.trim()===message)input.value='';
-   await open('support');
-   await select(data.ticket_id);
-   notify(data.needs_human?'Обращение передано в очередь поддержки':'Ответ поддержки получен');
-  }catch(error){notify(error.message)}
-  finally{if(button.isConnected)button.disabled=false}
- };
 }
 async function adminPage(){
  const content=$('#content');if(!content||content.dataset.section!=='admin')return;
@@ -229,9 +214,9 @@ async function adminPage(){
 }
 function watch(){
  const root=$('#content');if(!root||state.observer)return;
- state.observer=new MutationObserver(()=>{addTrigger();if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin'&&!root.querySelector('[data-comms-admin-overview]'))adminPage()});
+ state.observer=new MutationObserver(()=>{addTrigger();if(root.dataset.section==='admin'&&!root.querySelector('[data-comms-admin-overview]'))adminPage()});
  state.observer.observe(root,{childList:true,subtree:true});addTrigger();
- if(root.dataset.section==='support')supportPage();if(root.dataset.section==='admin')adminPage();
+ if(root.dataset.section==='admin')adminPage();
 }
 let presenceTimer=null;
 let presenceBusy=false;

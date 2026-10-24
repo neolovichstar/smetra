@@ -60,7 +60,7 @@
         try{localStorage.setItem('smetra.group.'+index,String(open))}catch{}
       });
       let saved=null;try{saved=localStorage.getItem('smetra.group.'+index)}catch{}
-      setOpen(saved===null?Boolean(inner.querySelector('[data-tab].active')):saved==='true');
+      setOpen(saved===null?(index<3||Boolean(inner.querySelector('[data-tab].active'))):saved==='true');
 
     });
   }
@@ -84,13 +84,7 @@
   document.querySelectorAll('[data-mode]').forEach(control => {
     control.onclick = () => sidebar?.querySelector(`[data-tab="${control.dataset.mode}"]`)?.click();
   });
-  const collapse = document.getElementById('sidebar-collapse');
-  if (collapse) collapse.onclick = () => {
-    const compact = document.body.classList.toggle('sidebar-compact');
-    collapse.setAttribute('aria-expanded',String(!compact));
-    collapse.setAttribute('aria-label',compact?'Развернуть меню':'Свернуть меню');
-    window.syncSidebarAccess?.();
-  };
+  // The collapse control is owned by app.js (state, persistence and icon).
   if (sidebar) new MutationObserver(syncNavigation).observe(sidebar,{attributes:true,attributeFilter:['class'],subtree:true});
   syncNavigation();
   function decorate(root) {
@@ -141,7 +135,8 @@
     root.querySelectorAll('.workspace-home .dashboard-aside').forEach(section => {
       section.classList.toggle('is-empty', !section.querySelector('.record-line'));
     });
-    const buttons=[...(root.matches?.('button,a.btn')?[root]:[]),...root.querySelectorAll('button, a.btn')];
+    // Automatic icons belong to captioned action buttons only, never to list rows or titles.
+    const buttons=[...(root.matches?.('.btn')?[root]:[]),...root.querySelectorAll('.btn')];
     buttons.forEach(button => {
       if (button.matches('.select-trigger,.select-option')) return;
       // An authored SVG/image is the canonical icon. Do not also decorate this
@@ -176,7 +171,7 @@
   new MutationObserver(records => {
     for(const record of records)for(const node of record.addedNodes){
       if(node.nodeType===1)added.add(node);
-      else if(record.target.matches?.('button,a.btn')&&!record.target.dataset.uiIcon)added.add(record.target);
+      else if(record.target.matches?.('.btn')&&!record.target.dataset.uiIcon)added.add(record.target);
     }
     if(pending||!added.size)return;
     pending=true;

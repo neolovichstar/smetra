@@ -18,7 +18,7 @@ const assert=require('node:assert/strict');
   workerSession=(await send('Target.attachToTarget',{targetId:worker.targetId,flatten:true})).sessionId;await send('Network.enable',{},workerSession);
   await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0},workerSession);
   await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});await send('Page.navigate',{url:site+'/app'});
-  await until("document.title==='Нет подключения · Сметра'");assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor==='rgb(0, 0, 0)'||getComputedStyle(document.documentElement).backgroundColor==='rgb(0, 0, 0)'"),true);
+  await until("document.title==='Нет подключения · Сметра'");assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor==='rgb(10, 10, 11)'||getComputedStyle(document.documentElement).backgroundColor==='rgb(10, 10, 11)'"),true);
   await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1},workerSession);
   await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});await send('Page.navigate',{url:site+'/app'});await until("document.querySelector('#auth-form')?.onsubmit");
   console.log('PASS: PWA manifest, active service worker, branded offline fallback, reconnect and public-only cache');
