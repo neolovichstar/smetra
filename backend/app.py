@@ -303,7 +303,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net https://www.google.com/s2/favicons; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         if cookie:
             self.send_header("Set-Cookie", cookie)
