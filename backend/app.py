@@ -500,6 +500,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 from backend.identity import route as identity_route
 
                 identity_route(self, None, method, path, query, ORIGIN)
+            elif method == "GET" and path == "/api/billing/catalog":
+                from backend.plan_catalog import public_catalog
+
+                plans = [
+                    {"code": code, "name": item["name"], "month": item["monthly_kopecks"],
+                     "year": item["yearly_kopecks"]}
+                    for code, item in public_catalog().items()
+                ]
+                self.send_json(200, {"plans": plans})
             elif method == "GET" and path == "/api/mobile/presentation":
                 presentation = json.loads((ROOT / "backend" / "mobile_presentation.json").read_text(encoding="utf-8"))
                 self.send_json(200, presentation)

@@ -55,7 +55,8 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-page')).getPropertyValue('--action').trim()"),'#ededef','Primary actions use the neutral light action token');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('.dashboard-intro h1')).letterSpacing)>=-1.5"),true,'Section heading tracking remains readable');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#capture-text')).resize"),'none','Dashboard composer cannot be manually stretched');
-  assert.equal(await evaluate("(()=>{const i=getComputedStyle(document.querySelector('#capture-text')),f=getComputedStyle(document.querySelector('#capture-form'));return i.borderTopWidth==='0px'&&i.outlineWidth==='0px'&&f.borderTopWidth==='1px'&&parseFloat(f.borderTopLeftRadius)>=16})()"),true,'Dashboard composer has one rounded outer surface and no nested input border');
+  const captureStyles=await evaluate("(()=>{const i=getComputedStyle(document.querySelector('#capture-text')),f=getComputedStyle(document.querySelector('#capture-form'));return {inputBorder:i.borderTopWidth,inputOutline:i.outlineWidth,inputOutlineStyle:i.outlineStyle,formBorder:f.borderTopWidth,formRadius:f.borderTopLeftRadius,formClass:document.querySelector('#capture-form').className,formBg:f.backgroundColor}})()");
+  assert.equal(captureStyles.inputBorder==='0px'&&(captureStyles.inputOutlineStyle==='none'||captureStyles.inputOutline==='0px')&&captureStyles.formBorder==='1px'&&parseFloat(captureStyles.formRadius)>=16,true,'Dashboard composer has one rounded outer surface and no nested input border: '+JSON.stringify(captureStyles));
 
   await click('#sidebar-collapse');
   assert.equal(await evaluate("document.querySelector('#sidebar-collapse').getAttribute('aria-expanded')"),'false','Compact mode updates the accessible expanded state');

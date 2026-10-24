@@ -45,12 +45,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
-        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button is-voice" id="assistant-send" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" data-ui-icon="microphone">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
+        <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про</a>
       </div>
     </div>
     <aside class="assistant-toolrail" aria-label="История и инструменты ассистента">
-      <button class="assistant-toolrail-toggle" id="assistant-toolrail-toggle" type="button" aria-expanded="${!collapsedTools}" aria-controls="assistant-workbar" aria-label="${collapsedTools?'Развернуть панель диалога':'Свернуть панель диалога'}" title="${collapsedTools?'Развернуть панель':'Свернуть панель'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="${collapsedTools?'M15 8l-4 4 4 4':'M9 8l4 4-4 4'}"/><path d="M7 4v16"/></svg></button>
+      <button class="assistant-toolrail-toggle" id="assistant-toolrail-toggle" type="button" aria-expanded="${!collapsedTools}" aria-controls="assistant-workbar" aria-label="${collapsedTools?'Развернуть панель диалога':'Свернуть панель диалога'}" title="${collapsedTools?'Развернуть панель':'Свернуть панель'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="${collapsedTools?'M12 9l3 3-3 3':'M15 9l-3 3 3 3'}"/><path d="M7 4v16"/></svg></button>
       <div class="assistant-toolrail-body">
         <div class="assistant-workbar" id="assistant-workbar">
           <button class="btn small assistant-tool-new" id="assistant-new-thread" type="button" aria-label="Новый диалог" title="Новый диалог">${assistantIcon('plus')}<span class="assistant-tool-label">Новый диалог</span></button>
@@ -160,27 +160,26 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
   jobBar.append(backgroundButton);composer.insertBefore(jobBar,document.querySelector('#assistant-form'));
   const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
-  composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
+  composeTools.append(attachmentBar,jobBar,document.querySelector('#assistant-voice'),document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
   const assistantForm=document.querySelector('#assistant-form');
   assistantForm.append(composeTools);
   // Background jobs belong to the composer surface directly above the message field.
   assistantForm.insertBefore(jobList,input);
   const send=document.querySelector('#assistant-send');
+  const voiceButton=document.querySelector('#assistant-voice');
   const status=document.querySelector('#assistant-status');
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
   let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   const syncSendButton=()=>{
-    const hasText=Boolean(input.value.trim()),hasImage=pendingPhotos.length>0;
-    const canSend=hasText||hasImage,icon=canSend?'arrow-up':'microphone';
-    send.type=canSend?'submit':'button';
-    if(send.dataset.uiIcon!==icon||!send.querySelector('svg')){send.dataset.uiIcon=icon;send.innerHTML=assistantIcon(canSend?'arrow-up':'microphone',18)}
-    // CSP style-src self: icons selected with external stylesheet by data-ui-icon.
-    send.classList.toggle('is-voice',!canSend);
+    const canSend=Boolean(input.value.trim()||pendingPhotos.length);
+    const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
+    send.disabled=!canSend||working||threadBusy||fileBlocking||!data.available||quotaBlocked||(backgroundMode&&!backgroundEnabled);
+    voiceButton.disabled=working||threadBusy||fileBlocking||!data.available;
     send.classList.toggle('has-message',canSend);
-    send.classList.toggle('is-recording',voiceListening||voiceStarting);
-    send.setAttribute('aria-label',canSend?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
-    send.title=canSend?'Отправить сообщение':voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
-    send.setAttribute('aria-pressed',String(!canSend&&voiceListening));
+    voiceButton.classList.toggle('is-recording',voiceListening||voiceStarting);
+    voiceButton.setAttribute('aria-label',voiceListening?'Остановить голосовой ввод':'Ввести сообщение голосом');
+    voiceButton.title=voiceListening?'Остановить голосовой ввод':'Голосовой ввод';
+    voiceButton.setAttribute('aria-pressed',String(voiceListening));
   };
   const startVoiceInput=async()=>{
     if(voiceListening){try{voiceRecognition?.stop()}catch{};return}
@@ -244,7 +243,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         'Не удалось включить микрофон. Проверьте разрешения сайта и повторите попытку.';
     }
   };
-  send.addEventListener('click',()=>{if(send.type==='button')startVoiceInput()});
+  voiceButton.addEventListener('click',startVoiceInput);
   const quotaLabel=document.querySelector('#assistant-quota');
   const upgrade=document.querySelector('#assistant-upgrade');
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
@@ -265,7 +264,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   const closeHistoryPanel=()=>{toolrail.classList.remove('is-history-expanded');historyToggle.setAttribute('aria-expanded','false')};
   historyToggle.onclick=event=>{event.stopPropagation();const open=toolrail.classList.toggle('is-history-expanded');historyToggle.setAttribute('aria-expanded',String(open));if(open)closeConversationMenus()};
-  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');closeHistoryPanel();toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';const arrow=toolrailToggle.querySelector('svg path');if(arrow)arrow.setAttribute('d',collapsed?'M15 8l-4 4 4 4':'M9 8l4 4-4 4');try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
+  toolrailToggle.onclick=()=>{const collapsed=toolrail.classList.toggle('assistant-tools-collapsed');closeHistoryPanel();toolrailToggle.setAttribute('aria-expanded',String(!collapsed));toolrailToggle.setAttribute('aria-label',collapsed?'Развернуть панель диалога':'Свернуть панель диалога');toolrailToggle.title=collapsed?'Развернуть панель':'Свернуть панель';const arrow=toolrailToggle.querySelector('svg path');if(arrow)arrow.setAttribute('d',collapsed?'M12 9l3 3-3 3':'M15 9l-3 3 3 3');try{localStorage.setItem('smetra.assistant.tools-collapsed',String(collapsed))}catch{}};
   document.querySelectorAll('[data-conversation]').forEach(button=>{button.onclick=()=>{
     const select=document.querySelector('#assistant-thread-select');select.value=button.dataset.conversation||'';select.dispatchEvent(new Event('change'));
   }});
@@ -502,9 +501,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const quotaBlocked=value.remaining<1&&value.plan!=='pro';
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
-    // The empty composer button is a microphone, not an AI request: dictation remains available at zero quota.
-    const canRecordVoice=send.type==='button'&&!input.value.trim();
-    send.disabled=working||fileBlocking||!data.available||(!canRecordVoice&&(quotaBlocked||(!input.value.trim()&&!pendingPhotos.length)||(backgroundMode&&!backgroundEnabled)));
+    syncSendButton();
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
@@ -571,7 +568,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
   };
   const renderSavedAction=(item,action,undoable,documentId)=>{
-    item.replaceChildren();item.classList.add('assistant-saved');const title=document.createElement('p');title.className='assistant-saved-title';title.textContent='Сохранено · '+action.summary;item.append(title);
+    item.replaceChildren();item.classList.add('is-saved');const title=document.createElement('p');title.className='assistant-saved-title';title.textContent='Сохранено · '+action.summary;item.append(title);
     if(documentId){const pdf=document.createElement('button');pdf.type='button';pdf.className='btn ghost';pdf.textContent='Скачать PDF';pdf.onclick=()=>Workspace.download('/documents/'+encodeURIComponent(documentId)+'/pdf','smetra-document.pdf').catch(error=>notify(error.message));item.append(pdf)}
     if(!undoable)return;
     const button=document.createElement('button');button.type='button';button.className='btn ghost';button.textContent='Отменить изменение';item.append(button);

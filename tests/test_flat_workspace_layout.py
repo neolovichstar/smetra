@@ -13,7 +13,8 @@ class FlatWorkspaceLayoutTests(unittest.TestCase):
         page = (WEB / "app.html").read_text()
         sheets = re.findall(r'href="/([^"?]+\.css)', page)
         self.assertEqual(sheets, ["ui/tokens.css", "ui/base.css", "ui/components.css", "ui/shell.css",
-                                  "ui/workspace.css", "ui/editor.css", "ui/assistant.css", "ui/modules.css"])
+                                  "ui/workspace.css", "ui/editor.css", "ui/assistant.css", "ui/modules.css",
+                                  "ui/tools.css"])
         legacy = [p.name for p in WEB.glob("*.css") if p.name not in ("change.css", "offline.css")]
         self.assertEqual(legacy, [])
 

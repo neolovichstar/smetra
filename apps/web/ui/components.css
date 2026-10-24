@@ -14,6 +14,7 @@
 .btn:active:not(:disabled),.comms-btn:active:not(:disabled){transform:translateY(.5px) scale(.99)}
 .btn:focus-visible,.comms-btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .btn:disabled,.btn[aria-disabled="true"],.comms-btn:disabled{opacity:.42;cursor:not-allowed;transform:none}
+.btn.primary:disabled,.btn.primary[aria-disabled="true"]{opacity:1;background:var(--surface-3);border-color:var(--line);color:var(--text-3)}
 .btn.primary,.btn.is-primary,.comms-btn.primary{--btn-bg:var(--action);--btn-fg:var(--action-text);--btn-line:transparent;--btn-hover:var(--action-hover);font-weight:600}
 .btn.ghost{--btn-bg:transparent;--btn-line:transparent;--btn-hover:var(--surface-3);--btn-fg:var(--text-2)}
 .btn.ghost:hover{color:var(--text)}
@@ -337,3 +338,8 @@ body.modal-open{overflow:hidden}
   *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important}
 }
 #assistant-input,#capture-text,.comms-compose textarea{outline:0}
+
+/* Native file inputs keep their accessibility but match the button style. */
+input[type="file"]{min-height:var(--control);padding:4px;color:var(--text-2);font-size:var(--fs-13);cursor:pointer}
+input[type="file"]::file-selector-button{margin-right:10px;min-height:28px;padding:0 12px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);color:var(--text);font:inherit;font-weight:500;cursor:pointer;transition:background-color var(--t-fast) var(--ease)}
+input[type="file"]:hover::file-selector-button{background:var(--surface-3)}
