@@ -309,3 +309,59 @@ body.workspace-page:not(.auth-mode) .workspace-home .dashboard-secondary{
   grid-area:status!important;grid-column:1/-1!important;grid-row:3!important;
  }
 }
+
+/* Without AI draft capability there is no attachment control.
+   Do not reserve its 40px column: the textarea must get the full row. */
+@media(min-width:601px){
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)){
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-rows:auto auto!important;
+  grid-template-areas:"input submit" "status status"!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) #capture-text{
+  grid-area:input!important;grid-column:1!important;grid-row:1!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) .capture-actions{
+  grid-area:submit!important;grid-column:2!important;grid-row:1!important;
+  width:auto!important;justify-self:end!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) #capture-status{
+  grid-area:status!important;grid-column:1/-1!important;grid-row:2!important;
+ }
+}
+@media(max-width:600px){
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)){
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  grid-template-rows:auto auto auto!important;
+  grid-template-areas:"input" "submit" "status"!important;
+  gap:9px 0!important;
+  padding:9px!important;
+  min-width:0!important;
+  align-items:center!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) #capture-text{
+  grid-area:input!important;grid-column:1!important;grid-row:1!important;
+  width:100%!important;min-width:0!important;
+  height:auto!important;min-height:44px!important;
+  padding:11px 4px!important;resize:none!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) .capture-actions{
+  grid-area:submit!important;grid-column:1!important;grid-row:2!important;
+  display:flex!important;align-items:stretch!important;
+  justify-content:stretch!important;justify-self:stretch!important;
+  width:100%!important;min-width:0!important;
+  margin:0!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) .capture-actions>.btn{
+  flex:1 1 auto!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:100%!important;min-width:0!important;max-width:none!important;
+  min-height:44px!important;height:44px!important;
+  font-size:12px!important;padding:0 14px!important;
+  white-space:nowrap!important;
+ }
+ body.workspace-page:not(.auth-mode) .workspace-home #capture-form.dashboard-capture-form:not(:has(.capture-file)) #capture-status{
+  grid-area:status!important;grid-column:1!important;grid-row:3!important;
+ }
+}
