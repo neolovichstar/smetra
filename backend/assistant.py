@@ -505,7 +505,7 @@ def assistant_model(service, has_image=False):
             service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp())
     if paid:
         return os.getenv("OPENROUTER_PAID_MODEL", "google/gemini-3-flash-preview"), True
-    name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free")
+    name = (os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen3.8-27b:free")
             if has_image else os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free"))
     if not (name == "openrouter/free" or name.endswith(":free")):
         raise DomainError(503, "Бесплатный тариф использует только бесплатную модель")
@@ -532,7 +532,7 @@ def query_model(messages, model=None, paid_model=False):
     payload = {
         "model": model,
         "messages": messages,
-        **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
+        **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
         "max_tool_calls": 4,
         "max_tokens": 3500,
             "temperature": 0.2,
@@ -583,7 +583,7 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
         packed({
             "model": model,
             "messages": messages,
-            **({} if model == os.getenv("OPENROUTER_FREE_VISION_MODEL", "qwen/qwen-2.5-vl-7b-instruct:free") else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
+            **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
             "max_tool_calls": 4,
             "max_tokens": 3500,
             "temperature": 0.2,
