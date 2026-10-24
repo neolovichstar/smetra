@@ -238,8 +238,98 @@ function syncMobileSidebarGeometry(){
  }
 }
 function closeNavigation(){document.body.classList.remove('nav-open');$('#nav-toggle')?.setAttribute('aria-expanded','false');$('#nav-toggle')?.setAttribute('aria-label','Открыть разделы');syncMobileSidebarGeometry();syncSidebarAccess()}
-function showAuth() { window.SmetraCommunication?.reset();window.SmetraQuoteEditor?.leave();authRevision++;renderRevision++;clearApiCache();closeNavigation();$('#content')?.replaceChildren();document.body.classList.add('auth-mode');$('.skip-link')?.setAttribute('href','#auth-title');$('#auth').classList.remove('hidden');$('#shell').classList.add('hidden');$('#shell').setAttribute('inert','');$('#nav-backdrop')?.classList.add('hidden'); }
-async function showApp() { window.SmetraCommunication?.reset();closeNavigation();document.body.classList.remove('auth-mode');$('.skip-link')?.setAttribute('href','#content');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');window.SmetraCommunication?.startPresence?.();$('#shell').removeAttribute('inert');const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');if(profileName)profileName.textContent=user.name;if(avatar)avatar.innerHTML=userAvatarMarkup(user);$('#admin-nav').classList.toggle('hidden',user.role!=='admin');const owner=user;const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');if(ref){sessionStorage.setItem('smetra.referral',ref);api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})}).then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});}await render();if(user!==owner)return;window.SmetraWarmFeatures?.();try{const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');if(draft&&window.Workspace){await window.Workspace.editor(draft);sessionStorage.removeItem('smetra.previewDraft')}}catch(err){notify(err.message)} }
+function setAppState(state){
+  document.body.dataset.appState=state;
+  if(state!=='boot'){
+    document.body.classList.remove('smetra-app-booting','smetra-app-transitioning');
+    $('#app-startup')?.setAttribute('aria-hidden','true');
+  }
+}
+function showBootError(message){
+  document.body.dataset.appState='boot';
+  document.body.classList.add('smetra-app-booting');
+  const label=$('#app-startup-label');
+  if(label)label.textContent=message||'Не удалось проверить соединение.';
+  const button=$('#app-startup-retry');
+  if(button)button.hidden=false;
+}
+function showAuth(){
+  window.SmetraFieldFlows?.stop?.();
+  window.SmetraCommunication?.reset();
+  window.SmetraQuoteEditor?.leave();
+  authRevision++;renderRevision++;clearApiCache();closeNavigation();
+  $('#content')?.replaceChildren();
+  document.body.classList.add('auth-mode');
+  $('.skip-link')?.setAttribute('href','#auth-title');
+  $('#shell').classList.add('hidden');$('#shell').setAttribute('inert','');
+  $('#auth').classList.remove('hidden');
+  $('#nav-backdrop')?.classList.add('hidden');
+  setAppState('guest');
+}
+async function showApp(){
+  const attempt=authRevision;
+  const owner=user;
+  if(!owner)return;
+  // Keep the previously rendered auth scene underneath a covering transition
+  // until the authorized route has finished constructing its first frame.
+  document.body.classList.add('smetra-app-transitioning');
+  document.body.dataset.appState='authorizing';
+  window.SmetraCommunication?.reset();
+  closeNavigation();
+  $('.skip-link')?.setAttribute('href','#content');
+  document.body.classList.remove('auth-mode');
+  $('#shell').classList.remove('hidden');
+  $('#shell').removeAttribute('inert');
+  const profileName=$('#sidebar-profile-name'),avatar=$('#sidebar-avatar');
+  if(profileName)profileName.textContent=owner.name;
+  if(avatar)avatar.innerHTML=userAvatarMarkup(owner);
+  $('#admin-nav').classList.toggle('hidden',owner.role!=='admin');
+  const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');
+  if(ref){
+    sessionStorage.setItem('smetra.referral',ref);
+    api('/billing/referral',{method:'POST',body:JSON.stringify({code:ref})})
+      .then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});
+  }
+  try{
+    await render();
+    if(user!==owner||authRevision!==attempt)return;
+    $('#auth').classList.add('hidden');
+    setAppState('authorized');
+    window.SmetraCommunication?.startPresence?.();
+    window.SmetraWarmFeatures?.();
+    try{
+      const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');
+      if(draft&&window.Workspace){
+        await window.Workspace.editor(draft);
+        sessionStorage.removeItem('smetra.previewDraft');
+      }
+    }catch(error){notify(error.message)}
+  }catch(error){
+    if(user===owner&&authRevision===attempt){
+      // A loading error must not be reclassified as a failed login.
+      setAppState('authorized');
+      $('#auth').classList.add('hidden');
+      notify('Не удалось открыть раздел. Попробуйте обновить страницу.');
+    }
+  }
+}
+window.addEventListener('pageshow',event=>{
+  // Returning via the browser back-forward cache must reveal auth again.
+  if(event.persisted&&document.body.dataset.appState==='authorizing'){
+    document.body.classList.remove('smetra-app-transitioning');
+    document.body.dataset.appState='guest';
+  }
+});
+window.SmetraCompleteAuth=async profile=>{
+  if(!profile?.id)throw Error('Не удалось подтвердить профиль.');
+  ++authRevision;
+  user=profile;clearApiCache();
+  sessionStorage.removeItem('workspace_id');
+  window.Workspace?.reset();
+  const hash=/^#[a-z-]+$/.test(location.hash)?location.hash:'#dashboard';
+  history.replaceState({},'', '/app'+hash);
+  await showApp();
+};
 async function loadQuotes(q='') { const result=await api('/quotes?q='+encodeURIComponent(q));quotes=result.quotes;return quotes; }
 function header(title, subtitle, action='') { return `<div class="topline"><div><h1>${title}</h1>${subtitle?`<p class="muted">${subtitle}</p>`:''}</div>${action?`<div class="topline-actions">${action}</div>`:''}</div>${user && !user.email_verified && window.SmetraEmailDeliveryAvailable===true ? '<div class="panel"><strong>Подтвердите почту</strong><p class="muted">Перед оплатой откройте ссылку из письма.</p><button class="btn small" data-resend="1">Отправить письмо повторно</button></div>' : ''}`; }
 function quoteCard(q) {
@@ -348,11 +438,11 @@ if($('#auth')){
   $('#auth-login-tab').onclick=()=>{setAuthMode('login');syncEmailActions()};
   $('#auth-register-tab').onclick=()=>{setAuthMode('register');syncEmailActions()};
   $('.auth-tabs').onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const mode=event.key==='Home'?'login':event.key==='End'?'register':registering?'login':'register';setAuthMode(mode);syncEmailActions();$(mode==='login'?'#auth-login-tab':'#auth-register-tab').focus()};
-  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;if(registering&&!$('#legal-consent').checked){$('#auth-form-error').textContent='Примите условия и предупреждение перед регистрацией.';return}const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim(),...(registering?{legal_acceptance:$('#legal-consent').checked,legal_version:REGISTRATION_CONSENT_VERSION}:{})})});if(attempt!==authRevision)return;user=result.user;sessionStorage.removeItem('workspace_id');window.Workspace?.reset();await showApp()}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
+  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;if(registering&&!$('#legal-consent').checked){$('#auth-form-error').textContent='Примите условия и предупреждение перед регистрацией.';return}const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim(),...(registering?{legal_acceptance:$('#legal-consent').checked,legal_version:REGISTRATION_CONSENT_VERSION}:{})})});if(attempt!==authRevision)return;await window.SmetraCompleteAuth(result.user)}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
-   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(tab===b.dataset.tab){closeNavigation();return}tab=b.dataset.tab;location.hash=tab;closeNavigation();return renderNavigation()});
-  $('#sidebar-profile').onclick=()=>{if(tab==='profile'){closeNavigation();return}tab='profile';location.hash=tab;closeNavigation();return renderNavigation()};
+   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{const next=b.dataset.tab;if(tab===next){closeNavigation();return;}closeNavigation();if(location.hash.slice(1)===next){tab=next;void renderNavigation();}else location.hash=next;});
+  $('#sidebar-profile').onclick=()=>{if(tab==='profile'){closeNavigation();return;}closeNavigation();if(location.hash.slice(1)==='profile'){tab='profile';void renderNavigation();}else location.hash='profile';};
   $('#nav-backdrop').classList.remove('hidden');
   $('#nav-toggle').onclick=()=>{syncMobileSidebarGeometry();const open=!document.body.classList.contains('nav-open');document.body.classList.toggle('nav-open',open);$('#nav-toggle').setAttribute('aria-expanded',String(open));$('#nav-toggle').setAttribute('aria-label',open?'Закрыть разделы':'Открыть разделы');syncSidebarAccess()};
   try{document.body.classList.toggle('sidebar-compact',localStorage.getItem('smetra.sidebar-compact')==='true'&&!matchMedia('(max-width:800px)').matches)}catch{}
@@ -382,16 +472,27 @@ if($('#auth')){
     try{pendingShare=sessionStorage.getItem('smetra.pendingShare')||''}catch{}
     if(params.has('share')||/^[a-f0-9-]{36}$/.test(pendingShare)){tab='inbox';}
     const bootRevision=authRevision;
-    verificationTask.then(async()=>{
+    const boot=async()=>{
+      const label=$('#app-startup-label');
+      if(label)label.textContent='Проверяем сессию…';
+      if($('#app-startup-retry'))$('#app-startup-retry').hidden=true;
+      await verificationTask;
       if(bootRevision!==authRevision)return;
-      try{
-        const result=await api('/me');
+      let result;
+      try{result=await api('/me')}
+      catch(error){
         if(bootRevision!==authRevision)return;
-        user=result.user;
-        if(params.has('payment')){tab='billing';history.replaceState({},'',location.pathname+location.search+'#billing')}
-        await showApp();
-      }catch{if(bootRevision===authRevision){user=null;showAuth()}}
-    });
+        if(error.status===401||error.status===403){user=null;showAuth();return}
+        showBootError('Соединение не удалось. Повторите попытку.');
+        return;
+      }
+      if(bootRevision!==authRevision)return;
+      user=result.user;
+      if(params.has('payment')){tab='billing';history.replaceState({},'',location.pathname+location.search+'#billing')}
+      await showApp();
+    };
+    $('#app-startup-retry')?.addEventListener('click',()=>{void boot()});
+    void boot();
   }
 }
 document.addEventListener('DOMContentLoaded',()=>{const params=new URLSearchParams(location.search),intake=params.get('intake'),quote=params.get('quote');if(intake&&document.querySelector('#public-quote'))window.Workspace.intakePage(intake);else if(quote&&document.querySelector('#public-quote'))window.Workspace.publicPage(quote)});

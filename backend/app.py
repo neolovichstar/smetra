@@ -593,6 +593,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("field-flows.js", "text/javascript"),
             ("field-flows.css", "text/css"),
             ("interface-audit.css", "text/css"),
+            ("auth-motion-fix.css", "text/css"),
             ("ai-workspace.js", "text/javascript"),
             ("file-editor.css", "text/css"),
             ("file-editor.js", "text/javascript"),

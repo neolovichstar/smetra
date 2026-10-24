@@ -79,7 +79,7 @@
   try{
    const data=await api('/auth/email/confirm',{method:'POST',body:JSON.stringify({challenge_id:challenge,code})});
    if(!data?.user)throw new Error('Не удалось завершить вход');
-   sessionStorage.removeItem('workspace_id');location.assign('/app#dashboard');
+   await window.SmetraCompleteAuth(data.user);
   }catch(e){err.textContent=e.message||'Неверный код';cells.forEach(x=>x.value='');cells[0].focus()}
   finally{loading=false;confirm.disabled=false;countdown()}
  });

@@ -11,6 +11,12 @@
    query.set('legal_acceptance','1');query.set('legal_version','2026-10-19-registration-v1');
   }
   link.href='/api/auth/oauth/'+encodeURIComponent(link.dataset.provider)+'/start?'+query.toString();
+  // The browser navigates to the provider on the same gesture. Do not flash
+  // a guest/app shell in the meantime.
+  document.body.classList.add('smetra-app-transitioning');
+  document.body.dataset.appState='authorizing';
+  const label=document.querySelector('#app-startup-label');
+  if(label)label.textContent='Перенаправляем в Яндекс ID…';
  });
  const providerLink=host.querySelector('a[data-provider="yandex"]');
  if(providerLink)host.replaceChildren(providerLink);

@@ -1,0 +1,242 @@
+/* Auth and workspace motion foundations, applied last. Strict CSP; no inline styles. */
+body.workspace-page{--sm-ease:cubic-bezier(.22,1,.36,1);--sm-speed:240ms}
+body.workspace-page #app-startup{
+  position:fixed;inset:0;z-index:9990;display:grid;place-items:center;
+  background:#09090a;color:#f4f4f5;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 240ms ease,visibility 240ms ease;
+}
+body.workspace-page.smetra-app-booting #app-startup,
+body.workspace-page.smetra-app-transitioning #app-startup{
+  opacity:1;visibility:visible;pointer-events:auto;
+}
+body.workspace-page .app-startup-inner{
+  display:flex;flex-direction:column;align-items:center;gap:18px;max-width:310px;
+  width:calc(100% - 48px);text-align:center;
+}
+body.workspace-page .app-startup-brand{font-size:24px;letter-spacing:-.065em;font-weight:750}
+body.workspace-page .app-startup-brand span{color:#babac0}
+body.workspace-page .app-startup-progress{height:2px;width:100%;max-width:145px;overflow:hidden;border-radius:3px;background:#2b2b2f}
+body.workspace-page .app-startup-progress span{
+  display:block;width:35%;height:100%;background:#d8d8db;border-radius:3px;
+  animation:smetra-progress 1250ms ease-in-out infinite alternate;
+}
+body.workspace-page .app-startup-inner p{margin:0;font-size:12px;line-height:1.6;color:#9c9ca5}
+body.workspace-page .app-startup-retry:not([hidden]){
+  display:inline-flex;align-items:center;justify-content:center;margin:4px 0 0;
+  padding:10px 18px;border:1px solid #46464c;border-radius:10px;background:#19191c;
+  color:#f5f5f6;font-size:12px;font-weight:650;cursor:pointer;
+}
+body.workspace-page .app-startup-retry[hidden]{display:none!important}
+@keyframes smetra-progress{from{transform:translateX(-165%)}to{transform:translateX(460%)}}
+body.workspace-page.smetra-app-booting :is(.app-nav,.auth-site-header,#auth,#shell),
+body.workspace-page.smetra-app-transitioning :is(.app-nav,.auth-site-header,#auth,#shell){
+  visibility:hidden!important;pointer-events:none!important;
+}
+body.workspace-page.smetra-app-booting .app-startup-progress[aria-hidden],
+body.workspace-page.smetra-app-transitioning .app-startup-progress[aria-hidden]{opacity:1}
+body.workspace-page[data-app-state="authorized"] :is(.app-nav,#shell),
+body.workspace-page[data-app-state="guest"] :is(.auth-site-header,#auth){
+  animation:sm-shell-reveal 290ms var(--sm-ease) both;
+}
+@keyframes sm-shell-reveal{from{opacity:.86;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+/* Preserve an actual, consistent width transition instead of replacing the grid tracks abruptly. */
+@media (min-width:801px) {
+ body.workspace-page:not(.auth-mode) #shell.app-shell,
+ body.workspace-page:not(.auth-mode) #shell.app-shell:has(.assistant-studio),
+ body.workspace-page:not(.auth-mode).sidebar-compact #shell.app-shell:has(.assistant-studio){
+  transition:grid-template-columns 270ms var(--sm-ease),gap 270ms var(--sm-ease)!important;
+ }
+ body.workspace-page:not(.auth-mode) #sidebar{
+  transition:width 270ms var(--sm-ease),border-color 180ms ease,background-color 180ms ease!important;
+  will-change:width;
+ }
+ body.workspace-page:not(.auth-mode) #sidebar .sidebar-item-label,
+ body.workspace-page:not(.auth-mode) #sidebar .sidebar-heading,
+ body.workspace-page:not(.auth-mode) #sidebar .sidebar-profile-copy{
+  transition:opacity 170ms ease,transform 220ms var(--sm-ease)!important;
+ }
+ body.workspace-page:not(.auth-mode).sidebar-compact #sidebar :is(.sidebar-item-label,.sidebar-heading,.sidebar-profile-copy){
+  opacity:0!important;transform:translateX(-7px)!important;pointer-events:none!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio{
+  transition:grid-template-columns 270ms var(--sm-ease)!important;
+ }
+}
+/* The assistant: one composition instead of a heading at the top and a detached textarea. */
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio>.assistant-main-column{
+  justify-content:center!important;gap:0!important;padding-inline:clamp(20px,3vw,46px)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-content{
+  flex:0 0 auto!important;max-height:none!important;margin:0!important;
+  overflow:visible!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-thread:has(.assistant-welcome){
+  min-height:0!important;height:auto!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-welcome{
+  max-width:740px!important;display:flex!important;align-items:center!important;
+  padding:0 0 4px!important;gap:0!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-welcome-line{
+  width:23px!important;height:23px!important;margin:0 auto 16px!important;
+  background:transparent!important;box-shadow:none!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-welcome h2{
+  max-width:740px!important;margin:0 auto 10px!important;text-align:center!important;
+  font-size:clamp(27px,2.6vw,34px)!important;line-height:1.23!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-welcome p{
+  max-width:470px!important;margin:0 auto!important;line-height:1.6!important;text-align:center!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-suggestions{
+  max-width:740px!important;gap:8px 15px!important;
+  margin:21px auto 0!important;align-items:center!important;justify-content:center!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-suggestions button{
+  min-height:34px!important;display:inline-flex!important;gap:7px!important;
+  padding:6px 4px!important;white-space:nowrap!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-main-column>.assistant-composer{
+  margin:22px auto 0!important;padding:0!important;width:min(740px,100%)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-main-column>.assistant-composer{
+  width:min(740px,100%)!important;max-width:740px!important;
+  transition:margin-top 250ms var(--sm-ease),opacity 200ms ease,transform 250ms var(--sm-ease)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-composer #assistant-form{
+  display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+  gap:6px!important;padding:10px 14px 8px!important;
+  border:1px solid rgba(255,255,255,.11)!important;border-radius:17px!important;
+  background:#131315!important;
+  box-shadow:0 10px 36px rgba(0,0,0,.13)!important;
+  transition:background .18s ease,border-color .18s ease,box-shadow .18s ease!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-composer #assistant-form:focus-within{
+  background:#171719!important;border-color:rgba(255,255,255,.27)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-input{
+  min-height:49px!important;max-height:200px!important;padding:10px 6px 6px!important;
+  font-size:14px!important;line-height:1.58!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-compose-tools{
+  min-height:40px!important;display:grid!important;grid-template-columns:40px minmax(0,1fr) 40px!important;
+  align-items:center!important;gap:10px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-attach,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio :is(#assistant-send,#assistant-stop){
+  width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;
+  display:grid!important;place-items:center!important;
+  color:#f9f9fb!important;stroke-width:2.2!important;border-radius:10px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio #assistant-background{
+  color:#a8a8ad!important;min-height:34px!important;padding:5px 9px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) #assistant-delivery-hint{display:none!important}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-composer-foot{
+  justify-content:flex-start!important;margin:6px 5px 0!important;padding:0!important;
+  min-height:16px!important;font-size:10px!important;color:#85858d!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-composer-foot:has(#assistant-status:empty) #assistant-delivery-hint{
+  opacity:.8;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-header{
+  right:clamp(20px,3vw,46px)!important;top:12px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-conversation>.assistant-main-column{
+  justify-content:flex-start!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-conversation .assistant-content{
+  flex:1 1 auto!important;overflow-y:auto!important;padding:34px 0 10px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio.has-conversation .assistant-main-column>.assistant-composer{
+  margin-top:auto!important;
+}
+/* Floating assistant history rail, with geometry tied to the actual content grid. */
+@media(min-width:801px) {
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio{
+  grid-template-columns:214px minmax(0,1fr)!important;gap:12px!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed{
+  grid-template-columns:54px minmax(0,1fr)!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio>.assistant-toolrail{
+  align-self:stretch!important;height:calc(100% - 16px)!important;
+  margin:8px 0!important;padding:16px 9px!important;
+  background:#111113!important;border:1px solid rgba(255,255,255,.09)!important;
+  border-radius:13px!important;
+  transition:padding 260ms var(--sm-ease),border-color 200ms ease,background 200ms ease!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio.assistant-tools-collapsed>.assistant-toolrail{
+  padding-inline:6px!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-toolrail-body{
+  opacity:1!important;transition:opacity 200ms ease!important;
+ }
+}
+/* Sidebars on narrow screens travel instead of blinking into existence. */
+@media(max-width:800px){
+ body.workspace-page:not(.auth-mode) #sidebar{
+  transition:transform 260ms var(--sm-ease),opacity 260ms ease,visibility 260ms ease!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio>.assistant-toolrail{
+  transition:transform 220ms var(--sm-ease),opacity 220ms ease!important;
+ }
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-suggestions button{
+  white-space:normal!important;text-align:center!important;
+ }
+}
+body.workspace-page:not(.auth-mode) #content.main #assistant-send[data-ui-icon="microphone"]::before{
+  mask:url('/assets/icons/microphone.svg') center/contain no-repeat!important;
+  -webkit-mask:url('/assets/icons/microphone.svg') center/contain no-repeat!important;
+}
+body.workspace-page:not(.auth-mode) #content.main #assistant-send[data-ui-icon="arrow-up"]::before{
+  mask:url('/assets/icons/arrow-up.svg') center/contain no-repeat!important;
+  -webkit-mask:url('/assets/icons/arrow-up.svg') center/contain no-repeat!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-thread,
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-message{
+  width:100%!important;max-width:740px!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-main-column>.assistant-composer .assistant-file-status{
+  max-width:100%!important;overflow-wrap:anywhere;
+}
+@media(max-height:630px){
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-welcome-line{margin-bottom:8px!important}
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-suggestions{margin-top:12px!important}
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio:not(.has-conversation) .assistant-main-column>.assistant-composer{margin-top:10px!important}
+}
+@media(prefers-reduced-motion:reduce){
+ body.workspace-page #app-startup,
+ body.workspace-page :is(.app-nav,#shell,.auth-site-header,#auth),
+ body.workspace-page:not(.auth-mode) #shell.app-shell,
+ body.workspace-page:not(.auth-mode) #sidebar,
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio,
+ body.workspace-page:not(.auth-mode) #content.main .assistant-studio *{
+  animation:none!important;transition:none!important;
+ }
+}
+
+/* A brief single transition for all new pages, not cascaded animations
+   for each row/card (those exaggerate loading changes). */
+body.workspace-page:not(.auth-mode) #content.main.app-view-enter{
+ animation:sm-page-in 225ms var(--sm-ease) both!important;
+}
+body.workspace-page:not(.auth-mode) #content.main.app-view-enter :is(
+ .topline,.dashboard-intro,.billing-hero,.panel,.dashboard-metrics,.today-actions,
+ .dashboard-work,.capture-panel,.workspace-columns,.billing-plans,.record-line){
+ animation:none!important;
+}
+@keyframes sm-page-in{from{opacity:.7;transform:translateY(7px)}to{opacity:1;transform:none}}
+body.workspace-page:not(.auth-mode) #sidebar .sidebar-group :is(button,.sidebar-disclosure){
+ transition:background-color 160ms ease,color 160ms ease,opacity 160ms ease!important;
+}
+body.workspace-page:not(.auth-mode) #sidebar :is(.sidebar-subnav,.sidebar-group-content,.sidebar-submenu){
+ transition:max-height 230ms var(--sm-ease),opacity 200ms ease,transform 230ms var(--sm-ease)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-toolrail{
+ transition:width 260ms var(--sm-ease),opacity 180ms ease,padding 260ms var(--sm-ease)!important;
+}
+body.workspace-page:not(.auth-mode) #content.main .assistant-studio .assistant-toolrail-body{
+ min-width:0!important;
+}

@@ -151,7 +151,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const hasText=Boolean(input.value.trim()),icon=hasText?'arrow-up':'microphone';
     send.type=hasText?'submit':'button';
     send.dataset.uiIcon=icon;
-    send.style.setProperty('--ui-icon',"url('/assets/icons/"+icon+".svg')");
+    // CSP style-src self: icons selected with external stylesheet by data-ui-icon.
     send.classList.toggle('is-voice',!hasText);
     send.classList.toggle('has-message',hasText);
     send.classList.toggle('is-recording',voiceListening||voiceStarting);
