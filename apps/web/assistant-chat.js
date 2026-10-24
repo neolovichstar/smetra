@@ -127,7 +127,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   conversationObserver.observe(messages,{childList:true,subtree:true});
   syncAssistantConversationState();
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">Прикрепить файл или фото</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">Прикрепить файл или фото</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden><span></span>';
   attachmentBar.querySelector('span').textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
@@ -343,25 +343,38 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
   const attachmentInfo=attachmentBar.querySelector('span');
-  let pendingPhoto=null,pendingPhotoUrl='';
-  const clearPhoto=()=>{
-    pendingPhoto=null;input.required=true;
-    if(pendingPhotoUrl){URL.revokeObjectURL(pendingPhotoUrl);pendingPhotoUrl=''}
-    attachmentBar.querySelector('.assistant-photo-preview')?.remove();
-    attachmentInfo.textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
-    renderQuota(quota);
-  };
+  const previewTray=document.createElement('div');previewTray.className='assistant-attachment-preview';previewTray.hidden=true;
+  composer.insertBefore(previewTray,document.querySelector('#assistant-form'));
+  let pendingPhotos=[];
   const renderPhoto=()=>{
-    attachmentBar.querySelector('.assistant-photo-preview')?.remove();
-    if(!pendingPhoto)return;
-    input.required=false;
-    const preview=document.createElement('div');preview.className='assistant-photo-preview';
-    const image=document.createElement('img');image.src=pendingPhotoUrl;image.alt='Предпросмотр прикреплённой фотографии';
-    const name=document.createElement('span');name.textContent=pendingPhoto.name;
-    const remove=document.createElement('button');remove.type='button';remove.className='assistant-photo-remove';remove.textContent='×';remove.setAttribute('aria-label','Убрать фотографию');
-    remove.onclick=clearPhoto;preview.append(image,name,remove);attachmentBar.append(preview);
-    attachmentInfo.textContent='Фото прикреплено · '+Math.ceil(pendingPhoto.size/1024)+' КБ';
-    renderQuota(quota);
+    previewTray.replaceChildren();
+    const hasFiles=pendingPhotos.length>0;
+    input.required=!hasFiles;
+    for(const entry of pendingPhotos){
+      const card=document.createElement('div');card.className='assistant-attachment-tile';
+      const image=document.createElement('img');image.src=entry.url;image.alt='Предпросмотр '+entry.file.name;
+      const name=document.createElement('span');name.className='assistant-attachment-name';name.textContent=entry.file.name;
+      const remove=document.createElement('button');remove.type='button';remove.className='assistant-attachment-remove';
+      remove.textContent='×';remove.title='Убрать изображение';remove.setAttribute('aria-label','Убрать изображение '+entry.file.name);
+      remove.onclick=()=>{URL.revokeObjectURL(entry.url);pendingPhotos=pendingPhotos.filter(item=>item!==entry);renderPhoto();syncSendButton()};
+      card.append(image,name,remove);previewTray.append(card);
+    }
+    if(context?.entity==='files'){
+      const chip=document.createElement('div');chip.className='assistant-attachment-tile assistant-attachment-document';
+      const icon=document.createElement('span');icon.className='assistant-document-glyph';icon.textContent='PDF';icon.setAttribute('aria-hidden','true');
+      const name=document.createElement('span');name.className='assistant-attachment-name';name.textContent=context.label||'Документ';
+      const remove=document.createElement('button');remove.type='button';remove.className='assistant-attachment-remove';
+      remove.textContent='×';remove.setAttribute('aria-label','Убрать файл из контекста');
+      remove.onclick=()=>document.querySelector('#assistant-context-remove')?.click();
+      chip.append(icon,name,remove);previewTray.append(chip);
+    }
+    previewTray.hidden=!previewTray.children.length;
+    attachmentInfo.textContent=hasFiles?pendingPhotos.length+' фото выбрано · до 3, общим размером до 1,5 МБ':'Файлы и фото';
+    if(typeof renderQuota==='function')renderQuota(quota);
+  };
+  const clearPhoto=()=>{
+    for(const entry of pendingPhotos)URL.revokeObjectURL(entry.url);
+    pendingPhotos=[];renderPhoto();
   };
   const encodePhoto=async file=>{
     const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
@@ -379,13 +392,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(file.size<1||file.size>2_000_000||file.type&&file.type!==expected){
         status.textContent='Прикрепите корректное фото PNG/JPG размером до 2 МБ';fileInput.value='';return;
       }
-      if(pendingPhotoUrl)URL.revokeObjectURL(pendingPhotoUrl);
-      pendingPhoto=file;pendingPhotoUrl=URL.createObjectURL(file);renderPhoto();
-      status.textContent='Фото прикреплено. Напишите, что нужно рассмотреть, и отправьте сообщение.';
+      const currentBytes=pendingPhotos.reduce((sum,item)=>sum+item.file.size,0);
+      if(pendingPhotos.length>=3||currentBytes+file.size>1_500_000){
+        status.textContent='Максимум 3 изображения общим размером до 1,5 МБ';fileInput.value='';return;
+      }
+      pendingPhotos.push({file,url:URL.createObjectURL(file)});renderPhoto();
+      status.textContent='Фото готовы к отправке вместе с сообщением.';
       input.focus();return;
     }
     if(!['pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите фото PNG/JPG до 2 МБ или документ до '+maxUploadLabel;return}
-    clearPhoto();
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -399,14 +414,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const attached={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
       context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
-      sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();refreshFile();refreshJobs();
+      sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();renderPhoto();refreshFile();refreshJobs();
       status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
     finally{attachButton.disabled=false;fileInput.value=''}
   };
-  fileInput.onchange=()=>uploadAttachment(fileInput.files[0]);
+  fileInput.onchange=async()=>{const files=[...fileInput.files];for(const file of files){await uploadAttachment(file)}fileInput.value=''};
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
-  composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();uploadAttachment(event.dataTransfer.files[0])}});
+  composer.addEventListener('drop',async event=>{if(event.dataTransfer.files.length){event.preventDefault();for(const file of [...event.dataTransfer.files])await uploadAttachment(file)}});
   let quota=data.quota,working=false,threadBusy=false,requestController=null;
   const setThreadBusy=blocked=>{
     document.querySelectorAll('.assistant-workbar button,.assistant-history-list button,.assistant-history-rename-form input,.assistant-history-rename-form button').forEach(button=>button.disabled=blocked);
@@ -554,11 +569,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   backgroundButton.onclick=()=>{
     if(!backgroundEnabled||working||fileBlocking)return;
-    if(pendingPhoto){status.textContent='Сначала отправьте фотографию в обычном чате или уберите её.';return}
+    if(pendingPhotos.length){status.textContent='Сначала отправьте фотографию в обычном чате или уберите её.';return}
     backgroundMode=!backgroundMode;renderDelivery();renderQuota(quota);input.focus();
   };
   const submitBackground=async()=>{
-    const text=input.value.trim();if(!text||pendingPhoto||working||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
+    const text=input.value.trim();if(!text||pendingPhotos.length||working||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
     const body=JSON.stringify({text,context:context?{entity:context.entity,id:context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})});
     if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
     working=true;renderQuota(quota);status.textContent='Сохраняю фоновую задачу…';
@@ -609,14 +624,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
-    event.preventDefault();const prompt=input.value.trim();if((!prompt&&!pendingPhoto)||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
+    event.preventDefault();const prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
     if(window.SmetraEstimateSafety){try{if(!(await window.SmetraEstimateSafety.ensureConsent()))return}catch(error){status.textContent=error.message;return}}
     if(backgroundMode){await submitBackground();return}
     working=true;renderQuota(quota);stop.hidden=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
     messages.querySelector('.assistant-welcome')?.remove();
-    const sentPhoto=pendingPhoto;
-    const userMessage=addMessage('user',prompt||(sentPhoto?'Посмотри прикреплённую фотографию.':''));
-    if(sentPhoto){const attached=document.createElement('small');attached.className='assistant-message-attachment';attached.textContent='Фото: '+sentPhoto.name;userMessage.body.append(attached)}
+    const sentPhotos=pendingPhotos.map(entry=>entry.file);
+    const userMessage=addMessage('user',prompt||(sentPhotos.length?'Посмотри прикреплённые фотографии.':''));
+    if(sentPhotos.length){const attached=document.createElement('small');attached.className='assistant-message-attachment';attached.textContent='Фото: '+sentPhotos.map(file=>file.name).join(', ');userMessage.body.append(attached)}
     const assistantMessage=addMessage('assistant','');
     assistantMessage.item.classList.add('streaming');
     scrollBottom();
@@ -624,8 +639,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const paint=()=>{const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;const frame=()=>{if(performance.now()-lastPaint<32)paintFrame=requestAnimationFrame(frame);else paint()};paintFrame=requestAnimationFrame(frame)}};
     try{
-      const image=sentPhoto?await encodePhoto(sentPhoto):null;
-      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(image?{image}:{}),...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
+      const images=sentPhotos.length?await Promise.all(sentPhotos.map(encodePhoto)):[];
+      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(images.length?{images}:{}),...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
       if(!response.body)throw Error('Браузер не поддерживает потоковый ответ');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
