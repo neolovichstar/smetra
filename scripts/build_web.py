@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -62,6 +63,37 @@ def embed_public_styles():
     print(f"Public landing CSS: {len(css.encode('utf-8'))} bytes in HTML, CSP hash verified")
 
 
+PARTNER_SITE_BRANCH = "feat/partner-platform-foundation-20261026"
+PARTNER_STATIC_FILES = frozenset({
+    "index.html", "app.html", "docs.html",
+    "partner-console.html", "partner-landing.html", "partner-docs.html",
+    "partner-console.js", "partner-docs.js", "partner-docs.md", "partner-sdk.js",
+    "ui/partner-console.css", "ui/partner-landing.css",
+    "vendor/markdown-it-15.0.2.min.js",
+    "favicon.ico", "favicon.png",
+})
+
+
+def build_partner_bundle():
+    """Physically isolate the feature-branch partner host from consumer static pages.
+
+    Host rewrites by themselves are insufficient: Vercel may resolve index.html
+    before a conditional route. Remove the product's static files entirely.
+    """
+    if os.environ.get("VERCEL_GIT_COMMIT_REF") != PARTNER_SITE_BRANCH:
+        raise RuntimeError("Refusing partner bundle on an unintended Git branch")
+    (DIST / "index.html").write_bytes((WEB / "partner-landing.html").read_bytes())
+    (DIST / "app.html").write_bytes((WEB / "partner-console.html").read_bytes())
+    (DIST / "docs.html").write_bytes((WEB / "partner-docs.html").read_bytes())
+    for asset in list(DIST.rglob("*")):
+        if asset.is_file() and asset.relative_to(DIST).as_posix() not in PARTNER_STATIC_FILES:
+            asset.unlink()
+    for folder in sorted((p for p in DIST.rglob("*") if p.is_dir()), reverse=True):
+        if not any(folder.iterdir()):
+            folder.rmdir()
+    print("Partner-only build: landing at /, partner login at /app, API docs at /docs")
+
+
 def build():
     for source in WEB.glob("*.js"):
         subprocess.run(["node", "--check", str(source)], check=True)
@@ -78,6 +110,8 @@ def build():
     shutil.rmtree(DIST, ignore_errors=True)
     shutil.copytree(WEB, DIST)
     embed_public_styles()
+    if os.environ.get("SMETRA_PARTNER_SITE") == "1":
+        build_partner_bundle()
     manifest = {
         str(p.relative_to(DIST)).replace("\\", "/"): hashlib.sha256(
             p.read_bytes()
