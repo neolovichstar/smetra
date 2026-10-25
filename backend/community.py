@@ -557,7 +557,7 @@ def _parse_support_reply(raw):
 
 
 def _support_completion(payload, timeout):
-    from backend.model_transport import FREE_ROUTER, open_completion
+    from backend.model_transport import FREE_ROUTER
 
     def call(body):
         request = urllib.request.Request(
@@ -571,7 +571,9 @@ def _support_completion(payload, timeout):
             },
             method="POST",
         )
-        with open_completion(request, timeout) as response:
+        # Support has its own bounded JSON-mode/free-router retry. Do not call
+        # open_completion here: its retry would multiply support requests.
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read(500_000).decode("utf-8"))
         return data.get("choices", [{}])[0].get("message", {}).get("content", "")
 
