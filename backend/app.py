@@ -504,9 +504,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # Never expose main customer routes through the partner hostname.
             console_host = self.headers.get("Host", "").split(":")[0].lower()
             if console_host == "console.smetra.online":
-                if method == "GET" and path in ("/", "/docs", "/partner-docs.html", "/partner-docs.md", "/partner-docs.js", "/partner-console.js", "/partner-sdk.js", "/ui/partner-console.css", "/vendor/markdown-it-15.0.2.min.js"):
-                    return self.static("/partner-console" if path == "/" else "/partner-docs" if path == "/docs" else path)
-                if not (path.startswith("/api/partners/console/") or path.startswith("/api/partners/v1/console/")):
+                site_assets = {
+                    "/", "/app", "/docs",
+                    "/partner-console.js", "/partner-docs.js", "/partner-docs.md",
+                    "/partner-sdk.js", "/ui/partner-console.css", "/ui/partner-landing.css",
+                    "/vendor/markdown-it-15.0.2.min.js", "/favicon.ico", "/favicon.png",
+                }
+                if method == "GET" and path in site_assets:
+                    asset = {"/": "/partner-landing", "/app": "/partner-console",
+                             "/docs": "/partner-docs"}.get(path, path)
+                    return self.static(asset)
+                if not (path.startswith("/api/partners/console/") or
+                        path.startswith("/api/partners/v1/console/")):
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
@@ -584,6 +593,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("SELECT 1")
             return self.send_json(200, {"ok": True})
         public = {
+            "/partner-landing": ("partner-landing.html", "text/html"),
             "/partner-console": ("partner-console.html", "text/html"),
             "/partner-docs": ("partner-docs.html", "text/html"),
             "/partner-docs.html": ("partner-docs.html", "text/html"),
