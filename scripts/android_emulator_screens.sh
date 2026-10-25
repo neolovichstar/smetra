@@ -7,6 +7,9 @@ APK=apps/mobile/app/build/outputs/apk/debug/app-debug.apk
 PACKAGE=ru.smetra.mobile
 mkdir -p "$OUT"
 adb wait-for-device
+# Keep a device log next to the screenshots; it explains crashes and WebView errors.
+adb logcat -c || true
+adb logcat -v time '*:W' > "$OUT/logcat.txt" 2>&1 &
 adb install -r "$APK"
 adb shell settings put system screen_off_timeout 1800000 || true
 # A clean, fixed status bar (demo mode) so screenshots do not show CI noise.
