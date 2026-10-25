@@ -1254,9 +1254,20 @@ def route(service, method, parts, data):
             "AND status='applied' ORDER BY created_at DESC LIMIT 20", (service.wid, service.user["id"]),
         ):
             result = json.loads(row["result"])
-            if result.get("undoable") and result.get("undo_until", 0) >= stamp():
-                recent.append({"id": row["id"], "summary": row["summary"], "undo_until": result["undo_until"],
-                               "document_id": result.get("result", {}).get("document", {}).get("id")})
+            applied = result.get("result") or {}
+            quote = applied.get("quote") if isinstance(applied, dict) else None
+            quote_id = quote.get("id") if isinstance(quote, dict) else None
+            undoable = bool(result.get("undoable") and result.get("undo_until", 0) >= stamp())
+            # Creation cannot be undone, but must remain discoverable after
+            # reopening the assistant instead of disappearing on refresh.
+            if undoable or quote_id:
+                entry = {"id": row["id"], "summary": row["summary"]}
+                if quote_id:
+                    entry["quote_id"] = quote_id
+                if undoable:
+                    entry["undo_until"] = result["undo_until"]
+                    entry["document_id"] = applied.get("document", {}).get("id")
+                recent.append(entry)
         from backend.attachments import maximum_upload
 
         return 200, {
