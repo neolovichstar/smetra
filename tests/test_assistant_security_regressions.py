@@ -91,6 +91,29 @@ class AssistantSecurityRegressions(unittest.TestCase):
                     code, _ = self.call("/assistant/" + endpoint, method, {"id": "unknown"}, owner)
                     self.assertEqual(code, 405)
 
+    def test_interactive_session_revoked_midflight_cannot_store_answer(self):
+        owner, user_id = self.account("chat-midflight-revoke")
+
+        def revoke(_messages):
+            with self.mod.db() as con:
+                con.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+            return {"content": "Закрытые данные"}
+
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-only"), patch(
+            "backend.assistant.query_model", side_effect=revoke,
+        ):
+            status, _ = self.call("/assistant/chat", "POST", {"text": "Проверь"}, owner)
+        self.assertEqual(status, 403)
+        with self.mod.db() as con:
+            messages = con.execute(
+                "SELECT count(*) FROM assistant_messages WHERE user_id=?", (user_id,),
+            ).fetchone()[0]
+            actions = con.execute(
+                "SELECT count(*) FROM assistant_actions WHERE user_id=?", (user_id,),
+            ).fetchone()[0]
+        self.assertEqual(messages, 0)
+        self.assertEqual(actions, 0)
+
     def test_background_session_revocation_during_provider_call_blocks_commit(self):
         owner, user_id = self.account("job-midflight-revocation")
         with patch.dict(os.environ, ASSISTANT_WORKER_SECRET=SECRET, OPENROUTER_API_KEY="test-only"):
