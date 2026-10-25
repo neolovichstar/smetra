@@ -380,6 +380,7 @@ def migrate(con):
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     con.executescript((Path(__file__).parent / "migrations" / "027_ecosystem_plans.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "028_object_chats.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "034_partner_platform.sql").read_text(encoding="utf-8"))
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
