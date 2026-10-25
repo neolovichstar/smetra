@@ -65,7 +65,7 @@ jobs:
           SMETRA_ORIGIN: http://10.0.2.2:8090
         with:
           api-level: 34
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_6
           ram-size: 2048M
