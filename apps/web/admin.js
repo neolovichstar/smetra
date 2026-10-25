@@ -1,8 +1,7 @@
 /* Owner console: compact, task-oriented, and deliberately separate from the customer workspace. */
 (() => {
   const state = {section:'users', search:'', status:'all', offset:0, support:'open', overview:null, users:[], total:0, request:0};
-  const actionNames = {block:'Заблокировать', unblock:'Разблокировать', grant:'Выдать Про на 31 день', revoke:'Отозвать Про'};
-  const auditNames = {'admin.block':'Блокировка','admin.unblock':'Разблокировка','admin.grant':'Доступ Про выдан','admin.revoke':'Доступ Про отозван','admin.support.open':'Обращение открыто','admin.support.closed':'Обращение закрыто'};
+  const auditNames = {'admin.block':'Блокировка','admin.unblock':'Разблокировка','admin.grant':'Доступ Про выдан','admin.revoke':'Доступ Про отозван','admin.tokens':'Изменение токенов','admin.sessions_revoke':'Сеансы завершены','admin.role.admin':'Выданы права администратора','admin.role.user':'Сняты права администратора','admin.set_plan.free':'Тариф: Старт','admin.set_plan.pro_solo':'Тариф: PRO Solo','admin.set_plan.pro_plus':'Тариф: PRO Plus','admin.set_plan.team':'Тариф: Team','admin.support.open':'Обращение открыто','admin.support.closed':'Обращение закрыто'};
   const paymentNames = {pending:'Ожидает',succeeded:'Оплачен',canceled:'Отменён',refunded:'Возврат'};
   const time = seconds => seconds ? date(seconds) : '—';
   const label = value => escapeHtml(String(value ?? ''));
@@ -30,7 +29,7 @@
         <button data-admin-section="payments" type="button">Платежи</button>
         <button data-admin-section="audit" type="button">Журнал</button>
       </nav><section id="admin-section" class="admin-section" aria-live="polite"></section>
-      <dialog id="admin-dialog" class="admin-dialog" aria-labelledby="admin-dialog-title"></dialog>`;
+`;
   }
 
   function userRows() {
@@ -99,6 +98,8 @@
   function renderSection() {
     const target = document.querySelector('#admin-section');
     if (!target) return;
+    state.userId = null;
+    document.querySelector('#content')?.classList.remove('is-admin-user');
     document.querySelectorAll('[data-admin-section]').forEach(button=>{
       const active = button.dataset.adminSection===state.section;
       button.classList.toggle('active',active);
@@ -131,33 +132,124 @@
       <h3>Экономика · 30 дней</h3><div class="admin-growth-funnel">${[['Выручка',data.economics.revenue_kopecks],['AI',data.economics.ai_cost_kopecks],['Комиссии',data.economics.payment_fees_kopecks],['Инфраструктура',data.economics.infrastructure_kopecks],['Хранение',data.economics.storage_kopecks],['Расчётный остаток',data.economics.gross_margin_kopecks]].map(([name,value])=>`<div><span>${name}</span><strong>${data.economics.costs_configured?money(value):name==='Выручка'?money(value):'—'}</strong></div>`).join('')}</div><p class="admin-footnote">${data.economics.costs_configured?'Расходы рассчитаны по заданным оператором ставкам. Это оценка, а не бухгалтерский отчёт.':'Для расчёта прибыли задайте ставки AI, комиссии, хранение и инфраструктуру в серверных переменных. Нулевой тариф API не означает отсутствие остальных расходов.'}</p><h3>Экономика пользователей</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Пользователь</th><th>Выручка</th><th>AI</th><th>Комиссии</th></tr></thead><tbody>${data.unit_users.map(p=>`<tr><td>${label(p.name||p.id)}</td><td>${money(p.revenue_kopecks)}</td><td>${data.economics.costs_configured?money(p.ai_cost_kopecks):'—'}</td><td>${data.economics.costs_configured?money(p.payment_fees_kopecks):'—'}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
-  function manage(id) {
-    const selected = state.users.find(item=>item.id===id);
-    if (!selected) return;
-    const dialog = document.querySelector('#admin-dialog');
-    const activePro = selected.entitlement_until > Date.now()/1000;
-    const actions = [selected.blocked?'unblock':'block',activePro?'revoke':'grant'];
-    dialog.innerHTML = `<div class="admin-dialog-top"><span class="admin-section-index">УПРАВЛЕНИЕ ДОСТУПОМ</span><button type="button" data-dialog-close aria-label="Закрыть">×</button></div><h2 id="admin-dialog-title">${label(selected.name||selected.email)}</h2><p class="admin-dialog-email">${label(selected.email)}</p>
-      <div class="admin-dialog-facts"><div><span>Статус</span><strong>${selected.blocked?'Заблокирован':'Активен'}</strong></div><div><span>Тариф</span><strong>${activePro?'Про до '+time(selected.entitlement_until):'Старт'}</strong></div></div>
-      <label for="admin-reason">Причина изменения</label><textarea id="admin-reason" maxlength="200" rows="2" placeholder="Кратко для журнала действий" required></textarea><p class="admin-dialog-hint">Действие сохранится в журнале. Блокировка завершит все сеансы пользователя.</p>
-      <div class="admin-dialog-actions">${actions.map(action=>`<button type="button" class="${action==='block'||action==='revoke'?'danger':''}" data-admin-action="${action}" ${action==='block'&&selected.id===user.id?'disabled title="Нельзя заблокировать себя"':''}>${actionNames[action]}</button>`).join('')}</div><p id="admin-dialog-error" role="alert"></p>`;
-    dialog.querySelector('[data-dialog-close]').onclick=()=>dialog.close();
-    dialog.querySelectorAll('[data-admin-action]').forEach(button=>button.onclick=async()=>{
-      const reason=dialog.querySelector('#admin-reason').value.trim();
-      if (!reason) {dialog.querySelector('#admin-dialog-error').textContent='Укажите причину изменения';dialog.querySelector('#admin-reason').focus();return;}
-      dialog.querySelectorAll('button').forEach(item=>item.disabled=true);
+  const tokenCount = value => {
+    const n = Number(value || 0), abs = Math.abs(n);
+    if (abs >= 1e6) return (n/1e6).toLocaleString('ru-RU',{maximumFractionDigits:2})+' млн';
+    if (abs >= 1e4) return (n/1e3).toLocaleString('ru-RU',{maximumFractionDigits:1})+' тыс.';
+    return count(n);
+  };
+  const ledgerNames = {assistant:'Ответ ассистента',admin_adjust:'Изменение администратором',ad_reward:'Награда за видео',legacy_purchase_bonus:'Бонус покупки',legacy_ad_reward:'Бонус за видео',refund_revoke:'Возврат платежа'};
+  const icon = (name, size=16) => window.SmetraIcons ? window.SmetraIcons.svg(name, size) : '';
+
+  function userPage(d) {
+    const u = d.user, t = d.tokens;
+    const usedShare = t.monthly_limit ? Math.min(100, Math.round(t.monthly_used / t.monthly_limit * 100)) : 0;
+    const personal = d.workspaces.find(w=>w.personal) || d.workspaces[0];
+    const planOf = w => { const active = w.tier!=='starter' && w.entitlement_until > Date.now()/1000; return active ? `${label(d.plans[w.plan]||w.plan)} · до ${time(w.entitlement_until)}` : 'Старт'; };
+    return `<div class="admin-user" data-admin-user="${label(u.id)}">
+      <button type="button" class="admin-back" data-admin-back>${icon('arrow-left')}<span>Все пользователи</span></button>
+      <header class="admin-user-head">
+        <span class="admin-avatar admin-avatar-lg" aria-hidden="true">${label((u.name||u.email||'?').slice(0,1).toUpperCase())}</span>
+        <div><h2>${label(u.name||'Без имени')}</h2><p>${label(u.email)} · с ${time(u.created_at)}</p>
+          <div class="admin-user-badges"><span class="admin-state ${u.blocked?'admin-state-red':'admin-state-green'}"><i></i>${u.blocked?'Заблокирован':'Активен'}</span>${u.role==='admin'?'<span class="admin-plan">Администратор</span>':''}<span class="admin-plan ${personal&&personal.tier!=='starter'?'is-pro':''}">${personal?planOf(personal):'Старт'}</span></div></div>
+        <dl class="admin-user-counts"><div><dt>Сметы</dt><dd>${count(d.counts.quotes)}</dd></div><div><dt>Сеансы</dt><dd>${count(d.counts.sessions)}</dd></div><div><dt>Обращения</dt><dd>${count(d.counts.support)}</dd></div></dl>
+      </header>
+      <div class="admin-user-grid">
+        <section class="admin-card" aria-labelledby="admin-plan-title">
+          <h3 id="admin-plan-title">Подписка</h3>
+          <ul class="admin-list">${d.workspaces.map(w=>`<li><span><strong>${label(w.name)}</strong><small>${w.personal?'Личное пространство · ':''}${count(w.members)} участн.</small></span><span>${planOf(w)}</span></li>`).join('')||'<li>Нет пространств</li>'}</ul>
+          <form class="admin-form" id="admin-plan-form">
+            <label>Пространство<select name="workspace_id">${d.workspaces.map(w=>`<option value="${label(w.id)}" ${w.personal?'selected':''}>${label(w.name)}</option>`).join('')}</select></label>
+            <label>Тариф<select name="plan">${Object.entries(d.plans).map(([code,name])=>`<option value="${code}" ${(personal&&personal.tier!=='starter'?personal.plan:'pro_solo')===code?'selected':''}>${label(name)}</option>`).join('')}</select></label>
+            <label>Срок, дней<input name="days" type="number" min="1" max="3660" value="30" inputmode="numeric"></label>
+            <div class="admin-chips" role="group" aria-label="Быстрый срок">${[30,90,365].map(n=>`<button type="button" data-days="${n}">${n} дн.</button>`).join('')}</div>
+            <label class="admin-form-wide">Причина<input name="reason" maxlength="200" placeholder="Для журнала действий"></label>
+            <button class="btn primary" type="submit">Применить тариф</button>
+          </form>
+        </section>
+        <section class="admin-card" aria-labelledby="admin-tokens-title">
+          <h3 id="admin-tokens-title">Токены ассистента</h3>
+          <div class="admin-token-total"><strong>${tokenCount(t.remaining)}</strong><span>доступно сейчас</span></div>
+          <div class="admin-meter" role="img" aria-label="Использовано ${usedShare}% месячного лимита"><span data-share="${usedShare}"></span></div>
+          <dl class="admin-facts"><div><dt>Месяц</dt><dd>${tokenCount(t.monthly_used)} из ${tokenCount(t.monthly_limit)}</dd></div><div><dt>Кошелёк</dt><dd>${tokenCount(t.wallet)}</dd></div><div><dt>Сброс</dt><dd>${time(t.resets_at)}</dd></div></dl>
+          <form class="admin-form" id="admin-tokens-form">
+            <label>Изменить кошелёк<input name="delta" type="number" step="1000" placeholder="+100000 или −5000" inputmode="numeric" required></label>
+            <div class="admin-chips" role="group" aria-label="Быстрое пополнение">${[50000,250000,1000000].map(n=>`<button type="button" data-delta="${n}">+${tokenCount(n)}</button>`).join('')}</div>
+            <label class="admin-form-wide">Причина<input name="reason" maxlength="200" placeholder="Компенсация, бонус…"></label>
+            <button class="btn primary" type="submit">Сохранить баланс</button>
+          </form>
+          <h4>История</h4>
+          <ul class="admin-list admin-ledger">${d.ledger.length?d.ledger.map(l=>`<li><span><strong>${label(ledgerNames[l.reason]||l.reason)}</strong><small>${time(l.created_at)}${l.actor_email?' · '+label(l.actor_email):''}${l.note?' · '+label(l.note):''}</small></span><span class="${l.delta<0?'is-minus':'is-plus'}">${l.delta>0?'+':''}${tokenCount(l.delta)}</span></li>`).join(''):'<li class="admin-muted">Операций пока нет</li>'}</ul>
+        </section>
+        <section class="admin-card" aria-labelledby="admin-access-title">
+          <h3 id="admin-access-title">Доступ</h3>
+          <div class="admin-access-actions">
+            <button type="button" class="btn ${u.blocked?'':'danger'}" data-user-action="${u.blocked?'unblock':'block'}" ${!u.blocked&&u.id===user.id?'disabled title="Нельзя заблокировать себя"':''}>${icon(u.blocked?'check':'x')}<span>${u.blocked?'Разблокировать':'Заблокировать'}</span></button>
+            <button type="button" class="btn" data-user-action="sessions_revoke">${icon('arrow-right')}<span>Завершить все сеансы</span></button>
+            <button type="button" class="btn" data-user-action="role" data-role="${u.role==='admin'?'user':'admin'}" ${u.id===user.id?'disabled title="Свою роль менять нельзя"':''}>${icon('key')}<span>${u.role==='admin'?'Снять права администратора':'Сделать администратором'}</span></button>
+          </div>
+          <p class="admin-footnote">Блокировка сразу завершает все сеансы. Каждое действие записывается в журнал вместе с причиной.</p>
+          <h4>Платежи</h4>
+          <ul class="admin-list">${d.payments.length?d.payments.map(p=>`<li><span><strong>${rub(p.amount_kopecks)}</strong><small>${time(p.created_at)} · ${label(p.plan)}</small></span><span class="admin-state ${p.refunded?'admin-state-red':p.status==='succeeded'?'admin-state-green':''}"><i></i>${p.refunded?'Возврат':label(paymentNames[p.status]||p.status)}</span></li>`).join(''):'<li class="admin-muted">Платежей нет</li>'}</ul>
+          <h4>Журнал по пользователю</h4>
+          <ul class="admin-list">${d.audit.length?d.audit.map(a=>`<li><span><strong>${label(auditNames[a.action]||a.action)}</strong><small>${time(a.created_at)} · ${label(a.actor_email||'Система')}${a.detail?' · '+label(a.detail):''}</small></span></li>`).join(''):'<li class="admin-muted">Записей нет</li>'}</ul>
+        </section>
+      </div>
+    </div>`;
+  }
+
+  async function openUser(id) {
+    const target = document.querySelector('#admin-section');
+    if (!target) return;
+    state.userId = id;
+    // A full page of its own: the platform summary steps aside.
+    document.querySelector('#content')?.classList.add('is-admin-user');
+    target.innerHTML = '<p class="admin-loading">Загружаем аккаунт…</p>';
+    window.scrollTo?.({top:0});
+    target.closest('#content')?.scrollTo?.({top:0});
+    let data;
+    try { data = await api('/admin/users/'+encodeURIComponent(id)); }
+    catch (error) { if (state.userId===id) target.innerHTML = `<p class="admin-error">${label(error.message)}</p>`; return; }
+    if (state.userId!==id || tab!=='admin') return;
+    target.innerHTML = userPage(data);
+    const root = target.querySelector('.admin-user');
+    root.querySelectorAll('[data-share]').forEach(bar=>bar.style.setProperty('--share', bar.dataset.share+'%'));
+    const run = async (body, button) => {
+      if (button) button.disabled = true;
       try {
-        await api('/admin/users/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({action:button.dataset.adminAction,reason})});
-        await loadUsers();
-        dialog.close();notify('Изменение сохранено');
-        state.overview=await api('/admin/overview');
-        await window.SmetraAdmin(state.overview);
-      } catch(error) {
-        dialog.querySelector('#admin-dialog-error').textContent=error.message;
-        dialog.querySelectorAll('button').forEach(item=>item.disabled=item.dataset.adminAction==='block'&&selected.id===user.id);
-      }
+        await api('/admin/users/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(body)});
+        notify('Изменение сохранено');
+        await openUser(id);
+      } catch (error) { notify(error.message); if (button?.isConnected) button.disabled = false; }
+    };
+    root.querySelector('[data-admin-back]').onclick = () => { state.userId = null; renderSection(); };
+    root.querySelectorAll('[data-days]').forEach(b=>b.onclick=()=>{root.querySelector('#admin-plan-form [name=days]').value=b.dataset.days});
+    root.querySelectorAll('[data-delta]').forEach(b=>b.onclick=()=>{root.querySelector('#admin-tokens-form [name=delta]').value=b.dataset.delta});
+    const planForm = root.querySelector('#admin-plan-form'), field = (form, name) => form.querySelector('[name='+name+']');
+    const syncDays = () => { field(planForm,'days').disabled = field(planForm,'plan').value==='free'; };
+    field(planForm,'plan').onchange = syncDays; syncDays();
+    planForm.onsubmit = async event => {
+      event.preventDefault();
+      const plan = field(planForm,'plan').value, days = Number(field(planForm,'days').value);
+      const name = data.plans[plan];
+      if (!await window.SmetraDialog.confirm({title:'Установить тариф?', message: plan==='free' ? 'Пространство перейдёт на «Старт».' : `${name} на ${count(days)} дн. с сегодняшнего дня.`, confirmLabel:'Применить'})) return;
+      run({action:'set_plan', workspace_id:field(planForm,'workspace_id').value, plan, days: plan==='free'?undefined:days, reason:field(planForm,'reason').value.trim()}, planForm.querySelector('[type=submit]'));
+    };
+    const tokenForm = root.querySelector('#admin-tokens-form');
+    tokenForm.onsubmit = async event => {
+      event.preventDefault();
+      const delta = Math.trunc(Number(field(tokenForm,'delta').value));
+      if (!delta) { notify('Укажите число токенов'); return; }
+      if (!await window.SmetraDialog.confirm({title: delta>0?'Начислить токены?':'Списать токены?', message:`${delta>0?'+':''}${count(delta)} токенов в кошелёк пользователя.`, confirmLabel:'Сохранить', danger: delta<0})) return;
+      run({action:'tokens', delta, reason:field(tokenForm,'reason').value.trim()}, tokenForm.querySelector('[type=submit]'));
+    };
+    root.querySelectorAll('[data-user-action]').forEach(button => button.onclick = async () => {
+      const action = button.dataset.userAction;
+      const titles = {block:'Заблокировать пользователя?', unblock:'Разблокировать пользователя?', sessions_revoke:'Завершить все сеансы?', role: button.dataset.role==='admin' ? 'Выдать права администратора?' : 'Снять права администратора?'};
+      const reason = await window.SmetraDialog.prompt({title:titles[action], message:'Укажите причину — она попадёт в журнал действий.', label:'Причина', confirmLabel:'Подтвердить', danger: action==='block'});
+      if (reason === null || reason === undefined) return;
+      run({action, role: button.dataset.role, reason: String(reason).trim()}, button);
     });
-    dialog.showModal();dialog.querySelector('#admin-reason').focus();
   }
 
   window.SmetraAdmin = async function (overview=null) {
@@ -179,7 +271,7 @@
     };
     content.querySelector('#admin-section').onclick=async event=>{
       const manageButton=event.target.closest('[data-admin-manage]');
-      if(manageButton){manage(manageButton.dataset.adminManage);return;}
+      if(manageButton){openUser(manageButton.dataset.adminManage);return;}
       const page=event.target.closest('[data-admin-page]');
       if(page){state.offset+=page.dataset.adminPage==='next'?25:-25;loadUsers();return;}
       const filter=event.target.closest('[data-admin-support-filter]');
