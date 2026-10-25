@@ -1,0 +1,98 @@
+{
+  "generated_at": "2026-10-25T13:56:17.795Z",
+  "screens": [
+    {
+      "screen": "01-dashboard",
+      "title": "Главная",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": [
+        {
+          "rule": "tap-target<32px",
+          "detail": "button.dashboard-quote-name, button.dashboard-quote-name",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "screen": "02-quotes",
+      "title": "Сметы",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "03-assistant",
+      "title": "ИИ-ассистент",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": [
+        {
+          "rule": "tap-target<32px",
+          "detail": "button#assistant-background",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "screen": "04-construction",
+      "title": "Объекты",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "05-object",
+      "title": "Помещения и объёмы",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "06-calculators",
+      "title": "Калькуляторы",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "07-projects",
+      "title": "Заказы и этапы",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "08-clients",
+      "title": "Клиенты",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "09-finance",
+      "title": "Деньги",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    },
+    {
+      "screen": "10-tokens",
+      "title": "Токены ИИ",
+      "viewport": "412x915",
+      "dpr": 2.625,
+      "theme": "dark",
+      "issues": []
+    }
+  ],
+  "console_errors": []
+}

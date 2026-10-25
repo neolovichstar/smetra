@@ -1,0 +1,347 @@
+{
+  "generated_at": "2026-10-25T13:57:51+00:00",
+  "generator": "scripts/rustore_promo.py",
+  "capture": "CDP (browser)",
+  "rule": "Screens are unedited captures of the debug APK against the isolated fixture; promos only scale and frame them.",
+  "text_contrast": {
+    "headline": 16.93,
+    "subline": 8.29
+  },
+  "metrics": {
+    "metrics-web": {
+      "origin": "http://localhost:8091",
+      "capture": "CDP (browser)",
+      "cabinet_ready_ms": 477,
+      "dom_content_loaded_ms": 268,
+      "load_ms": 275,
+      "transfer_kb": 1157,
+      "screens": [
+        {
+          "id": "01-dashboard",
+          "route": "/app#dashboard",
+          "render_ms": 1668
+        },
+        {
+          "id": "02-quotes",
+          "route": "/app#quotes",
+          "render_ms": 1668
+        },
+        {
+          "id": "03-assistant",
+          "route": "/app#assistant",
+          "render_ms": 1836
+        },
+        {
+          "id": "04-construction",
+          "route": "/app#construction",
+          "render_ms": 1818
+        },
+        {
+          "id": "05-object",
+          "route": "/app#construction",
+          "render_ms": 2382
+        },
+        {
+          "id": "06-calculators",
+          "route": "/app#calculators",
+          "render_ms": 1682
+        },
+        {
+          "id": "07-projects",
+          "route": "/app#projects",
+          "render_ms": 1667
+        },
+        {
+          "id": "08-clients",
+          "route": "/app#clients",
+          "render_ms": 1667
+        },
+        {
+          "id": "09-finance",
+          "route": "/app#finance",
+          "render_ms": 1666
+        },
+        {
+          "id": "10-tokens",
+          "route": "/app#billing",
+          "render_ms": 2225
+        }
+      ]
+    },
+    "metrics-native": {
+      "device": "Android SDK built for x86_64",
+      "android": "14",
+      "screen": "1080x2400",
+      "density": "420",
+      "webview": "",
+      "cold_start_ms": 1812,
+      "warm_start_ms": 156,
+      "total_pss_kb": 104093,
+      "apk_bytes": 14929476
+    }
+  },
+  "images": [
+    {
+      "id": "01-dashboard",
+      "route": "/app#dashboard",
+      "headline": "Сметы и деньги на одном экране",
+      "subline": "Проекты, оплаты и задачи — всегда под рукой",
+      "source": "raw/01-dashboard.png",
+      "source_sha256": "e4afbc3cbaf721074eb5ad6ab1c59d65a116cf66d79f9f26ef8587b83f70d28c",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/01-dashboard.png",
+      "promo_sha256": "3ca3d460047ad6deec05b1224b4e8293afcbde25c9724f2f31671985437d8649",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": [
+        {
+          "rule": "tap-target<32px",
+          "detail": "button.dashboard-quote-name, button.dashboard-quote-name",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "02-quotes",
+      "route": "/app#quotes",
+      "headline": "Сметы, которые клиент согласует",
+      "subline": "Ссылка для клиента, версии и статусы",
+      "source": "raw/02-quotes.png",
+      "source_sha256": "ff42f38a7bfccda62cd5efe5e9d84f3d9cb0cf46ce5324913a91ccb8751ea59f",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/02-quotes.png",
+      "promo_sha256": "c6a635f7de34c23570449b405e8c770f7ed2bac7badbf82fd1dc6e0715d2e406",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "03-assistant",
+      "route": "/app#assistant",
+      "headline": "ИИ-ассистент считает за вас",
+      "subline": "Спросите голосом — получите объёмы и цены",
+      "source": "raw/03-assistant.png",
+      "source_sha256": "f4af95be580d565085e4af4a563eb144505fa5f2a12748d07b4ab6d4455ef233",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/03-assistant.png",
+      "promo_sha256": "182d32f7056fec3dd5516814a6e0f9c58a7e1d358a6f4dd87f92962efe96c5ec",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": [
+        {
+          "rule": "tap-target<32px",
+          "detail": "button#assistant-background",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "04-construction",
+      "route": "/app#construction",
+      "headline": "Объекты и замеры в телефоне",
+      "subline": "Помещения, площади и объёмы работ",
+      "source": "raw/04-construction.png",
+      "source_sha256": "f0611a0ddfff7d97d29e62762c54d7aad79aec8a58374e2ba4aae130e05471b1",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/04-construction.png",
+      "promo_sha256": "d8e4df63927a8f86b975a3a4b9600d8fadc4c429fe5a69d07ea250116ca8e306",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "05-object",
+      "route": "/app#construction",
+      "headline": "Размеры комнат — готовая смета",
+      "subline": "Формулы сами считают площади и материалы",
+      "source": "raw/05-object.png",
+      "source_sha256": "2988c6a3f4c0e9e9ee390ca34d2b1679f4073f437f89618fef917b345c5009ae",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/05-object.png",
+      "promo_sha256": "4bc0f5b4cd1d3808fcdcab1519ddd28f66ef32117bad5fdb94b8bc2bb25a7538",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "06-calculators",
+      "route": "/app#calculators",
+      "headline": "Калькуляторы материалов",
+      "subline": "Плитка, ламинат, краска — сразу с запасом",
+      "source": "raw/06-calculators.png",
+      "source_sha256": "168ac2da4492a754c7da4d2d71348993a34964356eff8733db593ce3a3a4180c",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/06-calculators.png",
+      "promo_sha256": "1e095dc06647f0f582644f9992ed8e8da923805ac03ddaaa1d63f228d4f9b42f",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "07-projects",
+      "route": "/app#projects",
+      "headline": "Заказы по этапам",
+      "subline": "Согласованная смета становится проектом",
+      "source": "raw/07-projects.png",
+      "source_sha256": "fa2fa3291a86d5b9ff0db69cdedb5534148755ecd7b7058db40a4a426810ac63",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/07-projects.png",
+      "promo_sha256": "ac50f0c5f79e5c89d127f4e5e23ca98f753112c477dd96434b435371a59e0960",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 1,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "08-clients",
+      "route": "/app#clients",
+      "headline": "Клиенты и вся история работ",
+      "subline": "Контакты, сметы и файлы в одной карточке",
+      "source": "raw/08-clients.png",
+      "source_sha256": "782171e54218c27374bcd841f5788b7a964257f00fbf37f1544ec7670d484317",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/08-clients.png",
+      "promo_sha256": "a08fa7c5abd4309f434f4d609c3e30868b24c4442c0ae99970fccd61af922db2",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "09-finance",
+      "route": "/app#finance",
+      "headline": "Деньги под контролем",
+      "subline": "Поступления, расходы и ожидаемые оплаты",
+      "source": "raw/09-finance.png",
+      "source_sha256": "d317f03525abf2b81963e17ee111fe6dfdefad60e8fccc36dcc3fbd6847d0542",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/09-finance.png",
+      "promo_sha256": "50fb11a44bc9686ad09347693bf26fbe3e18f16385220f196494fbd47b3ceec7",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 1,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    },
+    {
+      "id": "10-tokens",
+      "route": "/app#billing",
+      "headline": "Токены для ИИ без подписки",
+      "subline": "Пакеты и своё количество — не сгорают",
+      "source": "raw/10-tokens.png",
+      "source_sha256": "204bebf35520645f2b91b24d8a1425616a3815c0cbd1cdb8ae4e20c647247d81",
+      "source_size": [
+        1082,
+        2402
+      ],
+      "promo": "promo/10-tokens.png",
+      "promo_sha256": "8be7785ec27d023f93e9277c85d2cce99b2383ad7d5595a875a426a1eb4955c4",
+      "size": [
+        1080,
+        1920
+      ],
+      "layout": {
+        "title_lines": 2,
+        "sub_lines": 1,
+        "screen_visible": 0.79
+      },
+      "promo_checks": [],
+      "screen_issues": []
+    }
+  ]
+}

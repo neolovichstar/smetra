@@ -1,0 +1,60 @@
+{
+  "origin": "http://localhost:8091",
+  "capture": "CDP (browser)",
+  "cabinet_ready_ms": 477,
+  "dom_content_loaded_ms": 268,
+  "load_ms": 275,
+  "transfer_kb": 1157,
+  "screens": [
+    {
+      "id": "01-dashboard",
+      "route": "/app#dashboard",
+      "render_ms": 1668
+    },
+    {
+      "id": "02-quotes",
+      "route": "/app#quotes",
+      "render_ms": 1668
+    },
+    {
+      "id": "03-assistant",
+      "route": "/app#assistant",
+      "render_ms": 1836
+    },
+    {
+      "id": "04-construction",
+      "route": "/app#construction",
+      "render_ms": 1818
+    },
+    {
+      "id": "05-object",
+      "route": "/app#construction",
+      "render_ms": 2382
+    },
+    {
+      "id": "06-calculators",
+      "route": "/app#calculators",
+      "render_ms": 1682
+    },
+    {
+      "id": "07-projects",
+      "route": "/app#projects",
+      "render_ms": 1667
+    },
+    {
+      "id": "08-clients",
+      "route": "/app#clients",
+      "render_ms": 1667
+    },
+    {
+      "id": "09-finance",
+      "route": "/app#finance",
+      "render_ms": 1666
+    },
+    {
+      "id": "10-tokens",
+      "route": "/app#billing",
+      "render_ms": 2225
+    }
+  ]
+}

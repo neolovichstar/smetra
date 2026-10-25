@@ -1,0 +1,11 @@
+{
+  "device": "Android SDK built for x86_64",
+  "android": "14",
+  "screen": "1080x2400",
+  "density": "420",
+  "webview": "",
+  "cold_start_ms": 1812,
+  "warm_start_ms": 156,
+  "total_pss_kb": 104093,
+  "apk_bytes": 14929476
+}

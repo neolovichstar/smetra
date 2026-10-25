@@ -1,0 +1,62 @@
+[
+  {
+    "id": "01-dashboard",
+    "title": "Главная",
+    "route": "/app#dashboard",
+    "file": "raw/01-dashboard.png"
+  },
+  {
+    "id": "02-quotes",
+    "title": "Сметы",
+    "route": "/app#quotes",
+    "file": "raw/02-quotes.png"
+  },
+  {
+    "id": "03-assistant",
+    "title": "ИИ-ассистент",
+    "route": "/app#assistant",
+    "file": "raw/03-assistant.png"
+  },
+  {
+    "id": "04-construction",
+    "title": "Объекты",
+    "route": "/app#construction",
+    "file": "raw/04-construction.png"
+  },
+  {
+    "id": "05-object",
+    "title": "Помещения и объёмы",
+    "route": "/app#construction",
+    "file": "raw/05-object.png"
+  },
+  {
+    "id": "06-calculators",
+    "title": "Калькуляторы",
+    "route": "/app#calculators",
+    "file": "raw/06-calculators.png"
+  },
+  {
+    "id": "07-projects",
+    "title": "Заказы и этапы",
+    "route": "/app#projects",
+    "file": "raw/07-projects.png"
+  },
+  {
+    "id": "08-clients",
+    "title": "Клиенты",
+    "route": "/app#clients",
+    "file": "raw/08-clients.png"
+  },
+  {
+    "id": "09-finance",
+    "title": "Деньги",
+    "route": "/app#finance",
+    "file": "raw/09-finance.png"
+  },
+  {
+    "id": "10-tokens",
+    "title": "Токены ИИ",
+    "route": "/app#billing",
+    "file": "raw/10-tokens.png"
+  }
+]
