@@ -144,6 +144,8 @@ def migrate():
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
+        from backend.ai_tokens import ensure_schema as ensure_ai_tokens
+        ensure_ai_tokens(con)
 
 
 def now():
@@ -1336,38 +1338,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
                 audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
-        if path.startswith("/api/admin/users/") and method == "PATCH":
+        if path.startswith("/api/admin/users/") and method in ("GET", "PATCH"):
+            from backend import admin_users
             target = path.removeprefix("/api/admin/users/")
-            data = self.body()
-            action = data.get("action")
-            reason = data.get("reason", "")
-            if not isinstance(reason, str) or len(reason.strip()) > 200:
-                raise ApiError(400, "Некорректная причина")
-            if target == user["id"] and action == "block":
-                raise ApiError(409, "Нельзя заблокировать себя")
-            if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", target):
                 raise ApiError(404, "Пользователь не найден")
-            if action in ("block", "unblock"):
-                con.execute(
-                    "UPDATE users SET blocked=? WHERE id=?",
-                    (int(action == "block"), target),
-                )
-                if action == "block":
-                    con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
-            elif action == "grant":
-                con.execute(
-                    "UPDATE users SET plan='pro',entitlement_until=max(coalesce(entitlement_until,0),?)+? WHERE id=?",
-                    (now(), 31 * 86400, target),
-                )
-            elif action == "revoke":
-                con.execute(
-                    "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
-                    (target,),
-                )
-            else:
-                raise ApiError(400, "Неизвестное действие")
-            audit(con, user["id"], "admin." + action, target, reason.strip())
-            return self.send_json(200, {"ok": True})
+            if method == "GET":
+                return self.send_json(200, admin_users.detail(con, target))
+            self.throttle("admin-user-action:" + user["id"], 120, 60)
+            return self.send_json(200, admin_users.act(con, user, target, self.body(), audit))
         raise ApiError(404, "Маршрут не найден")
 
     def quote_view(self, r):
@@ -1591,6 +1570,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     revenue.rebuild_workspace_entitlement(con, payment["user_id"], refunded_terms["workspace_id"] if refunded_terms else None)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    from backend import ai_tokens
+                    ai_tokens.revoke_purchase_bonus(con, payment["user_id"], payment["id"])
                     event(con, payment["user_id"], "payment_refunded")
                     terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:

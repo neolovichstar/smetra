@@ -61,6 +61,7 @@ def configuration():
 
 
 def pricing(con, user):
+    from backend import ai_tokens
     experiment, variants = configuration()
     uid = user['id']
     assigned = con.execute('SELECT variant FROM pricing_assignments WHERE user_id=? AND experiment=?', (uid, experiment)).fetchone()
@@ -89,7 +90,9 @@ def pricing(con, user):
         'annual_saving_kopecks': prices['month']*12-prices['year'],
         'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
-        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000}}
+        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000,
+                   # The assistant is metered in tokens; the request counts above are kept for old clients.
+                   'ai_tokens': dict(ai_tokens.MONTHLY_TOKENS), 'request_tokens': ai_tokens.REQUEST_TOKENS}}
 
 
 def record(con, uid, name, origin='', variant='', key=None):
