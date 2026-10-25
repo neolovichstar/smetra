@@ -79,25 +79,25 @@ def quota(service):
     next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp()
     base_limit = 100 if paid else 3
-    from backend.revenue import referral_bonus
-    referral_limit = referral_bonus(service.con, service.user["id"], period)
     key = hashlib.sha256(
         f"assistant:month:{period}:{service.user['id']}".encode()
     ).hexdigest()
-    row = service.con.execute("SELECT count FROM rate_limits WHERE key=?", (key,)).fetchone()
-    used = row["count"] if row else 0
-    bonus_remaining = 0
-    bonus_used = 0
-    if paid:
-        credits = service.con.execute(
-            "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_bonus_grants WHERE user_id=? AND expires_at>? AND remaining>0",
-            (service.user["id"], stamp()),
-        ).fetchone()
-        bonus_remaining = int(credits["remaining"] or 0)
-        usage = service.con.execute(
-            "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (key,)
-        ).fetchone()
-        bonus_used = int(usage["count"] or 0) if usage else 0
+    # Read one fresh database snapshot without serial network round-trips.
+    # No cross-request cache: reservations/refunds must remain immediately visible.
+    counters = service.con.execute(
+        "SELECT coalesce((SELECT count FROM rate_limits WHERE key=?),0) AS used,"
+        "coalesce((SELECT sum(bonus) FROM referral_rewards "
+        "WHERE inviter_id=? AND rewarded_at IS NOT NULL AND period=?),0) AS referral_limit,"
+        "CASE WHEN ?=1 THEN coalesce((SELECT sum(remaining) FROM assistant_bonus_grants "
+        "WHERE user_id=? AND expires_at>? AND remaining>0),0) ELSE 0 END AS bonus_remaining,"
+        "CASE WHEN ?=1 THEN coalesce((SELECT count FROM assistant_bonus_usage WHERE quota_key=?),0) "
+        "ELSE 0 END AS bonus_used",
+        (key, service.user["id"], period, int(paid), service.user["id"], stamp(), int(paid), key),
+    ).fetchone()
+    used = int(counters["used"])
+    referral_limit = min(30, int(counters["referral_limit"]))
+    bonus_remaining = int(counters["bonus_remaining"])
+    bonus_used = int(counters["bonus_used"])
     limit = base_limit + referral_limit + bonus_remaining + bonus_used
     return {
         "plan": "pro" if paid else "free",
@@ -1012,7 +1012,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 "UPDATE assistant_conversations SET updated_at=? WHERE id=? AND workspace_id=? AND user_id=?",
                 (stamp(), conversation_id, service.wid, service.user["id"]),
             )
-    return {"answer": answer, "actions": actions, "quota": public_quota(service)}
+    return result
 
 
 class ChatStream:

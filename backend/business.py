@@ -460,6 +460,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_chat_read_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
@@ -1845,9 +1850,17 @@ class Service:
         today = business_date().isoformat()
         month = today[:7] + "-01"
         items = []
-        settings = json.loads(self.con.execute(
-            "SELECT settings FROM workspaces WHERE id=?", (self.wid,)
-        ).fetchone()[0])
+        counts = self.con.execute(
+            "SELECT (SELECT settings FROM workspaces WHERE id=?) AS settings,"
+            "(SELECT count(*) FROM projects WHERE workspace_id=? "
+            "AND status NOT IN ('completed','cancelled')) AS active_projects,"
+            "(SELECT count(*) FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' "
+            "AND p.amount_kopecks>coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
+            "WHERE x.project_id=p.id AND x.workspace_id=?),0)) AS waiting_payments,"
+            "(SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?) AS approved_this_month",
+            (self.wid, self.wid, self.wid, self.wid, self.wid, business_month_start()),
+        ).fetchone()
+        settings = json.loads(counts["settings"])
         pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
         first_stage = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
 
@@ -1865,34 +1878,38 @@ class Service:
                 )
             )
 
-        for row in self.con.execute(
+        def cards(sql, parameters):
+            # Later priority groups cannot affect the bounded eight-card result.
+            return () if len(items) >= 8 else self.con.execute(sql, parameters)
+
+        for row in cards(
             "SELECT id,name FROM leads WHERE workspace_id=? AND status=? "
             "ORDER BY created_at DESC LIMIT 5",
             (self.wid, first_stage),
         ):
             add("lead", row, "Новая заявка", "Открыть заявку", row["name"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT q.id,q.title,q.currency FROM quotes q LEFT JOIN projects p ON p.quote_id=q.id "
             "WHERE q.workspace_id=? AND q.approval_state='approved' AND p.id IS NULL "
             "ORDER BY q.approved_at DESC LIMIT 5",
             (self.wid,),
         ):
             add("quote", row, "Смета согласована", "Создать проект", row["title"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,title,currency FROM quotes WHERE workspace_id=? AND approval_state='changes_requested' "
             "ORDER BY updated_at DESC LIMIT 5",
             (self.wid,),
         ):
             add("quote", row, "Клиент запросил изменения", "Открыть смету", row["title"])
-        for row in self.con.execute("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
+        for row in cards("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
             add('quote',row,'Смета ждёт согласования','Открыть смету',row['client']+' · '+row['title'])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,name,due_date FROM tasks WHERE workspace_id=? AND status!='done' "
             "AND due_date!='' AND due_date<=? ORDER BY due_date LIMIT 5",
             (self.wid, today),
         ):
             add("task", row, "Срок задачи сегодня" if row["due_date"] == today else "Задача просрочена", "Открыть задачу", row["name"], row["due_date"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT p.id,p.name,p.currency,p.due_date,p.amount_kopecks-"
             "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
             "WHERE x.project_id=p.id AND x.workspace_id=?),0) AS remaining "
@@ -1904,14 +1921,14 @@ class Service:
             (self.wid, self.wid, today, self.wid),
         ):
             add("project", row, "Ожидается оплата", "Открыть проект", row["name"], row["due_date"], row["remaining"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,name,due_date,currency FROM projects WHERE workspace_id=? "
             "AND status NOT IN ('completed','cancelled') AND due_date=? "
             "ORDER BY updated_at DESC LIMIT 5",
             (self.wid, today),
         ):
             add("project", row, "Срок проекта сегодня", "Открыть проект", row["name"], today)
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,title,currency,view_count FROM quotes WHERE workspace_id=? "
             "AND approval_state='viewed' AND view_count>=2 "
             "ORDER BY first_viewed_at DESC LIMIT 5",
@@ -1919,20 +1936,6 @@ class Service:
         ):
             add("quote", row, "Клиент вернулся к смете", "Открыть смету", row["title"])
 
-        active = self.con.execute(
-            "SELECT count(*) FROM projects WHERE workspace_id=? AND status NOT IN ('completed','cancelled')",
-            (self.wid,),
-        ).fetchone()[0]
-        waiting = self.con.execute(
-            "SELECT count(*) FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' "
-            "AND p.amount_kopecks>coalesce((SELECT sum(x.amount_kopecks) "
-            "FROM project_payments x WHERE x.project_id=p.id AND x.workspace_id=?),0)",
-            (self.wid, self.wid),
-        ).fetchone()[0]
-        approved = self.con.execute(
-            "SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?",
-            (self.wid, business_month_start()),
-        ).fetchone()[0]
         received = {
             row["currency"]: row["amount"]
             for row in self.con.execute(
@@ -1945,9 +1948,9 @@ class Service:
         return dict(
             items=items[:8],
             summary=dict(
-                active_projects=active,
-                waiting_payments=waiting,
-                approved_this_month=approved,
+                active_projects=counts["active_projects"],
+                waiting_payments=counts["waiting_payments"],
+                approved_this_month=counts["approved_this_month"],
                 received_this_month=received,
             ),
         )
