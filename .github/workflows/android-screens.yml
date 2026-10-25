@@ -66,9 +66,10 @@ jobs:
           cores: 4
           disk-size: 6000M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -memory 4096
+          emulator-options: -no-window -gpu guest -noaudio -no-boot-anim -no-snapshot -camera-back none -memory 4096
           script: SMETRA_SESSION=$(cat data/promo-session) bash scripts/android_emulator_screens.sh
       - name: Promo images, manifest and UI critic
+        if: success()
         run: |
           python scripts/rustore_promo.py data/android-screens
           cat data/android-screens/ui-critic.md >> "$GITHUB_STEP_SUMMARY"
@@ -81,8 +82,11 @@ jobs:
             data/promo-fixture.log
           retention-days: 30
       - name: Publish screens to the android-screens branch
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        # Partial captures and logcat are published too, so failures can be diagnosed.
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
+          [ -d data/android-screens ] || exit 0
+          cp data/promo-fixture.log data/android-screens/ 2>/dev/null || true
           cd data/android-screens
           git init -q -b android-screens
           git config user.name "smetra-ci"
