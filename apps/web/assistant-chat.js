@@ -46,7 +46,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
-        <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились. Посмотреть тариф Про</a>
+        <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
     </div>
     <aside class="assistant-toolrail" aria-label="История и инструменты ассистента">
@@ -500,8 +500,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     quotaLabel.textContent=tokens?`Токены: ${short(value.remaining)} · ${value.plan==='free'?'Старт':'Про'}`:`Осталось ${value.remaining} из ${value.limit} · ${value.plan==='free'?'Старт':'Про'}`;
     quotaLabel.title=tokens?`За месяц: ${short(value.monthly_used)} из ${short(value.monthly_limit)}${value.wallet?` · на балансе ${short(value.wallet)}`:''} · обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`:`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
     quotaLabel.classList.toggle('is-low',tokens&&value.remaining<Math.max(minimum*4,(value.monthly_limit||0)*.1));
-    upgrade.classList.toggle('hidden',!empty||value.plan==='pro');
-    if(empty&&value.plan!=='pro'){upgrade.onclick=()=>sessionStorage.setItem('smetra.paywall.source','ai_limit');Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
+    upgrade.classList.toggle('hidden',!empty||(value.plan==='pro'&&!tokens));
+    if(empty&&value.plan!=='pro'){upgrade.onclick=()=>{sessionStorage.setItem('smetra.paywall.source','ai_limit');if(tokens)try{sessionStorage.setItem('smetra.billing.view','tokens')}catch{}};if(!tokens)Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
     const quotaBlocked=empty;
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});

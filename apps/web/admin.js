@@ -85,7 +85,7 @@
   function paymentsSection() {
     const rows = state.overview.payments || [];
     return `<div class="admin-section-head"><div><span class="admin-section-index">03 / ОПЛАТЫ</span><h2>Платежи</h2><p>Последние 50 операций по подписке.</p></div><span class="admin-section-count">${count(rows.length)} операций</span></div>
-      ${rows.length?`<div class="admin-table-scroll"><table class="admin-table admin-payments-table"><thead><tr><th scope="col">Дата</th><th scope="col">Покупатель</th><th scope="col">Тариф</th><th scope="col">Сумма</th><th scope="col">Статус</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${time(p.created_at)}</td><td class="admin-email">${label(p.email)}</td><td>${p.plan==='pro_year'?'Про · год':'Про · месяц'}</td><td class="admin-money">${rub(p.amount_kopecks)}</td><td><span class="admin-state ${p.status==='succeeded'?'admin-state-green':p.status==='refunded'?'admin-state-red':''}"><i></i>${label(paymentNames[p.status]||p.status)}</span></td></tr>`).join('')}</tbody></table></div>`:empty('Платежей пока нет','Когда клиенты начнут оплачивать тариф, операции появятся здесь.')}
+      ${rows.length?`<div class="admin-table-scroll"><table class="admin-table admin-payments-table"><thead><tr><th scope="col">Дата</th><th scope="col">Покупатель</th><th scope="col">Тариф</th><th scope="col">Сумма</th><th scope="col">Статус</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${time(p.created_at)}</td><td class="admin-email">${label(p.email)}</td><td>${/^tokens_\d+m$/.test(p.plan)?'Токены · '+label(p.plan.slice(7,-1))+' млн':p.plan.endsWith('year')?'Про · год':'Про · месяц'}</td><td class="admin-money">${rub(p.amount_kopecks)}</td><td><span class="admin-state ${p.status==='succeeded'?'admin-state-green':p.status==='refunded'?'admin-state-red':''}"><i></i>${label(paymentNames[p.status]||p.status)}</span></td></tr>`).join('')}</tbody></table></div>`:empty('Платежей пока нет','Когда клиенты начнут оплачивать тариф, операции появятся здесь.')}
       <p class="admin-footnote">Сверяйте успешные платежи с ЮKassa. Чеки самозанятого оформляются в «Мой налог»; отметки о чеках эта панель не хранит.</p>`;
   }
 
@@ -138,7 +138,7 @@
     if (abs >= 1e4) return (n/1e3).toLocaleString('ru-RU',{maximumFractionDigits:1})+' тыс.';
     return count(n);
   };
-  const ledgerNames = {assistant:'Ответ ассистента',admin_adjust:'Изменение администратором',ad_reward:'Награда за видео',legacy_purchase_bonus:'Бонус покупки',legacy_ad_reward:'Бонус за видео',refund_revoke:'Возврат платежа'};
+  const ledgerNames = {purchase:'Покупка токенов',assistant:'Ответ ассистента',admin_adjust:'Изменение администратором',ad_reward:'Награда за видео',legacy_purchase_bonus:'Бонус покупки',legacy_ad_reward:'Бонус за видео',refund_revoke:'Возврат платежа'};
   const icon = (name, size=16) => window.SmetraIcons ? window.SmetraIcons.svg(name, size) : '';
 
   function userPage(d) {
