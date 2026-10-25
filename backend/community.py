@@ -1006,6 +1006,21 @@ def _admin_overview(con):
     }
 
 
+SUPPORT_STAGES = ("new", "in_progress", "waiting_user", "resolved")
+
+
+def _support_stage(row):
+    """Queue status derived from stored facts; no extra column to drift."""
+    if row["status"] == "closed":
+        return "resolved"
+    last = row["last_sender_type"]
+    if row["assigned_admin_id"]:
+        return "waiting_user" if last == "admin" else "in_progress"
+    if last == "assistant" and not row["needs_human"]:
+        return "waiting_user"
+    return "new"
+
+
 def _admin_route(handler, method, path, query, con):
     admin = _auth(handler, con, admin=True)
     if path == "/api/admin/communication/overview" and method == "GET":
@@ -1017,11 +1032,31 @@ def _admin_route(handler, method, path, query, con):
             "(SELECT m.created_at FROM chat_messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC,m.id DESC LIMIT 1) AS last_message_at, "
             "0 AS unread_count,'' AS partner_id,'' AS partner_name,"
             "(SELECT u.name FROM users u WHERE u.id=c.created_by) AS user_name,"
-            "(SELECT u.email FROM users u WHERE u.id=c.created_by) AS user_email "
+            "(SELECT u.email FROM users u WHERE u.id=c.created_by) AS user_email,"
+            "(SELECT m.sender_type FROM chat_messages m WHERE m.conversation_id=c.id AND m.sender_type<>'system' "
+            " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'assistant' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_sender_type,"
+            "(SELECT u.name FROM users u WHERE u.id=c.assigned_admin_id) AS assigned_admin_name "
             "FROM chat_conversations c WHERE c.kind='support' "
             "ORDER BY c.needs_human DESC,c.status ASC,c.updated_at DESC LIMIT 150"
         ).fetchall()
-        return handler.send_json(200, {"threads": [_conversation_view(row) for row in rows]})
+        threads = []
+        for row in rows:
+            view = _conversation_view(row)
+            view["stage"] = _support_stage(row)
+            view["assigned_admin_name"] = row["assigned_admin_name"] or ""
+            view["assigned_to_me"] = row["assigned_admin_id"] == admin["id"]
+            threads.append(view)
+        stage = (query.get("stage") or [""])[0] if isinstance(query, dict) else ""
+        if stage in SUPPORT_STAGES:
+            threads = [thread for thread in threads if thread["stage"] == stage]
+        return handler.send_json(200, {"threads": threads})
+    if path == "/api/admin/communication/admins" and method == "GET":
+        rows = con.execute(
+            "SELECT id,name,email FROM users WHERE role='admin' AND deleted_at IS NULL ORDER BY name LIMIT 50"
+        ).fetchall()
+        return handler.send_json(200, {"admins": [
+            {"id": row["id"], "name": row["name"] or row["email"], "me": row["id"] == admin["id"]} for row in rows
+        ]})
     match = re.fullmatch(r"/api/admin/communication/threads/([A-Za-z0-9_-]+)(?:/(messages))?", path)
     if match:
         conversation_id, action = match.group(1), match.group(2) or ""
@@ -1046,8 +1081,20 @@ def _admin_route(handler, method, path, query, con):
         if method == "PATCH" and not action:
             data = handler.body()
             action_name = _text(data.get("action"), 20, required=True)
-            if action_name not in ("close", "reopen", "assign", "release"):
+            if action_name not in ("close", "reopen", "assign", "release", "transfer"):
                 raise ApiError(400, "Неизвестное действие")
+            if action_name == "transfer":
+                target = _text(data.get("admin_id"), 80, required=True)
+                if not con.execute(
+                    "SELECT 1 FROM users WHERE id=? AND role='admin' AND deleted_at IS NULL", (target,)
+                ).fetchone():
+                    raise ApiError(400, "Сотрудник не найден")
+                con.execute(
+                    "UPDATE chat_conversations SET assigned_admin_id=?,needs_human=0,status='open',updated_at=? WHERE id=?",
+                    (target, now(), conversation_id),
+                )
+                audit(con, admin["id"], "admin.support.transfer", conversation_id + ":" + target)
+                return handler.send_json(200, {"ok": True})
             if action_name == "close":
                 con.execute(
                     "UPDATE chat_conversations SET status='closed',needs_human=0,updated_at=? WHERE id=?",

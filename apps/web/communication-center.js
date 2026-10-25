@@ -5,7 +5,11 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 const money = v => new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(v||0)/100);
 const num = v => new Intl.NumberFormat('ru-RU').format(Number(v||0));
 const time = v => v ? new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(Number(v)*1000)) : '';
-const state = {open:false,tab:'direct',current:null,messages:[],chats:[],channels:[],workspaces:[],role:'user',userId:'',publicId:'',mode:'user',busy:false,poll:null,observer:null,adminLoading:false,lastWaitingHuman:null};
+const state = {open:false,tab:'direct',current:null,messages:[],chats:[],channels:[],workspaces:[],role:'user',userId:'',publicId:'',mode:'user',busy:false,poll:null,observer:null,adminLoading:false,lastWaitingHuman:null,stage:'',admins:[]};
+// Support queue statuses come from the server (derived from stored facts).
+const STAGES=[['new','Новое'],['in_progress','В работе'],['waiting_user','Ожидает пользователя'],['resolved','Решено']];
+const stageName=id=>(STAGES.find(s=>s[0]===id)||['',''])[1];
+const adminQueue=()=>state.tab==='support'&&state.mode==='admin';
 let sessionEpoch=0;
 // Support has its own page; the admin queue appears here only for staff.
 const tabs = [['direct','Личные'],['object','Объекты'],['community','Сообщество']];
@@ -24,7 +28,7 @@ const ico = {
  back:'<path d="M19 12H5m6-6-6 6 6 6"/>',
  pencil:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'
 };
-const icon = n => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ico[n]||ico.chat)+'</svg>';
+const icon = n => !ico[n]&&window.SmetraIcons?window.SmetraIcons.svg(n,18):'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ico[n]||ico.chat)+'</svg>';
 async function api(path,options={}) {
  const epoch=sessionEpoch;
  const response=await fetch('/api'+path,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
@@ -44,6 +48,7 @@ function mount(){
    +'<header class="comms-top tg-rail-head"><button class="comms-btn" type="button" data-close aria-label="Закрыть сообщения" title="Закрыть">'+icon('back')+'</button><h2 class="comms-title" id="comms-heading">Сообщения</h2><button class="comms-btn" type="button" data-new-chat aria-label="Новая переписка" aria-expanded="false" title="Новая переписка">'+icon('pencil')+'</button></header>'
    +'<label class="comms-search"><span class="visually-hidden">Поиск по перепискам</span>'+icon('search')+'<input id="comms-search" type="search" placeholder="Поиск" autocomplete="off"></label>'
    +'<nav class="comms-tabs" id="comms-tabs" aria-label="Папки"></nav>'
+   +'<nav class="comms-stages" id="comms-stages" aria-label="Статус обращений" hidden></nav>'
    +'<div class="comms-tools" id="comms-tools" hidden></div>'
    +'<div class="comms-list" id="comms-list" role="list"></div>'
    +'<footer class="comms-my-id" id="comms-my-id"><span>Ваш ID</span><code>Загрузка…</code><button class="comms-btn" type="button" data-copy-id aria-label="Скопировать ID" title="Скопировать ID">'+icon('copy')+'</button></footer>'
@@ -55,7 +60,8 @@ function mount(){
   +'</section></section>';
  document.body.append(shell);
  shell.addEventListener('click',e=>{if(e.target.closest('[data-close]'))close()});
- $('#comms-tabs').addEventListener('click',async e=>{const b=e.target.closest('[data-tab]');if(!b)return;state.tab=b.dataset.tab;state.current=null;state.messages=[];shell.classList.remove('is-chat-open');await refresh(true)});
+ $('#comms-stages').addEventListener('click',e=>{const b=e.target.closest('[data-stage]');if(!b)return;state.stage=b.dataset.stage;renderStages();renderList()});
+ $('#comms-tabs').addEventListener('click',async e=>{const b=e.target.closest('[data-tab]');if(!b)return;state.tab=b.dataset.tab;state.stage='';state.current=null;state.messages=[];shell.classList.remove('is-chat-open');await refresh(true)});
  shell.querySelector('[data-new-chat]').onclick=e=>{const tools=$('#comms-tools');tools.hidden=!tools.hidden;e.currentTarget.setAttribute('aria-expanded',String(!tools.hidden));if(!tools.hidden)tools.querySelector('input,select')?.focus()};
  $('#comms-search').addEventListener('input',renderList);
  $('#comms-tools').addEventListener('submit',async e=>{e.preventDefault();if(e.target.id==='comms-direct-form')await findPerson();if(e.target.id==='comms-object-form')await createObjectChat();if(e.target.id==='comms-quote-form')await createQuoteChat()});
@@ -84,6 +90,12 @@ function renderTools(){
  }else if(state.tab==='community')el.innerHTML='<div class="comms-form"><p class="comms-note">Открытые профессиональные каналы: обсуждайте работу и обменивайтесь опытом. Не публикуйте данные клиентов.</p></div>';
  else el.innerHTML='<div class="comms-form"><p class="comms-note">Очередь команды поддержки: сначала обращения, которым требуется человек.</p><button class="comms-btn" data-handoff type="button">Обновить очередь</button></div>';
 }
+function renderStages(){
+ const el=$('#comms-stages');if(!el)return;
+ el.hidden=!adminQueue();if(el.hidden){el.innerHTML='';return}
+ const count=id=>state.chats.filter(c=>!id||c.stage===id).length;
+ el.innerHTML=[['','Все'],...STAGES].map(([id,label])=>'<button type="button" class="comms-stage'+(state.stage===id?' active':'')+'" data-stage="'+id+'" aria-pressed="'+(state.stage===id)+'"><span>'+esc(label)+'</span><b>'+count(id)+'</b></button>').join('');
+}
 function renderTabs(){
  const el=$('#comms-tabs');if(!el)return;
  el.innerHTML=visibleTabs().map(t=>'<button type="button" class="comms-tab'+(t[0]===state.tab?' active':'')+'" data-tab="'+t[0]+'" aria-pressed="'+(t[0]===state.tab)+'">'+esc(t[1])+'</button>').join('');
@@ -91,7 +103,7 @@ function renderTabs(){
 const rowTitle=row=>(row.kind==='direct'&&row.partner_name)||row.subject||row.partner_name||row.label||row.name||'Переписка';
 function renderList(){
  const el=$('#comms-list');if(!el)return;
- const all=state.tab==='community'?state.channels:state.chats;
+ const all=(state.tab==='community'?state.channels:state.chats).filter(row=>!adminQueue()||!state.stage||row.stage===state.stage);
  const query=($('#comms-search')?.value||'').trim().toLocaleLowerCase('ru');
  const rows=query?all.filter(row=>(rowTitle(row)+' '+(row.last_message||'')).toLocaleLowerCase('ru').includes(query)):all;
  if(!rows.length){el.innerHTML='<div class="comms-empty comms-empty-list"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>'+(query?'Ничего не найдено':'Пока пусто')+'</h3><p>'+(query?'Попробуйте другое имя.':state.tab==='direct'?'Нажмите карандаш и найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Очередь пуста.')+'</p></div>';return}
@@ -100,7 +112,7 @@ function renderList(){
  const preview=row.last_message|| (row.needs_human?'Ожидает сотрудника':row.kind==='community'?'Профессиональный канал':'Открыть переписку');
  const unread=Number(row.unread_count||0);
  const avatar=row.kind==='object'?icon('users'):row.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1).toUpperCase()));
- return '<button type="button" role="listitem" class="comms-row tg-row'+(state.current&&state.current.id===id?' active is-active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><span class="comms-copy tg-row-copy"><span class="tg-row-top"><span class="comms-label">'+esc(title)+'</span><time class="comms-time">'+esc(K?K.stamp(row.last_message_at||row.updated_at||row.created_at):time(row.last_message_at||row.updated_at||row.created_at))+'</time></span><span class="tg-row-bottom"><span class="comms-preview tg-preview">'+esc(preview)+'</span>'+(row.needs_human?'<i class="comms-human-needed tg-badge is-waiting" aria-label="Требуется сотрудник">сотрудник</i>':unread?'<span class="tg-unread">'+unread+'</span>':'')+'</span></span></button>';
+ return '<button type="button" role="listitem" class="comms-row tg-row'+(state.current&&state.current.id===id?' active is-active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><span class="comms-copy tg-row-copy"><span class="tg-row-top"><span class="comms-label">'+esc(title)+'</span><time class="comms-time">'+esc(K?K.stamp(row.last_message_at||row.updated_at||row.created_at):time(row.last_message_at||row.updated_at||row.created_at))+'</time></span><span class="tg-row-bottom"><span class="comms-preview tg-preview">'+esc(preview)+'</span>'+(adminQueue()&&row.stage?'<i class="tg-badge comms-stage-badge is-'+esc(row.stage)+'">'+esc(stageName(row.stage))+'</i>':row.needs_human?'<i class="comms-human-needed tg-badge is-waiting" aria-label="Требуется сотрудник">сотрудник</i>':unread?'<span class="tg-unread">'+unread+'</span>':'')+'</span></span></button>';
  }).join('');
 }
 function renderMessages(){
@@ -112,8 +124,9 @@ function renderMessages(){
  shell?.classList.add('is-chat-open');head.hidden=false;compose.hidden=false;
  const subtitle=c.kind==='estimate'?'Обсуждение сметы':c.kind==='object'?'Команда рабочего пространства':c.kind==='community'?'Открытый профессиональный канал':state.tab==='support'?'Обращение пользователя'+(c.user_email?' · '+c.user_email:''):(c.partner_public_id?'ID '+c.partner_public_id:'Личная переписка');
  const avatar=c.kind==='object'?icon('users'):c.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1)));
- head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+esc(title)+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
+ head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+esc(title)+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(adminQueue()?queueControls(c):c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
  head.querySelector('[data-chat-back]').onclick=()=>{state.current=null;state.messages=[];renderList();renderMessages()};
+ if(adminQueue())bindQueueControls(head,c);
  compose.querySelector('.comms-banner')?.remove();
  box.disabled=c.status==='closed';box.placeholder=box.disabled?'Переписка закрыта':'Сообщение…';send.disabled=box.disabled||state.busy||!box.value.trim();
  if(!state.messages.length){el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Начните разговор</h3><p>История сохранится в этой переписке.</p></div>';return}
@@ -121,6 +134,22 @@ function renderMessages(){
  const group=c.kind==='object'||c.kind==='community'||state.tab==='support';
  el.innerHTML=K?K.thread(rows,{showAuthors:group}):rows.map(m=>'<article class="comms-message'+(m.mine?' mine':'')+'"><p>'+esc(m.body)+'</p></article>').join('');
  el.scrollTop=el.scrollHeight;
+}
+function queueControls(c){
+ const owner=state.admins.length?'<label class="comms-assign"><span class="visually-hidden">Ответственный</span><select data-queue-assign><option value="">Не назначено</option>'+state.admins.map(a=>'<option value="'+esc(a.id)+'"'+(a.id===c.assigned_admin_id?' selected':'')+'>'+esc(a.me?a.name+' (вы)':a.name)+'</option>').join('')+'</select></label>':'';
+ const main=c.status==='closed'?'<button type="button" class="btn small" data-queue="reopen">'+icon('refresh')+'<span>Открыть снова</span></button>'
+  :(!c.assigned_admin_id?'<button type="button" class="btn small" data-queue="assign">'+icon('user')+'<span>Взять в работу</span></button>':'')+'<button type="button" class="btn small primary" data-queue="close">'+icon('check')+'<span>Решено</span></button>';
+ return '<div class="comms-queue-actions"><span class="tg-badge comms-stage-badge is-'+esc(c.stage||'new')+'">'+esc(stageName(c.stage||'new'))+'</span>'+owner+main+'</div>';
+}
+function bindQueueControls(head,c){
+ const run=async body=>{try{await api('/admin/communication/threads/'+encodeURIComponent(c.id),{method:'PATCH',body:JSON.stringify(body)});await refresh(false)}catch(error){notify(error.message)}};
+ head.querySelectorAll('[data-queue]').forEach(b=>b.onclick=async()=>{
+  const action=b.dataset.queue;
+  if(action==='close'&&window.SmetraDialog&&!await window.SmetraDialog.confirm({title:'Отметить решённым?',message:'Обращение закроется. Пользователь сможет создать новое.',confirmLabel:'Решено'}))return;
+  b.disabled=true;await run({action});
+ });
+ const select=head.querySelector('[data-queue-assign]');
+ if(select)select.onchange=()=>run(select.value?{action:'transfer',admin_id:select.value}:{action:'release'});
 }
 async function refresh(reset){
  if(state.busy)return;state.busy=true;
@@ -132,9 +161,9 @@ async function refresh(reset){
  if(state.tab==='direct'){const d=await api('/profile/chats');state.chats=d.chats||[];state.channels=[]}
  else if(state.tab==='object'){const d=await api('/profile/object-chats');state.chats=d.chats||[];state.workspaces=d.workspaces||[];state.channels=[]}
  else if(state.tab==='community'){const d=await api('/profile/communities');state.channels=(d.channels||[]).map(c=>({...c,subject:c.label,kind:'community'}));state.chats=[]}
- else if(state.mode==='admin'){const d=await api('/admin/communication/threads');state.chats=d.threads||[];state.channels=[]}
+ else if(state.mode==='admin'){const [d,a]=await Promise.all([api('/admin/communication/threads'),state.admins.length?{admins:state.admins}:api('/admin/communication/admins').catch(()=>({admins:[]}))]);state.chats=d.threads||[];state.admins=a.admins||[];state.channels=[]}
  else{state.chats=[];state.channels=[]}
- renderTools();renderList();
+ renderTools();renderStages();renderList();
  if(reset){const rows=state.tab==='community'?state.channels:state.chats;state.current=rows.find(x=>state.current&&x.id===state.current.id)||null;state.messages=[];renderMessages();if(!state.current&&rows.length&&state.tab==='community'){state.current=rows[0];await loadMessages(true)}}
  else if(state.current){const rows=state.tab==='community'?state.channels:state.chats;const newer=rows.find(x=>x.id===state.current.id);if(newer)state.current=newer;renderList();renderMessages()}
  }catch(error){if($('#comms-list'))$('#comms-list').innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}

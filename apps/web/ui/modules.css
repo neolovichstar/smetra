@@ -269,6 +269,23 @@ body.comms-scroll-locked{overflow:hidden}
 .comms-tab{flex:none;min-height:32px;padding:0 12px;border-radius:var(--r-pill);color:var(--text-2);font-size:var(--fs-13);font-weight:500}
 .comms-tab:hover{background:var(--surface-2);color:var(--text)}
 .comms-tab.active{background:var(--surface-inverse);color:var(--text-inverse)}
+.comms-stages{display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.comms-stages[hidden]{display:none}
+.comms-stage{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-pill);color:var(--text-2);font-size:var(--fs-12)}
+.comms-stage b{font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}
+.comms-stage:hover{background:var(--surface-2);color:var(--text)}
+.comms-stage.active{border-color:var(--line-strong);background:var(--surface-3);color:var(--text)}
+.comms-stage-badge.is-new{background:var(--accent-softer);color:var(--accent-text)}
+.comms-stage-badge.is-in_progress{background:var(--warning-soft);color:var(--text)}
+.comms-stage-badge.is-waiting_user{background:var(--surface-4);color:var(--text-2)}
+.comms-stage-badge.is-resolved{background:var(--success-soft,var(--surface-3));color:var(--text-2)}
+.comms-queue-actions{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-left:auto}
+.comms-queue-actions .btn{gap:6px}
+.comms-queue-actions .btn svg{width:15px;height:15px}
+#communication-center .comms-assign{display:block}
+@media (min-width:761px){#communication-center .tg-back{display:none}}
+.comms-assign select{min-height:30px;max-width:180px;padding:0 28px 0 10px;font-size:var(--fs-13)}
+@media (max-width:1100px){.comms-queue-actions .btn span{display:none}.comms-queue-actions .btn{width:32px;padding:0;justify-content:center}}
 .comms-tools{display:flex;flex-direction:column;gap:var(--s-2);padding:12px;border-bottom:1px solid var(--line);background:var(--surface-1)}
 .comms-tools[hidden]{display:none}
 .comms-form{display:flex;flex-direction:column;gap:8px;min-width:0}
