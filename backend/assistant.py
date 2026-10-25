@@ -4,6 +4,7 @@ import json
 import base64
 import hashlib
 import os
+import re
 import time
 import threading
 import urllib.error
@@ -518,9 +519,29 @@ def validate_tool_arguments(name, args):
     check(args, schema)
 
 
+def _safe_tool_result(value, depth=0):
+    """Remove credentials and bearer links before data is sent back to a third-party model."""
+    denied = {
+        "public_token", "public_url", "idempotency_key", "request_key",
+        "request_hash", "session_hash", "session_token_hash", "token_hash",
+        "api_key", "access_token", "refresh_token", "password_hash",
+        "secret", "webhook_secret", "private_key", "authorization",
+    }
+    if depth >= 12:
+        return "[слишком глубокие данные]"
+    if isinstance(value, dict):
+        return {key: _safe_tool_result(item, depth + 1) for key, item in value.items()
+                if key.lower() not in denied}
+    if isinstance(value, list):
+        return [_safe_tool_result(item, depth + 1) for item in value]
+    return value
+
+
 def tool_result_message(result, limit=6000):
-    """Produce valid JSON even when an upstream domain response is huge."""
-    value = packed(result)
+    """Return valid bounded JSON without propagating credentials to the provider."""
+    from backend.assistant_files import _SECRET
+
+    value = _SECRET.sub("[секрет скрыт]", packed(_safe_tool_result(result)))
     if len(value) <= limit:
         return value
     return packed({
@@ -528,6 +549,29 @@ def tool_result_message(result, limit=6000):
         "excerpt": value[:min(2600, max(0, limit // 2))],
         "notice": "Результат слишком большой. Уточните поиск или прочитайте запись отдельно.",
     })
+
+
+def normalize_tool_calls(calls):
+    """Validate provider-generated tool-call envelopes before forwarding or executing."""
+    if not isinstance(calls, list) or len(calls) > 4:
+        raise DomainError(502, "Модель вернула некорректные вызовы инструментов")
+    normalized, seen = [], set()
+    for call in calls:
+        if not isinstance(call, dict) or call.get("type", "function") != "function":
+            raise DomainError(502, "Некорректный формат вызова инструмента")
+        call_id, fn = call.get("id"), call.get("function")
+        if not isinstance(call_id, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", call_id) or call_id in seen:
+            raise DomainError(502, "Модель вернула некорректный идентификатор инструмента")
+        if not isinstance(fn, dict):
+            raise DomainError(502, "Некорректный формат вызова инструмента")
+        name, arguments = fn.get("name"), fn.get("arguments")
+        if (not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,99}", name)
+                or not isinstance(arguments, str) or len(arguments) > 20000):
+            raise DomainError(502, "Некорректные параметры вызова инструмента")
+        normalized.append({"id": call_id, "type": "function",
+                           "function": {"name": name, "arguments": arguments}})
+        seen.add(call_id)
+    return normalized
 
 
 def query_model(messages):
@@ -1051,11 +1095,11 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
             (identity(),service.wid,service.user['id'],'assistant',os.getenv('OPENROUTER_MODEL','openrouter/free'),'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
         answer = str(response.get("content") or "")[:12000]
-        calls = response.get("tool_calls") or []
+        calls = normalize_tool_calls(response.get("tool_calls") or [])
         if not calls:
             break
-        messages.append({"role": "assistant", "content": answer or None, "tool_calls": calls[:4]})
-        for call in calls[:4]:
+        messages.append({"role": "assistant", "content": answer or None, "tool_calls": calls})
+        for call in calls:
             try:
                 name = call["function"]["name"]
                 if on_status:
@@ -1137,7 +1181,7 @@ class ChatStream:
         handler.send_header("X-Content-Type-Options", "nosniff")
         handler.send_header("Referrer-Policy", "no-referrer")
         handler.end_headers()
-        emitted = False
+        committed = False
 
         def send(kind, data):
             handler.wfile.write(("event: " + kind + "\ndata: " + packed(data) + "\n\n").encode())
@@ -1147,26 +1191,26 @@ class ChatStream:
             send("ready", {"quota": public_quota(self.service)})
 
             def delta(text):
-                nonlocal emitted
-                emitted = True
                 send("delta", {"text": text})
 
-            send("done", answer_chat(
+            result = answer_chat(
                 self.service, self.prompt, delta, self.context,
                 self.conversation_id, lambda message: send("status", {"text": message}),
-            ))
+            )
+            committed = True
+            send("done", result)
         except DomainError as error:
-            if not emitted:
+            if not committed:
                 release(self.service, self.quota_key)
             try:
                 send("error", {"error": error.message, "quota": public_quota(self.service)})
             except (BrokenPipeError, ConnectionResetError):
                 pass
         except (BrokenPipeError, ConnectionResetError):
-            if not emitted:
+            if not committed:
                 release(self.service, self.quota_key)
         except Exception:
-            if not emitted:
+            if not committed:
                 release(self.service, self.quota_key)
             try:
                 send("error", {"error": "Ассистент временно недоступен. Попробуйте ещё раз.", "quota": public_quota(self.service)})
