@@ -5,11 +5,20 @@ import base64
 import hashlib
 import os
 import time
+import threading
 import urllib.error
 import urllib.request
 import datetime as dt
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 from backend.assistant_insights import READ_NAMES, NEW_READ_NAMES, read as read_insights
+
+# Per-request socket timeout, never shared across concurrent assistant chats.
+_PROVIDER_TIMEOUT = threading.local()
+
+
+def _provider_timeout(default):
+    return min(default, getattr(_PROVIDER_TIMEOUT, "seconds", default))
+
 
 ENTITIES = (
     "quotes",
@@ -546,7 +555,7 @@ def query_model(messages):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=40) as response:
+        with urllib.request.urlopen(request, timeout=_provider_timeout(40)) as response:
             raw = response.read(250001)
         if len(raw) > 250000:
             raise ValueError("response too large")
@@ -598,8 +607,10 @@ def query_model_stream(messages, on_delta):
     )
     pieces, calls, total_bytes, done, usage = [], {}, 0, False, None
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
+        with urllib.request.urlopen(request, timeout=_provider_timeout(45)) as response:
             for raw in response:
+                if getattr(_PROVIDER_TIMEOUT, "deadline", float("inf")) < time.monotonic():
+                    raise ValueError("response deadline exceeded")
                 total_bytes += len(raw)
                 if total_bytes > 300_000:
                     raise ValueError("response too large")
@@ -1019,10 +1030,22 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         {"role": "user", "content": prompt},
     ]
     actions, answer, remembered = [], "", False
+    # Keep multi-step tool use inside Vercel's 120-second function budget.
+    deadline = time.monotonic() + 104
     for turn in range(4):
         if on_commit and on_status:
             on_status("Формулирую ответ…")
-        response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+        remaining = deadline - time.monotonic()
+        if remaining < 8:
+            answer = "Проверка заняла слишком много времени. Повторите запрос с конкретной записью."
+            break
+        _PROVIDER_TIMEOUT.seconds = min(40, max(1, remaining - 6))
+        _PROVIDER_TIMEOUT.deadline = deadline
+        try:
+            response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+        finally:
+            del _PROVIDER_TIMEOUT.seconds
+            del _PROVIDER_TIMEOUT.deadline
         usage=response.pop('_usage',None)
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
