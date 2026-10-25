@@ -213,6 +213,9 @@ def hash_password(password, salt=None):
     return base64.b64encode(salt + digest).decode()
 
 
+_TIMING_DUMMY_HASH = base64.b64encode(bytes(16) + bytes(64)).decode()
+
+
 def verify_password(password, encoded):
     try:
         value = base64.b64decode(encoded)
@@ -899,12 +902,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             email = str(data.get("email", "")).lower().strip()
             self.throttle("login-account:" + hashlib.sha256(email[:254].encode()).hexdigest(), 20, 300)
             user = con.execute(
-                "SELECT * FROM users WHERE email=?",
+                "SELECT * FROM users WHERE email=? AND deleted_at IS NULL",
                 (email,),
             ).fetchone()
-            if not user or not verify_password(
-                str(data.get("password", "")), user["password_hash"]
-            ):
+            password = data.get("password", "")
+            if not isinstance(password, str) or len(password) > 256:
+                raise ApiError(401, "Неверная почта или пароль")
+            # Hash even for unknown addresses so response time does not reveal accounts.
+            matched = verify_password(password, user["password_hash"] if user else _TIMING_DUMMY_HASH)
+            if not user or not matched:
                 raise ApiError(401, "Неверная почта или пароль")
             if user["blocked"]:
                 raise ApiError(403, "Аккаунт заблокирован")

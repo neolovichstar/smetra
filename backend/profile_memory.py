@@ -109,12 +109,26 @@ def memory_route(service, method, parts, data):
     raise DomainError(405, 'Метод не поддерживается')
 
 
+MIN_EVIDENCE = 12
+_WORD = re.compile(r'[0-9a-zа-яё]{4,}', re.IGNORECASE)
+
+
+def _grounded(content, evidence):
+    """At least half of the fact's meaningful words (min. one) appear in the user's quote."""
+    words = {word[:6] for word in _WORD.findall(str(content).casefold())}
+    quoted = {word[:6] for word in _WORD.findall(str(evidence).casefold())}
+    return bool(words) and len(words & quoted) * 2 >= len(words)
+
+
 def remember(service, args, prompt):
     if not profile(service.con, service.user)['memory_enabled']:
         return {'saved': False, 'reason': 'Автоматическая память выключена пользователем'}
     evidence = string(args.get('evidence', ''), 'Цитата пользователя', 1500, True)
-    if evidence not in prompt:
+    if evidence not in prompt or len(evidence.strip()) < MIN_EVIDENCE:
         raise DomainError(400, 'Для памяти нужна точная цитата из текущего сообщения пользователя')
+    # The saved fact must come from the quote, not from text injected elsewhere (files, pages).
+    if not _grounded(args.get('content', ''), evidence):
+        raise DomainError(400, 'Запись памяти должна пересказывать слова пользователя')
     from backend.assistant_files import _SECRET
 
     if _SECRET.search(packed(args)) or re.search(r'\b(?:live_|test_|sk-)[A-Za-z0-9_-]{20,}|-----BEGIN .*PRIVATE KEY', packed(args)):
@@ -122,9 +136,12 @@ def remember(service, args, prompt):
     return _save(service, args, 'assistant')
 
 
-def forget(service, args):
+def forget(service, args, prompt=''):
     """Remove the records whose topic matches what the user asked to forget."""
     title = string(args.get('title', ''), 'Тема', 120, True).casefold()
+    # Only the user can ask to forget: the topic must be named in their own message.
+    if len(title.strip()) < 3 or title.strip() not in str(prompt).casefold():
+        raise DomainError(400, 'Назовите в сообщении, что именно забыть')
     rows = service.con.execute('SELECT id,title,title_key FROM assistant_memory WHERE user_id=? AND workspace_id=?',
                                (service.user['id'], service.wid)).fetchall()
     matches = [row for row in rows if row['title_key'] == title] or [

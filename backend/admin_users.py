@@ -147,10 +147,9 @@ def act(con, admin, user_id, data, audit):
         return {"ok": True, "entitlement_until": until}
     # Request-era shortcuts kept for older admin screens.
     if action == "grant":
-        con.execute(
-            "UPDATE users SET plan='pro',entitlement_until=max(coalesce(entitlement_until,0),?)+? WHERE id=?",
-            (stamp(), 31 * 86400, user_id),
-        )
+        # Computed here: scalar max(a,b) exists in SQLite but not in PostgreSQL.
+        until = max(int(user["entitlement_until"] or 0), stamp()) + 31 * 86400
+        con.execute("UPDATE users SET plan='pro',entitlement_until=? WHERE id=?", (until, user_id))
         audit(con, admin["id"], "admin.grant", user_id, reason)
         return {"ok": True}
     if action == "revoke":

@@ -1098,7 +1098,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 elif name == "forget_memory":
                     from backend.profile_memory import forget
 
-                    result = forget(service, args)
+                    result = forget(service, args, prompt)
                     for title in result.get("titles", []):
                         memory_updates.append({"kind": "forgotten", "title": title})
                 elif name in ("list_records", "get_record", "overview", "read_file", "read_markdown", "list_files", "search_knowledge", "search_file_content", "list_construction_objects", "get_construction_object", "calculate_construction", "get_file_metadata", "get_document", "list_documents"):
