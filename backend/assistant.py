@@ -1182,7 +1182,7 @@ class ChatStream:
     def write(self, handler):
         handler.send_response(200)
         handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        handler.send_header("Cache-Control", "no-cache, no-transform")
+        handler.send_header("Cache-Control", "no-store, no-cache, private, no-transform")
         handler.send_header("X-Accel-Buffering", "no")
         handler.send_header("X-Content-Type-Options", "nosniff")
         handler.send_header("Referrer-Policy", "no-referrer")
