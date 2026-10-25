@@ -72,8 +72,9 @@ class AssistantSecurityRegressions(unittest.TestCase):
             "name": "create_clients", "arguments": json.dumps({"name": "Не сохранять"}),
         }}]}
         with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"), patch(
-            "backend.assistant.query_model",
-            side_effect=[response, DomainError(502, "Модель недоступна")],
+            "backend.assistant.query_model", return_value=response,
+        ), patch(
+            "backend.assistant.public_quota", side_effect=DomainError(502, "Финализация ответа не удалась"),
         ):
             status, _ = self.call("/assistant/chat", "POST", {"text": "Добавь клиента"}, owner)
         self.assertEqual(status, 502)
