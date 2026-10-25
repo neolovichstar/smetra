@@ -296,3 +296,15 @@ body.public-quote-mode #landing{display:none}
 @media (prefers-reduced-motion:reduce){.motion .reveal,.motion .hero-float,.motion .hero-visual [data-line],.motion [data-chat-demo] [data-chat-step]{opacity:1;transform:none;transition:none}}
 body.public-quote-mode .site-nav-actions{display:none}
 body.public-quote-mode{background:var(--bg-sunken)}
+/* ───── Hero: 3D room (room3d.js) ───── */
+.hero-room{position:relative;aspect-ratio:16/13;width:100%}
+.hero-room::before{inset:-6% -10% -10% -6%}
+.hero-room-poster,.hero-room-canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero-room-poster{object-fit:contain;transition:opacity 600ms var(--ease)}
+.hero-room-canvas{opacity:0;cursor:grab;touch-action:pan-y;outline:none;transition:opacity 600ms var(--ease)}
+.hero-room.is-ready .hero-room-canvas{opacity:1}
+.hero-room.is-ready .hero-room-poster{opacity:0}
+.hero-room.is-turning .hero-room-canvas{cursor:grabbing}
+.hero-room-canvas:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:var(--r-3)}
+@media (max-width:980px){.hero-room{max-width:620px;margin-inline:auto}}
+@media (prefers-reduced-motion:reduce){.hero-room-poster,.hero-room-canvas{transition:none}}

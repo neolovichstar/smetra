@@ -594,6 +594,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/offline.css": ("offline.css", "text/css"),
             "/assets/fonts/onest-variable.woff2": ("assets/fonts/onest-variable.woff2", "font/woff2"),
             "/vendor/markdown-it-15.0.2.min.js": ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
+            "/vendor/three-0.170.0.module.min.js": ("vendor/three-0.170.0.module.min.js", "text/javascript"),
+            "/vendor/three-rounded-box-0.170.0.js": ("vendor/three-rounded-box-0.170.0.js", "text/javascript"),
+            "/vendor/three-room-environment-0.170.0.js": ("vendor/three-room-environment-0.170.0.js", "text/javascript"),
+            "/assets/landing/room.webp": ("assets/landing/room.webp", "image/webp"),
         }
         # Every top-level script is public; the build validates them with node --check.
         js_asset = re.fullmatch(r"/([a-z0-9-]{1,40})\.js", path)

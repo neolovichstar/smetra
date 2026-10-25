@@ -9,12 +9,13 @@
 <meta name="description" content="Сметы с позициями и итогами, согласование с клиентом по ссылке, этапы работ и поступления. ИИ-ассистент собирает черновик по описанию или фото. 10 смет бесплатно.">
 <link rel="icon" href="/favicon.ico">
 <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/ui/tokens.css?v=20261025-r14">
-<link rel="stylesheet" href="/ui/base.css?v=20261025-r14">
-<link rel="stylesheet" href="/ui/components.css?v=20261025-r14">
-<link rel="stylesheet" href="/ui/site.css?v=20261025-r14">
-<script src="/ui/plans.js?v=20261025-r14" defer></script>
-<script src="/landing.js?v=20261025-r14" defer></script>
+<link rel="stylesheet" href="/ui/tokens.css?v=20261026-r15">
+<link rel="stylesheet" href="/ui/base.css?v=20261026-r15">
+<link rel="stylesheet" href="/ui/components.css?v=20261026-r15">
+<link rel="stylesheet" href="/ui/site.css?v=20261026-r15">
+<script src="/ui/plans.js?v=20261026-r15" defer></script>
+<script src="/landing.js?v=20261026-r15" defer></script>
+<script type="module" src="/room3d.js?v=20261026-r15"></script>
 </head>
 <body class="site-page landing-page dark">
 <a class="skip-link" href="#landing">К содержимому</a>
@@ -48,34 +49,9 @@
       <p class="hero-note reveal">10 смет бесплатно · без банковской карты · сайт и Android-приложение</p>
     </div>
 
-    <div class="hero-visual reveal" role="img" aria-label="Пример сметы в интерфейсе Сметры: позиции, количество, цены и итог">
-      <div class="app-frame" aria-hidden="true">
-        <div class="app-frame-bar"><span></span><span></span><span></span><em>smetra.online/app</em></div>
-        <div class="app-frame-body">
-          <aside class="mini-nav">
-            <i class="is-active"></i><i></i><i></i><i></i><i></i><i></i>
-          </aside>
-          <div class="mini-doc">
-            <div class="mini-doc-head">
-              <div><small>Смета · черновик</small><strong>Ванная, ул. Садовая 5</strong><span>Ольга Петрова</span></div>
-              <span class="mini-status">Сохранено</span>
-            </div>
-            <div class="mini-table">
-              <div class="mini-row mini-row-head"><span>Позиция</span><span>Кол-во</span><span>Цена</span><span>Сумма</span></div>
-              <div class="mini-row" data-line><span>Демонтаж плитки</span><span>24 м²</span><span>450 ₽</span><b>10 800 ₽</b></div>
-              <div class="mini-row" data-line><span>Гидроизоляция пола</span><span>8,5 м²</span><span>750 ₽</span><b>6 375 ₽</b></div>
-              <div class="mini-row" data-line><span>Укладка керамогранита 60×60</span><span>24 м²</span><span>1 800 ₽</span><b>43 200 ₽</b></div>
-              <div class="mini-row" data-line><span>Монтаж инсталляции</span><span>1 шт.</span><span>8 500 ₽</span><b>8 500 ₽</b></div>
-            </div>
-            <div class="mini-total"><span>Итого</span><b data-count-to="68875">68 875 ₽</b></div>
-            <div class="mini-actions"><span class="mini-btn is-primary">Отправить клиенту</span><span class="mini-btn">Документ PDF</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="hero-float hero-float-client" aria-hidden="true">
-        <span class="dot dot-success"></span>
-        <div><strong>Клиент согласовал</strong><small>Версия 2 · по ссылке, без регистрации</small></div>
-      </div>
+    <div class="hero-visual hero-room reveal" data-room3d>
+      <img class="hero-room-poster" src="/assets/landing/room.webp" width="1280" height="1041" alt="Комната в 3D: белые стены, окно, диван, кресло и журнальный столик" fetchpriority="high" decoding="async">
+      <canvas class="hero-room-canvas" tabindex="0" role="img" aria-label="Трёхмерная комната. Перетащите или нажмите стрелки, чтобы повернуть."></canvas>
     </div>
   </section>
 
