@@ -179,7 +179,7 @@ def capture(con, user, cookie):
     ).fetchone()
     if not click:
         return False
-    if not click["created_at"] - 120 <= user["created_at"] <= click["created_at"] + MAX_REFERRAL_AGE:
+    if not click["created_at"] <= user["created_at"] <= click["created_at"] + MAX_REFERRAL_AGE:
         return False
     if con.execute("SELECT 1 FROM partner_attributions WHERE user_id=?", (user["id"],)).fetchone():
         return False
