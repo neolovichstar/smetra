@@ -51,7 +51,7 @@ def read(service, name, args):
     if name == "search_workspace":
         query = _search(args)
         result = service.route("GET", "search", [], {"q": [query]}, {})[1]
-        return {"query": query, "results": result.get("results", [])[:40]}
+        return {"query": query, "results": result.get("items", [])[:40]}
 
     if name == "find_catalog_prices":
         query = _search(args)
@@ -72,7 +72,7 @@ def read(service, name, args):
         items = quote.get("items", [])
         problems = []
         for index, item in enumerate(items, 1):
-            if not item.get("name", "").strip():
+            if not str(item.get("name") or "").strip():
                 problems.append({"row": index, "issue": "missing_name"})
             if item.get("unit_price") == 0 and item.get("included", True):
                 problems.append({"row": index, "issue": "zero_price"})
