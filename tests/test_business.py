@@ -1324,6 +1324,8 @@ class BusinessFlows(unittest.TestCase):
             self.assertNotIn("forecast_profit", dashboard["actions"]["summary"]["money"])
             self.assertNotIn("Перерасход по заказу", [i["title"] for i in dashboard["actions"]["items"]])
             self.assertNotIn("cash_profit", json_text(self.call("/overview", token=member, workspace=wid)[1]))
+            for feed in ("/activity", "/notifications", "/overview"):
+                self.assertNotIn("Расход записан", json_text(self.call(feed, token=member, workspace=wid)[1]), feed)
 
         json_text = lambda value: json.dumps(value, ensure_ascii=False)
         hidden_everywhere()
@@ -1346,6 +1348,7 @@ class BusinessFlows(unittest.TestCase):
         self.assertIn("internal_cost", self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"])
         self.assertEqual(self.call("/expenses", token=member, workspace=wid)[0], 200)
         self.assertTrue(self.call("/dashboard", token=member, workspace=wid)[1]["capabilities"]["finance"])
+        self.assertIn("Расход записан", json_text(self.call("/activity", token=member, workspace=wid)[1]))
 
         self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": False}, owner)[0], 200)
         hidden_everywhere()

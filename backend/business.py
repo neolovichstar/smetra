@@ -34,11 +34,19 @@ FINANCE_KEYS = frozenset((
 FINANCE_ROLES = ("owner", "admin", "manager")
 
 
+# Events whose text is itself internal economics (the detail holds the amount).
+FINANCE_EVENTS = frozenset(("Расход записан",))
+
+
+def finance_event(value):
+    return isinstance(value, dict) and (value.get("action") in FINANCE_EVENTS or value.get("message") in FINANCE_EVENTS)
+
+
 def without_finance(value):
     if isinstance(value, dict):
         return {k: without_finance(v) for k, v in value.items() if k not in FINANCE_KEYS}
     if isinstance(value, list):
-        return [without_finance(v) for v in value]
+        return [without_finance(v) for v in value if not finance_event(v)]
     return value
 
 
