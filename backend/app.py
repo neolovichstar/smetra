@@ -146,7 +146,6 @@ def migrate():
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
-        con.executescript((ROOT / "backend" / "migrations" / "034_partner_platform.sql").read_text(encoding="utf-8"))
         from backend.ai_tokens import ensure_schema as ensure_ai_tokens
         ensure_ai_tokens(con)
 
