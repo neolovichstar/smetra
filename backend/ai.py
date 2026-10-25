@@ -2,12 +2,12 @@
 
 import base64
 import io
-import json
 import os
 import urllib.error
 import urllib.request
 
 try:
+    from backend.validation import load_json, read_json_response, usage_counts
     from backend.business import (
         DomainError,
         calculate,
@@ -18,6 +18,7 @@ try:
         transaction,
     )
 except ModuleNotFoundError:
+    from validation import load_json, read_json_response, usage_counts
     from business import (
         DomainError,
         calculate,
@@ -213,14 +214,11 @@ def _draft(service, data):
     )
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
-            raw = response.read(300001)
-        if len(raw) > 300000:
-            raise ValueError("response too large")
-        result = json.loads(raw)
+            result = read_json_response(response, 300000)
         content = result["choices"][0]
         if content.get("finish_reason") != "stop" or content["message"].get("refusal"):
             raise ValueError("incomplete/refused response")
-        value = json.loads(content["message"]["content"])
+        value = load_json(content["message"]["content"])
         title = string(value.get("title", ""), "Название", 120, True)
         if (
             not isinstance(value.get("items"), list)
@@ -234,19 +232,7 @@ def _draft(service, data):
                 raise ValueError("invalid unit price")
             # Allow an unknown zero price in the unsaved AI draft; regular save still validates the final total.
             calculate([{**item, "unit_price": item.get("unit_price") or 1}])
-        usage = result.get("usage")
-        known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in ('prompt_tokens','completion_tokens'))
-        service.con.execute(
-            "UPDATE ai_usage SET status=?,input_tokens=?,output_tokens=? WHERE id=?",
-            (
-                'succeeded' if known else 'usage_unknown',
-                usage['prompt_tokens'] if known else 0,
-                usage['completion_tokens'] if known else 0,
-                usage_id,
-            ),
-        )
-        service.emit("ai", usage_id, "AI создал черновик")
-        return 200, {
+        draft_result = {
             "draft": {
                 "title": title,
                 "client": string(value.get("client", ""), "Клиент", 120),
@@ -259,9 +245,20 @@ def _draft(service, data):
             },
             "requires_review": True,
         }
+        counts = usage_counts(result.get("usage"))
+        service.con.execute(
+            "UPDATE ai_usage SET status=?,input_tokens=?,output_tokens=? WHERE id=?",
+            (
+                "succeeded" if counts is not None else "usage_unknown",
+                *(counts or (0, 0)),
+                usage_id,
+            ),
+        )
+        service.emit("ai", usage_id, "AI создал черновик")
+        return 200, draft_result
     except (
-        urllib.error.URLError,
-        TimeoutError,
+        OSError,
+        AttributeError,
         ValueError,
         KeyError,
         IndexError,

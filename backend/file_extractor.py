@@ -155,6 +155,57 @@ def capture(content, mime):
     return {"text": text[:12000]}
 
 
+def import_xlsx(content):
+    """Validate actual cell positions before bounded workbook iteration."""
+    import zipfile
+    from openpyxl import load_workbook
+    from openpyxl.utils.cell import coordinate_to_tuple
+    from backend.office_documents import archive, XLSX
+
+    if not 0 < len(content) <= 45_000:
+        raise ValueError("Import size")
+    with zipfile.ZipFile(io.BytesIO(content)) as package:
+        entries = package.infolist()
+        if len(entries) > 100 or sum(entry.file_size for entry in entries) > 5_000_000:
+            raise ValueError("Import archive size")
+    parts = archive(content, XLSX)
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    for name, root in parts.items():
+        if name.startswith("xl/worksheets/") and root is not None:
+            for index, row in enumerate(root.iter(ns + "row"), 1):
+                if index > 201 or not 1 <= int(row.get("r", index)) <= 201:
+                    raise ValueError("Row limit")
+                for column, cell in enumerate(row, 1):
+                    if column > 30:
+                        raise ValueError("Column limit")
+                    if cell.get("r"):
+                        r, c = coordinate_to_tuple(cell.get("r"))
+                        if not 1 <= r <= 201 or not 1 <= c <= 30:
+                            raise ValueError("Cell limit")
+    book = load_workbook(io.BytesIO(content), read_only=True, data_only=False, keep_links=False)
+    try:
+        sheet = book.active
+        if sheet is None:
+            raise ValueError("Missing worksheet")
+        # Dimensions are untrusted and may be missing or smaller than the data.
+        sheet.reset_dimensions()
+        values = list(sheet.iter_rows(min_row=1, max_row=201, max_col=30, values_only=True))
+        while values and not any(value is not None for value in values[-1]):
+            values.pop()
+        if len(values) < 2:
+            raise ValueError("Missing rows")
+        headers = values[0]
+        nonempty = [key for key in headers if key is not None]
+        if any(not isinstance(key, str) or not key for key in nonempty) or len(set(nonempty)) != len(nonempty):
+            raise ValueError("Invalid headers")
+        if any(key is None and value is not None for row in values[1:] for key, value in zip(headers, row)):
+            raise ValueError("Values without headers")
+        rows = [{key: value for key, value in zip(headers, row) if key is not None} for row in values[1:]]
+        return {"rows": rows}
+    finally:
+        book.close()
+
+
 def main():
     try:
         import resource
@@ -164,6 +215,9 @@ def main():
     except ImportError:
         pass  # Windows QA: parent still enforces input/output/time bounds.
     content = sys.stdin.buffer.read(5_000_001)
+    if sys.argv[1] == "import-xlsx":
+        sys.stdout.buffer.write(json.dumps(import_xlsx(content), ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        return
     if sys.argv[1].startswith("capture:"):
         result = capture(content, sys.argv[1].split(":", 1)[1])
         sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))

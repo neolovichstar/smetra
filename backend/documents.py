@@ -4,7 +4,9 @@ import base64
 import csv
 import io
 import json
-import zipfile
+import math
+import re
+import subprocess
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -377,39 +379,27 @@ def transfer(service, method, parts, query, data):
             raw = base64.b64decode(data.get("file", ""), validate=True)
             if len(raw) > 45000:
                 raise ValueError("size")
-            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                if (
-                    sum(f.file_size for f in archive.infolist()) > 5_000_000
-                    or len(archive.infolist()) > 100
-                ):
-                    raise ValueError("archive size")
-                if any(
-                    "vbaProject" in f.filename or "externalLinks" in f.filename
-                    for f in archive.infolist()
-                ):
-                    raise ValueError("active content")
-            from openpyxl import load_workbook
+            from backend.file_processing import isolated_extract
 
-            book = load_workbook(
-                io.BytesIO(raw), read_only=True, data_only=False, keep_links=False
-            )
-            try:
-                sheet = book.active
-                if sheet.max_row > 201 or sheet.max_column > 30:
-                    raise ValueError("row limit")
-                values = list(sheet.iter_rows(values_only=True))
-            finally:
-                book.close()
-            rows = [dict(zip(values[0], r)) for r in values[1:]]
-        except (ValueError, KeyError, zipfile.BadZipFile, IndexError):
+            rows = isolated_extract(raw, "import-xlsx")["rows"]
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise ValueError("Import result")
+        except (ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
             raise DomainError(
                 400, "Некорректный XLSX: до 200 строк, без макросов и внешних ссылок"
             ) from None
-        except ImportError:
-            raise DomainError(503, "Установите openpyxl на сервере") from None
     else:
         text = string(data.get("csv", ""), "CSV", 50000, True).lstrip("\ufeff")
-        rows = list(csv.DictReader(io.StringIO(text)))
+        try:
+            reader = csv.DictReader(io.StringIO(text), strict=True)
+            headers = reader.fieldnames or []
+            if not headers or any(not key for key in headers) or len(headers) > 30 or len(set(headers)) != len(headers):
+                raise ValueError("Invalid headers")
+            rows = list(reader)
+            if any(None in row for row in rows):
+                raise ValueError("Extra columns")
+        except (csv.Error, ValueError):
+            raise DomainError(400, "Некорректный CSV: проверьте заголовки и количество столбцов") from None
     if not 1 <= len(rows) <= 200:
         raise DomainError(400, "Импортируйте от 1 до 200 строк")
     seen_catalog = set()
@@ -424,8 +414,19 @@ def transfer(service, method, parts, query, data):
         for key in ("price", "cost_price"):
             if key in payload:
                 try:
-                    payload[key] = int(payload[key] or 0)
-                except (ValueError, TypeError):
+                    value = payload[key]
+                    if value == "":
+                        value = 0
+                    if isinstance(value, str):
+                        if not re.fullmatch(r"[+-]?[0-9]+", value.strip()):
+                            raise ValueError("Integer kopecks required")
+                    elif type(value) is float:
+                        if not math.isfinite(value) or not value.is_integer():
+                            raise ValueError("Integer kopecks required")
+                    elif type(value) is not int:
+                        raise ValueError("Integer kopecks required")
+                    payload[key] = int(value)
+                except (ValueError, TypeError, OverflowError):
                     raise DomainError(
                         400, f"Строка {index}: цена должна быть целым числом копеек"
                     ) from None

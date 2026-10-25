@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import http.server
 import json
-import math
+
 import os
 import re
 import secrets
@@ -23,11 +23,14 @@ from email.message import EmailMessage
 
 try:
     from backend import business, mytracker, revenue
+    from backend.validation import load_json, read_json_response
+    from backend.database_errors import unavailable as database_unavailable
 except ModuleNotFoundError:
     import business
     import mytracker
     import revenue
-
+    from validation import load_json, read_json_response
+    from database_errors import unavailable as database_unavailable
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
 WEB = ROOT / "apps" / "web"
@@ -259,7 +262,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        if status == 429:
+        if status in (429, 503):
             self.send_header("Retry-After", str(getattr(self, "retry_after", 60)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -282,51 +285,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if size and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise ApiError(415, "Отправьте данные в формате JSON")
         try:
-
-            def reject_constant(value):
-                raise ValueError("Non-finite JSON number")
-
-            def unique_keys(pairs):
-                result = {}
-                for key, value in pairs:
-                    if key in result:
-                        raise ValueError("Duplicate JSON key")
-                    result[key] = value
-                return result
-
             raw = self.rfile.read(size)
             if len(raw) != size:
                 self.close_connection = True
                 raise ValueError("Incomplete request body")
-            data = json.loads(
-                raw if size else b"{}", parse_constant=reject_constant,
-                object_pairs_hook=unique_keys,
-            )
-            if not isinstance(data, dict):
-                raise ValueError("Expected object")
-            # Reject values that cannot be safely stored in PostgreSQL or encoded
-            # in a response. parse_constant alone misses float overflow (1e999).
-            def validate(value, depth=0):
-                if depth > 64:
-                    raise ValueError("JSON nesting limit")
-                if isinstance(value, dict):
-                    for key, item in value.items():
-                        validate(key, depth + 1)
-                        validate(item, depth + 1)
-                elif isinstance(value, list):
-                    for item in value:
-                        validate(item, depth + 1)
-                elif isinstance(value, str):
-                    if "\0" in value:
-                        raise ValueError("Null character")
-                    value.encode("utf-8")
-                elif isinstance(value, float) and not math.isfinite(value):
-                    raise ValueError("Non-finite JSON number")
-
-            validate(data)
-            return data
-        except (ValueError, UnicodeError, RecursionError):
-            raise ApiError(400, "Некорректный JSON")
+            return load_json(raw if size else b"{}")
+        except TimeoutError:
+            self.close_connection = True
+            raise ApiError(408, "Истекло время чтения запроса") from None
+        except ValueError:
+            raise ApiError(400, "Некорректный JSON") from None
 
     def validate_body_length(self, path):
         lengths = self.headers.get_all("Content-Length", [])
@@ -514,13 +482,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ),
                 flush=True,
             )
-            self.send_json(
-                500,
-                {
+            if database_unavailable(err):
+                self.retry_after = 5
+                self.send_json(503, {
+                    "error": "База данных временно недоступна. Попробуйте позже",
+                    "code": "database_unavailable",
+                    "retryAfter": 5,
+                    "request_id": self.request_id,
+                })
+            else:
+                self.send_json(500, {
                     "error": "Внутренняя ошибка. Попробуйте позже",
                     "request_id": self.request_id,
-                },
-            )
+                })
 
     def static(self, path):
         if path == "/health":
@@ -1116,10 +1090,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.verify_yookassa_shop(result)
             if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
                 raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
-            if not result.get("id") or not result.get("confirmation", {}).get(
-                "confirmation_url", ""
-            ).startswith("https://"):
-                raise ApiError(502, "Платежный сервис вернул неполный ответ")
+            confirmation = result.get("confirmation")
+            payment_id = result.get("id")
+            confirmation_url = confirmation.get("confirmation_url") if isinstance(confirmation, dict) else None
+            if (not isinstance(payment_id, str) or not 1 <= len(payment_id) <= 100
+                    or not isinstance(confirmation_url, str) or len(confirmation_url) > 2048):
+                raise ApiError(502, "Платёжный сервис вернул неполный ответ")
+            try:
+                target = urllib.parse.urlsplit(confirmation_url)
+                valid_url = target.scheme == "https" and bool(target.hostname) and not target.username and not target.password
+                target.port  # Reject malformed ports as part of URL validation.
+            except ValueError:
+                valid_url = False
+            if not valid_url or any(char.isspace() or ord(char) < 32 for char in confirmation_url):
+                raise ApiError(502, "Платёжный сервис вернул некорректный адрес оплаты")
             try:
                 saved, created = revenue.persist_checkout(con,user,key,plan,intent,result)
             except ValueError:
@@ -1334,9 +1318,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
         try:
             with urllib.request.urlopen(request, timeout=12) as response:
-                return json.load(response)
-        except (urllib.error.URLError, TimeoutError) as err:
-            print(json.dumps({"payment_api_error": str(err)}), flush=True)
+                return read_json_response(response, 100_000)
+        except (OSError, ValueError) as err:
+            print(json.dumps({"payment_api_error": type(err).__name__, "request_id": getattr(self, "request_id", None)}), flush=True)
             raise ApiError(502, "Платёжный сервис временно недоступен")
 
     def provider_payment(self, payment_id):
@@ -1358,13 +1342,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)
+        amount, metadata = remote.get("amount"), remote.get("metadata")
+        if not isinstance(amount, dict) or not isinstance(metadata, dict):
+            raise ApiError(502, "Платёжный сервис вернул неполный ответ")
         if (
             remote.get("id") != local["provider_id"]
-            or remote.get("amount", {}).get("currency") != "RUB"
-            or remote.get("amount", {}).get("value")
+            or amount.get("currency") != "RUB"
+            or amount.get("value")
             != f"{local['amount_kopecks'] / 100:.2f}"
-            or remote.get("metadata", {}).get("user_id") != local["user_id"]
-            or remote.get("metadata", {}).get("plan") != local["plan"]
+            or metadata.get("user_id") != local["user_id"]
+            or metadata.get("plan") != local["plan"]
         ):
             raise ApiError(409, "Данные платежа не совпали")
         status = remote.get("status")
@@ -1423,6 +1410,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
 
     def apply_refund(self, con, remote):
+        if not isinstance(remote, dict) or not isinstance(remote.get("amount"), dict):
+            raise ApiError(502, "Платёжный сервис вернул неполный ответ возврата")
+        amount = remote["amount"]
         refund_id = remote.get("id")
         payment_id = remote.get("payment_id")
         if (
@@ -1437,8 +1427,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not payment or payment["status"] != "succeeded":
             raise ApiError(409, "Исходный платёж не найден")
         if (
-            remote.get("amount", {}).get("currency") != "RUB"
-            or remote.get("amount", {}).get("value")
+            amount.get("currency") != "RUB"
+            or amount.get("value")
             != f"{payment['amount_kopecks'] / 100:.2f}"
         ):
             raise ApiError(

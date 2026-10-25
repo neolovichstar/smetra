@@ -8,6 +8,7 @@ import os
 import urllib.error
 import urllib.request
 
+from backend.validation import load_json, read_json_response
 from backend.ai import capture_file
 from backend.attachments import download
 from backend.business import DomainError, date_value, identity, packed, stamp, string, transaction
@@ -196,21 +197,22 @@ def _request(model, image_url):
     )
     try:
         with urllib.request.urlopen(request, timeout=35) as response:
-            raw = response.read(8001)
-        if len(raw) > 8000:
-            raise ValueError("response too large")
-        answer = json.loads(raw)["choices"][0]["message"]["content"]
+            result = read_json_response(response, 8000)
+        choice = result["choices"][0]
+        if choice.get("finish_reason") not in (None, "stop") or choice["message"].get("refusal"):
+            raise ValueError("Incomplete OCR response")
+        answer = result["choices"][0]["message"]["content"]
         if not isinstance(answer, str):
             raise ValueError("invalid response")
         answer = answer.strip()
         if answer.startswith("```"):
             answer = answer.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        return json.loads(answer)
+        return load_json(answer)
     except urllib.error.HTTPError as error:
         if error.code == 429:
             raise DomainError(429, "Модель распознавания занята. Попробуйте позже") from None
         raise DomainError(502, "Не удалось распознать чек. Данные закупки не изменены") from None
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
         raise DomainError(502, "Не удалось распознать чек. Данные закупки не изменены") from None
 
 
