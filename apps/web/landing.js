@@ -42,7 +42,7 @@
       script.onload = resolve; script.onerror = () => reject(Error('Не удалось загрузить страницу'));
       document.head.append(script);
     });
-    Promise.all(['/ui/icons.js?v=20261025-r9', '/app.js?v=20261025-r9', '/workspace.js?v=20261025-r9'].map(load))
+    Promise.all(['/ui/icons.js?v=20261025-r10', '/app.js?v=20261025-r10', '/workspace.js?v=20261025-r10'].map(load))
       .then(() => { root.dataset.theme = 'light'; document.body.classList.remove('dark'); })
       .then(() => params.get('intake') ? window.Workspace.intakePage(params.get('intake')) : window.Workspace.publicPage(params.get('quote')))
       .catch(error => {
