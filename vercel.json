@@ -24,6 +24,16 @@
       "destination": "/partner-console.html"
     },
     {
+      "source": "/docs",
+      "has": [
+        {
+          "type": "host",
+          "value": "console.smetra.online"
+        }
+      ],
+      "destination": "/partner-docs.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index"
     },
