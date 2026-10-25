@@ -1075,6 +1075,10 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         *({"role": item["role"], "content": item["content"][:2000]} for item in reversed(previous)),
         {"role": "user", "content": prompt},
     ]
+    # Prepare proposals in memory; insert them only with the final assistant response.
+    # A provider failure or dropped SSE stream must not leave hidden orphan actions.
+    if not hasattr(service, "assistant_deferred_actions"):
+        service.assistant_deferred_actions = []
     actions, answer, remembered = [], "", False
     # Keep multi-step tool use inside Vercel's 120-second function budget.
     deadline = time.monotonic() + 104
