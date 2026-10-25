@@ -48,6 +48,7 @@ BROWSER_ORIGINS = frozenset({
     "https://smetra.online",
     "https://www.smetra.online",
     "https://smetra.vercel.app",
+    "https://console.smetra.online",
 })
 _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
@@ -503,7 +504,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # Never expose main customer routes through the partner hostname.
             console_host = self.headers.get("Host", "").split(":")[0].lower()
             if console_host == "console.smetra.online":
-                if method == "GET" and path in ("/", "/partner-console.js"):
+                if method == "GET" and path in ("/", "/partner-console.js", "/partner-console.css"):
                     return self.static("/partner-console" if path == "/" else path)
                 if not path.startswith("/api/partners/"):
                     raise ApiError(404, "Не найдено")
@@ -584,6 +585,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True})
         public = {
             "/partner-console": ("partner-console.html", "text/html"),
+            "/partner-console.css": ("partner-console.css", "text/css"),
             "/": ("index.html", "text/html"),
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
