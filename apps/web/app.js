@@ -132,7 +132,7 @@ document.documentElement.dataset.theme=document.body.classList.contains('dark')?
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
 function loadingView(section){
-  const names={fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',calculators:'Калькуляторы',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
+  const names={fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',calculators:'Калькуляторы',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',timeline:'График работ',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
   const title=names[section]||'Рабочее пространство';
   return `<section class="page-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Загрузка раздела"><div class="page-loading-head"><span class="page-skeleton page-skeleton-kicker"></span><span class="page-skeleton page-skeleton-title"></span><span class="page-skeleton page-skeleton-copy"></span></div><div class="page-loading-metrics"><span class="page-skeleton"></span><span class="page-skeleton"></span><span class="page-skeleton"></span></div><section class="page-loading-card"><span class="page-skeleton page-skeleton-heading"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row short"></span></section><span class="sr-only">Открываем раздел «${escapeHtml(title)}»</span></section>`;
 }
@@ -160,6 +160,7 @@ const sidebarIcons={
  leads:'<path d="M4 4h16l-6 7v6l-4 3v-9z"/>',
  tasks:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m7 12 3 3 7-7"/>',
  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+ timeline:'<path d="M4 4v16h16M7 9h9M10 14h9M8 19h9"/><path d="M6 7h9v4H6z"/>',
  assistant:'<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
  finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
  calculators:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 17h2M14 17h2"/>',
@@ -356,12 +357,13 @@ async function render() {
     if(active()&&content&&content.innerHTML===initialMarkup&&initialSection!==section)view(loadingView(section));
   },180);pendingPageLoadingTimer=loadingTimer;
   try {
-    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',calculators:'calculators',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
+    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',calculators:'calculators',timeline:'timeline',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
     if(tab==='profile' && window.SmetraProfile){await window.SmetraProfile.render(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
     if(tab==='calculators' && window.SmetraCalculators){window.SmetraCalculators.render();return;}
+    if(tab==='timeline' && window.SmetraSmartTimeline){await window.SmetraSmartTimeline.render(active);return;}
     if(tab==='premium' && window.SmetraPremiumTools){await window.SmetraPremiumTools.render(active);return;}
     if(tab==='chats'&&window.SmetraObjectChats){await window.SmetraObjectChats.render(active);return;}
     if(['fieldwork','inbox'].includes(tab)&&window.SmetraFieldFlows){await window.SmetraFieldFlows.render(tab,active);return;}
@@ -401,7 +403,7 @@ async function render() {
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
-const appSections=new Set(['fieldwork','inbox','chats','dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+const appSections=new Set(['fieldwork','inbox','chats','dashboard','clients','quotes','projects','construction','calculators','timeline','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;
