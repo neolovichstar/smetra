@@ -76,6 +76,32 @@ class AssistantInsightToolsTests(unittest.TestCase):
         self.assertIn({"row": 2, "issue": "zero_price"}, audit["issues"])
         self.assertEqual(audit["revision"], quote["revision"])
 
+    def test_quote_pages_and_published_versions(self):
+        owner, _ = self.account("insights-quote-pages-owner")
+        other, _ = self.account("insights-quote-pages-other")
+        rows = [{"name": "Работа " + str(i), "unit_price": 100 + i,
+                 "quantity": "1"} for i in range(35)]
+        code, response = self.call("/quotes", "POST",
+                                    {"title": "Крупная смета", "client": "Клиент", "items": rows}, owner)
+        self.assertEqual(code, 201, response)
+        quote = response["quote"]
+        page = self.read(owner, "list_quote_items", {
+            "id": quote["id"], "offset": 25, "limit": 10,
+        })
+        self.assertEqual(page["total_items"], 35)
+        self.assertEqual([row["row"] for row in page["rows"]], list(range(26, 36)))
+        self.assertFalse(page["has_more"])
+        self.assertEqual(page["amount_kopecks"], quote["amount_kopecks"])
+        self.assertIn("error", self.read(other, "list_quote_items", {"id": quote["id"]}))
+
+        published = self.call("/quotes/" + quote["id"] + "/publish", "POST",
+                              {"revision": quote["revision"]}, owner)
+        self.assertEqual(published[0], 200, published)
+        versions = self.read(owner, "list_quote_versions", {"id": quote["id"]})
+        self.assertEqual(versions["published_version"], 1)
+        self.assertEqual(versions["versions"][0]["version"], 1)
+        self.assertIn("error", self.read(other, "list_quote_versions", {"id": quote["id"]}))
+
     def test_project_finances_scoped_and_deadline_radar(self):
         owner, _ = self.account("insights-project-owner")
         other, _ = self.account("insights-project-other")
@@ -102,10 +128,13 @@ class AssistantInsightToolsTests(unittest.TestCase):
     def test_validation_rejects_unknown_functions_extra_fields_and_bad_types(self):
         names = {t["function"]["name"] for t in tools()}
         for name in ("audit_quote", "find_catalog_prices", "project_finances", "deadline_radar",
-                     "compare_quote_versions", "catalog_price_history", "search_workspace"):
+                     "compare_quote_versions", "catalog_price_history", "search_workspace",
+                     "list_quote_items", "list_quote_versions"):
             self.assertIn(name, names)
         for name, args in (
             ("unknown_function", {}),
+            ("list_quote_items", {"id": "a", "offset": 200}),
+            ("list_quote_items", {"id": "a", "limit": 31}),
             ("get_record", {"entity": "quotes", "id": "a", "unexpected": 1}),
             ("deadline_radar", {"days": True}),
             ("deadline_radar", {"days": 366}),
