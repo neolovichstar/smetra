@@ -22,6 +22,7 @@ const ADB = process.env.SMETRA_SCREENCAP === 'adb';
 const SCREENS = [
   { id: '01-dashboard', hash: 'dashboard', title: 'Главная' },
   { id: '02-quotes', hash: 'quotes', title: 'Сметы' },
+  { id: '03-assistant', hash: 'assistant', title: 'ИИ-ассистент', wait: '.assistant-message, .assistant-thread, #assistant-input' },
   { id: '04-construction', hash: 'construction', title: 'Объекты', wait: '.construction-object' },
   { id: '05-object', hash: 'construction', title: 'Помещения и объёмы', wait: '.construction-object', click: '.construction-object', settle: 1800 },
   { id: '06-calculators', hash: 'calculators', title: 'Калькуляторы' },
@@ -29,9 +30,25 @@ const SCREENS = [
   { id: '08-clients', hash: 'clients', title: 'Клиенты' },
   { id: '09-finance', hash: 'finance', title: 'Деньги' },
   { id: '10-tokens', hash: 'billing', title: 'Токены ИИ', wait: '[data-billing-tab="tokens"]', click: '[data-billing-tab="tokens"]', settle: 1500 },
-  // Last on purpose: the emulator has died on this screen, and the rest must still be captured.
-  { id: '03-assistant', hash: 'assistant', title: 'ИИ-ассистент', wait: '.assistant-message, .assistant-thread, #assistant-input' },
 ];
+
+// The CI emulator lives about 40 seconds, so screens are captured in batches,
+// each in a fresh emulator; results from all batches are merged by id.
+const ONLY = (process.env.SMETRA_SCREEN_IDS || '').split(',').map(item => item.trim()).filter(Boolean);
+const RUN = ONLY.length ? SCREENS.filter(screen => ONLY.some(prefix => screen.id.startsWith(prefix))) : SCREENS;
+const readJson = (name, fallback) => { try { return JSON.parse(fs.readFileSync(path.join(OUT, name), 'utf8')); } catch { return fallback; } };
+const byId = (items, key) => [...new Map(items.map(item => [item[key], item])).values()].sort((a, b) => a[key].localeCompare(b[key]));
+function save(metrics, critic, errors) {
+  const known = readJson('screens.json', []);
+  const done = critic.map(entry => SCREENS.find(screen => screen.id === entry.screen)).map(({ id, title, hash }) => ({ id, title, route: '/app#' + hash, file: 'raw/' + id + '.png' }));
+  fs.writeFileSync(path.join(OUT, 'screens.json'), JSON.stringify(byId([...known, ...done], 'id'), null, 2));
+  const review = readJson('ui-critic.json', { screens: [], console_errors: [] });
+  fs.writeFileSync(path.join(OUT, 'ui-critic.json'), JSON.stringify({ generated_at: new Date().toISOString(),
+    screens: byId([...review.screens, ...critic], 'screen'), console_errors: [...new Set([...(review.console_errors || []), ...errors])].slice(0, 20) }, null, 2));
+  const previous = readJson('metrics-web.json', null);
+  const merged = previous ? { ...previous, screens: byId([...previous.screens, ...metrics.screens], 'id') } : metrics;
+  fs.writeFileSync(path.join(OUT, 'metrics-web.json'), JSON.stringify(merged, null, 2));
+}
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -160,7 +177,7 @@ async function capture(cdp, file) {
   const timing = await evaluate(cdp, `(() => { const n = performance.getEntriesByType('navigation')[0] || {}; return { dom_content_loaded_ms: Math.round(n.domContentLoadedEventEnd || 0), load_ms: Math.round(n.loadEventEnd || 0), transfer_kb: Math.round((performance.getEntriesByType('resource').reduce((sum, r) => sum + (r.transferSize || 0), 0) + (n.transferSize || 0)) / 1024) }; })()`);
   const metrics = { origin: ORIGIN, capture: ADB ? 'adb screencap (device)' : 'CDP (browser)', cabinet_ready_ms: Date.now() - started, ...timing, screens: [] };
   const critic = [];
-  for (const screen of SCREENS) {
+  for (const screen of RUN) {
     const begin = Date.now();
     await evaluate(cdp, `(() => { document.querySelectorAll('dialog[open]').forEach(d => d.close()); const next = ${JSON.stringify(screen.hash)}; if (location.hash.slice(1) === next) { location.hash = 'dashboard'; } return true; })()`);
     await sleep(300);
@@ -178,14 +195,10 @@ async function capture(cdp, file) {
     critic.push({ screen: screen.id, title: screen.title, ...review });
     metrics.screens.push({ id: screen.id, route: '/app#' + screen.hash, render_ms: rendered });
     console.log(screen.id, rendered + 'ms', review.issues.length ? review.issues.map(issue => issue.rule).join(',') : 'ok');
-    fs.writeFileSync(path.join(OUT, 'ui-critic.json'), JSON.stringify({ generated_at: new Date().toISOString(), screens: critic, console_errors: [] }, null, 2));
-    fs.writeFileSync(path.join(OUT, 'screens.json'), JSON.stringify(SCREENS.slice(0, SCREENS.indexOf(screen) + 1).map(({ id, title, hash }) => ({ id, title, route: '/app#' + hash, file: 'raw/' + id + '.png' })), null, 2));
+    save({ ...metrics, screens: metrics.screens.slice(-1) }, critic.slice(-1), []);
   }
   const errors = cdp.events.filter(event => event.method === 'Runtime.exceptionThrown' || (event.method === 'Runtime.consoleAPICalled' && event.params.type === 'error'))
     .map(event => event.params.exceptionDetails?.exception?.description || (event.params.args || []).map(arg => arg.value || arg.description).join(' ')).slice(0, 20);
-  metrics.console_errors = errors;
-  fs.writeFileSync(path.join(OUT, 'metrics-web.json'), JSON.stringify(metrics, null, 2));
-  fs.writeFileSync(path.join(OUT, 'ui-critic.json'), JSON.stringify({ generated_at: new Date().toISOString(), screens: critic, console_errors: errors }, null, 2));
-  fs.writeFileSync(path.join(OUT, 'screens.json'), JSON.stringify(SCREENS.map(({ id, title, hash }) => ({ id, title, route: '/app#' + hash, file: 'raw/' + id + '.png' })), null, 2));
+  save({ ...metrics, screens: [] }, [], errors);
   cdp.close();
 })().catch(error => { console.error(error); process.exit(1); });

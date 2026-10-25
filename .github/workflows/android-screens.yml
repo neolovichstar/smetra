@@ -59,10 +59,47 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Capture screens in the emulator
+      - name: Capture screens 01,02,03,04 (fresh emulator)
         uses: reactivecircus/android-emulator-runner@v2
         env:
           SMETRA_ORIGIN: http://10.0.2.2:8090
+          SMETRA_SCREEN_IDS: '01,02,03,04'
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 2048M
+          heap-size: 256M
+          cores: 2
+          disk-size: 6000M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none
+          script: SMETRA_SESSION=$(cat data/promo-session) bash scripts/android_emulator_screens.sh
+      - name: Capture screens 05,06,07 (fresh emulator)
+        if: always()
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SMETRA_ORIGIN: http://10.0.2.2:8090
+          SMETRA_SCREEN_IDS: '05,06,07'
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 2048M
+          heap-size: 256M
+          cores: 2
+          disk-size: 6000M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none
+          script: SMETRA_SESSION=$(cat data/promo-session) bash scripts/android_emulator_screens.sh
+      - name: Capture screens 08,09,10 (fresh emulator)
+        if: always()
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SMETRA_ORIGIN: http://10.0.2.2:8090
+          SMETRA_SCREEN_IDS: '08,09,10'
         with:
           api-level: 34
           target: default

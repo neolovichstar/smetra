@@ -34,6 +34,7 @@ adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid"
 SMETRA_CDP=http://127.0.0.1:9222 SMETRA_SCREENCAP=adb SMETRA_SCREENS_DIR="$OUT" node scripts/android_screens.cjs
 
 pss=$(adb shell dumpsys meminfo "$PACKAGE" | tr -d '\r' | awk '/TOTAL PSS:/{print $3; exit} /^ *TOTAL /{print $2; exit}')
+[ -f "$OUT/metrics-native.json" ] && exit 0
 cat > "$OUT/metrics-native.json" <<JSON
 {
   "device": "$(adb shell getprop ro.product.model | tr -d '\r')",
