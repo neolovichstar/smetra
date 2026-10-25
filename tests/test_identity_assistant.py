@@ -491,6 +491,10 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertEqual(quote["title"], "Ремонт кухни")
         self.assertEqual(quote["client"], "Клиент не указан")
         self.assertEqual(quote["status"], "draft")
+        self.assertEqual(quote["amount_kopecks"], 0)
+        self.assertEqual(self.call("/quotes/" + quote["id"] + "/publish", "POST", {
+            "revision": quote["revision"], "review_confirmed": True,
+        }, owner)[0], 409, "Unknown prices must never become a published client offer")
         self.assertEqual(self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner)[0], 200)
         self.assertEqual(len(self.call("/quotes", token=owner)[1]["quotes"]), 1)
         recent = self.call("/assistant", token=owner)[1]["recent_actions"]
