@@ -43,3 +43,21 @@ Validation after the second pass: 398 Python unittest cases (397 passed, one opt
 The prior commit's GitHub CI passed Python 3.12 unit tests, dependency audit, DOM checks, web build and Android build. It failed the existing mobile navigation geometry assertion at tests/browser_flows.cjs:85. That frontend/browser-layout failure is recorded rather than bypassed; frontend source and browser assertions were not changed in this backend task.
 
 Supabase checks in this pass were read-only. Security Advisor returned informational private-schema RLS-without-policy findings, which were not treated as proof of public access. No database schema, privileges, user records or production deployment were changed.
+
+
+## Third pass — synchronous requests, retry recipients and erasure
+
+Additional reproductions and repairs:
+
+- Synchronous assistant requests now use the same live-session/membership validation boundaries as background chat. Streaming validates before the first content chunk, periodically while streaming (at most one-second intervals), after the provider returns, before tools and at final persistence. This prevents subsequent reads/proposals/history after detected revocation; already transmitted content cannot be recalled and an external provider call already in flight is not cancelled by this patch.
+- Workspace writes refresh the actor's session and actual team role after body parsing and again inside the ordinary write transaction. Action confirmation and reversal also revalidate within their own transactions. A deterministic API regression demotes the writer after initial authentication but before the client mutation and verifies that no record is created.
+- Administrative user/support mutations now reauthenticate the administrator inside a transaction after the request body has arrived. A revoked administrator can no longer grant access through a request that passed an earlier role check. The grant timestamp expression also uses a portable CASE rather than SQLite-only two-argument max.
+- Push retries are no longer authorized solely by an old device snapshot. Each retry requires the current session and workspace membership; ineligible deliveries are closed, including before the no-recipient early return. A failed delivery followed by removal from the team no longer sends the next notification to that recipient. Notifications already handed to the external provider remain outside this guarantee.
+- Account erasure now removes private assistant jobs, general messages, conversations, proposals, external identity bindings, OAuth handoff tickets/link states and push registrations across shared workspaces. Team-owned clients, quotes and attachments remain intact. Financial records retain the existing pseudonymous retention behavior.
+- Public construction-change links now check the workspace owner's active account both before and inside the public transaction. A blocked or deleted owner cannot continue exposing or collecting approvals through this previously unguarded path.
+
+All attack reproductions use isolated test accounts; no production account was deleted, blocked or granted access. Seven regression test methods were added in this pass, including actual logout and team-role operations, first-chunk streaming revocation, delayed administrator requests, private-state erasure and push retry exclusion.
+
+Verification: 405 unittest cases (404 passed, one optional disposable-PostgreSQL/RLS case skipped); repository-wide Ruff, compileall and diff checks passed. The audit remains targeted: it does not establish the absence of every possible attack. No frontend files, live business data or database schema were changed. The changes are on PR #64 and require release before they protect production.
+
+Read-only cloud metadata review also checked effective SELECT/INSERT/UPDATE/DELETE privileges (including inherited/public grants) for anon/authenticated across smetra tables and views: no effective relation privileges were found. The one authenticated SECURITY DEFINER helper, object_chat_realtime_allowed, was inspected: it checks signed JWT subject/session claims, an active stored session, current membership and workspace entitlement, and returns only a boolean. These are metadata/definition checks, not a replacement for the skipped disposable-database API/RLS integration test.

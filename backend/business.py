@@ -564,6 +564,22 @@ class Service:
         if callable(setter) and self.user and self.wid:
             setter((f"workspace:{self.wid}", f"user:{self.user['id']}"))
 
+    def revalidate_access(self):
+        """Refresh the authenticated actor and membership at a work boundary."""
+        token_hash = getattr(self.h, "session_token_hash", "")
+        row = self.global_con.execute(
+            "SELECT u.*,m.role AS workspace_role FROM sessions s "
+            "JOIN users u ON u.id=s.user_id "
+            "JOIN workspace_members m ON m.user_id=u.id AND m.workspace_id=? "
+            "WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? "
+            "AND u.blocked=0 AND u.deleted_at IS NULL",
+            (self.wid, token_hash, self.user["id"], stamp()),
+        ).fetchone()
+        if not row:
+            raise DomainError(403, "Доступ изменился. Войдите в аккаунт повторно")
+        self.user, self.role = row, row["workspace_role"]
+        self.write_access()
+
     def get(self, table, record_id):
         if not isinstance(record_id, str) or not 1 <= len(record_id) <= 100:
             raise DomainError(400, "Некорректный идентификатор записи")
@@ -2193,7 +2209,7 @@ class Service:
         ):
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
-            self.write_access()
+            self.revalidate_access()
             if kind == "assistant":
                 from backend.assistant import route
 
@@ -2209,6 +2225,7 @@ class Service:
                 self.con,
                 lock_scopes=(f"workspace:{self.wid}", f"user:{self.user['id']}"),
             ):
+                self.revalidate_access()
                 return self.route(method, kind, rest, query, data)
         return self.route(method, kind, rest, query, data)
 

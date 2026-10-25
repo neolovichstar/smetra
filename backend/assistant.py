@@ -772,6 +772,7 @@ def confirm(service, action_id):
 def _confirm(service, action_id):
     service.write_access()
     with transaction(service.con):
+        service.revalidate_access()
         row = service.con.execute(
             "SELECT * FROM assistant_actions WHERE id=? AND workspace_id=? AND user_id=?" +
             (" FOR UPDATE" if getattr(service.con, "is_postgres", False) else ""),
@@ -1036,14 +1037,21 @@ class ChatStream:
         try:
             send("ready", {"quota": public_quota(self.service)})
 
+            last_access_check = None
+
             def delta(text):
-                nonlocal emitted
+                nonlocal emitted, last_access_check
+                moment = time.monotonic()
+                if last_access_check is None or moment - last_access_check >= 1:
+                    self.service.revalidate_access()
+                    last_access_check = moment
                 emitted = True
                 send("delta", {"text": text})
 
             send("done", answer_chat(
                 self.service, self.prompt, delta, self.context,
                 self.conversation_id, lambda message: send("status", {"text": message}),
+                on_validate=self.service.revalidate_access,
             ))
         except DomainError as error:
             if not emitted:
@@ -1180,7 +1188,8 @@ def route(service, method, parts, data):
     if parts == ["stream"]:
         return 200, ChatStream(service, prompt, quota_key, context, lease, conversation_id)
     try:
-        return 200, answer_chat(service, prompt, context=context, conversation_id=conversation_id)
+        return 200, answer_chat(service, prompt, context=context, conversation_id=conversation_id,
+                                on_validate=service.revalidate_access)
     except Exception:
         release(service, quota_key)
         raise

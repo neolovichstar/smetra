@@ -990,6 +990,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
+                    # Shared business records belong to the workspace, but the
+                    # departing user's private conversations and login links do not.
+                    for table in (
+                        "assistant_jobs", "assistant_messages", "assistant_actions",
+                        "assistant_conversations", "external_identities", "oauth_tickets",
+                        "push_devices",
+                    ):
+                        con.execute(f"DELETE FROM {table} WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM oauth_states WHERE link_user_id=?", (user["id"],))
                     con.execute("DELETE FROM pricing_assignments WHERE user_id=?", (user['id'],))
                     con.execute("DELETE FROM referral_rewards WHERE inviter_id=? OR invitee_id=?", (user['id'],user['id']))
                     con.execute("DELETE FROM referral_links WHERE user_id=?", (user['id'],))
@@ -1215,12 +1224,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status = self.body().get("status")
             if status not in ("open", "closed"):
                 raise ApiError(400, "Некорректный статус")
-            row = con.execute("SELECT status FROM support WHERE id=?", (target,)).fetchone()
-            if not row:
-                raise ApiError(404, "Обращение не найдено")
-            if row["status"] != status:
-                con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
-                audit(con, user["id"], "admin.support." + status, target)
+            with business.transaction(con, lock_scopes=(f"user:{user['id']}", f"support:{target}")):
+                user = self.auth(con, admin=True)
+                row = con.execute("SELECT status FROM support WHERE id=?", (target,)).fetchone()
+                if not row:
+                    raise ApiError(404, "Обращение не найдено")
+                if row["status"] != status:
+                    con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
+                    audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
         if path.startswith("/api/admin/users/") and method == "PATCH":
             target = path.removeprefix("/api/admin/users/")
@@ -1229,30 +1240,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
             reason = data.get("reason", "")
             if not isinstance(reason, str) or len(reason.strip()) > 200:
                 raise ApiError(400, "Некорректная причина")
-            if target == user["id"] and action == "block":
-                raise ApiError(409, "Нельзя заблокировать себя")
-            if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
-                raise ApiError(404, "Пользователь не найден")
-            if action in ("block", "unblock"):
-                con.execute(
-                    "UPDATE users SET blocked=? WHERE id=?",
-                    (int(action == "block"), target),
-                )
-                if action == "block":
-                    con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
-            elif action == "grant":
-                con.execute(
-                    "UPDATE users SET plan='pro',entitlement_until=max(coalesce(entitlement_until,0),?)+? WHERE id=?",
-                    (now(), 31 * 86400, target),
-                )
-            elif action == "revoke":
-                con.execute(
-                    "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
-                    (target,),
-                )
-            else:
-                raise ApiError(400, "Неизвестное действие")
-            audit(con, user["id"], "admin." + action, target, reason.strip())
+            with business.transaction(con, lock_scopes=(f"user:{user['id']}", f"user:{target}")):
+                user = self.auth(con, admin=True)
+                if target == user["id"] and action == "block":
+                    raise ApiError(409, "Нельзя заблокировать себя")
+                if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
+                    raise ApiError(404, "Пользователь не найден")
+                if action in ("block", "unblock"):
+                    con.execute(
+                        "UPDATE users SET blocked=? WHERE id=?",
+                        (int(action == "block"), target),
+                    )
+                    if action == "block":
+                        con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
+                elif action == "grant":
+                    con.execute(
+                        "UPDATE users SET plan='pro',entitlement_until="
+                        "(CASE WHEN coalesce(entitlement_until,0)>? THEN entitlement_until ELSE ? END)+? WHERE id=?",
+                        (now(), now(), 31 * 86400, target),
+                    )
+                elif action == "revoke":
+                    con.execute(
+                        "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
+                        (target,),
+                    )
+                else:
+                    raise ApiError(400, "Неизвестное действие")
+                audit(con, user["id"], "admin." + action, target, reason.strip())
             return self.send_json(200, {"ok": True})
         raise ApiError(404, "Маршрут не найден")
 
