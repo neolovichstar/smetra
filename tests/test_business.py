@@ -1324,6 +1324,9 @@ class BusinessFlows(unittest.TestCase):
             con.execute("UPDATE workspaces SET plan='team_month',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (self.mod.now() + 86400, wid))
         self.assertEqual(self.call("/workspace/members", "POST", {"email": "finance-perm-member@test.invalid", "role": "member"}, owner)[0], 200)
 
+        def json_text(value):
+            return json.dumps(value, ensure_ascii=False)
+
         def hidden_everywhere():
             quote = self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"]
             self.assertNotIn("internal_cost", quote)
@@ -1347,7 +1350,6 @@ class BusinessFlows(unittest.TestCase):
             for feed in ("/activity", "/notifications", "/overview"):
                 self.assertNotIn("Расход записан", json_text(self.call(feed, token=member, workspace=wid)[1]), feed)
 
-        json_text = lambda value: json.dumps(value, ensure_ascii=False)
         hidden_everywhere()
 
         # Editing blind keeps the real cost; a typed cost is ignored.
