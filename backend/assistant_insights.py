@@ -145,20 +145,31 @@ def read(service, name, args):
                              {"from": [source], "to": [target]}, {})[1]
 
     if name == "project_finances":
-        project = service.route("GET", "projects", [_id(args, "Заказ")], {}, {})[1]["item"]
+        project = service.get("projects", _id(args, "Заказ"))
+        # Use bounded aggregates instead of materializing every payment and expense.
+        # Both sums are constrained by workspace and by the previously verified project.
+        paid_row = service.con.execute(
+            "SELECT coalesce(sum(amount_kopecks),0) AS amount,count(*) AS entries "
+            "FROM project_payments WHERE workspace_id=? AND project_id=?",
+            (service.wid, project["id"]),
+        ).fetchone()
+        spent_row = service.con.execute(
+            "SELECT coalesce(sum(amount_kopecks),0) AS amount,count(*) AS entries "
+            "FROM expenses WHERE workspace_id=? AND project_id=?",
+            (service.wid, project["id"]),
+        ).fetchone()
         planned = project["amount_kopecks"]
-        paid = project["paid"]
-        spent = project["actual_cost"]
+        paid, spent = paid_row["amount"], spent_row["amount"]
         return {
             "id": project["id"], "name": project["name"],
             "currency": project["currency"], "status": project["status"],
             "planned_revenue_kopecks": planned,
-            "planned_cost_kopecks": project.get("internal_cost"),
+            "planned_cost_kopecks": project["internal_cost"],
             "paid_kopecks": paid, "expenses_kopecks": spent,
             "unpaid_kopecks": max(0, planned - paid),
             "cash_position_kopecks": paid - spent,
-            "payment_count": len(project["payments"]),
-            "expense_count": len(project["expenses"]),
+            "payment_count": paid_row["entries"],
+            "expense_count": spent_row["entries"],
             "source": "workspace_project_ledger",
         }
 
