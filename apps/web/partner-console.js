@@ -25,6 +25,7 @@
     $("earned").textContent = money(response.earned_kopecks);
     $("cleared").textContent = money(response.cleared_kopecks);
     $("partner-name").textContent = "Партнёр: "+String(response.partner || "");
+    $("referral-link").value = "https://smetra.online/api/partners/r/" + encodeURIComponent(response.partner || "");
   };
   $("connect").addEventListener("submit", async event => {
     event.preventDefault();
@@ -46,6 +47,10 @@
       token = "";
       feedback(error.message);
     } finally { btn.disabled = false; }
+  });
+  $("copy-link").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("referral-link").value); feedback("Ссылка скопирована"); }
+    catch { $("referral-link").select(); feedback("Скопируйте выделенную ссылку"); }
   });
   $("refresh").addEventListener("click", () => refresh().catch(error => feedback(error.message)));
   $("catalog").addEventListener("submit", async event => {
