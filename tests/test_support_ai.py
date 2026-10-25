@@ -75,6 +75,32 @@ class SupportReplyTransportTests(unittest.TestCase):
             result = community._support_ai_reply({"id": "u"}, {}, [], "Позовите оператора, пожалуйста")
         self.assertTrue(result["escalate"])
 
+    def test_explicit_human_request_never_calls_openrouter(self):
+        with patch("backend.model_transport.urllib.request.urlopen",
+                   side_effect=AssertionError("must not contact OpenRouter")):
+            result = community._support_ai_reply(
+                {"id": "u"}, {}, [], "Позовите живого оператора, пожалуйста"
+            )
+        self.assertTrue(result["escalate"])
+        self.assertEqual(result["reason"], "user_requested_human")
+
+    def test_nonboolean_escalation_does_not_summon_an_employee(self):
+        with patch("backend.model_transport.urllib.request.urlopen",
+                   return_value=reply('{"reply":"Откройте настройки","escalate":"false"}')):
+            result = community._support_ai_reply({"id": "u"}, {}, [], "Где настройки?")
+        self.assertFalse(result["escalate"])
+
+    def test_provider_rate_limit_is_not_replayed(self):
+        rate_limit = urllib.error.HTTPError(
+            "https://openrouter.ai", 429, "rate limit", {}, io.BytesIO()
+        )
+        with patch("backend.model_transport.urllib.request.urlopen",
+                   side_effect=rate_limit) as opener:
+            result = community._support_ai_reply({"id": "u"}, {}, [], "Где сметы?")
+        self.assertTrue(result["escalate"])
+        self.assertEqual(result["reason"], "support_ai_error")
+        self.assertEqual(opener.call_count, 1)
+
     def test_provider_failure_hands_off_to_a_person(self):
         error = urllib.error.URLError("down")
         with patch("backend.model_transport.urllib.request.urlopen", side_effect=error):
