@@ -603,6 +603,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("calculators.css", "text/css"),
             ("estimate-audit.js", "text/javascript"),
             ("estimate-audit.css", "text/css"),
+            ("price-impact.js", "text/javascript"),
+            ("price-impact.css", "text/css"),
             ("construction.js", "text/javascript"),
             ("field-flows.js", "text/javascript"),
             ("field-flows.css", "text/css"),
