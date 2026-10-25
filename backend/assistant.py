@@ -774,6 +774,11 @@ def prepare(service, name, args):
             args["_undo_fields"], args["_preview"] = before, preview
         else:
             args.pop("id", None)
+            if operation == "create" and entity == "quotes" and not str(args.get("client") or "").strip():
+                # The model's create_quotes tool requires title and line items,
+                # but a draft can be requested before a client is known. Quote
+                # validation still expects a nonempty client display label.
+                args["client"] = "Клиент не указан"
             if entity == "stages":
                 project = service.get("projects", string(args.get("project_id", ""), "Заказ", 80, True))
                 args["_preview"] = {"kind": "fields", "currency": project["currency"], "rows": [
