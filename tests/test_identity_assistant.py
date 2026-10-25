@@ -482,6 +482,18 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertEqual(status, 200, proposed)
         action = proposed["actions"][0]
         self.assertEqual(action["arguments"]["client"], "Клиент не указан")
+        # Pending actions created by an older release lack the client field.
+        # They must remain applicable after the backend-only hotfix.
+        with self.mod.db() as con:
+            stored = con.execute(
+                "SELECT arguments FROM assistant_actions WHERE id=?", (action["id"],)
+            ).fetchone()
+            legacy = json.loads(stored["arguments"])
+            legacy.pop("client", None)
+            con.execute(
+                "UPDATE assistant_actions SET arguments=? WHERE id=?",
+                (json.dumps(legacy), action["id"]),
+            )
         self.assertEqual(self.call("/quotes", token=owner)[1]["quotes"], [])
         rejected = self.call("/assistant/confirm", "POST", {"id": action["id"]}, stranger)
         self.assertEqual(rejected[0], 404)
