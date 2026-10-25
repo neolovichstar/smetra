@@ -109,13 +109,17 @@
 
 @media (max-width:1100px){
   .editor-layout{grid-template-columns:minmax(0,1fr)}
-  .editor-aside{position:sticky;top:auto;bottom:0;z-index:20;order:2}
-  .editor-summary{flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px var(--s-4);border-radius:var(--r-3) var(--r-3) 0 0;box-shadow:var(--shadow-float)}
+  /* Only the total bar stays in reach; the draft check flows with the page. */
+  .editor-aside{position:static;order:2}
+  .editor-summary{position:fixed;left:var(--sidebar-w);right:0;bottom:var(--tabbar-space,0px);z-index:40;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:var(--s-3);margin:0;padding:10px var(--s-4);border-width:1px 0 0;border-radius:0;background:color-mix(in srgb,var(--surface-1) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 -8px 24px rgba(0,0,0,.18)}
+  body.sidebar-compact .editor-summary{left:var(--sidebar-rail)}
+  .quote-editor-form{padding-bottom:88px}
   .editor-summary .editor-section-title,.editor-summary>.muted,.editor-device{display:none}
-  .editor-total{font-size:var(--fs-24);flex:1}
-  .editor-summary .btn.primary{margin:0;width:auto}
+  .editor-total{flex:1;min-width:0;font-size:clamp(18px,5.4vw,var(--fs-24));white-space:nowrap;overflow-wrap:normal}
+  .editor-summary .btn.primary{flex:none;margin:0;width:auto}
   .editor-ai-action{width:auto}
 }
+@media (max-width:800px){.editor-summary{left:0}body.sidebar-compact .editor-summary{left:0}}
 @media (max-width:700px){
   .editor-section{padding:var(--s-4)}
   .editor-meta-grid{grid-template-columns:1fr}
@@ -124,6 +128,12 @@
   .editor-line-total{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}
   .editor-bulk-controls{grid-template-columns:1fr}
   .editor-ai-action{display:none}
+  .editor-history{flex-wrap:wrap;row-gap:4px}
+  #editor-save-state{min-width:0;font-size:var(--fs-12)}
+  .editor-row-tools{grid-row:3;justify-self:stretch;justify-content:flex-end;margin-top:var(--s-3)}
+  .editor-row-tools button{min-height:40px;min-width:40px}
+  .editor-item>details{grid-row:4;justify-self:stretch;max-width:none;margin-top:var(--s-1)}
+  .editor-item>details>summary{min-height:40px;align-items:center;white-space:nowrap}
 }
 @media (max-width:700px){.catalog-picker{flex-direction:column;flex-basis:100%}.catalog-picker>input,.catalog-picker .row{flex:none;width:100%}.editor-add-row{width:100%}}
 .catalog-picker .select-trigger>span:first-child{white-space:normal;text-overflow:clip;overflow:visible}

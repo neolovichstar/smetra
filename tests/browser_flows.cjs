@@ -179,7 +179,7 @@ const assert = require('node:assert/strict');
   await click('[data-work=catalog-favorite]');await until("document.querySelector('[data-work=catalog-favorite][aria-pressed=true]')");
   await click('#catalog-favorites');await until("document.querySelector('#records')?.textContent.includes('Покраска стен')");
   await click('.catalog-row [data-work=entity]');await until("document.querySelector('.catalog-detail-price')");
-  await click('[data-work=catalog-edit]');await until("document.querySelector('#workspace-dialog')?.open && document.querySelector('.dialog-heading h2')?.textContent==='Редактирование'");await fill('#f-price','1400');await click('#entity-form [type=submit]');
+  await click('[data-work=catalog-edit]');await until("document.querySelector('#workspace-dialog')?.open && document.querySelector('.dialog-heading h2')?.textContent==='Расценка'");await fill('#f-price','1400');await click('#entity-form [type=submit]');
   await until("!document.querySelector('#workspace-dialog')?.open && document.querySelectorAll('.catalog-history-row').length===2");
   assert.match(await evaluate("document.querySelector('.catalog-detail-price').textContent"),/1.?400/);await shot('catalog-price-history');
   await click('[data-work=navigate]');await until("document.querySelector('.catalog-row')");await click('[data-work=new]');await until("document.querySelector('#workspace-dialog')?.open");

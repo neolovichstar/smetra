@@ -463,3 +463,36 @@
 }
 /* Money stays on one line on phones instead of dropping the currency sign. */
 .business-stats .stat strong{font-size:clamp(17px,4.8vw,var(--fs-24));overflow-wrap:normal;white-space:nowrap}
+/* Phone: estimate rows become cards — name, then quantity × price and the line total. */
+@media (max-width:600px){
+  #content .estimate-table,#content .estimate-table tbody{display:block;width:100%}
+  #content .estimate-table thead{display:none}
+  #content .estimate-table tr{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;column-gap:8px;row-gap:4px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  #content .estimate-table tr:last-child{border-bottom:0}
+  #content .estimate-table td{display:block;min-width:0;padding:0;border:0;text-align:left;white-space:normal}
+  #content .estimate-table td:first-child{grid-column:1/-1;min-width:0}
+  #content .estimate-table td:nth-child(2),#content .estimate-table td:nth-child(3){color:var(--text-2);font-size:var(--fs-14);white-space:nowrap}
+  #content .estimate-table td:nth-child(3)::before{content:'× '}
+  #content .estimate-table td:nth-child(4){text-align:right;font-weight:600;white-space:nowrap}
+  #content .table-wrap:has(> .estimate-table){overflow:visible}
+}
+/* Phone: quote actions — the main action spans the row, the rest share an even grid. */
+@media (max-width:600px){
+  #quote-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  #quote-controls>.btn{width:100%;min-width:0;justify-content:center;padding-inline:10px;white-space:nowrap;min-height:44px}
+  #quote-controls>.btn:last-child:nth-child(even){grid-column:1/-1}
+  #quote-controls>.btn.primary{grid-column:1/-1;order:-1}
+}
+/* Phone: list toolbars — search on its own row, filters and actions share even rows. */
+@media (max-width:600px){
+  .panel>.toolbar{gap:8px}
+  .panel>.toolbar input[type=search]{flex:1 1 100%;max-width:none}
+  .panel>.toolbar .select-control{flex:1 1 100%;min-width:0}
+  .panel>.toolbar>.catalog-favorite-filter{flex:1 1 calc(50% - 4px);min-width:0;min-height:44px}
+  .panel>.toolbar>.btn,.panel>.toolbar>.btn:first-of-type{flex:1 1 calc(50% - 4px);min-width:0;margin-left:0;padding-inline:8px;justify-content:center}
+}
+/* Phone: the task checkbox stays beside its title instead of wrapping above it. */
+@media (max-width:640px){
+  .tasks-row{align-items:center}
+  .tasks-row>.record-title{flex:1 1 0;min-width:0}
+}

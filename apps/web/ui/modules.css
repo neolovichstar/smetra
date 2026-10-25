@@ -246,12 +246,12 @@
 .tg-send svg{width:20px;height:20px}
 
 /* Support page fills the workspace like the assistant. */
-.support-studio{height:calc(100dvh - var(--topbar-h))}
+.support-studio{height:calc(100dvh - var(--topbar-h) - var(--tabbar-space,0px))}
 .support-studio .tg-rail-head .btn{gap:6px}
 
 /* Communication center: a full page inside the cabinet. The top bar and the
    main sidebar stay visible, like any other section. */
-.comms-shell{position:fixed;top:var(--topbar-h);right:0;bottom:0;left:var(--sidebar-w);z-index:60;display:none;background:var(--bg);transition:left var(--t-slow) var(--ease)}
+.comms-shell{position:fixed;top:var(--topbar-h);right:0;bottom:var(--tabbar-space,0px);left:var(--sidebar-w);z-index:60;display:none;background:var(--bg);transition:left var(--t-slow) var(--ease)}
 body.sidebar-compact .comms-shell{left:var(--sidebar-rail)}
 .comms-shell.is-open{display:block;animation:fade-in var(--t-base) var(--ease)}
 body.comms-scroll-locked{overflow:hidden}

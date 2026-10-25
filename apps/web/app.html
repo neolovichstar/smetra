@@ -6,24 +6,24 @@
   <title>Кабинет · Сметра</title>
   <meta name="theme-color" content="#000000">
   <link rel="manifest" href="/manifest.webmanifest">
-  <script src="/pwa.js?v=20261025-r8" defer></script>
-  <script src="/theme-init.js?v=20261025-r8"></script>
+  <script src="/pwa.js?v=20261025-r9" defer></script>
+  <script src="/theme-init.js?v=20261025-r9"></script>
   <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/ui/tokens.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/base.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/components.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/shell.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/workspace.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/editor.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/assistant.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/modules.css?v=20261025-r8">
-  <link rel="stylesheet" href="/ui/tools.css?v=20261025-r8">
-  <script src="/ui/native.js?v=20261025-r8"></script>
-  <script src="/ui/icons.js?v=20261025-r8"></script>
-  <script src="/ui/dialog.js?v=20261025-r8"></script>
-  <script src="/ui/chat-kit.js?v=20261025-r8"></script>
-  <script src="/ui/context-menu.js?v=20261025-r8" defer></script>
-  <script src="/ui/plans.js?v=20261025-r8"></script>
+  <link rel="stylesheet" href="/ui/tokens.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/base.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/components.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/shell.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/workspace.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/editor.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/assistant.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/modules.css?v=20261025-r9">
+  <link rel="stylesheet" href="/ui/tools.css?v=20261025-r9">
+  <script src="/ui/native.js?v=20261025-r9"></script>
+  <script src="/ui/icons.js?v=20261025-r9"></script>
+  <script src="/ui/dialog.js?v=20261025-r9"></script>
+  <script src="/ui/chat-kit.js?v=20261025-r9"></script>
+  <script src="/ui/context-menu.js?v=20261025-r9" defer></script>
+  <script src="/ui/plans.js?v=20261025-r9"></script>
 </head>
 <body class="workspace-page smetra-app-booting" data-app-state="boot">
   <div id="app-startup" class="app-startup" role="status" aria-live="polite">
@@ -164,19 +164,27 @@
       </div>
     </aside>
     <main class="main" id="content" tabindex="-1"></main>
+    <nav id="mobile-tabbar" class="mobile-tabbar" aria-label="Быстрые разделы">
+      <button type="button" data-tab="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/></svg><span>Главная</span></button>
+      <button type="button" data-tab="quotes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/></svg><span>Сметы</span></button>
+      <button type="button" data-tab="assistant" class="tabbar-primary"><span class="tabbar-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg></span><span>Ассистент</span></button>
+      <button type="button" data-tab="construction"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v16"/><path d="M3 8h5M3 12h3M3 16h5M16 3v5M12 3v3M8 3v5"/></svg><span>Объекты</span></button>
+      <button type="button" id="tabbar-more" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>Ещё</span></button>
+    </nav>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261025-r8" defer></script>
-  <script src="/select-menu.js?v=20261025-r8" defer></script>
-  <script src="/app.js?v=20261025-r8" defer></script>
-  <script src="/workspace.js?v=20261025-r8" defer></script>
-  <script src="/field-flows.js?v=20261025-r8" defer></script>
-  <script src="/black.js?v=20261025-r8" defer></script>
-  <script src="/auth-email.js?v=20261025-r8" defer></script>
-  <script src="/file-preview.js?v=20261025-r8" defer></script>
-  <script src="/file-editor.js?v=20261025-r8" defer></script>
-  <script src="/product-ui.js?v=20261025-r8" defer></script>
-<script src="/support-chat.js?v=20261025-r8" defer></script>
-<script src="/communication-center.js?v=20261025-r8" defer></script>
+  <script src="/features.js?v=20261025-r9" defer></script>
+  <script src="/select-menu.js?v=20261025-r9" defer></script>
+  <script src="/app.js?v=20261025-r9" defer></script>
+  <script src="/workspace.js?v=20261025-r9" defer></script>
+  <script src="/field-flows.js?v=20261025-r9" defer></script>
+  <script src="/black.js?v=20261025-r9" defer></script>
+  <script src="/auth-email.js?v=20261025-r9" defer></script>
+  <script src="/file-preview.js?v=20261025-r9" defer></script>
+  <script src="/file-editor.js?v=20261025-r9" defer></script>
+  <script src="/product-ui.js?v=20261025-r9" defer></script>
+<script src="/support-chat.js?v=20261025-r9" defer></script>
+<script src="/communication-center.js?v=20261025-r9" defer></script>
+<script src="/ui/tabbar.js?v=20261025-r9" defer></script>
 </body>
 </html>

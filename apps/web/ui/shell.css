@@ -129,6 +129,50 @@ body.sidebar-compact #logout{opacity:0;pointer-events:none;width:0;overflow:hidd
   body.sidebar-compact .sidebar-disclosure::before{content:none}
   .main{padding:var(--s-5) var(--s-4) var(--s-9)}
 }
+/* ───────── Bottom tab bar (phones) ───────── */
+:root{--tabbar-space:0px}
+.mobile-tabbar{display:none}
+@media (max-width:800px){
+  :root{--tabbar-h:58px;--tabbar-space:calc(var(--tabbar-h) + env(safe-area-inset-bottom))}
+  .mobile-tabbar{position:fixed;inset:auto 0 0;z-index:95;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));height:var(--tabbar-space);padding:0 4px env(safe-area-inset-bottom);border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:saturate(1.2) blur(14px);-webkit-backdrop-filter:saturate(1.2) blur(14px)}
+  .mobile-tabbar button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:var(--tabbar-h);padding:0 2px;border:0;background:none;color:var(--text-3);font:inherit;font-size:12px;font-weight:500;letter-spacing:-.01em;-webkit-tap-highlight-color:transparent;transition:color var(--t-fast) var(--ease)}
+  .mobile-tabbar button>span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mobile-tabbar svg{width:23px;height:23px;flex:none}
+  .mobile-tabbar button.active{color:var(--text)}
+  .mobile-tabbar button.active::before{content:'';position:absolute;top:0;left:50%;width:22px;height:2px;border-radius:0 0 2px 2px;background:var(--accent);transform:translateX(-50%)}
+  .mobile-tabbar button:active{color:var(--text-2)}
+  .mobile-tabbar .tabbar-orb{display:grid;place-items:center;width:44px;height:30px;border-radius:15px;background:var(--surface-inverse);color:var(--text-inverse);transition:transform var(--t-fast) var(--ease)}
+  .mobile-tabbar .tabbar-orb svg{width:20px;height:20px}
+  .mobile-tabbar .tabbar-primary{gap:2px}
+  .mobile-tabbar .tabbar-primary.active::before{content:none}
+  .mobile-tabbar .tabbar-primary:active .tabbar-orb{transform:scale(.94)}
+  .mobile-tabbar button:focus-visible{outline:2px solid var(--accent);outline-offset:-4px;border-radius:var(--r-2)}
+  body.keyboard-open .mobile-tabbar{display:none}
+  @media (max-width:374px){.mobile-tabbar button{font-size:11px;letter-spacing:-.02em}}
+  body.keyboard-open{--tabbar-space:0px}
+  .main{padding-bottom:calc(var(--s-9) + var(--tabbar-space))}
+  #content:is([data-section="profile"],[data-section="settings"]){padding-bottom:var(--tabbar-space)}
+  .sidebar{bottom:var(--tabbar-space)}
+  .nav-backdrop{bottom:var(--tabbar-space)}
+}
+/* ───────── Phone ergonomics ───────── */
+@media (max-width:800px){
+  /* 16px fields: smaller text makes iOS zoom the page on focus and is hard to read outdoors. */
+  #shell input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),#shell select,#shell textarea,dialog input:not([type=checkbox]):not([type=radio]):not([type=range]),dialog select,dialog textarea{font-size:16px}
+  /* Money in summary tiles stays on one line. */
+  #content .stat strong,#content .dashboard-metric strong{white-space:nowrap;font-size:clamp(16px,5vw,var(--fs-20));overflow-wrap:normal}
+  .page-head h1,#content>h1,#content .section-top h1{overflow-wrap:anywhere}
+}
+@media (max-width:800px) and (pointer:coarse){
+  #shell .btn.small,dialog .btn.small{min-height:40px}
+  #shell .icon-button,dialog .icon-button{min-width:40px;min-height:40px}
+  #shell input[type=checkbox],dialog input[type=checkbox]{width:20px;height:20px}
+  /* Keep the 20px box; widen only the touch area. */
+  #shell .task-toggle::before{content:'';position:absolute;inset:-12px}
+  #shell .tg-chips button,#shell [data-period],#assistant-background{min-height:40px}
+  #shell .record-title{min-height:44px}
+  #shell .assistant-conversation-icon-button{min-width:40px;min-height:40px}
+}
 @media (prefers-reduced-motion:reduce){.sidebar{visibility:visible}}
 
 /* ───────── Authentication ───────── */
