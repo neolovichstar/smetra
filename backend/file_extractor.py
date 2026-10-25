@@ -120,6 +120,41 @@ def extract(content, mime):
     return pages, truncated
 
 
+def capture(content, mime):
+    """Read a transient AI source with all parser limits active."""
+    if not 0 < len(content) <= 2_000_000:
+        raise ValueError("capture size")
+    from backend.office_documents import MIMES, READABLE
+
+    if mime not in READABLE:
+        raise ValueError("capture mime")
+    if mime == "application/pdf":
+        validate_pdf(content)
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(content), strict=True)
+        if not 1 <= len(reader.pages) <= 12:
+            raise ValueError("capture pages")
+    if mime in MIMES:
+        import zipfile
+
+        with zipfile.ZipFile(io.BytesIO(content)) as package:
+            entries = package.infolist()
+            if len(entries) > 300 or sum(entry.file_size for entry in entries) > 10_000_000:
+                raise ValueError("capture archive bounds")
+    if mime == "text/plain":
+        text = content.decode("utf-8-sig")
+        if "\0" in text:
+            raise ValueError("capture text")
+    else:
+        pages, _ = extract(content, mime)
+        text = "\n".join(text for _, text in pages)
+    text = text.strip()
+    if not text:
+        raise ValueError("capture empty")
+    return {"text": text[:12000]}
+
+
 def main():
     try:
         import resource
@@ -129,6 +164,10 @@ def main():
     except ImportError:
         pass  # Windows QA: parent still enforces input/output/time bounds.
     content = sys.stdin.buffer.read(5_000_001)
+    if sys.argv[1].startswith("capture:"):
+        result = capture(content, sys.argv[1].split(":", 1)[1])
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+        return
     if sys.argv[1].startswith(("validate-office:", "preview:")):
         from backend.office_documents import CSV, archive, preview
 

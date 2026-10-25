@@ -6,7 +6,6 @@ import json
 import os
 import urllib.error
 import urllib.request
-import zipfile
 
 try:
     from backend.business import (
@@ -71,37 +70,14 @@ def capture_file(value):
                 output = io.BytesIO()
                 image.convert("RGB").save(output, format="JPEG", quality=82, optimize=True)
             return "", "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode()
-        if mime == "application/pdf":
-            from pypdf import PdfReader
+        # Documents use the same credential-free, CPU/memory/time-bounded
+        # worker as uploaded files. No untrusted PDF/XML parsing in the API.
+        from backend.file_processing import isolated_extract
 
-            reader = PdfReader(io.BytesIO(raw), strict=True)
-            if reader.is_encrypted or len(reader.pages) > 12:
-                raise DomainError(400, "PDF защищён паролем или содержит больше 12 страниц")
-            extracted = "\n".join((page.extract_text() or "") for page in reader.pages)
-        elif mime in ("text/plain", "text/csv"):
-            extracted = raw.decode("utf-8-sig")
-        else:
-            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                if len(archive.infolist()) > 300 or sum(item.file_size for item in archive.infolist()) > 10_000_000:
-                    raise DomainError(400, "Документ слишком велик после распаковки")
-                if mime.endswith("spreadsheetml.sheet"):
-                    import openpyxl
-
-                    book = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-                    try:
-                        lines = []
-                        for sheet in book.worksheets[:3]:
-                            for row in sheet.iter_rows(max_row=120, max_col=15, values_only=True):
-                                lines.append(" | ".join(str(cell)[:200] if cell is not None else "" for cell in row))
-                        extracted = "\n".join(lines)
-                    finally:
-                        book.close()
-                else:
-                    import xml.etree.ElementTree as ET
-
-                    document = archive.read("word/document.xml")
-                    root = ET.fromstring(document)
-                    extracted = " ".join(node.text or "" for node in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"))
+        result = isolated_extract(raw, "capture:" + mime)
+        extracted = result["text"]
+        if not isinstance(extracted, str) or len(extracted) > 12000:
+            raise ValueError("capture result")
         extracted = extracted.strip()
         if not extracted:
             raise DomainError(400, "Не удалось извлечь текст. Для скана отправьте изображение")

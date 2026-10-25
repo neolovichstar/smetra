@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import http.server
 import json
+import math
 import os
 import re
 import secrets
@@ -293,14 +294,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     result[key] = value
                 return result
 
+            raw = self.rfile.read(size)
+            if len(raw) != size:
+                self.close_connection = True
+                raise ValueError("Incomplete request body")
             data = json.loads(
-                self.rfile.read(size) or b"{}", parse_constant=reject_constant,
+                raw if size else b"{}", parse_constant=reject_constant,
                 object_pairs_hook=unique_keys,
             )
             if not isinstance(data, dict):
                 raise ValueError("Expected object")
+            # Reject values that cannot be safely stored in PostgreSQL or encoded
+            # in a response. parse_constant alone misses float overflow (1e999).
+            def validate(value, depth=0):
+                if depth > 64:
+                    raise ValueError("JSON nesting limit")
+                if isinstance(value, dict):
+                    for key, item in value.items():
+                        validate(key, depth + 1)
+                        validate(item, depth + 1)
+                elif isinstance(value, list):
+                    for item in value:
+                        validate(item, depth + 1)
+                elif isinstance(value, str):
+                    if "\0" in value:
+                        raise ValueError("Null character")
+                    value.encode("utf-8")
+                elif isinstance(value, float) and not math.isfinite(value):
+                    raise ValueError("Non-finite JSON number")
+
+            validate(data)
             return data
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeError, RecursionError):
             raise ApiError(400, "Некорректный JSON")
 
     def validate_body_length(self, path):
@@ -322,10 +347,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlsplit(self.path)
         return parsed.path, urllib.parse.parse_qs(parsed.query)
 
+    def bearer_token(self):
+        raw = self.headers.get("Authorization")
+        if raw is None:
+            return None
+        parts = raw.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            raise ApiError(401, "Некорректный токен авторизации")
+        return parts[1]
+
     def auth(self, con, admin=False):
-        raw = self.headers.get("Authorization", "")
-        token = raw[7:] if raw.startswith("Bearer ") else ""
-        if not token:
+        # An explicit invalid credential must never fall back to a cookie.
+        token = self.bearer_token()
+        if token is None:
             cookie = self.headers.get("Cookie", "")
             for part in cookie.split(";"):
                 if part.strip().startswith("session="):
@@ -400,7 +434,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
         if (
             has_session_cookie
-            and not self.headers.get("Authorization", "").startswith("Bearer ")
+            and self.bearer_token() is None
             and not origin
             and fetch_site != "same-origin"
         ):
@@ -818,6 +852,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE users SET password_hash=?,email_verified_at=coalesce(email_verified_at,?) WHERE id=?",
                         (hash_password(password), now(), row["user_id"]),
                     )
+                    # Revoke every outstanding reset capability in the same
+                    # user-scoped transaction as the password and sessions.
+                    con.execute(
+                        "UPDATE email_tokens SET consumed_at=? WHERE user_id=? "
+                        "AND purpose='reset' AND consumed_at IS NULL",
+                        (now(), row["user_id"]),
+                    )
                     con.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))
                     audit(con, row["user_id"], "auth.password_reset", row["user_id"])
                     con.execute("COMMIT")
@@ -909,11 +950,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(503, "Не удалось отправить письмо")
             return self.send_json(200, {"ok": True})
         if path == "/api/auth/logout" and method == "POST":
-            token = (
-                self.headers.get("Authorization", "")[7:]
-                if self.headers.get("Authorization", "").startswith("Bearer ")
-                else ""
-            )
+            token = self.bearer_token()
             if not token:
                 for part in self.headers.get("Cookie", "").split(";"):
                     if part.strip().startswith("session="):
