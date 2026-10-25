@@ -442,3 +442,4 @@
   .assistant-studio.has-quote-preview .assistant-toolrail-toggle{display:none}
 }
 .assistant-action-button[hidden],.assistant-jobbar [hidden]{display:none}
+@media (pointer:coarse){.assistant-message-action{width:40px;height:40px}}

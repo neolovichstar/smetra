@@ -48,13 +48,19 @@
   }
   async function detail() {
     const active=pageRequest();
-    const [data,supplierData] = await Promise.all([api('/construction/objects/' + encodeURIComponent(selected)),api('/construction/suppliers')]);
+    let data,supplierData;
+    try{[data,supplierData] = await Promise.all([api('/construction/objects/' + encodeURIComponent(selected)),api('/construction/suppliers')])}
+    catch(error){
+      // The object was deleted or moved to another workspace: go back to the list instead of a dead end.
+      if(error.status===404&&active()){selected=null;notify('Объект удалён или больше недоступен');return list()}
+      throw error;
+    }
     if(!active())return;
     const obj=data.object, zones=data.zones, rows=data.quantities, logs=data.daily_logs||[], suppliers=supplierData.items||[], purchases=data.purchases||[], changes=data.changes||[];
     view(`<div class="construction-back"><button id="construction-back" type="button">← Все объекты</button><span>ОБЪЕКТ / ${esc(obj.status.toUpperCase())}</span></div>
       <div class="topline construction-heading"><div><h1>${esc(obj.name)}</h1><p class="muted">${esc(obj.description || 'Добавьте размеры помещений, затем работы и материалы.')}</p></div><div class="topline-actions"><label class="btn small construction-import" title="Помещения в XLSX должны совпадать с помещениями объекта">Импорт XLSX<input id="construction-import" type="file" accept=".xlsx" hidden></label><button id="construction-export" class="btn small">Скачать XLSX</button>${obj.project_id?`<button id="construction-project-open" class="btn small">Открыть заказ</button>`:''}${obj.quote_id?`<button id="construction-quote-open" class="btn primary">Открыть смету</button>`:`<button id="construction-quote" class="btn primary" ${rows.length?'':'disabled'}>Создать смету</button>`}</div></div>
       <div class="construction-metrics"><div><span>План</span><strong>${money(data.totals.planned_kopecks)}</strong></div><div><span>Факт по позициям</span><strong>${money(data.totals.actual_kopecks)}</strong></div><div><span>Себестоимость</span><strong>${money(data.totals.cost_kopecks)}</strong></div></div>
-      <section class="construction-section"><div class="construction-section-title"><h2>01 / Помещения</h2><span>${zones.length}</span></div><form id="construction-zone" class="construction-inline">${field('name','Название','text','required placeholder="Кухня" maxlength="120"')}${field('length','Длина, м','number','required min="0.001" step="any" placeholder="5"')}${field('width','Ширина, м','number','required min="0.001" step="any" placeholder="4"')}${field('height','Высота, м','number','min="0" step="any" placeholder="2.8"')}<button class="btn">Добавить помещение</button></form>
+      <section class="construction-section"><div class="construction-section-title"><h2>01 / Помещения</h2><span>${zones.length}</span><button type="button" class="btn small construction-ar" id="construction-ar" hidden>AR-замер помещения</button></div><form id="construction-zone" class="construction-inline">${field('name','Название','text','required placeholder="Кухня" maxlength="120"')}${field('length','Длина, м','number','required min="0.001" step="any" placeholder="5"')}${field('width','Ширина, м','number','required min="0.001" step="any" placeholder="4"')}${field('height','Высота, м','number','min="0" step="any" placeholder="2.8"')}<button class="btn">Добавить помещение</button></form>
       ${zones.length?zones.map(zone=>`<div class="construction-row"><strong>${esc(zone.name)}</strong><span>${esc(zone.length_m)} × ${esc(zone.width_m)} м</span><b>${(number(zone.length_m)*number(zone.width_m)).toLocaleString('ru-RU')} м²</b><button type="button" class="construction-edit" data-zone-edit="${esc(zone.id)}">Изменить</button></div>`).join(''):'<p class="construction-empty">Помещений пока нет. Их размеры станут переменными для расчёта.</p>'}
       <div id="construction-room-visual" aria-label="Графическая схема помещений"></div>
       <form id="construction-measurement" class="construction-inline construction-subform"><label><span>Помещение</span><select name="zone_id" required><option value="">Выберите</option>${options(zones)}</select></label>${field('symbol','Переменная','text','required pattern="[a-z][a-z0-9_]{1,31}" placeholder="window_area"')}${field('value','Замер','number','required min="0" step="any" placeholder="1.5"')}<label><span>Единица</span><select name="unit"><option value="м²">м²</option><option value="м">м</option><option value="см">см</option><option value="шт.">шт.</option></select></label><button class="btn">Записать замер</button></form>
@@ -83,6 +89,26 @@
       <section class="construction-section"><div class="construction-section-title"><h2>09 / Фото и документы</h2><span id="construction-file-count"></span></div><label class="construction-upload">Прикрепить фото, PDF или TXT<input id="construction-file" type="file" accept="image/png,image/jpeg,application/pdf,text/plain" hidden></label><div id="construction-files"></div></section>`);
     window.SmetraQuoteVisuals?.mountRooms(document.querySelector('#construction-room-visual'),zones);
     document.querySelector('#construction-back').onclick=()=>{selected=null;list()};
+    // AR measurement exists only in the Android app on phones with ARCore; the
+    // server previews the rooms and nothing is saved until the user confirms.
+    const arButton=document.querySelector('#construction-ar');
+    window.SmetraShell?.ready.then(()=>{if(arButton.isConnected)arButton.hidden=!window.SmetraShell.has('ar')});
+    arButton.onclick=async()=>{
+      const object=selected;arButton.disabled=true;
+      try{
+        const measured=await window.SmetraShell.call('ar.measure',{},{timeout:0});
+        const rooms=(measured.rooms||[]).slice(0,12);if(!rooms.length)return;
+        const preview=await api(`/construction/objects/${object}/scan/preview`,{method:'POST',body:JSON.stringify({rooms})});
+        if(selected!==object)return;
+        const rows=preview.rooms.map(room=>`${room.name}: ${number(room.length_m).toLocaleString('ru-RU')} × ${number(room.width_m).toLocaleString('ru-RU')} × ${number(room.height_m).toLocaleString('ru-RU')} м · пол ${number(room.floor_m2).toLocaleString('ru-RU',{maximumFractionDigits:2})} м²`).join('\n');
+        const ok=await window.SmetraDialog.confirm({title:'Добавить помещения из AR-замера?',message:rows+'\n\nЗамер приблизительный. Проверьте размеры перед расчётами; опубликованные сметы не изменятся.',confirmLabel:'Добавить '+preview.rooms.length});
+        if(!ok||selected!==object)return;
+        await request(`/construction/objects/${object}/scan/import`,{rooms,review_confirmed:true},async()=>{notify('Помещения добавлены');await detail()});
+      }catch(error){
+        if(error.code==='ar_unavailable'){notify(error.message);document.querySelector('#construction-zone [name=name]')?.focus()}
+        else if(error.code!=='cancelled')notify(error.message);
+      }finally{if(arButton.isConnected)arButton.disabled=false}
+    };
     const zoneForm=document.querySelector('#construction-zone');zoneForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;return request(`/construction/objects/${selected}/zones${form.dataset.edit?'/'+form.dataset.edit:''}`,{name:val(form,'name'),length:val(form,'length'),width:val(form,'width'),height:val(form,'height')||0},detail,form.dataset.edit?'PATCH':'POST')};
     document.querySelectorAll('[data-zone-edit]').forEach(button=>button.onclick=()=>{const item=zones.find(zone=>zone.id===button.dataset.zoneEdit);zoneForm.dataset.edit=item.id;for(const [key,value] of Object.entries({name:item.name,length:item.length_m,width:item.width_m,height:item.height_m}))zoneForm.elements.namedItem(key).value=value;zoneForm.querySelector('button').textContent='Сохранить размеры';revealForm(zoneForm)});
     const measureForm=document.querySelector('#construction-measurement');measureForm.onsubmit=event=>{event.preventDefault();const form=event.currentTarget;return request(`/construction/objects/${selected}/measurements${form.dataset.edit?'/'+form.dataset.edit:''}`,{zone_id:val(form,'zone_id'),symbol:val(form,'symbol'),value:val(form,'value'),unit:val(form,'unit'),source:'manual'},detail,form.dataset.edit?'PATCH':'POST')};

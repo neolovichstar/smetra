@@ -145,18 +145,19 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
 
     // ---------- push ----------
 
-    private JSONObject pushStatus() throws JSONException {
+    private JSONObject pushStatus() {
         boolean allowed = Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-        return new JSONObject().put("configured", PushManager.isConfigured()).put("enabled", PushManager.isEnabled(activity)).put("permission", allowed);
+        JSONObject status = new JSONObject();
+        try { status.put("configured", PushManager.isConfigured()).put("enabled", PushManager.isEnabled(activity)).put("permission", allowed); }
+        catch (JSONException ignored) { }
+        return status;
     }
 
     private void pushEnable(BridgeProtocol.Request r, JavaScriptReplyProxy reply) {
         Runnable register = () -> PushManager.requestTokenAndRegister(activity, ShellSession.token(), (success, text) -> {
             if (success) PushManager.setEnabled(activity, true);
-            try {
-                if (success) reply.postMessage(BridgeProtocol.ok(r.id, pushStatus()));
-                else reply.postMessage(BridgeProtocol.error(r.id, "push_failed", text));
-            } catch (JSONException ignored) { }
+            if (success) reply.postMessage(BridgeProtocol.ok(r.id, pushStatus()));
+            else reply.postMessage(BridgeProtocol.error(r.id, "push_failed", text));
         });
         if (Build.VERSION.SDK_INT >= 33) activity.withPermission(Manifest.permission.POST_NOTIFICATIONS, ShellActivity.PERMISSION_NOTIFICATIONS,
             register, () -> reply.postMessage(BridgeProtocol.error(r.id, "permission_denied", "Разрешите уведомления в настройках Android")));

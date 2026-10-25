@@ -47,6 +47,7 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_settings_buttons.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_app_actions.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_native_bridge.cjs
       - run: python scripts/build_web.py
       - uses: actions/upload-artifact@v4
         with:
@@ -149,6 +150,9 @@ jobs:
           java -cp data/native-session-tests ru.smetra.mobile.NativeSessionWorkTest
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeImageSize.java tests/NativeImageSizeTest.java
           java -cp data/native-session-tests ru.smetra.mobile.NativeImageSizeTest
+          curl -sSfL -o data/org-json.jar https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
+          javac -cp data/org-json.jar -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/BridgeProtocol.java tests/BridgeProtocolTest.java
+          java -cp data/native-session-tests:data/org-json.jar ru.smetra.mobile.BridgeProtocolTest
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:

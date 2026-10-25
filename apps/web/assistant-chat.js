@@ -188,6 +188,16 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const startVoiceInput=async()=>{
     if(voiceListening){try{voiceRecognition?.stop()}catch{};return}
     if(voiceStarting)return;
+    // In the Android app the system recognizer is used; WebView has no SpeechRecognition.
+    if(!SpeechRecognitionAPI&&window.SmetraShell?.available){
+      await window.SmetraShell.ready;
+      if(!window.SmetraShell.has('speech')){status.textContent='Распознавание речи недоступно на этом телефоне. Включите голосовой ввод Google или Яндекс-клавиатуры.';return}
+      voiceStarting=true;syncSendButton();status.textContent='Говорите…';
+      try{const result=await window.SmetraShell.call('speech.recognize',{},{timeout:0});const heard=String(result.text||'').trim();if(heard){input.value=(input.value.trim()?input.value.trim()+' ':'')+heard;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus()}status.textContent=heard?'Текст добавлен — проверьте и отправьте.':''}
+      catch(error){status.textContent=error.code==='cancelled'?'':error.message}
+      finally{voiceStarting=false;syncSendButton()}
+      return;
+    }
     if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.';return}
     voiceStarting=true;voiceError=false;voiceText='';voiceInterim='';syncSendButton();
     status.textContent='Запускаем распознавание речи…';
@@ -371,6 +381,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const saveDraft=()=>{try{if(input.value)sessionStorage.setItem(draftSlot(),input.value.slice(0,3000));else sessionStorage.removeItem(draftSlot())}catch{}};
   const clearSentDraft=prompt=>{try{if((sessionStorage.getItem(draftSlot())||'').trim()===prompt)sessionStorage.removeItem(draftSlot())}catch{}};
   try{input.value=sessionStorage.getItem(draftSlot())||''}catch{}
+  // Text shared from another Android app arrives as a ready draft.
+  try{const shared=sessionStorage.getItem('smetra.shared.text');if(shared){sessionStorage.removeItem('smetra.shared.text');input.value=(input.value?input.value+'\n\n':'')+shared.slice(0,3000)}}catch{}
   try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
   saveDraft();
   document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();renderPhoto();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
@@ -502,6 +514,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     quotaLabel.classList.toggle('is-low',tokens&&value.remaining<Math.max(minimum*4,(value.monthly_limit||0)*.1));
     upgrade.classList.toggle('hidden',!empty||(value.plan==='pro'&&!tokens));
     if(empty&&value.plan!=='pro'){upgrade.onclick=()=>{sessionStorage.setItem('smetra.paywall.source','ai_limit');if(tokens)try{sessionStorage.setItem('smetra.billing.view','tokens')}catch{}};if(!tokens)Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
+    // In the Android app a free account can watch a rewarded video for tokens.
+    let reward=document.querySelector('#assistant-reward');
+    if(!reward&&window.SmetraShell?.available){
+      reward=document.createElement('button');reward.type='button';reward.id='assistant-reward';reward.className='btn small assistant-reward';reward.hidden=true;
+      reward.textContent='Посмотреть видео · +45 тыс. токенов';upgrade.after(reward);
+      reward.onclick=async()=>{reward.disabled=true;try{const result=await window.SmetraShell.call('ads.rewarded.show',{},{timeout:0});if(result.quota)renderQuota(result.quota);notify('Начислено '+Number(result.granted||0).toLocaleString('ru-RU')+' токенов')}catch(error){if(error.code!=='not_completed'&&error.code!=='cancelled')notify(error.message);else status.textContent=error.message}finally{reward.disabled=false}};
+    }
+    if(reward)window.SmetraShell.ready.then(()=>{reward.hidden=!(empty&&value.plan==='free'&&window.SmetraShell.has('ads'))});
     const quotaBlocked=empty;
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});

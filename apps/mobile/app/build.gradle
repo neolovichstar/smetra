@@ -22,8 +22,8 @@ android {
         applicationId 'ru.smetra.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 40
-        versionName '1.7.28'
+        versionCode 41
+        versionName '2.0.0'
         testInstrumentationRunner 'ru.smetra.mobile.DesignSmoke'
         buildConfigField 'String', 'API_BASE_URL', '"' + apiBase.replace('\"', '') + '"'
         buildConfigField 'String', 'MYTRACKER_SDK_KEY', '"' + myTrackerSdkKey.replace('\"', '') + '"'
@@ -71,4 +71,10 @@ dependencies {
     implementation 'com.my.tracker:mytracker-sdk:3.6.0'
     implementation 'com.yandex.android:mobileads:8.6.0'
     implementation 'ru.rustore.sdk:pushclient:7.5.0'
+    // Hybrid shell: origin-restricted web messaging, Custom Tabs sign-in, FileProvider.
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.browser:browser:1.8.0'
+    implementation 'androidx.core:core:1.13.1'
+    // Optional AR measurements; the app runs without Google Play Services for AR.
+    implementation 'com.google.ar:core:1.46.0'
 }

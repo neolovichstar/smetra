@@ -526,3 +526,22 @@ body.comms-scroll-locked{overflow:hidden}
   .admin-user-grid{grid-template-columns:minmax(0,1fr)}
   #content .admin-form{grid-template-columns:minmax(0,1fr)}
 }
+
+/* ───────── Android app shell ───────── */
+.sm-dialog-text{white-space:pre-line}
+.construction-section-title .construction-ar{margin-left:auto}
+.construction-ar[hidden]{display:none}
+.assistant-reward[hidden]{display:none}
+.assistant-reward{margin-top:6px}
+.app-update{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:1400;display:flex;align-items:center;gap:var(--s-3);padding:12px 12px 12px 16px;border:1px solid var(--line-strong);border-radius:var(--r-3);background:var(--surface-1);box-shadow:var(--shadow-float);animation:fade-in var(--t-base) var(--ease)}
+.app-update>div{flex:1;min-width:0}
+.app-update strong{display:block;font-size:var(--fs-14)}
+.app-update p{margin-top:2px;color:var(--text-2);font-size:var(--fs-12);line-height:1.4}
+.app-update.is-required{inset:0;flex-direction:column;justify-content:center;border-radius:0;padding:var(--s-6);text-align:center}
+.app-update.is-required>div{flex:none;max-width:360px}
+.app-update.is-required strong{font-size:var(--fs-20)}
+/* Inside the app the page owns the whole screen: no text selection callouts on
+   controls and no rubber-band glow at the edges. */
+html.in-app body{overscroll-behavior:none}
+html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+@media (pointer:coarse){.construction-back button,.review-back,.file-editor-back{min-height:40px}.construction-edit{min-height:36px}}

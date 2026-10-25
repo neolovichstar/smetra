@@ -21,7 +21,7 @@ final class ShellUpdates {
     static void check(Activity activity, ShellBridge bridge) {
         Executors.newSingleThreadExecutor().execute(() -> {
             try {
-                ShellSession.Response response = ShellSession.call("GET", "/api/app/compat?platform=android&version_code=" + BuildConfig.VERSION_CODE, null, false);
+                ShellSession.Response response = ShellSession.call("GET", "/api/mobile/compat", null, false);
                 if (!response.ok()) return;
                 JSONObject body = response.body;
                 int minimum = body.optInt("min_version_code", 0), latest = body.optInt("latest_version_code", 0);

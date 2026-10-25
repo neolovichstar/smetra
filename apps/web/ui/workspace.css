@@ -461,3 +461,5 @@
   .hub-row{flex-direction:column;align-items:flex-start}
   .hub-id code{max-width:180px}
 }
+/* Money stays on one line on phones instead of dropping the currency sign. */
+.business-stats .stat strong{font-size:clamp(17px,4.8vw,var(--fs-24));overflow-wrap:normal;white-space:nowrap}

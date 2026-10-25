@@ -495,7 +495,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     # /api/cron/push verifies its own dedicated server secret.
                 if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
-                if root == "mobile" and path != "/api/mobile/presentation":
+                if root == "mobile" and path not in ("/api/mobile/presentation", "/api/mobile/compat"):
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
@@ -512,6 +512,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     for code, item in public_catalog().items()
                 ]
                 self.send_json(200, {"plans": plans})
+            elif method == "GET" and path == "/api/mobile/compat":
+                # The web UI updates by itself; native features need a recent APK.
+                # Below the minimum the app shows a blocking update screen.
+                def version(name, default):
+                    try:
+                        return max(0, int(os.getenv(name, str(default))))
+                    except ValueError:
+                        return default
+                self.send_json(200, {
+                    "platform": "android",
+                    "bridge_protocol": 1,
+                    "min_version_code": version("ANDROID_MIN_VERSION_CODE", 0),
+                    "latest_version_code": version("ANDROID_LATEST_VERSION_CODE", 41),
+                    "store_url": "https://www.rustore.ru/catalog/app/ru.smetra.mobile",
+                    "message": os.getenv("ANDROID_UPDATE_MESSAGE", "")[:300],
+                })
             elif method == "GET" and path == "/api/mobile/presentation":
                 presentation = json.loads((ROOT / "backend" / "mobile_presentation.json").read_text(encoding="utf-8"))
                 self.send_json(200, presentation)
