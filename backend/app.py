@@ -506,7 +506,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if console_host == "console.smetra.online":
                 if method == "GET" and path in ("/", "/partner-console.js", "/ui/partner-console.css"):
                     return self.static("/partner-console" if path == "/" else path)
-                if not path.startswith("/api/partners/"):
+                if not path.startswith("/api/partners/console/"):
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
