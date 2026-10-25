@@ -106,6 +106,51 @@ class StreamFallbackTests(unittest.TestCase):
         self.assertIn("прервался", str(raised.exception))
 
 
+class ChatStreamTransactionTests(unittest.TestCase):
+    """An SSE HTTP 200 is not a license to commit failed database work."""
+
+    def handler(self):
+        from io import BytesIO
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            wfile=BytesIO(), request_id="fixture-request",
+            send_response=lambda _: None,
+            send_header=lambda *_: None,
+            end_headers=lambda: None,
+        )
+
+    def test_stream_error_rolls_back_runtime_transaction(self):
+        from types import SimpleNamespace
+        from backend.assistant import ChatStream
+
+        commits = []
+        service = SimpleNamespace(
+            runtime_connection=SimpleNamespace(finish=commits.append),
+        )
+        handler = self.handler()
+        with patch("backend.assistant.public_quota", return_value={"remaining": 100}), \\
+                patch("backend.assistant.answer_chat", side_effect=DomainError(502, "Ошибка модели")):
+            ChatStream(service, "Проверка", {}).write(handler)
+        self.assertEqual(commits, [False])
+        self.assertIn(b"event: error", handler.wfile.getvalue())
+
+    def test_stream_success_commits_runtime_transaction(self):
+        from types import SimpleNamespace
+        from backend.assistant import ChatStream
+
+        commits = []
+        service = SimpleNamespace(
+            runtime_connection=SimpleNamespace(finish=commits.append),
+        )
+        handler = self.handler()
+        with patch("backend.assistant.public_quota", return_value={"remaining": 100}), \\
+                patch("backend.assistant.answer_chat", return_value={"answer": "Готово"}):
+            ChatStream(service, "Проверка", {}).write(handler)
+        self.assertEqual(commits, [True])
+        self.assertIn(b"event: done", handler.wfile.getvalue())
+
+
 class DialogHistoryTests(unittest.TestCase):
     setUpClass = classmethod(test_business.BusinessFlows.setUpClass.__func__)
     tearDownClass = classmethod(test_business.BusinessFlows.tearDownClass.__func__)
