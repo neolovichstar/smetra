@@ -797,6 +797,23 @@ class BusinessFlows(unittest.TestCase):
         self.assertIn("Скоро срок этапа", titles, (actions["items"], stage))
         self.assertIn("Черновая отделка", titles["Скоро срок этапа"]["detail"])
 
+        orders = self.call("/overview/orders", token=token)[1]["items"]
+        self.assertEqual([(o["id"], o["receivable"], o["overrun"]) for o in orders], [(project, 70_000, 10_000)])
+        status, report = self.call("/transfer/orders?format=csv", token=token, raw=True)
+        self.assertEqual(status, 200)
+        lines = report.decode("utf-8-sig").splitlines()
+        self.assertTrue(lines[0].startswith("Заказ,Статус,Валюта,Стоимость"))
+        self.assertIn("Кухня", lines[1])
+        self.assertIn("-400.00", lines[1])
+        status, book = self.call("/transfer/orders?format=xlsx", token=token, raw=True)
+        self.assertEqual(status, 200)
+        from openpyxl import load_workbook
+
+        sheet = load_workbook(io.BytesIO(book)).active
+        header = [cell.value for cell in sheet[1]]
+        row = dict(zip(header, [cell.value for cell in sheet[2]]))
+        self.assertEqual((row["Заказ"], row["К получению"], row["Денежный результат"]), ("Кухня", 700, -400))
+
         other, _ = self.account("finance-stranger")
         self.assertEqual(self.call("/projects/" + project, token=other)[0], 404)
         money = self.call("/dashboard", token=other)[1]["actions"]["summary"]["money"]
@@ -1319,6 +1336,9 @@ class BusinessFlows(unittest.TestCase):
             self.assertEqual(set(item["finance"]) & {"planned_cost", "actual_cost", "forecast_profit", "cash_result", "overrun"}, set())
             self.assertEqual(item["finance"]["receivable"], 50_000)
             self.assertEqual(self.call("/expenses", token=member, workspace=wid)[0], 403)
+            self.assertEqual(self.call("/transfer/orders", token=member, workspace=wid)[0], 403)
+            orders = self.call("/overview/orders", token=member, workspace=wid)[1]["items"]
+            self.assertEqual(set(orders[0]) & {"planned_cost", "actual_cost", "forecast_profit", "cash_result"}, set())
             dashboard = self.call("/dashboard", token=member, workspace=wid)[1]
             self.assertFalse(dashboard["capabilities"]["finance"])
             self.assertNotIn("forecast_profit", dashboard["actions"]["summary"]["money"])

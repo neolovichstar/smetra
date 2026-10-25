@@ -528,3 +528,8 @@ a.dashboard-metric:focus-visible{outline:2px solid var(--accent);outline-offset:
   .team-member-row>.team-role-badge{margin-left:0}
   .team-member-row>.team-remove-member{margin-left:auto}
 }
+/* Finance: money by order. */
+.order-report{margin-bottom:var(--s-4)}
+.order-report-row b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.order-report-row b.is-negative{color:var(--danger)}
+.order-report-row small{color:var(--text-3)}

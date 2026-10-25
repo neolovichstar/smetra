@@ -33,3 +33,25 @@ class OrderFinanceMath(unittest.TestCase):
         self.assertEqual(order_finance.percent(1, 3), 33)
         self.assertIsNone(order_finance.percent(5, 0))
         self.assertEqual(order_finance.summarize(0, 0, 0, 0)["paid_pct"], None)
+
+
+class OrderReport(unittest.TestCase):
+    def test_kopecks_text_is_exact(self):
+        self.assertEqual(order_finance.kopecks_text(123456), "1234.56")
+        self.assertEqual(order_finance.kopecks_text(-5), "-0.05")
+        self.assertEqual(order_finance.kopecks_text(None), "")
+
+    def test_report_rows_use_server_figures(self):
+        order = dict(name="Кухня", status="in_progress", currency="RUB", **order_finance.summarize(100_000, 60_000, 30_000, 70_000))
+        header, row = order_finance.report_rows([order])
+        self.assertEqual(header[0], "Заказ")
+        values = dict(zip(header, row))
+        self.assertEqual(values["К получению"], "700.00")
+        self.assertEqual(values["Перерасход"], "100.00")
+        self.assertEqual(values["Денежный результат"], "-400.00")
+        self.assertEqual(values["Статус"], "В работе")
+        from decimal import Decimal
+        numeric = dict(zip(header, order_finance.report_rows([order], numeric=True)[1]))
+        self.assertEqual(numeric["Денежный результат"], Decimal("-400"))
+        unknown = dict(name="Без себестоимости", status="planned", currency="RUB", **order_finance.summarize(10_000, 0, 0, 0))
+        self.assertEqual(dict(zip(header, order_finance.report_rows([unknown])[1]))["Ожидаемая прибыль"], "")

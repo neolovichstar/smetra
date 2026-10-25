@@ -2445,9 +2445,9 @@ class Service:
 
     def finance_visible(self):
         """Owner, admin and manager see costs; others only when the owner grants it."""
-        if self.role in FINANCE_ROLES:
+        if getattr(self, "role", None) in FINANCE_ROLES:
             return True
-        if not self.user or not self.wid:
+        if not getattr(self, "user", None) or not getattr(self, "wid", None):
             return False
         cached = getattr(self, "_finance_grant", None)
         if cached is None or cached[0] != (self.wid, self.user["id"]):
@@ -2550,6 +2550,10 @@ class Service:
         if kind in ("receipts", "expenses"):
             return self.money(kind, method, query, data)
         if kind == "overview" and method == "GET":
+            if parts == ["orders"]:
+                from backend import order_finance
+
+                return 200, {"items": order_finance.order_report(self.con, self.wid)}
             return self.overview()
         if kind == "search" and method == "GET":
             term = string(query.get("q", [""])[0], "Поиск", 100)
