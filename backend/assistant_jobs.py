@@ -233,6 +233,9 @@ def run_one(handler, con, origin):
                 raise DomainError(409, 'Задача отменена')
 
         def complete(result):
+            # Revalidate access after the external model call, not only at job start.
+            # Revoked sessions or downgraded members must not retain results/proposals.
+            validate()
             # This fence is in the same transaction as messages and proposals.
             row = service.con.execute(
                 "UPDATE assistant_jobs SET status='completed',progress='Готово',result=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND status='running' AND lease_token=? AND lease_until>? AND cancel_requested=0 RETURNING id",
