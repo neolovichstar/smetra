@@ -14,6 +14,16 @@
   },
   "rewrites": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "console.smetra.online"
+        }
+      ],
+      "destination": "/partner-console.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index"
     },
