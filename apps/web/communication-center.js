@@ -39,7 +39,7 @@ function style(){}
 function mount(){
  style();if($('#communication-center'))return;
  const shell=document.createElement('div');shell.id='communication-center';shell.className='comms-shell';shell.setAttribute('aria-hidden','true');
- shell.innerHTML='<section class="comms-window tg" role="dialog" aria-modal="true" aria-labelledby="comms-heading">'
+ shell.innerHTML='<section class="comms-window tg" role="region" aria-labelledby="comms-heading">'
   +'<aside class="comms-sidebar tg-rail">'
    +'<header class="comms-top tg-rail-head"><button class="comms-btn" type="button" data-close aria-label="Закрыть сообщения" title="Закрыть">'+icon('back')+'</button><h2 class="comms-title" id="comms-heading">Сообщения</h2><button class="comms-btn" type="button" data-new-chat aria-label="Новая переписка" aria-expanded="false" title="Новая переписка">'+icon('pencil')+'</button></header>'
    +'<label class="comms-search"><span class="visually-hidden">Поиск по перепискам</span>'+icon('search')+'<input id="comms-search" type="search" placeholder="Поиск" autocomplete="off"></label>'
@@ -69,12 +69,12 @@ function mount(){
 }
 async function open(tab='direct'){
  mount();state.open=true;state.tab=[...tabs,adminTab].some(t=>t[0]===tab)?tab:'direct';
- $('#communication-center').classList.add('is-open');$('#communication-center').setAttribute('aria-hidden','false');document.body.classList.add('comms-scroll-locked');
+ $('#communication-center').classList.add('is-open');$('#communication-center').setAttribute('aria-hidden','false');document.body.classList.add('comms-scroll-locked');$('#sidebar-open-comms')?.setAttribute('aria-current','page');
  clearInterval(state.poll);await refresh(true);
  let lastRefresh=Date.now();state.poll=setInterval(async()=>{if(state.open&&!state.busy&&!document.hidden){if(Date.now()-lastRefresh>=30000){await refresh(false);lastRefresh=Date.now()}if(state.current)await loadMessages(false)}},8000);
  $('#communication-center [data-close]')?.focus();
 }
-function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.classList.remove('comms-scroll-locked')}
+function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.classList.remove('comms-scroll-locked');$('#sidebar-open-comms')?.removeAttribute('aria-current')}
 function renderTools(){
  const el=$('#comms-tools');if(!el)return;
  if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form><details class="comms-quote-details"><summary>Создать чат по смете</summary><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form></details>';
@@ -205,10 +205,10 @@ async function adminPage(){
  if(state.role!=='admin'){state.adminLoading=false;return}
  const base=content.querySelector('.admin-metrics');if(!base){state.adminLoading=false;return}
  let panel=content.querySelector('[data-comms-admin-overview]');
- if(!panel){panel=document.createElement('section');panel.className='comms-admin-panel';panel.dataset.commsAdminOverview='1';panel.innerHTML='<div class="comms-eyebrow">СМЕТРА / ОПЕРАЦИОННАЯ АНАЛИТИКА</div><h3>Экосистема в цифрах</h3><p>Сводные показатели сервиса и очередь поддержки. Личные переписки и содержимое документов здесь не показываются.</p><div class="comms-admin-metrics" data-admin-metrics></div><button type="button" class="comms-btn" data-admin-queue>'+icon('support')+' Открыть очередь поддержки</button>';base.insertAdjacentElement('afterend',panel);panel.querySelector('[data-admin-queue]').onclick=()=>open('support')}
+ if(!panel){panel=document.createElement('section');panel.className='comms-admin-panel';panel.dataset.commsAdminOverview='1';panel.innerHTML='<div class="comms-eyebrow">СМЕТРА / ОПЕРАЦИОННАЯ АНАЛИТИКА</div><h3>Экосистема в цифрах</h3><p>Сводные показатели сервиса и очередь поддержки. Личные переписки и содержимое документов здесь не показываются.</p><div class="comms-admin-metrics" data-admin-metrics></div><button type="button" class="btn" data-admin-queue>'+icon('support')+'<span>Открыть очередь поддержки</span></button>';base.insertAdjacentElement('afterend',panel);panel.querySelector('[data-admin-queue]').onclick=()=>open('support')}
  try{const d=await api('/admin/communication/overview');const waiting=Number(d.support_waiting_human||0);if(state.lastWaitingHuman!==null&&waiting>state.lastWaitingHuman)notify('Новое обращение ждёт сотрудника поддержки');state.lastWaitingHuman=waiting;const rows=[['Пользователи',d.users_total],['DAU · сутки',d.users_dau],['MAU · 30 дней',d.users_mau],['Все сметы',d.estimates_total],['Сметы за месяц',d.estimates_30d],['Рабочие пространства',d.workspaces_total],['Объекты',d.projects_total],['Клиенты',d.clients_total],['Файлы',d.files_total],['Расходы',d.expenses_total],['Переписки',d.chats_total],['Сообщения',d.messages_total],['Ожидают сотрудника',d.support_waiting_human],['Открытые обращения',d.support_open],['Получено за всё время',money(d.revenue_kopecks)],['Получено за 30 дней',money(d.revenue_30d_kopecks)],['Оплаченные платежи',d.paid_transactions],['Ожидают оплаты',d.pending_payments],['Доход сегодня',money(d.revenue_today_kopecks)]];
  panel.querySelector('[data-admin-metrics]').innerHTML=rows.map(r=>'<div class="comms-admin-metric"><span>'+esc(r[0])+'</span><strong>'+(typeof r[1]==='number'?num(r[1]):esc(r[1]))+'</strong></div>').join('');
- panel.querySelector('[data-admin-queue]').innerHTML=icon('support')+' Открыть очередь поддержки'+(d.support_waiting_human?' · '+num(d.support_waiting_human)+' ожидают':'');
+ panel.querySelector('[data-admin-queue]').innerHTML=icon('support')+'<span>Открыть очередь поддержки'+(d.support_waiting_human?' · '+num(d.support_waiting_human)+' ожидают':'')+'</span>';
  }catch(error){panel.querySelector('p').textContent='Не удалось обновить статистику: '+error.message}
  finally{state.adminLoading=false}
 }
@@ -242,6 +242,8 @@ function startPresence(){
 }
 document.addEventListener('DOMContentLoaded',()=>{
  mount();watch();
+ // Any section picked in the main sidebar replaces the messenger page.
+ document.addEventListener('click',e=>{if(state.open&&e.target.closest?.('#sidebar [data-tab],.app-nav [data-tab],#command-open'))close()},true);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void heartbeat()});
  setInterval(()=>{if(!document.body.classList.contains('auth-mode')&&location.hash==='#admin')adminPage()},30000);
 });

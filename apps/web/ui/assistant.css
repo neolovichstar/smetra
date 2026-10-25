@@ -265,17 +265,25 @@
 .knowledge-badge.is-off{background:transparent;box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--text-3)}
 .knowledge-clear{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin:4px 12px 12px;min-height:34px;border-radius:var(--r-2);color:var(--text-3);font-size:var(--fs-13)}
 .knowledge-clear:hover{background:var(--danger-soft);color:var(--danger)}
-.knowledge-editor{display:flex;flex-direction:column;gap:var(--s-3);min-height:0;padding:var(--s-5) var(--s-6);overflow:auto}
+.knowledge-editor{display:flex;flex-direction:column;gap:var(--s-3);min-height:0;padding:var(--s-5) var(--s-6) 0;overflow:auto;overscroll-behavior:contain}
 .knowledge-back{display:none}
 .knowledge-paused{padding:10px 12px;border-radius:var(--r-2);background:var(--warning-soft);color:var(--text);font-size:var(--fs-13);line-height:1.45}
-#knowledge-form{display:flex;flex-direction:column;gap:var(--s-4);max-width:560px}
+#knowledge-form{display:flex;flex-direction:column;flex:1 0 auto;gap:var(--s-4);max-width:560px}
 .knowledge-form-head h3{font-size:var(--fs-18);font-weight:600}
 .knowledge-form-head p{margin-top:4px;color:var(--text-3);font-size:var(--fs-13)}
 #knowledge-form label{position:relative}
-#knowledge-form textarea{min-height:120px;resize:vertical}
+#knowledge-form textarea{min-height:96px;max-height:40dvh;resize:vertical}
 .knowledge-counter{align-self:flex-end;color:var(--text-3);font-size:var(--fs-11);font-weight:400;font-variant-numeric:tabular-nums}
 #knowledge-form label.knowledge-enabled{flex-direction:row;align-items:center;gap:8px;color:var(--text)}
-.knowledge-form-actions{display:flex;gap:var(--s-2);flex-wrap:wrap}
+/* Actions stay reachable on short screens: the fields scroll under them. */
+.knowledge-form-actions{position:sticky;bottom:0;z-index:1;display:flex;gap:var(--s-2);flex-wrap:wrap;margin-top:auto;padding:var(--s-3) 0 var(--s-5);border-top:1px solid var(--line);background:var(--surface-1)}
+@media (max-height:780px){
+  .knowledge-window-head{padding:var(--s-4) var(--s-5) var(--s-3)}
+  .knowledge-window-head p,.knowledge-memory-bar small{display:none}
+  .knowledge-memory-bar{margin-bottom:var(--s-3);padding:8px 12px}
+  .knowledge-form-head p{display:none}
+  #knowledge-form{gap:var(--s-3)}
+}
 .knowledge-form-actions .btn{gap:6px}
 .knowledge-form-actions .btn svg{width:16px;height:16px}
 .knowledge-form-actions #knowledge-delete{margin-left:auto}
@@ -308,6 +316,14 @@
 .smetra-quote-preview{grid-area:preview;display:flex;flex-direction:column;min-width:0;min-height:0;border-left:1px solid var(--line);background:var(--surface-1);animation:panel-in var(--t-slow) var(--ease) both}
 .smetra-quote-preview[hidden]{display:none}
 @keyframes panel-in{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+.smetra-quote-preview-back[hidden]{display:none}
+.smetra-quote-preview-heading{flex:1;min-width:0}
+.smetra-quote-picker{display:flex;flex-direction:column;gap:4px}
+.smetra-quote-picker-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title sum" "meta sum";align-items:center;column-gap:var(--s-3);row-gap:2px;width:100%;padding:10px 12px;border:1px solid transparent;border-radius:var(--r-2);text-align:left;transition:background-color var(--t-fast) var(--ease)}
+.smetra-quote-picker-row:hover{background:var(--surface-2);border-color:var(--line)}
+.smetra-quote-picker-row strong{grid-area:title;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-14);font-weight:600}
+.smetra-quote-picker-row small{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:var(--fs-12)}
+.smetra-quote-picker-sum{grid-area:sum;color:var(--text);font-size:var(--fs-13);font-variant-numeric:tabular-nums;white-space:nowrap}
 .smetra-quote-preview-header{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);padding:12px 12px 12px var(--s-5);border-bottom:1px solid var(--line)}
 .smetra-quote-preview-heading small{display:block;color:var(--text-3);font-size:var(--fs-12)}
 .smetra-quote-preview-heading h2{font-size:var(--fs-16)}
@@ -393,7 +409,7 @@
   .assistant-workbar .btn{width:auto;height:36px;min-height:36px;padding:0 10px;gap:6px;font-size:var(--fs-13)}
   .assistant-workbar .assistant-history-toggle{display:inline-flex!important;order:-1}
   .assistant-workbar .btn .assistant-tool-label{opacity:1}
-  .assistant-tool-knowledge .assistant-tool-label,.assistant-tool-quote .assistant-tool-label{display:none}
+  .assistant-tool-knowledge .assistant-tool-label,.assistant-tool-quotes .assistant-tool-label{display:none}
   .assistant-history-panel{position:fixed;top:calc(var(--topbar-h) + 48px);left:0;bottom:0;z-index:70;width:min(320px,88vw);padding:12px 8px;border-right:1px solid var(--line-strong);background:var(--surface-1);box-shadow:var(--shadow-float);transform:translateX(-102%);transition:transform var(--t-slow) var(--ease);opacity:1;pointer-events:auto;visibility:hidden}
   .assistant-studio.is-history-expanded .assistant-history-panel{transform:none;visibility:visible}
   .assistant-tools-collapsed .assistant-history-panel{opacity:1}

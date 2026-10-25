@@ -40,7 +40,7 @@
         <td><span class="admin-state ${u.blocked?'admin-state-red':'admin-state-green'}"><i></i>${u.blocked?'Заблокирован':'Активен'}</span></td>
         <td><span class="admin-plan ${activePro?'is-pro':''}">${activePro?'Про':'Старт'}</span>${activePro?`<small class="admin-subline">до ${time(u.entitlement_until)}</small>`:''}</td>
         <td class="admin-date">${time(u.created_at)}</td>
-        <td class="admin-row-action"><button type="button" data-admin-manage="${label(u.id)}" aria-label="Управлять аккаунтом ${label(u.email)}">Управлять <span aria-hidden="true">↗</span></button></td></tr>`;
+        <td class="admin-row-action"><button type="button" data-admin-manage="${label(u.id)}" aria-label="Управлять аккаунтом ${label(u.email)}"><span>Управлять</span>${window.SmetraIcons ? window.SmetraIcons.svg('arrow-up-right', 14) : ''}</button></td></tr>`;
     }).join('');
   }
 
@@ -51,7 +51,7 @@
       ? `<div class="admin-table-scroll"><table class="admin-table admin-users-table"><thead><tr><th scope="col">Пользователь</th><th scope="col">Статус</th><th scope="col">Тариф</th><th scope="col">Регистрация</th><th scope="col"><span class="sr-only">Действия</span></th></tr></thead><tbody>${userRows()}</tbody></table></div>`
       : empty('Ничего не найдено','Измените запрос или фильтр и попробуйте ещё раз.');
     const footer = document.querySelector('#admin-user-pages');
-    footer.innerHTML = `<span>${state.total ? `${count(state.offset+1)}–${count(Math.min(state.offset+state.users.length,state.total))} из ${count(state.total)}` : '0 пользователей'}</span><div><button type="button" data-admin-page="previous" ${state.offset?'':'disabled'} aria-label="Предыдущая страница">←</button><button type="button" data-admin-page="next" ${state.offset+state.users.length<state.total?'':'disabled'} aria-label="Следующая страница">→</button></div>`;
+    footer.innerHTML = `<span>${state.total ? `${count(state.offset+1)}–${count(Math.min(state.offset+state.users.length,state.total))} из ${count(state.total)}` : '0 пользователей'}</span><div><button type="button" data-admin-page="previous" ${state.offset?'':'disabled'} aria-label="Предыдущая страница">${window.SmetraIcons ? window.SmetraIcons.svg('arrow-left', 16) : '←'}</button><button type="button" data-admin-page="next" ${state.offset+state.users.length<state.total?'':'disabled'} aria-label="Следующая страница">${window.SmetraIcons ? window.SmetraIcons.svg('arrow-right', 16) : '→'}</button></div>`;
   }
 
   async function loadUsers() {
@@ -71,7 +71,7 @@
 
   function usersSection() {
     return `<div class="admin-section-head"><div><span class="admin-section-index">01 / АККАУНТЫ</span><h2>Пользователи</h2><p>Поиск по имени и почте. Изменения доступа записываются в журнал.</p></div><span class="admin-section-count">${count(state.overview.stats.users)} аккаунтов</span></div>
-      <div class="admin-controls"><label class="admin-search"><span class="sr-only">Найти пользователя</span><span aria-hidden="true">⌕</span><input id="admin-user-search" type="search" placeholder="Поиск по имени или почте" maxlength="100" value="${label(state.search)}" autocomplete="off"></label>
+      <div class="admin-controls"><label class="admin-search"><span class="sr-only">Найти пользователя</span>${window.SmetraIcons ? window.SmetraIcons.svg('search', 16) : ''}<input id="admin-user-search" type="search" placeholder="Поиск по имени или почте" maxlength="100" value="${label(state.search)}" autocomplete="off"></label>
         <label class="admin-filter"><span class="sr-only">Фильтр пользователей</span><select id="admin-user-filter"><option value="all">Все</option><option value="active">Активные</option><option value="blocked">Заблокированные</option><option value="pro">Доступ Про</option></select></label></div>
       <div id="admin-user-results"></div><div id="admin-user-pages" class="admin-pagination"></div>`;
   }

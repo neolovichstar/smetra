@@ -65,6 +65,13 @@ body.sidebar-compact .app-shell{grid-template-columns:var(--sidebar-rail) minmax
 .sidebar-group button[data-tab].active{background:var(--surface-3);color:var(--text);font-weight:500}
 .sidebar-group button[data-tab].active::after{content:'';position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:0 2px 2px 0;background:var(--accent)}
 .sidebar-group button[data-tab].active .sidebar-item-icon{color:var(--accent-text)}
+/* While the messenger page is open it is the current section. */
+body.comms-scroll-locked .sidebar-group button[data-tab].active{background:none;color:var(--text-2);font-weight:450}
+body.comms-scroll-locked .sidebar-group button[data-tab].active::after{content:none}
+body.comms-scroll-locked .sidebar-group button[data-tab].active .sidebar-item-icon{color:inherit}
+.sidebar .comms-sidebar-trigger[aria-current="page"]{background:var(--surface-3);color:var(--text);font-weight:500}
+.sidebar .comms-sidebar-trigger[aria-current="page"]::after{content:'';position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:0 2px 2px 0;background:var(--accent)}
+.sidebar .comms-sidebar-trigger[aria-current="page"] .sidebar-item-icon{color:var(--accent-text)}
 .sidebar-item-icon{width:18px;height:18px;flex:none;color:inherit}
 .sidebar-item-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity var(--t-base) var(--ease)}
 .sidebar-group button[data-tab]:focus-visible,.sidebar-disclosure:focus-visible,.sidebar-foot button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}

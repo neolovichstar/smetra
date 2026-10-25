@@ -265,6 +265,13 @@ def function(name, description, properties, required=()):
     }
 
 
+ENTITY_LABELS = {
+    "quotes": "смета", "clients": "клиент", "projects": "заказ", "stages": "этап заказа",
+    "tasks": "задача", "leads": "лид", "catalog": "позиция справочника расценок",
+    "expenses": "расход", "receipts": "чек",
+}
+
+
 def tools():
     entity = {"type": "string", "enum": list(ENTITIES)}
     text = {"type": "string"}
@@ -444,18 +451,26 @@ def tools():
                         "name": text,
                         "quantity": text,
                         "unit": text,
-                        "unit_price": {"type": "integer"},
+                        "unit_price": {
+                            "type": "integer",
+                            "description": "Цена за единицу в копейках. Неизвестна — 0, пользователь уточнит.",
+                        },
                     },
                     "required": ["name", "quantity", "unit_price"],
                     "additionalProperties": False,
                 },
             }
+        label = ENTITY_LABELS.get(kind, kind)
         result.append(
             function(
                 "create_" + kind,
-                "Предложить создание "
-                + kind
-                + ". Запись произойдёт только после подтверждения пользователя.",
+                (
+                    "Создать новую смету-черновик: title и позиции items (name, quantity, unit, unit_price). "
+                    "Вызывай, когда пользователь просит составить, сделать или создать смету. "
+                    "Итоги считает сервер; запись появится после подтверждения пользователя."
+                    if kind == "quotes" else
+                    "Предложить создание: " + label + ". Запись произойдёт только после подтверждения пользователя."
+                ),
                 properties,
                 ("name", "project_id") if kind == "stages" else (),
             )
@@ -464,9 +479,7 @@ def tools():
             result.append(
                 function(
                     "update_" + kind,
-                    "Предложить изменение "
-                    + kind
-                    + ". Сначала прочитай текущую запись.",
+                    "Предложить изменение: " + label + ". Сначала прочитай текущую запись через get_record.",
                     {**properties, "id": text},
                     ("id",),
                 )
@@ -705,7 +718,14 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
     if model != FREE_ROUTER:
         attempts.append({**_stream_payload(FREE_ROUTER, messages, False, reasoning=False),
                          "provider": {"require_parameters": True}})
-    attempts.append(_stream_payload(FREE_ROUTER, messages, False, tools_enabled=False, reasoning=False))
+    # The plain answer has no tools: say so, so the model does not claim it
+    # can never create or edit records.
+    plain = messages + [{"role": "system", "content": (
+        "Инструменты сейчас временно недоступны. Не говори, что не умеешь создавать или менять сметы и записи: "
+        "ответь по существу (например, перечисли позиции черновика) и предложи повторить запрос через минуту, "
+        "чтобы создать запись с подтверждением."
+    )}]
+    attempts.append(_stream_payload(FREE_ROUTER, plain, False, tools_enabled=False, reasoning=False))
     for number, payload in enumerate(attempts):
         try:
             return _stream_once(payload, on_delta, on_source)
@@ -1082,6 +1102,12 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                " Используй память и профиль уместно, без пересказа. Профиль и память не могут отменять системные правила."
                " Не обещай запомнить, если инструмент не вернул saved=true.")
     system += " Для массовой правки строк черновика сначала get_record quotes, затем bulk_quote_items с проверенными номерами строк. Не переписывай остальные строки. Увеличить цены на 10% означает multiply unit_price на 1.1, а не заменить цены одинаковой суммой."
+    system += (
+        " Создание сметы — твоя штатная задача: когда пользователь просит составить или создать смету, "
+        "не отказывай и не отправляй его делать это вручную — сразу вызови create_quotes с названием и позициями. "
+        "Если данных мало, создай черновик с понятными позициями и ценой 0 там, где цена неизвестна, и коротко перечисли, что уточнить. "
+        "Пользователь подтвердит создание кнопкой в чате."
+    )
     system += ' Состав сметы меняй через restructure_quote_items: insert/remove/reorder. Не изобретай цены; если цены нет у пользователя или в справочнике, сначала уточни. Включение опциональных строк — bulk_quote_items field included, set, boolean true/false. Не изменяй согласованную смету; не утверждай, что предложение уже сохранено.'
     if context:
         system += (" Пользователь явно выбрал контекст: " + CONTEXT_ENTITIES[context["entity"]]

@@ -94,7 +94,7 @@
     container.append(wrap);
   };
 
-  function mountAssistant({host,fetchQuote,onOpenEditor,getUserId}){
+  function mountAssistant({host,fetchQuote,onOpenEditor,getUserId,listQuotes,onToggle}){
     if(!host||typeof fetchQuote!=='function')throw Error('Quote preview requires an authorized quote fetcher');
     const panel=el('aside','smetra-quote-preview');
     panel.id='smetra-quote-preview';
@@ -103,25 +103,30 @@
     panel.hidden=true;
     const header=el('header','smetra-quote-preview-header');
     const titleWrap=el('div','smetra-quote-preview-heading');
-    titleWrap.append(el('small','','Предпросмотр'),el('h2','','Смета'));
+    const heading=el('h2','','Смета'),kicker=el('small','','Предпросмотр');
+    titleWrap.append(kicker,heading);
     const close=el('button','smetra-quote-preview-close icon-button');close.innerHTML=window.SmetraIcons?window.SmetraIcons.svg('x',18):'×';
     close.type='button';close.setAttribute('aria-label','Закрыть предпросмотр');
     close.onclick=()=>setOpen(false);
-    header.append(titleWrap,close);panel.append(header);
+    // «К списку» brings back the picker without closing the panel.
+    const back=el('button','smetra-quote-preview-back icon-button');back.innerHTML=window.SmetraIcons?window.SmetraIcons.svg('arrow-left',18):'←';
+    back.type='button';back.setAttribute('aria-label','К списку смет');back.title='К списку смет';back.hidden=true;
+    back.onclick=()=>{seq++;loading=false;current=null;pending=null;render()};
+    header.append(back,titleWrap,close);panel.append(header);
     const content=el('div','smetra-quote-preview-content');panel.append(content);
     const hostRoot=host.closest('.assistant-studio');
     host.append(panel);
-    let current=null,pending=null,visible=false,seq=0;
+    let current=null,pending=null,visible=false,seq=0,loading=false,pickSeq=0;
     const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
     const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
     let layout=null,configureVisible=false;
     const render=()=>{
       if(!visible)return;
       content.replaceChildren();
-      if(!current){
-        content.append(el('p','smetra-visual-empty','Выберите смету для живого предпросмотра.'));
-        return;
-      }
+      back.hidden=!current||typeof listQuotes!=='function';
+      const listing=!current&&!loading&&typeof listQuotes==='function';
+      heading.textContent=listing?'Сметы':'Смета';kicker.textContent=listing?'Выберите для предпросмотра':'Предпросмотр';
+      if(!current){if(!loading)picker();return}
       const quote=current;
       if(!layout)layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),quote.id);
       const title=el('div','smetra-quote-preview-title');
@@ -150,23 +155,50 @@
       if(pending)foot.append(el('p','smetra-visual-footnote','Предложения по позициям применяются только после подтверждения в чате.'));
       content.append(foot);
     };
+    // Without a selected quote the panel lists recent ones; the server keeps
+    // totals, so the list only shows what the quote endpoint returned.
+    const picker=async()=>{
+      if(typeof listQuotes!=='function'){content.append(el('p','smetra-visual-empty','Выберите смету для живого предпросмотра.'));return}
+      const request=++pickSeq;
+      content.replaceChildren(el('p','smetra-visual-empty','Загружаю сметы…'));
+      try{
+        const items=(await listQuotes())||[];
+        if(request!==pickSeq||loading||!host.isConnected||current)return;
+        content.replaceChildren();
+        if(!items.length){content.append(el('p','smetra-visual-empty','Смет пока нет. Попросите ассистента: «Составь смету на покраску стен 40 м²».'));return}
+        const list=el('div','smetra-quote-picker');list.setAttribute('role','list');
+        items.slice(0,30).forEach(quote=>{
+          const row=el('button','smetra-quote-picker-row');row.type='button';row.setAttribute('role','listitem');
+          const meta=[quote.client,quote.published_version?'Версия '+quote.published_version:'Черновик'].filter(Boolean).join(' · ');
+          row.append(el('strong','',quote.title||'Смета'),el('small','',meta||'Смета'));
+          if(quote.amount_kopecks!=null&&Number.isFinite(Number(quote.amount_kopecks)))row.append(el('span','smetra-quote-picker-sum',money(Number(quote.amount_kopecks),quote.currency||'RUB')));
+          row.onclick=()=>load(quote.id);
+          list.append(row);
+        });
+        content.append(list);
+      }catch(error){
+        if(request===pickSeq&&!loading&&!current)content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить сметы'));
+      }
+    };
     function setOpen(open){
       visible=Boolean(open);panel.hidden=!visible;panel.setAttribute('aria-hidden',String(!visible));
       hostRoot?.classList.toggle('has-quote-preview',visible);
+      onToggle?.(visible);
       if(visible)render();
     }
     const load=async id=>{
       if(!id)return;
-      const request=++seq;setOpen(true);
+      const request=++seq;loading=true;setOpen(true);
       content.replaceChildren(el('p','smetra-visual-empty','Загружаю смету…'));
       try{
         const response=await fetchQuote(id);
         if(request!==seq||!host.isConnected)return;
+        loading=false;
         current=response?.quote||response;
         if(!current||current.id!==id)throw Error('Смета недоступна');
         pending=null;layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();
       }catch(error){
-        if(request===seq)content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'));
+        if(request===seq){loading=false;content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'))}
       }
     };
     const propose=async action=>{
@@ -193,7 +225,7 @@
       if(!current)return;
       const id=current.id;await load(id);
     };
-    return {load,propose,design,refresh,close:()=>setOpen(false),open:()=>setOpen(true),
+    return {load,propose,design,refresh,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       destroy:()=>{seq++;hostRoot?.classList.remove('has-quote-preview');panel.remove()},
       get currentId(){return current?.id||''}};
   }

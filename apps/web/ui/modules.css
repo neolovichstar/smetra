@@ -249,11 +249,15 @@
 .support-studio{height:calc(100dvh - var(--topbar-h))}
 .support-studio .tg-rail-head .btn{gap:6px}
 
-/* Communication center: full screen messenger over the app. */
-.comms-shell{position:fixed;inset:0;z-index:1200;display:none;background:var(--bg)}
+/* Communication center: a full page inside the cabinet. The top bar and the
+   main sidebar stay visible, like any other section. */
+.comms-shell{position:fixed;top:var(--topbar-h);right:0;bottom:0;left:var(--sidebar-w);z-index:60;display:none;background:var(--bg);transition:left var(--t-slow) var(--ease)}
+body.sidebar-compact .comms-shell{left:var(--sidebar-rail)}
 .comms-shell.is-open{display:block;animation:fade-in var(--t-base) var(--ease)}
 body.comms-scroll-locked{overflow:hidden}
-.comms-window{width:100%;height:100%;height:100dvh}
+.comms-window{width:100%;height:100%}
+.comms-window.tg{min-height:0}
+@media (max-width:800px){.comms-shell,body.sidebar-compact .comms-shell{left:0}}
 .comms-btn{--btn-bg:transparent;--btn-line:transparent;display:inline-grid;place-items:center;min-height:36px;width:36px;padding:0;border-radius:var(--r-2);color:var(--text-2)}
 .comms-btn:hover:not(:disabled){background:var(--surface-3);color:var(--text)}
 .comms-btn svg{width:18px;height:18px}
@@ -261,7 +265,7 @@ body.comms-scroll-locked{overflow:hidden}
 .comms-search svg{width:16px;height:16px;flex:none}
 #comms-search{flex:1;width:auto;min-width:0;min-height:38px;padding:0;border:0;background:transparent;box-shadow:none}
 #comms-search:focus{box-shadow:none;border:0}
-.comms-tabs{display:flex;gap:4px;padding:0 12px 8px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.comms-tabs{display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 8px;border-bottom:1px solid var(--line)}
 .comms-tab{flex:none;min-height:32px;padding:0 12px;border-radius:var(--r-pill);color:var(--text-2);font-size:var(--fs-13);font-weight:500}
 .comms-tab:hover{background:var(--surface-2);color:var(--text)}
 .comms-tab.active{background:var(--surface-inverse);color:var(--text-inverse)}
@@ -295,7 +299,7 @@ body.comms-scroll-locked{overflow:hidden}
 .comms-empty p{color:var(--text-3);font-size:var(--fs-13)}
 .comms-error{margin:var(--s-2) 0;padding:8px 12px;border-radius:var(--r-2);background:var(--danger-soft);color:var(--text);font-size:var(--fs-13)}
 .comms-admin-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
-.comms-admin-metric{display:flex;flex-direction:column-reverse;gap:2px;padding:10px;border:1px solid var(--line);border-radius:var(--r-2);font-size:var(--fs-12);color:var(--text-3)}
+.comms-admin-metric{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:2px;padding:10px;border:1px solid var(--line);border-radius:var(--r-2);font-size:var(--fs-12);color:var(--text-3)}
 .comms-admin-metric strong,.comms-admin-metric b{font-size:var(--fs-18);color:var(--text);font-variant-numeric:tabular-nums}
 .comms-sidebar-trigger svg{width:18px;height:18px}
 
@@ -334,23 +338,36 @@ body.comms-scroll-locked{overflow:hidden}
 .admin-section-head p{color:var(--text-2);font-size:var(--fs-14)}
 .admin-section-count{color:var(--text-3);font-size:var(--fs-13);white-space:nowrap}
 .admin-controls{display:flex;gap:var(--s-2);flex-wrap:wrap;margin-bottom:var(--s-3)}
-.admin-search{flex:1 1 260px}
+.admin-controls{align-items:center}
+#content .admin-search{display:flex;flex-direction:row;align-items:center;gap:8px;flex:1 1 260px;min-width:0;padding:0 12px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);color:var(--text-3)}
+#content .admin-search:focus-within{border-color:var(--accent)}
+.admin-search svg{flex:none;width:16px;height:16px}
+#admin-user-search{flex:1;min-width:0;min-height:38px;padding:0;border:0;background:transparent;box-shadow:none}
 .admin-table,.admin-users-table,.admin-payments-table{width:100%}
 .admin-table-scroll{border-radius:var(--r-2)}
 .admin-person{display:flex;align-items:center;gap:10px}
 .admin-avatar{width:30px;height:30px;font-size:12px}
+.admin-dateline{display:flex;gap:6px;margin-bottom:6px}
 .admin-email,.admin-subline,.admin-date,.admin-dateline,.admin-footnote{color:var(--text-3);font-size:var(--fs-12)}
 .admin-money{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .admin-plan,.admin-state{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--r-pill);background:var(--surface-3);font-size:var(--fs-12);color:var(--text-2)}
-.admin-row-action{min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-2);font-size:var(--fs-12);color:var(--text-2)}
-.admin-row-action:hover{border-color:var(--line-strong);color:var(--text)}
+.admin-users-table td,.admin-users-table th{vertical-align:middle}
+.admin-users-table td.admin-row-action{width:1%;text-align:right;white-space:nowrap}
+.admin-row-action>button{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-2);font-size:var(--fs-13);color:var(--text-2)}
+.admin-row-action>button:hover{border-color:var(--line-strong);background:var(--surface-2);color:var(--text)}
+.admin-row-action svg{width:14px;height:14px}
 .admin-ticket-list,.admin-audit-list{display:flex;flex-direction:column}
 .admin-ticket,.admin-audit>div{padding:12px 0;border-top:1px solid var(--line)}
 .admin-ticket-top{display:flex;justify-content:space-between;gap:var(--s-3);font-size:var(--fs-13);color:var(--text-3)}
 .admin-ticket p{margin:6px 0;font-size:var(--fs-14)}
 .admin-ticket-actions{display:flex;gap:6px}
 .admin-audit-mark{display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:var(--surface-4)}
-.admin-pagination{display:flex;justify-content:flex-end;gap:6px;margin-top:var(--s-3)}
+.admin-pagination,#admin-user-pages{display:flex;align-items:center;justify-content:flex-end;gap:var(--s-3);margin-top:var(--s-3);color:var(--text-3);font-size:var(--fs-13)}
+#admin-user-pages>div{display:flex;gap:4px}
+#admin-user-pages button{display:inline-grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:var(--r-2);color:var(--text-2)}
+#admin-user-pages button:hover:not(:disabled){background:var(--surface-2);color:var(--text)}
+#admin-user-pages button:disabled{opacity:.4}
+#admin-user-pages svg{width:16px;height:16px}
 .admin-empty,.admin-loading,.admin-error{padding:var(--s-5) 0;color:var(--text-3)}
 .admin-error{color:var(--danger)}
 .admin-growth-funnel{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
@@ -430,7 +447,7 @@ body.comms-scroll-locked{overflow:hidden}
 #estimate-ai-draft-form>.muted{margin-top:var(--s-3);font-size:var(--fs-13)}
 .intake-request{margin-bottom:var(--s-4);padding:var(--s-4);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-2)}
 .intake-request p{margin:6px 0 var(--s-2)}
-.comms-admin-panel{display:flex;flex-direction:column;gap:var(--s-2);margin-top:var(--s-5);padding:var(--s-5);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1)}
+.comms-admin-panel{display:flex;flex-direction:column;gap:var(--s-2);margin:var(--s-5) 0;padding:var(--s-5);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1)}
 .comms-admin-panel>h3{font-size:var(--fs-16)}
 .comms-admin-panel>p{color:var(--text-2);font-size:var(--fs-14)}
 .comms-admin-panel>button{align-self:flex-start}

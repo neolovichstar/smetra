@@ -55,6 +55,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         <div class="assistant-workbar" id="assistant-workbar">
           <button class="btn small assistant-tool-new" id="assistant-new-thread" type="button" aria-label="Новый диалог" title="Новый диалог">${assistantIcon('plus')}<span class="assistant-tool-label">Новый диалог</span></button>
           <button class="btn small assistant-history-toggle" id="assistant-history-toggle" type="button" aria-label="Показать историю диалогов" title="История диалогов" aria-expanded="false" aria-controls="assistant-history-panel">${assistantIcon('chat')}<span class="assistant-tool-label">История</span></button>
+          <button class="btn small assistant-tool-quotes" id="assistant-quotes" type="button" aria-label="Сметы" title="Сметы" aria-expanded="false" aria-controls="smetra-quote-preview">${assistantIcon('file-text')}<span class="assistant-tool-label">Сметы</span></button>
           <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="База знаний" title="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel">${assistantIcon('book')}<span class="assistant-tool-label">Знания</span></button>
         </div>
         <section class="assistant-history-panel" id="assistant-history-panel" aria-label="История диалогов">
@@ -125,6 +126,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     host:assistantStudioRoot,
     getUserId:()=>user?.id,
     fetchQuote:id=>api('/quotes/'+encodeURIComponent(id)),
+    listQuotes:async()=>(await api('/quotes'))?.quotes||[],
+    onToggle:open=>{const button=document.querySelector('#assistant-quotes');if(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('is-active',open)}},
     onOpenEditor:async id=>{
       try{
         const {quote}=await api('/quotes/'+encodeURIComponent(id));
@@ -343,6 +346,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(toolrail.classList.contains('is-history-expanded')){event.preventDefault();closeHistoryPanel();historyToggle.focus();}
   });
   document.querySelector('#assistant-new-thread').onclick=event=>threadAction(event.currentTarget,async()=>{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});if(!active())return;sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);await window.SmetraAssistant()});
+  document.querySelector('#assistant-quotes').onclick=()=>{if(!quotePreview){notify('Предпросмотр смет недоступен');return}closeHistoryPanel();if(!quotePreview.visible&&!quotePreview.currentId&&context?.entity==='quotes'&&context.id)quotePreview.load(context.id).catch(()=>{});else quotePreview.toggle()};
   document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
@@ -353,17 +357,6 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
   }
   if(!active())return;
-  const quoteViewToggle=document.createElement('button');
-  quoteViewToggle.className='btn small assistant-tool-quote';
-  quoteViewToggle.type='button';
-  quoteViewToggle.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 16h6"/></svg><span class="assistant-tool-label">Смета</span>';
-  quoteViewToggle.setAttribute('aria-label','Открыть предпросмотр сметы');
-  quoteViewToggle.onclick=()=>{
-    if(quotePreview?.currentId)quotePreview.open();
-    else if(context?.entity==='quotes')quotePreview?.load(context.id).catch(()=>{});
-    else status.textContent='Откройте существующую смету и выберите «Спросить AI».';
-  };
-  document.querySelector('#assistant-workbar')?.append(quoteViewToggle);
   const contextBar=document.querySelector('#assistant-context');
   const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');contextBar.after(fileStatus);
   const renderContext=()=>{
