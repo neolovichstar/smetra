@@ -511,3 +511,20 @@ a.dashboard-metric:focus-visible{outline:2px solid var(--accent);outline-offset:
 .order-finance-row small{display:inline;margin-left:4px;color:var(--text-3);font-weight:400}
 .order-finance-row.is-warning b,.order-finance-row.is-warning span{color:var(--danger)}
 .dashboard-metric-hint{margin-top:-4px;color:var(--text-3);font-size:var(--fs-12)}
+/* Finance permission switch in the team list. */
+.team-finance-toggle{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 8px;border-radius:var(--r-2);color:var(--text-2);font-size:var(--fs-13);font-weight:500;flex:none}
+.team-finance-toggle::before{content:'';width:28px;height:16px;border-radius:8px;background:var(--surface-4);box-shadow:inset 0 0 0 1px var(--line-strong);background-image:radial-gradient(circle at 8px 50%,var(--text-2) 5px,transparent 5.5px);transition:background-color var(--t-fast) var(--ease)}
+.team-finance-toggle[aria-checked="true"]{color:var(--text)}
+.team-finance-toggle[aria-checked="true"]::before{background-color:var(--accent-strong);box-shadow:none;background-image:radial-gradient(circle at 20px 50%,#fff 5px,transparent 5.5px)}
+.team-finance-toggle:hover{background:var(--surface-2)}
+.team-finance-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.team-finance-toggle:disabled{opacity:.5}
+.team-member-copy{flex:1 1 auto;min-width:0}
+.team-member-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:600px){
+  /* Name and email on the first line, role and controls under them. */
+  .team-member-row{flex-wrap:wrap;row-gap:var(--s-2)}
+  .team-member-copy{flex-basis:calc(100% - 52px)}
+  .team-member-row>.team-role-badge{margin-left:0}
+  .team-member-row>.team-remove-member{margin-left:auto}
+}

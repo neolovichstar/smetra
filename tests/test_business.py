@@ -1295,6 +1295,82 @@ class BusinessFlows(unittest.TestCase):
             409,
         )
 
+    def test_finance_permission_hides_costs_from_members_until_granted(self):
+        owner, _ = self.account("finance-perm-owner")
+        member, member_id = self.account("finance-perm-member")
+        q = self.quote(owner)
+        _, created = self.call("/projects", "POST", {"name": "Ванная", "amount_kopecks": 50_000, "internal_cost": 30_000}, owner)
+        project = created["item"]["id"]
+        self.assertEqual(self.call("/expenses", "POST", {"project_id": project, "amount_kopecks": 35_000, "category": "Плитка"}, owner, key="finance-perm-expense-key")[0], 201)
+        wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET plan='team_month',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (self.mod.now() + 86400, wid))
+        self.assertEqual(self.call("/workspace/members", "POST", {"email": "finance-perm-member@test.invalid", "role": "member"}, owner)[0], 200)
+
+        def hidden_everywhere():
+            quote = self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"]
+            self.assertNotIn("internal_cost", quote)
+            self.assertNotIn("profit", quote)
+            self.assertNotIn("cost_price", quote["items"][0])
+            self.assertEqual(quote["amount_kopecks"], q["amount_kopecks"], "Client prices stay visible")
+            item = self.call("/projects/" + project, token=member, workspace=wid)[1]["item"]
+            self.assertNotIn("expenses", item)
+            self.assertNotIn("internal_cost", item)
+            self.assertEqual(set(item["finance"]) & {"planned_cost", "actual_cost", "forecast_profit", "cash_result", "overrun"}, set())
+            self.assertEqual(item["finance"]["receivable"], 50_000)
+            self.assertEqual(self.call("/expenses", token=member, workspace=wid)[0], 403)
+            dashboard = self.call("/dashboard", token=member, workspace=wid)[1]
+            self.assertFalse(dashboard["capabilities"]["finance"])
+            self.assertNotIn("forecast_profit", dashboard["actions"]["summary"]["money"])
+            self.assertNotIn("Перерасход по заказу", [i["title"] for i in dashboard["actions"]["items"]])
+            self.assertNotIn("cash_profit", json_text(self.call("/overview", token=member, workspace=wid)[1]))
+
+        json_text = lambda value: json.dumps(value, ensure_ascii=False)
+        hidden_everywhere()
+
+        # Editing blind keeps the real cost; a typed cost is ignored.
+        quote = self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"]
+        items = [{**row, "name": "Переименовано", "cost_price": 1} for row in quote["items"]]
+        status, saved = self.call("/quotes/" + q["id"], "PATCH", {"revision": quote["revision"], "items": items}, member, wid)
+        self.assertEqual(status, 200, saved)
+        owner_view = self.call("/quotes/" + q["id"], token=owner)[1]["quote"]
+        self.assertEqual(owner_view["items"][0]["name"], "Переименовано")
+        self.assertEqual(owner_view["items"][0]["cost_price"], 4000)
+        self.assertEqual(owner_view["internal_cost"], q["internal_cost"])
+
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": True}, member, wid)[0], 403)
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": "yes"}, owner)[0], 400)
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": True}, owner)[0], 200)
+        members = {m["user_id"]: m for m in self.call("/workspace/members", token=owner)[1]["items"]}
+        self.assertTrue(members[member_id]["finance_access"])
+        self.assertIn("internal_cost", self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"])
+        self.assertEqual(self.call("/expenses", token=member, workspace=wid)[0], 200)
+        self.assertTrue(self.call("/dashboard", token=member, workspace=wid)[1]["capabilities"]["finance"])
+
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": False}, owner)[0], 200)
+        hidden_everywhere()
+
+        # Removal clears the grant, so a later invitation starts without it.
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": True}, owner)[0], 200)
+        self.assertEqual(self.call("/workspace/members/" + member_id, "DELETE", None, owner)[0], 200)
+        self.assertEqual(self.call("/quotes/" + q["id"], token=member, workspace=wid)[0], 404)
+        self.assertEqual(self.call("/workspace/members", "POST", {"email": "finance-perm-member@test.invalid", "role": "member"}, owner)[0], 200)
+        hidden_everywhere()
+
+    def test_assistant_read_tools_follow_the_finance_permission(self):
+        from backend import assistant
+
+        class Hidden:
+            def finance_visible(self):
+                return False
+
+        original = assistant.read_tool
+        assistant.read_tool = lambda service, name, args: {"internal_cost": 1, "items": [{"name": "x", "cost_price": 2, "unit_price": 3}]}
+        try:
+            self.assertEqual(assistant.execute_read(Hidden(), "list_records", {}), {"items": [{"name": "x", "unit_price": 3}]})
+        finally:
+            assistant.read_tool = original
+
     def test_compare_versions_is_private_read_only_and_validates_selectors(self):
         owner, _ = self.account("compare-owner")
         other, _ = self.account("compare-other")

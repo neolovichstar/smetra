@@ -619,6 +619,17 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
 
 
 def execute_read(service, name, args):
+    """Read tools see exactly what the user may see: no costs without the finance permission."""
+    result = read_tool(service, name, args)
+    visible = getattr(service, "finance_visible", None)
+    if callable(visible) and not visible():
+        from backend.business import without_finance
+
+        return without_finance(result)
+    return result
+
+
+def read_tool(service, name, args):
     if name == "get_file_metadata":
         return service.route("GET", "files", [string(args.get("id", ""), "Файл", 80, True), "metadata"], {}, {})[1]
     if name in ("get_document", "list_documents"):

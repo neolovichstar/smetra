@@ -22,6 +22,26 @@ except ZoneInfoNotFoundError:
     BUSINESS_TIMEZONE = dt.timezone(dt.timedelta(hours=3))
 
 
+# Internal economics a team member sees only with the finance permission.
+# Prices, contract amounts and client payments stay visible: they are needed
+# to work with the client. Costs, margins and spending are not.
+FINANCE_KEYS = frozenset((
+    "internal_cost", "cost_price", "cost_total", "profit", "planned_cost", "actual_cost",
+    "cash_profit", "planned_profit", "forecast_profit", "cash_result", "budget_used_pct",
+    "overrun", "overruns", "orders_with_costs", "orders_without_costs", "expenses",
+    "planned_cost_kopecks", "cost_kopecks", "actual_cost_kopecks",
+))
+FINANCE_ROLES = ("owner", "admin", "manager")
+
+
+def without_finance(value):
+    if isinstance(value, dict):
+        return {k: without_finance(v) for k, v in value.items() if k not in FINANCE_KEYS}
+    if isinstance(value, list):
+        return [without_finance(v) for v in value]
+    return value
+
+
 class DomainError(Exception):
     def __init__(self, status, message):
         super().__init__(message)
@@ -824,6 +844,14 @@ class Service:
             data.get("custom_fields", json.loads(old["custom_fields"]) if old else {}),
         )
         if "items" in data:
+            if not self.finance_visible() and isinstance(data["items"], list):
+                # The editor cannot see costs, so it must not overwrite them:
+                # a line keeps its stored cost, a new line starts without one.
+                stored = {item.get("line_id"): item.get("cost_price", 0) for item in (self.quote_view(old)["items"] if old else [])}
+                data = {**data, "items": [
+                    {**item, "cost_price": stored.get(item.get("line_id"), 0)} if isinstance(item, dict) else item
+                    for item in data["items"]
+                ]}
             items, total, cost = calculate(data["items"], allow_zero_total=(old is None or old["status"] == "draft"))
             if old:
                 from backend.quote_versions import carry_identities
@@ -2046,7 +2074,7 @@ class Service:
 
         currency = self.con.execute("SELECT currency FROM workspaces WHERE id=?", (self.wid,)).fetchone()[0] or "RUB"
         money = order_finance.workspace_money(self.con, self.wid, currency)
-        for over in money["overruns"][:3]:
+        for over in money["overruns"][:3] if self.finance_visible() else ():
             add("project", over, "Перерасход по заказу", "Открыть проект", over["name"], amount=over["overrun"])
         soon = (business_date() + dt.timedelta(days=3)).isoformat()
         for row in self.con.execute(
@@ -2158,9 +2186,10 @@ class Service:
     def workspace(self, method, parts, data):
         if parts and parts[0] == "members":
             if method == "GET":
+                granted = set(json.loads(self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()["settings"]).get("finance_access") or [])
                 return 200, {
                     "items": [
-                        dict(r)
+                        dict(r, finance_access=r["role"] in FINANCE_ROLES or r["user_id"] in granted)
                         for r in self.con.execute(
                             "SELECT m.user_id,m.role,u.name,u.email FROM workspace_members m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=?",
                             (self.wid,),
@@ -2208,6 +2237,26 @@ class Service:
                 )
                 self.emit("workspace", self.wid, "Роль участника изменена", role)
                 return 200, {"ok": True}
+            if method == "PATCH" and len(parts) == 2:
+                target = self.con.execute(
+                    "SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?",
+                    (self.wid, parts[1]),
+                ).fetchone()
+                if not target:
+                    raise DomainError(404, "Участник не найден")
+                if not isinstance(data.get("finance_access"), bool):
+                    raise DomainError(400, "Укажите доступ к финансам")
+                if target["role"] in FINANCE_ROLES:
+                    raise DomainError(409, "Эта роль всегда видит финансы")
+                row = self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()
+                settings = json.loads(row["settings"])
+                granted = [uid for uid in settings.get("finance_access") or [] if uid != parts[1]]
+                if data["finance_access"]:
+                    granted.append(parts[1])
+                settings["finance_access"] = granted
+                self.con.execute("UPDATE workspaces SET settings=? WHERE id=?", (json.dumps(settings, ensure_ascii=False), self.wid))
+                self.emit("workspace", self.wid, "Доступ к финансам " + ("открыт" if data["finance_access"] else "закрыт"))
+                return 200, {"ok": True, "finance_access": data["finance_access"]}
             if method == "DELETE" and len(parts) == 2:
                 target = self.con.execute(
                     "SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?",
@@ -2223,6 +2272,12 @@ class Service:
                     "DELETE FROM workspace_members WHERE workspace_id=? AND user_id=?",
                     (self.wid, parts[1]),
                 )
+                # A removed member must not regain finance access if invited again.
+                row = self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()
+                settings = json.loads(row["settings"])
+                if parts[1] in (settings.get("finance_access") or []):
+                    settings["finance_access"] = [uid for uid in settings["finance_access"] if uid != parts[1]]
+                    self.con.execute("UPDATE workspaces SET settings=? WHERE id=?", (json.dumps(settings, ensure_ascii=False), self.wid))
                 self.emit("workspace", self.wid, "Участник удалён")
                 return 200, {"ok": True}
         row = self.con.execute(
@@ -2380,7 +2435,32 @@ class Service:
                 return self.route(method, kind, rest, query, data)
         return self.route(method, kind, rest, query, data)
 
+    def finance_visible(self):
+        """Owner, admin and manager see costs; others only when the owner grants it."""
+        if self.role in FINANCE_ROLES:
+            return True
+        if not self.user or not self.wid:
+            return False
+        cached = getattr(self, "_finance_grant", None)
+        if cached is None or cached[0] != (self.wid, self.user["id"]):
+            row = self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()
+            granted = self.user["id"] in (json.loads(row["settings"]).get("finance_access") or []) if row else False
+            self._finance_grant = cached = ((self.wid, self.user["id"]), granted)
+        return cached[1]
+
     def route(self, method, kind, parts, query, data):
+        visible = self.finance_visible()
+        if not visible and kind == "expenses" and method == "GET":
+            raise DomainError(403, "Расходы видят владелец, администратор и менеджер")
+        if not visible and method in ("POST", "PATCH") and isinstance(data, dict):
+            # Costs typed blind would overwrite real ones; stored values stay.
+            data = {k: v for k, v in data.items() if k not in ("cost_price", "internal_cost")}
+        result = self.routed(method, kind, parts, query, data)
+        if visible or not isinstance(result, tuple) or len(result) < 2 or not isinstance(result[1], (dict, list)):
+            return result
+        return (result[0], without_finance(result[1]), *result[2:])
+
+    def routed(self, method, kind, parts, query, data):
         if kind == "dashboard" and method == "GET":
             _, context = self.workspace("GET", [], {})
             _, overview = self.overview(limit=4)
@@ -2425,6 +2505,7 @@ class Service:
                 "ai_drafting": available(),
                 "online_client_payments": False,
                 "uploads": ["png", "jpg", "pdf", "txt"],
+                "finance": self.finance_visible(),
             }
         if kind == "files":
             try:
