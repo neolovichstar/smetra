@@ -16,12 +16,14 @@ READ_NAMES = frozenset({
     "calculate_construction", "get_file_metadata", "get_document",
     "list_documents", "search_workspace", "find_catalog_prices",
     "catalog_price_history", "audit_quote", "compare_quote_versions",
+    "list_quote_items", "list_quote_versions",
     "project_finances", "deadline_radar",
 })
 
 NEW_READ_NAMES = frozenset({
     "search_workspace", "find_catalog_prices", "catalog_price_history",
-    "audit_quote", "compare_quote_versions", "project_finances", "deadline_radar",
+    "audit_quote", "compare_quote_versions", "list_quote_items",
+    "list_quote_versions", "project_finances", "deadline_radar",
 })
 
 
@@ -66,6 +68,43 @@ def read(service, name, args):
                 "history": [{key: row[key] for key in (
                     "price", "cost_price", "item_revision", "created_at",
                 ) if key in row} for row in record.get("price_history", [])[:20]]}
+
+    if name == "list_quote_items":
+        quote = service.quote_view(service.get("quotes", _id(args, "Смета")))
+        offset = args.get("offset", 0)
+        limit = args.get("limit", 15)
+        if type(offset) is not int or not 0 <= offset <= 199:
+            raise DomainError(400, "Неверный номер первой позиции")
+        if type(limit) is not int or not 1 <= limit <= 30:
+            raise DomainError(400, "Можно прочитать от 1 до 30 позиций")
+        columns = (
+            "line_id", "name", "description", "unit", "quantity", "unit_price",
+            "cost_price", "subtotal", "category", "optional", "included",
+            "coefficient", "markup", "discount", "tax",
+        )
+        items = quote["items"]
+        rows = []
+        for row, item in enumerate(items[offset:offset + limit], offset + 1):
+            fields = {key: item[key] for key in columns if key in item}
+            if isinstance(fields.get("description"), str):
+                fields["description"] = fields["description"][:300]
+            rows.append({"row": row, **fields})
+        return {"quote_id": quote["id"], "title": quote["title"],
+                "revision": quote["revision"], "currency": quote["currency"],
+                "amount_kopecks": quote["amount_kopecks"],
+                "offset": offset, "total_items": len(items), "rows": rows,
+                "has_more": offset + limit < len(items)}
+
+    if name == "list_quote_versions":
+        quote_id = _id(args, "Смета")
+        quote = service.get("quotes", quote_id)
+        versions = [dict(row) for row in service.con.execute(
+            "SELECT version,comment,created_at FROM quote_versions WHERE quote_id=? "
+            "ORDER BY version DESC LIMIT 30", (quote_id,),
+        )]
+        return {"quote_id": quote_id, "title": quote["title"],
+                "published_version": quote["published_version"],
+                "current_revision": quote["revision"], "versions": versions}
 
     if name == "audit_quote":
         quote = service.quote_view(service.get("quotes", _id(args, "Смета")))
