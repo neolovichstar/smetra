@@ -14,7 +14,7 @@ from backend.business import DomainError as ApiError
 try:
     from backend import postgres as _postgres
     _postgres.TABLES = _postgres.TABLES | frozenset(
-        {"chat_conversations", "chat_members", "chat_messages", "app_presence"}
+        {"chat_conversations", "chat_members", "chat_messages", "app_presence", "billing_subscriptions"}
     )
 except (ImportError, AttributeError):
     pass
