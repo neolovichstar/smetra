@@ -4,6 +4,8 @@ name: Android release
 on:
   workflow_dispatch:
   push:
+    branches: ['release/smetra-2-0-0-build']
+    paths: ['.github/workflows/android-release.yml']
     tags: ['android-v*']
 permissions:
   contents: write
