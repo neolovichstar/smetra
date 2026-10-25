@@ -577,17 +577,30 @@ def _support_completion(payload, timeout):
 
     try:
         return _parse_support_reply(call(payload))
+    except urllib.error.HTTPError as error:
+        # Authentication and account-wide provider rate limits cannot be
+        # recovered by immediately making another paid/upstream request.
+        if error.code in (401, 403, 429):
+            raise
     except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError, TypeError):
-        # One more try on the free router without the JSON mode some free
-        # models reject; the prompt still asks for the same envelope.
-        retry = {**payload, "model": FREE_ROUTER}
-        retry.pop("response_format", None)
-        return _parse_support_reply(call(retry))
+        pass
+    # Retry with a free model and without strict JSON mode, which is rejected
+    # by some free providers. The system prompt still requests JSON.
+    retry = {**payload, "model": FREE_ROUTER}
+    retry.pop("response_format", None)
+    return _parse_support_reply(call(retry))
 
 
 def _support_ai_reply(user, user_stats, history, message):
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     human_requested = wants_human(message)
+    if human_requested:
+        # Never hold a support conversation waiting for the model when the
+        # user explicitly asks to speak with an employee.
+        return {
+            "reply": "Передал обращение сотруднику поддержки. Ответ придёт в этот чат.",
+            "escalate": True, "reason": "user_requested_human",
+        }
     if not api_key:
         return {
             "reply": "Не хочу гадать и вводить вас в заблуждение: автоматическая поддержка сейчас недоступна. "
@@ -617,7 +630,7 @@ def _support_ai_reply(user, user_stats, history, message):
     try:
         decoded = _support_completion(payload, timeout)
         reply = _text(decoded.get("reply"), 3000, required=True)
-        escalate = bool(decoded.get("escalate")) or human_requested
+        escalate = decoded.get("escalate") is True
         reason = _text(decoded.get("reason"), 120) if escalate else ""
         return {"reply": reply, "escalate": escalate,
                 "reason": reason or ("user_requested_human" if human_requested else "ai_handoff")}
