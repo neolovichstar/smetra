@@ -149,6 +149,28 @@
 .assistant-proposal .row{gap:var(--s-2);flex-wrap:wrap}
 .proposal-fields{font-size:var(--fs-14);color:var(--text-2)}
 .proposal-fields dl,.proposal-fields .record-line{margin:0}
+
+/* A created estimate is a reviewable list, never flattened into one paragraph. */
+.assistant-quote-draft{display:grid;gap:12px;min-width:0}
+.assistant-quote-draft-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.assistant-quote-draft-heading strong{color:var(--text);font-size:var(--fs-14);font-weight:600}
+.assistant-quote-draft-heading>span,.assistant-quote-draft-meta{color:var(--text-3);font-size:var(--fs-13)}
+.assistant-quote-draft-list{list-style:none;display:grid;gap:0;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--r-2);overflow:hidden}
+.assistant-quote-draft-item{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:11px 13px;min-width:0}
+.assistant-quote-draft-item+.assistant-quote-draft-item{border-top:1px solid var(--line)}
+.assistant-quote-draft-main{display:grid;gap:4px;flex:1;min-width:0}
+.assistant-quote-draft-name{overflow-wrap:anywhere;color:var(--text);font-weight:500;line-height:1.45}
+.assistant-quote-draft-quantity{font-size:var(--fs-12);color:var(--text-3)}
+.assistant-quote-draft-price{flex:none;max-width:45%;text-align:right;white-space:normal;font-variant-numeric:tabular-nums;color:var(--text);font-size:var(--fs-13)}
+.assistant-quote-draft-price.is-unpriced{color:var(--text-3)}
+.assistant-quote-draft-more summary{cursor:pointer;padding:6px 0;color:var(--accent-text);font-size:var(--fs-13)}
+.assistant-quote-draft-more .assistant-quote-draft-list{margin-top:8px}
+.assistant-quote-draft-note,.assistant-saved-hint{font-size:var(--fs-12);line-height:1.55;color:var(--text-3)}
+.assistant-quote-draft-note{margin:0}
+.assistant-saved-hint{flex:0 0 100%;order:2}
+.assistant-saved-open-quote{flex:none}
+@media(max-width:520px){.assistant-quote-draft-item{align-items:flex-start;flex-direction:column;gap:6px}.assistant-quote-draft-price{max-width:none;text-align:left}}
+
 .assistant-edit-diff{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r-2);overflow:hidden}
 .assistant-diff-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:var(--s-3);padding:9px 12px;border-top:1px solid var(--line);font-size:var(--fs-13)}
 .assistant-diff-row:first-child{border-top:0}
