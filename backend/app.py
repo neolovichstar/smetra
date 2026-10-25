@@ -53,7 +53,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 56
+REQUIRED_CLOUD_SCHEMA_VERSION = 61
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -475,7 +475,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
+                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
@@ -499,6 +499,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
                 if root == "mobile" and path not in ("/api/mobile/presentation", "/api/mobile/compat"):
+                    raise ApiError(404, "Не найдено")
+            # Never expose main customer routes through the partner hostname.
+            console_host = self.headers.get("Host", "").split(":")[0].lower()
+            if console_host == "console.smetra.online":
+                if method == "GET" and path in ("/", "/partner-console.js"):
+                    return self.static("/partner-console" if path == "/" else path)
+                if not path.startswith("/api/partners/"):
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
@@ -576,6 +583,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("SELECT 1")
             return self.send_json(200, {"ok": True})
         public = {
+            "/partner-console": ("partner-console.html", "text/html"),
             "/": ("index.html", "text/html"),
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
@@ -674,7 +682,51 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def partner_redirect(self, target, cookie=None):
+        self.send_response(302)
+        self.send_header("Location", target)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+
     def api(self, method, path, query, con):
+        if path.startswith("/api/partners/"):
+            from backend import partner_platform as partner
+            try:
+                if method == "GET" and re.fullmatch(r"/api/partners/r/[a-z0-9_-]{3,40}", path):
+                    self.throttle("partner-visit:" + self.client_address[0], 40, 3600)
+                    token = partner.begin_visit(con, path.rsplit("/", 1)[1])
+                    return self.partner_redirect(ORIGIN + "/app?register=1",
+                        partner.cookie_header(token, COOKIE_SECURE))
+                if path == "/api/partners/offers" and method == "GET":
+                    user = self.auth(con)
+                    self.throttle("partner-offers:" + user["id"], 40, 3600)
+                    return self.send_json(200, partner.offers(con, query.get("q", [""])[0]))
+                if method == "GET" and re.fullmatch(r"/api/partners/out/[0-9a-f-]{36}", path):
+                    user = self.auth(con)
+                    self.throttle("partner-out:" + user["id"], 40, 3600)
+                    return self.partner_redirect(partner.outbound(con, user, path.rsplit("/", 1)[1]))
+                if path.startswith("/api/partners/admin/"):
+                    admin = self.auth(con, True)
+                    self.throttle("partner-admin:" + admin["id"], 20, 3600)
+                    if path == "/api/partners/admin/accounts" and method == "GET":
+                        return self.send_json(200, partner.list_partners(con))
+                    if path == "/api/partners/admin/accounts" and method == "POST":
+                        return self.send_json(201, partner.create_partner(con, self.body()))
+                if path == "/api/partners/console/summary" and method == "GET":
+                    org = partner.auth_partner(con, self.headers.get("Authorization"))
+                    self.throttle("partner-console:" + org["id"], 100, 3600)
+                    return self.send_json(200, partner.summary(con, org))
+                if path == "/api/partners/console/catalog" and method == "POST":
+                    org = partner.auth_partner(con, self.headers.get("Authorization"))
+                    self.throttle("partner-catalog:" + org["id"], 20, 3600)
+                    return self.send_json(200, partner.ingest_products(con, org, self.body()))
+            except partner.PartnerError as err:
+                raise ApiError(err.status, err.message) from None
+            raise ApiError(404, "Не найдено")
         if path == "/api/shared-inbox" or path.startswith("/api/shared-inbox/"):
             from backend.estimate_sharing import recipient_route
             return self.send_json(*recipient_route(self,con,method,path))
@@ -1037,6 +1089,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
         if path == "/api/me" and method == "GET":
+            from backend.partner_platform import capture
+            capture(con, user, self.headers.get("Cookie", ""))
             revenue.visit(con, user)
             return self.send_json(200, {"user": user_view(user, con)})
         if path == "/api/admin/revenue" and method == "GET":
@@ -1189,6 +1243,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/billing/checkout" and method == "POST":
             if user["email_verified_at"] is None:
                 raise ApiError(403, "Подтвердите почту перед оплатой")
+            from backend.partner_platform import capture
+            capture(con, user, self.headers.get("Cookie", ""))
             data = self.body()
             plan = data.get("plan")
             key = self.headers.get("Idempotency-Key", "")
@@ -1578,6 +1634,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
                             )
                         revenue.rebuild_workspace_entitlement(con, local["user_id"], terms["workspace_id"] if terms else None)
+                        from backend.partner_platform import record_subscription_payment
+                        record_subscription_payment(con, local)
                         newly_succeeded = True
                     if status in ('succeeded','canceled') and not pack:
                         revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
@@ -1639,6 +1697,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             now(),
                         ),
                     )
+                    from backend.partner_platform import reverse_subscription_payment
+                    reverse_subscription_payment(con, payment["id"])
                     pack = token_packs.millions_of(payment["plan"])
                 if not existing and pack:
                     from backend import ai_tokens
