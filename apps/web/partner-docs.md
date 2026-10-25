@@ -1,6 +1,6 @@
 # Smetra Partner API
 
-**Версия:** v1 / пилот · **Домен API:** `https://console.smetra.online`  
+**Версия:** v1 / пилот (старые пути `/api/partners/console/*` временно совместимы) · **Домен API:** `https://console.smetra.online`  
 **Для покупателей:** `https://smetra.online`
 
 Интегрируйте сервис создания смет в сайт магазина, публикуйте каталог стройматериалов и анализируйте переходы, регистрации, подтверждённые подписки и клики по товарам.
@@ -29,7 +29,7 @@ Authorization: Partner smp_live_YOUR_SECRET_KEY
 Консоль обменивает API-ключ на отдельную сессию сроком 1 час:
 
 ~~~http
-POST /api/partners/console/session
+POST /api/partners/v1/console/session
 Content-Type: application/json
 
 {"api_key":"smp_live_YOUR_SECRET_KEY"}
@@ -43,7 +43,7 @@ Content-Type: application/json
 Authorization: PartnerSession smp_session_...
 ~~~
 
-Сессия автоматически истекает; `POST /api/partners/console/logout` отзывает её. Все ответы не кэшируются.
+Сессия автоматически истекает; `POST /api/partners/v1/console/logout` отзывает её. Все ответы не кэшируются.
 
 ## Подтверждение домена (как в Meta Business)
 
@@ -52,7 +52,7 @@ Authorization: PartnerSession smp_session_...
 ### Способ 1: DNS TXT (рекомендуется)
 
 ~~~http
-POST /api/partners/console/domain
+POST /api/partners/v1/console/domain
 Authorization: Partner smp_live_YOUR_SECRET_KEY
 Content-Type: application/json
 
@@ -70,7 +70,7 @@ Value: smetra-verify-<выданный токен>
 Затем выполните:
 
 ~~~http
-POST /api/partners/console/domain/verify
+POST /api/partners/v1/console/domain/verify
 Authorization: Partner smp_live_YOUR_SECRET_KEY
 Content-Type: application/json
 
@@ -92,7 +92,7 @@ Content-Type: application/json
 Проверить текущее состояние:
 
 ~~~http
-GET /api/partners/console/domain
+GET /api/partners/v1/console/domain
 Authorization: Partner smp_live_YOUR_SECRET_KEY
 ~~~
 
@@ -139,7 +139,7 @@ SDK не содержит ключей и не отслеживает посет
 Импортируются пакеты до **100 товаров за запрос**:
 
 ~~~http
-POST /api/partners/console/catalog
+POST /api/partners/v1/console/catalog
 Authorization: Partner smp_live_YOUR_SECRET_KEY
 Content-Type: application/json
 
@@ -168,8 +168,8 @@ Content-Type: application/json
 ## Аналитика и конверсии
 
 ~~~http
-GET /api/partners/console/summary
-GET /api/partners/console/analytics?days=30
+GET /api/partners/v1/console/summary
+GET /api/partners/v1/console/analytics?days=30
 Authorization: Partner smp_live_YOUR_SECRET_KEY
 ~~~
 
@@ -195,7 +195,7 @@ Authorization: Partner smp_live_YOUR_SECRET_KEY
 Чтобы сопоставлять работу виджета и заказы магазина, ваш сервер может присылать обезличенные события:
 
 ~~~http
-POST /api/partners/console/events
+POST /api/partners/v1/console/events
 Authorization: Partner smp_live_YOUR_SECRET_KEY
 Content-Type: application/json
 

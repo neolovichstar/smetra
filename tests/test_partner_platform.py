@@ -190,5 +190,17 @@ class PartnerPlatformTests(unittest.TestCase):
             with self.assertRaises(partner.PartnerError):
                 partner.auth_console(self.con, "PartnerSession " + new["session_token"])
 
+    def test_admin_key_rotation_invalidates_sessions_and_old_keys(self):
+        original = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        issued = partner.new_console_session(self.con, "Partner " + self.partner["api_key"])
+        rotated = partner.rotate_api_key(self.con, original["id"])
+        self.assertEqual(rotated["partner"], "materials-market")
+        self.assertNotEqual(rotated["api_key"], self.partner["api_key"])
+        with self.assertRaises(partner.PartnerError):
+            partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        with self.assertRaises(partner.PartnerError):
+            partner.auth_console(self.con, "PartnerSession " + issued["session_token"])
+        self.assertEqual(partner.auth_partner(self.con, "Partner " + rotated["api_key"])["id"], original["id"])
+
 if __name__ == "__main__":
     unittest.main()

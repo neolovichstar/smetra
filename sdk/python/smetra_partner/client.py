@@ -40,27 +40,27 @@ class PartnerClient:
             raise PartnerAPIError(exc.code, message) from None
 
     def summary(self):
-        return self._request("/api/partners/console/summary")
+        return self._request("/api/partners/v1/console/summary")
 
     def analytics(self, days=30):
         if days not in (7, 30, 90):
             raise ValueError("days must be 7, 30 or 90")
-        return self._request("/api/partners/console/analytics?days=" + str(days))
+        return self._request("/api/partners/v1/console/analytics?days=" + str(days))
 
     def domain(self):
-        return self._request("/api/partners/console/domain")
+        return self._request("/api/partners/v1/console/domain")
 
     def begin_verification(self, method="dns"):
-        return self._request("/api/partners/console/domain", {"method": method})
+        return self._request("/api/partners/v1/console/domain", {"method": method})
 
     def verify_domain(self):
-        return self._request("/api/partners/console/domain/verify", {})
+        return self._request("/api/partners/v1/console/domain/verify", {})
 
     def update_catalog(self, products):
-        return self._request("/api/partners/console/catalog", {"products": products})
+        return self._request("/api/partners/v1/console/catalog", {"products": products})
 
     def report_event(self, *, event_key, event_type, amount_kopecks=0):
-        return self._request("/api/partners/console/events", {
+        return self._request("/api/partners/v1/console/events", {
             "event_key": event_key, "event_type": event_type,
             "amount_kopecks": amount_kopecks,
         })

@@ -506,7 +506,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if console_host == "console.smetra.online":
                 if method == "GET" and path in ("/", "/docs", "/partner-docs.html", "/partner-docs.md", "/partner-docs.js", "/partner-console.js", "/partner-sdk.js", "/ui/partner-console.css", "/vendor/markdown-it-15.0.2.min.js"):
                     return self.static("/partner-console" if path == "/" else "/partner-docs" if path == "/docs" else path)
-                if not path.startswith("/api/partners/console/"):
+                if not (path.startswith("/api/partners/console/") or path.startswith("/api/partners/v1/console/")):
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
@@ -697,6 +697,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def api(self, method, path, query, con):
+        # Stable versioned public contract with aliases for existing pilot clients.
+        if path.startswith("/api/partners/v1/"):
+            path = "/api/partners/" + path[len("/api/partners/v1/"):]
         if path.startswith("/api/partners/"):
             from backend import partner_platform as partner
             try:
@@ -719,7 +722,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if path == "/api/partners/admin/accounts" and method == "GET":
                         return self.send_json(200, partner.list_partners(con))
                     if path == "/api/partners/admin/accounts" and method == "POST":
-                        return self.send_json(201, partner.create_partner(con, self.body()))
+                        created = partner.create_partner(con, self.body())
+                        audit(con, admin["id"], "partner.created", created["id"])
+                        return self.send_json(201, created)
+                    if method == "POST" and re.fullmatch(
+                            r"/api/partners/admin/accounts/[0-9a-f-]{36}/rotate-key", path):
+                        partner_id = path.split("/")[-2]
+                        rotated = partner.rotate_api_key(con, partner_id)
+                        audit(con, admin["id"], "partner.key_rotated", partner_id)
+                        return self.send_json(200, rotated)
                 if path == "/api/partners/console/session" and method == "POST":
                     self.throttle("partner-login:" + self.client_address[0], 8, 900)
                     data = self.body()

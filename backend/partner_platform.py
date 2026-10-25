@@ -382,3 +382,32 @@ def revoke_console_session(con, header):
         "WHERE session_hash=? AND revoked_at IS NULL",
         (_now(), _sha(token)),
     ).rowcount > 0
+
+
+def rotate_api_key(con, partner_id):
+    """Admin-only rotation invalidates all old keys and console sessions atomically."""
+    if not isinstance(partner_id, str) or not re.fullmatch(r"[0-9a-f-]{36}\Z", partner_id):
+        raise PartnerError(400, "Некорректный идентификатор партнёра")
+    from backend.business import transaction
+    with transaction(con, lock_scopes=(f"partner:{partner_id}",)):
+        existing = con.execute(
+            "SELECT id,code FROM partner_accounts WHERE id=? AND active=1",
+            (partner_id,),
+        ).fetchone()
+        if not existing:
+            raise PartnerError(404, "Партнёр не найден")
+        moment = _now()
+        secret = "smp_live_" + secrets.token_urlsafe(36)
+        con.execute(
+            "UPDATE partner_api_tokens SET revoked_at=? "
+            "WHERE partner_id=? AND revoked_at IS NULL", (moment, partner_id)
+        )
+        con.execute(
+            "UPDATE partner_console_sessions SET revoked_at=? "
+            "WHERE partner_id=? AND revoked_at IS NULL", (moment, partner_id)
+        )
+        con.execute(
+            "INSERT INTO partner_api_tokens(id,partner_id,token_hash,created_at) "
+            "VALUES(?,?,?,?)", (_id(), partner_id, _sha(secret), moment)
+        )
+    return {"partner": existing["code"], "api_key": secret, "shown_once": True}
