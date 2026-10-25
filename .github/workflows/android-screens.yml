@@ -40,6 +40,9 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: Build debug APK for the emulator fixture
         run: |
+          # Installable test build against production, published with the screens.
+          bash apps/mobile/gradlew -p apps/mobile assembleDebug -PapiBaseUrl=https://smetra.online
+          mkdir -p data/apk && cp apps/mobile/app/build/outputs/apk/debug/app-debug.apk data/apk/smetra-2.0.0-debug.apk
           bash apps/mobile/gradlew -p apps/mobile assembleDebug -PapiBaseUrl=http://10.0.2.2:8090
           # Free the runner's memory for the emulator: the Gradle daemons are not needed any more.
           bash apps/mobile/gradlew -p apps/mobile --stop
@@ -118,6 +121,7 @@ jobs:
         run: |
           [ -d data/android-screens ] || exit 0
           cp data/promo-fixture.log data/android-screens/ 2>/dev/null || true
+          cp -r data/apk data/android-screens/ 2>/dev/null || true
           cd data/android-screens
           git init -q -b android-screens
           git config user.name "smetra-ci"
