@@ -24,6 +24,44 @@ function assistantEditPreview(preview){
   const totals=['quote_items','quote_structure'].includes(preview.kind)?`${structure?`<p class="muted">Позиций: ${escapeHtml(preview.before_count)} → ${escapeHtml(preview.after_count)}</p>`:''}<div class="assistant-diff-total"><span>Итого по смете</span><div><del>${escapeHtml(assistantEditValue('amount',preview.before_total,preview.currency))}</del><strong>${escapeHtml(assistantEditValue('amount',preview.after_total,preview.currency))}</strong></div></div>`:'';
   return `<div class="assistant-edit-diff">${rows.slice(0,5).join('')}${rows.length>5?`<details><summary>Ещё ${rows.length-5} изменений</summary>${rows.slice(5).join('')}</details>`:''}${totals}</div>`;
 }
+function assistantQuoteDraftPreview(host, args){
+  const rows=Array.isArray(args.items)?args.items:[];
+  if(!rows.length)return;
+  const wrapper=document.createElement('div');wrapper.className='assistant-quote-draft';
+  const heading=document.createElement('div');heading.className='assistant-quote-draft-heading';
+  const title=document.createElement('strong');title.textContent='Работы и материалы';
+  const count=document.createElement('span');count.textContent=rows.length+' позиций';
+  heading.append(title,count);wrapper.append(heading);
+  if(args.client){const client=document.createElement('p');client.className='assistant-quote-draft-meta';client.textContent='Клиент: '+String(args.client);wrapper.append(client);}
+  const buildRows=(subset,offset)=>{
+    const list=document.createElement('ol');list.className='assistant-quote-draft-list';
+    subset.forEach((record,index)=>{
+      const row=document.createElement('li');row.className='assistant-quote-draft-item';
+      const main=document.createElement('div');main.className='assistant-quote-draft-main';
+      const label=document.createElement('span');label.className='assistant-quote-draft-name';label.textContent=(offset+index+1)+'. '+String(record.name||'Работа');
+      const quantity=document.createElement('span');quantity.className='assistant-quote-draft-quantity';
+      quantity.textContent=String(record.quantity??1)+' '+String(record.unit||'шт.');
+      main.append(label,quantity);
+      const price=document.createElement('span');price.className='assistant-quote-draft-price';
+      const kopecks=Number(record.unit_price);
+      const specified=Number.isFinite(kopecks)&&kopecks>0;
+      price.textContent=specified?assistantEditValue('unit_price',kopecks,args.currency||'RUB')+' / ед.':'Цена не указана';
+      if(!specified)price.classList.add('is-unpriced');
+      row.append(main,price);list.append(row);
+    });
+    return list;
+  };
+  wrapper.append(buildRows(rows.slice(0,5),0));
+  if(rows.length>5){
+    const more=document.createElement('details');more.className='assistant-quote-draft-more';
+    const summary=document.createElement('summary');summary.textContent='Показать ещё '+(rows.length-5)+' позиций';
+    more.append(summary,buildRows(rows.slice(5),5));wrapper.append(more);
+  }
+  const note=document.createElement('p');note.className='assistant-quote-draft-note';
+  note.textContent='Черновик. Количество и цены необходимо проверить перед отправкой клиенту.';
+  wrapper.append(note);host.append(wrapper);
+}
+
 let assistantRenderRevision=0;
 const assistantIcon=(name,size=18)=>window.SmetraIcons?window.SmetraIcons.svg(name,size):'';
 window.SmetraAssistant=async function(parentActive=()=>true){
@@ -122,20 +160,21 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
   // Existing estimate engine and the chat share one revision-safe quote source.
+  const openQuoteEditor=async id=>{
+    try{
+      const {quote}=await api('/quotes/'+encodeURIComponent(id));
+      tab='quotes';location.hash='quotes';
+      await window.render();
+      if(tab==='quotes')await window.Workspace.editor(quote);
+    }catch(error){notify(error.message)}
+  };
   const quotePreview=window.SmetraQuoteVisuals?.mountAssistant({
     host:assistantStudioRoot,
     getUserId:()=>user?.id,
     fetchQuote:id=>api('/quotes/'+encodeURIComponent(id)),
     listQuotes:async()=>(await api('/quotes'))?.quotes||[],
     onToggle:open=>{const button=document.querySelector('#assistant-quotes');if(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('is-active',open)}},
-    onOpenEditor:async id=>{
-      try{
-        const {quote}=await api('/quotes/'+encodeURIComponent(id));
-        tab='quotes';location.hash='quotes';
-        await window.render();
-        if(tab==='quotes')await window.Workspace.editor(quote);
-      }catch(error){notify(error.message)}
-    },
+    onOpenEditor:openQuoteEditor,
   });
   const syncAssistantConversationState=()=>{
     if(!assistantStudioRoot||!messages?.isConnected)return;
@@ -581,14 +620,16 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(action?.tool&&/quote/.test(action.tool))quotePreview?.propose(action).catch(()=>{});
     const item=document.createElement('section');item.className='assistant-proposal';
     const markdownEdit=action.tool==='replace_markdown_text';
-    const detail=action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
+    const quoteDraft=action.tool==='create_quotes'&&Array.isArray(action.arguments?.items)&&action.arguments.items.length>0;
+    const detail=quoteDraft?'':action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
     item.innerHTML=`<span class="assistant-proposal-state">Требует подтверждения · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
     actions.append(item);
+    if(quoteDraft)assistantQuoteDraftPreview(item.querySelector('.proposal-fields'),action.arguments);
     if(action.tool==='create_document'){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
     }
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id);quotePreview?.refresh().catch(()=>{});notify('Изменения сохранены')}catch(error){notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
   };
   // Like ChatGPT's "Memory updated": a quiet note under the answer with a way to review it.
@@ -603,8 +644,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     manage.onclick=()=>{const panel=document.querySelector('#assistant-knowledge-panel');if(panel)panel.dataset.scope='personal';document.querySelector('#assistant-knowledge')?.click()};
     note.innerHTML=assistantIcon('book',14);note.append(text,manage);item.append(note);
   };
-  const renderSavedAction=(item,action,undoable,documentId)=>{
-    item.replaceChildren();item.classList.add('is-saved');const title=document.createElement('p');title.className='assistant-saved-title';title.textContent='Сохранено · '+action.summary;item.append(title);
+  const renderSavedAction=(item,action,undoable,documentId,quoteId)=>{
+    item.replaceChildren();item.classList.add('is-saved');const title=document.createElement('p');title.className='assistant-saved-title';
+    title.textContent=(quoteId?'Черновик создан · ':'Сохранено · ')+action.summary;item.append(title);
+    if(quoteId){
+      const open=document.createElement('button');open.type='button';open.className='btn small primary assistant-saved-open-quote';
+      open.textContent='Открыть смету';open.setAttribute('aria-label','Открыть созданную смету');
+      open.onclick=()=>openQuoteEditor(quoteId);item.append(open);
+      const hint=document.createElement('small');hint.className='assistant-saved-hint';
+      hint.textContent='Сохранено в разделе «Сметы». Клиенту ещё не отправлено.';
+      item.append(hint);
+    }
     if(documentId){const pdf=document.createElement('button');pdf.type='button';pdf.className='btn ghost';pdf.textContent='Скачать PDF';pdf.onclick=()=>Workspace.download('/documents/'+encodeURIComponent(documentId)+'/pdf','smetra-document.pdf').catch(error=>notify(error.message));item.append(pdf)}
     if(!undoable)return;
     const button=document.createElement('button');button.type='button';button.className='btn ghost';button.textContent='Отменить изменение';item.append(button);
@@ -714,7 +764,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.forEach(addAction);
-  (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true,action.document_id)});
+  (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<(quota.unit==='tokens'?1500:1))status.textContent='Токены закончились: обычные и фоновые ответы расходуют общий баланс. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};

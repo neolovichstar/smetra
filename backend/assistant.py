@@ -774,6 +774,11 @@ def prepare(service, name, args):
             args["_undo_fields"], args["_preview"] = before, preview
         else:
             args.pop("id", None)
+            if operation == "create" and entity == "quotes" and not str(args.get("client") or "").strip():
+                # The model's create_quotes tool requires title and line items,
+                # but a draft can be requested before a client is known. Quote
+                # validation still expects a nonempty client display label.
+                args["client"] = "Клиент не указан"
             if entity == "stages":
                 project = service.get("projects", string(args.get("project_id", ""), "Заказ", 80, True))
                 args["_preview"] = {"kind": "fields", "currency": project["currency"], "rows": [
@@ -851,6 +856,10 @@ def _confirm(service, action_id):
         undo_fields = args.pop("_undo_fields", None)
         args.pop("_preview", None)
         name = row["tool"]
+        if name == "create_quotes" and not str(args.get("client") or "").strip():
+            # Existing pending proposals were created before missing-client
+            # normalization. Keep those actions confirmable after upgrading.
+            args["client"] = "Клиент не указан"
         resource_undo = None
         if name in ("rename_file", "move_file", "create_document"):
             from backend.assistant_resources import apply_resource
@@ -1250,13 +1259,24 @@ def route(service, method, parts, data):
             item["arguments"] = {key: value for key, value in item["arguments"].items() if not key.startswith("_")}
         recent = []
         for row in service.con.execute(
-            "SELECT id,summary,result FROM assistant_actions WHERE workspace_id=? AND user_id=? "
+            "SELECT id,tool,summary,result FROM assistant_actions WHERE workspace_id=? AND user_id=? "
             "AND status='applied' ORDER BY created_at DESC LIMIT 20", (service.wid, service.user["id"]),
         ):
             result = json.loads(row["result"])
-            if result.get("undoable") and result.get("undo_until", 0) >= stamp():
-                recent.append({"id": row["id"], "summary": row["summary"], "undo_until": result["undo_until"],
-                               "document_id": result.get("result", {}).get("document", {}).get("id")})
+            applied = result.get("result") or {}
+            quote = applied.get("quote") if isinstance(applied, dict) else None
+            quote_id = quote.get("id") if row["tool"] == "create_quotes" and isinstance(quote, dict) else None
+            undoable = bool(result.get("undoable") and result.get("undo_until", 0) >= stamp())
+            # Creation cannot be undone, but must remain discoverable after
+            # reopening the assistant instead of disappearing on refresh.
+            if undoable or quote_id:
+                entry = {"id": row["id"], "summary": row["summary"]}
+                if quote_id:
+                    entry["quote_id"] = quote_id
+                if undoable:
+                    entry["undo_until"] = result["undo_until"]
+                    entry["document_id"] = applied.get("document", {}).get("id")
+                recent.append(entry)
         from backend.attachments import maximum_upload
 
         return 200, {

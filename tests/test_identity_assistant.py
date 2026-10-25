@@ -454,6 +454,65 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertEqual(len(self.call("/clients", token=token)[1]["items"]), 1)
         self.assertEqual(self.call("/assistant", token=stranger)[1]["messages"], [])
 
+    def test_quote_draft_without_client_is_created_and_remains_openable(self):
+        owner, _ = self.account("assistant-quote-no-client")
+        stranger, _ = self.account("assistant-quote-stranger")
+        response = {
+            "content": None,
+            "tool_calls": [{
+                "id": "draft-kitchen", "type": "function",
+                "function": {
+                    "name": "create_quotes",
+                    "arguments": json.dumps({
+                        "title": "Ремонт кухни",
+                        "items": [{
+                            "name": "Грунтовка стен",
+                            "quantity": "1", "unit": "м²",
+                            "unit_price": 0,
+                        }],
+                    }),
+                },
+            }],
+        }
+        with (
+            patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"),
+            patch("backend.assistant.query_model", return_value=response),
+        ):
+            status, proposed = self.call("/assistant/chat", "POST", {"text": "Составь смету кухни"}, owner)
+        self.assertEqual(status, 200, proposed)
+        action = proposed["actions"][0]
+        self.assertEqual(action["arguments"]["client"], "Клиент не указан")
+        # Pending actions created by an older release lack the client field.
+        # They must remain applicable after the backend-only hotfix.
+        with self.mod.db() as con:
+            stored = con.execute(
+                "SELECT arguments FROM assistant_actions WHERE id=?", (action["id"],)
+            ).fetchone()
+            legacy = json.loads(stored["arguments"])
+            legacy.pop("client", None)
+            con.execute(
+                "UPDATE assistant_actions SET arguments=? WHERE id=?",
+                (json.dumps(legacy), action["id"]),
+            )
+        self.assertEqual(self.call("/quotes", token=owner)[1]["quotes"], [])
+        rejected = self.call("/assistant/confirm", "POST", {"id": action["id"]}, stranger)
+        self.assertEqual(rejected[0], 404)
+        status, applied = self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner)
+        self.assertEqual(status, 200, applied)
+        quote = applied["result"]["quote"]
+        self.assertEqual(quote["title"], "Ремонт кухни")
+        self.assertEqual(quote["client"], "Клиент не указан")
+        self.assertEqual(quote["status"], "draft")
+        self.assertEqual(quote["amount_kopecks"], 0)
+        self.assertEqual(self.call("/quotes/" + quote["id"] + "/publish", "POST", {
+            "revision": quote["revision"], "review_confirmed": True,
+        }, owner)[0], 409, "Unknown prices must never become a published client offer")
+        self.assertEqual(self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner)[0], 200)
+        self.assertEqual(len(self.call("/quotes", token=owner)[1]["quotes"]), 1)
+        recent = self.call("/assistant", token=owner)[1]["recent_actions"]
+        self.assertTrue(any(item.get("quote_id") == quote["id"] for item in recent))
+        self.assertEqual(self.call("/quotes/" + quote["id"], token=stranger)[0], 404)
+
     def test_assistant_markdown_edit_is_reviewed_and_revision_checked(self):
         owner, _ = self.account("assistant-markdown-owner")
         stranger, _ = self.account("assistant-markdown-stranger")
