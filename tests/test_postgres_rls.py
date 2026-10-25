@@ -81,6 +81,32 @@ class RuntimeRlsTests(unittest.TestCase):
                             (str(uuid.uuid4()), workspace_ids[1]),
                         )
                     con.execute("ROLLBACK TO SAVEPOINT denied")
+                    # Token quotas switched from assistant:month to
+                    # assistant:tokens. The runtime role must update only its
+                    # own current-month counter, not another user's quota.
+                    migrated = admin.execute(
+                        "SELECT 1 FROM smetra.schema_migrations WHERE version=58"
+                    ).fetchone()
+                    if migrated:
+                        from backend.ai_tokens import month_key
+
+                        own_key = month_key(owner_ids[0])
+                        foreign_key = month_key(owner_ids[1])
+                        value = con.execute(
+                            "INSERT INTO smetra.rate_limits(key,count,started) "
+                            "VALUES(%s,1,%s) ON CONFLICT(key) "
+                            "DO UPDATE SET count=smetra.rate_limits.count+1 "
+                            "RETURNING count",
+                            (own_key, int(time.time())),
+                        ).fetchone()
+                        self.assertEqual(value[0], 1)
+                        con.execute("SAVEPOINT denied_token_counter")
+                        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                            con.execute(
+                                "INSERT INTO smetra.rate_limits(key,count,started) VALUES(%s,1,%s)",
+                                (foreign_key, int(time.time())),
+                            )
+                        con.execute("ROLLBACK TO SAVEPOINT denied_token_counter")
                     con.execute("SELECT set_config('smetra.workspace_id',%s,true)", (workspace_ids[1],))
                     self.assertEqual(con.execute(
                         "SELECT count(*) FROM smetra.clients"
