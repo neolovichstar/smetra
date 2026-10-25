@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0b0c"><meta name="robots" content="noindex,nofollow">
+<title>Сметра · Консоль партнёра</title>
+<link rel="stylesheet" href="/partner-console.css">
+<script src="/partner-console.js" defer></script>
+</head><body>
+<div class="shell">
+<header class="top"><a class="brand" href="https://smetra.online" rel="noopener">сметра<span>.</span></a><div class="top-right"><small>Партнёрская платформа</small><button id="signout" class="quiet" hidden>Выйти</button></div></header>
+<main>
+<div id="signin" class="signin">
+  <span class="eyebrow">PARTNER PORTAL</span>
+  <h1>Бизнес растёт<br>вместе.</h1>
+  <p>Переходы, подписки, начисления и ваш каталог — в одном месте.</p>
+  <form id="connect"><label for="key">API-ключ партнёра</label><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="smp_live_…" required><button type="submit">Открыть консоль</button></form>
+  <p class="hint">Ключ выдаёт администратор «Сметры». Он не сохраняется в браузере.</p>
+</div>
+<section id="dashboard" hidden>
+<div class="heading"><div><span class="eyebrow">SMETRA PARTNER</span><h1>Обзор сотрудничества</h1><p id="partner-name">Загрузка данных</p></div><button id="refresh" class="quiet">Обновить</button></div>
+<div class="metrics">
+ <div class="metric"><span>Переходы за 30 дней</span><strong id="clicks">—</strong></div>
+ <div class="metric"><span>Подтверждённые оплаты</span><strong id="conversions">—</strong></div>
+ <div class="metric"><span>Начислено</span><strong id="earned">—</strong></div>
+ <div class="metric"><span>Прошли период удержания</span><strong id="cleared">—</strong></div>
+</div>
+<div class="content">
+<section class="section"><div><h2>Каталог материалов</h2><p>Загружайте товары через API. Для ручной проверки можно отправить небольшой JSON-пакет.</p></div>
+<form id="catalog"><label for="products">JSON — массив products, максимум 100 товаров</label><textarea id="products" spellcheck="false" rows="8">{"products":[{"sku":"test-001","name":"Материал для примера","price_kopecks":150000,"url":"https://example.com/item","available":true}]}</textarea><small>Замените демонстрационный домен адресом вашего магазина. Покупатели пока переходят на сайт партнёра — автоматического оформления заказов нет.</small><button type="submit">Обновить товары</button></form></section>
+<section class="section"><h2>Прозрачная экономика</h2><p>Комиссионные начисляются только с подтверждённых нетестовых оплат привлечённых клиентов. Повторные уведомления не создают начислений. Возвраты аннулируют начисления.</p><p>Выплаты пока не активированы: после согласования договора и реквизитов они будут включены отдельным этапом.</p><div class="status">Учёт начислений · пилот</div></section>
+</div>
+</section>
+<div id="feedback" role="status" aria-live="polite"></div>
+</main><footer>© 2026 Сметра · Отдельная партнёрская консоль</footer>
+</div></body></html>
