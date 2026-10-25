@@ -75,6 +75,14 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none
           script: SMETRA_SESSION=$(cat data/promo-session) bash scripts/android_emulator_screens.sh
+      - name: Host diagnostics
+        if: failure()
+        run: |
+          free -m
+          sudo dmesg -T | grep -i -E "oom|killed|qemu|emulator|segfault|kvm" | tail -30 || true
+          ls -la ~/.android/avd/*.avd/ 2>/dev/null | head -20
+          tail -50 ~/.android/avd/*.avd/*.log 2>/dev/null || true
+          df -h / /mnt
       - name: Promo images, manifest and UI critic
         if: always() && hashFiles('data/android-screens/screens.json') != ''
         run: |
