@@ -531,17 +531,19 @@ def _safe_tool_result(value, depth=0):
         return "[слишком глубокие данные]"
     if isinstance(value, dict):
         return {key: _safe_tool_result(item, depth + 1) for key, item in value.items()
-                if key.lower() not in denied}
+                if isinstance(key, str) and key.lower() not in denied}
     if isinstance(value, list):
         return [_safe_tool_result(item, depth + 1) for item in value]
+    if isinstance(value, str):
+        from backend.assistant_files import _SECRET
+
+        return _SECRET.sub("[секрет скрыт]", value)
     return value
 
 
 def tool_result_message(result, limit=6000):
     """Return valid bounded JSON without propagating credentials to the provider."""
-    from backend.assistant_files import _SECRET
-
-    value = _SECRET.sub("[секрет скрыт]", packed(_safe_tool_result(result)))
+    value = packed(_safe_tool_result(result))
     if len(value) <= limit:
         return value
     return packed({
