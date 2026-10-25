@@ -1,10 +1,8 @@
 /* Landing hero: a furnished room in real 3D (three.js, vendored), orthographic
    camera from above and slightly to the side. A pre-rendered poster of the same
    scene shows first; WebGL loads after the page and fades in over it. The room
-   renders on demand: drag to turn, a slow sway while on screen, nothing while
-   hidden or with reduced motion. */
+   renders only when the user turns it: no animation loop at rest. */
 const root = document.querySelector('[data-room3d]');
-const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const posterMode = new URLSearchParams(location.search).has('room-poster');
 
 const start = () => import('./vendor/three-0.170.0.module.min.js').then(THREE => Promise.all([
@@ -21,7 +19,7 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   } catch {
     return; // No WebGL: the poster stays.
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.75 : 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 1.75));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -92,8 +90,8 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
     return mesh;
   };
   const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-  const rbox = (w, h, d, r = 0.04) => new RoundedBoxGeometry(w, h, d, 3, r);
-  const cyl = (rt, rb, h, seg = 32) => new THREE.CylinderGeometry(rt, rb, h, seg);
+  const rbox = (w, h, d, r = 0.04) => new RoundedBoxGeometry(w, h, d, 2, r);
+  const cyl = (rt, rb, h, seg = 24, open = false) => new THREE.CylinderGeometry(rt, rb, h, seg, 1, open);
 
   // ── Shell: slab, two walls with thickness, window, doorway ──
   const W = 5.4, D = 4.4, H = 2.7, T = 0.16, slab = 0.14;
@@ -170,7 +168,7 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   // Sideboard along the left wall with a lamp, books and a picture above.
   const side = new THREE.Group(); side.position.set(x0 + 0.26, 0, -0.75); room.add(side);
   add(rbox(0.46, 0.56, 1.7, 0.02), oak, 0, 0.36, 0, { parent: side });
-  [-0.42, 0.42].forEach(z => add(box(0.005, 0.44, 0.78), std(0x9c7650, 0.6), 0.233, 0.36, z, { parent: side, cast: false }));
+  [-0.42, 0.42].forEach(z => add(box(0.006, 0.44, 0.78), std(0x9c7650, 0.6), 0.236, 0.36, z, { parent: side, cast: false }));
   [[-0.17, -0.75], [0.17, -0.75], [-0.17, 0.75], [0.17, 0.75]].forEach(([x, z]) => add(cyl(0.015, 0.015, 0.08, 10), blackMetal, x, 0.04, z, { parent: side }));
   add(cyl(0.07, 0.09, 0.05, 24), ceramic, 0, 0.665, 0.55, { parent: side });
   add(cyl(0.008, 0.008, 0.32, 8), brass, 0, 0.84, 0.55, { parent: side });
@@ -179,8 +177,8 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   const art = new THREE.Group(); art.position.set(x0 + 0.02, 1.55, -0.75); room.add(art);
   add(box(0.03, 0.82, 1.12), std(0x1d1d1d, 0.5), 0, 0, 0, { parent: art });
   add(box(0.005, 0.7, 1.0), std(0xd8cdb8, 0.95), 0.016, 0, 0, { parent: art, cast: false });
-  add(new THREE.CircleGeometry(0.2, 40), std(0xb8673f, 0.9), 0.02, 0.05, 0.15, { parent: art, ry: Math.PI / 2, cast: false });
-  add(box(0.004, 0.06, 0.6), std(0x2f4858, 0.9), 0.02, -0.18, -0.12, { parent: art, cast: false });
+  add(new THREE.CircleGeometry(0.2, 40), std(0xb8673f, 0.9), 0.026, 0.05, 0.15, { parent: art, ry: Math.PI / 2, cast: false });
+  add(box(0.004, 0.06, 0.6), std(0x2f4858, 0.9), 0.026, -0.18, -0.12, { parent: art, cast: false });
 
   // Floor lamp beside the sofa.
   const lamp = new THREE.Group(); lamp.position.set(-1.0, 0, -1.7); room.add(lamp);
@@ -191,9 +189,10 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
 
   // Plant in the corner.
   const plant = new THREE.Group(); plant.position.set(x0 + 0.38, 0, z0 + 0.4); room.add(plant);
-  add(cyl(0.2, 0.15, 0.42, 32), ceramic, 0, 0.21, 0, { parent: plant });
-  add(cyl(0.18, 0.18, 0.02, 24), std(0x3b2a1e, 1), 0, 0.41, 0, { parent: plant, cast: false });
-  const leafGeo = new THREE.SphereGeometry(0.14, 16, 12);
+  add(cyl(0.2, 0.15, 0.42, 32, true), std(0xf2efe9, 0.35, { side: THREE.DoubleSide }), 0, 0.21, 0, { parent: plant });
+  add(new THREE.CircleGeometry(0.15, 24), ceramic, 0, 0.002, 0, { parent: plant, rx: -Math.PI / 2, cast: false });
+  add(new THREE.CircleGeometry(0.185, 24), std(0x3b2a1e, 1), 0, 0.37, 0, { parent: plant, rx: -Math.PI / 2, cast: false });
+  const leafGeo = new THREE.SphereGeometry(0.14, 12, 8);
   for (let i = 0; i < 16; i++) {
     const a = i * 2.4, r = 0.08 + (i % 4) * 0.06, h = 0.6 + (i % 5) * 0.16;
     const l = add(leafGeo, i % 3 ? leaf : leafDark, Math.cos(a) * r, h, Math.sin(a) * r, { parent: plant, rx: Math.cos(a) * 0.6, rz: Math.sin(a) * 0.6 });
@@ -213,7 +212,7 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   sun.position.set(2.2, 5.2, -7.5);
   sun.target.position.set(0.2, 0, 0.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 1, far: 20 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 6; sun.shadow.blurSamples = 16;
   scene.add(sun, sun.target);
@@ -223,9 +222,9 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   scene.add(new THREE.HemisphereLight(0xf4f1ea, 0x8a7a66, 0.6));
 
   // ── Camera: orthographic, from above and to the side ──
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 8, 30);
   const target = new THREE.Vector3(-0.15, 0.95, -0.1);
-  const view = { azimuth: 0.72, elevation: 0.68, base: 0.72 };
+  const view = { azimuth: 0.72, elevation: 0.68 };
   const AZ_MIN = 0.32, AZ_MAX = 1.18;
   const place = () => {
     const r = 18;
@@ -237,13 +236,33 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
     camera.lookAt(target);
   };
   const render = () => { place(); renderer.render(scene, camera); };
+  // Fit the frame to the room's real bounds, checked at every angle the user
+  // can turn to, so nothing is cut at any size or rotation.
+  const bounds = new THREE.Box3().setFromObject(room);
+  const corners = [];
+  for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  const extent = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity };
+  const resting = view.azimuth;
+  for (let i = 0; i <= 8; i++) {
+    view.azimuth = AZ_MIN + (AZ_MAX - AZ_MIN) * i / 8;
+    place(); camera.updateMatrixWorld();
+    for (const corner of corners) {
+      const p = corner.clone().applyMatrix4(camera.matrixWorldInverse);
+      extent.left = Math.min(extent.left, p.x); extent.right = Math.max(extent.right, p.x);
+      extent.bottom = Math.min(extent.bottom, p.y); extent.top = Math.max(extent.top, p.y);
+    }
+  }
+  view.azimuth = resting;
   const resize = () => {
     const { width, height } = canvas.getBoundingClientRect();
     if (!width || !height) return;
     renderer.setSize(width, height, false);
+    const margin = 1.04;
+    const cx = (extent.left + extent.right) / 2, cy = (extent.bottom + extent.top) / 2;
+    let halfW = (extent.right - extent.left) / 2 * margin, halfH = (extent.top - extent.bottom) / 2 * margin;
     const aspect = width / height;
-    const half = Math.max(3.25, 3.9 / aspect);
-    Object.assign(camera, { left: -half * aspect, right: half * aspect, top: half, bottom: -half });
+    if (halfW / halfH > aspect) halfH = halfW / aspect; else halfW = halfH * aspect;
+    Object.assign(camera, { left: cx - halfW, right: cx + halfW, bottom: cy - halfH, top: cy + halfH });
     camera.updateProjectionMatrix();
     render();
   };
@@ -251,7 +270,7 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   const request = () => { if (!pending) pending = requestAnimationFrame(() => { pending = 0; render(); }); };
 
   // ── Interaction: horizontal drag turns the room (vertical swipes still scroll) ──
-  let drag = null, visible = true, idleFrom = performance.now(), loop = 0;
+  let drag = null;
   canvas.addEventListener('pointerdown', event => {
     drag = { x: event.clientX }; root.classList.add('is-turning');
     canvas.setPointerCapture?.(event.pointerId);
@@ -262,42 +281,23 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
     drag.x = event.clientX;
     request();
   });
-  const release = () => { if (!drag) return; drag = null; root.classList.remove('is-turning'); idleFrom = performance.now(); view.base = view.azimuth; };
+  const release = () => { if (!drag) return; drag = null; root.classList.remove('is-turning'); };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
   canvas.addEventListener('keydown', event => {
     const step = { ArrowLeft: 0.08, ArrowRight: -0.08 }[event.key];
     if (!step) return;
     event.preventDefault();
-    view.azimuth = view.base = Math.min(AZ_MAX, Math.max(AZ_MIN, view.azimuth + step));
+    view.azimuth = Math.min(AZ_MAX, Math.max(AZ_MIN, view.azimuth + step));
     request();
   });
 
-  // A slow sway around the resting angle while the hero is visible.
-  const sway = now => {
-    loop = 0;
-    if (!visible || document.hidden) return;
-    if (!drag && now - idleFrom > 1500) {
-      const t = (now - idleFrom - 1500) / 1000;
-      const amplitude = Math.min(1, t / 3) * 0.09;
-      view.azimuth = Math.min(AZ_MAX, Math.max(AZ_MIN, view.base + Math.sin(t * 0.35) * amplitude));
-      render();
-    }
-    loop = requestAnimationFrame(sway);
-  };
-  const play = () => { if (!loop && !reduced && !posterMode) loop = requestAnimationFrame(sway); };
-  new IntersectionObserver(entries => {
-    visible = entries.some(entry => entry.isIntersecting);
-    if (visible) play(); else { cancelAnimationFrame(loop); loop = 0; }
-  }, { threshold: 0.05 }).observe(canvas);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) play(); });
   new ResizeObserver(resize).observe(canvas);
 
   renderer.shadowMap.needsUpdate = true;
   resize();
   render();
   root.classList.add('is-ready');
-  play();
   if (posterMode) window.roomPoster = () => { render(); return canvas.toDataURL('image/png'); };
 }
 

@@ -3,20 +3,20 @@
   const pending=new Map();
 
   const features={
-    markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js?v=20261026-r15','/chat-markdown.js?v=20261026-r15']},
-    quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261026-r15','/quote-visual-core.js?v=20261026-r15']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-chat.js?v=20261026-r15','/ai-workspace.js?v=20261026-r15']},
-    profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261026-r15']},
-    dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r15']},
-    construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261026-r15']},
-    calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261026-r15']},
-    admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261026-r15']},
-    growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261026-r15','/growth.js?v=20261026-r15']},
-    quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js?v=20261026-r15']},
-    estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261026-r15']},
-    quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js?v=20261026-r15']},
-    objectChats:{ready:()=>!!window.SmetraObjectChats,files:['/object-chats.js?v=20261026-r15']},
-    premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js?v=20261026-r15']},
+    markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js?v=20261026-r16','/chat-markdown.js?v=20261026-r16']},
+    quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261026-r16','/quote-visual-core.js?v=20261026-r16']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-chat.js?v=20261026-r16','/ai-workspace.js?v=20261026-r16']},
+    profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261026-r16']},
+    dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r16']},
+    construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261026-r16']},
+    calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261026-r16']},
+    admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261026-r16']},
+    growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261026-r16','/growth.js?v=20261026-r16']},
+    quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js?v=20261026-r16']},
+    estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261026-r16']},
+    quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js?v=20261026-r16']},
+    objectChats:{ready:()=>!!window.SmetraObjectChats,files:['/object-chats.js?v=20261026-r16']},
+    premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js?v=20261026-r16']},
   };
   const load=source=>{
     if(pending.has(source))return pending.get(source);
