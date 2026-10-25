@@ -1040,6 +1040,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                         "search_workspace": "Ищу в рабочем пространстве…",
                     }.get(name, "Готовлю предложение…"))
                 args = json.loads(call["function"]["arguments"])
+                if isinstance(args, dict):
+                    # Model-supplied internal preview/undo fields are never trusted.
+                    args = {key: value for key, value in args.items() if not key.startswith("_")}
                 validate_tool_arguments(name, args)
                 if name == "remember_knowledge":
                     from backend.profile_memory import remember
