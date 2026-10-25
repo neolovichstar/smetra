@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend import business, partner_platform as partner, revenue
+from backend import business, partner_platform as partner, partner_integrations as integration, revenue
 from backend.app import Handler
 
 
@@ -116,6 +116,11 @@ class PartnerPlatformTests(unittest.TestCase):
             {"sku": "M1", "name": "Газобетонный блок", "price_kopecks": 12000,
              "url": "https://partner.shop/products/1", "available": True}
         ]})["accepted"], 1)
+        self.assertEqual(len(partner.offers(self.con, "блок")["offers"]), 0,
+                         "Unverified vendors cannot publish links to the estimate buyer")
+        integration.begin_verification(self.con, p, "dns")
+        with patch("backend.partner_integrations._verify_dns", return_value=True):
+            self.assertEqual(integration.verify_domain(self.con, p)["status"], "verified")
         self.assertEqual(len(partner.offers(self.con, "блок")["offers"]), 1)
         pid = partner.offers(self.con, "блок")["offers"][0]["id"]
         buyer = self._account("another-buyer")
@@ -127,6 +132,63 @@ class PartnerPlatformTests(unittest.TestCase):
                 {"sku": "M2", "name": "Блок", "price_kopecks": 100, "url": "https://partner.shop/items/2"}
             ]})
 
+
+    def test_domain_verification_is_partner_scoped_and_never_follows_remote_links(self):
+        p = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        other = partner.auth_partner(self.con, "Partner " + self.other["api_key"])
+        challenge = integration.begin_verification(self.con, p, "meta")
+        self.assertEqual(challenge["status"], "pending")
+        self.assertEqual(challenge["domain"], "partner.shop")
+        self.assertEqual(integration.domain_status(self.con, other)["status"], "not_started")
+        with patch("backend.partner_integrations._verify_meta", return_value=False):
+            self.assertEqual(integration.verify_domain(self.con, p)["status"], "pending")
+        with patch("backend.partner_integrations._verify_meta", return_value=True):
+            self.assertEqual(integration.verify_domain(self.con, p)["status"], "verified")
+        self.assertEqual(integration.begin_verification(self.con, p, "dns")["status"], "verified")
+        checker = integration._MetaChecker(challenge["token"])
+        checker.feed('<html><head><meta name="smetra-domain-verification" content="' + challenge["token"] + '"></head>')
+        self.assertTrue(checker.matched)
+        checker2 = integration._MetaChecker(challenge["token"])
+        checker2.feed('<meta name="smetra-domain-verification" content="fake">')
+        self.assertFalse(checker2.matched)
+
+    def test_self_reported_events_are_deduplicated_and_not_payment_proof(self):
+        p = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        with self.assertRaises(partner.PartnerError):
+            integration.report_event(self.con, p, {
+                "event_key": "material-order-id-01", "event_type": "material_order_reported",
+                "amount_kopecks": 120000,
+            })
+        integration.begin_verification(self.con, p, "dns")
+        with patch("backend.partner_integrations._verify_dns", return_value=True):
+            integration.verify_domain(self.con, p)
+        order = {"event_key": "material-order-id-01", "event_type": "material_order_reported",
+                 "amount_kopecks": 120000}
+        self.assertFalse(integration.report_event(self.con, p, order)["trusted"])
+        integration.report_event(self.con, p, order)
+        stat = integration.analytics(self.con, p, 7)
+        self.assertEqual(stat["merchant_reported"]["material_order_reported"]["count"], 1)
+        self.assertEqual(stat["merchant_reported"]["material_order_reported"]["amount_kopecks"], 120000)
+        self.assertEqual(stat["verified_subscription_payments"]["payments"], 0)
+        self.assertFalse(stat["payouts_enabled"])
+        with self.assertRaises(partner.PartnerError):
+            integration.report_event(self.con, p, {**order, "email": "someone@example.com"})
+
+    def test_console_access_tokens_expire_and_revoke(self):
+        login = partner.new_console_session(self.con, "Partner " + self.partner["api_key"])
+        header = "PartnerSession " + login["session_token"]
+        self.assertEqual(partner.auth_console(self.con, header)["code"], "materials-market")
+        self.assertFalse(self.con.execute(
+            "SELECT id FROM partner_console_sessions WHERE session_hash=?",
+            (login["session_token"],)
+        ).fetchone())
+        self.assertTrue(partner.revoke_console_session(self.con, header))
+        with self.assertRaises(partner.PartnerError):
+            partner.auth_console(self.con, header)
+        new = partner.new_console_session(self.con, "Partner " + self.partner["api_key"])
+        with patch("backend.partner_platform._now", return_value=int(time.time()) + 7200):
+            with self.assertRaises(partner.PartnerError):
+                partner.auth_console(self.con, "PartnerSession " + new["session_token"])
 
 if __name__ == "__main__":
     unittest.main()

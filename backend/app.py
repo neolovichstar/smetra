@@ -717,14 +717,45 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         return self.send_json(200, partner.list_partners(con))
                     if path == "/api/partners/admin/accounts" and method == "POST":
                         return self.send_json(201, partner.create_partner(con, self.body()))
+                if path == "/api/partners/console/session" and method == "POST":
+                    self.throttle("partner-login:" + self.client_address[0], 8, 900)
+                    data = self.body()
+                    if set(data) != {"api_key"} or not isinstance(data["api_key"], str):
+                        raise ApiError(400, "Нужен ключ партнёра")
+                    return self.send_json(201, partner.new_console_session(con, "Partner " + data["api_key"]))
+                if path == "/api/partners/console/logout" and method == "POST":
+                    partner.revoke_console_session(con, self.headers.get("Authorization"))
+                    return self.send_json(200, {"ok": True})
                 if path == "/api/partners/console/summary" and method == "GET":
-                    org = partner.auth_partner(con, self.headers.get("Authorization"))
+                    org = partner.auth_console(con, self.headers.get("Authorization"))
                     self.throttle("partner-console:" + org["id"], 100, 3600)
                     return self.send_json(200, partner.summary(con, org))
                 if path == "/api/partners/console/catalog" and method == "POST":
-                    org = partner.auth_partner(con, self.headers.get("Authorization"))
+                    org = partner.auth_console(con, self.headers.get("Authorization"))
                     self.throttle("partner-catalog:" + org["id"], 20, 3600)
                     return self.send_json(200, partner.ingest_products(con, org, self.body()))
+                if path.startswith("/api/partners/console/"):
+                    from backend import partner_integrations as integration
+                    org = partner.auth_console(con, self.headers.get("Authorization"))
+                    self.throttle("partner-api:" + org["id"], 120, 3600)
+                    if path == "/api/partners/console/domain" and method == "GET":
+                        return self.send_json(200, integration.domain_status(con, org))
+                    if path == "/api/partners/console/domain" and method == "POST":
+                        data = self.body()
+                        if set(data) != {"method"}:
+                            raise ApiError(400, "Некорректные параметры домена")
+                        return self.send_json(200, integration.begin_verification(con, org, data["method"]))
+                    if path == "/api/partners/console/domain/verify" and method == "POST":
+                        self.throttle("partner-verify:" + org["id"], 6, 900)
+                        return self.send_json(200, integration.verify_domain(con, org))
+                    if path == "/api/partners/console/analytics" and method == "GET":
+                        days = query.get("days", ["30"])[0]
+                        if not isinstance(days, str) or days not in ("7", "30", "90"):
+                            raise ApiError(400, "Период: 7, 30 или 90 дней")
+                        return self.send_json(200, integration.analytics(con, org, int(days)))
+                    if path == "/api/partners/console/events" and method == "POST":
+                        self.throttle("partner-event:" + org["id"], 300, 3600)
+                        return self.send_json(202, integration.report_event(con, org, self.body()))
             except partner.PartnerError as err:
                 raise ApiError(err.status, err.message) from None
             raise ApiError(404, "Не найдено")

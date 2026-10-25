@@ -311,6 +311,7 @@ def offers(con, term):
     rows = con.execute(
         "SELECT p.id,p.name,p.price_kopecks,p.updated_at,a.name AS partner "
         "FROM partner_products p JOIN partner_accounts a ON a.id=p.partner_id "
+        "JOIN partner_domain_verifications v ON v.partner_id=a.id AND v.domain=a.allowed_host AND v.status='verified' "
         "WHERE a.active=1 AND p.available=1 AND lower(p.name) LIKE ? ESCAPE '\\' "
         "ORDER BY p.price_kopecks ASC LIMIT 30",
         (pattern,),
@@ -325,6 +326,7 @@ def outbound(con, user, product_id):
     row = con.execute(
         "SELECT p.id,p.partner_id,p.url,a.allowed_host FROM partner_products p "
         "JOIN partner_accounts a ON a.id=p.partner_id "
+        "JOIN partner_domain_verifications v ON v.partner_id=a.id AND v.domain=a.allowed_host AND v.status='verified' "
         "WHERE p.id=? AND p.available=1 AND a.active=1", (product_id,),
     ).fetchone()
     if not row:
