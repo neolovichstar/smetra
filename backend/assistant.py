@@ -4,13 +4,11 @@ import json
 import logging
 from contextvars import ContextVar
 import base64
-import hashlib
 import os
 import time
 import urllib.error
 import urllib.request
 from backend.model_transport import open_completion
-import datetime as dt
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 
 ENTITIES = (
@@ -76,61 +74,17 @@ def available():
 
 
 def quota(service):
-    """Monthly allowance plus purchase credits, shared by every workspace and instance."""
-    now = dt.datetime.now(dt.timezone.utc)
-    period = now.strftime("%Y-%m")
-    next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
-    from backend.entitlements import workspace_feature_access
-    paid = (workspace_feature_access(service.con, service.wid, "clean_export", stamp())["allowed"]
-            if getattr(service, "wid", None) else service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp())
-    base_limit = 100 if paid else 3
-    from backend.revenue import referral_bonus
-    referral_limit = referral_bonus(service.con, service.user["id"], period)
-    key = hashlib.sha256(
-        f"assistant:month:{period}:{service.user['id']}".encode()
-    ).hexdigest()
-    row = service.con.execute("SELECT count FROM rate_limits WHERE key=?", (key,)).fetchone()
-    used = row["count"] if row else 0
-    bonus_remaining = 0
-    bonus_used = 0
-    if paid:
-        credits = service.con.execute(
-            "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_bonus_grants WHERE user_id=? AND expires_at>? AND remaining>0",
-            (service.user["id"], stamp()),
-        ).fetchone()
-        bonus_remaining = int(credits["remaining"] or 0)
-        usage = service.con.execute(
-            "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (key,)
-        ).fetchone()
-        bonus_used = int(usage["count"] or 0) if usage else 0
-    ad_credits = service.con.execute(
-        "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_ad_reward_credits "
-        "WHERE user_id=? AND expires_at>? AND remaining>0",
-        (service.user["id"], stamp()),
-    ).fetchone()
-    ad_remaining = int(ad_credits["remaining"] or 0)
-    ad_usage_row = service.con.execute(
-        "SELECT count FROM assistant_ad_reward_usage WHERE quota_key=?", (key,)
-    ).fetchone()
-    ad_used = int(ad_usage_row["count"] or 0) if ad_usage_row else 0
-    limit = base_limit + referral_limit + bonus_remaining + bonus_used + ad_remaining + ad_used
-    return {
-        "plan": "pro" if paid else "free",
-        "period": period,
-        "limit": limit,
-        "used": used,
-        "remaining": max(0, limit - used),
-        "purchase_bonus_remaining": bonus_remaining,
-        "ad_reward_remaining": ad_remaining,
-        "resets_at": int(next_month.timestamp()),
-        "base_limit": base_limit,
-        "referral_limit": referral_limit,
-        "key": key,
-    }
+    """AI allowance in tokens: monthly plan allowance plus the token wallet."""
+    from backend import ai_tokens
+    current = ai_tokens.balance(service)
+    # Older clients read these request-era fields; tokens now live in the wallet.
+    current["purchase_bonus_remaining"] = current["wallet"]
+    current["ad_reward_remaining"] = 0
+    return current
 
 
 def public_quota(service):
-    return {key: value for key, value in quota(service).items() if key not in {"key", "base_limit", "referral_limit"}}
+    return {key: value for key, value in quota(service).items() if key != "key"}
 
 
 def verified_context(service, value):
@@ -153,101 +107,16 @@ def reserve(service):
 
 
 def reserve_in_transaction(service):
-    current = quota(service)
-    if current["remaining"] <= 0:
-        raise DomainError(429, "Лимит сообщений ассистенту исчерпан. Подключите PRO для увеличения лимита; рекламные награды пока недоступны.")
-    key = current["key"]
-    base_allowance = current["base_limit"] + current["referral_limit"]
-    if current["used"] < base_allowance:
-        service.con.execute(
-            "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
-            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
-            (key, stamp()),
-        )
-        return {"key": key, "bonus_grant_id": None, "ad_reward_id": None}
+    """Check that enough tokens are left; the actual usage is charged after the answer."""
+    from backend import ai_tokens
+    current = ai_tokens.require_tokens(service)
+    return {"key": current["key"], "bonus_grant_id": None, "ad_reward_id": None}
 
-    grant = service.con.execute(
-        "SELECT id FROM assistant_bonus_grants WHERE user_id=? AND remaining>0 AND expires_at>? "
-        "ORDER BY expires_at,created_at,id LIMIT 1",
-        (service.user["id"], stamp()),
-    ).fetchone()
-    if grant:
-        service.con.execute(
-            "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
-            "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
-            (key, stamp()),
-        )
-        updated = service.con.execute(
-            "UPDATE assistant_bonus_grants SET remaining=remaining-1 "
-            "WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
-            (grant["id"], stamp()),
-        ).fetchone()
-        if not updated:
-            raise DomainError(429, "Бонусные сообщения уже использованы. Обновите страницу.")
-        service.con.execute(
-            "INSERT INTO assistant_bonus_usage(quota_key,user_id,count,updated_at) VALUES(?,?,1,?) "
-            "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_bonus_usage.count+1,updated_at=excluded.updated_at",
-            (key, service.user["id"], stamp()),
-        )
-        return {"key": key, "bonus_grant_id": grant["id"], "ad_reward_id": None}
-
-    ad_credit = service.con.execute(
-        "SELECT id FROM assistant_ad_reward_credits WHERE user_id=? AND remaining>0 AND expires_at>? "
-        "ORDER BY expires_at,created_at,id LIMIT 1",
-        (service.user["id"], stamp()),
-    ).fetchone()
-    if not ad_credit:
-        raise DomainError(429, "Посмотрите rewarded-видео, чтобы получить ещё 3 запроса.")
-    updated = service.con.execute(
-        "UPDATE assistant_ad_reward_credits SET remaining=remaining-1 "
-        "WHERE id=? AND remaining>0 AND expires_at>? RETURNING id",
-        (ad_credit["id"], stamp()),
-    ).fetchone()
-    if not updated:
-        raise DomainError(429, "Бонус за рекламу уже использован. Обновите страницу.")
-    service.con.execute(
-        "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
-        "ON CONFLICT(key) DO UPDATE SET count=rate_limits.count+1",
-        (key, stamp()),
-    )
-    service.con.execute(
-        "INSERT INTO assistant_ad_reward_usage(quota_key,user_id,count,updated_at) VALUES(?,?,1,?) "
-        "ON CONFLICT(quota_key) DO UPDATE SET count=assistant_ad_reward_usage.count+1,updated_at=excluded.updated_at",
-        (key, service.user["id"], stamp()),
-    )
-    return {"key": key, "bonus_grant_id": None, "ad_reward_id": ad_credit["id"]}
 
 def release(service, reservation):
-    key = reservation["key"] if isinstance(reservation, dict) else reservation
-    bonus_grant_id = reservation.get("bonus_grant_id") if isinstance(reservation, dict) else None
-    ad_reward_id = reservation.get("ad_reward_id") if isinstance(reservation, dict) else None
-    with transaction(service.con):
-        service.con.execute(
-            "UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0", (key,)
-        )
-        if bonus_grant_id:
-            restored = service.con.execute(
-                "UPDATE assistant_bonus_grants SET remaining=remaining+1 "
-                "WHERE id=? AND remaining<amount RETURNING id",
-                (bonus_grant_id,),
-            ).fetchone()
-            if restored:
-                service.con.execute(
-                    "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
-                    (stamp(), key),
-                )
-        if ad_reward_id:
-            restored = service.con.execute(
-                "UPDATE assistant_ad_reward_credits SET remaining=remaining+1 "
-                "WHERE id=? AND remaining<amount RETURNING id",
-                (ad_reward_id,),
-            ).fetchone()
-            if restored:
-                service.con.execute(
-                    "UPDATE assistant_ad_reward_usage SET count=count-1,updated_at=? "
-                    "WHERE quota_key=? AND count>0",
-                    (stamp(), key),
-                )
+    """Nothing was charged before the answer, so a failed request costs nothing."""
+    return None
+
 
 def function(name, description, properties, required=()):
     return {
@@ -560,6 +429,7 @@ def query_model(messages, model=None, paid_model=False):
         **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": "auto"}),
         "max_tool_calls": 4,
         "max_tokens": 3500,
+        "usage": {"include": True},
             "temperature": 0.2,
             "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
     }
@@ -601,7 +471,8 @@ def query_model(messages, model=None, paid_model=False):
 
 
 def _stream_payload(model, messages, paid_model, tools_enabled=True, reasoning=True):
-    payload = {"model": model, "messages": messages, "max_tokens": 3500, "temperature": 0.2, "stream": True}
+    payload = {"model": model, "messages": messages, "max_tokens": 3500, "temperature": 0.2, "stream": True,
+               "usage": {"include": True}}
     if tools_enabled and model != "qwen/qwen-2.5-vl-7b-instruct:free":
         payload["tools"] = tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else [])
         payload["tool_choice"] = "auto"
@@ -1060,6 +931,8 @@ def _confirm(service, action_id):
 
 
 def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None, on_design=None):
+    from backend import ai_tokens
+    ai_tokens.start_meter()
     if conversation_id:
         history_sql = "SELECT role,content FROM assistant_messages WHERE workspace_id=? AND user_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 8"
         history_args = (service.wid, service.user["id"], conversation_id)
@@ -1147,6 +1020,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         finally:
             _MODEL_CONTEXT.reset(selection)
         usage=response.pop('_usage',None)
+        ai_tokens.note_usage(usage, {"messages": messages, "tools": tools()},
+                             json.dumps(response, ensure_ascii=False, default=str))
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
             (identity(),service.wid,service.user['id'],'assistant',model,'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
@@ -1228,7 +1103,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     if not answer:
         answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
     with transaction(service.con):
-        result = {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates, "quota": public_quota(service)}
+        tokens_used = ai_tokens.charge(service, ai_tokens.metered(), "assistant", None)
+        result = {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates,
+                  "tokens_used": tokens_used, "quota": public_quota(service)}
         if on_commit:
             on_commit(result)
         for values in getattr(service, "assistant_deferred_actions", []):
@@ -1252,7 +1129,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 "WHERE id=? AND workspace_id=? AND user_id=?",
                 (stamp(), first_line, conversation_id, service.wid, service.user["id"]),
             )
-    return {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates, "quota": public_quota(service)}
+    return {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates,
+            "tokens_used": tokens_used, "quota": public_quota(service)}
 
 
 class ChatStream:

@@ -545,6 +545,8 @@ def migrate(con):
         con.execute("ALTER TABLE assistant_jobs ADD COLUMN ad_reward_id TEXT")
     from backend.community import ensure_sqlite_schema
     ensure_sqlite_schema(con)
+    from backend.ai_tokens import ensure_schema as ensure_ai_tokens
+    ensure_ai_tokens(con)
     push_columns = {r["name"] for r in con.execute("PRAGMA table_info(push_outbox)")}
     if "recipient_user_id" not in push_columns:
         con.execute("ALTER TABLE push_outbox ADD COLUMN recipient_user_id TEXT REFERENCES users(id) ON DELETE CASCADE")

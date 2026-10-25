@@ -46,7 +46,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
-        <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Лимит исчерпан. Посмотреть тариф Про</a>
+        <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
     </div>
     <aside class="assistant-toolrail" aria-label="История и инструменты ассистента">
@@ -494,16 +494,20 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   stop.onclick=()=>requestController?.abort();
   const renderQuota=value=>{
     quota=value;
-    quotaLabel.textContent=`Осталось ${value.remaining} из ${value.limit} · ${value.plan==='free'?'Старт':'Про'}`;
-    quotaLabel.title=`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
-    upgrade.classList.toggle('hidden',value.remaining>0||value.plan==='pro');
-    if(value.remaining<1&&value.plan!=='pro'){upgrade.onclick=()=>sessionStorage.setItem('smetra.paywall.source','ai_limit');Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
-    const quotaBlocked=value.remaining<1&&value.plan!=='pro';
+    // Usage is metered in model tokens; a reply needs a small reserve to start.
+    const tokens=value.unit==='tokens',minimum=tokens?1500:1,empty=value.remaining<minimum;
+    const short=n=>{n=Number(n||0);return n>=1e6?(n/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':n>=1e4?Math.round(n/1e3).toLocaleString('ru-RU')+' тыс.':n.toLocaleString('ru-RU')};
+    quotaLabel.textContent=tokens?`Токены: ${short(value.remaining)} · ${value.plan==='free'?'Старт':'Про'}`:`Осталось ${value.remaining} из ${value.limit} · ${value.plan==='free'?'Старт':'Про'}`;
+    quotaLabel.title=tokens?`За месяц: ${short(value.monthly_used)} из ${short(value.monthly_limit)}${value.wallet?` · на балансе ${short(value.wallet)}`:''} · обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`:`Лимит обновится ${new Date(value.resets_at*1000).toLocaleDateString('ru-RU')}`;
+    quotaLabel.classList.toggle('is-low',tokens&&value.remaining<Math.max(minimum*4,(value.monthly_limit||0)*.1));
+    upgrade.classList.toggle('hidden',!empty||(value.plan==='pro'&&!tokens));
+    if(empty&&value.plan!=='pro'){upgrade.onclick=()=>{sessionStorage.setItem('smetra.paywall.source','ai_limit');if(tokens)try{sessionStorage.setItem('smetra.billing.view','tokens')}catch{}};if(!tokens)Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(active())window.SmetraGrowth?.paywall('ai_limit')}).catch(()=>{});}
+    const quotaBlocked=empty;
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});
     syncSendButton();
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
-    send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
+    send.title=quotaBlocked?'Токены ассистента закончились. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
     input.disabled=working||!data.available;
     input.title=quotaBlocked?'Черновик можно редактировать; отправка откроется после обновления лимита или перехода на Про.':'';
@@ -637,8 +641,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     composer.classList.toggle('background-mode',backgroundMode);
     send.setAttribute('aria-label',backgroundMode?'Отправить задачу в фон':'Отправить сообщение');
     const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
-    send.title=quotaBlocked?'Месячный лимит исчерпан. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
-    document.querySelector('#assistant-delivery-hint').textContent=quotaBlocked?'Лимит исчерпан — фон также расходует сообщения.':backgroundMode?'Ответ сохранится в диалоге. Можно закрыть страницу.':'Enter — отправить · Shift+Enter — новая строка';
+    send.title=quotaBlocked?'Токены ассистента закончились. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
+    document.querySelector('#assistant-delivery-hint').textContent=quotaBlocked?'Токены закончились — фоновые задачи тоже их расходуют.':backgroundMode?'Ответ сохранится в диалоге. Можно закрыть страницу.':'Enter — отправить · Shift+Enter — новая строка';
   };
   backgroundButton.onclick=()=>{
     if(!backgroundEnabled||working||fileBlocking)return;
@@ -692,7 +696,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   data.actions.forEach(addAction);
   (data.recent_actions||[]).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,true,action.document_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
-  else if(quota.remaining<1)status.textContent='Лимит исчерпан: обычные и фоновые сообщения используют общий месячный лимит. Черновик можно редактировать.';
+  else if(quota.remaining<(quota.unit==='tokens'?1500:1))status.textContent='Токены закончились: обычные и фоновые ответы расходуют общий баланс. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});

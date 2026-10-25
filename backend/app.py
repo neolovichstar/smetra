@@ -22,11 +22,12 @@ from email.message import EmailMessage
 from backend.plan_catalog import PURCHASES
 
 try:
-    from backend import business, mytracker, revenue
+    from backend import business, mytracker, revenue, token_packs
 except ModuleNotFoundError:
     import business
     import mytracker
     import revenue
+    import token_packs
 
 try:
     from backend.estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
@@ -144,6 +145,8 @@ def migrate():
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
+        from backend.ai_tokens import ensure_schema as ensure_ai_tokens
+        ensure_ai_tokens(con)
 
 
 def now():
@@ -1152,6 +1155,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "payments": [dict(r) for r in payments],
                     "plans": {k: v['amount_kopecks'] for k, v in offer['plans'].items()},
                     "pricing": offer,
+                    "tokens": token_packs.offer(),
                     "checkout_mode": yookassa_mode(user),
                     "email_verified": user["email_verified_at"] is not None,
                 },
@@ -1230,6 +1234,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except ValueError:
                 raise ApiError(409,"Conflicting checkout") from None
             return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"]})
+        if path == "/api/billing/tokens/checkout" and method == "POST":
+            return self.token_checkout(con, user)
         if path == "/api/billing/sync" and method == "POST":
             self.throttle("sync:" + user["id"], 5, 60)
             rows = con.execute(
@@ -1336,38 +1342,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
                 audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
-        if path.startswith("/api/admin/users/") and method == "PATCH":
+        if path.startswith("/api/admin/users/") and method in ("GET", "PATCH"):
+            from backend import admin_users
             target = path.removeprefix("/api/admin/users/")
-            data = self.body()
-            action = data.get("action")
-            reason = data.get("reason", "")
-            if not isinstance(reason, str) or len(reason.strip()) > 200:
-                raise ApiError(400, "Некорректная причина")
-            if target == user["id"] and action == "block":
-                raise ApiError(409, "Нельзя заблокировать себя")
-            if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", target):
                 raise ApiError(404, "Пользователь не найден")
-            if action in ("block", "unblock"):
-                con.execute(
-                    "UPDATE users SET blocked=? WHERE id=?",
-                    (int(action == "block"), target),
-                )
-                if action == "block":
-                    con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
-            elif action == "grant":
-                con.execute(
-                    "UPDATE users SET plan='pro',entitlement_until=max(coalesce(entitlement_until,0),?)+? WHERE id=?",
-                    (now(), 31 * 86400, target),
-                )
-            elif action == "revoke":
-                con.execute(
-                    "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
-                    (target,),
-                )
-            else:
-                raise ApiError(400, "Неизвестное действие")
-            audit(con, user["id"], "admin." + action, target, reason.strip())
-            return self.send_json(200, {"ok": True})
+            if method == "GET":
+                return self.send_json(200, admin_users.detail(con, target))
+            self.throttle("admin-user-action:" + user["id"], 120, 60)
+            return self.send_json(200, admin_users.act(con, user, target, self.body(), audit))
         raise ApiError(404, "Маршрут не найден")
 
     def quote_view(self, r):
@@ -1459,6 +1442,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             raise ApiError(409, "Платёж получен не от выбранного магазина")
 
+    def token_checkout(self, con, user):
+        """One-time token pack. Mirrors subscription checkout; grants happen in apply_payment."""
+        if user["email_verified_at"] is None:
+            raise ApiError(403, "Подтвердите почту перед оплатой")
+        data = self.body()
+        millions = data.get("millions")
+        key = self.headers.get("Idempotency-Key", "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
+            raise ApiError(400, "Неверный ключ запроса")
+        amount = token_packs.price(millions)
+        plan = token_packs.code(millions)
+        expected = data.get("expected_amount_kopecks")
+        if expected is not None and expected != amount:
+            raise ApiError(409, "Цена токенов изменилась. Обновите страницу.")
+        mode = yookassa_mode(user)
+        if mode == "off":
+            raise ApiError(503, "Оплата пока недоступна")
+        self.throttle("token-checkout:" + user["id"], 10, 600)
+        previous = con.execute("SELECT * FROM payments WHERE user_id=? AND idempotency_key=?", (user["id"], key)).fetchone()
+        if previous:
+            if previous["plan"] != plan or previous["amount_kopecks"] != amount:
+                raise ApiError(409, "Ключ уже использован для другой покупки")
+            refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous["id"],)).fetchone()
+            return self.send_json(200, {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"]})
+        workspace_id = business.ensure_workspace(con, user)
+        con.execute(
+            "INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages,workspace_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING",
+            (uid(), user["id"], key, plan, amount, 1, "tokens", revenue.source(data.get("source")), int(mode == "test"), now(), 0, workspace_id),
+        )
+        intent = con.execute("SELECT * FROM billing_intents WHERE user_id=? AND request_key=?", (user["id"], key)).fetchone()
+        if intent["plan"] != plan or intent["amount_kopecks"] != amount:
+            raise ApiError(409, "Ключ уже использован для другой покупки")
+        request = {
+            "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
+            "capture": True,
+            "confirmation": {"type": "redirect", "return_url": ORIGIN + "/app?payment=return#billing"},
+            "description": f"Токены ассистента Сметры: {millions} млн",
+            "metadata": {"user_id": user["id"], "plan": plan},
+        }
+        provider_key = hashlib.sha256(("tokens:v1:" + user["id"] + ":" + key).encode()).hexdigest()
+        result = self.provider_call("/payments", "POST", request, provider_key)
+        self.verify_yookassa_shop(result)
+        if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
+            raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
+        if not result.get("id") or not result.get("confirmation", {}).get("confirmation_url", "").startswith("https://"):
+            raise ApiError(502, "Платежный сервис вернул неполный ответ")
+        try:
+            saved, created = revenue.persist_checkout(con, user, key, plan, intent, result)
+        except ValueError:
+            raise ApiError(409, "Conflicting checkout") from None
+        return self.send_json(201 if created else 200, {"url": saved["confirmation_url"], "status": saved["status"]})
+
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)
         if (
@@ -1489,7 +1525,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE payments SET status=?, activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
                         (status, status, now(), local["id"]),
                     )
-                    if status == "succeeded":
+                    pack = token_packs.millions_of(local["plan"])
+                    if status == "succeeded" and pack:
+                        # A token pack never changes the subscription; it only fills the wallet.
+                        from backend import ai_tokens
+                        ai_tokens.credit(con, local["user_id"], pack * token_packs.MILLION, "purchase",
+                                         f"{pack} млн", "payment:" + local["id"])
+                        terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?', (local['id'],)).fetchone()
+                        if terms and not terms['is_test']:
+                            revenue.record(con, local['user_id'], 'payment_success', terms['source'], terms['variant'], 'payment:' + local['id'] + ':succeeded')
+                    elif status == "succeeded":
                         terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
                         prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
                         grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
@@ -1508,7 +1553,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             )
                         revenue.rebuild_workspace_entitlement(con, local["user_id"], terms["workspace_id"] if terms else None)
                         newly_succeeded = True
-                    if status in ('succeeded','canceled'):
+                    if status in ('succeeded','canceled') and not pack:
                         revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
@@ -1568,10 +1613,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             now(),
                         ),
                     )
+                    pack = token_packs.millions_of(payment["plan"])
+                if not existing and pack:
+                    from backend import ai_tokens
+                    # Tokens already spent cannot be taken back; the rest of the pack is.
+                    moved = con.execute("SELECT delta FROM ai_token_ledger WHERE user_id=? AND ref=?",
+                                        (payment["user_id"], "payment:" + payment["id"])).fetchone()
+                    if moved:
+                        ai_tokens._wallet_add(con, payment["user_id"], -int(moved["delta"]), "refund_revoke", "", "refund:" + payment["id"])
+                    event(con, payment["user_id"], "payment_refunded")
+                    audit(con, None, "payment.refunded", payment["id"])
+                elif not existing:
                     # Rebuild remaining paid time without the refunded grant.
                     grants = con.execute(
                         """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
                         WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
+                        AND p.plan NOT LIKE 'tokens_%'
                         AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                         ORDER BY p.activated_at,p.created_at,p.id""",
                         (payment["user_id"],),
@@ -1591,6 +1648,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     revenue.rebuild_workspace_entitlement(con, payment["user_id"], refunded_terms["workspace_id"] if refunded_terms else None)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    from backend import ai_tokens
+                    ai_tokens.revoke_purchase_bonus(con, payment["user_id"], payment["id"])
                     event(con, payment["user_id"], "payment_refunded")
                     terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:
