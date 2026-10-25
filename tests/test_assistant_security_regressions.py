@@ -66,6 +66,30 @@ class AssistantSecurityRegressions(unittest.TestCase):
         self.assertNotIn("api_key", result["nested"][0])
         self.assertEqual(result["nested"][0]["amount_kopecks"], 12000)
 
+    def test_provider_failure_after_prepared_proposal_does_not_leave_action(self):
+        owner, _ = self.account("proposal-orphan")
+        response = {"tool_calls": [{"id": "prepare-1", "type": "function", "function": {
+            "name": "create_clients", "arguments": json.dumps({"name": "Не сохранять"}),
+        }}]}
+        with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"), patch(
+            "backend.assistant.query_model",
+            side_effect=[response, DomainError(502, "Модель недоступна")],
+        ):
+            status, _ = self.call("/assistant/chat", "POST", {"text": "Добавь клиента"}, owner)
+        self.assertEqual(status, 502)
+        self.assertEqual(self.call("/assistant", token=owner)[1]["actions"], [])
+        self.assertEqual(self.call("/assistant", token=owner)[1]["messages"], [])
+        self.assertEqual(self.call("/assistant", token=owner)[1]["quota"]["used"], 0)
+        self.assertEqual(self.call("/clients", token=owner)[1]["items"], [])
+
+    def test_confirm_and_dismiss_are_post_only(self):
+        owner, _ = self.account("ai-mutating-methods")
+        for endpoint in ("confirm", "dismiss"):
+            for method in ("GET", "PATCH", "DELETE"):
+                with self.subTest(endpoint=endpoint, method=method):
+                    code, _ = self.call("/assistant/" + endpoint, method, {"id": "unknown"}, owner)
+                    self.assertEqual(code, 405)
+
     def test_background_session_revocation_during_provider_call_blocks_commit(self):
         owner, user_id = self.account("job-midflight-revocation")
         with patch.dict(os.environ, ASSISTANT_WORKER_SECRET=SECRET, OPENROUTER_API_KEY="test-only"):
