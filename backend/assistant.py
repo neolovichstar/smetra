@@ -1243,7 +1243,7 @@ def route(service, method, parts, data):
         from backend.ai_workspace import conversations, knowledge
 
         return (conversations if parts[0] == "conversations" else knowledge)(service, method, parts[1:], data)
-    if method == "GET":
+    if method == "GET" and not parts:
         messages = [
             dict(row)
             for row in service.con.execute(
@@ -1282,6 +1282,8 @@ def route(service, method, parts, data):
             "quota": public_quota(service),
         }
     if parts == ["confirm"]:
+        if method != "POST":
+            raise DomainError(405, "Подтверждение требует POST")
         return 200, confirm(service, string(data.get("id", ""), "Действие", 80, True))
     if parts == ["undo"]:
         from backend.assistant_edits import undo
@@ -1290,6 +1292,8 @@ def route(service, method, parts, data):
             raise DomainError(405, "Отмена требует POST")
         return 200, undo(service, string(data.get("id", ""), "Действие", 80, True))
     if parts == ["dismiss"]:
+        if method != "POST":
+            raise DomainError(405, "Отклонение предложения требует POST")
         service.con.execute(
             "UPDATE assistant_actions SET status='dismissed' WHERE id=? AND workspace_id=? AND user_id=? AND status='pending'",
             (
