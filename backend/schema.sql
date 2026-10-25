@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id,purpose
 CREATE TABLE IF NOT EXISTS quotes (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  title TEXT NOT NULL, client TEXT NOT NULL, description TEXT NOT NULL,
- amount_kopecks INTEGER NOT NULL CHECK(amount_kopecks > 0),
+ amount_kopecks INTEGER NOT NULL CHECK(amount_kopecks >= 0 AND (status='draft' OR amount_kopecks > 0)),
  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','sent','accepted','declined','completed')),
  public_token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
  ai_generated INTEGER NOT NULL DEFAULT 0 CHECK(ai_generated IN (0,1))
