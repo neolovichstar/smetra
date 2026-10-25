@@ -313,6 +313,18 @@ def run_batch(con, limit=3):
             break
         processed += 1
 
+        # A delivery snapshot is not a permanent permission grant. Revoke old
+        # retries before the early no-recipient return as well as before sending.
+        con.execute(
+            "UPDATE push_deliveries SET completed_at=?,lease_until=0,last_error='recipient_access_revoked' "
+            "WHERE outbox_id=? AND completed_at IS NULL AND NOT EXISTS ("
+            "SELECT 1 FROM push_devices d "
+            "JOIN workspace_members m ON m.user_id=d.user_id AND m.workspace_id=push_deliveries.workspace_id "
+            "JOIN sessions s ON s.user_id=d.user_id AND s.token_hash=d.session_token_hash "
+            "WHERE d.id=push_deliveries.device_id AND s.expires_at>?)",
+            (now, event["id"], now),
+        )
+
         devices = con.execute(
             "SELECT DISTINCT d.id,d.token FROM push_devices d "
             "JOIN workspace_members m ON m.user_id=d.user_id "
@@ -342,10 +354,13 @@ def run_batch(con, limit=3):
         candidates = con.execute(
             "SELECT p.id AS delivery_id,p.device_id,p.attempts,d.token "
             "FROM push_deliveries p JOIN push_devices d ON d.id=p.device_id "
+            "JOIN workspace_members m ON m.user_id=d.user_id AND m.workspace_id=p.workspace_id "
+            "JOIN sessions s ON s.user_id=d.user_id AND s.token_hash=d.session_token_hash "
             "WHERE p.outbox_id=? AND p.completed_at IS NULL "
+            "AND p.workspace_id=? AND s.expires_at>? "
             "AND p.next_attempt_at<=? AND p.lease_until<? "
             "ORDER BY p.created_at,p.id LIMIT ?",
-            (event["id"], now, now, MAX_DELIVERIES_PER_BATCH),
+            (event["id"], event["workspace_id"], now, now, now, MAX_DELIVERIES_PER_BATCH),
         ).fetchall()
 
         work = []

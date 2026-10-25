@@ -485,12 +485,10 @@ class IdentityAssistantTests(unittest.TestCase):
             {"choices":[{"delta":{"content":"Проверяю ","tool_calls":[{"index":0,"id":"tool-1","function":{"name":"list_","arguments":"{\"entity\":\""}}]}}]},
             {"choices":[{"delta":{"content":"сметы","tool_calls":[{"index":0,"function":{"name":"records","arguments":"quotes\"}"}}]}}]},
         ]
-        class FakeResponse:
-            def __enter__(self):return self
-            def __exit__(self,*args):return False
-            def __iter__(self):
-                yield from [("data: "+json.dumps(chunk)+"\n").encode() for chunk in chunks]
-                yield b"data: [DONE]\n"
+        import io
+        class FakeResponse(io.BytesIO):
+            def __init__(self):
+                super().__init__(b"".join([("data: "+json.dumps(chunk)+"\n").encode() for chunk in chunks]) + b"data: [DONE]\n")
         deltas=[]
         with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"), patch("backend.assistant.urllib.request.urlopen", return_value=FakeResponse()) as opener:
             result=query_model_stream([{"role":"user","content":"Сметы"}],deltas.append)

@@ -172,6 +172,30 @@ class PushTests(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM push_deliveries WHERE completed_at IS NULL").fetchone()[0], 0)
         self.assertIsNotNone(self.con.execute("SELECT sent_at FROM push_outbox").fetchone()[0])
 
+    def test_retry_does_not_deliver_to_removed_workspace_member(self):
+        other = Service(self.con)
+        other.user = {"id": "u2"}
+        other.h.session_token_hash = "session-hash-2"
+        self.con.execute("INSERT INTO users VALUES('u2')")
+        self.con.execute("INSERT INTO workspace_members VALUES('w1','u2','member')")
+        self.con.execute("INSERT INTO sessions VALUES('s2','u2','session-hash-2',9999999999)")
+        settings = {"RUSTORE_PUSH_PROJECT_ID": "fixture-project", "RUSTORE_PUSH_SERVICE_TOKEN": "fixture-secret"}
+        with patch.dict(os.environ, settings):
+            push.handle(self.service, "POST", [], {"installation_id": self.installation, "token": self.token})
+            push.handle(other, "POST", [], {
+                "installation_id": "b3b3b3b3-1234-4234-8234-123456789abc", "token": "other-device-token-value",
+            })
+            push.enqueue(self.con, "w1", "n1", "Title", "Body", "private-entity")
+            with patch.object(push, "_send", return_value=(False, 503, False)):
+                push.run_batch(self.con)
+            self.con.execute("DELETE FROM workspace_members WHERE user_id='u2'")
+            self.con.execute("UPDATE push_deliveries SET next_attempt_at=0")
+            self.con.execute("UPDATE push_outbox SET next_attempt_at=0")
+            with patch.object(push, "_send", return_value=(True, 200, False)) as send:
+                push.run_batch(self.con)
+            self.assertEqual([call.args[0] for call in send.call_args_list], [self.token])
+        self.assertEqual(self.con.execute("SELECT count(*) FROM push_deliveries WHERE completed_at IS NULL").fetchone()[0], 0)
+
     def test_rustore_token_errors_are_distinguished_from_project_errors(self):
         self.assertFalse(push._is_invalid_token_error(404, b'{"error":{"status":"NOT_FOUND","message":"Project not found"}}'))
         self.assertTrue(push._is_invalid_token_error(404, b'{"error":{"status":"NOT_FOUND","message":"Requested entity was not found."}}'))

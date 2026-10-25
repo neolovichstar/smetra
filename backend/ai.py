@@ -2,13 +2,12 @@
 
 import base64
 import io
-import json
 import os
 import urllib.error
 import urllib.request
-import zipfile
 
 try:
+    from backend.validation import load_json, read_json_response, usage_counts
     from backend.business import (
         DomainError,
         calculate,
@@ -19,6 +18,7 @@ try:
         transaction,
     )
 except ModuleNotFoundError:
+    from validation import load_json, read_json_response, usage_counts
     from business import (
         DomainError,
         calculate,
@@ -71,37 +71,14 @@ def capture_file(value):
                 output = io.BytesIO()
                 image.convert("RGB").save(output, format="JPEG", quality=82, optimize=True)
             return "", "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode()
-        if mime == "application/pdf":
-            from pypdf import PdfReader
+        # Documents use the same credential-free, CPU/memory/time-bounded
+        # worker as uploaded files. No untrusted PDF/XML parsing in the API.
+        from backend.file_processing import isolated_extract
 
-            reader = PdfReader(io.BytesIO(raw), strict=True)
-            if reader.is_encrypted or len(reader.pages) > 12:
-                raise DomainError(400, "PDF защищён паролем или содержит больше 12 страниц")
-            extracted = "\n".join((page.extract_text() or "") for page in reader.pages)
-        elif mime in ("text/plain", "text/csv"):
-            extracted = raw.decode("utf-8-sig")
-        else:
-            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                if len(archive.infolist()) > 300 or sum(item.file_size for item in archive.infolist()) > 10_000_000:
-                    raise DomainError(400, "Документ слишком велик после распаковки")
-                if mime.endswith("spreadsheetml.sheet"):
-                    import openpyxl
-
-                    book = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-                    try:
-                        lines = []
-                        for sheet in book.worksheets[:3]:
-                            for row in sheet.iter_rows(max_row=120, max_col=15, values_only=True):
-                                lines.append(" | ".join(str(cell)[:200] if cell is not None else "" for cell in row))
-                        extracted = "\n".join(lines)
-                    finally:
-                        book.close()
-                else:
-                    import xml.etree.ElementTree as ET
-
-                    document = archive.read("word/document.xml")
-                    root = ET.fromstring(document)
-                    extracted = " ".join(node.text or "" for node in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"))
+        result = isolated_extract(raw, "capture:" + mime)
+        extracted = result["text"]
+        if not isinstance(extracted, str) or len(extracted) > 12000:
+            raise ValueError("capture result")
         extracted = extracted.strip()
         if not extracted:
             raise DomainError(400, "Не удалось извлечь текст. Для скана отправьте изображение")
@@ -237,14 +214,11 @@ def _draft(service, data):
     )
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
-            raw = response.read(300001)
-        if len(raw) > 300000:
-            raise ValueError("response too large")
-        result = json.loads(raw)
+            result = read_json_response(response, 300000)
         content = result["choices"][0]
         if content.get("finish_reason") != "stop" or content["message"].get("refusal"):
             raise ValueError("incomplete/refused response")
-        value = json.loads(content["message"]["content"])
+        value = load_json(content["message"]["content"])
         title = string(value.get("title", ""), "Название", 120, True)
         if (
             not isinstance(value.get("items"), list)
@@ -258,19 +232,7 @@ def _draft(service, data):
                 raise ValueError("invalid unit price")
             # Allow an unknown zero price in the unsaved AI draft; regular save still validates the final total.
             calculate([{**item, "unit_price": item.get("unit_price") or 1}])
-        usage = result.get("usage")
-        known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in ('prompt_tokens','completion_tokens'))
-        service.con.execute(
-            "UPDATE ai_usage SET status=?,input_tokens=?,output_tokens=? WHERE id=?",
-            (
-                'succeeded' if known else 'usage_unknown',
-                usage['prompt_tokens'] if known else 0,
-                usage['completion_tokens'] if known else 0,
-                usage_id,
-            ),
-        )
-        service.emit("ai", usage_id, "AI создал черновик")
-        return 200, {
+        draft_result = {
             "draft": {
                 "title": title,
                 "client": string(value.get("client", ""), "Клиент", 120),
@@ -283,9 +245,20 @@ def _draft(service, data):
             },
             "requires_review": True,
         }
+        counts = usage_counts(result.get("usage"))
+        service.con.execute(
+            "UPDATE ai_usage SET status=?,input_tokens=?,output_tokens=? WHERE id=?",
+            (
+                "succeeded" if counts is not None else "usage_unknown",
+                *(counts or (0, 0)),
+                usage_id,
+            ),
+        )
+        service.emit("ai", usage_id, "AI создал черновик")
+        return 200, draft_result
     except (
-        urllib.error.URLError,
-        TimeoutError,
+        OSError,
+        AttributeError,
         ValueError,
         KeyError,
         IndexError,

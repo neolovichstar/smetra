@@ -149,6 +149,7 @@ def before_update(service, entity, record, arguments):
 def undo(service, action_id):
     service.write_access()
     with transaction(service.con):
+        service.revalidate_access()
         row = service.con.execute(
             "SELECT * FROM assistant_actions WHERE id=? AND workspace_id=? AND user_id=?" +
             (" FOR UPDATE" if getattr(service.con, "is_postgres", False) else ""),

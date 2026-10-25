@@ -3,13 +3,13 @@
 import base64
 import hashlib
 import hmac
-import json
 import os
 import re
 import secrets
 import urllib.parse
 import urllib.request
 from http.cookies import SimpleCookie
+from backend.validation import read_json_response
 from backend.business import DomainError, identity, stamp, transaction
 
 
@@ -58,7 +58,7 @@ def remote(url, data=None, headers=None):
         headers or {},
     )
     with urllib.request.urlopen(request, timeout=15) as response:
-        return json.loads(response.read(100000))
+        return read_json_response(response, 100_000)
 
 
 def profile(provider, code, state, verifier, callback, device):

@@ -1,6 +1,7 @@
 """Workspace-scoped assistant with persisted, reviewable and idempotent actions."""
 
 import json
+
 import base64
 import hashlib
 import os
@@ -8,6 +9,7 @@ import time
 import urllib.error
 import urllib.request
 import datetime as dt
+from backend.validation import load_json, read_json_response, usage_counts
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 
 ENTITIES = (
@@ -79,25 +81,25 @@ def quota(service):
     next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     paid = service.user["plan"] == "pro" and service.user["entitlement_until"] > stamp()
     base_limit = 100 if paid else 3
-    from backend.revenue import referral_bonus
-    referral_limit = referral_bonus(service.con, service.user["id"], period)
     key = hashlib.sha256(
         f"assistant:month:{period}:{service.user['id']}".encode()
     ).hexdigest()
-    row = service.con.execute("SELECT count FROM rate_limits WHERE key=?", (key,)).fetchone()
-    used = row["count"] if row else 0
-    bonus_remaining = 0
-    bonus_used = 0
-    if paid:
-        credits = service.con.execute(
-            "SELECT coalesce(sum(remaining),0) AS remaining FROM assistant_bonus_grants WHERE user_id=? AND expires_at>? AND remaining>0",
-            (service.user["id"], stamp()),
-        ).fetchone()
-        bonus_remaining = int(credits["remaining"] or 0)
-        usage = service.con.execute(
-            "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (key,)
-        ).fetchone()
-        bonus_used = int(usage["count"] or 0) if usage else 0
+    # Read one fresh database snapshot without serial network round-trips.
+    # No cross-request cache: reservations/refunds must remain immediately visible.
+    counters = service.con.execute(
+        "SELECT coalesce((SELECT count FROM rate_limits WHERE key=?),0) AS used,"
+        "coalesce((SELECT sum(bonus) FROM referral_rewards "
+        "WHERE inviter_id=? AND rewarded_at IS NOT NULL AND period=?),0) AS referral_limit,"
+        "CASE WHEN ?=1 THEN coalesce((SELECT sum(remaining) FROM assistant_bonus_grants "
+        "WHERE user_id=? AND expires_at>? AND remaining>0),0) ELSE 0 END AS bonus_remaining,"
+        "CASE WHEN ?=1 THEN coalesce((SELECT count FROM assistant_bonus_usage WHERE quota_key=?),0) "
+        "ELSE 0 END AS bonus_used",
+        (key, service.user["id"], period, int(paid), service.user["id"], stamp(), int(paid), key),
+    ).fetchone()
+    used = int(counters["used"])
+    referral_limit = min(30, int(counters["referral_limit"]))
+    bonus_remaining = int(counters["bonus_remaining"])
+    bonus_used = int(counters["bonus_used"])
     limit = base_limit + referral_limit + bonus_remaining + bonus_used
     return {
         "plan": "pro" if paid else "free",
@@ -183,14 +185,22 @@ def release(service, reservation):
             "UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0", (key,)
         )
         if bonus_grant_id:
-            service.con.execute(
-                "UPDATE assistant_bonus_grants SET remaining=remaining+1 WHERE id=? AND remaining<amount",
-                (bonus_grant_id,),
-            )
-            service.con.execute(
-                "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
-                (stamp(), key),
-            )
+            restore_bonus(service.con, bonus_grant_id, key)
+
+
+def restore_bonus(con, grant_id, quota_key):
+    # A refund expires the grant permanently. A late failed/cancelled request
+    # must not recreate credits, but its usage reservation still needs removal.
+    con.execute(
+        "UPDATE assistant_bonus_grants SET remaining=remaining+1 "
+        "WHERE id=? AND remaining<amount AND expires_at>?",
+        (grant_id, stamp()),
+    )
+    con.execute(
+        "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? "
+        "WHERE quota_key=? AND count>0",
+        (stamp(), quota_key),
+    )
 
 
 def function(name, description, properties, required=()):
@@ -418,6 +428,39 @@ def tools():
     return result
 
 
+def model_message(value):
+    """Validate complete messages before executing tools or saving history."""
+    if not isinstance(value, dict) or value.get("refusal"):
+        raise ValueError("Invalid assistant message")
+    content = value.get("content")
+    if content is not None and (not isinstance(content, str) or len(content) > 12000):
+        raise ValueError("Invalid assistant content")
+    calls = value.get("tool_calls")
+    if calls is None:
+        calls = []
+    if not isinstance(calls, list) or len(calls) > 4:
+        raise ValueError("Invalid tool calls")
+    ids = set()
+    for call in calls:
+        if not isinstance(call, dict) or call.get("type", "function") != "function":
+            raise ValueError("Invalid tool call")
+        ident, function = call.get("id"), call.get("function")
+        if not isinstance(ident, str) or not ident or len(ident) > 200 or ident in ids:
+            raise ValueError("Invalid tool id")
+        ids.add(ident)
+        if not isinstance(function, dict):
+            raise ValueError("Invalid function")
+        name, arguments = function.get("name"), function.get("arguments")
+        if not isinstance(name, str) or not name.isascii() or not name.isidentifier() or len(name) > 100:
+            raise ValueError("Invalid function name")
+        if not isinstance(arguments, str) or len(arguments) > 20000:
+            raise ValueError("Invalid arguments")
+        load_json(arguments)
+    if not calls and not (content or "").strip():
+        raise ValueError("Empty assistant answer")
+    return {**value, "content": content or "", "tool_calls": calls}
+
+
 def query_model(messages):
     model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
     if model != "openrouter/free" and not model.endswith(":free"):
@@ -444,13 +487,11 @@ def query_model(messages):
     )
     try:
         with urllib.request.urlopen(request, timeout=40) as response:
-            raw = response.read(250001)
-        if len(raw) > 250000:
-            raise ValueError("response too large")
-        value = json.loads(raw)
-        answer = value["choices"][0]["message"]
-        if not isinstance(answer, dict):
-            raise ValueError("message")
+            value = read_json_response(response, 250_000)
+        choice = value["choices"][0]
+        if choice.get("finish_reason") not in ("stop", "tool_calls"):
+            raise ValueError("Incomplete answer")
+        answer = model_message(choice["message"])
         if isinstance(value.get('usage'),dict):
             answer['_usage']=value['usage']
         return answer
@@ -462,7 +503,7 @@ def query_model(messages):
         raise DomainError(
             502, "Ассистент временно недоступен. Ваши данные не изменены."
         ) from None
-    except (OSError, ValueError, KeyError, IndexError):
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
         raise DomainError(
             502, "Ассистент не успел ответить. Попробуйте ещё раз."
         ) from None
@@ -493,13 +534,16 @@ def query_model_stream(messages, on_delta):
         },
         method="POST",
     )
-    pieces, calls, total_bytes, done, usage = [], {}, 0, False, None
+    pieces, calls, total_bytes, content_length, done, usage = [], {}, 0, 0, False, None
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
-            for raw in response:
+            while True:
+                raw = response.readline(65_537)
+                if not raw:
+                    break
                 total_bytes += len(raw)
-                if total_bytes > 300_000:
-                    raise ValueError("response too large")
+                if len(raw) > 65_536 or total_bytes > 300_000:
+                    raise ValueError("Response too large")
                 if not raw.startswith(b"data:"):
                     continue
                 data = raw[5:].strip()
@@ -508,35 +552,60 @@ def query_model_stream(messages, on_delta):
                     break
                 if not data:
                     continue
-                event = json.loads(data)
-                if isinstance(event.get('usage'),dict):
-                    usage=event['usage']
+                event = load_json(data)
+                if isinstance(event.get("usage"), dict):
+                    usage = event["usage"]
                 if event.get("error"):
-                    raise ValueError("provider error")
-                choice = (event.get("choices") or [{}])[0]
-                delta = choice.get("delta") or {}
+                    raise ValueError("Provider error")
+                choices = event.get("choices")
+                if not isinstance(choices, list):
+                    raise ValueError("Invalid choices")
+                if not choices:
+                    continue  # Usage-only chunk.
+                choice = choices[0]
+                if not isinstance(choice, dict) or choice.get("finish_reason") not in (None, "stop", "tool_calls"):
+                    raise ValueError("Incomplete answer")
+                delta = choice.get("delta")
+                if not isinstance(delta, dict) or delta.get("refusal"):
+                    raise ValueError("Invalid delta")
                 content = delta.get("content")
-                if isinstance(content, str) and content:
-                    if sum(map(len, pieces)) + len(content) > 12000:
-                        raise ValueError("answer too large")
+                if content is not None and not isinstance(content, str):
+                    raise ValueError("Invalid content")
+                if content:
+                    content_length += len(content)
+                    if content_length > 12000:
+                        raise ValueError("Answer too large")
                     pieces.append(content)
                     on_delta(content)
-                for part in delta.get("tool_calls") or []:
+                parts = delta.get("tool_calls")
+                if parts is None:
+                    parts = []
+                if not isinstance(parts, list) or len(parts) > 4:
+                    raise ValueError("Invalid tool fragments")
+                for part in parts:
+                    if not isinstance(part, dict) or part.get("type", "function") != "function":
+                        raise ValueError("Invalid tool fragment")
                     index = part.get("index")
-                    if not isinstance(index, int) or not 0 <= index < 4:
-                        continue
+                    if type(index) is not int or not 0 <= index < 4:
+                        raise ValueError("Invalid tool index")
                     call = calls.setdefault(index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                    call["id"] += part.get("id") or ""
-                    function_part = part.get("function") or {}
-                    call["function"]["name"] += function_part.get("name") or ""
-                    call["function"]["arguments"] += function_part.get("arguments") or ""
-                    if len(call["function"]["arguments"]) > 20000:
-                        raise ValueError("tool arguments too large")
+                    function = part.get("function", {})
+                    if not isinstance(function, dict):
+                        raise ValueError("Invalid function fragment")
+                    for target, key, fragment, limit in (
+                        (call, "id", part.get("id"), 200),
+                        (call["function"], "name", function.get("name"), 100),
+                        (call["function"], "arguments", function.get("arguments"), 20000),
+                    ):
+                        if fragment is not None:
+                            if not isinstance(fragment, str) or len(target[key]) + len(fragment) > limit:
+                                raise ValueError("Invalid tool fragment")
+                            target[key] += fragment
         if not done:
-            raise ValueError("incomplete stream")
-        result={"content": "".join(pieces), "tool_calls": list(calls.values())}
+            raise ValueError("Incomplete stream")
+        result = model_message({"content": "".join(pieces), "tool_calls": [calls[i] for i in sorted(calls)]})
         if usage is not None:
-            result['_usage']=usage
+            result["_usage"] = usage
         return result
     except urllib.error.HTTPError as error:
         if error.code == 429:
@@ -764,6 +833,7 @@ def confirm(service, action_id):
 def _confirm(service, action_id):
     service.write_access()
     with transaction(service.con):
+        service.revalidate_access()
         row = service.con.execute(
             "SELECT * FROM assistant_actions WHERE id=? AND workspace_id=? AND user_id=?" +
             (" FOR UPDATE" if getattr(service.con, "is_postgres", False) else ""),
@@ -870,7 +940,22 @@ def _confirm(service, action_id):
         return result
 
 
-def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None):
+def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, on_validate=None):
+    """Scope proposals to one answer, restoring state even if its commit fails."""
+    previous = getattr(service, "assistant_deferred_actions", None)
+    service.assistant_deferred_actions = []
+    try:
+        return _answer_chat(service, prompt, on_delta, context, conversation_id, on_status, on_commit, on_validate)
+    finally:
+        if previous is None:
+            del service.assistant_deferred_actions
+        else:
+            service.assistant_deferred_actions = previous
+
+
+def _answer_chat(service, prompt, on_delta, context, conversation_id, on_status, on_commit, on_validate):
+    if on_validate:
+        on_validate()
     if conversation_id:
         history_sql = "SELECT role,content FROM assistant_messages WHERE workspace_id=? AND user_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 8"
         history_args = (service.wid, service.user["id"], conversation_id)
@@ -928,16 +1013,27 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         if on_commit and on_status:
             on_status("Формулирую ответ…")
         response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
-        usage=response.pop('_usage',None)
-        known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
-        service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
-            (identity(),service.wid,service.user['id'],'assistant',os.getenv('OPENROUTER_MODEL','openrouter/free'),'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
-        answer = str(response.get("content") or "")[:12000]
-        calls = response.get("tool_calls") or []
+        try:
+            response = model_message(response)
+        except ValueError:
+            raise DomainError(502, "Ассистент вернул некорректный ответ. Попробуйте ещё раз.") from None
+        if on_validate:
+            on_validate()
+        counts = usage_counts(response.pop("_usage", None))
+        service.con.execute(
+            "INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            (identity(), service.wid, service.user["id"], "assistant", os.getenv("OPENROUTER_MODEL", "openrouter/free"),
+             "succeeded" if counts is not None else "usage_unknown", *(counts or (0, 0)), stamp()),
+        )
+        answer = response["content"]
+        calls = response["tool_calls"]
         if not calls:
             break
-        messages.append({"role": "assistant", "content": answer or None, "tool_calls": calls[:4]})
-        for call in calls[:4]:
+        messages.append({"role": "assistant", "content": answer or None, "tool_calls": calls})
+        for call in calls:
+            # Access revocation is fatal, not a tool error for the model to retry.
+            if on_validate:
+                on_validate()
             try:
                 name = call["function"]["name"]
                 if on_status:
@@ -949,9 +1045,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                         "list_records": "Ищу записи…", "get_record": "Проверяю запись…",
                         "overview": "Сверяю показатели…",
                     }.get(name, "Готовлю предложение…"))
-                args = json.loads(call["function"]["arguments"])
-                if not isinstance(args, dict):
-                    raise ValueError("arguments")
+                args = load_json(call["function"]["arguments"])
                 if name == "remember_knowledge":
                     from backend.profile_memory import remember
 
@@ -973,8 +1067,10 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             answer = "Запомнил. Буду учитывать это в дальнейших ответах."
             break
     if not answer:
-        answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
+        raise DomainError(502, "Ассистент не завершил ответ. Попробуйте ещё раз.")
     with transaction(service.con):
+        if on_validate:
+            on_validate()
         result = {"answer": answer, "actions": actions, "quota": public_quota(service)}
         if on_commit:
             on_commit(result)
@@ -994,7 +1090,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 "UPDATE assistant_conversations SET updated_at=? WHERE id=? AND workspace_id=? AND user_id=?",
                 (stamp(), conversation_id, service.wid, service.user["id"]),
             )
-    return {"answer": answer, "actions": actions, "quota": public_quota(service)}
+    return result
 
 
 class ChatStream:
@@ -1019,14 +1115,21 @@ class ChatStream:
         try:
             send("ready", {"quota": public_quota(self.service)})
 
+            last_access_check = None
+
             def delta(text):
-                nonlocal emitted
+                nonlocal emitted, last_access_check
+                moment = time.monotonic()
+                if last_access_check is None or moment - last_access_check >= 1:
+                    self.service.revalidate_access()
+                    last_access_check = moment
                 emitted = True
                 send("delta", {"text": text})
 
             send("done", answer_chat(
                 self.service, self.prompt, delta, self.context,
                 self.conversation_id, lambda message: send("status", {"text": message}),
+                on_validate=self.service.revalidate_access,
             ))
         except DomainError as error:
             if not emitted:
@@ -1163,7 +1266,8 @@ def route(service, method, parts, data):
     if parts == ["stream"]:
         return 200, ChatStream(service, prompt, quota_key, context, lease, conversation_id)
     try:
-        return 200, answer_chat(service, prompt, context=context, conversation_id=conversation_id)
+        return 200, answer_chat(service, prompt, context=context, conversation_id=conversation_id,
+                                on_validate=service.revalidate_access)
     except Exception:
         release(service, quota_key)
         raise

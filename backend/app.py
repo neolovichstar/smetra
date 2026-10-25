@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import http.server
 import json
+
 import os
 import re
 import secrets
@@ -22,11 +23,14 @@ from email.message import EmailMessage
 
 try:
     from backend import business, mytracker, revenue
+    from backend.validation import load_json, read_json_response
+    from backend.database_errors import unavailable as database_unavailable
 except ModuleNotFoundError:
     import business
     import mytracker
     import revenue
-
+    from validation import load_json, read_json_response
+    from database_errors import unavailable as database_unavailable
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "data" / "smetra.sqlite3")))
 WEB = ROOT / "apps" / "web"
@@ -258,7 +262,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        if status == 429:
+        if status in (429, 503):
             self.send_header("Retry-After", str(getattr(self, "retry_after", 60)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -281,27 +285,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if size and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise ApiError(415, "Отправьте данные в формате JSON")
         try:
-
-            def reject_constant(value):
-                raise ValueError("Non-finite JSON number")
-
-            def unique_keys(pairs):
-                result = {}
-                for key, value in pairs:
-                    if key in result:
-                        raise ValueError("Duplicate JSON key")
-                    result[key] = value
-                return result
-
-            data = json.loads(
-                self.rfile.read(size) or b"{}", parse_constant=reject_constant,
-                object_pairs_hook=unique_keys,
-            )
-            if not isinstance(data, dict):
-                raise ValueError("Expected object")
-            return data
-        except (ValueError, UnicodeDecodeError):
-            raise ApiError(400, "Некорректный JSON")
+            raw = self.rfile.read(size)
+            if len(raw) != size:
+                self.close_connection = True
+                raise ValueError("Incomplete request body")
+            return load_json(raw if size else b"{}")
+        except TimeoutError:
+            self.close_connection = True
+            raise ApiError(408, "Истекло время чтения запроса") from None
+        except ValueError:
+            raise ApiError(400, "Некорректный JSON") from None
 
     def validate_body_length(self, path):
         lengths = self.headers.get_all("Content-Length", [])
@@ -322,10 +315,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlsplit(self.path)
         return parsed.path, urllib.parse.parse_qs(parsed.query)
 
+    def bearer_token(self):
+        raw = self.headers.get("Authorization")
+        if raw is None:
+            return None
+        parts = raw.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            raise ApiError(401, "Некорректный токен авторизации")
+        return parts[1]
+
     def auth(self, con, admin=False):
-        raw = self.headers.get("Authorization", "")
-        token = raw[7:] if raw.startswith("Bearer ") else ""
-        if not token:
+        # An explicit invalid credential must never fall back to a cookie.
+        token = self.bearer_token()
+        if token is None:
             cookie = self.headers.get("Cookie", "")
             for part in cookie.split(";"):
                 if part.strip().startswith("session="):
@@ -400,7 +402,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
         if (
             has_session_cookie
-            and not self.headers.get("Authorization", "").startswith("Bearer ")
+            and self.bearer_token() is None
             and not origin
             and fetch_site != "same-origin"
         ):
@@ -480,13 +482,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ),
                 flush=True,
             )
-            self.send_json(
-                500,
-                {
+            if database_unavailable(err):
+                self.retry_after = 5
+                self.send_json(503, {
+                    "error": "База данных временно недоступна. Попробуйте позже",
+                    "code": "database_unavailable",
+                    "retryAfter": 5,
+                    "request_id": self.request_id,
+                })
+            else:
+                self.send_json(500, {
                     "error": "Внутренняя ошибка. Попробуйте позже",
                     "request_id": self.request_id,
-                },
-            )
+                })
 
     def static(self, path):
         if path == "/health":
@@ -818,6 +826,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE users SET password_hash=?,email_verified_at=coalesce(email_verified_at,?) WHERE id=?",
                         (hash_password(password), now(), row["user_id"]),
                     )
+                    # Revoke every outstanding reset capability in the same
+                    # user-scoped transaction as the password and sessions.
+                    con.execute(
+                        "UPDATE email_tokens SET consumed_at=? WHERE user_id=? "
+                        "AND purpose='reset' AND consumed_at IS NULL",
+                        (now(), row["user_id"]),
+                    )
                     con.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))
                     audit(con, row["user_id"], "auth.password_reset", row["user_id"])
                     con.execute("COMMIT")
@@ -909,11 +924,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ApiError(503, "Не удалось отправить письмо")
             return self.send_json(200, {"ok": True})
         if path == "/api/auth/logout" and method == "POST":
-            token = (
-                self.headers.get("Authorization", "")[7:]
-                if self.headers.get("Authorization", "").startswith("Bearer ")
-                else ""
-            )
+            token = self.bearer_token()
             if not token:
                 for part in self.headers.get("Cookie", "").split(";"):
                     if part.strip().startswith("session="):
@@ -953,6 +964,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
+                    # Shared business records belong to the workspace, but the
+                    # departing user's private conversations and login links do not.
+                    for table in (
+                        "assistant_jobs", "assistant_messages", "assistant_actions",
+                        "assistant_conversations", "external_identities", "oauth_tickets",
+                        "push_devices",
+                    ):
+                        con.execute(f"DELETE FROM {table} WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM oauth_states WHERE link_user_id=?", (user["id"],))
                     con.execute("DELETE FROM pricing_assignments WHERE user_id=?", (user['id'],))
                     con.execute("DELETE FROM referral_rewards WHERE inviter_id=? OR invitee_id=?", (user['id'],user['id']))
                     con.execute("DELETE FROM referral_links WHERE user_id=?", (user['id'],))
@@ -1070,10 +1090,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.verify_yookassa_shop(result)
             if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
                 raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
-            if not result.get("id") or not result.get("confirmation", {}).get(
-                "confirmation_url", ""
-            ).startswith("https://"):
-                raise ApiError(502, "Платежный сервис вернул неполный ответ")
+            confirmation = result.get("confirmation")
+            payment_id = result.get("id")
+            confirmation_url = confirmation.get("confirmation_url") if isinstance(confirmation, dict) else None
+            if (not isinstance(payment_id, str) or not 1 <= len(payment_id) <= 100
+                    or not isinstance(confirmation_url, str) or len(confirmation_url) > 2048):
+                raise ApiError(502, "Платёжный сервис вернул неполный ответ")
+            try:
+                target = urllib.parse.urlsplit(confirmation_url)
+                valid_url = target.scheme == "https" and bool(target.hostname) and not target.username and not target.password
+                target.port  # Reject malformed ports as part of URL validation.
+            except ValueError:
+                valid_url = False
+            if not valid_url or any(char.isspace() or ord(char) < 32 for char in confirmation_url):
+                raise ApiError(502, "Платёжный сервис вернул некорректный адрес оплаты")
             try:
                 saved, created = revenue.persist_checkout(con,user,key,plan,intent,result)
             except ValueError:
@@ -1178,12 +1208,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status = self.body().get("status")
             if status not in ("open", "closed"):
                 raise ApiError(400, "Некорректный статус")
-            row = con.execute("SELECT status FROM support WHERE id=?", (target,)).fetchone()
-            if not row:
-                raise ApiError(404, "Обращение не найдено")
-            if row["status"] != status:
-                con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
-                audit(con, user["id"], "admin.support." + status, target)
+            with business.transaction(con, lock_scopes=(f"user:{user['id']}", f"support:{target}")):
+                user = self.auth(con, admin=True)
+                row = con.execute("SELECT status FROM support WHERE id=?", (target,)).fetchone()
+                if not row:
+                    raise ApiError(404, "Обращение не найдено")
+                if row["status"] != status:
+                    con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
+                    audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
         if path.startswith("/api/admin/users/") and method == "PATCH":
             target = path.removeprefix("/api/admin/users/")
@@ -1192,30 +1224,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
             reason = data.get("reason", "")
             if not isinstance(reason, str) or len(reason.strip()) > 200:
                 raise ApiError(400, "Некорректная причина")
-            if target == user["id"] and action == "block":
-                raise ApiError(409, "Нельзя заблокировать себя")
-            if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
-                raise ApiError(404, "Пользователь не найден")
-            if action in ("block", "unblock"):
-                con.execute(
-                    "UPDATE users SET blocked=? WHERE id=?",
-                    (int(action == "block"), target),
-                )
-                if action == "block":
-                    con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
-            elif action == "grant":
-                con.execute(
-                    "UPDATE users SET plan='pro',entitlement_until=max(coalesce(entitlement_until,0),?)+? WHERE id=?",
-                    (now(), 31 * 86400, target),
-                )
-            elif action == "revoke":
-                con.execute(
-                    "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
-                    (target,),
-                )
-            else:
-                raise ApiError(400, "Неизвестное действие")
-            audit(con, user["id"], "admin." + action, target, reason.strip())
+            with business.transaction(con, lock_scopes=(f"user:{user['id']}", f"user:{target}")):
+                user = self.auth(con, admin=True)
+                if target == user["id"] and action == "block":
+                    raise ApiError(409, "Нельзя заблокировать себя")
+                if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
+                    raise ApiError(404, "Пользователь не найден")
+                if action in ("block", "unblock"):
+                    con.execute(
+                        "UPDATE users SET blocked=? WHERE id=?",
+                        (int(action == "block"), target),
+                    )
+                    if action == "block":
+                        con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
+                elif action == "grant":
+                    con.execute(
+                        "UPDATE users SET plan='pro',entitlement_until="
+                        "(CASE WHEN coalesce(entitlement_until,0)>? THEN entitlement_until ELSE ? END)+? WHERE id=?",
+                        (now(), now(), 31 * 86400, target),
+                    )
+                elif action == "revoke":
+                    con.execute(
+                        "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
+                        (target,),
+                    )
+                else:
+                    raise ApiError(400, "Неизвестное действие")
+                audit(con, user["id"], "admin." + action, target, reason.strip())
             return self.send_json(200, {"ok": True})
         raise ApiError(404, "Маршрут не найден")
 
@@ -1283,9 +1318,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
         try:
             with urllib.request.urlopen(request, timeout=12) as response:
-                return json.load(response)
-        except (urllib.error.URLError, TimeoutError) as err:
-            print(json.dumps({"payment_api_error": str(err)}), flush=True)
+                return read_json_response(response, 100_000)
+        except (OSError, ValueError) as err:
+            print(json.dumps({"payment_api_error": type(err).__name__, "request_id": getattr(self, "request_id", None)}), flush=True)
             raise ApiError(502, "Платёжный сервис временно недоступен")
 
     def provider_payment(self, payment_id):
@@ -1307,13 +1342,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)
+        amount, metadata = remote.get("amount"), remote.get("metadata")
+        if not isinstance(amount, dict) or not isinstance(metadata, dict):
+            raise ApiError(502, "Платёжный сервис вернул неполный ответ")
         if (
             remote.get("id") != local["provider_id"]
-            or remote.get("amount", {}).get("currency") != "RUB"
-            or remote.get("amount", {}).get("value")
+            or amount.get("currency") != "RUB"
+            or amount.get("value")
             != f"{local['amount_kopecks'] / 100:.2f}"
-            or remote.get("metadata", {}).get("user_id") != local["user_id"]
-            or remote.get("metadata", {}).get("plan") != local["plan"]
+            or metadata.get("user_id") != local["user_id"]
+            or metadata.get("plan") != local["plan"]
         ):
             raise ApiError(409, "Данные платежа не совпали")
         status = remote.get("status")
@@ -1372,6 +1410,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
 
     def apply_refund(self, con, remote):
+        if not isinstance(remote, dict) or not isinstance(remote.get("amount"), dict):
+            raise ApiError(502, "Платёжный сервис вернул неполный ответ возврата")
+        amount = remote["amount"]
         refund_id = remote.get("id")
         payment_id = remote.get("payment_id")
         if (
@@ -1386,8 +1427,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not payment or payment["status"] != "succeeded":
             raise ApiError(409, "Исходный платёж не найден")
         if (
-            remote.get("amount", {}).get("currency") != "RUB"
-            or remote.get("amount", {}).get("value")
+            amount.get("currency") != "RUB"
+            or amount.get("value")
             != f"{payment['amount_kopecks'] / 100:.2f}"
         ):
             raise ApiError(
@@ -1433,7 +1474,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
-                    con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    con.execute(
+                        "UPDATE assistant_bonus_grants SET remaining=0,"
+                        "expires_at=CASE WHEN expires_at>? THEN ? ELSE expires_at END WHERE payment_id=?",
+                        (now(), now(), payment['id']),
+                    )
                     event(con, payment["user_id"], "payment_refunded")
                     terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:
