@@ -24,7 +24,7 @@
  <div class="metric"><span>Начислено</span><strong id="earned">—</strong></div>
  <div class="metric"><span>Прошли период удержания</span><strong id="cleared">—</strong></div>
 </div>
-<div class="content">
+<section class="section referral"><h2>Партнёрская ссылка</h2><p>Разместите ссылку в кабинете профессионального покупателя, рассылке или карточке сервиса. Регистрация и платежи фиксируются на сервере.</p><div class="link-row"><input type="text" id="referral-link" readonly aria-label="Партнёрская ссылка"><button id="copy-link" type="button">Скопировать</button></div></section><div class="content">
 <section class="section"><div><h2>Каталог материалов</h2><p>Загружайте товары через API. Для ручной проверки можно отправить небольшой JSON-пакет.</p></div>
 <form id="catalog"><label for="products">JSON — массив products, максимум 100 товаров</label><textarea id="products" spellcheck="false" rows="8">{"products":[{"sku":"test-001","name":"Материал для примера","price_kopecks":150000,"url":"https://example.com/item","available":true}]}</textarea><small>Замените демонстрационный домен адресом вашего магазина. Покупатели пока переходят на сайт партнёра — автоматического оформления заказов нет.</small><button type="submit">Обновить товары</button></form></section>
 <section class="section"><h2>Прозрачная экономика</h2><p>Комиссионные начисляются только с подтверждённых нетестовых оплат привлечённых клиентов. Повторные уведомления не создают начислений. Возвраты аннулируют начисления.</p><p>Выплаты пока не активированы: после согласования договора и реквизитов они будут включены отдельным этапом.</p><div class="status">Учёт начислений · пилот</div></section>
