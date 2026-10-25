@@ -76,7 +76,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none
           script: SMETRA_SESSION=$(cat data/promo-session) bash scripts/android_emulator_screens.sh
       - name: Promo images, manifest and UI critic
-        if: success()
+        if: always() && hashFiles('data/android-screens/screens.json') != ''
         run: |
           python scripts/rustore_promo.py data/android-screens
           cat data/android-screens/ui-critic.md >> "$GITHUB_STEP_SUMMARY"
