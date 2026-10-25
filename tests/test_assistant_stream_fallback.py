@@ -59,6 +59,36 @@ class StreamFallbackTests(unittest.TestCase):
         self.assertIn("tools", sent[1])
         self.assertNotIn("tools", sent[2])
 
+    def test_done_without_content_falls_back_instead_of_succeeding(self):
+        result, sent, deltas = self.run_stream([
+            stream(),
+            stream({"choices": [{"delta": {"content": "Готовый ответ"}}]}),
+        ])
+        self.assertEqual(result["content"], "Готовый ответ")
+        self.assertEqual(deltas, ["Готовый ответ"])
+        self.assertEqual(sent[1]["model"], "openrouter/free")
+
+    def test_provider_error_inside_http_200_is_not_treated_as_success(self):
+        result, sent, deltas = self.run_stream([
+            stream({"choices": [{"delta": {}, "finish_reason": "error"}]}),
+            stream({"choices": [{"delta": {"content": "Проверил данные"}}]}),
+        ])
+        self.assertEqual(result["content"], "Проверил данные")
+        self.assertEqual(deltas, ["Проверил данные"])
+        self.assertEqual(len(sent), 2)
+
+    def test_free_router_retries_without_reasoning_but_keeps_tools(self):
+        result, sent, deltas = self.run_stream([
+            stream({"error": {"message": "No capable provider"}}),
+            stream({"choices": [{"delta": {"content": "Ответ"}}]}),
+        ], model="openrouter/free")
+        self.assertEqual(result["content"], "Ответ")
+        self.assertEqual(deltas, ["Ответ"])
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(sent[1]["model"], "openrouter/free")
+        self.assertNotIn("reasoning", sent[1])
+        self.assertIn("tools", sent[1])
+
     def test_partial_answer_is_not_replayed(self):
         from backend.assistant import query_model_stream
 
