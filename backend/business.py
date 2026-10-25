@@ -126,7 +126,7 @@ def choice(value, options, label):
     return value
 
 
-def calculate(items):
+def calculate(items, *, allow_zero_total=False):
     if not isinstance(items, list) or not 1 <= len(items) <= 200:
         raise DomainError(400, "Добавьте от 1 до 200 позиций")
     result, total, cost, line_ids = [], 0, 0, set()
@@ -222,7 +222,7 @@ def calculate(items):
         if included:
             total += subtotal
             cost += cost_total
-    integer(total, "Итоговая стоимость", 1)
+    integer(total, "Итоговая стоимость", 0 if allow_zero_total else 1)
     integer(cost, "Общая себестоимость")
     return result, total, cost
 
@@ -824,7 +824,7 @@ class Service:
             data.get("custom_fields", json.loads(old["custom_fields"]) if old else {}),
         )
         if "items" in data:
-            items, total, cost = calculate(data["items"])
+            items, total, cost = calculate(data["items"], allow_zero_total=(old is None or old["status"] == "draft"))
             if old:
                 from backend.quote_versions import carry_identities
 
@@ -999,6 +999,10 @@ class Service:
         if row["approval_state"] in ("sent", "viewed"):
             raise DomainError(409, "Эта версия уже отправлена")
         snapshot = self.quote_view(row)
+        if row["amount_kopecks"] <= 0 or (row["itemized"] and any(
+            item.get("unit_price", 0) <= 0 for item in snapshot.get("items", [])
+        )):
+            raise DomainError(409, "Перед отправкой сметы укажите цены всех работ и материалов")
         # Recalculate persisted rows before creating an immutable offer. A
         # concurrent or legacy writer must never publish inconsistent money.
         from backend.quote_integrity import InvalidSnapshot, verify_totals
