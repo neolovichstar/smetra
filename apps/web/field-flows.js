@@ -82,7 +82,7 @@ window.SmetraFieldFlows=(()=>{
   async function fieldwork(isCurrent){
     const [quotes,objects]=await Promise.all([api('/quotes'),api('/construction/objects')]);if(!isCurrent())return;
     const approved=(quotes.quotes||[]).filter(x=>x.published_version>0&&['sent','viewed','changes_requested'].includes(x.approval_state));
-    view('<section class="ff-page"><header class="ff-heading"><span class="ff-kicker">СМЕТРА / ИНСТРУМЕНТЫ</span><h1>Инструменты смет</h1><p>Голос, документы, обмеры и работа с клиентом — без непроверенных сумм и автоматической публикации.</p></header>'+
+    view('<section class="ff-page"><header class="ff-heading"><span class="ff-kicker">СМЕТРА / ИНСТРУМЕНТЫ</span><h1>Инструменты смет</h1></header>'+
       section('ff-voice','01 / ГОЛОС','Смета на слух','Запишите голосовую заметку до 25 секунд или выберите аудиофайл WAV, MP3, FLAC.',
         '<div class="ff-actions"><button type="button" class="btn" data-record>Записать голос</button><span data-record-info class="ff-hint">Микрофон включается только по запросу</span></div>'+
         '<div class="ff-actions"><label class="ff-upload">Аудиофайл<input type="file" name="audio" accept=".wav,.mp3,.flac"></label><button type="button" class="btn primary" data-audio-submit>Создать черновик</button></div><div data-voice-result></div>')+

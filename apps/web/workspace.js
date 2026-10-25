@@ -13,7 +13,7 @@ window.Workspace = (() => {
   const field = (key,label,value='',type='text',extra='') => `<div class="field"><label for="f-${key}">${e(label)}</label>${type==='textarea'?`<textarea id="f-${key}" name="${key}" rows="3" ${extra}>${e(value??'')}</textarea>`:`<input id="f-${key}" name="${key}" type="${type}" value="${e(value??'')}" ${extra}>`}</div>`;
   const select = (key,label,values,selected='') => `<div class="field"><label for="f-${key}">${e(label)}</label><select name="${key}" id="f-${key}">${option(values,selected)}</select></div>`;
   const empty = (title,text) => `<div class="empty"><h3>${e(title)}</h3><p>${e(text)}</p></div>`;
-  const chevron = '<svg class="row-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 7 5 5-5 5"/></svg>';
+  const chevron = '<svg class="row-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 7 5 5-5 5"/></svg>';
   const shortDate = seconds => seconds?new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short'}).format(new Date(seconds*1000)):'—';
   const button = (label,action,id='',cls='') => `<button class="btn small ${cls}" data-work="${action}" data-id="${e(id)}">${label}</button>`;
   const mainTitle = (title,subtitle,actions='') => header(title,subtitle,actions);
@@ -44,7 +44,7 @@ window.Workspace = (() => {
   function openModal(title,subtitle,content){
     if(!modal){modal=document.createElement('dialog');modal.id='workspace-dialog';modal.className='experience-dialog workspace-dialog';document.body.append(modal);modal.addEventListener('cancel',ev=>{ev.preventDefault();closeModal()});modal.addEventListener('click',ev=>{if(ev.target===modal){const r=modal.getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)closeModal()}});modal.addEventListener('close',()=>{if(!modal.open){document.body.classList.remove('modal-open');modal.replaceChildren()}})}
     clearTimeout(modalTimer);modal.classList.remove('is-closing');
-    modal.innerHTML=`<div class="modal-topbar"><span>СМЕТРА / РАБОЧЕЕ ПРОСТРАНСТВО</span><button class="icon-button" type="button" data-close aria-label="Закрыть">${window.SmetraIcons?window.SmetraIcons.svg('x',18):'×'}</button></div><div class="dialog-heading"><div><h2>${e(title)}</h2><p>${e(subtitle)}</p></div></div>${content}`;
+    modal.innerHTML=`<div class="modal-topbar"><span>СМЕТРА / РАБОЧЕЕ ПРОСТРАНСТВО</span><button class="icon-button" type="button" data-close aria-label="Закрыть">${window.SmetraIcons?window.SmetraIcons.svg('x',18):'×'}</button></div><div class="dialog-heading"><div><h2>${e(title)}</h2>${subtitle&&/\s/.test(subtitle.trim())?`<p>${e(subtitle)}</p>`:''}</div></div>${content}`;
     modal.querySelector('[data-close]').onclick=closeModal;
     if(!modal.open)modal.showModal();document.body.classList.add('modal-open');
     return modal;
@@ -102,7 +102,7 @@ window.Workspace = (() => {
           <form id="capture-form" class="dashboard-capture-form">
             <label class="sr-only" for="capture-text">Опишите работы</label>
             <textarea id="capture-text" rows="1" maxlength="8000" placeholder="Опишите работы или вставьте сообщение клиента" aria-describedby="capture-status"></textarea>
-            ${capabilities.ai_drafting?'<label class="capture-file" for="capture-file" title="Прикрепить файл" aria-label="Прикрепить файл"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></label><input id="capture-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.csv,.xlsx,.docx" aria-label="Прикрепить файл">':''}
+            ${capabilities.ai_drafting?'<label class="capture-file" for="capture-file" title="Прикрепить файл" aria-label="Прикрепить файл"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></label><input id="capture-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.csv,.xlsx,.docx" aria-label="Прикрепить файл">':''}
             <div class="capture-actions">${capabilities.ai_drafting?'<button class="btn primary" type="submit">Составить черновик</button>':'<button class="btn primary" type="button" id="capture-manual">Открыть редактор</button>'}</div>
             <p id="capture-status" role="status"></p>
           </form>
@@ -131,7 +131,7 @@ window.Workspace = (() => {
       quotes=result.quotes;
       const total=quotes.length;
       html=`<section class="quotes-register" aria-labelledby="quotes-register-title">
-        <div class="topline"><div><h1 id="quotes-register-title">Сметы</h1><p class="muted"><span id="quotes-visible-count">${total}</span> в списке · поиск по названию и клиенту</p></div><div class="topline-actions">${roleCanWrite()?button('Создать смету','quote-new','','primary'):''}</div></div>
+        <div class="topline"><div><h1 id="quotes-register-title">Сметы</h1><p class="muted">В списке: <span id="quotes-visible-count">${total}</span></p></div><div class="topline-actions">${roleCanWrite()?button('Создать смету','quote-new','','primary'):''}</div></div>
         <div class="list-toolbar"><input type="search" id="workspace-search" placeholder="Найти смету или клиента" aria-label="Поиск смет"></div>
         <section class="data-list quotes-document" aria-label="Список смет">
           <div class="data-list-head quotes-document-columns" aria-hidden="true"><span>Смета</span><span>Клиент</span><span>Статус</span><span>Сумма</span><span>Изменена</span><span></span></div>
@@ -142,31 +142,31 @@ window.Workspace = (() => {
       </section>`;
     }else if(['clients','catalog','projects','tasks','leads'].includes(section)){
       const result=await api('/'+section);if(!active())return true;
-      html=mainTitle(names[section],{clients:'Контакты и вся история работы.',catalog:'Единая цена для новых смет. Изменения сохраняются в истории.',projects:'Согласованные условия превращаются в работу.',tasks:'Небольшие шаги к завершённой работе.',leads:'От знакомства до нового заказа.'}[section],add+(section==='leads'&&roleCanWrite()?button('Ссылка для заявки','intake-link'):''))+`<section class="panel"><div class="toolbar"><input id="workspace-search" type="search" aria-label="Поиск" placeholder="${section==='catalog'?'Название, категория или артикул':'Найти по названию'}">${section==='catalog'?`<select id="catalog-category" aria-label="Категория">${option([['','Все категории'],...(result.categories||[]).map(value=>[value,value])],'')}</select><label class="catalog-favorite-filter"><input id="catalog-favorites" type="checkbox"> Избранное</label><label class="catalog-favorite-filter"><input id="catalog-recent" type="checkbox"> Недавние</label>`:''}${['clients','catalog'].includes(section)?button(section==='catalog'?'Импорт':'Импорт CSV','import',section)+button('Экспорт CSV','export',section):''}</div><div id="records">${section==='leads'?kanban(result.items):entityRows(section,result.items)}</div>${result.items.length===50?button('Показать ещё','more-entities',section):''}</section>`;
+      html=mainTitle(names[section],'',add+(section==='leads'&&roleCanWrite()?button('Ссылка для заявки','intake-link'):''))+`<section class="panel"><div class="toolbar"><input id="workspace-search" type="search" aria-label="Поиск" placeholder="${section==='catalog'?'Название, категория или артикул':'Найти по названию'}">${section==='catalog'?`<select id="catalog-category" aria-label="Категория">${option([['','Все категории'],...(result.categories||[]).map(value=>[value,value])],'')}</select><label class="catalog-favorite-filter"><input id="catalog-favorites" type="checkbox"> Избранное</label><label class="catalog-favorite-filter"><input id="catalog-recent" type="checkbox"> Недавние</label>`:''}${['clients','catalog'].includes(section)?button(section==='catalog'?'Импорт':'Импорт CSV','import',section)+button('Экспорт CSV','export',section):''}</div><div id="records">${section==='leads'?kanban(result.items):entityRows(section,result.items)}</div>${result.items.length===50?button('Показать ещё','more-entities',section):''}</section>`;
       window.Workspace.records=result.items;
     }else if(section==='finance'){
       const [overview,receipts,expenses]=await Promise.all([api('/overview'),api('/receipts'),api('/expenses')]);if(!active())return true;
-      html=mainTitle('Финансы','Полученные деньги и расходы. Каждая валюта считается отдельно.',button('Записать оплату','money','receipts','primary')+button('Добавить расход','money','expenses'))+
+      html=mainTitle('Финансы','',button('Записать оплату','money','receipts','primary')+button('Добавить расход','money','expenses'))+
         (overview.currencies.length?overview.currencies.map(c=>`<div class="stats business-stats"><div class="stat"><span>Получено · ${e(c.currency)}</span><strong>${money(c.paid,c.currency)}</strong></div><div class="stat"><span>Расходы</span><strong>${money(c.actual_cost,c.currency)}</strong></div><div class="stat"><span>Денежный результат</span><strong>${money(c.cash_profit,c.currency)}</strong><small>Поступления минус расходы</small></div><div class="stat"><span>Ожидаемая оплата</span><strong>${money(c.unpaid,c.currency)}</strong></div></div>`).join(''):empty('Финансы начинаются с заказа','Создайте заказ из согласованной сметы.'))+
         `<div class="workspace-columns"><section class="panel"><h3>Поступления</h3>${moneyRows(receipts.items)}</section><section class="panel"><h3>Расходы</h3>${moneyRows(expenses.items,true)}</section></div>`;
     }else if(section==='calendar'){
       const result=await api('/overview');if(!active())return true;
       const days=[...new Set(result.deadlines.map(item=>item.due_date))];
-      html=mainTitle('Календарь','Ближайшие сроки по задачам и проектам.',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${days.length?days.map(day=>`<section class="agenda-day"><time datetime="${e(day)}"><strong>${e(day.slice(-2))}</strong><span>${e(new Intl.DateTimeFormat('ru-RU',{month:'short',weekday:'short'}).format(new Date(day+'T12:00:00')))}</span></time><div>${result.deadlines.filter(item=>item.due_date===day).map(d=>`<div class="record-line"><button class="record-title" data-work="entity" data-kind="${d.kind==='task'?'tasks':'projects'}" data-id="${e(d.id)}"><strong>${e(d.name)}</strong><small>${d.kind==='task'?'Задача':'Проект'}</small></button>${status(d.status)}</div>`).join('')}</div></section>`).join(''):empty('Сроки пока не назначены','Укажите дату в проекте или задаче.')}</section>`;
+      html=mainTitle('Календарь','',button('Новая задача','new','tasks','primary'))+`<section class="panel agenda">${days.length?days.map(day=>`<section class="agenda-day"><time datetime="${e(day)}"><strong>${e(day.slice(-2))}</strong><span>${e(new Intl.DateTimeFormat('ru-RU',{month:'short',weekday:'short'}).format(new Date(day+'T12:00:00')))}</span></time><div>${result.deadlines.filter(item=>item.due_date===day).map(d=>`<div class="record-line"><button class="record-title" data-work="entity" data-kind="${d.kind==='task'?'tasks':'projects'}" data-id="${e(d.id)}"><strong>${e(d.name)}</strong><small>${d.kind==='task'?'Задача':'Проект'}</small></button>${status(d.status)}</div>`).join('')}</div></section>`).join(''):empty('Сроки пока не назначены','Укажите дату в проекте или задаче.')}</section>`;
     }else if(section==='activity'||section==='notifications'){
       const result=await api('/'+section);if(!active())return true;
-      html=mainTitle(names[section],section==='activity'?'Кто, что и когда изменил.':'Ответы клиентов и события заказов.',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel ${section==='notifications'?'notifications-panel':'activity-panel'}">${section==='activity'?activityList(result.items):result.items.length?result.items.map(n=>`<div class="record-line notification-row ${n.is_read?'':'unread'}"><span class="notification-dot" aria-hidden="true"></span><div><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div></div>`).join(''):empty('Пока тихо','Новые события появятся здесь.')}</section>`;
+      html=mainTitle(names[section],'',section==='notifications'?button('Отметить прочитанными','read-notifications'):'')+`<section class="panel ${section==='notifications'?'notifications-panel':'activity-panel'}">${section==='activity'?activityList(result.items):result.items.length?result.items.map(n=>`<div class="record-line notification-row ${n.is_read?'':'unread'}"><span class="notification-dot" aria-hidden="true"></span><div><strong>${e(n.message)}</strong><small>${date(n.created_at)}</small></div></div>`).join(''):empty('Пока тихо','Новые события появятся здесь.')}</section>`;
     }else if(section==='team'){
       const result=await api('/workspace/members');if(!active())return true;
       const memberRows=result.items.map(m=>`<div class="team-member-row"><span class="team-member-avatar" aria-hidden="true">${m.user_id===user.id&&window.SmetraUserAvatar?window.SmetraUserAvatar(user):e((m.name||m.email||'?').trim().slice(0,1).toLocaleUpperCase('ru-RU'))}</span><div class="team-member-copy"><strong>${e(m.name||'Участник')}</strong><small>${e(m.email)}</small></div><span class="pill team-role-badge status-${e(m.role)}">${e(labels[m.role]||m.role)}</span>${m.role!=='owner'?button('Убрать','remove-member',m.user_id,'team-remove-member'):''}</div>`).join('');
-      html=mainTitle('Команда','Люди, роли и настройки одного рабочего пространства.',button('Добавить участника','member','','primary'))+
+      html=mainTitle('Команда','',button('Добавить участника','member','','primary'))+
         `<div class="team-page">
           <section class="team-overview">
             <div class="team-workspace-picker">${select('workspace','Рабочее пространство',workspaces.map(w=>[w.id,w.name]),workspace.id)}</div>
-            <div class="team-current-role"><span>Ваша роль</span><strong>${e(labels[workspace.role]||workspace.role)}</strong><small>Доступ к данным текущего пространства</small></div>
+            <div class="team-current-role"><span>Ваша роль</span><strong>${e(labels[workspace.role]||workspace.role)}</strong></div>
           </section>
           <section class="panel team-members-panel">
-            <div class="team-section-heading"><div><h2>Участники</h2><p>Кто имеет доступ к сметам и клиентским данным.</p></div><span class="team-count">${result.items.length}</span></div>
+            <div class="team-section-heading"><div><h2>Участники</h2></div><span class="team-count">${result.items.length}</span></div>
             <div class="team-member-list">${memberRows||empty('Пока нет участников','Добавьте коллегу, чтобы работать над сметами вместе.')}</div>
           </section>
           <details class="panel team-business-settings">
@@ -180,11 +180,11 @@ window.Workspace = (() => {
         </div>`;
     }else if(section==='files'){
       fileCenterData=await api('/files');if(!active())return true;
-      html=mainTitle('Файлы','Вложения смет, клиентов и заказов. Текстовые файлы доступны для поиска и ассистента.')+
+      html=mainTitle('Файлы','')+
         `<section class="panel file-center"><div class="toolbar"><input id="file-center-search" type="search" aria-label="Поиск файлов" placeholder="Найти файл по названию"></div><div id="file-center-list"></div></section>`;
     }else if(section==='documents'){
       const result=await api('/documents');if(!active())return true;
-      html=mainTitle('Документы','Предложения, акты и условия работы.',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div><div class="attachment-actions">${button('Спросить AI','ask-document',d.id).replace('data-work=',`data-label="${e(d.name)}" data-work=`)}${button('Скачать PDF','download-document',d.id)}</div></div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
+      html=mainTitle('Документы','',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div><div class="attachment-actions">${button('Спросить AI','ask-document',d.id).replace('data-work=',`data-label="${e(d.name)}" data-work=`)}${button('Скачать PDF','download-document',d.id)}</div></div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
     }else return false;
     if(!active())return true;
     view(`<section class="workspace-section section-${e(section)}">${html}</section>`);
@@ -371,16 +371,16 @@ window.Workspace = (() => {
     let aiDraftUsageId=quote?.ai_draft_usage_id||'';
     const custom=await customControls('estimates',q.custom_fields);
     if(!active())return;
-    view(mainTitle(q.id?'Редактирование сметы':'Новая смета','Черновик сохраняется автоматически. Отправьте клиенту, когда всё готово.',button('← К сметам','navigate','quotes'))+
+    view(mainTitle(q.id?'Редактирование сметы':'Новая смета','',button('← К сметам','navigate','quotes'))+
       ((q.ai_generated||q._ai_generated)&&window.SmetraEstimateSafety?window.SmetraEstimateSafety.bannerHtml():'')+
       `<form id="estimate-editor" class="quote-editor-form"><div class="workspace-columns editor-layout"><section class="editor-main">
         <section class="editor-section editor-basics" aria-labelledby="editor-basics-title">
-          <div class="editor-section-head"><span class="editor-step" aria-hidden="true">01</span><div><h3 class="editor-section-title" id="editor-basics-title">Данные сметы</h3><p>Название документа, клиент и валюта расчёта.</p></div></div>
+          <div class="editor-section-head"><span class="editor-step" aria-hidden="true">01</span><div><h3 class="editor-section-title" id="editor-basics-title">Данные сметы</h3></div></div>
           <div class="form-grid editor-meta-grid">${field('title','Название сметы',q.title||'','text','required maxlength="120"')}${select('currency','Валюта',[['RUB','Рубли · ₽'],['USD','Доллары · $'],['EUR','Евро · €'],['KZT','Тенге · ₸'],['BYN','Белорусские рубли'],['GBP','Фунты · £']],q.currency||workspace.currency)}${select('client_id','Выбрать клиента',[['','Новый клиент'],...clients.items.map(c=>[c.id,c.name])],q.client_id||'')}${field('client','Имя или компания',q.client||'','text','required maxlength="120"')}</div>
           <details class="editor-description" ${q.description?'open':''}><summary>Описание сметы <span class="editor-optional">Необязательно</span></summary>${field('description','Что входит в работу',q.description||'','textarea')}</details>
         </section>
         <section class="editor-section editor-positions" aria-labelledby="editor-positions-title">
-          <div class="editor-section-head editor-positions-heading"><span class="editor-step" aria-hidden="true">02</span><div><h3 class="editor-section-title" id="editor-positions-title">Позиции</h3><p>Добавьте работы, услуги и материалы. Сумма пересчитывается автоматически.</p></div><span id="editor-position-count" class="editor-position-count">${rows.length} поз.</span></div>
+          <div class="editor-section-head editor-positions-heading"><span class="editor-step" aria-hidden="true">02</span><div><h3 class="editor-section-title" id="editor-positions-title">Позиции</h3></div><span id="editor-position-count" class="editor-position-count">${rows.length} поз.</span></div>
           <div class="editor-catalog-tools"><div class="catalog-picker"><input id="catalog-search" type="search" aria-label="Найти расценку в каталоге" placeholder="Найти в каталоге"><div class="row">${select('catalog','Добавить из расценок',catalogOptions(catalog.items))}</div></div><button type="button" class="btn editor-add-row" id="add-row">Своя позиция</button></div>
           <div class="editor-history"><div><button type="button" class="editor-tool" id="editor-undo" disabled aria-label="Отменить правку">↶ <span>Отменить</span></button><button type="button" class="editor-tool" id="editor-redo" disabled aria-label="Повторить правку">↷ <span>Повторить</span></button></div><span id="editor-save-state" role="status" aria-live="polite">Автосохранение включено</span></div>
           <div class="editor-recovery" id="editor-recovery" hidden><span>Есть черновик с этого устройства</span><button type="button" id="editor-recover">Восстановить</button><button type="button" id="editor-discard">Удалить локальный</button></div>

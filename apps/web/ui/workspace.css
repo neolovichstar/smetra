@@ -318,14 +318,14 @@
 .catalog-plan li::before{content:'';position:absolute;left:0;top:4px;width:14px;height:14px;background:var(--text-3);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/contain no-repeat}
 .catalog-plan.selected li::before{background:var(--accent)}
 .catalog-plan .btn{width:100%;margin-top:var(--s-2)}
-.catalog-plan .note{margin-top:var(--s-2);padding:9px 0;text-align:center;border:1px dashed var(--line-strong);border-radius:var(--r-2)}
+.catalog-plan .note{margin-top:var(--s-2);padding:8px 0;text-align:center;border:1px dashed var(--line-strong);border-radius:var(--r-2)}
 #catalog-checkout-note:empty{display:none}
 @media (max-width:1100px){.catalog-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-plan:nth-child(3){border-left:0}.catalog-plan:nth-child(n+3){border-top:1px solid var(--line)}}
 @media (max-width:620px){.catalog-plan-grid{grid-template-columns:1fr}.catalog-plan+.catalog-plan{border-left:0;border-top:1px solid var(--line)}}
 
 /* Plans / Tokens switch */
 .billing-switch{display:inline-flex;align-self:flex-start;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface-1)}
-#content .billing-switch button{min-width:132px;min-height:36px;padding:0 18px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font-size:var(--fs-14);font-weight:500;box-shadow:none;transition:background-color var(--t-base) var(--ease),color var(--t-base) var(--ease)}
+#content .billing-switch button{min-width:132px;min-height:40px;padding:0 16px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font-size:var(--fs-14);font-weight:500;box-shadow:none;transition:background-color var(--t-base) var(--ease),color var(--t-base) var(--ease)}
 #content .billing-switch button:hover{color:var(--text)}
 #content .billing-switch button[aria-selected="true"]{background:var(--surface-inverse);color:var(--text-inverse)}
 #content .billing-switch button:focus-visible{outline:none;box-shadow:var(--focus-ring)}
@@ -406,7 +406,7 @@
 .hub.is-rail-collapsed{--hub-rail:64px}
 .hub-rail{position:sticky;top:var(--topbar-h);align-self:start;display:flex;flex-direction:column;gap:var(--s-4);height:calc(100dvh - var(--topbar-h));padding:54px 12px var(--s-5);border-right:1px solid var(--line);overflow:hidden auto}
 .hub-rail>.rail-toggle{position:absolute;top:10px;right:10px;transition:right var(--t-slow) var(--ease),background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
-.hub.is-rail-collapsed .hub-rail>.rail-toggle{right:15px}
+.hub.is-rail-collapsed .hub-rail>.rail-toggle{right:16px}
 .hub-identity>div,.hub-tab span{white-space:nowrap;transition:opacity var(--t-base) var(--ease)}
 .hub.is-rail-collapsed .hub-identity>div,.hub.is-rail-collapsed .hub-tab span{opacity:0;pointer-events:none}
 .hub.is-rail-collapsed .hub-avatar.sidebar-avatar{width:40px;height:40px;font-size:15px}
@@ -431,13 +431,13 @@
 .hub-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);padding:var(--s-4) 0;border-top:1px solid var(--line)}
 .hub-row:first-child{padding-top:0;border-top:0}
 .hub-row:last-child{padding-bottom:0}
-.hub-row>div:first-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.hub-row>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
 .hub-row strong{font-size:var(--fs-14);font-weight:500}
 .hub-row small{color:var(--text-3);font-size:var(--fs-13);line-height:1.45;overflow-wrap:anywhere}
 .hub-row .btn{flex:none;gap:6px}
 .hub-row .btn svg{width:16px;height:16px}
 .hub-row>div.hub-photo:first-child{flex-direction:row;align-items:center;gap:12px}
-.hub-photo>div{display:flex;flex-direction:column;gap:3px}
+.hub-photo>div{display:flex;flex-direction:column;gap:4px}
 .hub-id{display:inline-flex;align-items:center;gap:4px;flex:none;padding:2px 2px 2px 10px;border:1px solid var(--line);border-radius:var(--r-pill)}
 .hub-id code{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--text-2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hub-id .icon-button{width:30px;height:30px}

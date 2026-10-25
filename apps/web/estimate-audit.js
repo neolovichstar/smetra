@@ -105,7 +105,7 @@
     let timer=null, disposed=false, latest=null, expanded=false;
     root.innerHTML='<div class="anti-estimate-head"><div><span class="anti-estimate-kicker">ПРОВЕРКА ЧЕРНОВИКА</span>'+
       '<h3>Антисмета</h3><p>Замечания к составу работ и введённым данным.</p></div>'+
-      '<span class="anti-estimate-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></div>'+
+      '<span class="anti-estimate-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></div>'+
       '<div class="anti-estimate-stats" id="anti-estimate-stats" role="status" aria-live="polite"></div>'+
       '<div id="anti-estimate-issues"></div>'+
       '<p class="anti-estimate-disclaimer">Проверка автоматическая и ориентировочная. Не заменяет экспертизу сметы. Никакие позиции не меняются.</p>';

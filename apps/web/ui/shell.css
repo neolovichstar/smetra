@@ -6,7 +6,7 @@ body.workspace-page{background:var(--bg)}
 body.smetra-app-booting .app-startup,body.smetra-app-transitioning .app-startup{display:grid}
 body.smetra-app-transitioning .app-startup{animation:fade-in 160ms var(--ease)}
 .app-startup-inner{display:flex;flex-direction:column;align-items:center;gap:var(--s-4);text-align:center}
-.app-startup-brand{font-size:28px;font-weight:650;letter-spacing:-.04em}
+.app-startup-brand{font-size:28px;font-weight:600;letter-spacing:-.04em}
 .app-startup-brand span{color:var(--accent)}
 .app-startup-progress{position:relative;width:120px;height:2px;border-radius:2px;background:var(--surface-3);overflow:hidden}
 .app-startup-progress span{position:absolute;inset:0;width:40%;border-radius:inherit;background:var(--text-2);animation:startup-progress 1.1s var(--ease-in-out) infinite}
@@ -60,13 +60,13 @@ body.sidebar-compact .app-shell{grid-template-columns:var(--sidebar-rail) minmax
 .sidebar-group:first-child{gap:1px}
 
 /* Every navigation row shares one geometry; the icon never moves. */
-.sidebar-group button[data-tab],.sidebar .comms-sidebar-trigger{position:relative;display:flex;align-items:center;gap:12px;width:100%;height:34px;padding:0 0 0 15px;border-radius:var(--r-2);color:var(--text-2);font-size:var(--fs-14);font-weight:450;white-space:nowrap;transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.sidebar-group button[data-tab],.sidebar .comms-sidebar-trigger{position:relative;display:flex;align-items:center;gap:12px;width:100%;height:34px;padding:0 0 0 15px;border-radius:var(--r-2);color:var(--text-2);font-size:var(--fs-14);font-weight:400;white-space:nowrap;transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .sidebar-group button[data-tab]:hover,.sidebar .comms-sidebar-trigger:hover{background:var(--surface-2);color:var(--text)}
 .sidebar-group button[data-tab].active{background:var(--surface-3);color:var(--text);font-weight:500}
 .sidebar-group button[data-tab].active::after{content:'';position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:0 2px 2px 0;background:var(--accent)}
 .sidebar-group button[data-tab].active .sidebar-item-icon{color:var(--accent-text)}
 /* While the messenger page is open it is the current section. */
-body.comms-scroll-locked .sidebar-group button[data-tab].active{background:none;color:var(--text-2);font-weight:450}
+body.comms-scroll-locked .sidebar-group button[data-tab].active{background:none;color:var(--text-2);font-weight:400}
 body.comms-scroll-locked .sidebar-group button[data-tab].active::after{content:none}
 body.comms-scroll-locked .sidebar-group button[data-tab].active .sidebar-item-icon{color:inherit}
 .sidebar .comms-sidebar-trigger[aria-current="page"]{background:var(--surface-3);color:var(--text);font-weight:500}
@@ -170,7 +170,7 @@ body.sidebar-compact #logout{opacity:0;pointer-events:none;width:0;overflow:hidd
   /* Keep the 20px box; widen only the touch area. */
   #shell .task-toggle::before{content:'';position:absolute;inset:-12px}
   #shell .tg-chips button,#shell [data-period],#assistant-background{min-height:40px}
-  #shell .record-title{min-height:44px}
+  #shell .record-title{min-height:44px;display:flex;align-items:center;text-align:left}
   #shell .assistant-conversation-icon-button{min-width:40px;min-height:40px}
 }
 @media (prefers-reduced-motion:reduce){.sidebar{visibility:visible}}
@@ -269,3 +269,50 @@ body.sidebar-compact .sidebar-group-items{visibility:visible;transition:none}
 .keys-help-list dt{display:flex;align-items:center;gap:4px;color:var(--text-3);font-size:var(--fs-13);white-space:nowrap}
 .keys-help-list dd{margin:0;color:var(--text-2);font-size:var(--fs-14)}
 .keys-help-list kbd{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 6px;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:6px;background:var(--surface-2);color:var(--text);font:600 12px/1 var(--font-sans,inherit)}
+/* ───────── Design system: touch sizes and type on phones ─────────
+   Controls 44px (Apple HIG / Material 48dp hit area), segmented tabs and
+   secondary buttons 40px, page titles 24px. */
+@media (max-width:800px){
+  :root{--control:44px;--control-sm:40px}
+  #shell .btn.small,dialog .btn.small{min-height:40px}
+  #shell [role=tablist]>button,#shell .segmented>button,#shell .knowledge-tabs>button,#shell .billing-periods>button,#shell .smcalc-tab{min-height:40px}
+  .hub-tabs[role=tablist]>.hub-tab{min-height:40px}
+  #shell details>summary{min-height:44px;display:flex;align-items:center}
+  #shell .assistant-action-button{width:40px;height:40px}
+  #logout{width:40px;height:40px}
+  .sidebar-disclosure{height:40px}
+  #content h1:not(.smetra-document *):not(.quote-document *){font-size:var(--fs-24);line-height:1.2}
+  .topline h1+.muted,.topline h1+p{font-size:var(--fs-14)}
+}
+/* Thumb-zone create action (ui/ux.js). */
+.page-fab{display:none}
+@media (max-width:800px){
+  #content .fab-source{display:none}
+  .page-fab:not([hidden]){position:fixed;right:16px;bottom:calc(var(--tabbar-space) + 16px);z-index:94;display:inline-flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);height:48px;padding:0 20px 0 16px;border:0;border-radius:24px;background:var(--action);color:var(--action-text);font:inherit;font-size:var(--fs-15);font-weight:600;box-shadow:var(--shadow-pop);-webkit-tap-highlight-color:transparent;transition:transform var(--t-base) var(--ease),opacity var(--t-base) var(--ease),padding var(--t-base) var(--ease)}
+  .page-fab span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .page-fab:active{transform:scale(.97)}
+  .page-fab:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  body.topbar-hidden .page-fab span{display:none}
+  body.topbar-hidden .page-fab{width:48px;padding:0;justify-content:center}
+  body.keyboard-open .page-fab,body.nav-open .page-fab,body:has(dialog[open]) .page-fab{opacity:0;pointer-events:none;transform:translateY(16px)}
+  /* Lists end above the floating action. */
+  body:has(.page-fab:not([hidden])) .main{padding-bottom:calc(var(--s-9) + var(--tabbar-space) + 64px)}
+}
+@media (prefers-reduced-motion:reduce){.page-fab{transition:none}}
+/* Dialog actions sit flush at the bottom of the sheet, fully visible. */
+dialog.workspace-dialog{padding-bottom:0}
+dialog.workspace-dialog .form-actions{bottom:0;margin-bottom:0}
+@media (max-width:800px){
+  #shell .editor-tool{min-height:40px}
+  #shell .rail-toggle{width:40px;height:40px}
+  #shell .ff-link{display:inline-flex;align-items:center;min-height:40px}
+}
+.btn.small{padding-inline:12px}
+@media (max-width:800px){
+  #shell .editor-row-tools button{min-height:40px;min-width:40px}
+  #shell .editor-bulk-link{display:inline-flex;align-items:center;min-height:40px}
+  #estimate-editor .anti-issue button{padding:8px 0}
+}
+/* «Back» is navigation, not an action: quiet text button, same everywhere. */
+#content .topline-actions [data-work=navigate]{--btn-bg:transparent;--btn-line:transparent;--btn-hover:var(--surface-2);color:var(--text-2);padding-inline:8px}
+#content .topline-actions [data-work=navigate]:hover{color:var(--text)}

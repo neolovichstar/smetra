@@ -1,67 +1,67 @@
 /* Construction calculators and the Антисмета editor check, on shared tokens. */
 
 /* SMETRA / construction calculators — scoped to the workspace tools view. */
-#smetra-calculators{width:min(1120px,100%);margin:0 auto;padding:clamp(16px,3vw,36px) 0 72px;color:var(--text)}
-#smetra-calculators .smcalc-header{display:flex;justify-content:space-between;align-items:end;margin:0 0 28px}
-#smetra-calculators .smcalc-kicker,#smetra-calculators .smcalc-title>span{display:block;color:var(--text-3);font-size:10px;font-weight:600;letter-spacing:.11em;margin-bottom:10px}
-#smetra-calculators h1{font-size:clamp(29px,4vw,39px);line-height:1.2;letter-spacing:-.045em;font-weight:550;margin:0 0 10px}
+#smetra-calculators{width:min(1120px,100%);margin:0 auto;padding:0 0 72px;color:var(--text)}
+#smetra-calculators .smcalc-header{display:flex;justify-content:space-between;align-items:end;margin:0 0 24px}
+#smetra-calculators .smcalc-kicker,#smetra-calculators .smcalc-title>span{display:block;color:var(--text-3);font-size:var(--fs-12);font-weight:600;letter-spacing:.11em;margin-bottom:10px}
+#smetra-calculators h1{font-size:var(--fs-28);line-height:1.2;letter-spacing:var(--tracking-tight);font-weight:600;margin:0 0 10px}
 #smetra-calculators .smcalc-header p{color:var(--text-2);margin:0;max-width:620px;font-size:13px}
-#smetra-calculators .smcalc-tabs{display:flex;align-items:center;gap:6px;overflow:auto;scrollbar-width:thin;padding:3px 0 16px;margin:0 0 8px}
-#smetra-calculators .smcalc-tab{border:1px solid var(--line);background:transparent;color:var(--text-2);padding:9px 16px;min-height:42px;border-radius:12px;white-space:nowrap;font-size:12px;font-weight:550;transition:background .18s,border-color .18s,color .18s}
+#smetra-calculators .smcalc-tabs{display:flex;align-items:center;gap:6px;overflow:auto;scrollbar-width:thin;padding:4px 0 16px;margin:0 0 8px}
+#smetra-calculators .smcalc-tab{border:1px solid var(--line);background:transparent;color:var(--text-2);padding:8px 16px;min-height:40px;border-radius:var(--r-2);white-space:nowrap;font-size:12px;font-weight:600;transition:background .18s,border-color .18s,color .18s}
 #smetra-calculators .smcalc-tab:hover{background:var(--surface-3);color:var(--text)}
 #smetra-calculators .smcalc-tab[aria-pressed="true"]{background:var(--surface-2);color:var(--text);border-color:var(--line-strong)}
 #smetra-calculators .smcalc-layout{display:grid;grid-template-columns:minmax(0,1.16fr) minmax(0,.84fr);gap:16px;align-items:start}
-#smetra-calculators .smcalc-card{background:var(--surface-1);border:1px solid var(--line);border-radius:18px;padding:clamp(18px,2.7vw,30px);min-width:0}
+#smetra-calculators .smcalc-card{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-3);padding:clamp(16px,2.5vw,24px);min-width:0}
 #smetra-calculators .smcalc-title{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:22px}
-#smetra-calculators .smcalc-title h2{font-size:21px;font-weight:550;letter-spacing:-.035em;margin:0 0 6px;line-height:1.3}
+#smetra-calculators .smcalc-title h2{font-size:var(--fs-20);font-weight:600;letter-spacing:var(--tracking-tight);margin:0 0 6px;line-height:1.3}
 #smetra-calculators .smcalc-title p{font-size:12px;color:var(--text-2);margin:0;line-height:1.6}
-#smetra-calculators .smcalc-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px 14px}
+#smetra-calculators .smcalc-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 #smetra-calculators .smcalc-field{display:flex;flex-direction:column;gap:8px;min-width:0}
 #smetra-calculators .smcalc-field>span{color:var(--text-2);font-size:12px;line-height:1.45}
-#smetra-calculators .smcalc-field small{color:var(--text-3);font-size:11px}
-#smetra-calculators .smcalc-field input{width:100%;min-height:48px;border:1px solid var(--line);background:var(--surface-2);border-radius:11px;padding:10px 14px;font-size:16px;font-weight:520;color:var(--text);outline:0;transition:border-color .18s,background .18s}
+#smetra-calculators .smcalc-field small{color:var(--text-3);font-size:var(--fs-12)}
+#smetra-calculators .smcalc-field input{width:100%;min-height:48px;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;font-size:16px;font-weight:500;color:var(--text);outline:0;transition:border-color .18s,background .18s}
 #smetra-calculators .smcalc-field input:hover{border-color:var(--line-strong)}
 #smetra-calculators .smcalc-field input:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px}
 #smetra-calculators .smcalc-result{position:sticky;top:24px}
-#smetra-calculators .smcalc-metric{display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--line);padding:0 0 20px;margin:0 0 21px}
+#smetra-calculators .smcalc-metric{display:flex;flex-direction:column;gap:4px;border-bottom:1px solid var(--line);padding:0 0 20px;margin:0 0 20px}
 #smetra-calculators .smcalc-metric>span{font-size:12px;color:var(--text-2)}
-#smetra-calculators .smcalc-metric strong{font-size:clamp(27px,3vw,38px);line-height:1.24;font-weight:600;letter-spacing:-.05em;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
-#smetra-calculators .smcalc-metric small{font-size:16px;font-weight:450;letter-spacing:0;color:var(--text-2)}
-#smetra-calculators .smcalc-secondary strong{font-size:25px}
+#smetra-calculators .smcalc-metric strong{font-size:clamp(24px,3vw,32px);line-height:1.24;font-weight:600;letter-spacing:var(--tracking-tight);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+#smetra-calculators .smcalc-metric small{font-size:16px;font-weight:400;letter-spacing:0;color:var(--text-2)}
+#smetra-calculators .smcalc-secondary strong{font-size:var(--fs-24)}
 #smetra-calculators .smcalc-formula{font-size:12px;line-height:1.6;color:var(--text);margin:0 0 12px}
 #smetra-calculators .smcalc-note{font-size:12px;line-height:1.6;color:var(--text-2);margin:0 0 20px}
-#smetra-calculators .smcalc-error{font-size:12px;line-height:1.6;border:1px solid var(--danger);color:var(--danger);border-radius:11px;padding:12px;margin:0 0 20px}
+#smetra-calculators .smcalc-error{font-size:12px;line-height:1.6;border:1px solid var(--danger);color:var(--danger);border-radius:var(--r-2);padding:12px;margin:0 0 20px}
 #smetra-calculators [hidden]{display:none!important}
 #smetra-calculators .smcalc-copy{width:100%;min-height:44px;font-size:12px;font-weight:500;justify-content:center}
-@media(max-width:780px){#smetra-calculators{padding:18px 0 50px}#smetra-calculators .smcalc-layout{grid-template-columns:minmax(0,1fr);gap:12px}#smetra-calculators .smcalc-result{position:static}#smetra-calculators .smcalc-card{padding:20px}}
-@media(max-width:390px){#smetra-calculators .smcalc-fields{grid-template-columns:minmax(0,1fr)}#smetra-calculators .smcalc-tab{padding:9px 13px}}
+@media(max-width:780px){#smetra-calculators{padding:16px 0 48px}#smetra-calculators .smcalc-layout{grid-template-columns:minmax(0,1fr);gap:12px}#smetra-calculators .smcalc-result{position:static}#smetra-calculators .smcalc-card{padding:20px}}
+@media(max-width:390px){#smetra-calculators .smcalc-fields{grid-template-columns:minmax(0,1fr)}#smetra-calculators .smcalc-tab{padding:8px 12px}}
 @media(prefers-reduced-motion:reduce){#smetra-calculators .smcalc-tab,#smetra-calculators .smcalc-field input{transition:none}}
 
-#smetra-calculators .smcalc-transfer{margin-top:22px;padding:18px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:11px}
-#smetra-calculators .smcalc-transfer-label{font-size:11.5px;letter-spacing:.1em;font-weight:650;color:var(--text-2)}
+#smetra-calculators .smcalc-transfer{margin-top:24px;padding:16px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+#smetra-calculators .smcalc-transfer-label{font-size:var(--fs-12);letter-spacing:.1em;font-weight:600;color:var(--text-2)}
 #smetra-calculators .smcalc-transfer-method{display:flex;flex-direction:column;gap:8px;color:var(--text-2);font-size:12px}
-#smetra-calculators .smcalc-transfer-method select{width:100%;min-height:44px;background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
-#smetra-calculators .smcalc-transfer-method .select-trigger{min-height:44px;border:1px solid var(--line);border-radius:10px}
+#smetra-calculators .smcalc-transfer-method select{width:100%;min-height:44px;background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:var(--r-2);padding:8px 12px}
+#smetra-calculators .smcalc-transfer-method .select-trigger{min-height:44px;border:1px solid var(--line);border-radius:var(--r-2)}
 #smetra-calculators .smcalc-transfer-method :disabled{opacity:.55;cursor:not-allowed}
-#smetra-calculators .smcalc-transfer-preview{display:flex;flex-direction:column;gap:5px;border-radius:11px;padding:13px 14px;border:1px solid var(--line);background:var(--surface-2);min-width:0}
+#smetra-calculators .smcalc-transfer-preview{display:flex;flex-direction:column;gap:4px;border-radius:var(--r-2);padding:12px 16px;border:1px solid var(--line);background:var(--surface-2);min-width:0}
 #smetra-calculators .smcalc-transfer-preview>span{color:var(--text-2);font-size:12px;overflow-wrap:anywhere}
 #smetra-calculators .smcalc-transfer-preview strong{color:var(--text);font-weight:600;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
 #smetra-calculators .smcalc-transfer-note{color:var(--text-2);font-size:12px;line-height:1.6;margin:0}
-#smetra-calculators .smcalc-draft{width:100%;min-height:46px;justify-content:center;border-radius:11px}
+#smetra-calculators .smcalc-draft{width:100%;min-height:44px;justify-content:center;border-radius:var(--r-2)}
 #smetra-calculators .smcalc-draft:disabled{opacity:.45;cursor:not-allowed}
-#smetra-calculators .smcalc-copy{margin-top:5px}
+#smetra-calculators .smcalc-copy{margin-top:4px}
 
 /* Антисмета — compact, read-only quality gate in the estimate editor. */
-#estimate-editor .anti-estimate-panel{margin-top:14px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface-1);color:var(--text);min-width:0}
+#estimate-editor .anti-estimate-panel{margin-top:16px;padding:20px;border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1);color:var(--text);min-width:0}
 #estimate-editor .anti-estimate-head{display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:16px}
-#estimate-editor .anti-estimate-head h3{margin:4px 0 6px;font-size:18px;font-weight:620;line-height:1.3;letter-spacing:-.035em;color:inherit}
+#estimate-editor .anti-estimate-head h3{margin:0 0 4px;font-size:18px;font-weight:600;line-height:1.3;letter-spacing:var(--tracking-tight);color:inherit}
 #estimate-editor .anti-estimate-head p{margin:0;color:var(--text-2);font-size:12px;line-height:1.5}
-#estimate-editor .anti-estimate-kicker{color:var(--text-2);font-size:10px;font-weight:600;letter-spacing:.1em}
+#estimate-editor .anti-estimate-kicker{color:var(--text-2);font-size:var(--fs-12);font-weight:600;letter-spacing:.1em}
 #estimate-editor .anti-estimate-symbol svg{width:17px;height:17px;display:block}
-#estimate-editor .anti-estimate-symbol{display:grid;place-items:center;width:30px;height:30px;flex:none;border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:14px}
+#estimate-editor .anti-estimate-symbol{display:grid;place-items:center;width:32px;height:32px;flex:none;border:1px solid var(--line);border-radius:var(--r-2);color:var(--text);font-size:14px}
 #estimate-editor .anti-estimate-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;border-bottom:1px solid var(--line);padding-bottom:16px}
-#estimate-editor .anti-count{display:flex;flex-direction:column;gap:5px;color:var(--text-2);font-size:10px;line-height:1.4}
-#estimate-editor .anti-count strong{font-size:24px;line-height:1.2;font-weight:630;letter-spacing:-.04em;color:var(--text);font-variant-numeric:tabular-nums}
+#estimate-editor .anti-count{display:flex;flex-direction:column;gap:4px;color:var(--text-2);font-size:var(--fs-12);line-height:1.4}
+#estimate-editor .anti-count strong{font-size:24px;line-height:1.2;font-weight:600;letter-spacing:var(--tracking-tight);color:var(--text);font-variant-numeric:tabular-nums}
 #estimate-editor .anti-count.anti-errors strong{color:var(--danger)}
 #estimate-editor .anti-issue-list{list-style:none;display:flex;flex-direction:column;padding:0;margin:4px 0 0}
 #estimate-editor .anti-issue{display:flex;gap:10px;align-items:flex-start;min-width:0;padding:12px 0;border-bottom:1px solid var(--line)}
@@ -70,15 +70,15 @@
 #estimate-editor .anti-error .anti-issue-dot{background:var(--danger)}
 #estimate-editor .anti-tip .anti-issue-dot{background:var(--text-3)}
 #estimate-editor .anti-issue>div{flex:1;min-width:0}
-#estimate-editor .anti-issue button,#estimate-editor .anti-issue strong{display:block;padding:0;margin:0;background:transparent;border:0;color:var(--text);font:inherit;font-weight:600;font-size:11.5px;line-height:1.45;text-align:left;overflow-wrap:anywhere;cursor:default}
+#estimate-editor .anti-issue button,#estimate-editor .anti-issue strong{display:block;padding:0;margin:0;background:transparent;border:0;color:var(--text);font:inherit;font-weight:600;font-size:var(--fs-12);line-height:1.45;text-align:left;overflow-wrap:anywhere;cursor:default}
 #estimate-editor .anti-issue button{cursor:pointer;text-decoration:none}
 #estimate-editor .anti-issue button:hover{text-decoration:underline;text-underline-offset:3px}
 #estimate-editor .anti-issue button:focus-visible,#estimate-editor .anti-estimate-more:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
-#estimate-editor .anti-issue p{font-size:11px;line-height:1.55;color:var(--text-2);margin:4px 0 0;overflow-wrap:anywhere}
-#estimate-editor .anti-estimate-ok{font-size:11.5px;color:var(--text-2);margin:17px 0;line-height:1.55}
-#estimate-editor .anti-estimate-more{width:100%;min-height:36px;border:1px solid var(--line);border-radius:9px;padding:8px;color:var(--text);font-size:11px;background:transparent;text-align:center;margin-top:10px;cursor:pointer}
+#estimate-editor .anti-issue p{font-size:var(--fs-12);line-height:1.55;color:var(--text-2);margin:4px 0 0;overflow-wrap:anywhere}
+#estimate-editor .anti-estimate-ok{font-size:var(--fs-12);color:var(--text-2);margin:16px 0;line-height:1.55}
+#estimate-editor .anti-estimate-more{width:100%;min-height:40px;border:1px solid var(--line);border-radius:var(--r-2);padding:8px;color:var(--text);font-size:var(--fs-12);background:transparent;text-align:center;margin-top:10px;cursor:pointer}
 #estimate-editor .anti-estimate-more:hover{background:var(--surface-3)}
-#estimate-editor .anti-estimate-disclaimer{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--text-2);font-size:10px;line-height:1.55}
+#estimate-editor .anti-estimate-disclaimer{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--text-2);font-size:var(--fs-12);line-height:1.55}
 @media(max-width:850px){#estimate-editor .anti-estimate-panel{padding:17px}#estimate-editor .anti-estimate-stats{gap:4px}}
 @media(prefers-reduced-motion:reduce){#estimate-editor .anti-issue button{scroll-behavior:auto}}
 
@@ -89,8 +89,13 @@
 #smetra-calculators h1{font-size:var(--fs-28);font-weight:600;line-height:var(--lh-tight);letter-spacing:var(--tracking-tight);margin:0}
 #smetra-calculators .smcalc-header p{margin-top:6px;font-size:var(--fs-14);max-width:68ch}
 #smetra-calculators .smcalc-tabs{gap:6px;padding:0 0 var(--s-4);margin:0}
-#smetra-calculators .smcalc-tab{min-height:36px;padding:0 14px;border-radius:var(--r-pill);font-size:var(--fs-13);font-weight:500}
+#smetra-calculators .smcalc-tab{min-height:40px;padding:0 14px;border-radius:var(--r-pill);font-size:var(--fs-13);font-weight:500}
 #smetra-calculators .smcalc-tab[aria-pressed="true"]{background:var(--surface-inverse);border-color:transparent;color:var(--text-inverse)}
 #smetra-calculators .smcalc-card{border-radius:var(--r-3);background:var(--surface-1);border-color:var(--line)}
 #smetra-calculators .smcalc-title>span{font-size:var(--fs-11);letter-spacing:var(--tracking-caps)}
 @media (max-width:640px){#smetra-calculators h1{font-size:var(--fs-24)}}
+
+/* Numbering kickers repeat the heading below them. */
+#smetra-calculators .smcalc-kicker,#smetra-calculators .smcalc-title>span,#estimate-editor .anti-estimate-kicker{display:none}
+#smetra-calculators .smcalc-header{margin:0 0 16px}
+@media (max-width:800px){#smetra-calculators h1{font-size:var(--fs-24)}}

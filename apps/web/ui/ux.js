@@ -79,7 +79,7 @@
   const indicator = document.createElement('div');
   indicator.className = 'pull-refresh';
   indicator.setAttribute('aria-hidden', 'true');
-  indicator.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>';
+  indicator.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>';
   document.body.append(indicator);
   const scrollsInside = target => {
     for (let node = target; node && node !== document.body; node = node.parentElement) {
@@ -149,4 +149,32 @@
       help();
     }
   });
+
+  // Phones: the section's main «create» action moves from the top of the page
+  // into the thumb zone, above the tab bar. The original button stays in the
+  // DOM (hidden on phones) and does the work.
+  const fab = document.createElement('button');
+  fab.type = 'button';
+  fab.className = 'page-fab';
+  fab.hidden = true;
+  fab.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span></span>';
+  document.body.append(fab);
+  let source = null;
+  const syncFab = () => {
+    const next = [...(content()?.querySelectorAll('.topline-actions .btn.primary,.page-actions .btn.primary') || [])].find(button => !button.disabled && /^(\+\s*)?(Создать|Новый|Новая|Добавить|Записать)/.test(button.textContent.trim()));
+    if (source && source !== next) source.classList.remove('fab-source');
+    source = next || null;
+    fab.hidden = !source;
+    if (!source) return;
+    source.classList.add('fab-source');
+    const label = source.textContent.trim();
+    fab.querySelector('span').textContent = label;
+    fab.setAttribute('aria-label', label);
+  };
+  fab.addEventListener('click', () => source?.click());
+  const main = content();
+  let queued = false;
+  if (main) new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; syncFab(); }); }).observe(main, { childList: true, subtree: true });
+  syncFab();
+
 })();
