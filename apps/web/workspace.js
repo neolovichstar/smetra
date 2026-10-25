@@ -80,10 +80,10 @@ window.Workspace = (() => {
         approved:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>',
         received:'<path d="M3 20h18M5 19v-5h4v5M11 19V8h4v11M17 19V4h4v15"/>',
       };
-      const metric=(icon,label,value)=>`<article class="dashboard-metric">
+      const metric=(icon,label,value,target)=>`<a class="dashboard-metric" href="#${target}">
         <div class="dashboard-metric-label"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[icon]}</svg><span>${e(label)}</span></div>
         <strong>${value}</strong>
-      </article>`;
+      </a>`;
       const recentRows=recent.map(q=>`<div class="dashboard-quote-row">
         <button type="button" class="dashboard-quote-name" data-work="quote" data-id="${e(q.id)}">${e(q.title||'Смета без названия')}</button>
         <span class="dashboard-quote-client">${e(q.client||'Не указан')}</span>
@@ -109,10 +109,10 @@ window.Workspace = (() => {
           <div class="capture-shortcuts">${button('Создать вручную','quote-new')}${button('Мои расценки','navigate','catalog')}${button('Спросить ассистента','navigate','assistant')}</div>
         </section>`:'')+
         `<div class="dashboard-metrics" aria-label="Показатели работы">
-          ${metric('projects','Активные проекты',e(actions.summary.active_projects||0))}
-          ${metric('waiting','Ждут оплаты',e(actions.summary.waiting_payments||0))}
-          ${metric('approved','Согласовано за месяц',e(actions.summary.approved_this_month||0))}
-          ${metric('received','Получено за месяц',money(actions.summary.received_this_month?.[balance.currency]||0,balance.currency))}
+          ${metric('projects','Активные проекты',e(actions.summary.active_projects||0),'projects')}
+          ${metric('waiting','Ждут оплаты',e(actions.summary.waiting_payments||0),'finance')}
+          ${metric('approved','Согласовано за месяц',e(actions.summary.approved_this_month||0),'quotes')}
+          ${metric('received','Получено за месяц',money(actions.summary.received_this_month?.[balance.currency]||0,balance.currency),'finance')}
         </div>
         <section class="dashboard-recent" aria-labelledby="dashboard-recent-title">
           <header class="dashboard-recent-head"><h2 id="dashboard-recent-title">Последние сметы</h2>${button('Все сметы','navigate','quotes','ghost')}</header>
@@ -205,7 +205,7 @@ window.Workspace = (() => {
     let files=initial.items,timer,request=0;const mine=generation;
     const paint=()=>{list.innerHTML=files.length?files.map(file=>`<div class="record-line file-center-row"><span class="file-type" aria-hidden="true">${e(file.name.split('.').pop().slice(0,4).toUpperCase())}</span><div class="file-description"><strong>${e(file.name)}</strong><small>${Math.ceil(file.size/1024)} КБ · ${date(file.created_at)}</small></div><div class="attachment-actions"><button class="btn small" data-file-open="${e(file.id)}">Открыть</button>${file.name.toLowerCase().endsWith('.md')?`<button class="btn small" data-file-edit="${e(file.id)}">Изменить</button>`:''}${roleCanWrite()?`<button class="btn small" data-file-manage="${e(file.id)}">Данные</button>`:''}${['text/plain','application/pdf','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(file.mime)?`<button class="btn small" data-file-ask="${e(file.id)}">Спросить AI</button>`:''}</div></div>`).join(''):empty('Файлы не найдены','Прикрепите файл к смете, клиенту или проекту.')};
     paint();
-    search.insertAdjacentHTML('afterend','<button class="btn small" id="file-new-note" type="button">Заметка .md</button>');
+    search.insertAdjacentHTML('afterend','<button class="btn small" id="file-new-note" type="button" title="Текстовая заметка в формате Markdown">Новая заметка</button>');
     document.querySelector('#file-new-note').onclick=()=>window.SmetraFileEditor?.open();
     search.oninput=()=>{clearTimeout(timer);const sequence=++request,value=search.value.trim();timer=setTimeout(async()=>{if(!search.isConnected||mine!==generation)return;try{const result=await api('/files?q='+encodeURIComponent(value));if(sequence!==request||!search.isConnected||mine!==generation)return;files=result.items;paint()}catch(error){if(sequence===request&&search.isConnected&&mine===generation)notify(error.message)}},200)};
     list.onclick=event=>{const button=event.target.closest('[data-file-open],[data-file-ask],[data-file-edit],[data-file-manage]');if(!button)return;const id=button.dataset.fileOpen||button.dataset.fileAsk||button.dataset.fileEdit||button.dataset.fileManage,file=files.find(item=>item.id===id);if(!file)return;if(button.dataset.fileAsk)askAbout('files',file.id,file.name);else if(button.dataset.fileManage)manageFile(file.id).catch(error=>notify(error.message));else if(button.dataset.fileEdit)window.SmetraFileEditor?.open(file);else window.SmetraFilePreview?.open(file,workspace?.id)};

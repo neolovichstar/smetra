@@ -496,3 +496,12 @@
   .tasks-row{align-items:center}
   .tasks-row>.record-title{flex:1 1 0;min-width:0}
 }
+/* Metrics open their section. */
+a.dashboard-metric{color:inherit;text-decoration:none;transition:background-color var(--t-fast) var(--ease)}
+a.dashboard-metric:hover{background:var(--surface-2)}
+a.dashboard-metric:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+@media (max-width:600px){
+  .contact-group{grid-template-columns:minmax(0,1fr);gap:0}
+  .contact-group>h3{padding:var(--s-3) 0 0}
+  .hub-tabs[role=tablist]{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+}

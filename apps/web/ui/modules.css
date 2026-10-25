@@ -580,3 +580,9 @@ body.comms-scroll-locked{overflow:hidden}
 html.in-app body{overscroll-behavior:none}
 html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 @media (pointer:coarse){.construction-back button,.review-back,.file-editor-back{min-height:40px}.construction-edit{min-height:36px}}
+@media (max-width:600px){
+  .construction-intro{padding:var(--s-4)}
+  .construction-intro .construction-inline{flex-direction:column;align-items:stretch;flex-basis:100%}
+  .construction-inline>label{flex-basis:auto}
+  .construction-intro .construction-inline .btn{justify-content:center}
+}
