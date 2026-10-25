@@ -1616,6 +1616,11 @@ class Service:
                     result["actual_cost"] = sum(
                         p["amount_kopecks"] for p in result["expenses"]
                     )
+                    from backend import order_finance
+
+                    result["finance"] = order_finance.summarize(
+                        result["amount_kopecks"], result["internal_cost"], result["paid"], result["actual_cost"]
+                    )
                 if kind == "clients":
                     result["quotes"] = [
                         self.quote_view(r)
@@ -2037,6 +2042,21 @@ class Service:
             (self.wid,),
         ):
             add("quote", row, "Клиент вернулся к смете", "Открыть смету", row["title"])
+        from backend import order_finance
+
+        currency = self.con.execute("SELECT currency FROM workspaces WHERE id=?", (self.wid,)).fetchone()[0] or "RUB"
+        money = order_finance.workspace_money(self.con, self.wid, currency)
+        for over in money["overruns"][:3]:
+            add("project", over, "Перерасход по заказу", "Открыть проект", over["name"], amount=over["overrun"])
+        soon = (business_date() + dt.timedelta(days=3)).isoformat()
+        for row in self.con.execute(
+            "SELECT s.project_id AS id,s.name,s.due_date,p.name AS project,p.currency FROM project_stages s "
+            "JOIN projects p ON p.id=s.project_id AND p.workspace_id=s.workspace_id "
+            "WHERE s.workspace_id=? AND s.status!='done' AND p.status NOT IN ('completed','cancelled') "
+            "AND s.due_date!='' AND s.due_date>=? AND s.due_date<=? ORDER BY s.due_date LIMIT 5",
+            (self.wid, today, soon),
+        ):
+            add("project", row, "Срок этапа сегодня" if row["due_date"] == today else "Скоро срок этапа", "Открыть проект", row["project"] + " · " + row["name"], row["due_date"])
 
         active = self.con.execute(
             "SELECT count(*) FROM projects WHERE workspace_id=? AND status NOT IN ('completed','cancelled')",
@@ -2068,6 +2088,7 @@ class Service:
                 waiting_payments=waiting,
                 approved_this_month=approved,
                 received_this_month=received,
+                money=money,
             ),
         )
 

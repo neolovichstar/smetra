@@ -768,6 +768,40 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(consent_code, 200, consent)
         return result["token"], result["user"]["id"]
 
+    def test_order_money_today_and_isolation(self):
+        token, _ = self.account("finance-owner")
+        status, created = self.call("/projects", "POST", {"name": "Кухня", "amount_kopecks": 100_000, "internal_cost": 60_000, "currency": "RUB"}, token)
+        self.assertEqual(status, 201, created)
+        project = created["item"]["id"]
+        paid_status, paid = self.call("/receipts", "POST", {"project_id": project, "amount_kopecks": 30_000, "method": "cash"}, token, key="finance-order-payment-key")
+        self.assertEqual(paid_status, 201, paid)
+        self.assertEqual(self.call("/expenses", "POST", {"project_id": project, "amount_kopecks": 70_000, "category": "Плитка"}, token, key="finance-order-expense-key")[0], 201)
+        from backend.business import business_date
+
+        tomorrow = (business_date() + dt.timedelta(days=1)).isoformat()
+        stage_status, stage = self.call("/stages", "POST", {"project_id": project, "name": "Черновая отделка", "due_date": tomorrow, "amount_kopecks": 0}, token)
+        self.assertEqual(stage_status, 201, stage)
+
+        finance = self.call("/projects/" + project, token=token)[1]["item"]["finance"]
+        self.assertEqual(
+            (finance["paid"], finance["receivable"], finance["actual_cost"], finance["overrun"], finance["forecast_profit"], finance["cash_result"]),
+            (30_000, 70_000, 70_000, 10_000, 30_000, -40_000),
+        )
+
+        actions = self.call("/dashboard", token=token)[1]["actions"]
+        self.assertEqual(actions["summary"]["money"]["receivable"], 70_000)
+        self.assertEqual(actions["summary"]["money"]["forecast_profit"], 30_000)
+        titles = {item["title"]: item for item in actions["items"]}
+        self.assertEqual(titles["Перерасход по заказу"]["entity_id"], project)
+        self.assertEqual(titles["Перерасход по заказу"]["amount_kopecks"], 10_000)
+        self.assertIn("Скоро срок этапа", titles, (actions["items"], stage))
+        self.assertIn("Черновая отделка", titles["Скоро срок этапа"]["detail"])
+
+        other, _ = self.account("finance-stranger")
+        self.assertEqual(self.call("/projects/" + project, token=other)[0], 404)
+        money = self.call("/dashboard", token=other)[1]["actions"]["summary"]["money"]
+        self.assertEqual((money["receivable"], money["forecast_profit"], money["overruns"]), (0, None, []))
+
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
         from backend.data_export import _clean
 
