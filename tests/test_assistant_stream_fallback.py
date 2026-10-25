@@ -129,8 +129,8 @@ class ChatStreamTransactionTests(unittest.TestCase):
             runtime_connection=SimpleNamespace(finish=commits.append),
         )
         handler = self.handler()
-        with patch("backend.assistant.public_quota", return_value={"remaining": 100}), \\
-                patch("backend.assistant.answer_chat", side_effect=DomainError(502, "Ошибка модели")):
+        with (patch("backend.assistant.public_quota", return_value={"remaining": 100}),
+              patch("backend.assistant.answer_chat", side_effect=DomainError(502, "Ошибка модели"))):
             ChatStream(service, "Проверка", {}).write(handler)
         self.assertEqual(commits, [False])
         self.assertIn(b"event: error", handler.wfile.getvalue())
@@ -144,8 +144,8 @@ class ChatStreamTransactionTests(unittest.TestCase):
             runtime_connection=SimpleNamespace(finish=commits.append),
         )
         handler = self.handler()
-        with patch("backend.assistant.public_quota", return_value={"remaining": 100}), \\
-                patch("backend.assistant.answer_chat", return_value={"answer": "Готово"}):
+        with (patch("backend.assistant.public_quota", return_value={"remaining": 100}),
+              patch("backend.assistant.answer_chat", return_value={"answer": "Готово"})):
             ChatStream(service, "Проверка", {}).write(handler)
         self.assertEqual(commits, [True])
         self.assertIn(b"event: done", handler.wfile.getvalue())
