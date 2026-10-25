@@ -1,0 +1,14 @@
+name: Partner site live smoke
+on:
+  push:
+    branches:
+      - feat/partner-platform-foundation-20261026
+  workflow_dispatch:
+jobs:
+  public-partner-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify separate partner landing, console and docs
+        run: python scripts/check_partner_site_live.py
