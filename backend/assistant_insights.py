@@ -98,7 +98,8 @@ def read(service, name, args):
         quote_id = _id(args, "Смета")
         source = str(args.get("from_version", ""))
         target = str(args.get("to_version", "current"))
-        valid = lambda v: bool(re.fullmatch(r"[1-9][0-9]{0,8}", v))
+        def valid(value):
+            return bool(re.fullmatch(r"[1-9][0-9]{0,8}", value))
         if not valid(source) or (target != "current" and not valid(target)):
             raise DomainError(400, "Укажите существующую версию и версию для сравнения")
         return service.route("GET", "quotes", [quote_id, "compare"],
