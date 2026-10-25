@@ -522,9 +522,12 @@ def _stream_once(payload, on_delta, on_source):
                 if isinstance(event.get('usage'),dict):
                     usage=event['usage']
                 if event.get("error"):
-                    error = event["error"]
-                    raise ValueError("provider error: " + str(error.get("message") if isinstance(error, dict) else error)[:200])
+                    # OpenRouter may emit a provider error after HTTP 200.
+                    # Never include the provider's untrusted message in logs.
+                    raise ValueError("provider stream error")
                 choice = (event.get("choices") or [{}])[0]
+                if choice.get("finish_reason") == "error":
+                    raise ValueError("provider stream ended with error")
                 delta = choice.get("delta") or {}
                 content = delta.get("content")
                 # Provider-issued citations only; never fabricate source domains.
@@ -557,10 +560,12 @@ def _stream_once(payload, on_delta, on_source):
                     call["function"]["arguments"] += function_part.get("arguments") or ""
                     if len(call["function"]["arguments"]) > 20000:
                         raise ValueError("tool arguments too large")
-        if not done and not pieces and not calls:
-            raise ValueError("stream closed before any output")
         if not done:
             raise ValueError("incomplete stream")
+        # A complete SSE stream without content or tool calls is still a failed
+        # generation (e.g. reasoning-only output with reasoning excluded).
+        if not pieces and not calls:
+            raise ValueError("empty stream")
         result={"content": "".join(pieces), "tool_calls": list(calls.values())}
         if usage is not None:
             result['_usage']=usage
@@ -586,9 +591,14 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
 
     model, paid_model, on_source = provider_selection(model, paid_model, on_source)
     attempts = [_stream_payload(model, messages, paid_model)]
+    # Reasoning can exclude otherwise usable free endpoints. Keep tools for
+    # the second attempt; only the last fallback drops them. Never switch a
+    # free user to a paid model.
     if model != FREE_ROUTER:
         attempts.append({**_stream_payload(FREE_ROUTER, messages, False, reasoning=False),
                          "provider": {"require_parameters": True}})
+    else:
+        attempts.append(_stream_payload(FREE_ROUTER, messages, False, reasoning=False))
     # The plain answer has no tools: say so, so the model does not claim it
     # can never create or edit records.
     plain = messages + [{"role": "system", "content": (
@@ -1147,6 +1157,7 @@ class ChatStream:
         handler.send_header("Referrer-Policy", "no-referrer")
         handler.end_headers()
         emitted = False
+        completed = False
 
         def send(kind, data):
             handler.wfile.write(("event: " + kind + "\ndata: " + packed(data) + "\n\n").encode())
@@ -1166,6 +1177,7 @@ class ChatStream:
                 image_url=self.image_url, on_source=lambda source: (send("status", {"text": "Проверяю источники…"}), send("web_source", source)),
                 on_design=lambda design: send("quote_design", design),
             ))
+            completed = True
         except DomainError as error:
             if not emitted:
                 release(self.service, self.quota_key)
@@ -1176,7 +1188,13 @@ class ChatStream:
         except (BrokenPipeError, ConnectionResetError):
             if not emitted:
                 release(self.service, self.quota_key)
-        except Exception:
+        except Exception as error:
+            # A 200 SSE HTTP status cannot reveal a later server-side failure.
+            # Log only a request id and exception type (never prompts or tokens).
+            logging.getLogger(__name__).error(
+                "Assistant SSE failed request_id=%s type=%s",
+                getattr(handler, "request_id", ""), type(error).__name__,
+            )
             if not emitted:
                 release(self.service, self.quota_key)
             try:
@@ -1187,7 +1205,7 @@ class ChatStream:
             if self.lease:
                 self.lease.release()
             if self.service.runtime_connection:
-                self.service.runtime_connection.finish(True)
+                self.service.runtime_connection.finish(completed)
 
 
 def route(service, method, parts, data):
