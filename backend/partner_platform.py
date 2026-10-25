@@ -335,3 +335,48 @@ def outbound(con, user, product_id):
         "VALUES(?,?,?,?,?)", (_id(), row["partner_id"], row["id"], user["id"], _now()),
     )
     return url
+
+
+def new_console_session(con, api_key_header):
+    """One-hour scoped bearer token, so the browser need not keep the API key."""
+    partner = auth_partner(con, api_key_header)
+    token = "smp_session_" + secrets.token_urlsafe(36)
+    moment = _now()
+    con.execute(
+        "INSERT INTO partner_console_sessions"
+        "(id,partner_id,session_hash,created_at,expires_at) VALUES(?,?,?,?,?)",
+        (_id(), partner["id"], _sha(token), moment, moment + 3600),
+    )
+    return {"session_token": token, "expires_in": 3600}
+
+
+def auth_console(con, header):
+    """Server SDKs may use the long-lived key, browser uses an expiring session."""
+    if isinstance(header, str) and header.startswith("Partner smp_live_"):
+        return auth_partner(con, header)
+    if not isinstance(header, str) or not re.fullmatch(
+            r"PartnerSession smp_session_[A-Za-z0-9_-]{35,100}\Z", header):
+        raise PartnerError(401, "Войдите в партнёрскую консоль")
+    session = con.execute(
+        "SELECT p.* FROM partner_console_sessions s "
+        "JOIN partner_accounts p ON p.id=s.partner_id "
+        "WHERE s.session_hash=? AND s.revoked_at IS NULL "
+        "AND s.expires_at>? AND p.active=1",
+        (_sha(header[len("PartnerSession "):]), _now()),
+    ).fetchone()
+    if not session:
+        raise PartnerError(401, "Сессия истекла")
+    return session
+
+
+def revoke_console_session(con, header):
+    if not isinstance(header, str) or not header.startswith("PartnerSession "):
+        return False
+    token = header[len("PartnerSession "):]
+    if not re.fullmatch(r"smp_session_[A-Za-z0-9_-]{35,100}\Z", token):
+        return False
+    return con.execute(
+        "UPDATE partner_console_sessions SET revoked_at=? "
+        "WHERE session_hash=? AND revoked_at IS NULL",
+        (_now(), _sha(token)),
+    ).rowcount > 0
