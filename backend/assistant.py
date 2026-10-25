@@ -1151,6 +1151,22 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             answer = "Не удалось завершить все проверки за один запрос. Уточните, какую запись проверить следующей."
     if not answer:
         answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
+    if not on_commit:
+        # The user may have logged out or lost workspace membership while the
+        # external model was responding. Do not persist or deliver stale data.
+        session_hash = getattr(service.h, "session_token_hash", "")
+        session = service.con.execute(
+            "SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id "
+            "WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? "
+            "AND u.blocked=0 AND u.deleted_at IS NULL",
+            (session_hash, service.user["id"], stamp()),
+        ).fetchone()
+        membership = service.con.execute(
+            "SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?",
+            (service.wid, service.user["id"]),
+        ).fetchone()
+        if not session or not membership or (actions and membership["role"] == "viewer"):
+            raise DomainError(403, "Доступ к рабочему пространству изменился. Войдите заново.")
     with transaction(service.con):
         result = {"answer": answer, "actions": actions, "quota": public_quota(service)}
         if on_commit:
