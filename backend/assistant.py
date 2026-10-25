@@ -1255,13 +1255,13 @@ def route(service, method, parts, data):
             item["arguments"] = {key: value for key, value in item["arguments"].items() if not key.startswith("_")}
         recent = []
         for row in service.con.execute(
-            "SELECT id,summary,result FROM assistant_actions WHERE workspace_id=? AND user_id=? "
+            "SELECT id,tool,summary,result FROM assistant_actions WHERE workspace_id=? AND user_id=? "
             "AND status='applied' ORDER BY created_at DESC LIMIT 20", (service.wid, service.user["id"]),
         ):
             result = json.loads(row["result"])
             applied = result.get("result") or {}
             quote = applied.get("quote") if isinstance(applied, dict) else None
-            quote_id = quote.get("id") if isinstance(quote, dict) else None
+            quote_id = quote.get("id") if row["tool"] == "create_quotes" and isinstance(quote, dict) else None
             undoable = bool(result.get("undoable") and result.get("undo_until", 0) >= stamp())
             # Creation cannot be undone, but must remain discoverable after
             # reopening the assistant instead of disappearing on refresh.
