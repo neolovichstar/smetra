@@ -86,16 +86,18 @@ gracefully on older shells.
   lintRelease`, installable debug APK artifact.
 - `CI / web-backend`: `tests/dom_native_bridge.cjs` (web bridge client) and the
   compat endpoint test.
-- `Android screens` workflow: builds a debug APK for `http://10.0.2.2:8090`, starts
-  `scripts/android_ui_fixture.py` with `SMETRA_PROMO_QA=1` (isolated SQLite, no
-  production data), boots a Pixel 6 emulator (API 34), measures cold/warm start,
-  memory and APK size, drives the WebView over its devtools socket
-  (`scripts/android_screens.cjs`) and captures device screenshots with
-  `adb screencap`. `scripts/rustore_promo.py` then frames them into 10 promo
-  images 1080×1920 and writes `manifest.json` (hashes of every source and promo)
-  and `ui-critic.md` (Smetra UI Critic: overflow, tap targets, contrast, empty or
-  error screens, console errors, promo layout checks). Results are uploaded as an
-  artifact and pushed to the `android-screens` branch.
+- `Android screens` workflow: starts `scripts/android_ui_fixture.py` with
+  `SMETRA_PROMO_QA=1` (isolated SQLite, no production data) and captures the 10
+  screens with headless Chrome at phone size (412×915 CSS px, DPR 2.625 → 1080×2400)
+  through `scripts/android_screens.cjs` — the cabinet inside the app is the same web
+  UI. `scripts/rustore_promo.py` frames them into 10 promo images 1080×1920 and
+  writes `manifest.json` (hashes of every source and promo) and `ui-critic.md`
+  (Smetra UI Critic: overflow, tap targets, contrast, empty or error screens,
+  console errors, promo layout checks). A best-effort step also boots the debug APK
+  in an emulator for cold/warm start, memory and APK size (`metrics-native.json`);
+  the hosted emulator dies about 40 s after boot, so device screenshots are not
+  relied on. Results are uploaded as an artifact and pushed to the
+  `android-screens` branch.
 
 Regenerate locally (browser capture, not device):
 

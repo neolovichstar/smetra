@@ -31,10 +31,8 @@ sleep 3
 pid=$(adb shell pidof "$PACKAGE" | tr -d '\r')
 adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid"
 
-SMETRA_CDP=http://127.0.0.1:9222 SMETRA_SCREENCAP=adb SMETRA_SCREENS_DIR="$OUT" node scripts/android_screens.cjs
 
 pss=$(adb shell dumpsys meminfo "$PACKAGE" | tr -d '\r' | awk '/TOTAL PSS:/{print $3; exit} /^ *TOTAL /{print $2; exit}')
-[ -f "$OUT/metrics-native.json" ] && exit 0
 cat > "$OUT/metrics-native.json" <<JSON
 {
   "device": "$(adb shell getprop ro.product.model | tr -d '\r')",
@@ -49,4 +47,6 @@ cat > "$OUT/metrics-native.json" <<JSON
 }
 JSON
 cat "$OUT/metrics-native.json"
+# Device screenshots are best effort: the CI emulator is short-lived.
+SMETRA_CDP=http://127.0.0.1:9222 SMETRA_SCREENCAP=adb SMETRA_SCREENS_DIR="$OUT" node scripts/android_screens.cjs
 adb shell am broadcast -a com.android.systemui.demo -e command exit > /dev/null || true
