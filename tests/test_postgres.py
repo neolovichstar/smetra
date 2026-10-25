@@ -31,6 +31,14 @@ class PostgresQueryTests(unittest.TestCase):
             "INSERT INTO smetra.files(id) VALUES(%s) ON CONFLICT DO NOTHING",
         )
 
+    def test_purchase_bonus_queries_use_the_private_schema(self):
+        for table in ("assistant_bonus_grants", "assistant_bonus_usage"):
+            with self.subTest(table=table):
+                self.assertEqual(
+                    translate(f"SELECT count(*) FROM {table} WHERE user_id=?", "smetra", True),
+                    f"SELECT count(*) FROM smetra.{table} WHERE user_id=%s",
+                )
+
     def test_monthly_quota_upsert_targets_existing_counter(self):
         sql = (
             "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "

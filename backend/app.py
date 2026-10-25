@@ -1470,7 +1470,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         (until, plan if until > now() else "free", payment["user_id"]),
                     )
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
-                    con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    con.execute(
+                        "UPDATE assistant_bonus_grants SET remaining=0,"
+                        "expires_at=CASE WHEN expires_at>? THEN ? ELSE expires_at END WHERE payment_id=?",
+                        (now(), now(), payment['id']),
+                    )
                     event(con, payment["user_id"], "payment_refunded")
                     terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:

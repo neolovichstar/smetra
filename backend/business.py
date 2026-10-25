@@ -983,12 +983,12 @@ class Service:
                     "SELECT * FROM documents WHERE id=? AND quote_id=? AND workspace_id=?",
                     (file_id, row["id"], self.wid),
                 ).fetchone()
-                if not document:
-                    raise DomainError(404, "Документ не найден")
                 try:
-                    from backend.documents import Download, pdf
+                    from backend.documents import Download, pdf, public_document
                 except ModuleNotFoundError:
-                    from documents import Download, pdf
+                    from documents import Download, pdf, public_document
+                if not document or not public_document(document, row["published_version"]):
+                    raise DomainError(404, "Документ не найден")
                 return 200, Download(
                     pdf(document), "application/pdf", "smetra-document.pdf"
                 )
@@ -1041,12 +1041,15 @@ class Service:
                         (row["id"],),
                     )
                 ]
+                from backend.documents import public_document
+
                 result["documents"] = [
-                    dict(d)
+                    {key: d[key] for key in ("id", "name", "number")}
                     for d in self.con.execute(
-                        "SELECT id,name,number FROM documents WHERE quote_id=? ORDER BY created_at DESC LIMIT 50",
-                        (row["id"],),
+                        "SELECT id,name,number,snapshot FROM documents WHERE quote_id=? AND workspace_id=? ORDER BY created_at DESC LIMIT 50",
+                        (row["id"], self.wid),
                     )
+                    if public_document(d, row["published_version"])
                 ]
                 result["versions"] = [
                     dict(

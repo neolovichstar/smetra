@@ -210,6 +210,15 @@ def pdf(document):
     return stream.getvalue()
 
 
+def public_document(document, published_version):
+    """Only documents built from an already published snapshot may be shared."""
+    try:
+        version = json.loads(document["snapshot"]).get("version")
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return type(version) is int and 1 <= version <= published_version
+
+
 def documents(service, method, parts, query, data):
     con = service.con
     if method == "GET":

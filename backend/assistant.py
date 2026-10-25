@@ -183,14 +183,22 @@ def release(service, reservation):
             "UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0", (key,)
         )
         if bonus_grant_id:
-            service.con.execute(
-                "UPDATE assistant_bonus_grants SET remaining=remaining+1 WHERE id=? AND remaining<amount",
-                (bonus_grant_id,),
-            )
-            service.con.execute(
-                "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0",
-                (stamp(), key),
-            )
+            restore_bonus(service.con, bonus_grant_id, key)
+
+
+def restore_bonus(con, grant_id, quota_key):
+    # A refund expires the grant permanently. A late failed/cancelled request
+    # must not recreate credits, but its usage reservation still needs removal.
+    con.execute(
+        "UPDATE assistant_bonus_grants SET remaining=remaining+1 "
+        "WHERE id=? AND remaining<amount AND expires_at>?",
+        (grant_id, stamp()),
+    )
+    con.execute(
+        "UPDATE assistant_bonus_usage SET count=count-1,updated_at=? "
+        "WHERE quota_key=? AND count>0",
+        (stamp(), quota_key),
+    )
 
 
 def function(name, description, properties, required=()):
@@ -870,7 +878,9 @@ def _confirm(service, action_id):
         return result
 
 
-def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None):
+def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, on_validate=None):
+    if on_validate:
+        on_validate()
     if conversation_id:
         history_sql = "SELECT role,content FROM assistant_messages WHERE workspace_id=? AND user_id=? AND conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 8"
         history_args = (service.wid, service.user["id"], conversation_id)
@@ -928,6 +938,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         if on_commit and on_status:
             on_status("Формулирую ответ…")
         response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+        if on_validate:
+            on_validate()
         usage=response.pop('_usage',None)
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -938,6 +950,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             break
         messages.append({"role": "assistant", "content": answer or None, "tool_calls": calls[:4]})
         for call in calls[:4]:
+            # Access revocation is fatal, not a tool error for the model to retry.
+            if on_validate:
+                on_validate()
             try:
                 name = call["function"]["name"]
                 if on_status:
@@ -975,6 +990,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     if not answer:
         answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
     with transaction(service.con):
+        if on_validate:
+            on_validate()
         result = {"answer": answer, "actions": actions, "quota": public_quota(service)}
         if on_commit:
             on_commit(result)
