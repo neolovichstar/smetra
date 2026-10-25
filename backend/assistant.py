@@ -856,6 +856,10 @@ def _confirm(service, action_id):
         undo_fields = args.pop("_undo_fields", None)
         args.pop("_preview", None)
         name = row["tool"]
+        if name == "create_quotes" and not str(args.get("client") or "").strip():
+            # Existing pending proposals were created before missing-client
+            # normalization. Keep those actions confirmable after upgrading.
+            args["client"] = "Клиент не указан"
         resource_undo = None
         if name in ("rename_file", "move_file", "create_document"):
             from backend.assistant_resources import apply_resource
