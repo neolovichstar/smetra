@@ -12,6 +12,56 @@ WEB = ROOT / "apps/web"
 DIST = ROOT / "dist/web"
 
 
+
+# Only the public landing is self-contained. The cabinet and source CSS files
+# stay byte-for-byte unchanged; the browser receives the same rules in the same
+# order, without relying on separate stylesheet requests during review.
+PUBLIC_CSS = ("tokens.css", "base.css", "components.css", "site.css")
+
+
+def embed_public_styles():
+    import base64
+
+    css = "\n" + "\n".join(
+        (WEB / "ui" / name).read_text(encoding="utf-8")
+        for name in PUBLIC_CSS
+    ) + "\n"
+    if "</style" in css.lower():
+        raise RuntimeError("A closing style tag in CSS would break inline delivery")
+    digest = base64.b64encode(hashlib.sha256(css.encode("utf-8")).digest()).decode("ascii")
+    csp_hash = f"'sha256-{digest}'"
+    config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+    policies = [
+        header["value"]
+        for block in config["headers"]
+        for header in block["headers"]
+        if header["key"].lower() == "content-security-policy"
+    ]
+    if len(policies) != 1 or csp_hash not in policies[0]:
+        raise RuntimeError(
+            f"Landing CSP hash does not match CSS. Add {csp_hash} to style-src in vercel.json"
+        )
+
+    # The source HTML deliberately keeps normal links for local development.
+    # Only dist/web/index.html is transformed for the production deployment.
+    page = DIST / "index.html"
+    html = page.read_text(encoding="utf-8")
+    pattern = "\n".join(
+        rf'<link rel="stylesheet" href="/ui/{re.escape(name)}\?v=[^"]+">'
+        for name in PUBLIC_CSS
+    )
+    if len(re.findall(pattern, html)) != 1:
+        raise RuntimeError("Landing stylesheet links changed; refusing an unsafe build")
+    html = re.sub(
+        pattern,
+        lambda _: '<style data-smetra-public-css="inlined">' + css + '</style>',
+        html,
+        count=1,
+    )
+    page.write_text(html, encoding="utf-8")
+    print(f"Public landing CSS: {len(css.encode('utf-8'))} bytes in HTML, CSP hash verified")
+
+
 def build():
     for source in WEB.glob("*.js"):
         subprocess.run(["node", "--check", str(source)], check=True)
@@ -27,6 +77,7 @@ def build():
     # Start from an empty bundle so deleted sources never linger in a deploy.
     shutil.rmtree(DIST, ignore_errors=True)
     shutil.copytree(WEB, DIST)
+    embed_public_styles()
     manifest = {
         str(p.relative_to(DIST)).replace("\\", "/"): hashlib.sha256(
             p.read_bytes()
