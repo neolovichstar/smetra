@@ -5,6 +5,7 @@ DNS proof uses a fixed DNS-over-HTTPS resolver; HTML proof connects only to
 a pre-validated public IP with TLS hostname verification and no redirects.
 """
 import datetime as dt
+import hashlib
 import html.parser
 import http.client
 import ipaddress
@@ -200,15 +201,18 @@ def report_event(con, account, data):
         raise partner.PartnerError(400, "Некорректная сумма")
     if (kind == "material_order_reported") != (amount > 0):
         raise partner.PartnerError(400, "Сумма разрешена только для заказа")
+    # Never store merchant order identifiers in plaintext: they may be
+    # joinable to people inside the merchant's own order management system.
+    key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()
     con.execute(
         "INSERT INTO partner_site_events"
         "(id,partner_id,event_key,event_type,amount_kopecks,created_at)"
         "VALUES(?,?,?,?,?,?) ON CONFLICT(partner_id,event_key) DO NOTHING",
-        (partner._id(), account["id"], key, kind, amount, _moment()),
+        (partner._id(), account["id"], key_hash, kind, amount, _moment()),
     )
     recorded = con.execute(
         "SELECT event_type,amount_kopecks FROM partner_site_events "
-        "WHERE partner_id=? AND event_key=?", (account["id"], key)
+        "WHERE partner_id=? AND event_key=?", (account["id"], key_hash)
     ).fetchone()
     if not recorded or recorded["event_type"] != kind or int(recorded["amount_kopecks"]) != amount:
         raise partner.PartnerError(409, "Ключ события уже использован для других данных")

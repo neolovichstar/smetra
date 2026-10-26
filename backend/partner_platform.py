@@ -93,15 +93,17 @@ def create_partner(con, data):
         raise PartnerError(400, "Некорректный срок комиссионного периода")
     secret = "smp_live_" + secrets.token_urlsafe(36)
     partner_id = _id()
-    con.execute(
-        "INSERT INTO partner_accounts(id,code,name,allowed_host,active,commission_bps,term_days,created_at) "
-        "VALUES(?,?,?,?,1,?,?,?)",
-        (partner_id, code, name, allowed_host, bps, days, _now()),
-    )
-    con.execute(
-        "INSERT INTO partner_api_tokens(id,partner_id,token_hash,created_at) VALUES(?,?,?,?)",
-        (_id(), partner_id, _sha(secret), _now()),
-    )
+    from backend.business import transaction
+    with transaction(con, lock_scopes=("partner-admin:onboard",)):
+        con.execute(
+            "INSERT INTO partner_accounts(id,code,name,allowed_host,active,commission_bps,term_days,created_at) "
+            "VALUES(?,?,?,?,1,?,?,?)",
+            (partner_id, code, name, allowed_host, bps, days, _now()),
+        )
+        con.execute(
+            "INSERT INTO partner_api_tokens(id,partner_id,token_hash,created_at) VALUES(?,?,?,?)",
+            (_id(), partner_id, _sha(secret), _now()),
+        )
     return {"id": partner_id, "code": code, "name": name,
             "referral_path": "/api/partners/r/" + code, "api_key": secret}
 
@@ -188,12 +190,12 @@ def capture(con, user, cookie):
     p = con.execute(
         "SELECT commission_bps,term_days FROM partner_accounts WHERE id=?", (click["partner_id"],)
     ).fetchone()
-    con.execute(
+    created = con.execute(
         "INSERT INTO partner_attributions(user_id,partner_id,click_id,rate_bps,term_days,created_at) "
         "VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO NOTHING",
         (user["id"], click["partner_id"], click["id"], p["commission_bps"], p["term_days"], moment),
     )
-    return True
+    return created.rowcount > 0
 
 
 def record_subscription_payment(con, payment):
@@ -487,13 +489,15 @@ def set_partner_active(con, partner_id, active):
         raise PartnerError(400, "Некорректный идентификатор")
     if type(active) is not bool:
         raise PartnerError(400, "Ожидается active: true/false")
-    changed = con.execute("UPDATE partner_accounts SET active=? WHERE id=?",
-                          (int(active), partner_id)).rowcount
-    if not changed:
-        raise PartnerError(404, "Партнёр не найден")
-    if not active:
-        con.execute("UPDATE partner_console_sessions SET revoked_at=? "
-                    "WHERE partner_id=? AND revoked_at IS NULL", (_now(), partner_id))
+    from backend.business import transaction
+    with transaction(con, lock_scopes=(f"partner:{partner_id}",)):
+        changed = con.execute("UPDATE partner_accounts SET active=? WHERE id=?",
+                              (int(active), partner_id)).rowcount
+        if not changed:
+            raise PartnerError(404, "Партнёр не найден")
+        if not active:
+            con.execute("UPDATE partner_console_sessions SET revoked_at=? "
+                        "WHERE partner_id=? AND revoked_at IS NULL", (_now(), partner_id))
     return {"id": partner_id, "active": active, "payouts_enabled": False}
 
 
