@@ -85,7 +85,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <header class="assistant-header" hidden><span id="assistant-quota" class="assistant-quota"></span></header>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
-      <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
+      <div class="assistant-composer"><div id="assistant-decision-slot" class="assistant-decision-slot" aria-live="polite"></div><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
@@ -685,24 +685,49 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }
     messages.append(item);return {item,body};
   };
+  const decisionSlot=document.getElementById('assistant-decision-slot');
+  const proposalQueue=[];
+  const updateDecisions=()=>{
+    if(!decisionSlot?.isConnected)return;
+    decisionSlot.replaceChildren();
+    const next=proposalQueue.find(item=>item.isConnected&&item.dataset.proposalState==='pending');
+    if(!next)return;
+    const heading=document.createElement('div');heading.className='assistant-decision-heading';
+    const kicker=document.createElement('span');kicker.textContent='Подтвердите действие';
+    const summary=document.createElement('strong');summary.textContent=next.querySelector('h3')?.textContent||'Предложение ИИ';
+    heading.append(kicker,summary);
+    const controls=document.createElement('div');controls.className='assistant-decision-buttons';
+    const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Принять';yes.onclick=()=>next.querySelector('[data-confirm]')?.click();
+    const no=document.createElement('button');no.type='button';no.className='btn ghost';no.textContent='Отклонить';no.onclick=()=>next.querySelector('[data-dismiss]')?.click();
+    controls.append(yes,no);decisionSlot.append(heading,controls);
+  };
   const renderedProposalIds=new Set();
   const addAction=action=>{
     if(!action || !action.id || renderedProposalIds.has(action.id))return;
     renderedProposalIds.add(action.id);
     if(action?.tool&&/quote/.test(action.tool))quotePreview?.propose(action).catch(()=>{});
-    const item=document.createElement('section');item.className='assistant-proposal';
+    const item=document.createElement('section');item.className='assistant-proposal';item.dataset.proposalState='pending';
     const markdownEdit=action.tool==='replace_markdown_text';
     const quoteDraft=action.tool==='create_quotes'&&Array.isArray(action.arguments?.items)&&action.arguments.items.length>0;
     const detail=quoteDraft?'':action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
     item.innerHTML=`<span class="assistant-proposal-state">Требует подтверждения · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
-    actions.append(item);
+    actions.append(item);proposalQueue.push(item);updateDecisions();
     if(quoteDraft)assistantQuoteDraftPreview(item.querySelector('.proposal-fields'),action.arguments);
     if(action.tool==='create_document'){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
     }
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
-    item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-dismiss]').onclick=async()=>{
+      const dismiss=item.querySelector('[data-dismiss]');
+      if(dismiss.disabled)return;
+      dismiss.disabled=true;
+      try{
+        await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});
+        item.dataset.proposalState='dismissed';quotePreview?.clearProposal?.(action.id);
+        item.remove();updateDecisions();
+      }catch(error){dismiss.disabled=false;notify(error.message)}
+    };
   };
   // Like ChatGPT's "Memory updated": a quiet note under the answer with a way to review it.
   const showMemoryNote=(item,updates)=>{
