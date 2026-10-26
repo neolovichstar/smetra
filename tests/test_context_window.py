@@ -2,7 +2,7 @@
 import unittest
 
 from backend.context_window import (
-    estimate_tokens, pack_history, MAX_MESSAGES_IN_PROMPT
+    estimate_tokens, pack_history, MAX_MESSAGES_IN_PROMPT, enforce_round_budget
 )
 
 
@@ -59,3 +59,25 @@ class ContextWindowTests(unittest.TestCase):
         self.assertNotIn("SUPER_SECRET_TOKEN_1234567",summary)
         self.assertIn("грунтовку",summary)
         self.assertGreaterEqual(stats["compressed_excerpts"],1)
+
+    def test_iterative_tool_context_compaction_keeps_protected_results(self):
+        from unittest.mock import patch
+
+        content = "Очень длинные результаты поиска. " * 600
+        msgs = [
+            {"role": "system", "content": "Правила важны."},
+            {"role": "user", "content": "Покажи сведения о ремонте."},
+        ]
+        for i in range(10):
+            msgs.append({"role": "assistant", "content": None, "tool_calls": [
+                {"id":f"call{i}","type":"function","function":{"name":"read_file","arguments":"{}"}}
+            ]})
+            msgs.append({"role":"tool","tool_call_id":f"call{i}","content":content})
+        before_ids = [item["tool_call_id"] for item in msgs if item["role"]=="tool"]
+        with patch.dict("os.environ",{"SMETRA_ASSISTANT_CONTEXT_TOKENS":"12000"}):
+            stats = enforce_round_budget(msgs,[{"type":"function","function":{"name":"read_file"}}])
+        self.assertTrue(stats["compacted"])
+        self.assertLess(stats["after"], stats["before"])
+        self.assertEqual(before_ids,[item["tool_call_id"] for item in msgs if item["role"]=="tool"])
+        self.assertEqual(msgs[-1]["content"],content)
+        self.assertEqual(msgs[0]["content"],"Правила важны.")
