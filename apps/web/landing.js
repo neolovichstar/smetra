@@ -42,7 +42,7 @@
       script.onload = resolve; script.onerror = () => reject(Error('Не удалось загрузить страницу'));
       document.head.append(script);
     });
-    Promise.all(['/ui/icons.js?v=20261026-r17', '/app.js?v=20261026-r17', '/workspace.js?v=20261026-r17'].map(load))
+    Promise.all(['/ui/icons.js?v=20261026-r18', '/app.js?v=20261026-r18', '/workspace.js?v=20261026-r18'].map(load))
       .then(() => { root.dataset.theme = 'light'; document.body.classList.remove('dark'); })
       .then(() => params.get('intake') ? window.Workspace.intakePage(params.get('intake')) : window.Workspace.publicPage(params.get('quote')))
       .catch(error => {
@@ -51,6 +51,56 @@
         host.textContent = error.message;
       });
     return;
+  }
+
+  // Pressed-surface tilt for plan and feature cards: the side under the cursor
+  // sinks away from the viewer. CSS rotateY(+a) moves the right edge back and
+  // rotateX(+a) the top edge. Mouse only; off for touch and reduced motion.
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+  if (!reduced) {
+    const MAX = 4;
+    const states = new WeakMap();
+    const frame = card => {
+      const state = states.get(card);
+      state.x += (state.tx - state.x) * 0.14;
+      state.y += (state.ty - state.y) * 0.14;
+      const settled = Math.abs(state.tx - state.x) < 0.005 && Math.abs(state.ty - state.y) < 0.005;
+      if (settled) { state.x = state.tx; state.y = state.ty; }
+      card.style.transform = state.x || state.y ? `perspective(1000px) rotateX(${(-state.y * MAX).toFixed(3)}deg) rotateY(${(state.x * MAX).toFixed(3)}deg)` : '';
+      state.raf = settled ? 0 : requestAnimationFrame(() => frame(card));
+    };
+    const aim = (card, x, y) => {
+      if (!states.has(card)) states.set(card, { x: 0, y: 0, tx: 0, ty: 0, raf: 0 });
+      const state = states.get(card);
+      state.tx = x; state.ty = y;
+      if (!state.raf) state.raf = requestAnimationFrame(() => frame(card));
+    };
+    let active = null;
+    const leave = () => { if (!active) return; active.classList.remove('is-pressed'); aim(active, 0, 0); active = null; };
+    document.addEventListener('pointermove', event => {
+      if (event.pointerType !== 'mouse' || !fine.matches) return;
+      const card = event.target.closest?.('.plan,.feature-group');
+      if (card !== active) leave();
+      if (!card) return;
+      active = card;
+      card.classList.add('is-pressed');
+      const rect = card.getBoundingClientRect();
+      const x = Math.max(-1, Math.min(1, (event.clientX - rect.left - rect.width / 2) / (rect.width / 2)));
+      const y = Math.max(-1, Math.min(1, (event.clientY - rect.top - rect.height / 2) / (rect.height / 2)));
+      card.style.setProperty('--lx', ((x + 1) * 50).toFixed(1) + '%');
+      card.style.setProperty('--ly', ((y + 1) * 50).toFixed(1) + '%');
+      aim(card, x, y);
+    }, { passive: true });
+    document.addEventListener('pointerleave', leave);
+    addEventListener('blur', leave);
+
+    // The 3D room drifts a little slower than the page while the hero is in view.
+    const visual = document.querySelector('.hero-room');
+    if (visual && motion) {
+      let parallax = 0;
+      const drift = () => { parallax = 0; const y = Math.min(scrollY, innerHeight); visual.style.translate = `0 ${(y * 0.06).toFixed(1)}px`; };
+      addEventListener('scroll', () => { if (!parallax && scrollY < innerHeight * 1.2) parallax = requestAnimationFrame(drift); }, { passive: true });
+    }
   }
 
   // Navigation gains a surface once the page scrolls.

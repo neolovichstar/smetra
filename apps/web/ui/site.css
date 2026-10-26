@@ -308,3 +308,9 @@ body.public-quote-mode{background:var(--bg-sunken)}
 .hero-room-canvas:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:var(--r-3)}
 @media (max-width:980px){.hero-room{max-width:620px;margin-inline:auto}}
 @media (prefers-reduced-motion:reduce){.hero-room-poster,.hero-room-canvas{transition:none}}
+/* Pressed-surface tilt (landing.js): the raised opposite edge catches a little light. */
+.plans{perspective:1400px}
+.plan,.feature-group{position:relative;transform-origin:50% 50%;transition:background var(--d-2,.2s) ease}
+.plan::after,.feature-group::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 90% at calc(100% - var(--lx,50%)) calc(100% - var(--ly,50%)),rgba(255,255,255,.045),transparent 70%);transition:opacity .45s ease}
+.plan.is-pressed,.feature-group.is-pressed{z-index:1;will-change:transform}
+.plan.is-pressed::after,.feature-group.is-pressed::after{opacity:1}
