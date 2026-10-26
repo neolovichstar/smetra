@@ -74,9 +74,10 @@
         body: JSON.stringify(payload)
       });
       const sent = data.email_delivery?.sent === 1;
-      message(sent ? 'Чек сохранён, письмо передано почтовому серверу.' : 'Чек сохранён. Статус почты: '+(data.receipt?.status || 'ожидает проверки')+'. Проверьте историю.');
       if (sent) document.getElementById('npd-url').value='';
       await refresh();
+      message(sent ? 'Чек сохранён, письмо передано почтовому серверу.' :
+        'Чек сохранён; проверьте доставку в истории. Если требуется повторная отправка, сначала выясните состояние предыдущей.');
     } catch(err) { message(err.message || 'Не удалось сохранить чек', true); }
     finally { submit.disabled = false; }
   });
