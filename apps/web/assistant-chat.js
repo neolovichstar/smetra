@@ -543,6 +543,19 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     return {name:file.name,mime:file.type||(extension==='png'?'image/png':'image/jpeg'),content:btoa(binary)};
   };
   attachButton.onclick=()=>fileInput.click();
+  // Sent photos become durable workspace files before invoking the assistant.
+  // A stable per-File key prevents duplicate uploads when retrying a failed chat turn.
+  const photoStorageKeys=new WeakMap();
+  const persistChatPhoto=async file=>{
+    let key=photoStorageKeys.get(file);
+    if(!key){key=crypto.randomUUID();photoStorageKeys.set(file,key)}
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    let binary='';
+    for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+    const saved=await api('/files',{method:'POST',headers:{'Idempotency-Key':key},
+      body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
+    return saved.file?.id;
+  };
   const uploadAttachment=async file=>{
     if(!file||attachButton.disabled||working||threadBusy||!active())return;
     attachingCount++;renderQuota(quota);
@@ -895,6 +908,16 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const paint=()=>{const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;const frame=()=>{if(performance.now()-lastPaint<32)paintFrame=requestAnimationFrame(frame);else paint()};paintFrame=requestAnimationFrame(frame)}};
     try{
+      if(sentPhotos.length){
+        status.textContent='Сохраняю фотографии в хранилище…';
+        const savedIds=await Promise.all(sentPhotos.map(persistChatPhoto));
+        if(savedIds.some(id=>!id))throw Error('Не удалось сохранить все изображения в рабочем пространстве');
+        const notice=document.createElement('a');
+        notice.href='#files';notice.textContent='Фотографии сохранены в хранилище';
+        notice.className='assistant-storage-link';
+        notice.onclick=event=>{event.preventDefault();location.hash='files'};
+        userMessage.body.append(notice);
+      }
       const images=sentPhotos.length?await Promise.all(sentPhotos.map(encodePhoto)):[];
       const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(images.length?{images}:{}),context:submitted.context?{entity:submitted.context.entity,id:submitted.context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})})});
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
