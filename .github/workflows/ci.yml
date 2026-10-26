@@ -181,3 +181,52 @@ jobs:
           path: apps/mobile/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+  backend-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: smetra_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d smetra_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SMETRA_TEST_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/smetra_test
+      SMETRA_TEST_RUNTIME_URL: postgresql://smetra_ci_runtime:fixture-only@127.0.0.1:5432/smetra_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dev.txt
+      - name: Prepare disposable database and limited runtime role
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+
+          with psycopg.connect(os.environ["SMETRA_TEST_ADMIN_URL"], autocommit=True) as con:
+              con.execute("CREATE ROLE anon NOLOGIN")
+              con.execute("CREATE ROLE authenticated NOLOGIN")
+              # These existing migrations define the bridge's core schema/RLS.
+              # Hosted cron/realtime infrastructure is not needed by these tests.
+              for filename in (
+                  "20260927212249_bootstrap_smetra_postgres.sql",
+                  "20260927214435_russian_identity_and_assistant.sql",
+                  "20260929130000_client_intake.sql",
+                  "20260929211944_runtime_rls.sql",
+              ):
+                  con.execute((Path("supabase/migrations") / filename).read_text())
+              con.execute("CREATE ROLE smetra_ci_runtime LOGIN PASSWORD 'fixture-only' IN ROLE smetra_runtime")
+          PY
+      - name: Verify pool saturation, atomic fallback limits, SSE durability and RLS
+        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls -v

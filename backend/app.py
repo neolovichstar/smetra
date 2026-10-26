@@ -414,7 +414,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 from backend.postgres import throttle
             except ModuleNotFoundError:
                 from postgres import throttle
-            if not throttle(key, limit, window, now()):
+            if not throttle(
+                key, limit, window, now(),
+                connection=getattr(self, "_request_db", None),
+            ):
                 self.retry_after = window
                 raise ApiError(429, "Слишком много запросов. Попробуйте позже")
             return
@@ -540,7 +543,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_json(200, presentation)
             elif path.startswith("/api/"):
                 with db() as con:
-                    self.api(method, path, query, con)
+                    self._request_db = con
+                    try:
+                        self.api(method, path, query, con)
+                    finally:
+                        self._request_db = None
             elif method == "GET":
                 self.static(path)
             else:

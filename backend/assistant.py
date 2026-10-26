@@ -94,7 +94,7 @@ def verified_context(service, value):
     if not isinstance(value, dict) or set(value) != {"entity", "id"}:
         raise DomainError(400, "Некорректный контекст ассистента")
     entity = value.get("entity")
-    if entity not in CONTEXT_ENTITIES:
+    if not isinstance(entity, str) or entity not in CONTEXT_ENTITIES:
         raise DomainError(400, "Этот раздел пока нельзя передать ассистенту")
     record_id = string(value.get("id", ""), "Контекст", 80, True)
     row = service.get(entity, record_id)
@@ -1169,63 +1169,85 @@ class ChatStream:
         self.conversation_id, self.image_url = conversation_id, image_url
 
     def write(self, handler):
-        handler.send_response(200)
-        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        handler.send_header("Cache-Control", "no-cache, no-transform")
-        handler.send_header("X-Accel-Buffering", "no")
-        handler.send_header("X-Content-Type-Options", "nosniff")
-        handler.send_header("Referrer-Policy", "no-referrer")
-        handler.end_headers()
-        emitted = False
         completed = False
+        latest_quota = None
+        disconnects = (BrokenPipeError, ConnectionResetError, TimeoutError)
 
         def send(kind, data):
             handler.wfile.write(("event: " + kind + "\ndata: " + packed(data) + "\n\n").encode())
             handler.wfile.flush()
 
+        def send_error(message):
+            # Finalizing a runtime transaction releases its connection. Never
+            # query it again while trying to report a commit/connection failure.
+            payload = {"error": message}
+            if latest_quota is not None:
+                payload["quota"] = latest_quota
+            try:
+                send("error", payload)
+            except disconnects:
+                pass
+
         try:
-            send("ready", {"quota": public_quota(self.service)})
+            # Header writes can fail too, so they share the same cleanup path.
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            handler.send_header("Cache-Control", "no-store, no-transform")
+            handler.send_header("X-Accel-Buffering", "no")
+            handler.send_header("X-Content-Type-Options", "nosniff")
+            handler.send_header("Referrer-Policy", "no-referrer")
+            handler.end_headers()
+            latest_quota = public_quota(self.service)
+            send("ready", {"quota": latest_quota})
 
-            def delta(text):
-                nonlocal emitted
-                emitted = True
-                send("delta", {"text": text})
-
-            send("done", answer_chat(
-                self.service, self.prompt, delta, self.context,
+            result = answer_chat(
+                self.service, self.prompt, lambda text: send("delta", {"text": text}), self.context,
                 self.conversation_id, lambda message: send("status", {"text": message}),
                 image_url=self.image_url, on_source=lambda source: (send("status", {"text": "Проверяю источники…"}), send("web_source", source)),
                 on_design=lambda design: send("quote_design", design),
-            ))
+            )
+            if self.service.runtime_connection:
+                runtime = self.service.runtime_connection
+                self.service.runtime_connection = None
+                runtime.finish(True)
+            # Persistence is complete even if the client leaves while receiving
+            # the final frame. Never roll back a saved result due to socket I/O.
             completed = True
+            latest_quota = result.get("quota", latest_quota)
+            send("done", result)
         except DomainError as error:
-            if not emitted:
+            if not completed:
                 release(self.service, self.quota_key)
-            try:
-                send("error", {"error": error.message, "quota": public_quota(self.service)})
-            except (BrokenPipeError, ConnectionResetError):
-                pass
-        except (BrokenPipeError, ConnectionResetError):
-            if not emitted:
+            send_error(error.message)
+        except disconnects:
+            if not completed:
                 release(self.service, self.quota_key)
         except Exception as error:
-            # A 200 SSE HTTP status cannot reveal a later server-side failure.
-            # Log only a request id and exception type (never prompts or tokens).
             logging.getLogger(__name__).error(
                 "Assistant SSE failed request_id=%s type=%s",
                 getattr(handler, "request_id", ""), type(error).__name__,
             )
-            if not emitted:
+            if not completed:
                 release(self.service, self.quota_key)
-            try:
-                send("error", {"error": "Ассистент временно недоступен. Попробуйте ещё раз.", "quota": public_quota(self.service)})
-            except (BrokenPipeError, ConnectionResetError):
-                pass
+            send_error("Ассистент временно недоступен. Попробуйте ещё раз.")
         finally:
-            if self.lease:
-                self.lease.release()
-            if self.service.runtime_connection:
-                self.service.runtime_connection.finish(completed)
+            try:
+                if self.service.runtime_connection:
+                    runtime = self.service.runtime_connection
+                    self.service.runtime_connection = None
+                    try:
+                        runtime.finish(False)
+                    except Exception as error:
+                        # A stream already has HTTP headers. Keep cleanup
+                        # failures from causing a second HTTP/JSON response.
+                        logging.getLogger(__name__).error(
+                            "Assistant SSE cleanup failed request_id=%s type=%s",
+                            getattr(handler, "request_id", ""), type(error).__name__,
+                        )
+            finally:
+                # Hold coordination until the DB transaction is finalized.
+                if self.lease:
+                    self.lease.release()
 
 
 def route(service, method, parts, data):
@@ -1249,6 +1271,8 @@ def route(service, method, parts, data):
         from backend.ai_workspace import conversations, knowledge
 
         return (conversations if parts[0] == "conversations" else knowledge)(service, method, parts[1:], data)
+    if parts in (["confirm"], ["dismiss"], ["undo"], ["chat"], ["stream"]) and method != "POST":
+        raise DomainError(405, "Действие требует POST")
     if method == "GET":
         messages = [
             dict(row)
@@ -1325,13 +1349,18 @@ def route(service, method, parts, data):
         images = [data["image"]] if data.get("image") is not None else []
     if not isinstance(images, list) or len(images) > 3:
         raise DomainError(400, "Можно прикрепить не больше трёх фотографий")
+    # Validate types before length checks or decoding: JSON scalars/objects
+    # must produce a client error, not a TypeError and an HTTP 500.
+    for image_value in images:
+        if (not isinstance(image_value, dict)
+                or image_value.get("mime") not in ("image/png", "image/jpeg")
+                or not isinstance(image_value.get("content"), str)):
+            raise DomainError(400, "Для сообщения прикрепите фото PNG или JPEG")
     # Limit combined base64 BEFORE decoding, to protect the API body/memory budget.
-    if sum(len(item.get("content", "")) for item in images if isinstance(item, dict)) > 2_100_000:
+    if sum(len(item["content"]) for item in images) > 2_100_000:
         raise DomainError(413, "Общий размер фотографий слишком большой — до 1,5 МБ")
     image_url = []
     for image_value in images:
-        if not isinstance(image_value, dict) or image_value.get("mime") not in ("image/png", "image/jpeg"):
-            raise DomainError(400, "Для сообщения прикрепите фото PNG или JPEG")
         try:
             from backend.ai import capture_file
         except ModuleNotFoundError:
