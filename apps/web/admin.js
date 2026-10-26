@@ -300,7 +300,7 @@
       const filter=event.target.closest('[data-admin-support-filter]');
       if(filter){state.support=filter.dataset.adminSupportFilter;renderSection();return;}
       const support=event.target.closest('[data-admin-open-support]');
-      if(support){event.preventDefault();if(window.SmetraCommunicationCenter?.open)window.SmetraCommunicationCenter.open('support');else notify('Откройте очередь поддержки в центре общения');return;}
+      if(support){event.preventDefault();if(window.SmetraCommunication?.openTicket)await window.SmetraCommunication.openTicket(support.dataset.adminOpenSupport);else notify('Центр общения недоступен');return;}
       const ticket=event.target.closest('[data-admin-ticket]');
       if(ticket){ticket.disabled=true;try{await api('/admin/support/'+encodeURIComponent(ticket.dataset.adminTicket),{method:'PATCH',body:JSON.stringify({status:ticket.dataset.status})});state.overview=await api('/admin/overview');renderSection();notify('Статус обращения обновлён');}catch(error){ticket.disabled=false;notify(error.message)}}
     };
