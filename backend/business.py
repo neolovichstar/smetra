@@ -381,10 +381,14 @@ def migrate(con):
         " (SELECT w.owner_id FROM workspaces w WHERE w.id=files.workspace_id)) "
         "WHERE owner_user_id IS NULL"
     )
+    # Older SQLite fixture schemas predate construction_id; never assume an
+    # optional reference column exists while upgrading local databases.
+    reference_columns = [key for key in ("quote_id", "project_id", "client_id", "construction_id")
+                         if key in file_columns]
+    private_candidates = " AND ".join(key + " IS NULL" for key in reference_columns)
     con.execute(
         "UPDATE files SET vault_scope='personal' WHERE vault_scope='workspace' "
-        "AND quote_id IS NULL AND project_id IS NULL AND client_id IS NULL "
-        "AND construction_id IS NULL AND public=0"
+        "AND public=0" + (" AND " + private_candidates if private_candidates else "")
     )
     con.execute("CREATE INDEX IF NOT EXISTS idx_files_personal_owner ON files(owner_user_id,created_at DESC) WHERE vault_scope='personal'")
     con.execute("CREATE INDEX IF NOT EXISTS idx_files_shared_workspace ON files(workspace_id,created_at DESC) WHERE vault_scope='workspace'")
