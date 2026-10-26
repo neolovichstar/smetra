@@ -157,7 +157,7 @@ class VaultChangelogTests(unittest.TestCase):
         self.assertEqual(status,201,uploaded)
         fid=uploaded["file"]["id"]
         self.assertEqual(self.call("/files/"+fid,token=author,workspace=wid)[0],404)
-        self.assertEqual(self.call("/files/"+fid,token=viewer,workspace=wid)[0],200)
+        self.assertEqual(self.call("/files/"+fid+"/metadata",token=viewer,workspace=wid)[0],200)
         self.assertEqual(self.call("/files/"+fid+"/archive","PATCH",{"archived":1},viewer,workspace=wid)[0],200)
         self.assertEqual(self.call("/files/"+fid,"DELETE",token=author,workspace=wid)[0],404)
 
