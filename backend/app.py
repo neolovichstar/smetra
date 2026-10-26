@@ -741,6 +741,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         rotated = partner.rotate_api_key(con, partner_id)
                         audit(con, admin["id"], "partner.key_rotated", partner_id)
                         return self.send_json(200, rotated)
+                    if method == "POST" and re.fullmatch(
+                            r"/api/partners/admin/accounts/[0-9a-f-]{36}/state", path):
+                        data = self.body()
+                        if not isinstance(data, dict) or set(data) != {"active"}:
+                            raise ApiError(400, "Ожидается active")
+                        partner_id = path.split("/")[-2]
+                        updated = partner.set_partner_active(con, partner_id, data["active"])
+                        audit(con, admin["id"], "partner.state_changed", partner_id)
+                        return self.send_json(200, updated)
                 if path == "/api/partners/console/session" and method == "POST":
                     self.throttle("partner-login:" + self.client_address[0], 8, 900)
                     data = self.body()
@@ -754,6 +763,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     org = partner.auth_console(con, self.headers.get("Authorization"))
                     self.throttle("partner-console:" + org["id"], 100, 3600)
                     return self.send_json(200, partner.summary(con, org))
+                if path == "/api/partners/console/profile" and method == "GET":
+                    org = partner.auth_console(con, self.headers.get("Authorization"))
+                    return self.send_json(200, partner.partner_profile(con, org))
+                if path in ("/api/partners/console/products", "/api/partners/console/commissions") and method == "GET":
+                    org = partner.auth_console(con, self.headers.get("Authorization"))
+                    self.throttle("partner-page:" + org["id"], 120, 3600)
+                    raw_limit = query.get("limit", ["50" if path.endswith("products") else "30"])[0]
+                    if not isinstance(raw_limit, str) or not re.fullmatch(r"[1-9][0-9]{0,2}", raw_limit):
+                        raise ApiError(400, "Некорректный размер страницы")
+                    limit = int(raw_limit)
+                    cursor = query.get("cursor", [""])[0]
+                    result = (partner.catalog_page(con, org, limit, cursor)
+                              if path.endswith("products") else
+                              partner.commission_page(con, org, limit, cursor))
+                    return self.send_json(200, result)
                 if path == "/api/partners/console/catalog" and method == "POST":
                     org = partner.auth_console(con, self.headers.get("Authorization"))
                     self.throttle("partner-catalog:" + org["id"], 20, 3600)
