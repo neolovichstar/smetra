@@ -73,8 +73,8 @@ def route(service, method, parts, query, data):
         operation, record_id = lookup(service, "file", data)
         if record_id:
             row = service.con.execute(
-                "SELECT id,name,mime,size,sha256,public FROM files WHERE id=? AND workspace_id=?",
-                (record_id, service.wid),
+                "SELECT id,name,mime,size,sha256,public FROM files WHERE id=? AND workspace_id=? AND (vault_scope='workspace' OR owner_user_id=?)",
+                (record_id, service.wid, service.user["id"]),
             ).fetchone()
             if not row:
                 raise DomainError(409, "Файл этого запроса уже удалён. Выберите файл заново")
@@ -165,11 +165,13 @@ def _route(service, method, parts, query, data):
                 raise ValueError("markdown bounds")
         except (ValueError, TypeError, UnicodeError):
             raise DomainError(400, "Markdown должен содержать текст UTF-8 до 1 МБ") from None
-        used = service.con.execute(
-            "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
-        ).fetchone()[0]
-        if used - row["size"] + len(raw) > workspace_storage_limit(service):
-            raise DomainError(413, "Достигнут лимит хранилища текущего тарифа")
+        from backend.vault import personal_storage_used, shared_storage_used, personal_storage_limit
+        if row["vault_scope"] == "personal":
+            used, quota = personal_storage_used(service), personal_storage_limit(service)
+        else:
+            used, quota = shared_storage_used(service), workspace_storage_limit(service)
+        if used - row["size"] + len(raw) > quota:
+            raise DomainError(413, "Недостаточно места в вашем хранилище")
         digest = hashlib.sha256(raw).hexdigest()
         if digest == row["sha256"]:
             return 200, {"file": {"id": row["id"], "name": row["name"], "size": len(raw), "sha256": digest}}
@@ -222,35 +224,55 @@ def _route(service, method, parts, query, data):
                     "items": [
                         dict(r)
                         for r in service.con.execute(
-                            f"SELECT id,name,mime,size,sha256,public,created_at FROM files WHERE workspace_id=? AND archived=0 AND {key}=? ORDER BY created_at DESC LIMIT 100",
-                            (service.wid, query[key][0]),
+                            f"SELECT id,name,mime,size,sha256,public,created_at FROM files WHERE workspace_id=? AND archived=0 AND {key}=? AND (vault_scope='workspace' OR owner_user_id=?) ORDER BY created_at DESC LIMIT 100",
+                            (service.wid, query[key][0], service.user["id"]),
                         )
                     ],
                 }
+        from backend.vault import personal_storage_used, shared_storage_used, personal_storage_limit
         phrase = string(query.get("q", [""])[0], "Поиск", 100)
         archived = 1 if query.get("archived", ["0"])[0] == "1" else 0
         file_type = query.get("type", ["all"])[0]
+        vault_scope = query.get("scope", ["all"])[0]
         if file_type not in ("all", "images", "documents"):
             raise DomainError(400, "Неизвестный тип файлов")
+        if vault_scope not in ("all", "personal", "workspace"):
+            raise DomainError(400, "Неверная область хранилища")
         type_condition = (" AND mime IN ('image/png','image/jpeg')" if file_type == "images"
                           else " AND mime NOT IN ('image/png','image/jpeg')" if file_type == "documents" else "")
-        used = service.con.execute(
-            "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
-        ).fetchone()[0]
+        where = "workspace_id=? AND archived=? AND instr(lower(name),lower(?))>0"
+        args = [service.wid, archived, phrase]
+        if vault_scope != "all":
+            where += " AND vault_scope=?"
+            args.append(vault_scope)
+        where += " AND (vault_scope='workspace' OR owner_user_id=?)"
+        args.append(service.user["id"])
+        shared_used = shared_storage_used(service)
+        personal_used = personal_storage_used(service)
+        shared_limit = workspace_storage_limit(service)
+        personal_limit = personal_storage_limit(service)
+        if vault_scope == "personal":
+            used,quota = personal_used,personal_limit
+        elif vault_scope == "workspace":
+            used,quota = shared_used,shared_limit
+        else:
+            used,quota = personal_used + shared_used,personal_limit + shared_limit
         count = service.con.execute(
-            "SELECT count(*) FROM files WHERE workspace_id=? AND archived=?"
-            " AND instr(lower(name),lower(?))>0" + type_condition,
-            (service.wid, archived, phrase),
+            "SELECT count(*) FROM files WHERE " + where + type_condition, args,
         ).fetchone()[0]
         rows = service.con.execute(
-            "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,client_id,construction_id,archived "
-            "FROM files WHERE workspace_id=? AND archived=? AND instr(lower(name),lower(?))>0"
-            + type_condition + " ORDER BY created_at DESC,id DESC LIMIT 60 OFFSET ?",
-            (service.wid, archived, phrase, service.page(query)),
+            "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,"
+            "client_id,construction_id,archived,vault_scope FROM files WHERE "
+            + where + type_condition + " ORDER BY created_at DESC,id DESC LIMIT 60 OFFSET ?",
+            (*args, service.page(query)),
         ).fetchall()
-        return 200, {"items":[dict(row) for row in rows], "total":count,
-                     "used_bytes":used, "quota_bytes":workspace_storage_limit(service),
-                     "max_upload_bytes":maximum_upload()}
+        return 200, {
+            "items": [dict(row) for row in rows], "total": count,
+            "used_bytes": used, "quota_bytes": quota,
+            "personal_used_bytes": personal_used, "personal_quota_bytes": personal_limit,
+            "workspace_used_bytes": shared_used, "workspace_quota_bytes": shared_limit,
+            "max_upload_bytes": maximum_upload(),
+        }
     if method == "DELETE" and parts:
         row = service.get("files", parts[0])
         from backend.assistant_jobs import refund
@@ -365,10 +387,13 @@ def _route(service, method, parts, query, data):
         except (UnicodeError, ValueError):
             raise DomainError(400, "TXT должен содержать текст UTF-8") from None
         mime = "text/plain"
-    used = service.con.execute(
-        "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
-    ).fetchone()[0]
-    if used + len(raw) > workspace_storage_limit(service):
+    from backend.vault import personal_storage_used, shared_storage_used, personal_storage_limit
+    vault_scope = "personal" if assistant_upload else "workspace"
+    if assistant_upload:
+        used, quota = personal_storage_used(service), personal_storage_limit(service)
+    else:
+        used, quota = shared_storage_used(service), workspace_storage_limit(service)
+    if used + len(raw) > quota:
         raise DomainError(413, "Достигнут лимит хранилища текущего тарифа")
     public = integer(data.get("public", 0), "Публичность", 0, 1)
     if public and not references["quote_id"]:
@@ -378,6 +403,8 @@ def _route(service, method, parts, query, data):
     values = dict(
         id=fid,
         workspace_id=service.wid,
+        owner_user_id=service.user["id"],
+        vault_scope=vault_scope,
         **references,
         name=name,
         mime=mime,
