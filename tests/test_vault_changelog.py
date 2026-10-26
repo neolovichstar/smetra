@@ -220,3 +220,30 @@ class VaultChangelogTests(unittest.TestCase):
             listing=self.call("/files?scope=personal",token=owner,workspace=other_wid)[1]
             self.assertEqual(listing["items"],[])
             self.assertEqual(listing["used_bytes"],personal["used_bytes"])
+
+
+    def test_upload_rejects_spoofed_magic_before_storing(self):
+        token,_=self.account("invalid-signatures")
+        forged=(
+            ("photo.png",b"MZ" + b"\0"*40),
+            ("report.pdf",b"PK\x03\x04fake"),
+            ("document.docx",b"MZ" + b"\0"*40),
+            ("notes.txt",b"\x7fELF" + b"\0"*40),
+        )
+        for name,payload in forged:
+            with self.subTest(name=name):
+                status,response=self.call("/files","POST",{
+                    "assistant_upload":True,
+                    "name":name,
+                    "content":base64.b64encode(payload).decode("ascii"),
+                },token)
+                self.assertEqual(status,400,response)
+        listing=self.call("/files",token=token)[1]
+        self.assertEqual(listing["items"],[])
+
+    def test_upload_rejects_when_required_antivirus_is_missing(self):
+        token,_=self.account("missing-antivirus")
+        with patch.dict(os.environ,{"FILE_AV_REQUIRED":"1","CLAMAV_HOST":""}):
+            status,response=self.upload(token)
+        self.assertEqual(status,503,response)
+        self.assertEqual(self.call("/files",token=token)[1]["items"],[])
