@@ -114,6 +114,33 @@ class MaintenanceTests(SecurityHardeningTests):
                 "SELECT id FROM partner_accounts WHERE id=?", (holder["id"],)
             ).fetchone())
 
+    def test_attributed_clicks_retained_to_keep_foreign_key_integrity(self):
+        from backend import partner_platform as partner
+        now = int(__import__("time").time())
+        with self.mod.db() as con:
+            created = partner.create_partner(con, {
+                "code": "fk-protected-click", "name": "FK Protected",
+                "allowed_host": "fk-partner.example.org",
+            })
+            cookie = partner.begin_visit(con, created["code"])
+            click_id = con.execute(
+                "SELECT id FROM partner_clicks WHERE partner_id=?",
+                (created["id"],),
+            ).fetchone()[0]
+        _, user_id = self.account("new-partner-user")
+        with self.mod.db() as con:
+            user = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            self.assertTrue(partner.capture(con, user, partner.COOKIE_NAME + "=" + cookie))
+            con.execute("UPDATE partner_clicks SET expires_at=? WHERE id=?",
+                        (now - 30 * 86400, click_id))
+            self.assertEqual(maintenance.cleanup(con, now=now)["ok"], True)
+            self.assertIsNotNone(con.execute(
+                "SELECT id FROM partner_clicks WHERE id=?", (click_id,)
+            ).fetchone(), "Referenced click remains auditable for attribution")
+            self.assertIsNotNone(con.execute(
+                "SELECT user_id FROM partner_attributions WHERE click_id=?", (click_id,)
+            ).fetchone())
+
     def test_per_table_batch_caps_work_to_prevent_long_transactions(self):
         now=1_800_000_000
         with self.mod.db() as con:
