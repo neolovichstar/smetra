@@ -310,10 +310,11 @@ body.public-quote-mode{background:var(--bg-sunken)}
 @media (prefers-reduced-motion:reduce){.hero-room-poster,.hero-room-canvas{transition:none}}
 /* Pressed-surface tilt (landing.js): the raised opposite edge catches a little light. */
 .plans{perspective:1400px}
-.plan,.feature-group{position:relative;transform-origin:50% 50%;transition:background var(--d-2,.2s) ease}
-.plan::after,.feature-group::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 90% at calc(100% - var(--lx,50%)) calc(100% - var(--ly,50%)),rgba(255,255,255,.045),transparent 70%);transition:opacity .45s ease}
-.plan.is-pressed,.feature-group.is-pressed{z-index:1;will-change:transform}
-.plan.is-pressed::after,.feature-group.is-pressed::after{opacity:1}
+.plan,.feature-group,.flow-card,.chat-window{position:relative;transform-origin:50% 50%;transition:background var(--d-2,.2s) ease}
+.plan::after,.feature-group::after,.flow-card::after,.chat-window::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 90% at calc(100% - var(--lx,50%)) calc(100% - var(--ly,50%)),rgba(255,255,255,.045),transparent 70%);transition:opacity .45s ease}
+.plan.is-pressed,.feature-group.is-pressed,.flow-card.is-pressed,.chat-window.is-pressed{z-index:1;will-change:transform}
+.plan.is-pressed::after,.feature-group.is-pressed::after,.flow-card.is-pressed::after,.chat-window.is-pressed::after{opacity:1}
+.flow-card::after,.chat-window::after{border-radius:inherit}
 /* ───── Phone density: shorter page, smaller type, no repeated explanations ───── */
 @media (max-width:640px){
   /* Top bar: a floating pill of clear wet glass. */

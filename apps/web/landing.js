@@ -53,12 +53,14 @@
     return;
   }
 
-  // Pressed-surface tilt for plan and feature cards: the side under the cursor
+  // Pressed-surface tilt for the landing cards (plans, features, the flow and
+  // assistant demos): the side under the cursor
   // sinks away from the viewer. CSS rotateY(+a) moves the right edge back and
   // rotateX(+a) the top edge. Mouse only; off for touch and reduced motion.
   const fine = matchMedia('(hover: hover) and (pointer: fine)');
   if (!reduced) {
     const MAX = 4;
+    const TILT_CARDS = '.plan,.feature-group,.flow-card,.chat-window';
     const states = new WeakMap();
     const frame = card => {
       const state = states.get(card);
@@ -79,7 +81,7 @@
     const leave = () => { if (!active) return; active.classList.remove('is-pressed'); aim(active, 0, 0); active = null; };
     document.addEventListener('pointermove', event => {
       if (event.pointerType !== 'mouse' || !fine.matches) return;
-      const card = event.target.closest?.('.plan,.feature-group');
+      const card = event.target.closest?.(TILT_CARDS);
       if (card !== active) leave();
       if (!card) return;
       active = card;
