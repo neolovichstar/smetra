@@ -18,6 +18,16 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 def archive(content, mime):
     if mime not in MIMES or not 0 < len(content) <= 5_000_000:
         raise ValueError("office bounds")
+    # OOXML is a ZIP container, but it must be a clean standalone ZIP:
+    # no prepended executable stub, malformed local header, or trailing overlay.
+    if not content.startswith(b"PK\\x03\\x04".decode("unicode_escape").encode("latin1")):
+        raise ValueError("ooxml magic")
+    end = content.rfind(b"PK\\x05\\x06".decode("unicode_escape").encode("latin1"),
+                        max(0, len(content) - 65557))
+    if end < 0 or end + 22 > len(content) or (
+        end + 22 + int.from_bytes(content[end + 20:end + 22], "little") != len(content)
+    ):
+        raise ValueError("zip footer or appended payload")
     result = {}
     with zipfile.ZipFile(io.BytesIO(content)) as package:
         entries = package.infolist()
@@ -31,7 +41,11 @@ def archive(content, mime):
                     entry.file_size > 5_000_000 or
                     entry.file_size > max(entry.compress_size, 1) * 200 or
                     any(part in lower for part in
-                        ("vbaproject", "vbadata", "activex/", "embeddings/", "externallinks/"))):
+                        ("vbaproject", "vbadata", "activex/", "embeddings/", "externallinks/")) or
+                    lower.endswith((".exe", ".com", ".dll", ".scr", ".msi", ".ps1", ".bat",
+                        ".cmd", ".vbs", ".js", ".jse", ".jar", ".hta", ".lnk",
+                        ".html", ".htm", ".svg", ".bin", ".sh", ".py")) or
+                    ((entry.external_attr >> 16) & 0o170000) == 0o120000):
                 raise ValueError("unsafe archive")
             raw = package.read(entry)
             if lower.endswith((".xml", ".rels")):
