@@ -358,6 +358,20 @@ def tools():
             ("length", "width", "height", "formula"),
         ),
     ]
+    result.append(function(
+        "ask_user",
+        "Для важного уточнения показать вопрос пользователю с 2–4 готовыми ответами и своим вариантом. Используй, только если без ответа нельзя продолжить.",
+        {"question":{"type":"string","maxLength":200},
+         "options":{"type":"array","minItems":2,"maxItems":4,
+                    "items":{"type":"string","maxLength":80}}},
+        ("question","options"),
+    ))
+    for kind in ("quotes","tasks","leads","catalog"):
+        result.append(function(
+            "delete_"+kind,
+            "Предложить удаление записи, требует явного подтверждения. Сначала get_record. Для смет разрешены только неопубликованные черновики, не связанные с заказом.",
+            {"id": text}, ("id",),
+        ))
     for kind in ENTITIES:
         properties = {field: {"type": "string"} for field in EDIT_FIELDS[kind]}
         for field in ("amount", "amount_kopecks", "price", "cost_price"):
@@ -794,6 +808,7 @@ def prepare(service, name, args):
         "list_documents",
         "search_workspace_storage",
         "search_internet",
+        "ask_user",
         "inspect_storage_image",
         "search_chat_history",
         "list_chat_conversations",
@@ -852,6 +867,16 @@ def prepare(service, name, args):
 
             row_in_object(service, "construction_quantities", args.get("parent_work_id") or args["quantity_id"], args["object_id"])
         summary = "Объект · " + str(args.get("name") or args.get("title") or args.get("symbol") or args.get("quantity") or name)[:120]
+    elif name in ("delete_quotes","delete_tasks","delete_leads","delete_catalog"):
+        entity=name.split("_",1)[1]
+        record=service.get(TABLE.get(entity,entity),string(args.get("id",""),"ID",80,True))
+        if entity=="quotes":
+            if record["approval_state"]!="draft" or record["published_version"]:
+                raise DomainError(409,"Можно удалить только неопубликованный черновик сметы")
+            if service.con.execute("SELECT 1 FROM projects WHERE quote_id=? LIMIT 1",(record["id"],)).fetchone():
+                raise DomainError(409,"Смета связана с заказом")
+        args={"id":record["id"],"revision":record["revision"]}
+        summary="Удалить "+ENTITY_LABELS.get(entity,entity)+" · "+str(record["title"] if entity=="quotes" else record["name"])[:100]
     elif name in ("publish_quote", "create_order"):
         entity = "quotes"
         record = service.get("quotes", string(args.get("id", ""), "ID", 80, True))
@@ -1005,6 +1030,14 @@ def _confirm(service, action_id):
                 "record_construction_fact": ["objects", object_id, "facts"],
             }
             kind, parts, method = "construction", paths[name], "POST"
+        elif name in ("delete_quotes","delete_tasks","delete_leads","delete_catalog"):
+            kind=name.split("_",1)[1]
+            current=service.get(TABLE.get(kind,kind),args["id"])
+            if current["revision"] != args["revision"]:
+                raise DomainError(409,"Запись изменилась. Запросите новое подтверждение")
+            if kind=="quotes" and (current["approval_state"]!="draft" or current["published_version"]):
+                raise DomainError(409,"Можно удалить только неопубликованный черновик")
+            parts,method=[args["id"]],"DELETE"
         elif name in ("publish_quote", "create_order"):
             current = service.get("quotes", args["id"])
             if current["revision"] != args["revision"]:
@@ -1164,7 +1197,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         )},
     ]
     model, paid_model = assistant_model(service, has_image=bool(image_url))
-    actions, designs, answer, remembered = [], [], "", False
+    actions, designs, questions, answer, remembered = [], [], [], "", False
     memory_updates = []
     remembered_status = None
     proposal_fingerprints = {}
@@ -1252,6 +1285,17 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                     if on_status:
                         on_status(remembered_status)
                     result = {"ok": True, "status": remembered_status}
+                elif name == "ask_user":
+                    question=string(args.get("question",""),"Вопрос",200,True)
+                    options=args.get("options")
+                    if not isinstance(options,list) or not 2<=len(options)<=4:
+                        raise DomainError(400,"Нужно от двух до четырёх вариантов")
+                    options=[string(option,"Вариант",80,True) for option in options]
+                    if len(set(options))!=len(options):
+                        raise DomainError(400,"Повторяющиеся варианты ответа")
+                    if not questions:
+                        questions.append({"question":question,"options":options})
+                    result={"ok":True,"question_ready":True}
                 elif name == "remember_knowledge":
                     from backend.profile_memory import remember
 
@@ -1300,6 +1344,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         if actions:
             answer = "Подготовил изменения. Проверьте детали и нажмите «Применить»."
             break
+        if questions:
+            answer = questions[0]["question"]
+            break
         if turn == 1 and not memory_updates and not extra_vision_turn:
             # A third round is reserved for an explicit memory update or for
             # a storage image opened after searching in earlier rounds.
@@ -1325,7 +1372,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             suggested_title = generate_title(prompt, model, paid_model)
     with transaction(service.con):
         tokens_used = ai_tokens.charge(service, ai_tokens.metered(), "assistant", None)
-        result = {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates,
+        result = {"answer": answer, "actions": actions, "designs": designs, "questions": questions, "memory": memory_updates,
                   "tokens_used": tokens_used, "quota": public_quota(service)}
         if on_commit:
             on_commit(result)
