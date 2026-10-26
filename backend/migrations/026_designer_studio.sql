@@ -46,3 +46,5 @@ CREATE TABLE IF NOT EXISTS designer_items (
 );
 CREATE INDEX IF NOT EXISTS idx_designer_items_project
  ON designer_items(workspace_id,project_id,room_id,created_at);
+
+INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(40,strftime('%s','now'));
