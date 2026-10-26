@@ -795,7 +795,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if path == "/api/partners/console/catalog" and method == "POST":
                     org = partner.auth_console(con, self.headers.get("Authorization"))
                     self.throttle("partner-catalog:" + org["id"], 20, 3600)
-                    return self.send_json(200, partner.ingest_products(con, org, self.body()))
+                    result = partner.ingest_products(con, org, self.body())
+                    audit(con, None, "partner.catalog_updated", org["id"], str(result["accepted"]))
+                    return self.send_json(200, result)
                 if path.startswith("/api/partners/console/"):
                     from backend import partner_integrations as integration
                     org = partner.auth_console(con, self.headers.get("Authorization"))
@@ -806,10 +808,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         data = self.body()
                         if set(data) != {"method"}:
                             raise ApiError(400, "Некорректные параметры домена")
-                        return self.send_json(200, integration.begin_verification(con, org, data["method"]))
+                        result = integration.begin_verification(con, org, data["method"])
+                        audit(con, None, "partner.domain_challenge_created", org["id"], data["method"])
+                        return self.send_json(200, result)
                     if path == "/api/partners/console/domain/verify" and method == "POST":
                         self.throttle("partner-verify:" + org["id"], 6, 900)
-                        return self.send_json(200, integration.verify_domain(con, org))
+                        result = integration.verify_domain(con, org)
+                        audit(con, None, "partner.domain_check", org["id"], result["status"])
+                        return self.send_json(200, result)
                     if path == "/api/partners/console/analytics" and method == "GET":
                         days = query.get("days", ["30"])[0]
                         if not isinstance(days, str) or days not in ("7", "30", "90"):

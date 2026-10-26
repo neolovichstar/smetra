@@ -425,14 +425,12 @@ def rotate_api_key(con, partner_id):
 
 def partner_profile(con, account):
     """Read-only non-PII partner profile."""
-    domain = con.execute(
-        "SELECT status,verified_at FROM partner_domain_verifications WHERE partner_id=? AND domain=?",
-        (account["id"], account["allowed_host"]),
-    ).fetchone()
+    from backend.partner_integrations import domain_status
+    proof = domain_status(con, account)
     return {"id": account["id"], "code": account["code"], "name": account["name"],
             "domain": account["allowed_host"], "active": bool(account["active"]),
-            "domain_status": domain["status"] if domain else "not_started",
-            "domain_verified_at": domain["verified_at"] if domain else None,
+            "domain_status": proof["status"],
+            "domain_verified_at": proof["verified_at"],
             "commission_bps": account["commission_bps"], "term_days": account["term_days"],
             "currency": "RUB", "payouts_enabled": False}
 
