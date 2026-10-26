@@ -719,7 +719,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, run_cloud_batch(con))
         if path == "/api/cron/maintenance" and method == "GET":
             from backend.maintenance import run as run_maintenance
-            return self.send_json(200, run_maintenance(self, con))
+            from backend import npd_receipts
+            result = run_maintenance(self, con)
+            # Only tax receipts already issued in FNS can enter this queue.
+            result["npd_receipt_emails"] = npd_receipts.dispatch(con, mail, limit=8)
+            return self.send_json(200, result)
         if path == "/api/webhooks/google-drive" and method == "POST":
             from backend.cloud_drives import webhook
 
