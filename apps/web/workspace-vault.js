@@ -207,7 +207,8 @@
     list.innerHTML=notes.length ? notes.map(item =>
       '<article class="changelog-entry'+(openedNote===item.id?' is-open':'')+'" data-id="'+esc(item.id)+'">' +
       '<button type="button" class="changelog-open" data-note="'+esc(item.id)+'" aria-expanded="'+(openedNote===item.id)+'"><span class="changelog-date">'+when(item.published_at)+'</span>' +
-      '<span class="changelog-title">'+esc(item.title)+'</span><span class="changelog-version">'+esc(item.version||'Обновление')+'</span></button>' +
+      '<span class="changelog-title">'+esc(item.title)+'</span><span class="changelog-version">'+esc(item.version||'Обновление')+'</span>'+
+      (item.published&&!item.has_viewed?'<span class="changelog-new-indicator">Не прочитано</span>':'')+'</button>' +
       (openedNote===item.id?'<div class="changelog-body assistant-markdown" id="changelog-body"></div>':'') +
       '<div class="changelog-footer"><span>'+item.view_count+' просмотров</span>' +
       '<button type="button" data-react="like" data-id="'+esc(item.id)+'" aria-pressed="'+(item.my_reaction==='like')+'">Нравится · '+item.likes+'</button>' +
@@ -227,6 +228,7 @@
     const result=await api('/changelog');
     if(!activeNews(mine))return;
     notes=result.items;canPublish=result.can_publish;
+    window.SmetraReleaseUnread?.set(result.unread_count);
     await paintNews(mine);
   }
   function editor(note,mine) {
@@ -259,6 +261,7 @@
     const result=await api('/changelog');
     if(!active()||epoch!==mine||owner!==user||tab!=='changelog')return;
     notes=result.items;canPublish=result.can_publish;openedNote='';
+    window.SmetraReleaseUnread?.set(result.unread_count);
     view('<section id="changelog-root" class="vault-root">'+head('Что нового','История изменений Сметры. Оценивайте обновления, чтобы помогать нам делать сервис лучше.')+
       '<div class="changelog-toolbar"><span>Обновления продукта</span>'+(canPublish?'<button class="btn primary" id="changelog-publish">+ Опубликовать</button>':'')+'</div>'+
       '<div id="changelog-list" class="changelog-list"></div></section>');
