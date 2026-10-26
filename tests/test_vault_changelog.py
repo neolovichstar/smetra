@@ -113,6 +113,33 @@ class VaultChangelogTests(unittest.TestCase):
         self.assertEqual(self.call("/changelog/"+id+"/view","POST",{},reader)[0],404)
         self.assertEqual(len(self.call("/changelog",token=author)[1]["items"]),1)
 
+    def test_release_badge_counts_only_unread_published_posts_per_user(self):
+        author,author_id=self.account("release-badge-author")
+        alice,_=self.account("release-badge-alice")
+        bob,_=self.account("release-badge-bob")
+        with self.mod.db() as con:
+            con.execute("UPDATE users SET role='admin' WHERE id=?",(author_id,))
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],0)
+        draft=self.call("/changelog","POST",{"title":"Скрытый черновик","body":"Текст","published":0},author)[1]["id"]
+        first=self.call("/changelog","POST",{"title":"Выпуск 1","body":"Новые файлы"},author)[1]["id"]
+        second=self.call("/changelog","POST",{"title":"Выпуск 2","body":"Новая память"},author)[1]["id"]
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog",token=alice)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog/unread",token=bob)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog/"+first+"/view","POST",{},alice)[0],200)
+        self.assertEqual(self.call("/changelog/"+first+"/view","POST",{},alice)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],1)
+        self.assertEqual(self.call("/changelog/unread",token=bob)[1]["unread_count"],2)
+        alice_rows=self.call("/changelog",token=alice)[1]["items"]
+        self.assertTrue(next(x for x in alice_rows if x["id"]==first)["has_viewed"])
+        self.assertFalse(next(x for x in alice_rows if x["id"]==second)["has_viewed"])
+        self.assertEqual(self.call("/changelog/"+draft,"PATCH",{"published":1},author)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog/"+second,"PATCH",{"published":0},author)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],1)
+        self.assertEqual(self.call("/changelog/"+draft+"/view","POST",{},bob)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=bob)[1]["unread_count"],1)
+
     def test_viewer_can_rate_news_but_cannot_edit_workspace(self):
         author,author_id=self.account("news-owner")
         viewer,viewer_id=self.account("news-viewer")
