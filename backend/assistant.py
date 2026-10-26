@@ -1308,6 +1308,21 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         answer = "Готово, удалил это из памяти."
     if not answer:
         answer = "Запомнил. Буду учитывать это в дальнейших ответах." if remembered else "Данные проверены. Уточните, что нужно сделать дальше."
+    # Name only the first message of an untouched default-titled conversation.
+    # Later turns and manually renamed chats must never be overwritten.
+    suggested_title = None
+    if conversation_id:
+        pristine = service.con.execute(
+            "SELECT 1 FROM assistant_conversations c WHERE c.id=? AND c.workspace_id=? "
+            "AND c.user_id=? AND c.title='Новый диалог' "
+            "AND NOT EXISTS(SELECT 1 FROM assistant_messages m WHERE m.conversation_id=c.id) "
+            "LIMIT 1",
+            (conversation_id, service.wid, service.user["id"]),
+        ).fetchone()
+        if pristine:
+            from backend.chat_titles import generate_title
+
+            suggested_title = generate_title(prompt, model, paid_model)
     with transaction(service.con):
         tokens_used = ai_tokens.charge(service, ai_tokens.metered(), "assistant", None)
         result = {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates,
@@ -1326,17 +1341,17 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 (identity(), service.wid, service.user["id"], role, content, moment + index, conversation_id),
             )
         if conversation_id:
-            # A fresh dialog takes its name from the first question, so the
-            # history never fills up with identical "Новый диалог" rows.
-            first_line = " ".join(str(prompt).split())[:60].strip() or "Новый диалог"
-            service.con.execute(
-                "UPDATE assistant_conversations SET updated_at=?,"
-                "title=CASE WHEN title='Новый диалог' THEN ? ELSE title END "
-                "WHERE id=? AND workspace_id=? AND user_id=?",
-                (stamp(), first_line, conversation_id, service.wid, service.user["id"]),
-            )
-    return {"answer": answer, "actions": actions, "designs": designs, "memory": memory_updates,
-            "tokens_used": tokens_used, "quota": public_quota(service)}
+            # Conditional update protects user-renamed titles and races.
+            row = service.con.execute(
+                "UPDATE assistant_conversations SET updated_at=?, "
+                "title=CASE WHEN title='Новый диалог' AND ? IS NOT NULL "
+                "THEN ? ELSE title END "
+                "WHERE id=? AND workspace_id=? AND user_id=? RETURNING title",
+                (stamp(), suggested_title, suggested_title, conversation_id, service.wid, service.user["id"]),
+            ).fetchone()
+            if row:
+                result["conversation_title"] = row["title"]
+    return {**result, "quota": public_quota(service)}
 
 
 class ChatStream:
