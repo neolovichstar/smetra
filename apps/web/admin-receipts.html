@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#090909">
+<title>НПД и чеки · Сметра</title><link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/ui/tokens.css"><link rel="stylesheet" href="/ui/base.css">
+<link rel="stylesheet" href="/ui/components.css"><link rel="stylesheet" href="/ui/site.css">
+<link rel="stylesheet" href="/ui/npd-receipts-admin.css">
+<script src="/npd-receipts-admin.js" defer></script></head>
+<body class="site-page dark">
+<header class="site-nav is-scrolled"><div class="site-nav-inner">
+<a class="brand" href="/">сметра<span class="brand-mark">.</span></a>
+<div class="site-nav-actions"><a href="/app#admin" class="btn small ghost">Администрация</a>
+<a href="/app" class="btn small primary">Кабинет</a></div>
+</div></header>
+<main class="container doc npd-page">
+<span class="overline">Администрация / контроль чеков</span>
+<h1>Чеки «Мой налог»</h1>
+<p>Здесь отображаются подтверждённые оплаты и статусы отправки фискальных чеков. Доступ только администраторам.</p>
+<p class="npd-warning">Важное: эта страница НЕ создаёт налоговый чек. Сначала зарегистрируйте доход в официальном «Мой налог» или через уполномоченного партнёра ФНС. Затем прикрепите ссылку на уже созданный чек. Не путайте его с квитанцией ЮKassa.</p>
+<div class="npd-status" id="npd-status" role="status" aria-live="polite">Проверка доступа…</div>
+<section aria-labelledby="attach-title"><h2 id="attach-title">Отправить покупателю существующий чек</h2>
+<form id="npd-form" class="npd-form">
+<label for="npd-payment">ID подтверждённого платежа в Сметре</label>
+<input id="npd-payment" name="payment_id" autocomplete="off" spellcheck="false" required placeholder="UUID платежа">
+<label for="npd-url">Официальная ссылка на чек ФНС</label>
+<input id="npd-url" name="receipt_url" type="url" inputmode="url" autocomplete="off" required placeholder="https://lknpd.nalog.ru/api/v1/receipt/…/print">
+<button class="btn primary" id="npd-submit" type="submit">Сохранить чек и отправить письмо</button>
+</form></section>
+<section aria-labelledby="receipts-title"><div class="npd-section-head"><h2 id="receipts-title">История выдачи</h2><button class="btn small ghost" id="npd-refresh" type="button">Обновить</button></div>
+<p>«Нужен чек» — налоговый чек не прикреплён. «Отправлен» — почтовый сервер принял письмо. «Требует проверки» — доставка не подтверждена. «Возвращён» — нужна корректировка дохода в ФНС.</p>
+<div class="npd-table-wrap"><table class="npd-table"><thead><tr><th>Платёж</th><th>Покупатель</th><th>Сумма</th><th>Состояние</th><th>Дата отправки</th></tr></thead><tbody id="npd-rows"><tr><td colspan="5">Загрузка…</td></tr></tbody></table></div></section>
+<p><a href="/refunds.html">Правила возврата</a> · <a href="/privacy">Обработка данных</a></p>
+</main></body></html>
