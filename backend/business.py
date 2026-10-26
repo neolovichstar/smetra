@@ -368,6 +368,26 @@ def migrate(con):
     if "archived" not in file_columns:
         con.execute("ALTER TABLE files ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1))")
     con.execute("CREATE INDEX IF NOT EXISTS idx_files_workspace_archived ON files(workspace_id,archived,created_at DESC)")
+    file_columns = {r["name"] for r in con.execute("PRAGMA table_info(files)")}
+    if "owner_user_id" not in file_columns:
+        con.execute("ALTER TABLE files ADD COLUMN owner_user_id TEXT")
+    if "vault_scope" not in file_columns:
+        con.execute("ALTER TABLE files ADD COLUMN vault_scope TEXT NOT NULL DEFAULT 'workspace'")
+    con.execute(
+        "UPDATE files SET owner_user_id=coalesce("
+        " (SELECT a.actor_id FROM activity a WHERE a.workspace_id=files.workspace_id "
+        " AND a.entity_type='file' AND a.entity_id=files.id AND a.actor_id IS NOT NULL "
+        " ORDER BY a.created_at,a.id LIMIT 1),"
+        " (SELECT w.owner_id FROM workspaces w WHERE w.id=files.workspace_id)) "
+        "WHERE owner_user_id IS NULL"
+    )
+    con.execute(
+        "UPDATE files SET vault_scope='personal' WHERE vault_scope='workspace' "
+        "AND quote_id IS NULL AND project_id IS NULL AND client_id IS NULL "
+        "AND construction_id IS NULL AND public=0"
+    )
+    con.execute("CREATE INDEX IF NOT EXISTS idx_files_personal_owner ON files(owner_user_id,created_at DESC) WHERE vault_scope='personal'")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_files_shared_workspace ON files(workspace_id,created_at DESC) WHERE vault_scope='workspace'")
     con.executescript((Path(__file__).parent / "migrations" / "026_vault_changelog.sql").read_text(encoding="utf-8"))
     # Keep local SQLite and the production private schema aligned.
     for table, additions in {
@@ -711,6 +731,10 @@ class Service:
         ).fetchone()
         if not row:
             raise DomainError(404, "Запись не найдена")
+        if table == "files":
+            from backend.vault import require_file
+
+            require_file(self, row)
         return row
 
     def page(self, query):
@@ -2442,7 +2466,19 @@ class Service:
         ):
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
-            if kind != "changelog":
+            if kind == "files":
+                from backend.vault import private_file, require_file_write
+
+                if method == "POST" and not rest and isinstance(data, dict) and data.get("assistant_upload") is True:
+                    pass  # Personal uploads are allowed even to workspace viewers.
+                elif rest:
+                    file_row = self.get("files", rest[0])
+                    require_file_write(self, file_row)
+                    if not private_file(self, file_row):
+                        self.write_access()
+                else:
+                    self.write_access()
+            elif kind != "changelog":
                 self.write_access()
             if kind == "assistant":
                 from backend.assistant import route
