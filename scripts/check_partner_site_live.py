@@ -47,6 +47,10 @@ def check_once():
     if "SmetraPartner" not in sdk:
         raise AssertionError("Partner JavaScript SDK is missing")
 
+    openapi = fetch("https://console.smetra.online/partner-openapi.json")
+    if '"openapi": "3.1.0"' not in openapi:
+        raise AssertionError("Partner OpenAPI 3.1 contract missing")
+
     customer = fetch("https://smetra.online/")
     if "Сметра для партнёров" in customer:
         raise AssertionError("Consumer main hostname incorrectly serves partner landing")
