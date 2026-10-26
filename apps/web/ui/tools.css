@@ -146,3 +146,95 @@
   .panel .empty::before{display:none}
   .btn{font-size:var(--fs-14)}
 }
+
+
+/* Vault & changelog: black/gray workspace surfaces, no decorative cards. */
+.vault-root{width:min(1320px,100%);margin:0 auto;padding:clamp(20px,3vw,44px) clamp(12px,2vw,32px) 90px;color:var(--text,#f4f4f4);min-height:70vh}
+.vault-head{padding-bottom:30px;border-bottom:1px solid rgba(145,145,145,.18)}
+.vault-head h1{font-size:clamp(30px,4.2vw,46px);font-weight:620;letter-spacing:-.048em;line-height:1.15;margin:8px 0 12px}
+.vault-head p{color:#9b9b9b;font-size:14px;max-width:720px;line-height:1.55;margin:0}
+.vault-eyebrow{font-size:10px;font-weight:700;letter-spacing:.16em;color:#777}
+.vault-tools{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:30px 0 25px}
+.vault-space{display:grid;grid-template-columns:auto auto;gap:8px 24px;align-items:center;min-width:min(340px,100%)}
+.vault-space span{font-size:13px;color:#999}
+.vault-space strong{font-size:13px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.vault-space progress{grid-column:1/-1;width:100%;height:3px;border:0;overflow:hidden;border-radius:8px;accent-color:#bdbdbd;background:rgba(120,120,120,.24)}
+.vault-space progress::-webkit-progress-bar{background:rgba(120,120,120,.24)}
+.vault-space progress::-webkit-progress-value{background:#d4d4d4;border-radius:6px}
+.vault-upload{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;min-height:40px;padding:0 17px;border-radius:11px;white-space:nowrap}
+.vault-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:15px 0 22px;border-top:1px solid rgba(140,140,140,.13)}
+.vault-tabs{display:flex;align-items:center;gap:24px}
+.vault-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0;color:#959595;padding:12px 1px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.vault-tabs button:hover,.vault-tabs button.selected{color:var(--text,#fff)}
+.vault-tabs button.selected{border-bottom-color:#c9c9c9}
+#vault-search{width:min(290px,100%);height:38px;padding:8px 14px;background:rgba(126,126,126,.08);color:var(--text,#eee);border:1px solid rgba(130,130,130,.2);border-radius:10px;outline:none;font-size:13px}
+#vault-search:focus{border-color:#858585}
+.vault-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:14px}
+.vault-image-tile,.vault-file-tile{min-width:0;overflow:hidden}
+.vault-image-tile{position:relative}
+.vault-image-preview{display:block;width:100%;aspect-ratio:1/1;border:1px solid rgba(160,160,160,.12);border-radius:12px;background:linear-gradient(120deg,rgba(140,140,140,.05),rgba(160,160,160,.14));overflow:hidden;padding:0;cursor:pointer}
+.vault-image-preview img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+.vault-image-preview:hover img{transform:scale(1.04)}
+.vault-image-preview img.is-unavailable{opacity:0}
+.vault-image-info{display:flex;align-items:baseline;gap:8px;justify-content:space-between;margin:10px 1px 5px;white-space:nowrap}
+.vault-image-info strong,.vault-file-details strong{font-size:12px;font-weight:570;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.vault-image-info small,.vault-file-details small{font-size:11px;color:#888;white-space:nowrap}
+.vault-item-actions{display:flex;flex-wrap:wrap;gap:5px}
+.vault-item-actions button{border:0;background:transparent;color:#999;font:inherit;font-size:11px;cursor:pointer;padding:6px 7px 6px 0}
+.vault-item-actions button:hover{color:var(--text,#fff)}
+.vault-item-actions .is-destructive:hover{color:#ef8686}
+.vault-item-actions button:disabled{opacity:.4;cursor:default}
+.vault-file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:12px}
+.vault-file-tile{display:grid;grid-template-columns:48px minmax(0,1fr);column-gap:13px;align-items:center;min-height:130px;padding:17px 15px 13px;border:1px solid rgba(150,150,150,.16);border-radius:13px;background:rgba(150,150,150,.035)}
+.vault-file-tile:hover{border-color:rgba(175,175,175,.28);background:rgba(150,150,150,.06)}
+.vault-file-icon{display:block;position:relative;width:42px;height:50px;color:#bcbcbc}
+.vault-file-icon svg{width:42px;height:50px}
+.vault-file-icon b{position:absolute;left:5px;right:3px;top:31px;font-size:10px;text-align:center;color:#e5e5e5;background:#333;border-radius:3px;line-height:16px;overflow:hidden;white-space:nowrap}
+.vault-file-details{min-width:0;display:grid;gap:6px}
+.vault-file-tile .vault-item-actions{grid-column:1/-1;margin-top:12px;border-top:1px solid rgba(160,160,160,.12);padding-top:6px}
+.vault-empty{grid-column:1/-1;text-align:center;padding:95px 20px;color:#aaa}
+.vault-empty strong{font-size:19px;font-weight:560;color:var(--text,#fff)}
+.vault-empty p{font-size:13px}
+.vault-footer{display:flex;justify-content:space-between;align-items:center;color:#888;font-size:12px;margin:30px 0}
+.vault-progress{margin:0 0 15px;color:#bcbcbc;font-size:13px}
+.changelog-toolbar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:30px 0 15px;font-size:12px;color:#9c9c9c}
+.changelog-list{max-width:950px;margin:0 auto}
+.changelog-entry{padding:24px 0 28px;border-bottom:1px solid rgba(145,145,145,.18)}
+.changelog-open{display:flex;align-items:baseline;gap:20px;width:100%;text-align:left;background:none;color:inherit;border:0;padding:0;cursor:pointer}
+.changelog-date{font-size:12px;color:#858585;white-space:nowrap;flex:0 0 110px}
+.changelog-title{font-size:clamp(17px,2vw,23px);font-weight:600;letter-spacing:-.03em;flex:1;line-height:1.35}
+.changelog-version{font-size:11px;white-space:nowrap;color:#aaa;border:1px solid rgba(155,155,155,.25);border-radius:7px;padding:4px 7px}
+.changelog-open:hover .changelog-title{text-decoration:underline;text-decoration-color:#777;text-underline-offset:5px}
+.changelog-body{padding:25px 0 15px;margin-left:130px;line-height:1.7;max-width:750px;overflow-wrap:anywhere}
+.changelog-body img{max-width:100%;height:auto}
+.changelog-footer{display:flex;flex-wrap:wrap;gap:20px;align-items:center;margin:18px 0 0 130px;font-size:12px;color:#999}
+.changelog-footer button{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;padding:2px 0}
+.changelog-footer button:hover,.changelog-footer button[aria-pressed="true"]{color:var(--text,#fff)}
+.changelog-draft{color:#f4bd74}
+.changelog-editor{width:min(640px,calc(100vw - 25px));max-height:90vh;color:var(--text,#fff);background:var(--surface,#151515);border:1px solid rgba(160,160,160,.28);border-radius:18px;padding:25px}
+.changelog-editor::backdrop{background:rgba(0,0,0,.7);backdrop-filter:blur(4px)}
+.changelog-form{display:grid;gap:14px}
+.changelog-form h2{font-size:22px;letter-spacing:-.035em;margin:0 0 6px}
+.changelog-form label{display:grid;gap:7px;font-size:13px;color:#aaa}
+.changelog-form input:not([type="checkbox"]),.changelog-form textarea{box-sizing:border-box;width:100%;padding:11px 12px;border:1px solid #444;border-radius:9px;background:#111;color:#f1f1f1;font:inherit;outline:0}
+.changelog-form textarea{resize:vertical;font-size:13px;line-height:1.5}
+.changelog-form .changelog-published{display:flex;align-items:center}
+.changelog-error{color:#eb8686;margin:0;font-size:12px}
+.changelog-form-actions{display:flex;justify-content:flex-end;gap:12px}
+.changelog-form-actions button:not(.btn){background:none;border:0;color:#aaa;cursor:pointer}
+@media(max-width:680px){
+ .vault-root{padding:18px 14px 70px}
+ .vault-tools{align-items:flex-start;flex-direction:column;gap:20px}
+ .vault-space{width:100%}
+ .vault-bar{align-items:stretch;flex-direction:column;gap:11px}
+ .vault-tabs{gap:24px}
+ #vault-search{width:100%}
+ .vault-gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .vault-file-grid{grid-template-columns:repeat(1,minmax(0,1fr))}
+ .changelog-open{display:grid;grid-template-columns:1fr auto;gap:10px}
+ .changelog-date{grid-column:1/2}
+ .changelog-title{grid-column:1/-1;grid-row:2}
+ .changelog-version{grid-column:2;grid-row:1}
+ .changelog-body,.changelog-footer{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){.vault-image-preview img{transition:none}}
