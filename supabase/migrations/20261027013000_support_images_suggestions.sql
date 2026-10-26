@@ -63,4 +63,6 @@ CREATE POLICY support_suggestions_user_insert ON smetra.support_suggestions FOR 
   ));
 CREATE POLICY support_suggestions_admin_update ON smetra.support_suggestions FOR UPDATE TO smetra_runtime
   USING (smetra.runtime_is_admin()) WITH CHECK (smetra.runtime_is_admin());
+INSERT INTO smetra.schema_migrations(version,applied_at)
+VALUES(67,extract(epoch FROM now())::bigint) ON CONFLICT DO NOTHING;
 COMMIT;
