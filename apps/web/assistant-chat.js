@@ -278,6 +278,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     // In the Android app the system recognizer is used; WebView has no SpeechRecognition.
     if(!SpeechRecognitionAPI&&window.SmetraShell?.available){
       await window.SmetraShell.ready;
+      // A delayed Android bridge handshake must not open the system recorder
+      // after the assistant view or account has changed.
+      if(!active()||!input.isConnected)return;
       if(!window.SmetraShell.has('speech')){status.textContent='Распознавание речи недоступно на этом телефоне. Включите голосовой ввод Google или Яндекс-клавиатуры.';return}
       voiceStarting=true;syncSendButton();status.textContent='Говорите…';
       try{const result=await window.SmetraShell.call('speech.recognize',{},{timeout:0});if(!active()||!input.isConnected)return;const heard=String(result.text||'').trim();if(heard){input.value=(input.value.trim()?input.value.trim()+' ':'')+heard;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus()}status.textContent=heard?'Текст добавлен — проверьте и отправьте.':''}
