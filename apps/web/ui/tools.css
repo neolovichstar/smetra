@@ -238,3 +238,55 @@
  .changelog-body,.changelog-footer{margin-left:0}
 }
 @media(prefers-reduced-motion:reduce){.vault-image-preview img{transition:none}}
+
+/* Vault & release feed: consistent editorial rhythm, no nested card chrome. */
+.vault-head h1{letter-spacing:-.04em;font-weight:620}
+.vault-bar{flex-wrap:wrap}
+.vault-tabs button{min-height:42px}
+.vault-tabs button:focus-visible,#vault-search:focus-visible,.vault-item-actions button:focus-visible,.changelog-open:focus-visible,.changelog-reactions button:focus-visible{
+ outline:2px solid var(--text-2);outline-offset:3px;
+}
+.vault-image-info strong,.vault-file-details strong{font-size:13px}
+.vault-image-info small,.vault-file-details small{font-size:12px}
+.vault-item-actions button{font-size:12px;padding:7px 8px;margin-left:-8px;border-radius:7px;min-height:30px}
+.vault-item-actions button:hover{background:var(--surface-3)}
+.vault-file-tile{transition:background .15s ease,border-color .15s ease}
+.changelog-open{display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:20px;align-items:start;min-height:52px}
+.changelog-date{flex:none;padding-top:5px;font-size:12px;color:var(--text-3)}
+.changelog-copy{display:flex;flex-direction:column;gap:8px;min-width:0}
+.changelog-title{display:block;line-height:1.32;font-weight:600;max-width:100%;font-size:clamp(19px,2vw,24px)}
+.changelog-excerpt{display:block;max-width:70ch;color:var(--text-3);font-size:13px;line-height:1.6}
+.changelog-meta{display:flex;align-items:center;gap:12px;padding-top:2px;white-space:nowrap}
+.changelog-chevron{width:17px;height:17px;color:var(--text-3);flex:none;transition:transform .18s ease}
+.changelog-entry.is-open .changelog-chevron{transform:rotate(90deg)}
+.changelog-entry.is-open .changelog-open:hover .changelog-title{text-decoration:none}
+.changelog-reactions{display:inline-flex;gap:10px;align-items:center}
+.changelog-reactions button{display:inline-flex;gap:6px;align-items:center;justify-content:center;min-width:44px;height:30px;padding:0 9px;border:1px solid transparent;border-radius:8px;color:var(--text-3)}
+.changelog-reactions button svg{width:14px;height:14px;flex:none}
+.changelog-reactions button:hover{background:var(--surface-3);border-color:var(--line)}
+.changelog-reactions button[aria-pressed="true"]{background:var(--surface-3);color:var(--text);border-color:var(--line-strong)}
+.changelog-footer{gap:10px 16px}
+.changelog-views{margin-right:8px;color:var(--text-3);white-space:nowrap}
+.changelog-footer .changelog-edit{padding:6px 9px;border-radius:7px}
+.changelog-footer .changelog-edit:hover{background:var(--surface-3)}
+.changelog-editor{width:min(700px,calc(100vw - 24px));max-height:min(92vh,920px);overflow-y:auto;padding:clamp(16px,3vw,28px)}
+.changelog-editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--text-2)}
+.changelog-editor-toolbar button{font:inherit;font-size:12px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;color:var(--text-2)}
+.changelog-editor-toolbar button[aria-pressed="true"]{background:var(--surface-3);color:var(--text)}
+.changelog-preview{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:16px;min-height:80px;max-height:320px;overflow-y:auto;font-size:13px;line-height:1.6}
+.changelog-preview[hidden]{display:none}
+.changelog-form textarea:focus,.changelog-form input:not([type="checkbox"]):focus{border-color:var(--text-3)}
+.changelog-form-actions{gap:10px;margin-top:6px}
+@media(max-width:680px){
+ .changelog-open{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ .changelog-date{grid-column:1;grid-row:1}
+ .changelog-copy{grid-column:1/-1;grid-row:2}
+ .changelog-meta{grid-column:2;grid-row:1;gap:8px}
+ .changelog-body{margin-left:0}
+ .changelog-footer{margin-left:0;gap:10px 12px}
+ .changelog-entry{padding:20px 0 24px}
+ .changelog-title{font-size:20px}
+ .changelog-excerpt{font-size:12px}
+ .changelog-reactions button{min-width:40px}
+}
+@media(prefers-reduced-motion:reduce){.changelog-chevron,.vault-file-tile{transition:none}}
