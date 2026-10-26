@@ -506,9 +506,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if console_host == "console.smetra.online":
                 site_assets = {
                     "/", "/app", "/docs", "/privacy", "/terms",
-                    "/partner-console.js", "/partner-docs.js", "/partner-docs.md", "/partner-openapi.json",
-                    "/partner-sdk.js", "/ui/partner-console.css", "/ui/partner-landing.css",
-                    "/vendor/markdown-it-15.0.2.min.js", "/favicon.ico", "/favicon.png",
+                    "/partner-landing.js", "/partner-scene.js", "/partner-console.js", "/partner-docs-ui.js",
+                    "/partner-docs.md", "/partner-openapi.json", "/partner-sdk.js",
+                    "/ui/partner-base.css", "/ui/partner-landing.css", "/ui/partner-console.css", "/ui/partner-docs.css",
+                    "/vendor/three-0.170.0.module.min.js", "/vendor/qrcode-generator-1.4.4.js",
+                    "/assets/fonts/onest-variable.woff2", "/favicon.ico", "/favicon.png",
                 }
                 if method == "GET" and path in site_assets:
                     asset = {"/": "/partner-landing", "/app": "/partner-console",
@@ -623,6 +625,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/vendor/three-0.170.0.module.min.js": ("vendor/three-0.170.0.module.min.js", "text/javascript"),
             "/vendor/three-rounded-box-0.170.0.js": ("vendor/three-rounded-box-0.170.0.js", "text/javascript"),
             "/vendor/three-room-environment-0.170.0.js": ("vendor/three-room-environment-0.170.0.js", "text/javascript"),
+            "/vendor/qrcode-generator-1.4.4.js": ("vendor/qrcode-generator-1.4.4.js", "text/javascript"),
             "/assets/landing/room.webp": ("assets/landing/room.webp", "image/webp"),
         }
         # Every top-level script is public; the build validates them with node --check.

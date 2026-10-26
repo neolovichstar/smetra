@@ -20,3 +20,11 @@ Copied from the pinned npm tarball after checking the registry SHA-512 integrity
 `examples/jsm/environments/RoomEnvironment.js` with the bare `'three'` import
 rewritten to the local file (no import map, so the CSP needs no inline script).
 Used only by the landing hero (`../room3d.js`), loaded after the page is idle.
+
+qrcode-generator 1.4.4 (Kazuhiko Arase), MIT, https://github.com/kazuhikoarase/qrcode-generator
+
+`qrcode-generator-1.4.4.js` is `qrcode.js` from the pinned npm tarball after checking
+the registry SHA-512 integrity
+(`HM7yY8O2ilqhmULxGMpcHSF1EhJJ9yBj8gvDEuZ6M+KGJ0YY2hKpnXvRD+hZPLrDVck3ExIGhmPtSdcjC+guuw==`).
+SHA-256 `18ae399f81182bc9de916e9c77b195df20cc58d6f2d55a62b085a299f1bf1780`. The MIT notice is in the file header. Used only by the partner
+console's link page to draw the referral QR code locally (no third-party QR service).

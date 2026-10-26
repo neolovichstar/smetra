@@ -23,7 +23,7 @@ def fetch(path, *, timeout=12):
 
 def check_once():
     landing = fetch("https://console.smetra.online/")
-    if "Сметра для партнёров" not in landing or "Больше продаж." not in landing:
+    if "Сметра для партнёров" not in landing or "Пусть купят у" not in landing:
         raise AssertionError("Console root is not the partner-specific marketing landing")
     if 'href="/app"' not in landing or 'href="/docs"' not in landing:
         raise AssertionError("Partner navigation to /app and /docs missing")
@@ -31,7 +31,7 @@ def check_once():
     cabinet = fetch("https://console.smetra.online/app")
     if 'id="connect"' not in cabinet or 'id="dashboard"' not in cabinet:
         raise AssertionError("Partner console app is not available at /app")
-    if "Больше продаж." in cabinet:
+    if "Пусть купят у" in cabinet:
         raise AssertionError("Cabinet returned the partner marketing landing")
 
     docs = fetch("https://console.smetra.online/docs")

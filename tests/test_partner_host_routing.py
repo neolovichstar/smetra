@@ -36,7 +36,7 @@ class PartnerHostnameRoutingTests(unittest.TestCase):
         status, _, dashboard = self.request_raw("GET", "/app", "console.smetra.online")
         self.assertEqual(status, 200)
         self.assertIn('id="connect"', dashboard)
-        self.assertNotIn("Больше продаж.", dashboard)
+        self.assertNotIn("Пусть купят у", dashboard)
         status, _, docs = self.request_raw("GET", "/docs", "console.smetra.online")
         self.assertEqual(status, 200)
         self.assertIn("Developer Docs", docs)

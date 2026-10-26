@@ -67,8 +67,11 @@ PARTNER_SITE_BRANCH = "feat/partner-platform-foundation-20261026"
 PARTNER_STATIC_FILES = frozenset({
     "index.html", "app.html", "docs.html", "privacy.html", "terms.html",
     "partner-console.html", "partner-landing.html", "partner-docs.html",
-    "partner-console.js", "partner-docs.md", "partner-openapi.json", "partner-sdk.js",
-    "ui/partner-console.css", "ui/partner-landing.css",
+    "partner-landing.js", "partner-scene.js", "partner-console.js", "partner-docs-ui.js",
+    "partner-docs.md", "partner-openapi.json", "partner-sdk.js",
+    "ui/partner-base.css", "ui/partner-landing.css", "ui/partner-console.css", "ui/partner-docs.css",
+    "vendor/three-0.170.0.module.min.js", "vendor/qrcode-generator-1.4.4.js",
+    "assets/fonts/onest-variable.woff2",
     "favicon.ico", "favicon.png",
 })
 
