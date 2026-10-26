@@ -526,3 +526,23 @@
 @media(prefers-reduced-motion:reduce){
  .smetra-document-config-choice,.smetra-document-config-styles button{transition:none}
 }
+
+/* Compact, inline decision affordance above the message composer. */
+.assistant-decision-slot:empty{display:none}
+.assistant-decision-slot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:0 0 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--text)}
+.assistant-decision-heading{display:flex;flex-direction:column;gap:4px;min-width:0}
+.assistant-decision-heading span{font-size:11px;color:var(--text-3)}
+.assistant-decision-heading strong{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:450px}
+.assistant-decision-buttons{display:flex;gap:6px;align-items:center;flex:none}
+.assistant-decision-buttons .btn{min-height:32px;padding:0 10px;font-size:12px;border-radius:8px}
+.assistant-question-choice{display:flex;flex-wrap:wrap;gap:7px}
+.assistant-question-choice button{border:1px solid var(--line);border-radius:9px;background:transparent;padding:7px 10px;color:var(--text-2);font-size:12px}
+.assistant-question-choice button:hover{background:var(--surface-3);color:var(--text)}
+.assistant-question-custom{display:flex;gap:8px;min-width:0;flex:1 1 100%}
+.assistant-question-custom input{flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 10px}
+.assistant-decision-slot .assistant-question-custom button{min-height:34px;border:1px solid var(--line);border-radius:9px;padding:0 10px}
+@media(max-width:560px){
+ .assistant-decision-slot{flex-direction:column;align-items:stretch;gap:10px}
+ .assistant-decision-heading strong{max-width:100%}
+ .assistant-decision-buttons{justify-content:flex-end}
+}
