@@ -199,7 +199,7 @@
   const activeNews = mine => epoch===mine && tab==='changelog' && document.querySelector('#changelog-root');
   async function noteMarkup(body) {
     await window.SmetraLoadFeature('markdown');
-    return typeof window.assistantMarkdown === 'function' ? window.assistantMarkdown(body) : '<pre>' + esc(body) + '</pre>';
+    return window.SmetraMarkdown?.render(body) ?? '<pre>' + esc(body) + '</pre>';
   }
   async function paintNews(mine) {
     if (!activeNews(mine)) return;
