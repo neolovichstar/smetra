@@ -1,5 +1,10 @@
 name: CI
 on: [push, pull_request]
+# Many small fixes should not run multiple overlapping Android/browser builds.
+# Keep the newest result for each PR or branch and save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -73,6 +78,8 @@ jobs:
             cat data/chrome.log
             exit 1
           fi
+          # Unlike /health this probes /api/me, which MUST reach PostgreSQL.
+          python scripts/smoke_production.py --base-url http://localhost:8082
           node tests/browser_flows.cjs
           node tests/browser_quote_review.cjs
           node tests/browser_quote_editor.cjs

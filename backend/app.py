@@ -88,6 +88,10 @@ def db():
         finally:
             con.close()
         return
+    # Never silently switch a cloud instance to an ephemeral SQLite database.
+    # A missing DATABASE_URL must fail closed, not create unrelated user state.
+    if os.getenv("VERCEL") or os.getenv("VERCEL_ENV") in ("production", "preview"):
+        raise RuntimeError("Cloud PostgreSQL is not configured (DATABASE_URL)")
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=10, isolation_level=None)
     try:
@@ -629,6 +633,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/vendor/three-room-environment-0.170.0.js": ("vendor/three-room-environment-0.170.0.js", "text/javascript"),
             "/vendor/qrcode-generator-1.4.4.js": ("vendor/qrcode-generator-1.4.4.js", "text/javascript"),
             "/assets/landing/room.webp": ("assets/landing/room.webp", "image/webp"),
+            "/assets/pwa/drops.svg": ("assets/pwa/drops.svg", "image/svg+xml"),
+            "/assets/pwa/icon-192.png": ("assets/pwa/icon-192.png", "image/png"),
+            "/assets/pwa/icon-512.png": ("assets/pwa/icon-512.png", "image/png"),
+            "/assets/pwa/icon-maskable-512.png": ("assets/pwa/icon-maskable-512.png", "image/png"),
+            "/assets/pwa/apple-touch-icon.png": ("assets/pwa/apple-touch-icon.png", "image/png"),
         }
         # Every top-level script is public; the build validates them with node --check.
         js_asset = re.fullmatch(r"/([a-z0-9-]{1,40})\.js", path)
