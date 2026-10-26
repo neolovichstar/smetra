@@ -292,6 +292,7 @@
       try{
         await api(note?'/changelog/'+encodeURIComponent(note.id):'/changelog',{method:note?'PATCH':'POST',body});
         close(); if(activeNews(mine))await refreshNotes(mine);
+        if(form.elements.published.checked)void window.SmetraReleaseUnread?.refresh(true);
       }catch(err){form.querySelector('[role=alert]').textContent=err.message;button.disabled=false;}
     };
     dialog.showModal();
@@ -331,6 +332,7 @@
           try{
             await api('/changelog/'+encodeURIComponent(note.id)+'/view',{method:'POST',body:'{}'});
             if(activeNews(mine))await refreshNotes(mine);
+            void window.SmetraReleaseUnread?.refresh(true);
           }catch(err){notify(err.message);}
         }
       }
