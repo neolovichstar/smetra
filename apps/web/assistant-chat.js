@@ -63,8 +63,11 @@ function assistantQuoteDraftPreview(host, args){
 }
 
 let assistantRenderRevision=0;
+let assistantVoiceCleanup=null;
 const assistantIcon=(name,size=18)=>window.SmetraIcons?window.SmetraIcons.svg(name,size):'';
 window.SmetraAssistant=async function(parentActive=()=>true){
+  // Starting another conversation must release the previous microphone first.
+  assistantVoiceCleanup?.();
   const mine=++assistantRenderRevision,owner=user,workspaceId=sessionStorage.getItem('workspace_id');
   const active=()=>parentActive()&&mine===assistantRenderRevision&&owner===user&&tab==='assistant'&&workspaceId===sessionStorage.getItem('workspace_id');
   const [data,threadIndex]=await Promise.all([api('/assistant'),api('/assistant/conversations')]);
@@ -214,6 +217,23 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
   let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   let voicePreview='',voicePreviewAt=0;
+  const stopVoiceInput=()=>{
+    const recognition=voiceRecognition;
+    voiceRecognition=null;
+    voiceListening=false;voiceStarting=false;
+    if(!recognition)return;
+    // Do not let a late browser callback write into a submitted or replaced composer.
+    recognition.onstart=null;recognition.onresult=null;
+    recognition.onerror=null;recognition.onend=null;
+    try{recognition.abort()}catch{}
+  };
+  const cleanupVoice=()=>{
+    document.removeEventListener('smetra:before-view',cleanupVoice);
+    if(assistantVoiceCleanup===cleanupVoice)assistantVoiceCleanup=null;
+    stopVoiceInput();
+  };
+  assistantVoiceCleanup=cleanupVoice;
+  document.addEventListener('smetra:before-view',cleanupVoice,{once:true});
   const renderVoiceToInput=()=>{
     // Reconcile interim/final segments in one composer range. Each new
     // SpeechRecognition result replaces that range, rather than appending
@@ -260,9 +280,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       await window.SmetraShell.ready;
       if(!window.SmetraShell.has('speech')){status.textContent='Распознавание речи недоступно на этом телефоне. Включите голосовой ввод Google или Яндекс-клавиатуры.';return}
       voiceStarting=true;syncSendButton();status.textContent='Говорите…';
-      try{const result=await window.SmetraShell.call('speech.recognize',{},{timeout:0});const heard=String(result.text||'').trim();if(heard){input.value=(input.value.trim()?input.value.trim()+' ':'')+heard;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus()}status.textContent=heard?'Текст добавлен — проверьте и отправьте.':''}
-      catch(error){status.textContent=error.code==='cancelled'?'':error.message}
-      finally{voiceStarting=false;syncSendButton()}
+      try{const result=await window.SmetraShell.call('speech.recognize',{},{timeout:0});if(!active()||!input.isConnected)return;const heard=String(result.text||'').trim();if(heard){input.value=(input.value.trim()?input.value.trim()+' ':'')+heard;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus()}status.textContent=heard?'Текст добавлен — проверьте и отправьте.':''}
+      catch(error){if(active()&&input.isConnected)status.textContent=error.code==='cancelled'?'':error.message}
+      finally{if(active()&&input.isConnected){voiceStarting=false;syncSendButton()}}
       return;
     }
     if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.';return}
@@ -798,7 +818,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
-    event.preventDefault();const prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
+    event.preventDefault();
+    // The displayed transcript is the source of truth at submit time.
+    // Abort recognition before clearing the composer so late results cannot reappear.
+    if(voiceListening||voiceStarting){stopVoiceInput();syncSendButton()}
+    const prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
     if(window.SmetraEstimateSafety){try{if(!(await window.SmetraEstimateSafety.ensureConsent()))return}catch(error){status.textContent=error.message;return}}
     if(backgroundMode){await submitBackground();return}
     working=true;renderQuota(quota);stop.hidden=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
