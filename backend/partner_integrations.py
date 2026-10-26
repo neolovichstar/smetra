@@ -24,6 +24,7 @@ EVENT_TYPES = frozenset({"widget_impression", "widget_click", "material_order_re
 KEY_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{12,100}\Z")
 VALID_METHODS = ("dns", "meta")
 VERIFICATION_TTL = 90 * 86400  # Domain ownership is not permanent.
+CHALLENGE_TTL = 7 * 86400  # Pending proofs cannot be replayed indefinitely.
 
 
 def _moment():
@@ -163,6 +164,13 @@ def verify_domain(con, account):
     row = domain_status(con, account)
     if row["status"] == "not_started":
         raise partner.PartnerError(409, "Сначала создайте проверку домена")
+    created = con.execute(
+        "SELECT created_at FROM partner_domain_verifications WHERE partner_id=?",
+        (account["id"],),
+    ).fetchone()
+    if row["status"] != "verified" and (
+            not created or created["created_at"] <= _moment() - CHALLENGE_TTL):
+        raise partner.PartnerError(409, "Срок подтверждения истёк. Создайте новую проверку")
     method = row["method"]
     if method not in VALID_METHODS:
         raise partner.PartnerError(409, "Неизвестный способ проверки")
