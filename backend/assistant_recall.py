@@ -206,18 +206,29 @@ def search_workspace_storage(service, query="", kind="all"):
     sql = (
         "SELECT id,name,mime,size,created_at,index_status FROM files WHERE "
         + " AND ".join(filters) +
-        " ORDER BY created_at DESC LIMIT 100"
+        " ORDER BY created_at DESC"
     )
-    files = [dict(row) for row in service.con.execute(sql, values).fetchall()]
     query_lower = query.casefold()
-    matched = [row for row in files if query_lower in row["name"].casefold()] if query else files
+    # Do not restrict matching to the most recent 100 files: an older receipt
+    # must remain retrievable without scanning all binary payloads.
+    matched = []
+    cursor = service.con.execute(sql, values)
+    while len(matched) < 20:
+        batch = cursor.fetchmany(128)
+        if not batch:
+            break
+        for row in batch:
+            if not query or query_lower in row["name"].casefold():
+                matched.append(dict(row))
+                if len(matched) == 20:
+                    break
     text_matches = []
     if len(query) >= 2 and kind != "images":
         from backend.assistant_files import search_content
 
         text_matches = search_content(service, query)["items"]
         if kind == "documents":
-            text_matches = [item for item in text_matches if any(row["id"] == item["file_id"] for row in files)]
+            text_matches = [item for item in text_matches if not item["name"].lower().endswith((".png",".jpg",".jpeg"))]
     return {
         "files": matched[:20],
         "text_matches": text_matches[:6],
