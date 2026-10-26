@@ -51,7 +51,7 @@ window.SmetraSupport = (() => {
     const status = root.querySelector('#support-status');
     const handoff = root.querySelector('#support-handoff');
     const grow = kit().composer(input, form);
-    const syncSend = () => { send.disabled = state.sending || input.disabled || !input.value.trim(); };
+    const syncSend = () => { send.disabled = state.sending || input.disabled; };
     input.addEventListener('input', syncSend);
     if (typeof bindRailToggle === 'function') bindRailToggle(root.querySelector('#support-rail-toggle'), root, 'smetra.support.rail-collapsed');
 
