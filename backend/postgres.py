@@ -157,7 +157,18 @@ class Connection:
         self.nested = False
         self.pool = None
         self.raw = None
-        database_url = os.environ["RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"]
+        key = "RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"
+        database_url = os.environ[key].strip()
+        # Some Vercel dashboards receive an accidentally pasted .env assignment
+        # (DATABASE_URL=postgresql://...) as the VALUE of DATABASE_URL. libpq
+        # otherwise parses DATABASE_URL as an unsupported connection option.
+        # Accept only this unambiguous copy/paste error, and never log the DSN.
+        if database_url.startswith(key + "="):
+            database_url = database_url[len(key) + 1:].strip()
+            if len(database_url) >= 2 and database_url[0] == database_url[-1] and database_url[0] in ("'", '"'):
+                database_url = database_url[1:-1]
+        if not database_url.startswith(("postgresql://", "postgres://")):
+            raise RuntimeError("Invalid PostgreSQL connection URI: update " + key + " in deployment settings")
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
         self.pool = _connection_pool(database_url, local_test)
