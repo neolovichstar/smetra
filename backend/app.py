@@ -37,7 +37,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 39
+REQUIRED_CLOUD_SCHEMA_VERSION = 40
 PLANS = {"pro_month": (49000, 31), "pro_year": (490000, 366)}
 
 
@@ -531,6 +531,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("assistant.css", "text/css"),
             ("construction.css", "text/css"),
             ("construction.js", "text/javascript"),
+            ("designer-studio.js", "text/javascript"),
+            ("designer-studio.css", "text/css"),
             ("ai-workspace.js", "text/javascript"),
             ("file-editor.css", "text/css"),
             ("file-editor.js", "text/javascript"),
