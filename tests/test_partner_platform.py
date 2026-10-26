@@ -172,6 +172,14 @@ class PartnerPlatformTests(unittest.TestCase):
         stat = integration.analytics(self.con, p, 7)
         self.assertEqual(stat["merchant_reported"]["material_order_reported"]["count"], 1)
         self.assertEqual(stat["merchant_reported"]["material_order_reported"]["amount_kopecks"], 120000)
+        self.assertIsNone(self.con.execute(
+            "SELECT 1 FROM partner_site_events WHERE partner_id=? AND event_key=?",
+            (p["id"], order["event_key"]),
+        ).fetchone(), "Merchant order IDs must not be stored in plaintext")
+        self.assertIsNotNone(self.con.execute(
+            "SELECT 1 FROM partner_site_events WHERE partner_id=? AND event_key=?",
+            (p["id"], __import__("hashlib").sha256(order["event_key"].encode()).hexdigest()),
+        ).fetchone())
         self.assertEqual(stat["verified_subscription_payments"]["payments"], 0)
         self.assertFalse(stat["payouts_enabled"])
         with self.assertRaises(partner.PartnerError):
