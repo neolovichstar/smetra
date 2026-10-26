@@ -322,6 +322,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
         self.wfile.write(body)
+        return True  # A completed response must not be mistaken for an unhandled route.
 
     def body(self):
         size = getattr(self, "_body_length", None)
@@ -348,8 +349,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             if not isinstance(data, dict):
                 raise ValueError("Expected object")
+            pending = [(data, 0)]
+            while pending:
+                value, depth = pending.pop()
+                if depth > 64:
+                    raise ValueError("JSON nesting exceeds limit")
+                if isinstance(value, dict):
+                    pending.extend((child, depth + 1) for child in value.values())
+                elif isinstance(value, list):
+                    pending.extend((child, depth + 1) for child in value)
             return data
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, RecursionError):
             raise ApiError(400, "Некорректный JSON")
 
     def validate_body_length(self, path):
@@ -404,7 +414,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             result = rate_limit(key, limit, window)
         except RedisUnavailable:
             # Cost-bearing AI requests must not bypass their fast guard during an outage.
-            if key.startswith(("assistant:", "ai:")):
+            if key.startswith(("assistant:", "ai:", "support-ai:")):
                 raise ApiError(503, "Ассистент временно недоступен") from None
             result = None  # PostgreSQL remains the distributed fallback.
         if result is not None:
@@ -417,7 +427,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 from backend.postgres import throttle
             except ModuleNotFoundError:
                 from postgres import throttle
-            if not throttle(key, limit, window, now()):
+            if not throttle(
+                key, limit, window, now(),
+                connection=getattr(self, "_request_db", None),
+            ):
                 self.retry_after = window
                 raise ApiError(429, "Слишком много запросов. Попробуйте позже")
             return
@@ -505,6 +518,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     # /api/cron/push verifies its own dedicated server secret.
                 if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
+                if root == "webhooks" and method != "POST":
+                    raise ApiError(405, "Webhook принимает только POST")
                 if root == "mobile" and path not in ("/api/mobile/presentation", "/api/mobile/compat"):
                     raise ApiError(404, "Не найдено")
             # Never expose main customer routes through the partner hostname.
@@ -562,7 +577,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_json(200, presentation)
             elif path.startswith("/api/"):
                 with db() as con:
-                    self.api(method, path, query, con)
+                    self._request_db = con
+                    try:
+                        self.api(method, path, query, con)
+                    finally:
+                        self._request_db = None
             elif method == "GET":
                 self.static(path)
             else:
@@ -1211,14 +1230,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("BEGIN IMMEDIATE")
                 try:
                     changed = con.execute(
-                        "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL",
-                        (now(), row["id"]),
+                        "UPDATE email_tokens SET consumed_at=? WHERE id=? AND consumed_at IS NULL "
+                        "AND expires_at>? AND EXISTS(SELECT 1 FROM users WHERE id=? "
+                        "AND deleted_at IS NULL AND blocked=0)",
+                        (now(), row["id"], now(), row["user_id"]),
                     )
                     if changed.rowcount != 1:
                         raise ApiError(409, "Ссылка уже использована")
                     con.execute(
                         "UPDATE users SET password_hash=?,email_verified_at=coalesce(email_verified_at,?) WHERE id=?",
                         (hash_password(password), now(), row["user_id"]),
+                    )
+                    # Serialize and invalidate every other reset link for this account.
+                    con.execute(
+                        "UPDATE email_tokens SET consumed_at=? WHERE user_id=? AND purpose='reset' "
+                        "AND consumed_at IS NULL", (now(), row["user_id"]),
                     )
                     con.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))
                     audit(con, row["user_id"], "auth.password_reset", row["user_id"])
@@ -1234,9 +1260,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             data = self.body()
             obj = data.get("object")
             if (
-                not isinstance(obj, dict)
+                data.get("type", "notification") != "notification"
+                or not isinstance(obj, dict)
                 or not isinstance(obj.get("id"), str)
-                or not 1 <= len(obj["id"]) <= 100
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", obj["id"])
             ):
                 raise ApiError(400, "Некорректное уведомление")
             if data.get("event") == "refund.succeeded":
@@ -1249,9 +1276,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "SELECT 1 FROM refunds WHERE provider_id=?", (obj["id"],)
                 ).fetchone():
                     return self.send_json(200, {"ok": True})
+                self.throttle("webhook-object:refund:" + obj["id"], 6, 60)
+                self.throttle("webhook-provider", 300, 60)
                 verified = self.provider_call(
                     "/refunds/" + urllib.parse.quote(obj["id"], safe="")
                 )
+                if (
+                    not isinstance(verified, dict)
+                    or verified.get("id") != obj["id"]
+                    or verified.get("payment_id") != payment_id
+                ):
+                    raise ApiError(409, "Данные возврата не совпали")
+                # Refunds have no recipient/test fields; revalidate the original payment.
+                local = con.execute("SELECT * FROM payments WHERE provider_id=?", (payment_id,)).fetchone()
+                self.apply_payment(con, local, self.provider_payment(payment_id))
                 self.apply_refund(con, verified)
             elif data.get("event") in ("payment.succeeded", "payment.canceled"):
                 payment = con.execute(
@@ -1261,6 +1299,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     raise ApiError(404, "Платеж не найден")
                 if payment["status"] == data["event"].split(".", 1)[1]:
                     return self.send_json(200, {"ok": True})
+                self.throttle("webhook-object:payment:" + obj["id"], 6, 60)
+                self.throttle("webhook-provider", 300, 60)
                 self.apply_payment(con, payment, self.provider_payment(obj["id"]))
             else:
                 raise ApiError(400, "Неизвестное событие")
@@ -1757,6 +1797,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)
+        if not isinstance(remote.get("amount"), dict) or not isinstance(remote.get("metadata"), dict):
+            raise ApiError(409, "Некорректные данные платежа")
         if (
             remote.get("id") != local["provider_id"]
             or remote.get("amount", {}).get("currency") != "RUB"
@@ -1834,6 +1876,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
 
     def apply_refund(self, con, remote):
+        if not isinstance(remote, dict) or not isinstance(remote.get("amount"), dict):
+            raise ApiError(409, "Некорректные данные возврата")
         refund_id = remote.get("id")
         payment_id = remote.get("payment_id")
         if (

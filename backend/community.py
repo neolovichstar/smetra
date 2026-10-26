@@ -175,8 +175,13 @@ def _json(value):
 
 def _member(con, conversation_id, user_id):
     return con.execute(
-        "SELECT role,last_read_at FROM chat_members WHERE conversation_id=? AND user_id=?",
-        (conversation_id, user_id),
+        "SELECT cm.role,cm.last_read_at FROM chat_members cm "
+        "JOIN chat_conversations c ON c.id=cm.conversation_id "
+        "WHERE cm.conversation_id=? AND cm.user_id=? AND (c.kind<>'object' OR EXISTS("
+        "SELECT 1 FROM workspaces w WHERE w.id=c.workspace_id AND "
+        "(w.owner_id=? OR EXISTS(SELECT 1 FROM workspace_members wm "
+        "WHERE wm.workspace_id=w.id AND wm.user_id=?))))",
+        (conversation_id, user_id, user_id, user_id),
     ).fetchone()
 
 
@@ -247,7 +252,7 @@ def _message_view(row):
     }
 
 
-def _conversation_view(row):
+def _conversation_view(row, include_user=False):
     return {
         "id": row["id"], "kind": row["kind"], "subject": row["subject"],
         "workspace_id": row["workspace_id"], "project_id": row["project_id"],
@@ -265,12 +270,22 @@ def _conversation_view(row):
         "partner_name": row["partner_name"] or "",
         "partner_public_id": make_public_id(row["partner_id"]) if row["partner_id"] else "",
         "user_name": row["user_name"] or "",
-        "user_email": row["user_email"] or "",
+        "user_email": (row["user_email"] or "") if include_user else "",
     }
 
 
 def _list_conversations(con, user_id, kinds, include_user=False):
     placeholders = ",".join("?" for _ in kinds)
+    # Historical chat membership must not expose a revoked workspace's metadata.
+    access_sql, access_args = "", ()
+    if "object" in kinds:
+        access_sql = (
+            "AND (c.kind<>'object' OR EXISTS(SELECT 1 FROM workspaces w "
+            "WHERE w.id=c.workspace_id AND (w.owner_id=? OR EXISTS("
+            "SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=w.id AND wm.user_id=?)))) "
+        )
+        access_args = (user_id, user_id)
+    email_sql = "(SELECT u.email FROM users u WHERE u.id=c.created_by)" if include_user else "''"
     rows = con.execute(
         "SELECT c.*, "
         "(SELECT m.body FROM chat_messages m WHERE m.conversation_id=c.id "
@@ -290,26 +305,29 @@ def _list_conversations(con, user_id, kinds, include_user=False):
         " WHERE cm.conversation_id=c.id AND cm.user_id<>? AND c.kind IN ('direct','estimate') "
         " ORDER BY cm.joined_at LIMIT 1) AS partner_name, "
         "(SELECT u.name FROM users u WHERE u.id=c.created_by) AS user_name, "
-        "(SELECT u.email FROM users u WHERE u.id=c.created_by) AS user_email "
+        + email_sql + " AS user_email "
         "FROM chat_conversations c JOIN chat_members mine ON mine.conversation_id=c.id "
         "WHERE mine.user_id=? AND c.kind IN (" + placeholders + ") "
-        "ORDER BY c.updated_at DESC LIMIT 100",
-        (user_id, user_id, user_id, user_id, user_id, *kinds),
+        + access_sql + "ORDER BY c.updated_at DESC,c.id DESC LIMIT 100",
+        (user_id, user_id, user_id, user_id, user_id, *kinds, *access_args),
     ).fetchall()
-    return [_conversation_view(row) for row in rows]
+    return [_conversation_view(row, include_user=include_user) for row in rows]
 
 
 def _messages(con, conversation_id, after=0, limit=100):
     limit = max(1, min(int(limit), 100))
+    after = max(0, int(after or 0))
+    # Load the newest window initially; incremental reads keep ascending pages.
+    direction = "ASC" if after else "DESC"
     rows = con.execute(
         "SELECT m.id,m.sender_id,m.sender_type,m.body,m.metadata,m.created_at,u.name AS sender_name "
         "FROM chat_messages m LEFT JOIN users u ON u.id=m.sender_id "
-        # Replies are often written in the same second as the question; keep
-        # the question first so the thread reads in conversation order.
-        "WHERE m.conversation_id=? AND m.created_at>? ORDER BY m.created_at,"
-        "CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END,m.id LIMIT ?",
-        (conversation_id, int(after or 0), limit),
+        "WHERE m.conversation_id=? AND m.created_at>? ORDER BY m.created_at " + direction + ","
+        "CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END " + direction + ",m.id " + direction + " LIMIT ?",
+        (conversation_id, after, limit),
     ).fetchall()
+    if not after:
+        rows.reverse()
     return [_message_view(row) for row in rows]
 
 
@@ -872,7 +890,7 @@ def _public_id_route(handler, method, path, query, con, user):
     if match and method in ("GET", "POST"):
         conversation_id = match.group(1)
         conversation = con.execute(
-            "SELECT id,kind,status,category FROM chat_conversations WHERE id=?",
+            "SELECT id,kind,status,category,workspace_id FROM chat_conversations WHERE id=?",
             (conversation_id,),
         ).fetchone()
         if not conversation or conversation["kind"] not in ("direct", "object", "estimate", "community"):
@@ -881,6 +899,8 @@ def _public_id_route(handler, method, path, query, con, user):
             if conversation["kind"] != "community":
                 raise ApiError(403, "Нет доступа к этому чату")
             _add_member(con, conversation_id, user["id"], "member")
+        if conversation["kind"] == "object":
+            _team_workspace(con, user["id"], conversation["workspace_id"])
         if method == "GET":
             after = (query.get("after") or ["0"])[0]
             try:
@@ -888,17 +908,26 @@ def _public_id_route(handler, method, path, query, con, user):
             except ValueError:
                 after = 0
             messages = _messages(con, conversation_id, after=after)
-            con.execute(
-                "UPDATE chat_members SET last_read_at=? WHERE conversation_id=? AND user_id=?",
-                (now(), conversation_id, user["id"]),
-            )
+            if messages:
+                con.execute(
+                    "UPDATE chat_members SET last_read_at=? WHERE conversation_id=? AND user_id=? AND last_read_at<?",
+                    (now(), conversation_id, user["id"], messages[-1]["created_at"]),
+                )
             return handler.send_json(200, {"messages": messages})
         handler.throttle("chat-message:" + user["id"], 45, 60)
         data = handler.body()
         message = _text(data.get("message"), 4000, required=True)
         if conversation["status"] == "closed":
             raise ApiError(409, "Чат закрыт")
-        saved = _add_message(con, conversation_id, user["id"], "user", message)
+        from backend.business import transaction
+        scopes = (f"user:{user['id']}", f"chat:{conversation_id}")
+        if conversation["kind"] == "object":
+            scopes += (f"workspace:{conversation['workspace_id']}",)
+        with transaction(con, lock_scopes=scopes):
+            _auth(handler, con)
+            if not _member(con, conversation_id, user["id"]):
+                raise ApiError(403, "Нет доступа к этому чату")
+            saved = _add_message(con, conversation_id, user["id"], "user", message)
         return handler.send_json(201, {"message": saved})
     if path == "/api/profile/communities" and method == "POST":
         # Kept as a convenient explicit join action for Android clients.
@@ -914,8 +943,11 @@ def _public_id_route(handler, method, path, query, con, user):
 
 def _support_route(handler, method, path, query, con, user):
     if path == "/api/support" and method == "POST":
+        handler.throttle("support-create:" + user["id"], 5, 3600)
         data = handler.body()
         message = _text(data.get("message"), 4000, required=True)
+        if not wants_human(message):
+            handler.throttle("support-ai:" + user["id"], 30, 60)
         subject = _text(data.get("subject") or "Обращение в поддержку", 120)
         conversation_id = _new_conversation(con, "support", subject, user["id"])
         _add_member(con, conversation_id, user["id"], "customer")
@@ -940,6 +972,7 @@ def _support_route(handler, method, path, query, con, user):
             "threads": _list_conversations(con, user["id"], ("support",))
         })
     if path == "/api/support/threads" and method == "POST":
+        handler.throttle("support-create:" + user["id"], 5, 3600)
         data = handler.body()
         subject = _text(data.get("subject") or "Новый вопрос", 120, required=True)
         conversation_id = _new_conversation(con, "support", subject, user["id"])
@@ -975,10 +1008,11 @@ def _support_route(handler, method, path, query, con, user):
             except (TypeError, ValueError):
                 after = 0
             messages = _messages(con, conversation_id, after=after)
-            con.execute(
-                "UPDATE chat_members SET last_read_at=? WHERE conversation_id=? AND user_id=?",
-                (now(), conversation_id, user["id"]),
-            )
+            if messages:
+                con.execute(
+                    "UPDATE chat_members SET last_read_at=? WHERE conversation_id=? AND user_id=? AND last_read_at<?",
+                    (now(), conversation_id, user["id"], messages[-1]["created_at"]),
+                )
             return handler.send_json(200, {"messages": messages})
         if action == "messages" and method == "POST":
             handler.throttle("support-message:" + user["id"], 30, 60)
@@ -986,6 +1020,8 @@ def _support_route(handler, method, path, query, con, user):
             message = _text(data.get("message"), 4000, required=True)
             if conversation["status"] == "closed":
                 raise ApiError(409, "Обращение закрыто. Создайте новое обращение.")
+            if not conversation["needs_human"] and not wants_human(message):
+                handler.throttle("support-ai:" + user["id"], 30, 60)
             history = _messages(con, conversation_id, limit=20)
             _add_message(con, conversation_id, user["id"], "user", message)
             if conversation["needs_human"]:
@@ -1110,7 +1146,7 @@ def _admin_route(handler, method, path, query, con):
         ).fetchall()
         threads = []
         for row in rows:
-            view = _conversation_view(row)
+            view = _conversation_view(row, include_user=True)
             view["stage"] = _support_stage(row)
             view["assigned_admin_name"] = row["assigned_admin_name"] or ""
             view["assigned_to_me"] = row["assigned_admin_id"] == admin["id"]

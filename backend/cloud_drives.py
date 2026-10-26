@@ -816,13 +816,23 @@ def webhook(handler, con):
     channel_id = handler.headers.get("X-Goog-Channel-ID", "")
     channel_token = handler.headers.get("X-Goog-Channel-Token", "")
     resource_id = handler.headers.get("X-Goog-Resource-ID", "")
-    if not channel_id or not channel_token or not resource_id:
+    if (
+        not channel_id or not channel_token or not resource_id
+        or len(channel_id) > 128 or len(channel_token) > 512 or len(resource_id) > 512
+    ):
         raise business.DomainError(400, "Некорректный webhook Google Drive")
+    handler.throttle("webhook-drive:" + handler.client_address[0], 120, 60)
     row = con.execute("SELECT * FROM cloud_watch_channels WHERE channel_id=? AND status='active' AND expires_at>?",
                       (channel_id, _now())).fetchone()
     if not row or not hmac.compare_digest(row["token_hash"], _hash(channel_token)) or row["resource_id"] != resource_id:
         raise business.DomainError(401, "Подпись webhook не подтверждена")
-    con.execute("UPDATE cloud_folder_bindings SET sync_requested=1,next_sync_at=?,updated_at=? WHERE connection_id=? AND status='active'",
+    connection = con.execute(
+        "SELECT 1 FROM cloud_connections WHERE id=? AND status='active'", (row["connection_id"],),
+    ).fetchone()
+    if not connection:
+        raise business.DomainError(401, "Подключение облака отключено")
+    handler.throttle("webhook-drive-channel:" + channel_id, 30, 60)
+    con.execute("UPDATE cloud_folder_bindings SET sync_requested=1,next_sync_at=?,updated_at=? WHERE connection_id=? AND status='active' AND sync_requested=0",
                 (_now(), _now(), row["connection_id"]))
     return {"ok": True, "accepted": True}
 
