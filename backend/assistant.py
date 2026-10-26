@@ -934,7 +934,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             if len(image_data) > 2_500_000:
                 raise DomainError(413, "Для анализа ИИ выберите изображение до 2,5 МБ")
             vision_content = [
-                {"type": "text", "text": prompt + "\\nИмя прикреплённого изображения: " + selected_file["name"]},
+                {"type": "text", "text": prompt + "\nИмя прикреплённого изображения: " + selected_file["name"]},
                 {"type": "image_url", "image_url": {"url": "data:" + selected_file["mime"] + ";base64,"
                     + base64.b64encode(image_data).decode("ascii")}},
             ]
@@ -959,7 +959,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         usage=response.pop('_usage',None)
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
-            (identity(),service.wid,service.user['id'],'assistant',os.getenv('OPENROUTER_MODEL','openrouter/free'),'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
+            (identity(),service.wid,service.user['id'],'assistant',(os.getenv('OPENROUTER_VISION_MODEL','openrouter/free') if isinstance(vision_content,list) else os.getenv('OPENROUTER_MODEL','openrouter/free')),'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
         answer = str(response.get("content") or "")[:12000]
         calls = response.get("tool_calls") or []
         if not calls:
