@@ -165,6 +165,9 @@ def _route(service, method, parts, query, data):
                 raise ValueError("markdown bounds")
         except (ValueError, TypeError, UnicodeError):
             raise DomainError(400, "Markdown должен содержать текст UTF-8 до 1 МБ") from None
+        from backend.file_security import validate_signature, scan_upload
+        validate_signature(row["name"], raw)
+        scan_upload(raw)
         from backend.vault import personal_storage_used, shared_storage_used, personal_storage_limit
         if row["vault_scope"] == "personal":
             used, quota = personal_storage_used(service), personal_storage_limit(service)
@@ -314,6 +317,9 @@ def _route(service, method, parts, query, data):
     maximum = maximum_upload()
     if not 1 <= len(raw) <= maximum:
         raise DomainError(413, f"Максимальный размер файла — {maximum // 1_000_000} МБ")
+    from backend.file_security import validate_signature, scan_upload
+    validate_signature(name, raw)
+    scan_upload(raw)
     if extension in (".png", ".jpg", ".jpeg"):
         try:
             from PIL import Image
