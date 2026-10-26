@@ -25,11 +25,12 @@ def verified_receipt_url(value):
         raise NpdReceiptError("Укажите ссылку на настоящий чек из «Мой налог»")
     try:
         url = urllib.parse.urlsplit(value)
+        port = url.port
     except ValueError:
         raise NpdReceiptError("Некорректный адрес чека") from None
     if (
         url.scheme != "https" or url.hostname != "lknpd.nalog.ru"
-        or url.port not in (None, 443)
+        or port not in (None, 443)
         or url.username or url.password or url.query or url.fragment
         or "\\" in value or any(ord(c) < 32 for c in value)
     ):
