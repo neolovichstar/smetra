@@ -411,3 +411,80 @@ def rotate_api_key(con, partner_id):
             "VALUES(?,?,?,?)", (_id(), partner_id, _sha(secret), moment)
         )
     return {"partner": existing["code"], "api_key": secret, "shown_once": True}
+
+
+def partner_profile(con, account):
+    """Read-only non-PII partner profile."""
+    domain = con.execute(
+        "SELECT status,verified_at FROM partner_domain_verifications WHERE partner_id=? AND domain=?",
+        (account["id"], account["allowed_host"]),
+    ).fetchone()
+    return {"id": account["id"], "code": account["code"], "name": account["name"],
+            "domain": account["allowed_host"], "active": bool(account["active"]),
+            "domain_status": domain["status"] if domain else "not_started",
+            "domain_verified_at": domain["verified_at"] if domain else None,
+            "commission_bps": account["commission_bps"], "term_days": account["term_days"],
+            "currency": "RUB", "payouts_enabled": False}
+
+
+def catalog_page(con, account, limit=50, cursor=""):
+    """Tenant-isolated, deterministic keyset pagination."""
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise PartnerError(400, "Размер страницы от 1 до 100")
+    if not isinstance(cursor, str) or (cursor and not SKU_RE.fullmatch(cursor)):
+        raise PartnerError(400, "Некорректный курсор")
+    rows = con.execute(
+        "SELECT sku,name,price_kopecks,url,available,updated_at "
+        "FROM partner_products WHERE partner_id=? AND sku>? ORDER BY sku LIMIT ?",
+        (account["id"], cursor, limit + 1),
+    ).fetchall()
+    items = rows[:limit]
+    return {"items": [dict(row) for row in items],
+            "next_cursor": items[-1]["sku"] if len(rows) > limit else None}
+
+
+def commission_page(con, account, limit=30, cursor=""):
+    """Opaque receipt IDs; no customer names, emails or user IDs."""
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise PartnerError(400, "Размер страницы от 1 до 100")
+    stamp, last_id = 2**62, "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+    if cursor:
+        match = re.fullmatch(r"([0-9]{1,12}):([0-9a-f-]{36})", cursor) if isinstance(cursor, str) else None
+        if not match:
+            raise PartnerError(400, "Некорректный курсор")
+        stamp, last_id = int(match[1]), match[2]
+    rows = con.execute(
+        "SELECT id,gross_kopecks,commission_kopecks,rate_bps,status,created_at,ready_at "
+        "FROM partner_commissions WHERE partner_id=? "
+        "AND (created_at<? OR (created_at=? AND id<?)) "
+        "ORDER BY created_at DESC,id DESC LIMIT ?",
+        (account["id"], stamp, stamp, last_id, limit + 1),
+    ).fetchall()
+    now = _now()
+    page = rows[:limit]
+    items = [{
+        "receipt_id": row["id"], "gross_kopecks": row["gross_kopecks"],
+        "commission_kopecks": row["commission_kopecks"], "rate_bps": row["rate_bps"],
+        "status": "reversed" if row["status"] == "reversed" else (
+            "held" if now < row["ready_at"] else "cleared_unpaid"),
+        "created_at": row["created_at"], "ready_at": row["ready_at"],
+    } for row in page]
+    return {"items": items,
+            "next_cursor": f"{page[-1]['created_at']}:{page[-1]['id']}" if len(rows) > limit else None,
+            "payouts_enabled": False}
+
+
+def set_partner_active(con, partner_id, active):
+    """Administrator-only pause. No payments or payouts are executed."""
+    if not isinstance(partner_id, str) or not re.fullmatch(r"[0-9a-f-]{36}\Z", partner_id):
+        raise PartnerError(400, "Некорректный идентификатор")
+    if type(active) is not bool:
+        raise PartnerError(400, "Ожидается active: true/false")
+    changed = con.execute("UPDATE partner_accounts SET active=? WHERE id=?",
+                          (int(active), partner_id)).rowcount
+    if not changed:
+        raise PartnerError(404, "Партнёр не найден")
+    if not active:
+        con.execute("UPDATE partner_console_sessions SET revoked_at=? "
+                    "WHERE partner_id=? AND revoked_at IS NULL", (_now(), partner_id))
+    return {"id": partner_id, "active": active, "payouts_enabled": False}
