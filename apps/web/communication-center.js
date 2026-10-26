@@ -298,5 +298,5 @@ function reset(){
  sessionEpoch++;close();state.current=null;state.messages=[];state.chats=[];state.channels=[];state.workspaces=[];state.userId='';state.publicId='';state.role='user';state.mode='user';state.busy=false;state.adminLoading=false;state.lastWaitingHuman=null;
  if($('#communication-center')){renderList();renderMessages();$('#comms-tools')?.replaceChildren();$('#comms-my-id code').textContent='';}
 }
-window.SmetraCommunication={open,close,reset,startPresence,refresh:()=>refresh(true)};
+window.SmetraCommunication={open,close,reset,startPresence,refresh:()=>refresh(true),openTicket:async id=>{await open('support');if(state.mode==='admin'&&state.chats.some(t=>t.id===id))await select(id)}};
 })();
