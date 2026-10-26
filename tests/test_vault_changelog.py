@@ -156,7 +156,7 @@ class VaultChangelogTests(unittest.TestCase):
         own=self.call("/files?scope=personal",token=owner,workspace=wid)[1]
         self.assertEqual(own["items"][0]["id"],file_id)
         self.assertEqual(own["items"][0]["vault_scope"],"personal")
-        from backend.assistant_files import list_files, search_content
+        from backend.assistant_files import list_files
         from backend.vault import require_file
         from types import SimpleNamespace
 
@@ -173,13 +173,12 @@ class VaultChangelogTests(unittest.TestCase):
     def test_private_quota_follows_account_across_workspaces(self):
         owner,owner_id=self.account("private-cap-owner")
         teammate,teammate_id=self.account("private-cap-team")
-        owner_wid=self.call("/workspace",token=owner)[1]["workspace"]["id"]
+        self.call("/workspace",token=owner)
         other_wid=self.call("/workspace",token=teammate)[1]["workspace"]["id"]
         with self.mod.db() as con:
             con.execute("INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,?)",
                         (other_wid,owner_id,"member"))
         # The mock cap is server-side and account-wide, not per workspace.
-        from backend.vault import personal_storage_used
         with patch("backend.vault.personal_storage_limit",return_value=150):
             code,first=self.upload(owner)
             self.assertEqual(code,201,first)
