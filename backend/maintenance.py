@@ -44,10 +44,18 @@ def cleanup(con, *, now=None, per_table=4000):
     limit = max(1, min(int(per_table), 4000))
     counts = {}
     for table, primary_key, column, grace_period in RETENTION:
+        # Referenced clicks are audit evidence for first-touch attribution.
+        # Deleting them would violate partner_attributions.click_id foreign keys
+        # and abort the entire maintenance job.
+        extra = (
+            " AND NOT EXISTS (SELECT 1 FROM partner_attributions a "
+            "WHERE a.click_id=partner_clicks.id)"
+            if table == "partner_clicks" else ""
+        )
         sql = (
             f"DELETE FROM {table} WHERE {primary_key} IN "
             f"(SELECT {primary_key} FROM {table} "
-            f"WHERE {column}<? ORDER BY {column},{primary_key} LIMIT ?)"
+            f"WHERE {column}<?{extra} ORDER BY {column},{primary_key} LIMIT ?)"
         )
         affected = con.execute(sql, (timestamp - grace_period, limit))
         counts[table] = max(0, affected.rowcount)
