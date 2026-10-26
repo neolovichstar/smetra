@@ -166,6 +166,9 @@ class PartnerPlatformTests(unittest.TestCase):
                  "amount_kopecks": 120000}
         self.assertFalse(integration.report_event(self.con, p, order)["trusted"])
         integration.report_event(self.con, p, order)
+        with self.assertRaises(partner.PartnerError) as conflicting:
+            integration.report_event(self.con, p, {**order, "amount_kopecks": 220000})
+        self.assertEqual(conflicting.exception.status, 409)
         stat = integration.analytics(self.con, p, 7)
         self.assertEqual(stat["merchant_reported"]["material_order_reported"]["count"], 1)
         self.assertEqual(stat["merchant_reported"]["material_order_reported"]["amount_kopecks"], 120000)
