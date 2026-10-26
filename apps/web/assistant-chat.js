@@ -937,7 +937,21 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(kind==='status'&&typeof payload.text==='string'&&payload.text.trim()){hasModelProgress=true;setActivity(payload.text.trim());status.textContent=payload.text.trim()}
         if(kind==='web_source'){showSource(payload);if(!hasModelProgress)setActivity('Проверяю источники…')}
         if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});if(!hasModelProgress)setActivity('Конструирую смету…')}
-        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        if(kind==='done'){if(activeConversation&&typeof payload.conversation_title==='string'){
+          const title=payload.conversation_title.trim();
+          if(title){
+            const row=[...document.querySelectorAll('[data-thread-row]')].find(node=>node.dataset.threadId===activeConversation);
+            if(row){
+              const label=row.querySelector('.assistant-conversation-title'),open=row.querySelector('.assistant-conversation-open');
+              if(label)label.textContent=title;
+              if(open)open.title=title;
+              const rename=row.querySelector('[data-thread-rename-input]');if(rename)rename.value=title;
+            }
+            const index=threadIndex.items.find(item=>item.id===activeConversation);if(index)index.title=title;
+            const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
+            if(option)option.textContent=title;
+          }
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();break}buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
