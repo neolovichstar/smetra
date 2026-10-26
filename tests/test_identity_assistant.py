@@ -119,10 +119,12 @@ class IdentityAssistantTests(unittest.TestCase):
 
         with self.mod.db() as con:
             wid = con.execute("SELECT id FROM workspaces WHERE owner_id=?", (stranger_id,)).fetchone()
-            service = SimpleNamespace(con=con, wid=wid["id"])
+            stranger_user=con.execute("SELECT * FROM users WHERE id=?",(stranger_id,)).fetchone()
+            service = SimpleNamespace(con=con, wid=wid["id"], user=stranger_user)
             self.assertEqual(list_files(service, "brief"), {"files": []})
             owner_wid = con.execute("SELECT id FROM workspaces WHERE owner_id=?", (owner_id,)).fetchone()
             service.wid = owner_wid["id"]
+            service.user=con.execute("SELECT * FROM users WHERE id=?",(owner_id,)).fetchone()
             self.assertEqual([item["name"] for item in list_files(service, "brief")["files"]],
                              ["private-brief.txt"])
 
