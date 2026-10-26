@@ -56,7 +56,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 64
+REQUIRED_CLOUD_SCHEMA_VERSION = 65
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -639,6 +639,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/assets/pwa/icon-maskable-512.png": ("assets/pwa/icon-maskable-512.png", "image/png"),
             "/assets/pwa/apple-touch-icon.png": ("assets/pwa/apple-touch-icon.png", "image/png"),
         }
+        public["/workspace-vault.css"] = ("workspace-vault.css", "text/css")
         # Every top-level script is public; the build validates them with node --check.
         js_asset = re.fullmatch(r"/([a-z0-9-]{1,40})\.js", path)
         if js_asset and (WEB / f"{js_asset[1]}.js").is_file():
