@@ -1,5 +1,10 @@
 name: CI
 on: [push, pull_request]
+# Many small fixes should not run multiple overlapping Android/browser builds.
+# Keep the newest result for each PR or branch and save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
