@@ -120,6 +120,10 @@
     const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
     const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
     let layout=null,configureVisible=false;
+    const themeObserver=new MutationObserver(()=>{
+      if(visible && (!layout || layout.appearance==='auto') && current)render();
+    });
+    themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     const render=()=>{
       if(!visible)return;
       content.replaceChildren();
@@ -226,7 +230,7 @@
       const id=current.id;await load(id);
     };
     return {load,propose,design,refresh,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
-      destroy:()=>{seq++;hostRoot?.classList.remove('has-quote-preview');panel.remove()},
+      destroy:()=>{seq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview');panel.remove()},
       get currentId(){return current?.id||''}};
   }
   window.SmetraQuoteVisuals={mountAssistant,mountRooms,breakdown,serverAmounts,roomDiagram,money};
