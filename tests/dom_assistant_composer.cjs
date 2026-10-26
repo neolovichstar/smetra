@@ -16,6 +16,7 @@ async function setup(enabled=true,voice=false,remaining=3){
    constructor(){activeRecognition=this;this.lang='';this.interimResults=false;this.continuous=false;this.maxAlternatives=1;}
    start(){this.started=true;this.onstart?.()}
    stop(){this.stopped=true;this.onend?.()}
+   abort(){this.aborted=true;this.onend?.()}
   };
  }
  w.notify=text=>notices.push(text);w.scrollTo=()=>{};
@@ -43,14 +44,42 @@ async function setup(enabled=true,voice=false,remaining=3){
   const rec=recognition();assert.ok(rec,'SpeechRecognition instance should be created');assert.equal(rec.started,true);
   assert.equal(microphonePermissionRequests(),0,'SpeechRecognition must not compete with a second permission request');
   assert.match(doc.querySelector('#assistant-status').textContent,/Слушаю/);
+  rec.onresult({results:[{0:{transcript:'Состав'},isFinal:false}],resultIndex:0});
+  assert.equal(input.value,'Состав','interim words must appear in the message textarea');
   rec.onresult({results:[{0:{transcript:'Составь смету'},isFinal:true}],resultIndex:0});
+  assert.equal(input.value,'Составь смету','final result replaces interim, without duplication');
+  assert.doesNotMatch(doc.querySelector('#assistant-status').textContent,/Распознаю:/,'transcript must not render in the footer');
   rec.stop();await tick();
   assert.equal(input.value,'Составь смету');
   assert.equal(button.type,'submit');assert.ok(button.querySelector('svg'),'send has a visible SVG');
   assert.equal(button.disabled,true,'sending remains blocked while quota is exhausted');
   assert.equal(voice.disabled,false,'microphone stays usable after transcription');
-  assert.match(doc.querySelector('#assistant-status').textContent,/Текст распознан/);
+  assert.match(doc.querySelector('#assistant-status').textContent,/Текст в поле/);
  },true,true,0);
+ await test('starting a new assistant screen aborts the old microphone session',async({w,doc,recognition})=>{
+  const voice=doc.querySelector('#assistant-voice'),input=doc.querySelector('#assistant-input');
+  voice.click();await tick();
+  const rec=recognition();
+  rec.onresult({results:[{0:{transcript:'Первый черновик'},isFinal:false}],resultIndex:0});
+  assert.equal(input.value,'Первый черновик');
+  doc.dispatchEvent(new w.Event('smetra:before-view'));
+  assert.equal(rec.aborted,true,'navigating away must stop microphone capture');
+  assert.equal(rec.onresult,null,'late recognition events must not update a detached composer');
+ },true,true);
+ await test('submitting background job aborts speech before clearing the editor',async({w,doc,recognition,requests})=>{
+  doc.querySelector('#assistant-background').click();
+  const input=doc.querySelector('#assistant-input');
+  doc.querySelector('#assistant-voice').click();await tick();
+  const rec=recognition();
+  rec.onresult({results:[{0:{transcript:'Покраска потолка'},isFinal:false}],resultIndex:0});
+  assert.equal(input.value,'Покраска потолка');
+  doc.querySelector('#assistant-form').requestSubmit();await tick();
+  assert.equal(rec.aborted,true,'recognition must stop when the prompt is submitted');
+  assert.equal(rec.onresult,null,'late partial results must be disabled');
+  assert.equal(requests.length,1);
+  assert.equal(JSON.parse(requests[0].body).text,'Покраска потолка');
+  assert.equal(input.value,'','submitting must clear the composer only once');
+ },true,true);
  await test('empty and whitespace messages cannot be sent while microphone stays available',async({w,doc,requests})=>{
   const button=doc.querySelector('#assistant-send'),voice=doc.querySelector('#assistant-voice');
   assert.equal(button.type,'submit');assert.equal(button.disabled,true);assert.equal(voice.disabled,false);
