@@ -44,6 +44,7 @@ TABLES = TABLES | frozenset(
 )
 TABLES = TABLES | frozenset("object_chat_threads object_chat_messages project_cash_risks".split())
 TABLES = TABLES | frozenset("ai_token_wallets ai_token_ledger assistant_bonus_grants assistant_bonus_usage".split())
+TABLES = TABLES | frozenset({"npd_receipt_deliveries"})
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
