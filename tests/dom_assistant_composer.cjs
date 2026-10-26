@@ -80,6 +80,17 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(JSON.parse(requests[0].body).text,'Покраска потолка');
   assert.equal(input.value,'','submitting must clear the composer only once');
  },true,true);
+ await test('delayed Android bridge never opens microphone after navigation',async({w,doc})=>{
+  const ready=deferred(),calls=[];
+  w.SmetraShell={available:true,ready:ready.promise,has:feature=>feature==='speech',
+    call:async op=>{calls.push(op);return {text:'Не отправлять'}}};
+  doc.querySelector('#assistant-voice').click();await tick();
+  doc.dispatchEvent(new w.Event('smetra:before-view'));
+  w.eval("tab='dashboard'");
+  ready.resolve({});
+  await tick();await tick();
+  assert.deepEqual(calls,[],'do not call Android recognizer after leaving the assistant');
+ },true,false);
  await test('empty and whitespace messages cannot be sent while microphone stays available',async({w,doc,requests})=>{
   const button=doc.querySelector('#assistant-send'),voice=doc.querySelector('#assistant-voice');
   assert.equal(button.type,'submit');assert.equal(button.disabled,true);assert.equal(voice.disabled,false);
