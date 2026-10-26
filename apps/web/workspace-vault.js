@@ -17,7 +17,11 @@
     for (const url of thumbUrls) URL.revokeObjectURL(url);
     thumbUrls = [];
   }
-  window.addEventListener('hashchange', cleanup);
+  // A hashchange into this page must not cancel its own in-flight render.
+  window.addEventListener('hashchange', () => {
+    const section=location.hash.slice(1);
+    if(section!=='files' && section!=='changelog') cleanup();
+  });
   const state = {filter:'images',search:'',offset:0,files:[],result:null,canWrite:false,wid:''};
   const activePage = mine => epoch === mine && tab === 'files' && document.querySelector('#vault-root');
 
