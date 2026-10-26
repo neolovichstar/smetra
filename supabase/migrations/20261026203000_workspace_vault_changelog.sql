@@ -60,6 +60,47 @@ CREATE POLICY product_update_reactions_owner ON smetra.product_update_reactions 
 REVOKE ALL ON smetra.product_updates,smetra.product_update_views,smetra.product_update_reactions
  FROM PUBLIC,anon,authenticated;
 
+
+-- Trigger-owned counters: members never need UPDATE permissions on the public announcement row.
+CREATE OR REPLACE FUNCTION smetra.product_update_count_trigger() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+ AS $
+ BEGIN
+  IF TG_TABLE_NAME='product_update_views' THEN
+    IF TG_OP='INSERT' THEN
+      UPDATE smetra.product_updates SET view_count=view_count+1 WHERE id=NEW.update_id;
+    ELSE
+      UPDATE smetra.product_updates SET view_count=view_count-1 WHERE id=OLD.update_id;
+    END IF;
+  ELSE
+    IF TG_OP IN ('UPDATE','DELETE') THEN
+      UPDATE smetra.product_updates SET
+        likes=likes-CASE WHEN OLD.reaction='like' THEN 1 ELSE 0 END,
+        dislikes=dislikes-CASE WHEN OLD.reaction='dislike' THEN 1 ELSE 0 END
+      WHERE id=OLD.update_id;
+    END IF;
+    IF TG_OP IN ('INSERT','UPDATE') THEN
+      UPDATE smetra.product_updates SET
+        likes=likes+CASE WHEN NEW.reaction='like' THEN 1 ELSE 0 END,
+        dislikes=dislikes+CASE WHEN NEW.reaction='dislike' THEN 1 ELSE 0 END
+      WHERE id=NEW.update_id;
+    END IF;
+  END IF;
+  RETURN COALESCE(NEW,OLD);
+ END;
+ $;
+REVOKE ALL ON FUNCTION smetra.product_update_count_trigger() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER product_update_view_insert AFTER INSERT ON smetra.product_update_views
+ FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
+CREATE TRIGGER product_update_view_delete AFTER DELETE ON smetra.product_update_views
+ FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
+CREATE TRIGGER product_update_reaction_insert AFTER INSERT ON smetra.product_update_reactions
+ FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
+CREATE TRIGGER product_update_reaction_update AFTER UPDATE ON smetra.product_update_reactions
+ FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
+CREATE TRIGGER product_update_reaction_delete AFTER DELETE ON smetra.product_update_reactions
+ FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
+
 INSERT INTO smetra.schema_migrations(version,applied_at)
  VALUES(40,extract(epoch FROM now())::bigint) ON CONFLICT DO NOTHING;
 COMMIT;
