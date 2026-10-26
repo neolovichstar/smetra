@@ -86,6 +86,23 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == "thumbnail" and method == "GET":
+        row = service.get("files", parts[0])
+        if row["mime"] not in ("image/png", "image/jpeg"):
+            raise DomainError(415, "Нет миниатюры для этого файла")
+        from PIL import Image
+        with Image.open(io.BytesIO(download(row, service.con).data)) as source:
+            source.thumbnail((380, 380))
+            output = io.BytesIO()
+            source.convert("RGB").save(output, format="JPEG", quality=76, optimize=True)
+        return 200, Download(output.getvalue(), "image/jpeg", "preview.jpg")
+    if len(parts) == 2 and parts[1] == "archive" and method == "PATCH":
+        row = service.get("files", parts[0])
+        archived = integer(data.get("archived"), "Архив", 0, 1)
+        service.con.execute("UPDATE files SET archived=? WHERE id=? AND workspace_id=?",
+            (archived, row["id"], service.wid))
+        service.emit("file",row["id"],"Файл архивирован" if archived else "Файл восстановлен",row["name"])
+        return 200, {"ok":True, "archived":archived}
     if len(parts) == 2 and parts[1] == "preview":
         from backend.file_preview import route as preview_route
 
@@ -205,20 +222,35 @@ def _route(service, method, parts, query, data):
                     "items": [
                         dict(r)
                         for r in service.con.execute(
-                            f"SELECT id,name,mime,size,sha256,public,created_at FROM files WHERE workspace_id=? AND {key}=? ORDER BY created_at DESC LIMIT 100",
+                            f"SELECT id,name,mime,size,sha256,public,created_at FROM files WHERE workspace_id=? AND archived=0 AND {key}=? ORDER BY created_at DESC LIMIT 100",
                             (service.wid, query[key][0]),
                         )
                     ],
                 }
         phrase = string(query.get("q", [""])[0], "Поиск", 100)
-        return 200, {
-            "items": [dict(row) for row in service.con.execute(
-                "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,client_id,construction_id "
-                "FROM files WHERE workspace_id=? AND instr(lower(name),lower(?))>0 "
-                "ORDER BY created_at DESC LIMIT 50 OFFSET ?",
-                (service.wid, phrase, service.page(query)),
-            )],
-        }
+        archived = 1 if query.get("archived", ["0"])[0] == "1" else 0
+        file_type = query.get("type", ["all"])[0]
+        if file_type not in ("all", "images", "documents"):
+            raise DomainError(400, "Неизвестный тип файлов")
+        type_condition = (" AND mime IN ('image/png','image/jpeg')" if file_type == "images"
+                          else " AND mime NOT IN ('image/png','image/jpeg')" if file_type == "documents" else "")
+        used = service.con.execute(
+            "SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (service.wid,)
+        ).fetchone()[0]
+        count = service.con.execute(
+            "SELECT count(*) FROM files WHERE workspace_id=? AND archived=?"
+            " AND instr(lower(name),lower(?))>0" + type_condition,
+            (service.wid, archived, phrase),
+        ).fetchone()[0]
+        rows = service.con.execute(
+            "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,client_id,construction_id,archived "
+            "FROM files WHERE workspace_id=? AND archived=? AND instr(lower(name),lower(?))>0"
+            + type_condition + " ORDER BY created_at DESC,id DESC LIMIT 60 OFFSET ?",
+            (service.wid, archived, phrase, service.page(query)),
+        ).fetchall()
+        return 200, {"items":[dict(row) for row in rows], "total":count,
+                     "used_bytes":used, "quota_bytes":workspace_storage_limit(service),
+                     "max_upload_bytes":maximum_upload()}
     if method == "DELETE" and parts:
         row = service.get("files", parts[0])
         from backend.assistant_jobs import refund
