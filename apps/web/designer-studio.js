@@ -18,7 +18,6 @@
   const input=(key,label,placeholder,value='',extra='')=>'<label class="designer-field"><span>'+h(label)+'</span><input name="'+key+'" placeholder="'+h(placeholder)+'" value="'+h(value)+'" '+extra+'></label>';
   const btn=(name,attrs)=>'<button class="btn small" type="button" '+(attrs||'')+'>'+name+'</button>';
   const isCurrent=(mine,accountId,workspaceId)=>generation===mine&&tab==='designer'&&user?.id===accountId&&sessionStorage.getItem('workspace_id')===workspaceId;
-  const start=()=>{const id=++generation;return ()=>isCurrent(id,userId,workspaceId);};
   const userId=()=>user?.id;
   const workspaceId=()=>sessionStorage.getItem('workspace_id');
   const request=(path,payload,method='POST')=>api(path,{method,body:JSON.stringify(payload)});
@@ -80,7 +79,7 @@
       '<div><span>Плановый бюджет</span><strong>'+money(sum.budget_kopecks)+'</strong></div>'+
       '<div><span>Осталось</span><strong '+(sum.remainder_kopecks<0?'class="designer-over"':'')+'>'+money(sum.remainder_kopecks)+'</strong></div>'+
       '<div><span>Без цены</span><strong>'+sum.missing_prices+'</strong></div></div>'+
-      '<div class="designer-progress" role="progressbar" aria-label="Использование бюджета" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100"><span style="width:'+pct+'%"></span></div>'+
+      '<progress class="designer-progress" aria-label="Использование бюджета" value="'+pct+'" max="100"></progress>'+
       (sum.missing_prices?'<p class="designer-warning">У '+sum.missing_prices+' позиций нет подтверждённой цены. Расчёт предварительный.</p>':'')+
       '<section class="designer-section"><h2>Помещения и бюджеты</h2><div class="designer-rooms">'+rooms.map(r=>
         '<div class="designer-room"><span><strong>'+h(r.name)+'</strong><small>'+h(r.notes||'')+'</small></span><b>'+money(totals.get(r.id))+'</b>'+
