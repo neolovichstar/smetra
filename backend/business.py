@@ -382,6 +382,17 @@ def migrate(con):
     con.executescript((Path(__file__).parent / "migrations" / "028_object_chats.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "034_partner_platform.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "035_partner_verification_analytics.sql").read_text(encoding="utf-8"))
+    # Python casefold handles Cyrillic correctly; SQLite's lower() only handles ASCII.
+    partner_columns = {r["name"] for r in con.execute("PRAGMA table_info(partner_products)")}
+    if "search_name" not in partner_columns:
+        con.execute("ALTER TABLE partner_products ADD COLUMN search_name TEXT NOT NULL DEFAULT ''")
+    pending_names = con.execute(
+        "SELECT id,name FROM partner_products WHERE search_name=''"
+    ).fetchall()
+    for item in pending_names:
+        con.execute("UPDATE partner_products SET search_name=? WHERE id=?",
+                    (item["name"].casefold(), item["id"]))
+
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")

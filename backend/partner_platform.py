@@ -292,17 +292,18 @@ def ingest_products(con, partner, body):
         active = item.get("available", True)
         if type(active) is not bool:
             raise PartnerError(400, "Некорректная доступность")
-        prepared.append((sku, name, price, url, int(active)))
+        prepared.append((sku, name, name.casefold(), price, url, int(active)))
     moment = _now()
     from backend.business import transaction
     with transaction(con, lock_scopes=(f"partner:{partner['id']}",)):
-        for sku, name, price, url, active in prepared:
+        for sku, name, normalized, price, url, active in prepared:
             con.execute(
-                "INSERT INTO partner_products(id,partner_id,sku,name,price_kopecks,url,available,updated_at) "
-                "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(partner_id,sku) DO UPDATE SET "
-                "name=excluded.name,price_kopecks=excluded.price_kopecks,"
+                "INSERT INTO partner_products(id,partner_id,sku,name,search_name,price_kopecks,url,available,updated_at) "
+                "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(partner_id,sku) DO UPDATE SET "
+                "name=excluded.name,search_name=excluded.search_name,"
+                "price_kopecks=excluded.price_kopecks,"
                 "url=excluded.url,available=excluded.available,updated_at=excluded.updated_at",
-                (_id(), partner["id"], sku, name, price, url, active, moment),
+                (_id(), partner["id"], sku, name, normalized, price, url, active, moment),
             )
     return {"accepted": len(prepared)}
 
@@ -313,13 +314,13 @@ def offers(con, term):
     if len(term) < 2:
         raise PartnerError(400, "Введите минимум 2 символа")
     # Escape SQL LIKE metacharacters; a partner cannot inject SQL by product title.
-    pattern = "%" + term.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    pattern = "%" + term.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     rows = con.execute(
         "SELECT p.id,p.name,p.price_kopecks,p.updated_at,a.name AS partner "
         "FROM partner_products p JOIN partner_accounts a ON a.id=p.partner_id "
         "JOIN partner_domain_verifications v ON v.partner_id=a.id AND v.domain=a.allowed_host AND v.status='verified' "
         "WHERE a.active=1 AND p.available=1 AND v.verified_at>? "
-        "AND lower(p.name) LIKE ? ESCAPE '\\' "
+        "AND p.search_name LIKE ? ESCAPE '\\' "
         "ORDER BY p.price_kopecks ASC LIMIT 30",
         (_now() - VERIFICATION_TTL, pattern),
     ).fetchall()
