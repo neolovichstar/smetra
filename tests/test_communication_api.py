@@ -154,6 +154,22 @@ class CommunicationApiTests(unittest.TestCase):
             self.assertIn(public_token,saved["body"])
             self.assertEqual(json.loads(saved["metadata"])["quote_id"],quote_id)
 
+
+    def test_existing_invalid_support_reply_is_masked_in_messages_and_list(self):
+        with app.db() as con:
+            cid = community._new_conversation(con, "support", "Ассистент и лимиты", self.alice_id)
+            community._add_member(con, cid, self.alice_id, "customer")
+            community._add_message(con, cid, None, "assistant", "User Safety: safe")
+        status, messages = self.request(
+            "/api/support/threads/" + cid + "/messages", token=self.alice_token,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(messages["messages"][-1]["body"], community._SUPPORT_UNAVAILABLE_REPLY)
+        status, listing = self.request("/api/support/threads", token=self.alice_token)
+        self.assertEqual(status, 200)
+        item = next(row for row in listing["threads"] if row["id"] == cid)
+        self.assertEqual(item["last_message"], community._SUPPORT_UNAVAILABLE_REPLY)
+
     def test_support_escalation_is_visible_to_admin_and_user_cannot_read_admin_queue(self):
         mocked = {"reply": "Подключаю сотрудника поддержки.", "escalate": True,
                   "reason": "user_requested_human"}

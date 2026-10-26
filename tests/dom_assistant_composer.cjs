@@ -157,6 +157,104 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(sent.path,'/api/assistant/stream');assert.equal(JSON.parse(sent.options.body).text,'Normal question');assert.equal(requests.length,0);
   assert.equal(doc.querySelector('.assistant-message.assistant strong').textContent,'Ready');assert.equal(doc.querySelector('#assistant-stop').hidden,true);assert.equal(doc.querySelector('#assistant-input').value,'');
  });
+
+ await test('text and photos leave the composer before the network replies, using their original snapshot',async({w,doc})=>{
+  const task=deferred(),sent=[],revoked=[];
+  w.URL.createObjectURL=()=> 'blob:fixture-photo';w.URL.revokeObjectURL=url=>revoked.push(url);
+  const file=new w.File(['photo'],'photo.jpg',{type:'image/jpeg'});
+  Object.defineProperty(file,'arrayBuffer',{value:async()=>Uint8Array.from([1,2,3]).buffer});
+  const picker=doc.querySelector('#assistant-attach-input');
+  Object.defineProperty(picker,'files',{configurable:true,value:[file]});await picker.onchange();
+  type(w,doc,'Проверь это фото');
+  w.fetch=(path,options)=>{sent.push({path,options});return task.promise};
+  doc.querySelector('#assistant-form').requestSubmit();
+  assert.equal(doc.querySelector('#assistant-input').value,'','clear text at submit time');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,0,'clear photo tray at submit time');
+  assert.equal(doc.querySelector('.assistant-attachment-preview').hidden,true);
+  assert.equal(w.sessionStorage.getItem('smetra.assistant.draft:qa:qa-workspace:global'),null);
+  await tick();await tick();
+  const payload=JSON.parse(sent[0].options.body);
+  assert.equal(payload.text,'Проверь это фото');assert.equal(payload.images.length,1);
+  assert.equal(payload.images[0].content,'AQID');assert.equal(revoked.length,1);
+  task.resolve({ok:true,body:new ReadableStream({start(controller){
+   controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Проверено',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));controller.close();
+  }})});
+  await tick();await tick();assert.equal(doc.querySelector('#assistant-input').value,'');
+ });
+ await test('failed normal send restores its text and photo for retry',async({w,doc})=>{
+  let created=0,revoked=0;w.URL.createObjectURL=()=> 'blob:fixture-'+(++created);w.URL.revokeObjectURL=()=>revoked++;
+  const file=new w.File(['photo'],'retry.jpg',{type:'image/jpeg'});
+  Object.defineProperty(file,'arrayBuffer',{value:async()=>Uint8Array.from([1]).buffer});
+  const picker=doc.querySelector('#assistant-attach-input');
+  Object.defineProperty(picker,'files',{configurable:true,value:[file]});await picker.onchange();
+  type(w,doc,'Не потеряй вложение');w.fetch=async()=>{throw Error('Network unavailable')};
+  doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'Не потеряй вложение');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,1);
+  assert.equal(created,2,'restored photo receives a fresh preview URL');assert.equal(revoked,1);
+  assert.match(doc.querySelector('.assistant-error').textContent,/Network unavailable/);
+ });
+ await test('sending a selected document clears its chip while preserving the request context',async({w,doc})=>{
+  const original=w.api,task=deferred();let sent;
+  const context={entity:'files',id:'document-1',label:'estimate.pdf',workspace_id:'qa-workspace'};
+  w.sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));
+  w.api=async(path,options={})=>path==='/files/document-1/metadata'?{
+   file:{id:'document-1',name:'estimate.pdf',size:10},processing:{state:'ready',pages:1}
+  }:original(path,options);
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelectorAll('.assistant-attachment-document').length,1);
+  type(w,doc,'Проверь документ');w.fetch=(path,options)=>{sent=JSON.parse(options.body);return task.promise};
+  doc.querySelector('#assistant-form').requestSubmit();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,0);
+  assert.ok(doc.querySelector('#assistant-context').classList.contains('hidden'));
+  assert.equal(w.sessionStorage.getItem('smetra.assistant.context'),null);
+  assert.equal(sent.context.entity,'files');assert.equal(sent.context.id,'document-1');
+  task.resolve({ok:false,status:503,json:async()=>({error:'Try again'})});await tick();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'Проверь документ');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-document').length,1);
+ });
+
+ await test('a sent document is detached from a named conversation after success',async({w,doc})=>{
+  const original=w.api,changes=[];
+  const item={id:'thread-document',title:'Файл',context_entity:'files',context_id:'document-2'};
+  w.sessionStorage.setItem('smetra.assistant.conversation',item.id);
+  w.api=async(path,options={})=>{
+   if(path==='/assistant/conversations')return {items:[item]};
+   if(path==='/assistant/conversations/'+item.id){
+    if(options.method==='PATCH'){changes.push(JSON.parse(options.body));return {conversation:{...item,context_entity:'',context_id:''}}}
+    return {conversation:item,messages:[]};
+   }
+   if(path==='/files/document-2/metadata')return {file:{id:'document-2',name:'notes.txt',size:10},processing:{state:'ready',pages:1}};
+   return original(path,options);
+  };
+  await w.SmetraAssistant();await tick();
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){
+   controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Прочитано',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));controller.close();
+  }})});
+  type(w,doc,'Прочитай');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,0);
+  assert.deepEqual(changes,[{context_entity:'',context_id:''}]);
+ });
+ await test('an accepted background job clears the composer before its reply arrives',async({w,doc})=>{
+  const task=deferred(),original=w.api;
+  w.api=(path,options={})=>path==='/assistant/jobs'&&options.method==='POST'?task.promise:original(path,options);
+  doc.querySelector('#assistant-background').click();type(w,doc,'Фоновая задача');
+  doc.querySelector('#assistant-form').requestSubmit();
+  assert.equal(doc.querySelector('#assistant-input').value,'');
+  task.resolve({job:{id:'job'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'');
+ });
+ await test('consent cancellation leaves text and attachments in place',async({w,doc})=>{
+  w.URL.createObjectURL=()=> 'blob:fixture';w.URL.revokeObjectURL=()=>{};
+  const picker=doc.querySelector('#assistant-attach-input'),file=new w.File(['photo'],'keep.jpg',{type:'image/jpeg'});
+  Object.defineProperty(picker,'files',{configurable:true,value:[file]});await picker.onchange();
+  w.SmetraEstimateSafety={ensureConsent:async()=>false};type(w,doc,'Черновик');
+  doc.querySelector('#assistant-form').requestSubmit();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'Черновик');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,1);
+ });
  await test('in-flight queue submission cannot be sent twice',async({w,doc})=>{
   const task=deferred(),original=w.api;let calls=0;w.api=(path,options={})=>{if(path==='/assistant/jobs'&&options.method==='POST'){calls++;return task.promise}return original(path,options)};
   doc.querySelector('#assistant-background').click();type(w,doc,'One job');doc.querySelector('#assistant-form').requestSubmit();await tick();

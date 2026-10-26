@@ -237,7 +237,8 @@ def _message_view(row):
         return None
     return {
         "id": row["id"], "sender_id": row["sender_id"],
-        "sender_type": row["sender_type"], "body": row["body"],
+        "sender_type": row["sender_type"],
+        "body": _support_public_reply(row["body"]) if row["sender_type"] == "assistant" else row["body"],
         "metadata": _json(row["metadata"]), "created_at": row["created_at"],
         # Display name lets group chats label bubbles like a messenger.
         # Staff names stay private: only peer users are labelled by name.
@@ -254,7 +255,11 @@ def _conversation_view(row):
         "status": row["status"], "needs_human": bool(row["needs_human"]),
         "human_reason": row["human_reason"], "assigned_admin_id": row["assigned_admin_id"],
         "created_at": row["created_at"], "updated_at": row["updated_at"],
-        "last_message": row["last_message"] or "",
+        "last_message": (
+            _support_public_reply(row["last_message"])
+            if row["kind"] == "support" and "last_message_sender_type" in row.keys()
+            and row["last_message_sender_type"] == "assistant" else row["last_message"] or ""
+        ),
         "last_message_at": row["last_message_at"] or row["updated_at"],
         "unread_count": int(row["unread_count"] or 0),
         "partner_name": row["partner_name"] or "",
@@ -270,6 +275,8 @@ def _list_conversations(con, user_id, kinds, include_user=False):
         "SELECT c.*, "
         "(SELECT m.body FROM chat_messages m WHERE m.conversation_id=c.id "
         " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_message, "
+        "(SELECT m.sender_type FROM chat_messages m WHERE m.conversation_id=c.id "
+        " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_message_sender_type, "
         "(SELECT m.created_at FROM chat_messages m WHERE m.conversation_id=c.id "
         " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_message_at, "
         "(SELECT COUNT(*) FROM chat_messages m JOIN chat_members mine "
@@ -533,14 +540,53 @@ def _support_prompt(user, user_stats):
     )
 
 
+_SUPPORT_INTERNAL = re.compile(
+    r"(?im)^\s*(?:[#*\x60-]+\s*)?(?:user\s+safety|safety\s+(?:assessment|classification|analysis)"
+    r"|(?:internal\s+)?(?:analysis|reasoning)|chain[- ]of[- ]thought)\s*[*\x60]*\s*:"
+)
+_SUPPORT_UNAVAILABLE_REPLY = (
+    "Не удалось сформировать ответ поддержки. Напишите вопрос ещё раз "
+    "или нажмите «Позвать сотрудника»."
+)
+
+
+def _support_reply_text(value):
+    """Only final user-facing text may become a support message."""
+    if not isinstance(value, str):
+        raise ValueError("invalid support reply type")
+    text = re.sub(
+        r"<(think|thinking|analysis|reasoning)\b[^>]*>.*?</\1\s*>",
+        "", value, flags=re.I | re.S,
+    ).strip()
+    if (not text or _SUPPORT_INTERNAL.search(text)
+            or re.search(r"</?(?:think|thinking|analysis|reasoning)\b", text, re.I)):
+        raise ValueError("support reply contains no final answer")
+    return text
+
+
+def _support_public_reply(value):
+    """Mask old invalid model messages on read without modifying chat history."""
+    try:
+        return _support_reply_text(value)
+    except ValueError:
+        return _SUPPORT_UNAVAILABLE_REPLY
+
+
 def _parse_support_reply(raw):
-    """Accept strict JSON, fenced JSON or plain prose from free models."""
+    """Accept final JSON/prose, reject classifier output and reasoning traces."""
     if isinstance(raw, dict):
-        return raw
-    text = str(raw or "").strip()
+        return {**raw, "reply": _support_reply_text(raw.get("reply"))}
+    if not isinstance(raw, str):
+        raise ValueError("invalid support response")
+    text = raw.strip()
     if not text:
         raise ValueError("empty support reply")
-    fenced = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(
+        r"<(think|thinking|analysis|reasoning)\b[^>]*>.*?</\1\s*>",
+        "", text, flags=re.I | re.S,
+    ).strip()
+    fence = chr(96) * 3
+    fenced = re.sub(rf"^{fence}(?:json)?\s*|\s*{fence}$", "", text, flags=re.IGNORECASE).strip()
     for candidate in (fenced, (re.search(r"\{.*\}", fenced, re.S) or [None])[0]):
         if not candidate:
             continue
@@ -548,12 +594,11 @@ def _parse_support_reply(raw):
             decoded = json.loads(candidate)
         except ValueError:
             continue
-        if isinstance(decoded, dict) and str(decoded.get("reply") or "").strip():
-            return decoded
-    # Prose without the JSON envelope is still a usable answer.
-    if fenced.startswith("{"):
+        if isinstance(decoded, dict):
+            return {**decoded, "reply": _support_reply_text(decoded.get("reply"))}
+    if fenced.startswith(("{", "[")):
         raise ValueError("malformed support payload")
-    return {"reply": fenced, "escalate": False, "reason": ""}
+    return {"reply": _support_reply_text(fenced), "escalate": False, "reason": ""}
 
 
 def _support_completion(payload, timeout):
@@ -574,8 +619,16 @@ def _support_completion(payload, timeout):
         # Support has its own bounded JSON-mode/free-router retry. Do not call
         # open_completion here: its retry would multiply support requests.
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read(500_000).decode("utf-8"))
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw = response.read(500_001)
+        if len(raw) > 500_000:
+            raise ValueError("support response too large")
+        data = json.loads(raw)
+        choices = data.get("choices") if isinstance(data, dict) else None
+        first = choices[0] if isinstance(choices, list) and choices else None
+        message = first.get("message") if isinstance(first, dict) else None
+        if not isinstance(message, dict):
+            raise ValueError("invalid support completion")
+        return message.get("content", "")
 
     try:
         return _parse_support_reply(call(payload))
@@ -624,6 +677,7 @@ def _support_ai_reply(user, user_stats, history, message):
         "temperature": 0.3,
         "max_tokens": 700,
         "response_format": {"type": "json_object"},
+        "reasoning": {"effort": "low", "exclude": True},
     }
     try:
         timeout = max(4, min(20, int(os.getenv("SUPPORT_AI_TIMEOUT_SECONDS", "12"))))

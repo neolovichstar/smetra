@@ -264,7 +264,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const syncSendButton=()=>{
     const canSend=Boolean(input.value.trim()||pendingPhotos.length);
     const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
-    send.disabled=!canSend||working||threadBusy||fileBlocking||!data.available||quotaBlocked||(backgroundMode&&!backgroundEnabled);
+    send.disabled=!canSend||working||threadBusy||attachingCount>0||fileBlocking||!data.available||quotaBlocked||(backgroundMode&&!backgroundEnabled);
     voiceButton.disabled=working||threadBusy||fileBlocking||!data.available;
     send.classList.toggle('has-message',canSend);
     voiceButton.classList.toggle('is-recording',voiceListening||voiceStarting);
@@ -468,7 +468,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const draftUser=user.id;
   const draftSlot=()=>`smetra.assistant.draft:${draftUser}:${currentWorkspace}:${activeConversation|| (context?context.entity+':'+context.id:'global')}`;
   const saveDraft=()=>{try{if(input.value)sessionStorage.setItem(draftSlot(),input.value.slice(0,3000));else sessionStorage.removeItem(draftSlot())}catch{}};
-  const clearSentDraft=prompt=>{try{if((sessionStorage.getItem(draftSlot())||'').trim()===prompt)sessionStorage.removeItem(draftSlot())}catch{}};
+  const clearSentDraft=(prompt,slot=draftSlot())=>{try{if((sessionStorage.getItem(slot)||'').trim()===prompt)sessionStorage.removeItem(slot)}catch{}};
   try{input.value=sessionStorage.getItem(draftSlot())||''}catch{}
   // Text shared from another Android app arrives as a ready draft.
   try{const shared=sessionStorage.getItem('smetra.shared.text');if(shared){sessionStorage.removeItem('smetra.shared.text');input.value=(input.value?input.value+'\n\n':'')+shared.slice(0,3000)}}catch{}
@@ -480,7 +480,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const attachmentInfo=attachmentBar.querySelector('span');
   const previewTray=document.createElement('div');previewTray.className='assistant-attachment-preview';previewTray.hidden=true;
   composer.insertBefore(previewTray,document.querySelector('#assistant-form'));
-  let pendingPhotos=[];
+  let pendingPhotos=[],attachingCount=0;
   const renderPhoto=()=>{
     previewTray.replaceChildren();
     const hasFiles=pendingPhotos.length>0;
@@ -544,7 +544,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   attachButton.onclick=()=>fileInput.click();
   const uploadAttachment=async file=>{
-    if(!file||attachButton.disabled)return;
+    if(!file||attachButton.disabled||working||threadBusy||!active())return;
+    attachingCount++;renderQuota(quota);
+    try{
     const extension=file.name.toLowerCase().split('.').pop();
     if(['png','jpg','jpeg'].includes(extension)){
       if(backgroundMode){status.textContent='Фото доступно в обычном чате, не в фоновой задаче.';fileInput.value='';return}
@@ -554,6 +556,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       }
       let optimized;
       try{optimized=await compressPhoto(file)}catch(error){status.textContent=error.message;fileInput.value='';return}
+      if(!active())return;
       const currentBytes=pendingPhotos.reduce((sum,item)=>sum+item.file.size,0);
       if(pendingPhotos.length>=3||currentBytes+optimized.size>1_500_000){
         status.textContent='Максимум 3 изображения общим размером до 1,5 МБ после сжатия';fileInput.value='';return;
@@ -573,13 +576,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(!pending||pending.fingerprint!==fingerprint||typeof pending.key!=='string'){pending={fingerprint,key:crypto.randomUUID()};sessionStorage.setItem(retrySlot,JSON.stringify(pending))}
       for(let index=0;index<bytes.length;index+=32768)binary+=String.fromCharCode(...bytes.subarray(index,index+32768));
       const result=await api('/files',{method:'POST',headers:{'Idempotency-Key':pending.key},body:JSON.stringify({assistant_upload:true,name:file.name,content:btoa(binary)})});
+      if(!active())return;
       const attached={entity:'files',id:result.file.id,label:result.file.name,workspace_id:currentWorkspace||sessionStorage.getItem('workspace_id')||''};
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
       context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();renderPhoto();refreshFile();refreshJobs();
       status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
-    finally{attachButton.disabled=false;fileInput.value=''}
+    finally{fileInput.value=''}
+    }finally{attachingCount--;if(active())renderQuota(quota)}
   };
   fileInput.onchange=async()=>{const files=[...fileInput.files];for(const file of files){await uploadAttachment(file)}fileInput.value=''};
 
@@ -618,6 +623,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     backgroundButton.disabled=working||fileBlocking||!data.available||!backgroundEnabled;
     send.title=quotaBlocked?'Токены ассистента закончились. Черновик останется доступен.':backgroundMode?'Отправить задачу в фон':'Отправить сообщение';
     backgroundButton.title=!backgroundEnabled?'Фоновая обработка не подключена на сервере':quotaBlocked?'Фоновая задача использует тот же месячный лимит сообщений.':'Сохранить задачу на сервере и открыть ответ позже';
+    attachButton.disabled=working||threadBusy||attachingCount>0||!data.available;
     input.disabled=working||!data.available;
     input.title=quotaBlocked?'Черновик можно редактировать; отправка откроется после обновления лимита или перехода на Про.':'';
     setThreadBusy(working||threadBusy);
@@ -770,16 +776,18 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     backgroundMode=!backgroundMode;renderDelivery();renderQuota(quota);input.focus();
   };
   const submitBackground=async()=>{
-    const text=input.value.trim();if(!text||pendingPhotos.length||working||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
+    const text=input.value.trim();if(!text||pendingPhotos.length||working||attachingCount||fileBlocking||quota.remaining<1||!backgroundEnabled||!data.available)return;
     const body=JSON.stringify({text,context:context?{entity:context.entity,id:context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})});
     if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
+    const submitted=takeSubmittedDraft();
     working=true;renderQuota(quota);status.textContent='Сохраняю фоновую задачу…';
     try{
       const result=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key},body});
-      clearSentDraft(text);jobRequest=null;
+      jobRequest=null;
       if(!active())return;
-      renderQuota(result.quota);input.value='';resize();syncSendButton();status.textContent='В очереди · можно закрыть страницу';refreshJobs();
-    }catch(error){if(active()){status.textContent=error.message;notify(error.message)}}
+      await clearSentFileContext(submitted);
+      renderQuota(result.quota);status.textContent='В очереди · можно закрыть страницу';refreshJobs();
+    }catch(error){if(active()){restoreSubmittedDraft(submitted);status.textContent=error.message;notify(error.message)}}
     finally{working=false;if(active()){renderQuota(quota);if(!input.disabled)input.focus()}}
   };
   renderDelivery();
@@ -818,6 +826,32 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<(quota.unit==='tokens'?1500:1))status.textContent='Токены закончились: обычные и фоновые ответы расходуют общий баланс. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
+  const takeSubmittedDraft=()=>{
+    const submitted={text:input.value,prompt:input.value.trim(),photos:pendingPhotos.map(entry=>entry.file),context,slot:draftSlot()};
+    clearSentDraft(submitted.prompt,submitted.slot);
+    input.value='';fileInput.value='';
+    if(context&&['files','documents'].includes(context.entity)){
+      context=null;renderContext();clearTimeout(filePollTimer);filePollSeq++;
+      fileStatus.hidden=true;fileStatus.replaceChildren();fileBlocking=false;
+    }
+    submitted.remainingContext=context;
+    clearSentDraft(submitted.prompt);
+    clearPhoto();resize();syncSendButton();
+    return submitted;
+  };
+  const restoreSubmittedDraft=submitted=>{
+    if(!active()||!input.isConnected||input.value||pendingPhotos.length||context!==submitted.remainingContext)return;
+    context=submitted.context;
+    if(context)sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));
+    pendingPhotos=submitted.photos.map(file=>({file,url:URL.createObjectURL(file)}));
+    input.value=submitted.text;renderContext();renderPhoto();saveDraft();resize();syncSendButton();
+    if(context?.entity==='files')refreshFile();
+  };
+  const clearSentFileContext=async submitted=>{
+    if(!active()||!activeConversation||!submitted.context||!['files','documents'].includes(submitted.context.entity))return;
+    // The sent request owns a context snapshot. It no longer belongs to the next draft.
+    try{await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})})}catch{}
+  };
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
@@ -825,12 +859,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     // The displayed transcript is the source of truth at submit time.
     // Abort recognition before clearing the composer so late results cannot reappear.
     if(voiceListening||voiceStarting){stopVoiceInput();syncSendButton()}
-    const prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||fileBlocking||quota.remaining<1||!data.available)return;
+    let prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||attachingCount||fileBlocking||quota.remaining<1||!data.available)return;
     if(window.SmetraEstimateSafety){try{if(!(await window.SmetraEstimateSafety.ensureConsent()))return}catch(error){status.textContent=error.message;return}}
+    if(!active()||working||threadBusy||attachingCount)return;
+    prompt=input.value.trim();if(!prompt&&!pendingPhotos.length)return;
     if(backgroundMode){await submitBackground();return}
+    const submitted=takeSubmittedDraft();
     working=true;renderQuota(quota);stop.hidden=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
     messages.querySelector('.assistant-welcome')?.remove();messages.querySelectorAll('.assistant-error').forEach(node=>node.remove());
-    const sentPhotos=pendingPhotos.map(entry=>entry.file);
+    const sentPhotos=submitted.photos;
     const userMessage=addMessage('user',prompt||(sentPhotos.length?'Посмотри прикреплённые фотографии.':''));
     if(sentPhotos.length){const attached=document.createElement('small');attached.className='assistant-message-attachment';attached.textContent='Фото: '+sentPhotos.map(file=>file.name).join(', ');userMessage.body.append(attached)}
     const assistantMessage=addMessage('assistant','');
@@ -859,7 +896,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const schedule=()=>{if(!paintPending){paintPending=true;const frame=()=>{if(performance.now()-lastPaint<32)paintFrame=requestAnimationFrame(frame);else paint()};paintFrame=requestAnimationFrame(frame)}};
     try{
       const images=sentPhotos.length?await Promise.all(sentPhotos.map(encodePhoto)):[];
-      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(images.length?{images}:{}),...(context?{context:{entity:context.entity,id:context.id}}:{}),...(activeConversation?{conversation_id:activeConversation}:{})})});
+      const response=await fetch('/api/assistant/stream',{method:'POST',credentials:'same-origin',signal:requestController.signal,headers:{'Content-Type':'application/json',...(sessionStorage.getItem('workspace_id')?{'X-Workspace-Id':sessionStorage.getItem('workspace_id')}:{})},body:JSON.stringify({text:prompt,...(images.length?{images}:{}),context:submitted.context?{entity:submitted.context.entity,id:submitted.context.id}:null,...(activeConversation?{conversation_id:activeConversation}:{})})});
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
       if(!response.body)throw Error('Браузер не поддерживает потоковый ответ');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
@@ -878,8 +915,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       };
       while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();break}buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
       if(!completed){if(buffer.trim())eventBlock(buffer.trim());if(!completed)throw Error('Ответ оборвался. Попробуйте ещё раз.')}
-      assistantMessage.item.classList.remove('streaming');input.value='';clearSentDraft(prompt);clearPhoto();resize();syncSendButton();
+      assistantMessage.item.classList.remove('streaming');await clearSentFileContext(submitted);
     }catch(error){
+      restoreSubmittedDraft(submitted);
       cancelAnimationFrame(paintFrame);
       assistantMessage.item.classList.remove('streaming');
       if(error.name!=='AbortError'&&generated&&assistantMessage.item.isConnected)paint();
@@ -891,7 +929,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         setActivity('Генерация прервана');
         if(!generated)assistantMessage.item.remove();
         status.textContent=(generated?'Ответ прервался: ':'')+error.message;
-        // The prompt stays in the composer (and its saved draft) until a reply completes.
+        // Restore the submitted draft for retry without overwriting a newer view or draft.
         const failure=document.createElement('div');failure.className='assistant-error';failure.setAttribute('role','alert');
         const text=document.createElement('p');text.textContent=(generated?'Ответ прервался. ':'Не удалось получить ответ. ')+error.message+' Текст сообщения сохранён.';
         const retry=document.createElement('button');retry.type='button';retry.className='btn small';retry.innerHTML=assistantIcon('refresh',15)+'<span>Повторить</span>';
