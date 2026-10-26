@@ -506,7 +506,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if console_host == "console.smetra.online":
                 site_assets = {
                     "/", "/app", "/docs",
-                    "/partner-console.js", "/partner-docs.js", "/partner-docs.md",
+                    "/partner-console.js", "/partner-docs.js", "/partner-docs.md", "/partner-openapi.json",
                     "/partner-sdk.js", "/ui/partner-console.css", "/ui/partner-landing.css",
                     "/vendor/markdown-it-15.0.2.min.js", "/favicon.ico", "/favicon.png",
                 }
@@ -598,6 +598,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/partner-docs": ("partner-docs.html", "text/html"),
             "/partner-docs.html": ("partner-docs.html", "text/html"),
             "/partner-docs.md": ("partner-docs.md", "text/markdown"),
+            "/partner-openapi.json": ("partner-openapi.json", "application/json"),
             "/": ("index.html", "text/html"),
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
