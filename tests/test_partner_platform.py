@@ -202,5 +202,65 @@ class PartnerPlatformTests(unittest.TestCase):
             partner.auth_console(self.con, "PartnerSession " + issued["session_token"])
         self.assertEqual(partner.auth_partner(self.con, "Partner " + rotated["api_key"])["id"], original["id"])
 
+    def test_partner_read_models_are_scoped_and_paged(self):
+        main = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        other = partner.auth_partner(self.con, "Partner " + self.other["api_key"])
+        self.assertFalse(partner.partner_profile(self.con, main)["payouts_enabled"])
+        self.assertEqual(partner.partner_profile(self.con, main)["domain_status"], "not_started")
+        for i in range(3):
+            partner.ingest_products(self.con, main, {"products": [{
+                "sku": f"SKU-{i:03d}", "name": "Блок", "price_kopecks": i + 100,
+                "url": f"https://partner.shop/items/{i}", "available": True,
+            }]})
+        partner.ingest_products(self.con, other, {"products": [{
+            "sku": "PRIVATE", "name": "Private", "price_kopecks": 11,
+            "url": "https://other.shop/private", "available": True,
+        }]})
+        first = partner.catalog_page(self.con, main, 2)
+        self.assertEqual(len(first["items"]), 2)
+        second = partner.catalog_page(self.con, main, 2, first["next_cursor"])
+        self.assertEqual([x["sku"] for x in second["items"]], ["SKU-002"])
+        self.assertIsNone(second["next_cursor"])
+        self.assertEqual(len(partner.catalog_page(self.con, other)["items"]), 1)
+        self.assertEqual(partner.commission_page(self.con, main)["items"], [])
+        for invalid in (-1, 0, 101, "5", True):
+            with self.assertRaises(partner.PartnerError):
+                partner.catalog_page(self.con, main, invalid)
+        with self.assertRaises(partner.PartnerError):
+            partner.commission_page(self.con, main, cursor="invalid")
+
+    def test_commission_receipts_never_expose_customer_data(self):
+        main = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        token = partner.begin_visit(self.con, "materials-market")
+        user = self._account("receipts-buyer")
+        self.assertTrue(partner.capture(self.con, user, partner.COOKIE_NAME + "=" + token))
+        self._purchase(user, key="receipts_paid_1234567")
+        response = partner.commission_page(self.con, main)
+        self.assertEqual(len(response["items"]), 1)
+        receipt = response["items"][0]
+        self.assertIn(receipt["status"], ("held", "cleared_unpaid"))
+        for forbidden in ("user_id", "email", "payment_id", "provider_id"):
+            self.assertNotIn(forbidden, receipt)
+        self.assertEqual(
+            partner.commission_page(
+                self.con, partner.auth_partner(self.con, "Partner " + self.other["api_key"])
+            )["items"], []
+        )
+
+    def test_admin_pause_revokes_console_and_blocks_referrals(self):
+        p = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        login = partner.new_console_session(self.con, "Partner " + self.partner["api_key"])
+        self.assertFalse(partner.set_partner_active(self.con, p["id"], False)["active"])
+        with self.assertRaises(partner.PartnerError):
+            partner.auth_console(self.con, "PartnerSession " + login["session_token"])
+        with self.assertRaises(partner.PartnerError):
+            partner.begin_visit(self.con, p["code"])
+        self.assertTrue(partner.set_partner_active(self.con, p["id"], True)["active"])
+        self.assertEqual(
+            partner.auth_partner(self.con, "Partner " + self.partner["api_key"])["id"], p["id"]
+        )
+        with self.assertRaises(partner.PartnerError):
+            partner.set_partner_active(self.con, p["id"], "true")
+
 if __name__ == "__main__":
     unittest.main()
