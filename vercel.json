@@ -21,7 +21,7 @@
           "value": "console.smetra.online"
         }
       ],
-      "destination": "/partner-docs.html"
+      "destination": "/docs.html"
     },
     {
       "source": "/api/:path*",
