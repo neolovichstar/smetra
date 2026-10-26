@@ -38,6 +38,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await send('Page.navigate',{url:site+'/app#dashboard'});
  }
  await until("typeof user==='object'&&user?.id&&document.querySelector('#content')");
+ // Let the first section render finish: started earlier, it would replace the starter catalog.
+ await until("document.querySelector('#content h1')&&!document.querySelector('#content .page-loading')");
  // The compact dashboard no longer displays the older onboarding banner.
  // Exercise the starter catalog directly instead of requiring a retired CTA.
  await evaluate("SmetraLoadFeature('growth').then(()=>SmetraGrowth.start('estimate'))");
