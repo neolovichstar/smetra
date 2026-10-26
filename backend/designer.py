@@ -9,7 +9,7 @@ from backend.business import DomainError, choice, decimal, identity, integer, st
 
 KINDS = ("finish", "furniture", "lighting", "plumbing", "decor", "equipment", "work", "other")
 STATUSES = ("planned", "selected", "approved", "ordered", "delivered", "installed")
-MAX_LINE_TOTAL = 10**15
+MAX_LINE_TOTAL = 10**13
 
 
 def _revision(service, old, data):
