@@ -44,6 +44,14 @@ class PartnerHostnameRoutingTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(source.startswith("# Smetra Partner API"))
 
+    def test_partner_policy_pages_are_distinct(self):
+        code, _, privacy = self.request_raw("GET", "/privacy", "console.smetra.online")
+        self.assertEqual(code, 200)
+        self.assertIn("Обработка данных", privacy)
+        code, _, terms = self.request_raw("GET", "/terms", "console.smetra.online")
+        self.assertEqual(code, 200)
+        self.assertIn("Пилот", terms)
+
     def test_console_host_rejects_customer_endpoints(self):
         for route in ("/admin", "/api/me", "/api/billing", "/api/auth/providers"):
             status, _, _ = self.request_raw("GET", route, "console.smetra.online")
