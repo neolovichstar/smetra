@@ -355,11 +355,43 @@ function bindRailToggle(button,root,key){
   };
 }
 // Profile and settings share one hub with its own section rail, like the assistant.
-const accountHubTabs=[['profile','Профиль','user'],['account','Аккаунт и вход','key'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
+const accountHubTabs=[['profile','Профиль','user'],['account','Аккаунт и вход','key'],['usage','Использование','gauge'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
 function accountHubTab(){
   if(tab==='profile')return 'profile';
   try{const saved=sessionStorage.getItem('smetra.settings.tab');if(saved&&saved!=='profile'&&accountHubTabs.some(item=>item[0]===saved))return saved}catch{}
   return 'account';
+}
+// Plan usage: every limit comes from the server code that enforces it.
+const usageNumber=value=>Number(value||0).toLocaleString('ru-RU');
+function usageBytes(value){const units=['Б','КБ','МБ','ГБ'];let n=Number(value||0),i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return (i?n.toLocaleString('ru-RU',{maximumFractionDigits:n<10?1:0}):String(n))+' '+units[i]}
+function usageMeter(title,meter,format,note=''){
+  const unlimited=meter.limit===null||meter.limit===undefined;
+  const pct=unlimited?100:Math.max(0,Math.min(100,meter.remaining_pct));
+  const value=unlimited?'Без ограничений':`${pct}%`;
+  const detail=unlimited?`Использовано ${format(meter.used)}`:`Осталось ${format(meter.remaining)} из ${format(meter.limit)}`;
+  return `<div class="usage-meter${!unlimited&&pct<=10?' is-low':''}"><div class="usage-meter-head"><strong>${title}</strong><span class="usage-meter-value">${value}</span></div>
+    <div class="usage-bar" role="progressbar" aria-label="${title}: осталось" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"${unlimited?' aria-valuetext="Без ограничений"':''}><span data-pct="${pct}"></span></div>
+    <small>${detail}${note?' · '+note:''}</small></div>`;
+}
+async function renderUsage(active){
+  const host=$('#hub-usage-host');if(!host)return;
+  let data;
+  try{data=await api('/usage')}catch(error){if(active()&&host.isConnected){host.removeAttribute('aria-busy');host.innerHTML=`<p class="muted">${escapeHtml(error.message||'Не удалось загрузить')}</p>`}return}
+  if(!active()||!host.isConnected)return;
+  if(!data?.tokens||!data.plan||!data.storage||!data.records){host.removeAttribute('aria-busy');host.innerHTML='<p class="muted">Не удалось загрузить</p>';return}
+  const reset=new Date(data.tokens.resets_at*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+  const wallet=data.tokens.wallet>0?`ещё ${usageNumber(data.tokens.wallet)} на балансе`:'';
+  const until=data.plan.until?` · до ${new Date(data.plan.until*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}`:'';
+  const records=[['Сметы',data.records.quotes],['Клиенты',data.records.clients],['Заказы',data.records.projects],['Файлы',data.records.files]];
+  host.removeAttribute('aria-busy');
+  host.innerHTML=`<div class="usage-plan"><div><small>Тариф</small><strong>${escapeHtml(data.plan.name)}${until}</strong></div><a class="btn small" href="#billing">Тарифы</a></div>
+    ${usageMeter('Токены ассистента',data.tokens,usageNumber,[`обновятся ${reset}`,wallet].filter(Boolean).join(', '))}
+    ${data.quotes.limit===null?'':usageMeter('Бесплатные сметы',data.quotes,usageNumber)}
+    ${usageMeter('Хранилище файлов',data.storage,usageBytes)}
+    ${data.seats.limit>1?usageMeter('Места в команде',data.seats,usageNumber):''}
+    <dl class="usage-records">${records.map(([label,value])=>`<div><dt>${label}</dt><dd>${usageNumber(value)}</dd></div>`).join('')}</dl>`;
+  // CSP forbids inline style attributes; the CSSOM is allowed.
+  host.querySelectorAll('.usage-bar span[data-pct]').forEach(bar=>bar.style.width=bar.dataset.pct+'%');
 }
 async function renderAccountHub(active){
   const owner=user,current=accountHubTab(),icon=name=>window.SmetraIcons?.svg(name,18)||'';
@@ -378,6 +410,7 @@ async function renderAccountHub(active){
         <div class="hub-row"><div><strong>Публичный ID</strong><small>По нему вас находят в центре общения. Почта не раскрывается.</small></div><span class="hub-id"><code id="hub-public-id">…</code><button class="icon-button" type="button" id="hub-copy-id" aria-label="Скопировать ID" title="Скопировать ID">${icon('copy')}</button></span></div>
         <div class="hub-row"><div class="hub-photo"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>Фото профиля</strong><small>${yandexPhoto}</small></div></div><a class="btn" id="hub-yandex-photo" href="/api/auth/oauth/yandex/start?link=1">${icon('refresh')}Подтянуть из Яндекса</a></div></div>
       </section>
+      <section class="hub-panel" id="hub-panel-usage" role="tabpanel" aria-labelledby="hub-tab-usage"${current==='usage'?'':' hidden'}><header class="hub-head"><h1>Использование</h1></header><div id="hub-usage-host" class="hub-card usage-card" aria-busy="true"><p class="muted">Загружаем…</p></div></section>
       <section class="hub-panel" id="hub-panel-assistant" role="tabpanel" aria-labelledby="hub-tab-assistant"${current==='assistant'?'':' hidden'}><header class="hub-head"><h1>Ассистент</h1></header><div class="settings-page"><section id="settings-personalization" class="settings-personalization-host"></section></div></section>
       <section class="hub-panel" id="hub-panel-appearance" role="tabpanel" aria-labelledby="hub-tab-appearance"${current==='appearance'?'':' hidden'}><header class="hub-head"><h1>Внешний вид</h1></header><div class="hub-card"><div class="hub-row"><div><strong>Тема</strong><small>Тёмная бережёт глаза вечером, светлая удобнее на ярком солнце.</small></div><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></div></section>
       <section class="hub-panel" id="hub-panel-data" role="tabpanel" aria-labelledby="hub-tab-data"${current==='data'?'':' hidden'}><header class="hub-head"><h1>Данные и экспорт</h1></header><div class="settings-page"><section id="settings-export" class="settings-export-host"></section></div></section>
@@ -398,6 +431,7 @@ async function renderAccountHub(active){
   syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);
   const deleteAccountButton=$('#delete-account');
   if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;let confirmed=false;try{confirmed=await window.SmetraDialog.confirm({title:'Удалить аккаунт?',message:'Аккаунт, сметы и доступ будут удалены без возможности восстановления.',confirmLabel:'Удалить аккаунт',danger:true});if(!confirmed||user!==owner)return;await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
+  renderUsage(active);
   api('/profile/id').then(result=>{const code=$('#hub-public-id');if(code&&active())code.textContent=result.public_id||'не задан'}).catch(()=>{const code=$('#hub-public-id');if(code)code.textContent='недоступен'});
   $('#hub-copy-id')?.addEventListener('click',async()=>{const value=$('#hub-public-id')?.textContent||'';try{await navigator.clipboard.writeText(value);notify('ID скопирован')}catch{notify('Ваш ID: '+value)}});
   if(window.SmetraProfile){await window.SmetraProfile.render(active,$('#hub-profile-host'));if(!active())return;await window.SmetraProfile.settings(active);if(!active())return;}

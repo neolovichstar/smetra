@@ -768,6 +768,23 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(consent_code, 200, consent)
         return result["token"], result["user"]["id"]
 
+    def test_usage_summary_reports_what_is_left(self):
+        token, _ = self.account("usage-owner")
+        other, _ = self.account("usage-other")
+        self.assertEqual(self.call("/quotes", "POST", {"title": "Ванная", "client": "Клиент", "amount": 10000}, token)[0], 201)
+        status, usage = self.call("/usage", token=token)
+        self.assertEqual(status, 200, usage)
+        self.assertEqual(usage["plan"]["tier"], "starter")
+        self.assertEqual((usage["quotes"]["used"], usage["quotes"]["limit"], usage["quotes"]["remaining"], usage["quotes"]["remaining_pct"]), (1, 10, 9, 90))
+        self.assertEqual(usage["tokens"]["remaining"], usage["tokens"]["limit"] - usage["tokens"]["used"])
+        self.assertEqual(usage["storage"]["used"], 0)
+        self.assertEqual(usage["storage"]["remaining_pct"], 100)
+        self.assertEqual((usage["seats"]["used"], usage["seats"]["limit"]), (1, 1))
+        self.assertEqual(usage["records"]["quotes"], 1)
+        # Another account sees only its own usage.
+        self.assertEqual(self.call("/usage", token=other)[1]["records"]["quotes"], 0)
+        self.assertEqual(self.call("/usage", "POST", {}, token)[0], 404)
+
     def test_order_money_today_and_isolation(self):
         token, _ = self.account("finance-owner")
         status, created = self.call("/projects", "POST", {"name": "Кухня", "amount_kopecks": 100_000, "internal_cost": 60_000, "currency": "RUB"}, token)

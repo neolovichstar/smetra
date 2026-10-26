@@ -2541,6 +2541,10 @@ class Service:
             return fn(self, method, parts, query, data)
         if kind == "workspace":
             return self.workspace(method, parts, data)
+        if kind == "usage" and method == "GET" and not parts:
+            from backend.usage import summary as usage_summary
+
+            return usage_summary(self)
         if kind == "intake":
             return self.intake(method, data)
         if kind == "quotes":
@@ -2718,6 +2722,7 @@ ROUTES = set(ENTITIES) | {
     "intake",
     "assistant",
     "workspace",
+    "usage",
     "quotes",
     "public",
     "overview",
