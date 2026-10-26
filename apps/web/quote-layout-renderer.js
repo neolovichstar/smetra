@@ -4,6 +4,7 @@
  const KINDS=new Set(['title','intro','summary','items','breakdown','notes','divider','section','metrics','terms','rooms']);
  const STYLES=new Set(['editorial','minimal','technical','compact']);
  const TONES=new Set(['neutral','warm','graphite','sage','sand']);
+ const APPEARANCES=new Set(['auto','dark','light']);
  const node=(tag,cl,text)=>{const n=document.createElement(tag);if(cl)n.className=cl;if(text!==undefined)n.textContent=String(text);return n};
  const safeLayout=value=>{
    const l=value||{},blocks=Array.isArray(l.blocks)?l.blocks:[];
@@ -12,10 +13,11 @@
    if(!blocks.every(b=>b&&KINDS.has(b.kind)))return null;
    return {version:1,style:STYLES.has(l.style)?l.style:'editorial',
      tone:TONES.has(l.tone)?l.tone:'neutral',
+     appearance:APPEARANCES.has(l.appearance)?l.appearance:'auto',
      blocks:blocks.map((b,i)=>({kind:b.kind,title:String(b.title||'').slice(0,100),
      description:String(b.description||'').slice(0,400),width:b.width==='half'?'half':'full',key:String(i)}))};
  };
- const base=()=>({version:1,style:'editorial',tone:'neutral',blocks:[
+ const base=()=>({version:1,style:'editorial',tone:'neutral',appearance:'auto',blocks:[
    {kind:'title',title:'',description:'',width:'full'},
    {kind:'summary',title:'Общая стоимость',description:'',width:'full'},
    {kind:'items',title:'Состав работ и материалов',description:'',width:'full'},
@@ -30,7 +32,9 @@
  const cost=v=>Number.isSafeInteger(v)?v:null;
  function render({quote,layout,pending,onLayoutChange}){
    const l=safeLayout(layout)||safeLayout(base());
-   const root=node('article','smetra-document smetra-document--'+l.style+' smetra-document-tone--'+l.tone);
+   const dark=l.appearance==='dark'||(l.appearance==='auto'&&document.documentElement.dataset.theme==='dark');
+   const root=node('article','smetra-document smetra-document--'+l.style+' smetra-document-tone--'+l.tone+(dark?' smetra-document--dark':' smetra-document--light'));
+   root.setAttribute('aria-label','Предпросмотр сметы, '+(dark?'тёмная':'светлая')+' тема');
    const configured=pending?.preview&&['quote_items','quote_structure'].includes(pending.preview.kind);
    const items=configured&&Array.isArray(pending?.arguments?.items)?pending.arguments.items:Array.isArray(quote.items)?quote.items:[];
    const currency=quote.currency||'RUB',format=v=>window.SmetraQuoteVisuals?.money(v,currency)||'—';
@@ -112,14 +116,37 @@
  const configure=({container,value,onChange})=>{
    const l=safeLayout(value)||base();
    const wrapper=node('section','smetra-document-config');
-   wrapper.append(node('h3','','Настроить документ'));
+   wrapper.append(node('h3','','Оформление сметы'));
+   wrapper.append(node('p','smetra-document-config-hint','Изменения применяются к предпросмотру. Данные, суммы и цены остаются серверными.'));
+   const appearance=node('div','smetra-document-config-group');
+   appearance.append(node('span','smetra-document-config-label','Тема листа'));
+   const appearanceOptions=node('div','smetra-document-config-options');
+   [['auto','Как в приложении'],['dark','Тёмная'],['light','Светлая']].forEach(([value,label])=>{
+     const button=node('button','smetra-document-config-choice',label);
+     button.type='button';button.setAttribute('aria-pressed',String(l.appearance===value));
+     button.onclick=()=>{l.appearance=value;onChange(safeLayout(l))};
+     appearanceOptions.append(button);
+   });
+   appearance.append(appearanceOptions);wrapper.append(appearance);
+   const styleGroup=node('div','smetra-document-config-group');
+   styleGroup.append(node('span','smetra-document-config-label','Композиция'));
    const styles=node('div','smetra-document-config-styles');
    ['editorial','minimal','technical','compact'].forEach(style=>{
      const b=node('button','',''+({editorial:'Редакционный',minimal:'Минимализм',technical:'Технический',compact:'Компактный'}[style]));
      b.type='button';b.setAttribute('aria-pressed',String(l.style===style));
      b.onclick=()=>{l.style=style;onChange(safeLayout(l))};styles.append(b);
    });
-   wrapper.append(styles);
+   styleGroup.append(styles);wrapper.append(styleGroup);
+   const details=node('div','smetra-document-config-group');
+   details.append(node('span','smetra-document-config-label','Цветовой акцент'));
+   const tones=node('div','smetra-document-config-options');
+   [['neutral','Нейтральный'],['graphite','Графит'],['warm','Тёплый'],['sage','Шалфей'],['sand','Песок']].forEach(([value,label])=>{
+     const b=node('button','smetra-document-config-choice',label);
+     b.type='button';b.setAttribute('aria-pressed',String(l.tone===value));
+     b.onclick=()=>{l.tone=value;onChange(safeLayout(l))};tones.append(b);
+   });
+   details.append(tones);wrapper.append(details);
+   wrapper.append(node('span','smetra-document-config-label','Структура документа'));
    const rows=node('div','smetra-document-config-rows');
    const relabel={title:'Заголовок',intro:'Введение',summary:'Итого',items:'Позиции',breakdown:'Диаграмма',notes:'Заметки',
      divider:'Разделитель',section:'Секция',metrics:'Показатели',terms:'Условия',rooms:'Помещения'};
