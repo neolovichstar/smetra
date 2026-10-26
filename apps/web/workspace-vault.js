@@ -63,12 +63,12 @@
     const controls = '<div class="vault-item-actions">' +
       '<button type="button" data-action="open" data-id="' + esc(file.id) + '" aria-label="Открыть">Открыть</button>' +
       '<button type="button" data-action="ask" data-id="' + esc(file.id) + '">Спросить ИИ</button>' +
-      (state.canWrite ? '<button type="button" data-action="archive" data-id="' + esc(file.id) + '">' + (file.archived ? 'Восстановить' : 'В архив') + '</button>' +
+      (state.canWrite ? '<button type="button" data-file-manage="' + esc(file.id) + '" data-action="manage" data-id="' + esc(file.id) + '">Данные</button><button type="button" data-action="archive" data-id="' + esc(file.id) + '">' + (file.archived ? 'Восстановить' : 'В архив') + '</button>' +
       '<button type="button" class="is-destructive" data-action="delete" data-id="' + esc(file.id) + '">Удалить</button>' : '') +
       '</div>';
     if (image) return '<article class="vault-image-tile"><button type="button" class="vault-image-preview" data-action="open" data-id="' + esc(file.id) + '" aria-label="Просмотреть ' + esc(file.name) + '"><img data-thumb="' + esc(file.id) + '" alt="' + esc(file.name) + '" loading="lazy" decoding="async"></button>' +
       '<div class="vault-image-info"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + '</small></div>' + controls + '</article>';
-    return '<article class="vault-file-tile">' + fileSymbol(file) +
+    return '<article class="vault-file-tile file-center-row">' + fileSymbol(file) +
       '<div class="vault-file-details"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + ' · ' + when(file.created_at) + '</small></div>' + controls + '</article>';
   }
   function paint(mine) {
@@ -178,6 +178,7 @@
       const action = button.dataset.action;
       if (action === 'open') return window.SmetraFilePreview?.open(file,state.wid);
       if (action === 'ask') return ask(file).catch(err=>notify(err.message));
+      if (action === 'manage') return window.Workspace.manageFile(file.id).catch(err=>notify(err.message));
       if (!state.canWrite) return;
       if (action === 'delete' && !confirm('Удалить «' + file.name + '» без возможности восстановления?')) return;
       button.disabled = true;
