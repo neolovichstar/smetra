@@ -701,6 +701,33 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const no=document.createElement('button');no.type='button';no.className='btn ghost';no.textContent='Отклонить';no.onclick=()=>next.querySelector('[data-dismiss]')?.click();
     controls.append(yes,no);decisionSlot.append(heading,controls);
   };
+  const showQuestion=(question)=>{
+    if(!decisionSlot?.isConnected||!question||typeof question.question!=='string')return;
+    const options=Array.isArray(question.options)?question.options.slice(0,4):[];
+    if(options.length<2)return;
+    decisionSlot.replaceChildren();
+    const group=document.createElement('div');group.className='assistant-decision-heading';
+    const tag=document.createElement('span');tag.textContent='Ассистент уточняет';
+    const title=document.createElement('strong');title.textContent=question.question;
+    title.style.whiteSpace='normal';group.append(tag,title);
+    const choices=document.createElement('div');choices.className='assistant-question-choice';
+    const reply=value=>{
+      if(working||!active()||!value.trim())return;
+      decisionSlot.replaceChildren();input.value=value.trim();input.dispatchEvent(new Event('input',{bubbles:true}));
+      document.querySelector('#assistant-form')?.requestSubmit();
+    };
+    for(const value of options){
+      if(typeof value!=='string'||!value.trim())continue;
+      const button=document.createElement('button');button.type='button';button.textContent=value;button.onclick=()=>reply(value);
+      choices.append(button);
+    }
+    const custom=document.createElement('form');custom.className='assistant-question-custom';
+    const field=document.createElement('input');field.type='text';field.maxLength=300;field.placeholder='Свой вариант ответа';field.setAttribute('aria-label','Свой вариант ответа');field.required=true;
+    const sendChoice=document.createElement('button');sendChoice.type='submit';sendChoice.textContent='Отправить';
+    custom.append(field,sendChoice);
+    custom.addEventListener('submit',event=>{event.preventDefault();reply(field.value)});
+    decisionSlot.append(group,choices,custom);
+  };
   const renderedProposalIds=new Set();
   const addAction=action=>{
     if(!action || !action.id || renderedProposalIds.has(action.id))return;
@@ -717,7 +744,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
     }
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{
+      if(action.tool?.startsWith('delete_')){
+        const accepted=window.SmetraDialog?.confirm
+          ? await window.SmetraDialog.confirm({title:'Удалить запись?',message:action.summary+' — удаление нельзя отменить.',confirmLabel:'Удалить',danger:true})
+          : window.confirm(action.summary+'? Это действие нельзя отменить.');
+        if(!accepted)return;
+      }
+      const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{
       const dismiss=item.querySelector('[data-dismiss]');
       if(dismiss.disabled)return;
@@ -976,7 +1010,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();break}buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}
