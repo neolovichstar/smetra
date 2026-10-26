@@ -158,7 +158,7 @@ def build_chat_context(service, conversation_id, prompt, system, profile_text, r
     Other chats are searched separately by per-user tool; only selected dialogue
     is compacted. The request performs one bounded indexed SQL read.
     """
-    from backend.business import DomainError, string
+    from backend.business import string
 
     if conversation_id:
         from backend.ai_workspace import conversation
