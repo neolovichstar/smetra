@@ -75,6 +75,8 @@ class AssistantRecallTests(unittest.TestCase):
         self.assertEqual(len(results["items"]), 1)
         self.assertIn("серебристую", results["items"][0]["excerpt"])
         self.assertEqual(results["items"][0]["conversation_id"], conv)
+        # Matching must survive Russian declensions, e.g. -а vs -у.
+        self.assertEqual(len(search_chat_history(mine, "термокраска")["items"]), 1)
         self.assertEqual(search_chat_history(other_service, "серебристую")["items"], [])
         with self.assertRaises(DomainError) as error:
             read_chat_history(other_service, conv)
