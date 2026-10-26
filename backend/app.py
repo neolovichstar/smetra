@@ -1041,6 +1041,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"user": user_view(user, con)})
         if path == "/api/admin/revenue" and method == "GET":
             return self.send_json(200, revenue.dashboard(con))
+        if path == "/api/admin/npd/receipts" and method == "GET":
+            from backend import npd_receipts
+            return self.send_json(200, npd_receipts.list_receipts(con))
+        if path == "/api/admin/npd/receipts" and method == "POST":
+            from backend import npd_receipts
+            self.throttle("npd-admin:" + user["id"], 15, 3600)
+            body = self.body()
+            try:
+                record = npd_receipts.attach_tax_receipt(
+                    con, body.get("payment_id"), body.get("receipt_url"))
+            except npd_receipts.NpdReceiptError as exc:
+                raise ApiError(400, str(exc)) from None
+            # A tax document already exists. Emailing it does not register income.
+            delivery = npd_receipts.dispatch(con, mail, limit=1,
+                payment_id=record["payment_id"])
+            return self.send_json(200, {"receipt": record, "email_delivery": delivery})
         if path == "/api/billing/events" and method == "POST":
             self.throttle('growth:'+user['id'], 60, 3600)
             data = self.body()
@@ -1583,6 +1599,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
+                    if status == "succeeded":
+                        from backend import npd_receipts
+                        npd_receipts.note_payment(con, local["id"])
                 con.execute("COMMIT")
             except Exception:
                 con.execute("ROLLBACK")
@@ -1681,6 +1700,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if terms and not terms['is_test']:
                         revenue.record(con,payment['user_id'],'subscription_cancelled',terms['source'],terms['variant'],'refund:'+refund_id)
                     audit(con, None, "payment.refunded", payment["id"])
+                if not existing:
+                    from backend import npd_receipts
+                    npd_receipts.mark_refund(con, payment["id"])
                 con.execute("COMMIT")
             except Exception:
                 con.execute("ROLLBACK")
