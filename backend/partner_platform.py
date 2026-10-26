@@ -210,7 +210,7 @@ def record_subscription_payment(con, payment):
     ).fetchone()
     if not attribution or not attribution["active"]:
         return False
-    moment = _now()
+    moment = int(payment["activated_at"] or _now())
     start = attribution["first_paid_at"]
     if start is None:
         con.execute(
@@ -222,6 +222,9 @@ def record_subscription_payment(con, payment):
             (payment["user_id"],),
         ).fetchone()["first_paid_at"]
     if not start <= moment < start + attribution["term_days"] * 86400:
+        return False
+    if con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'",
+                   (payment["id"],)).fetchone():
         return False
     gross = int(payment["amount_kopecks"])
     commission = gross * attribution["rate_bps"] // 10000
@@ -488,3 +491,26 @@ def set_partner_active(con, partner_id, active):
         con.execute("UPDATE partner_console_sessions SET revoked_at=? "
                     "WHERE partner_id=? AND revoked_at IS NULL", (_now(), partner_id))
     return {"id": partner_id, "active": active, "payouts_enabled": False}
+
+
+def reconcile_confirmed_payments(con, limit=100):
+    """Admin-only bounded repair pass; only real confirmed paid subscriptions.
+
+    Safe to re-run: unique payment_id and ON CONFLICT guarantee idempotency.
+    This never issues a payout, edits subscription rights, or contacts YooKassa.
+    """
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise PartnerError(400, "Лимит сверки от 1 до 100")
+    candidates = con.execute(
+        "SELECT p.* FROM payments p "
+        "JOIN billing_intents b ON b.payment_id=p.id "
+        "JOIN partner_attributions a ON a.user_id=p.user_id "
+        "WHERE p.status='succeeded' AND b.is_test=0 "
+        "AND (p.plan LIKE 'pro_%' OR p.plan LIKE 'team_%') "
+        "AND NOT EXISTS (SELECT 1 FROM partner_commissions c WHERE c.payment_id=p.id) "
+        "AND NOT EXISTS (SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') "
+        "ORDER BY p.activated_at ASC,p.id ASC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    created = sum(bool(record_subscription_payment(con, row)) for row in candidates)
+    return {"scanned": len(candidates), "created": created, "payouts_enabled": False}
