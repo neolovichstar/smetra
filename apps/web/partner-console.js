@@ -52,6 +52,7 @@
     upload: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>',
     external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.5a6.5 6.5 0 0 1 3 5.5"/>',
     key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l2.5 2.5M14.5 8.5 17 11"/>',
   };
   const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
@@ -136,39 +137,47 @@
   let period = 30;
 
   /* ---------- routes ---------- */
+  // Each page names the server permission it needs; the server checks the same role.
   const ROUTES = [
-    { id: "overview", title: "Обзор", icon: "overview", group: "Работа" },
-    { id: "analytics", title: "Аналитика", icon: "analytics", group: "Работа" },
-    { id: "links", title: "Партнёрские ссылки", short: "Ссылки", icon: "links", group: "Работа" },
-    { id: "catalog", title: "Каталог материалов", short: "Каталог", icon: "catalog", group: "Работа" },
-    { id: "finance", title: "Финансы и комиссии", short: "Финансы", icon: "finance", group: "Деньги" },
-    { id: "payouts", title: "Выплаты", icon: "payouts", group: "Деньги" },
-    { id: "domain", title: "Подтверждение домена", short: "Домен", icon: "domain", group: "Интеграция" },
-    { id: "api", title: "API и интеграции", short: "API", icon: "api", group: "Интеграция" },
-    { id: "sdk", title: "SDK и материалы", short: "SDK", icon: "sdk", group: "Интеграция" },
-    { id: "activity", title: "История операций", short: "История", icon: "activity", group: "Аккаунт" },
-    { id: "settings", title: "Настройки", icon: "settings", group: "Аккаунт" },
+    { id: "overview", title: "Обзор", icon: "overview", group: "Работа", need: "summary" },
+    { id: "analytics", title: "Аналитика", icon: "analytics", group: "Работа", need: "analytics" },
+    { id: "links", title: "Партнёрские ссылки", short: "Ссылки", icon: "links", group: "Работа", need: "summary" },
+    { id: "catalog", title: "Каталог материалов", short: "Каталог", icon: "catalog", group: "Работа", need: "products" },
+    { id: "finance", title: "Финансы и комиссии", short: "Финансы", icon: "finance", group: "Деньги", need: "commissions" },
+    { id: "payouts", title: "Выплаты", icon: "payouts", group: "Деньги", need: "commissions" },
+    { id: "domain", title: "Подтверждение домена", short: "Домен", icon: "domain", group: "Интеграция", need: "domain" },
+    { id: "api", title: "API и интеграции", short: "API", icon: "api", group: "Интеграция", need: "products" },
+    { id: "sdk", title: "SDK и материалы", short: "SDK", icon: "sdk", group: "Интеграция", need: "profile" },
+    { id: "activity", title: "История операций", short: "История", icon: "activity", group: "Аккаунт", need: "products" },
+    { id: "team", title: "Команда", icon: "team", group: "Аккаунт", need: "team" },
+    { id: "settings", title: "Настройки", icon: "settings", group: "Аккаунт", need: "profile" },
   ];
-  const TABBAR = ["overview", "analytics", "catalog", "finance"];
+  let access = { role: "", permissions: new Set(), user: null, partners: [] };
+  const can = permission => access.permissions.has(permission);
+  const allowed = () => ROUTES.filter(route => can(route.need));
+  const tabbar = () => allowed().map(route => route.id).filter(id => id !== "settings" && id !== "team").slice(0, 4);
   const routeFromHash = () => {
     const id = (location.hash.match(/^#\/([a-z]+)/) || [])[1];
-    return ROUTES.find(route => route.id === id) || ROUTES[0];
+    const list = allowed();
+    return list.find(route => route.id === id) || list[0] || ROUTES[ROUTES.length - 1];
   };
   const navLink = (route, attention) => `<a class="pc-nav-link" href="#/${route.id}" data-route="${route.id}" title="${esc(route.title)}">${ico(route.icon)}<span class="pc-nav-text">${esc(route.title)}</span>${attention ? `<span class="pc-badge" aria-label="Требует внимания">!</span>` : ""}</a>`;
   let attention = new Set();
   const drawNav = () => {
     let group = "";
-    $("#pc-nav").innerHTML = ROUTES.map(route => {
+    const TABBAR = tabbar();
+    $("#pc-nav").innerHTML = allowed().map(route => {
       const head = route.group !== group ? `<div class="pc-nav-group">${esc((group = route.group))}</div>` : "";
       return head + navLink(route, attention.has(route.id));
     }).join("");
-    $("#pc-more-nav").innerHTML = ROUTES.filter(route => !TABBAR.includes(route.id)).map(route => navLink(route, attention.has(route.id))).join("") + `<a class="pc-nav-link" href="/docs" target="_blank" rel="noopener">${ico("book")}<span class="pc-nav-text">Документация</span></a>`;
+    $("#pc-more-nav").innerHTML = allowed().filter(route => !TABBAR.includes(route.id)).map(route => navLink(route, attention.has(route.id))).join("") + `<a class="pc-nav-link" href="/docs" target="_blank" rel="noopener">${ico("book")}<span class="pc-nav-text">Документация</span></a>`;
     $("#pc-tabbar").innerHTML = TABBAR.map(id => ROUTES.find(route => route.id === id)).map(route => `<a href="#/${route.id}" data-route="${route.id}">${icon(route.icon)}<span>${esc(route.short || route.title)}</span></a>`).join("") + `<button type="button" id="pc-more-btn" aria-expanded="false" aria-controls="pc-more">${icon("more")}<span>Ещё</span></button>`;
     $("#pc-more-btn").addEventListener("click", () => openMore(true));
     markCurrent();
   };
   const markCurrent = () => {
     const current = routeFromHash().id;
+    const TABBAR = tabbar();
     $$("[data-route]").forEach(link => (link.dataset.route === current ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current")));
     const more = $("#pc-more-btn");
     if (more) more.classList.toggle("is-current", !TABBAR.includes(current));
@@ -909,7 +918,7 @@
 
   /* ---------- 10. Activity ---------- */
   PAGES.activity = async (host, live) => {
-    const [proof, commissions, products] = await Promise.all([domain(), api("/commissions?limit=30"), api("/products?limit=100")]);
+    const [proof, commissions, products] = await Promise.all([domain(), can("commissions") ? api("/commissions?limit=30") : { items: [] }, api("/products?limit=100")]);
     if (!live()) return;
     // Real records the server already returns; no invented events.
     const events = [];
@@ -938,6 +947,66 @@
     draw();
   };
 
+  /* ---------- 12. Team ---------- */
+  PAGES.team = async (host, live) => {
+    const data = await api("/team");
+    if (!live()) return;
+    const owner = access.role === "owner";
+    const roleOptions = (current, lockOwner) => data.roles.filter(r => owner || r.id !== "owner" || r.id === current)
+      .map(r => `<option value="${r.id}" ${r.id === current ? "selected" : ""} ${lockOwner && r.id !== current ? "disabled" : ""}>${esc(r.label)}</option>`).join("");
+    const me = access.user?.email?.toLowerCase();
+    host.innerHTML = pageHead("Команда", "Сотрудники входят своим аккаунтом Сметры — почтой или через Яндекс ID. Доступ даётся по почте аккаунта.") + `
+      <section class="pc-block" aria-labelledby="invite-title"><div class="pc-block-head"><h2 id="invite-title">Пригласить</h2><p>Приглашение действует 14 дней</p></div>
+        <form class="pc-panel pc-panel-pad pc-invite" id="invite-form" novalidate>
+          <label class="p-field"><span>Почта сотрудника</span><input class="p-input" type="email" name="email" required autocomplete="off" placeholder="name@company.ru"></label>
+          <label class="p-field"><span>Роль</span><select class="p-select" name="role">${roleOptions("analyst")}</select></label>
+          <button class="p-btn is-primary" type="submit">Пригласить</button>
+        </form>
+        <p class="p-hint" data-mt>Сотрудник откроет console.smetra.online и войдёт аккаунтом Сметры с этой почтой (почта должна быть подтверждена). Доступ появится сразу после входа.</p>
+      </section>
+      <section class="pc-block" aria-labelledby="members-title"><div class="pc-block-head"><h2 id="members-title">Участники</h2><p>${data.members.length}</p></div>
+        <div class="pc-panel">${data.members.map(m => {
+          const self = (m.email || "").toLowerCase() === me;
+          const lock = m.role === "owner" && !owner;
+          return `<div class="pc-team-row"><div><strong>${esc(m.name || m.email)}${self ? " · вы" : ""}</strong><small>${esc(m.email)} · с ${day(m.since)}</small></div>
+            <select class="p-select" data-role-for="${esc(m.user_id)}" aria-label="Роль ${esc(m.name || m.email)}" ${lock ? "disabled" : ""}>${roleOptions(m.role, lock)}</select>
+            <button class="p-btn is-small is-quiet" type="button" data-remove="${esc(m.user_id)}" ${lock ? "disabled" : ""}>${self ? "Выйти из команды" : "Удалить"}</button></div>`;
+        }).join("")}</div></section>
+      <section class="pc-block" aria-labelledby="pending-title"><div class="pc-block-head"><h2 id="pending-title">Ожидают входа</h2></div>
+        ${data.invites.length ? `<div class="pc-panel">${data.invites.map(i => `<div class="pc-team-row"><div><strong>${esc(i.email)}</strong><small>до ${day(i.expires_at)}</small></div><span class="p-pill is-plain">${esc(i.role_label)}</span>
+          <button class="p-btn is-small is-quiet" type="button" data-revoke="${esc(i.id)}">Отозвать</button></div>`).join("")}</div>`
+          : `<div class="pc-panel"><div class="pc-state is-inline">${ico("team")}<h2>Приглашений нет</h2><p>Пригласите сотрудника по почте его аккаунта Сметры.</p></div></div>`}</section>
+      <section class="pc-block pc-cols">
+        ${note("info", "info", "<strong>Роли.</strong> Владелец — всё, включая команду. Администратор — всё, кроме владельцев. Аналитик — только просмотр статистики, каталога и начислений. Каталог — товары, домен и события магазина, без денег и статистики.")}
+        ${note("info", "lock", "Удалённый участник теряет доступ сразу: его сессии в кабинете закрываются. В команде всегда остаётся хотя бы один владелец.")}
+      </section>`;
+    const post = (path, body) => api(path, { method: "POST", body: body || {} });
+    $("#invite-form", host).addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.target;
+      if (!form.email.checkValidity() || !form.email.value.trim()) { form.email.setAttribute("aria-invalid", "true"); toast("Проверьте почту", "error"); return; }
+      const button = $("[type=submit]", form);
+      button.disabled = true;
+      try { await post("/team/invites", { email: form.email.value.trim(), role: form.role.value }); toast("Приглашение создано", "ok"); render(); }
+      catch (error) { toast(error.message, "error"); }
+      finally { button.disabled = false; }
+    });
+    $$("[data-role-for]", host).forEach(select => select.addEventListener("change", async () => {
+      try { await post(`/team/members/${select.dataset.roleFor}/role`, { role: select.value }); toast("Роль изменена", "ok"); }
+      catch (error) { toast(error.message, "error"); render(); }
+    }));
+    $$("[data-remove]", host).forEach(button => button.addEventListener("click", async () => {
+      const self = button.textContent.startsWith("Выйти");
+      if (!confirm(self ? "Выйти из команды партнёра? Доступ к кабинету пропадёт." : "Удалить участника из команды? Его сессии будут закрыты.")) return;
+      try { const result = await post(`/team/members/${button.dataset.remove}/remove`); toast("Готово", "ok"); if (result.self) { signOut(); return; } render(); }
+      catch (error) { toast(error.message, "error"); }
+    }));
+    $$("[data-revoke]", host).forEach(button => button.addEventListener("click", async () => {
+      try { await post(`/team/invites/${button.dataset.revoke}/revoke`); toast("Приглашение отозвано", "ok"); render(); }
+      catch (error) { toast(error.message, "error"); }
+    }));
+  };
+
   /* ---------- 11. Settings ---------- */
   PAGES.settings = async (host, live) => {
     const me = await profile(true);
@@ -964,17 +1033,33 @@
         <section class="pc-panel pc-panel-pad" aria-labelledby="s-help"><h2 class="p-label" id="s-help">Поддержка</h2><dl class="pc-kv">
           <dt>Партнёрство</dt><dd><a class="pc-link" href="mailto:sales@smetra.online">sales@smetra.online</a></dd><dt>Техническая</dt><dd><a class="pc-link" href="mailto:support@smetra.online">support@smetra.online</a></dd></dl></section>
       </div>
-      <section class="pc-block">${note("info", "info", "<strong>Планируется:</strong> сотрудники партнёра, роли, приглашения, двухфакторный вход и настройки уведомлений. Они появятся вместе с серверным разграничением доступа.")}</section>`;
+      <section class="pc-block">${note("info", "info", "<strong>Планируется:</strong> двухфакторный вход и настройки уведомлений. Сотрудники и роли — в разделе «Команда».")}</section>`;
     $("#s-signout", host).addEventListener("click", signOut);
   };
 
   /* ---------- sign in / out ---------- */
-  const showApp = () => {
+  // Who is signed in and what the role allows; the server checks the same rules.
+  const loadAccess = async () => {
+    const me = await api("/me");
+    access = { role: me.role, permissions: new Set(me.permissions), user: me.user, partners: me.partners || [] };
+    const who = $("#top-user");
+    who.hidden = !me.user;
+    who.textContent = me.user ? `${me.user.name || me.user.email} · ${me.role_label}` : "";
+    who.title = me.user ? me.user.email : "";
+  };
+  const showApp = async () => {
     $("#signin").hidden = true;
     $("#dashboard").hidden = false;
-    drawNav();
     tick();
+    await loadAccess();
+    drawNav();
     profile().then(me => { $("#partner-name").textContent = me.name; $("#partner-meta").textContent = me.domain; }).catch(() => {});
+  };
+  const startSession = async result => {
+    session = { token: result.session_token, expiresAt: Date.now() + (Number(result.expires_in) || 3600) * 1000 - 15000 };
+    saveSession(session);
+    await showApp();
+    render();
   };
   const showSignin = message => {
     $("#dashboard").hidden = true;
@@ -982,7 +1067,8 @@
     const error = $("#key-error");
     error.hidden = !message;
     error.textContent = message || "";
-    $("#key").focus();
+    $("#sso-start").hidden = false;
+    $("#sso-start").focus();
   };
   let ticker = 0;
   const tick = () => {
@@ -1036,15 +1122,12 @@
           : response.status === 429 ? "Слишком много попыток входа. Подождите 15 минут." : "Не удалось войти. Повторите позже.");
         return;
       }
-      session = { token: result.session_token, expiresAt: Date.now() + (Number(result.expires_in) || 3600) * 1000 - 15000 };
-      saveSession(session);
-      showApp();
-      render();
+      await startSession(result);
     } catch {
       fail(navigator.onLine ? "Сервер не отвечает. Повторите попытку." : "Нет подключения к интернету.");
     } finally {
       input.value = "";
-      button.disabled = false; button.textContent = "Войти";
+      button.disabled = false; button.textContent = "Войти ключом";
     }
   });
 
@@ -1063,11 +1146,42 @@
   addEventListener("online", () => toast("Соединение восстановлено", "ok"));
   addEventListener("offline", () => toast("Нет подключения к интернету", "error"));
 
+  // Account sign in: smetra.online sends back a one-time code in the fragment.
+  const main = location.protocol + "//" + location.host.replace(/^console\./, "");
+  $("#sso-start").href = main + "/api/partners/sso/start";
+  const exchange = async (code, partnerId) => {
+    const choose = $("#sso-choose");
+    const error = $("#key-error");
+    error.hidden = true;
+    try {
+      const response = await fetch(API + "/session/sso", { method: "POST", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(partnerId ? { code, partner_id: partnerId } : { code }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { showSignin(typeof result.error === "string" ? result.error : "Не удалось войти. Попробуйте ещё раз."); return; }
+      if (result.choose) {
+        choose.hidden = false;
+        choose.innerHTML = `<p>${esc(result.user?.name || result.user?.email || "")}, выберите партнёра:</p>` + result.choose.map(item =>
+          `<button type="button" data-partner="${esc(item.id)}"><span><b>${esc(item.name)}</b><small>${esc(item.domain)}</small></span><span class="p-pill is-plain">${esc(item.role_label)}</span></button>`).join("");
+        $$("[data-partner]", choose).forEach(button => button.addEventListener("click", () => { choose.hidden = true; exchange(code, button.dataset.partner); }));
+        $("#sso-start").hidden = true;
+        return;
+      }
+      choose.hidden = true;
+      await startSession(result);
+    } catch {
+      showSignin(navigator.onLine ? "Сервер не отвечает. Повторите вход." : "Нет подключения к интернету.");
+    }
+  };
+  const ssoCode = (location.hash.match(/^#sso=([A-Za-z0-9_-]{40,60})$/) || [])[1];
   session = loadSession();
-  if (session) {
-    showApp();
+  if (ssoCode) {
+    // Drop the code from the address bar and history before using it.
+    history.replaceState(null, "", location.pathname + location.search);
+    $("#signin").hidden = false;
+    exchange(ssoCode);
+  } else if (session) {
     // Validate the stored session before drawing the page.
-    profile().then(() => render()).catch(error => { if (error.kind !== "auth") render(); });
+    showApp().then(() => render()).catch(error => { if (error.kind !== "auth") showSignin(error.message); });
   } else {
     showSignin("");
   }

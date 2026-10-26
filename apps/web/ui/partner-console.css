@@ -336,3 +336,27 @@ fieldset.pc-method{min-width:0;margin:0;padding:0;border:0}
   .pc-table td[data-label]::before{min-width:96px}
   .pc-table td:last-child .p-btn{margin-top:var(--s-2);padding:0;min-height:32px}
 }
+/* Account sign in */
+.pc-sso{min-height:48px}
+.pc-key-login{padding-top:var(--s-4);border-top:1px solid var(--line)}
+.pc-key-login summary{cursor:pointer;color:var(--text-2);font-size:var(--fs-14);list-style:none}
+.pc-key-login summary::-webkit-details-marker{display:none}
+.pc-key-login summary::after{content:" →";color:var(--text-3)}
+.pc-key-login[open] summary{margin-bottom:var(--s-4)}
+.pc-key-login .pc-signin-form .p-btn{margin-top:0;min-height:44px}
+.pc-choose{display:flex;flex-direction:column;gap:var(--s-2)}
+.pc-choose p{color:var(--text-2);font-size:var(--fs-14)}
+.pc-choose button{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);min-height:56px;padding:0 var(--s-4);border:1px solid var(--line-2);border-radius:var(--r-2);background:var(--bg-1);text-align:left}
+.pc-choose button:hover{border-color:var(--line-3);background:var(--bg-2)}
+.pc-choose button span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pc-choose button small{color:var(--text-3);font-size:var(--fs-12)}
+.pc-top-user{margin-left:auto;margin-right:var(--s-3);color:var(--text-3);font-size:var(--fs-13);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.pc-team-row{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;align-items:center;gap:var(--s-3);padding:var(--s-3) var(--s-5);border-top:1px solid var(--line)}
+.pc-team-row:first-child{border-top:0}
+.pc-team-row div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pc-team-row strong{font-weight:500;font-size:var(--fs-14);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-team-row small{color:var(--text-3);font-size:var(--fs-12);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-team-row .p-select{min-height:36px;font-size:var(--fs-13)}
+.pc-invite{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:var(--s-2);align-items:end}
+@media (max-width:640px){.pc-team-row,.pc-invite{grid-template-columns:1fr}.pc-top-user{display:none}}
+.pc-team-row>.p-pill{justify-self:start}

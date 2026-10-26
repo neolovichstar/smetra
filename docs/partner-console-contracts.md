@@ -75,12 +75,11 @@ Showing «показы в ассистенте» needs `partner_offer_impression
 product_id, day, count)` written when the offer tool returns a product, and a
 field in `/console/analytics`. Count per day only, no user ids.
 
-## 7. Team access, roles, MFA, notifications
+## 7. MFA and notifications
 
-Needs partner user accounts separate from customer accounts
-(`partner_members`, invitation tokens, roles `owner|analyst|catalog`), server
-checks on every route by role, and TOTP for owners. Not to be simulated in the
-browser.
+Team access and roles are built (`backend/partner_access.py`: account sign-in
+through smetra.online, `partner_members`, invitations, roles checked on every
+request). Still missing: TOTP for owners and notification settings.
 
 ## 8. Payouts
 

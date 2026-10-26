@@ -382,6 +382,9 @@ def migrate(con):
     con.executescript((Path(__file__).parent / "migrations" / "028_object_chats.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "034_partner_platform.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "035_partner_verification_analytics.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "036_partner_members.sql").read_text(encoding="utf-8"))
+    if "user_id" not in {r["name"] for r in con.execute("PRAGMA table_info(partner_console_sessions)")}:
+        con.execute("ALTER TABLE partner_console_sessions ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE")
     # Python casefold handles Cyrillic correctly; SQLite's lower() only handles ASCII.
     partner_columns = {r["name"] for r in con.execute("PRAGMA table_info(partner_products)")}
     if "search_name" not in partner_columns:

@@ -43,18 +43,20 @@ COOKIE_SECURE = ORIGIN.startswith("https://")
 # Browser deployments may be reached through the canonical domain and the
 # historical Vercel alias. Origin checks must compare exact, trusted origins,
 # never a suffix match or an untrusted Host/X-Forwarded-Host header.
+PARTNER_CONSOLE_ORIGIN = os.getenv("PARTNER_CONSOLE_ORIGIN", "https://console.smetra.online").rstrip("/")
 BROWSER_ORIGINS = frozenset({
     ORIGIN,
     "https://smetra.online",
     "https://www.smetra.online",
     "https://smetra.vercel.app",
     "https://console.smetra.online",
+    PARTNER_CONSOLE_ORIGIN,
 })
 _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 63
+REQUIRED_CLOUD_SCHEMA_VERSION = 64
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -759,6 +761,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         audit(con, admin["id"], "partner.key_rotated", partner_id)
                         return self.send_json(200, rotated)
                     if method == "POST" and re.fullmatch(
+                            r"/api/partners/admin/accounts/[0-9a-f-]{36}/owner", path):
+                        from backend import partner_access as access
+                        data = self.body()
+                        if not isinstance(data, dict) or set(data) != {"email"}:
+                            raise ApiError(400, "Ожидается email")
+                        partner_id = path.split("/")[-2]
+                        result = access.admin_invite_owner(con, partner_id, data["email"])
+                        audit(con, admin["id"], "partner.owner_invited", partner_id)
+                        return self.send_json(201, result)
+                    if method == "POST" and re.fullmatch(
                             r"/api/partners/admin/accounts/[0-9a-f-]{36}/state", path):
                         data = self.body()
                         if not isinstance(data, dict) or set(data) != {"active"}:
@@ -767,6 +779,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         updated = partner.set_partner_active(con, partner_id, data["active"])
                         audit(con, admin["id"], "partner.state_changed", partner_id)
                         return self.send_json(200, updated)
+                if path == "/api/partners/sso/start" and method == "GET":
+                    # On smetra.online: the account session cookie lives here, the console cannot read it.
+                    from backend import partner_access as access
+                    try:
+                        user = self.auth(con)
+                    except ApiError:
+                        return self.partner_redirect(ORIGIN + "/app?partner_sso=1")
+                    self.throttle("partner-sso:" + user["id"], 30, 3600)
+                    code = access.begin_sso(con, user)
+                    # Fragment, not query: the code never reaches logs or the Referer header.
+                    return self.partner_redirect(PARTNER_CONSOLE_ORIGIN + "/app#sso=" + code)
+                if path == "/api/partners/console/session/sso" and method == "POST":
+                    from backend import partner_access as access
+                    self.throttle("partner-login:" + self.client_address[0], 20, 900)
+                    data = self.body()
+                    if not isinstance(data, dict) or not set(data) <= {"code", "partner_id"} or "code" not in data:
+                        raise ApiError(400, "Некорректный вход")
+                    partner_id = data.get("partner_id")
+                    if partner_id is not None and (not isinstance(partner_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", partner_id)):
+                        raise ApiError(400, "Некорректный партнёр")
+                    result = access.exchange_sso(con, data["code"], partner_id)
+                    if "session_token" in result:
+                        audit(con, None, "partner.console_signed_in", result["partner"]["id"])
+                    return self.send_json(201 if "session_token" in result else 200, result)
                 if path == "/api/partners/console/session" and method == "POST":
                     self.throttle("partner-login:" + self.client_address[0], 8, 900)
                     data = self.body()
@@ -776,55 +812,85 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if path == "/api/partners/console/logout" and method == "POST":
                     partner.revoke_console_session(con, self.headers.get("Authorization"))
                     return self.send_json(200, {"ok": True})
-                if path == "/api/partners/console/summary" and method == "GET":
-                    org = partner.auth_console(con, self.headers.get("Authorization"))
-                    self.throttle("partner-console:" + org["id"], 100, 3600)
-                    return self.send_json(200, partner.summary(con, org))
-                if path == "/api/partners/console/profile" and method == "GET":
-                    org = partner.auth_console(con, self.headers.get("Authorization"))
-                    return self.send_json(200, partner.partner_profile(con, org))
-                if path in ("/api/partners/console/products", "/api/partners/console/commissions") and method == "GET":
-                    org = partner.auth_console(con, self.headers.get("Authorization"))
-                    self.throttle("partner-page:" + org["id"], 120, 3600)
-                    raw_limit = query.get("limit", ["50" if path.endswith("products") else "30"])[0]
-                    if not isinstance(raw_limit, str) or not re.fullmatch(r"[1-9][0-9]{0,2}", raw_limit):
-                        raise ApiError(400, "Некорректный размер страницы")
-                    limit = int(raw_limit)
-                    cursor = query.get("cursor", [""])[0]
-                    result = (partner.catalog_page(con, org, limit, cursor)
-                              if path.endswith("products") else
-                              partner.commission_page(con, org, limit, cursor))
-                    return self.send_json(200, result)
-                if path == "/api/partners/console/catalog" and method == "POST":
-                    org = partner.auth_console(con, self.headers.get("Authorization"))
-                    self.throttle("partner-catalog:" + org["id"], 20, 3600)
-                    result = partner.ingest_products(con, org, self.body())
-                    audit(con, None, "partner.catalog_updated", org["id"], str(result["accepted"]))
-                    return self.send_json(200, result)
                 if path.startswith("/api/partners/console/"):
+                    from backend import partner_access as access
                     from backend import partner_integrations as integration
-                    org = partner.auth_console(con, self.headers.get("Authorization"))
+                    org, role, member = access.console_access(con, self.headers.get("Authorization"))
+                    if path == "/api/partners/console/me" and method == "GET":
+                        return self.send_json(200, access.me(con, org, role, member))
+                    if path == "/api/partners/console/summary" and method == "GET":
+                        access.require(role, "summary")
+                        self.throttle("partner-console:" + org["id"], 100, 3600)
+                        return self.send_json(200, partner.summary(con, org))
+                    if path == "/api/partners/console/profile" and method == "GET":
+                        return self.send_json(200, partner.partner_profile(con, org))
+                    if path in ("/api/partners/console/products", "/api/partners/console/commissions") and method == "GET":
+                        access.require(role, "products" if path.endswith("products") else "commissions")
+                        self.throttle("partner-page:" + org["id"], 120, 3600)
+                        raw_limit = query.get("limit", ["50" if path.endswith("products") else "30"])[0]
+                        if not isinstance(raw_limit, str) or not re.fullmatch(r"[1-9][0-9]{0,2}", raw_limit):
+                            raise ApiError(400, "Некорректный размер страницы")
+                        limit = int(raw_limit)
+                        cursor = query.get("cursor", [""])[0]
+                        result = (partner.catalog_page(con, org, limit, cursor)
+                                  if path.endswith("products") else
+                                  partner.commission_page(con, org, limit, cursor))
+                        return self.send_json(200, result)
+                    if path == "/api/partners/console/catalog" and method == "POST":
+                        access.require(role, "catalog_write")
+                        self.throttle("partner-catalog:" + org["id"], 20, 3600)
+                        result = partner.ingest_products(con, org, self.body())
+                        audit(con, member, "partner.catalog_updated", org["id"], str(result["accepted"]))
+                        return self.send_json(200, result)
+                    if path == "/api/partners/console/team" and method == "GET":
+                        access.require(role, "team")
+                        return self.send_json(200, access.team(con, org))
+                    if path == "/api/partners/console/team/invites" and method == "POST":
+                        access.require(role, "team")
+                        self.throttle("partner-team:" + org["id"], 30, 3600)
+                        result = access.invite(con, org, role, member, self.body())
+                        audit(con, member, "partner.member_invited", org["id"], result["role"])
+                        return self.send_json(201, result)
+                    team_item = re.fullmatch(r"/api/partners/console/team/(invites|members)/([0-9a-f-]{36})/(revoke|role|remove)", path)
+                    if team_item and method == "POST":
+                        access.require(role, "team")
+                        self.throttle("partner-team:" + org["id"], 30, 3600)
+                        kind, item, action = team_item.groups()
+                        if kind == "invites" and action == "revoke":
+                            result = access.revoke_invite(con, org, item)
+                        elif kind == "members" and action == "role":
+                            result = access.change_role(con, org, role, member, item, self.body())
+                        elif kind == "members" and action == "remove":
+                            result = access.remove_member(con, org, role, member, item)
+                        else:
+                            raise ApiError(404, "Не найдено")
+                        audit(con, member, "partner.team_" + kind[:-1] + "_" + action, org["id"], item)
+                        return self.send_json(200, result)
                     self.throttle("partner-api:" + org["id"], 120, 3600)
                     if path == "/api/partners/console/domain" and method == "GET":
                         return self.send_json(200, integration.domain_status(con, org))
                     if path == "/api/partners/console/domain" and method == "POST":
+                        access.require(role, "domain_write")
                         data = self.body()
                         if set(data) != {"method"}:
                             raise ApiError(400, "Некорректные параметры домена")
                         result = integration.begin_verification(con, org, data["method"])
-                        audit(con, None, "partner.domain_challenge_created", org["id"], data["method"])
+                        audit(con, member, "partner.domain_challenge_created", org["id"], data["method"])
                         return self.send_json(200, result)
                     if path == "/api/partners/console/domain/verify" and method == "POST":
+                        access.require(role, "domain_write")
                         self.throttle("partner-verify:" + org["id"], 6, 900)
                         result = integration.verify_domain(con, org)
-                        audit(con, None, "partner.domain_check", org["id"], result["status"])
+                        audit(con, member, "partner.domain_check", org["id"], result["status"])
                         return self.send_json(200, result)
                     if path == "/api/partners/console/analytics" and method == "GET":
+                        access.require(role, "analytics")
                         days = query.get("days", ["30"])[0]
                         if not isinstance(days, str) or days not in ("7", "30", "90"):
                             raise ApiError(400, "Период: 7, 30 или 90 дней")
                         return self.send_json(200, integration.analytics(con, org, int(days)))
                     if path == "/api/partners/console/events" and method == "POST":
+                        access.require(role, "events")
                         self.throttle("partner-event:" + org["id"], 300, 3600)
                         return self.send_json(202, integration.report_event(con, org, self.body()))
             except partner.PartnerError as err:

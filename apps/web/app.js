@@ -18,7 +18,7 @@ const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
 let user = null, quotes = [], tab = location.hash.slice(1) || (new URLSearchParams(location.search).get('cloud') === 'connected' ? 'premium' : 'dashboard'), registering = false, toastTimer, renderRevision=0, authRevision=0;
-try{sessionStorage.removeItem('mobile_token');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
+try{sessionStorage.removeItem('mobile_token');if(new URLSearchParams(location.search).has('partner_sso'))sessionStorage.setItem('smetra.partnerSso','1');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 const apiResponseCache=new Map();
 const API_CACHE_TTL=5000;
@@ -278,6 +278,8 @@ async function showApp(){
   const attempt=authRevision;
   const owner=user;
   if(!owner)return;
+  // Signed in after coming from the partner console: go back there with a one-time code.
+  try{if(sessionStorage.getItem('smetra.partnerSso')){sessionStorage.removeItem('smetra.partnerSso');location.replace('/api/partners/sso/start');return}}catch{}
   // Keep the previously rendered auth scene underneath a covering transition
   // until the authorized route has finished constructing its first frame.
   document.body.classList.add('smetra-app-transitioning');

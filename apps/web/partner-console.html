@@ -15,20 +15,26 @@
 <body class="pc">
 <a class="skip-link" href="#view">К содержанию</a>
 
-<!-- Sign in: the API key is exchanged once for a one-hour session and never stored. -->
+<!-- Sign in with the Smetra account (email or Yandex ID). An API key is the fallback for integrators and is never stored. -->
 <main class="pc-signin" id="signin" aria-labelledby="signin-title">
   <div class="pc-signin-card">
     <a class="p-brand" href="/"><span>сметра<b>.</b></span><small>partners</small></a>
     <h1 id="signin-title">Кабинет партнёра</h1>
-    <p class="pc-signin-lead">Войдите ключом Partner API. Консоль получит временную сессию на один час, сам ключ в браузере не сохраняется.</p>
-    <form id="connect" class="pc-signin-form" novalidate>
-      <label class="p-field" for="key"><span>Ключ Partner API</span>
-        <input id="key" class="p-input" type="password" autocomplete="off" spellcheck="false" placeholder="smp_live_…" required aria-describedby="key-error">
-      </label>
-      <p class="p-error" id="key-error" role="alert" hidden></p>
-      <button class="p-btn is-primary" type="submit">Войти</button>
-    </form>
-    <p class="p-hint">Ключ выдаёт команда «Сметры» после согласования условий. Нет ключа? <a href="mailto:sales@smetra.online">sales@smetra.online</a></p>
+    <p class="pc-signin-lead">Войдите тем же аккаунтом, что и на smetra.online: через почту или Яндекс ID.</p>
+    <p class="p-error" id="key-error" role="alert" hidden></p>
+    <div id="sso-choose" class="pc-choose" hidden></div>
+    <a class="p-btn is-primary pc-sso" id="sso-start" href="https://smetra.online/api/partners/sso/start">Войти через аккаунт Сметры</a>
+    <p class="p-hint">Нет доступа? Попросите владельца кабинета пригласить вашу почту или напишите на <a href="mailto:sales@smetra.online">sales@smetra.online</a>.</p>
+    <details class="pc-key-login">
+      <summary>Войти ключом Partner API</summary>
+      <form id="connect" class="pc-signin-form" novalidate>
+        <label class="p-field" for="key"><span>Ключ Partner API</span>
+          <input id="key" class="p-input" type="password" autocomplete="off" spellcheck="false" placeholder="smp_live_…" required aria-describedby="key-error">
+        </label>
+        <button class="p-btn" type="submit">Войти ключом</button>
+        <p class="p-hint">Ключ используется один раз для сессии на час и в браузере не сохраняется.</p>
+      </form>
+    </details>
     <nav class="pc-signin-links" aria-label="Справка"><a href="/">О программе</a><a href="/docs">Документация API</a><a href="/privacy">Обработка данных</a></nav>
   </div>
 </main>
@@ -52,6 +58,7 @@
         <strong id="partner-name">Партнёр</strong>
         <span class="pc-top-meta" id="partner-meta"></span>
       </div>
+      <span class="pc-top-user" id="top-user" hidden></span>
       <div class="pc-top-actions">
         <span class="pc-session" id="session-left" title="Сессия консоли"></span>
         <button class="p-btn is-quiet is-small" id="signout" type="button">Выйти</button>
