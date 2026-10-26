@@ -536,6 +536,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("file-editor.js", "text/javascript"),
             ("file-preview.css", "text/css"),
             ("file-preview.js", "text/javascript"),
+            ("workspace-vault.js", "text/javascript"),
+            ("workspace-vault.css", "text/css"),
             ("black.js", "text/javascript"),
             ("assistant-chat.js", "text/javascript"),
             ("profile-ui.js", "text/javascript"),
