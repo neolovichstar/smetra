@@ -61,7 +61,8 @@ def begin_verification(con, account, method="dns"):
         "(partner_id,domain,token,status,method,verified_at,last_checked_at,created_at) "
         "VALUES(?,?,?,'pending',?,NULL,NULL,?) "
         "ON CONFLICT(partner_id) DO UPDATE SET token=excluded.token,"
-        "status='pending',method=excluded.method,verified_at=NULL,last_checked_at=NULL",
+        "status='pending',method=excluded.method,verified_at=NULL,last_checked_at=NULL,"
+        "created_at=excluded.created_at",
         (account["id"], account["allowed_host"], token, method, moment),
     )
     return domain_status(con, account)
