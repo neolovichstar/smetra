@@ -135,6 +135,12 @@ CREATE OR REPLACE FUNCTION smetra.vault_file_guard()
  DECLARE allowance BIGINT;
  BEGIN
    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+   -- Backward-compatible cutover: the currently published backend still
+   -- creates files without owner_user_id. Fill from its authenticated request
+   -- context until the v66 release is serving all requests.
+   IF TG_OP='INSERT' AND NEW.owner_user_id IS NULL THEN
+      NEW.owner_user_id:=smetra.runtime_user_id();
+   END IF;
    IF TG_OP='UPDATE' AND (
       NEW.owner_user_id IS DISTINCT FROM OLD.owner_user_id OR
       NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
@@ -206,6 +212,10 @@ CREATE OR REPLACE FUNCTION smetra.vault_can_edit_workspace(wid TEXT)
   SELECT 1 FROM smetra.workspace_members m
   WHERE m.workspace_id=wid AND m.user_id=smetra.runtime_user_id()
   AND m.role IN ('owner','admin','manager','member')
+ )
+ OR EXISTS(
+  SELECT 1 FROM smetra.workspaces w
+  WHERE w.id=wid AND w.owner_id=smetra.runtime_user_id()
  );
  $access$;
 REVOKE ALL ON FUNCTION smetra.vault_can_edit_workspace(TEXT) FROM PUBLIC,anon,authenticated;
