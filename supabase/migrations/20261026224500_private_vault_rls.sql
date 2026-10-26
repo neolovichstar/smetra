@@ -119,6 +119,12 @@ CREATE OR REPLACE FUNCTION smetra.vault_file_guard()
       RAISE EXCEPTION 'File ownership or workspace cannot be reassigned'
         USING ERRCODE='23514';
    END IF;
+   IF TG_OP='INSERT'
+       AND NULLIF(current_setting('smetra.session_hash',true),'') IS NOT NULL
+       AND NEW.owner_user_id IS DISTINCT FROM smetra.runtime_user_id() THEN
+      RAISE EXCEPTION 'File owner must match authenticated user'
+        USING ERRCODE='23514';
+   END IF;
    IF NEW.vault_scope NOT IN ('personal','workspace') OR
       NEW.owner_user_id IS NULL THEN
        RAISE EXCEPTION 'Invalid vault owner and scope' USING ERRCODE='23514';
@@ -168,18 +174,57 @@ DROP TRIGGER IF EXISTS vault_file_guard ON smetra.files;
 CREATE TRIGGER vault_file_guard BEFORE INSERT OR UPDATE ON smetra.files
  FOR EACH ROW EXECUTE FUNCTION smetra.vault_file_guard();
 
--- Replace the workspace-only policy with individual file ownership gates.
+-- RLS separates read from write: team viewers can read shared documents
+-- but CANNOT modify them. Personal files stay private even inside teams.
+CREATE OR REPLACE FUNCTION smetra.vault_can_edit_workspace(wid TEXT)
+ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
+ AS $access$
+ SELECT EXISTS (
+  SELECT 1 FROM smetra.workspace_members m
+  WHERE m.workspace_id=wid AND m.user_id=smetra.runtime_user_id()
+  AND m.role IN ('owner','admin','manager','member')
+ );
+ $access$;
+REVOKE ALL ON FUNCTION smetra.vault_can_edit_workspace(TEXT) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION smetra.vault_can_edit_workspace(TEXT) TO smetra_runtime;
+
 DROP POLICY IF EXISTS smetra_runtime_scope ON smetra.files;
-CREATE POLICY smetra_runtime_scope ON smetra.files FOR ALL TO smetra_runtime
+DROP POLICY IF EXISTS vault_files_read ON smetra.files;
+DROP POLICY IF EXISTS vault_files_insert ON smetra.files;
+DROP POLICY IF EXISTS vault_files_update ON smetra.files;
+DROP POLICY IF EXISTS vault_files_delete ON smetra.files;
+CREATE POLICY vault_files_read ON smetra.files FOR SELECT TO smetra_runtime
  USING (
   workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
   AND smetra.runtime_workspace_allowed(workspace_id)
   AND (vault_scope='workspace' OR owner_user_id=smetra.runtime_user_id())
+ );
+CREATE POLICY vault_files_insert ON smetra.files FOR INSERT TO smetra_runtime
+ WITH CHECK (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.runtime_workspace_allowed(workspace_id)
+  AND owner_user_id=smetra.runtime_user_id()
+  AND (vault_scope='personal' OR smetra.vault_can_edit_workspace(workspace_id))
+ );
+CREATE POLICY vault_files_update ON smetra.files FOR UPDATE TO smetra_runtime
+ USING (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.runtime_workspace_allowed(workspace_id)
+  AND ( (vault_scope='personal' AND owner_user_id=smetra.runtime_user_id())
+     OR (vault_scope='workspace' AND smetra.vault_can_edit_workspace(workspace_id)))
  )
  WITH CHECK (
   workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
   AND smetra.runtime_workspace_allowed(workspace_id)
-  AND (vault_scope='workspace' OR owner_user_id=smetra.runtime_user_id())
+  AND ( (vault_scope='personal' AND owner_user_id=smetra.runtime_user_id())
+     OR (vault_scope='workspace' AND smetra.vault_can_edit_workspace(workspace_id)))
+ );
+CREATE POLICY vault_files_delete ON smetra.files FOR DELETE TO smetra_runtime
+ USING (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.runtime_workspace_allowed(workspace_id)
+  AND ( (vault_scope='personal' AND owner_user_id=smetra.runtime_user_id())
+     OR (vault_scope='workspace' AND smetra.vault_can_edit_workspace(workspace_id)))
  );
 
 -- Child-table policies must always resolve through the accessible parent file,
