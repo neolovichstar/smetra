@@ -206,8 +206,9 @@ def search_workspace_storage(service, query="", kind="all"):
     query = string(query, "Поиск в хранилище", 100).strip()
     if kind not in ("all", "images", "documents"):
         raise DomainError(400, "Неверный тип вложений")
-    filters = ["workspace_id=?", "archived=0"]
-    values = [service.wid]
+    filters = ["workspace_id=?", "archived=0",
+               "(vault_scope='workspace' OR owner_user_id=?)"]
+    values = [service.wid, service.user["id"]]
     if kind == "images":
         filters.append("mime IN ('image/png','image/jpeg')")
     elif kind == "documents":

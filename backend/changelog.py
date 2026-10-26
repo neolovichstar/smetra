@@ -14,20 +14,36 @@ def _row(service, update_id, include_draft=False):
         raise DomainError(404, "Обновление не найдено")
     return row
 
+def unread_count(service):
+    # Same durable per-user view records power both unique views and unread badges.
+    # No device-localStorage flags: one user's read cannot clear another's badge.
+    return int(service.con.execute(
+        "SELECT count(*) FROM product_updates u WHERE u.published=1 "
+        "AND NOT EXISTS (SELECT 1 FROM product_update_views v "
+        "WHERE v.update_id=u.id AND v.user_id=?)",
+        (service.user["id"],),
+    ).fetchone()[0])
+
+
 def route(service, method, parts, query, data):
+    if method == "GET" and parts == ["unread"]:
+        return 200, {"unread_count": unread_count(service)}
     if method == "GET" and not parts:
         admin = service.user["role"] == "admin"
         rows = service.con.execute(
             "SELECT u.id,u.title,u.version,u.body,u.published,u.published_at,u.updated_at,"
             "u.view_count,u.likes,u.dislikes,"
             "(SELECT r.reaction FROM product_update_reactions r "
-            " WHERE r.update_id=u.id AND r.user_id=?) AS my_reaction "
+            " WHERE r.update_id=u.id AND r.user_id=?) AS my_reaction,"
+            "EXISTS (SELECT 1 FROM product_update_views v "
+            "WHERE v.update_id=u.id AND v.user_id=?) AS has_viewed "
             "FROM product_updates u "
             + ("" if admin else "WHERE u.published=1 ")
             + "ORDER BY u.published_at DESC,u.id DESC LIMIT 80",
-            (service.user["id"],),
+            (service.user["id"], service.user["id"]),
         ).fetchall()
-        return 200, {"items":[dict(r) for r in rows], "can_publish":admin}
+        return 200, {"items":[dict(r) for r in rows], "can_publish":admin,
+                     "unread_count": unread_count(service)}
     if method == "POST" and not parts:
         _admin(service)
         title = string(data.get("title"), "Заголовок", 160, True)
@@ -52,8 +68,10 @@ def route(service, method, parts, query, data):
         body = string(data.get("body",row["body"]), "Markdown", 30000, True)
         published = integer(data.get("published",row["published"]), "Опубликовано", 0, 1)
         service.con.execute(
-            "UPDATE product_updates SET title=?,version=?,body=?,published=?,updated_at=? WHERE id=?",
-            (title,version,body,published,stamp(),row["id"]),
+            "UPDATE product_updates SET title=?,version=?,body=?,published=?,"
+            "published_at=CASE WHEN published=0 AND ?=1 THEN ? ELSE published_at END,"
+            "updated_at=? WHERE id=?",
+            (title,version,body,published,published,stamp(),stamp(),row["id"]),
         )
         return 200, {"ok":True}
     if len(parts) != 2 or method != "POST":

@@ -85,7 +85,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <header class="assistant-header" hidden><span id="assistant-quota" class="assistant-quota"></span></header>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
-      <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
+      <div class="assistant-composer"><div id="assistant-decision-slot" class="assistant-decision-slot" aria-live="polite"></div><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
@@ -685,21 +685,83 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }
     messages.append(item);return {item,body};
   };
+  const decisionSlot=document.getElementById('assistant-decision-slot');
+  const proposalQueue=[];
+  const updateDecisions=()=>{
+    if(!decisionSlot?.isConnected)return;
+    decisionSlot.replaceChildren();
+    const next=proposalQueue.find(item=>item.isConnected&&item.dataset.proposalState==='pending');
+    if(!next)return;
+    const heading=document.createElement('div');heading.className='assistant-decision-heading';
+    const kicker=document.createElement('span');kicker.textContent='Подтвердите действие';
+    const summary=document.createElement('strong');summary.textContent=next.querySelector('h3')?.textContent||'Предложение ИИ';
+    heading.append(kicker,summary);
+    const controls=document.createElement('div');controls.className='assistant-decision-buttons';
+    const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Принять';yes.onclick=()=>next.querySelector('[data-confirm]')?.click();
+    const no=document.createElement('button');no.type='button';no.className='btn ghost';no.textContent='Отклонить';no.onclick=()=>next.querySelector('[data-dismiss]')?.click();
+    controls.append(yes,no);decisionSlot.append(heading,controls);
+  };
+  const showQuestion=(question)=>{
+    if(!decisionSlot?.isConnected||!question||typeof question.question!=='string')return;
+    const options=Array.isArray(question.options)?question.options.slice(0,4):[];
+    if(options.length<2)return;
+    decisionSlot.replaceChildren();
+    const group=document.createElement('div');group.className='assistant-decision-heading';
+    const tag=document.createElement('span');tag.textContent='Ассистент уточняет';
+    const title=document.createElement('strong');title.textContent=question.question;
+    title.style.whiteSpace='normal';group.append(tag,title);
+    const choices=document.createElement('div');choices.className='assistant-question-choice';
+    const reply=value=>{
+      if(working||!active()||!value.trim())return;
+      decisionSlot.replaceChildren();input.value=value.trim();input.dispatchEvent(new Event('input',{bubbles:true}));
+      document.querySelector('#assistant-form')?.requestSubmit();
+    };
+    for(const value of options){
+      if(typeof value!=='string'||!value.trim())continue;
+      const button=document.createElement('button');button.type='button';button.textContent=value;button.onclick=()=>reply(value);
+      choices.append(button);
+    }
+    const custom=document.createElement('form');custom.className='assistant-question-custom';
+    const field=document.createElement('input');field.type='text';field.maxLength=300;field.placeholder='Свой вариант ответа';field.setAttribute('aria-label','Свой вариант ответа');field.required=true;
+    const sendChoice=document.createElement('button');sendChoice.type='submit';sendChoice.textContent='Отправить';
+    custom.append(field,sendChoice);
+    custom.addEventListener('submit',event=>{event.preventDefault();reply(field.value)});
+    decisionSlot.append(group,choices,custom);
+  };
+  const renderedProposalIds=new Set();
   const addAction=action=>{
+    if(!action || !action.id || renderedProposalIds.has(action.id))return;
+    renderedProposalIds.add(action.id);
     if(action?.tool&&/quote/.test(action.tool))quotePreview?.propose(action).catch(()=>{});
-    const item=document.createElement('section');item.className='assistant-proposal';
+    const item=document.createElement('section');item.className='assistant-proposal';item.dataset.proposalState='pending';
     const markdownEdit=action.tool==='replace_markdown_text';
     const quoteDraft=action.tool==='create_quotes'&&Array.isArray(action.arguments?.items)&&action.arguments.items.length>0;
     const detail=quoteDraft?'':action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
     item.innerHTML=`<span class="assistant-proposal-state">Требует подтверждения · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
-    actions.append(item);
+    actions.append(item);proposalQueue.push(item);updateDecisions();
     if(quoteDraft)assistantQuoteDraftPreview(item.querySelector('.proposal-fields'),action.arguments);
     if(action.tool==='create_document'){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
     }
-    item.querySelector('[data-confirm]').onclick=async()=>{const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
-    item.querySelector('[data-dismiss]').onclick=async()=>{try{await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});item.remove()}catch(error){notify(error.message)}};
+    item.querySelector('[data-confirm]').onclick=async()=>{
+      if(action.tool?.startsWith('delete_')){
+        const accepted=window.SmetraDialog?.confirm
+          ? await window.SmetraDialog.confirm({title:'Удалить запись?',message:action.summary+' — удаление нельзя отменить.',confirmLabel:'Удалить',danger:true})
+          : window.confirm(action.summary+'? Это действие нельзя отменить.');
+        if(!accepted)return;
+      }
+      const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+    item.querySelector('[data-dismiss]').onclick=async()=>{
+      const dismiss=item.querySelector('[data-dismiss]');
+      if(dismiss.disabled)return;
+      dismiss.disabled=true;
+      try{
+        await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});
+        item.dataset.proposalState='dismissed';quotePreview?.clearProposal?.(action.id);
+        item.remove();updateDecisions();
+      }catch(error){dismiss.disabled=false;notify(error.message)}
+    };
   };
   // Like ChatGPT's "Memory updated": a quiet note under the answer with a way to review it.
   const showMemoryNote=(item,updates)=>{
@@ -923,17 +985,32 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
       if(!response.body)throw Error('Браузер не поддерживает потоковый ответ');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+      let hasModelProgress=false;
       const eventBlock=block=>{
         const lines=block.split(/\r?\n/);const kind=lines.find(line=>line.startsWith('event:'))?.slice(6).trim();
         const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
-        if(kind==='ready'){renderQuota(payload.quota);setActivity('Думаю…');status.textContent='Формулирую ответ…'}
-        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();setActivity('Пишу ответ…');status.textContent='Пишу ответ…'}
-        if(kind==='status'){setActivity(payload.text);status.textContent=payload.text}
-        if(kind==='web_source'){showSource(payload);setActivity('Проверяю источники…')}
-        if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});setActivity('Конструирую смету…')}
-        if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        if(kind==='ready'){renderQuota(payload.quota);if(!hasModelProgress){setActivity('Анализирую запрос…');status.textContent='Анализирую запрос…'}}
+        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();if(!hasModelProgress){setActivity('Формирую ответ…');status.textContent='Формирую ответ…'}}
+        if(kind==='status'&&typeof payload.text==='string'&&payload.text.trim()){hasModelProgress=true;setActivity(payload.text.trim());status.textContent=payload.text.trim()}
+        if(kind==='web_source'){showSource(payload);if(!hasModelProgress)setActivity('Проверяю источники…')}
+        if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});if(!hasModelProgress)setActivity('Конструирую смету…')}
+        if(kind==='done'){if(activeConversation&&typeof payload.conversation_title==='string'){
+          const title=payload.conversation_title.trim();
+          if(title){
+            const row=[...document.querySelectorAll('[data-thread-row]')].find(node=>node.dataset.threadId===activeConversation);
+            if(row){
+              const label=row.querySelector('.assistant-conversation-title'),open=row.querySelector('.assistant-conversation-open');
+              if(label)label.textContent=title;
+              if(open)open.title=title;
+              const rename=row.querySelector('[data-thread-rename-input]');if(rename)rename.value=title;
+            }
+            const index=threadIndex.items.find(item=>item.id===activeConversation);if(index)index.title=title;
+            const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
+            if(option)option.textContent=title;
+          }
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
       while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();break}buffer+=decoder.decode(value,{stream:true});let match;while((match=buffer.match(/\r?\n\r?\n/))){const block=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);eventBlock(block)}}

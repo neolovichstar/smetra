@@ -176,6 +176,41 @@ const sidebarIcons={
  settings:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
  admin:'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/>'
 };
+// Product update notifications are derived from authenticated server-side views.
+const SmetraReleaseUnread=(()=>{
+  let inFlight=null,sequence=0,lastRefresh=0;
+  function set(count){
+    const button=document.querySelector('#sidebar .sidebar-group button[data-tab="changelog"]');
+    if(!button)return;
+    const value=Number.isFinite(Number(count))?Math.max(0,Math.floor(Number(count))):0;
+    let badge=button.querySelector('.sidebar-unread-badge');
+    if(value===0){badge?.remove();button.removeAttribute('data-unread');return;}
+    if(!badge){badge=document.createElement('span');badge.className='sidebar-unread-badge';badge.setAttribute('aria-label','Непрочитанные обновления');button.append(badge);}
+    badge.textContent=value>99?'99+':String(value);
+    button.dataset.unread=String(value);
+    button.setAttribute('aria-label','Что нового — '+value+' непрочитанных обновлений');
+  }
+  async function refresh(force=false){
+    if(!user || document.body.classList.contains('auth-mode'))return;
+    if(inFlight)return inFlight;
+    if(!force && Date.now()-lastRefresh<15000)return;
+    const owner=user,request=++sequence;
+    inFlight=(async()=>{
+      try{
+        const result=await api('/changelog/unread');
+        if(user===owner&&request===sequence){set(result.unread_count);lastRefresh=Date.now();}
+      }catch{/* Badge failure must never interrupt the app or expose user data. */}
+      finally{inFlight=null;}
+    })();
+    return inFlight;
+  }
+  function reset(){sequence++;lastRefresh=0;set(0);}
+  return {set,refresh,reset};
+})();
+window.SmetraReleaseUnread=SmetraReleaseUnread;
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)void SmetraReleaseUnread.refresh();});
+window.addEventListener('focus',()=>{void SmetraReleaseUnread.refresh();});
+setInterval(()=>{if(!document.hidden)void SmetraReleaseUnread.refresh();},120000);
 function enhanceSidebarNavigation(){
  const sidebar=$('#sidebar');if(!sidebar)return;
  const makeSvg=(className,paths)=>{
@@ -203,7 +238,7 @@ function enhanceSidebarNavigation(){
    const canonical=[...button.children].find(node=>node.matches('svg.sidebar-item-icon'));
    if(!canonical){normalizeButton(button);return}
    [...button.querySelectorAll('svg')].forEach(svg=>{if(svg!==canonical)svg.remove()});
-   [...button.children].filter(node=>!['sidebar-item-icon','sidebar-item-label','sidebar-accent'].some(name=>node.classList.contains(name))).forEach(node=>node.remove());
+   [...button.children].filter(node=>!['sidebar-item-icon','sidebar-item-label','sidebar-accent','sidebar-unread-badge'].some(name=>node.classList.contains(name))).forEach(node=>node.remove());
    let kept=false;
    [...button.children].filter(node=>node.classList.contains('sidebar-item-icon')).forEach(svg=>{if(kept)svg.remove();else kept=true});
   });
@@ -263,6 +298,7 @@ function showBootError(message){
   if(button)button.hidden=false;
 }
 function showAuth(){
+  SmetraReleaseUnread.reset();
   window.SmetraFieldFlows?.stop?.();
   window.SmetraCommunication?.reset();
   window.SmetraQuoteEditor?.leave();
@@ -307,6 +343,7 @@ async function showApp(){
     $('#auth').classList.add('hidden');
     setAppState('authorized');
     window.SmetraCommunication?.startPresence?.();
+    void SmetraReleaseUnread.refresh(true);
     window.SmetraWarmFeatures?.();
     try{
       const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');
@@ -461,6 +498,7 @@ async function render() {
   const owner=user,section=tab,mine=++renderRevision;
   const active=()=>mine===renderRevision&&user===owner&&tab===section;
   for(const b of document.querySelectorAll('[data-tab]'))b.classList.toggle('active',b.dataset.tab===tab);
+  if(tab==='changelog')void SmetraReleaseUnread.refresh();
   $('#sidebar-profile')?.classList.toggle('active',tab==='profile');
   const contentBefore=$('#content');
   const initialMarkup=contentBefore?.innerHTML;

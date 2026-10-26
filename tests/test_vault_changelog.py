@@ -113,6 +113,33 @@ class VaultChangelogTests(unittest.TestCase):
         self.assertEqual(self.call("/changelog/"+id+"/view","POST",{},reader)[0],404)
         self.assertEqual(len(self.call("/changelog",token=author)[1]["items"]),1)
 
+    def test_release_badge_counts_only_unread_published_posts_per_user(self):
+        author,author_id=self.account("release-badge-author")
+        alice,_=self.account("release-badge-alice")
+        bob,_=self.account("release-badge-bob")
+        with self.mod.db() as con:
+            con.execute("UPDATE users SET role='admin' WHERE id=?",(author_id,))
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],0)
+        draft=self.call("/changelog","POST",{"title":"Скрытый черновик","body":"Текст","published":0},author)[1]["id"]
+        first=self.call("/changelog","POST",{"title":"Выпуск 1","body":"Новые файлы"},author)[1]["id"]
+        second=self.call("/changelog","POST",{"title":"Выпуск 2","body":"Новая память"},author)[1]["id"]
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog",token=alice)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog/unread",token=bob)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog/"+first+"/view","POST",{},alice)[0],200)
+        self.assertEqual(self.call("/changelog/"+first+"/view","POST",{},alice)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],1)
+        self.assertEqual(self.call("/changelog/unread",token=bob)[1]["unread_count"],2)
+        alice_rows=self.call("/changelog",token=alice)[1]["items"]
+        self.assertTrue(next(x for x in alice_rows if x["id"]==first)["has_viewed"])
+        self.assertFalse(next(x for x in alice_rows if x["id"]==second)["has_viewed"])
+        self.assertEqual(self.call("/changelog/"+draft,"PATCH",{"published":1},author)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],2)
+        self.assertEqual(self.call("/changelog/"+second,"PATCH",{"published":0},author)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=alice)[1]["unread_count"],1)
+        self.assertEqual(self.call("/changelog/"+draft+"/view","POST",{},bob)[0],200)
+        self.assertEqual(self.call("/changelog/unread",token=bob)[1]["unread_count"],1)
+
     def test_viewer_can_rate_news_but_cannot_edit_workspace(self):
         author,author_id=self.account("news-owner")
         viewer,viewer_id=self.account("news-viewer")
@@ -125,4 +152,71 @@ class VaultChangelogTests(unittest.TestCase):
         note_id=self.call("/changelog","POST",{"title":"Релиз","body":"Текст"},author)[1]["id"]
         code,result=self.call("/changelog/"+note_id+"/reaction","POST",{"reaction":"like"},viewer,workspace=wid)
         self.assertEqual(code,200,result)
-        self.assertEqual(self.call("/files","POST",{"assistant_upload":True,"name":"test.txt","content":"YQ=="},viewer,workspace=wid)[0],403)
+        # Viewers can use their private quota, not the company's shared quota.
+        status,uploaded=self.call("/files","POST",{"assistant_upload":True,"name":"test.txt","content":"YQ=="},viewer,workspace=wid)
+        self.assertEqual(status,201,uploaded)
+        fid=uploaded["file"]["id"]
+        self.assertEqual(self.call("/files/"+fid,token=author,workspace=wid)[0],404)
+        self.assertEqual(self.call("/files/"+fid+"/metadata",token=viewer,workspace=wid)[0],200)
+        self.assertEqual(self.call("/files/"+fid+"/archive","PATCH",{"archived":1},viewer,workspace=wid)[0],200)
+        self.assertEqual(self.call("/files/"+fid,"DELETE",token=author,workspace=wid)[0],404)
+
+
+    def test_private_vault_is_not_readable_by_other_members_of_same_workspace(self):
+        owner,owner_id=self.account("private-vault-owner")
+        colleague,colleague_id=self.account("private-vault-colleague")
+        wid=self.call("/workspace",token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,?)",
+                        (wid,colleague_id,"member"))
+        code,created=self.upload(owner)
+        self.assertEqual(code,201,created)
+        file_id=created["file"]["id"]
+        self.assertEqual(self.call("/files/"+file_id,token=colleague,workspace=wid)[0],404)
+        self.assertEqual(self.call("/files/"+file_id+"/thumbnail",token=colleague,workspace=wid)[0],404)
+        self.assertEqual(self.call("/files/"+file_id+"/metadata",token=colleague,workspace=wid)[0],404)
+        self.assertEqual(self.call("/files/"+file_id+"/archive","PATCH",{"archived":1},colleague,workspace=wid)[0],404)
+        self.assertEqual(self.call("/files/"+file_id,"DELETE",token=colleague,workspace=wid)[0],404)
+        listing=self.call("/files?scope=personal",token=colleague,workspace=wid)[1]
+        self.assertEqual(listing["items"],[])
+        self.assertEqual(listing["used_bytes"],0)
+        own=self.call("/files?scope=personal",token=owner,workspace=wid)[1]
+        self.assertEqual(own["items"][0]["id"],file_id)
+        self.assertEqual(own["items"][0]["vault_scope"],"personal")
+        from backend.assistant_files import list_files
+        from backend.vault import require_file
+        from types import SimpleNamespace
+
+        with self.mod.db() as con:
+            user=con.execute("SELECT * FROM users WHERE id=?",(colleague_id,)).fetchone()
+            fake=SimpleNamespace(con=con,wid=wid,user=user)
+            self.assertEqual(list_files(fake,"photo")["files"],[])
+            row=con.execute("SELECT * FROM files WHERE id=?",(file_id,)).fetchone()
+            from backend.business import DomainError
+            with self.assertRaises(DomainError) as denied:
+                require_file(fake,row)
+            self.assertEqual(denied.exception.status,404)
+
+    def test_private_quota_follows_account_across_workspaces(self):
+        owner,owner_id=self.account("private-cap-owner")
+        teammate,teammate_id=self.account("private-cap-team")
+        self.call("/workspace",token=owner)
+        other_wid=self.call("/workspace",token=teammate)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,?)",
+                        (other_wid,owner_id,"member"))
+        # The mock cap is server-side and account-wide, not per workspace.
+        with patch("backend.vault.personal_storage_limit",return_value=150):
+            code,first=self.upload(owner)
+            self.assertEqual(code,201,first)
+            personal=self.call("/files?scope=personal",token=owner)[1]
+            self.assertEqual(personal["quota_bytes"],150)
+            self.assertGreater(personal["used_bytes"],0)
+            code,other=self.call("/files","POST",{
+                "assistant_upload":True,"name":"second.png",
+                "content":base64.b64encode(self.picture()).decode()
+            },owner,workspace=other_wid)
+            self.assertEqual(code,413,other)
+            listing=self.call("/files?scope=personal",token=owner,workspace=other_wid)[1]
+            self.assertEqual(listing["items"],[])
+            self.assertEqual(listing["used_bytes"],personal["used_bytes"])

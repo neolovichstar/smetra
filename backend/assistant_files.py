@@ -22,8 +22,9 @@ def list_files(service, query=""):
     # Bounded metadata only; the model must request file content explicitly.
     rows = service.con.execute(
         "SELECT id,name,mime,size FROM files WHERE workspace_id=? AND archived=0 "
+        "AND (vault_scope='workspace' OR owner_user_id=?) "
         "AND lower(name) LIKE ? ORDER BY created_at DESC LIMIT 20",
-        (service.wid, "%" + phrase + "%"),
+        (service.wid, service.user["id"], "%" + phrase + "%"),
     ).fetchall()
     return {"files": [dict(row) for row in rows]}
 
@@ -83,8 +84,9 @@ def search_content(service, query):
         "SELECT c.file_id,c.page,c.text,f.name FROM file_text_chunks c "
         "JOIN files f ON f.id=c.file_id AND f.workspace_id=c.workspace_id "
         "WHERE c.workspace_id=? AND c.source_sha256=f.sha256 AND f.archived=0 "
+        "AND (f.vault_scope='workspace' OR f.owner_user_id=?) "
         "AND instr(lower(c.text),?)>0 ORDER BY f.created_at DESC,c.page LIMIT 10",
-        (service.wid, phrase),
+        (service.wid, service.user["id"], phrase),
     ).fetchall()
     matches = []
     for row in rows:

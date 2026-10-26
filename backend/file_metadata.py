@@ -9,7 +9,7 @@ REFERENCES = {"quotes": "quote_id", "clients": "client_id", "projects": "project
               "construction": "construction_id"}
 TABLES = {"quotes": "quotes", "clients": "clients", "projects": "projects",
           "construction": "construction_objects"}
-FIELDS = ("name", "sha256", "public", *REFERENCES.values())
+FIELDS = ("name", "sha256", "public", "vault_scope", *REFERENCES.values())
 
 
 def ensure_movable(service, row):
@@ -54,6 +54,17 @@ def changes(service, row, data):
         if any(row[field] != value for field, value in refs.items()):
             ensure_movable(service, row)
             values.update(refs)
+            # Moving a private file onto an object is an explicit sharing
+            # action. Never change its visibility through a rename.
+            if row["vault_scope"] == "personal":
+                if service.role not in ("owner", "admin", "manager", "member"):
+                    raise DomainError(403, "Передавать личные файлы команде может только участник с правом записи")
+                from backend.vault import shared_storage_used
+                from backend.attachments import workspace_storage_limit
+
+                if shared_storage_used(service) + row["size"] > workspace_storage_limit(service):
+                    raise DomainError(413, "В хранилище команды недостаточно места")
+                values["vault_scope"] = "workspace"
     values = {key: value for key, value in values.items() if row[key] != value}
     if not values:
         raise DomainError(409, "Файл уже содержит эти данные")
@@ -61,10 +72,12 @@ def changes(service, row, data):
 
 
 def update(service, row, values, expected):
-    service.write_access()
+    from backend.vault import require_file_write
+
+    require_file_write(service, row)
     if fingerprint(row) != expected:
         raise DomainError(409, "Файл изменился. Обновите данные перед изменением")
-    if not values or not set(values).issubset({"name", *REFERENCES.values()}):
+    if not values or not set(values).issubset({"name", "vault_scope", *REFERENCES.values()}):
         raise DomainError(400, "Неверные поля файла")
     if set(values).intersection(REFERENCES.values()):
         ensure_movable(service, row)
@@ -89,7 +102,9 @@ def route(service, method, file_id, data):
         return 200, {"file": public_metadata(row), "processing": file_processing.state(service, row)}
     if method != "PATCH":
         raise DomainError(405, "Метод не поддерживается")
-    service.write_access()
+    from backend.vault import require_file_write
+
+    require_file_write(service, row)
     if not isinstance(data, dict) or not isinstance(data.get("metadata_etag"), str):
         raise DomainError(400, "Обновите данные файла перед изменением")
     expected = data["metadata_etag"]
