@@ -729,6 +729,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if path.startswith("/api/partners/admin/"):
                     admin = self.auth(con, True)
                     self.throttle("partner-admin:" + admin["id"], 20, 3600)
+                    if path == "/api/partners/admin/reconcile" and method == "POST":
+                        data = self.body()
+                        if not isinstance(data, dict) or set(data) - {"limit"}:
+                            raise ApiError(400, "Некорректная сверка")
+                        self.throttle("partner-reconcile:" + admin["id"], 6, 3600)
+                        with business.transaction(con, lock_scopes=("partner:reconcile",)):
+                            result = partner.reconcile_confirmed_payments(con, data.get("limit", 100))
+                            audit(con, admin["id"], "partner.commissions_reconciled",
+                                  str(result["created"]))
+                        return self.send_json(200, result)
                     if path == "/api/partners/admin/accounts" and method == "GET":
                         return self.send_json(200, partner.list_partners(con))
                     if path == "/api/partners/admin/accounts" and method == "POST":
