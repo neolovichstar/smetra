@@ -14,6 +14,11 @@ RETENTION = (
     ("oauth_states", "state_hash", "expires_at", 2 * 86400),
     ("oauth_tickets", "ticket_hash", "expires_at", 2 * 86400),
     ("sessions", "id", "expires_at", 7 * 86400),
+    # Partner referrals count for 30 days; delete after expiry + 14-day buffer.
+    ("partner_clicks", "id", "expires_at", 14 * 86400),
+    ("partner_console_sessions", "id", "expires_at", 7 * 86400),
+    ("partner_site_events", "id", "created_at", 180 * 86400),
+    ("partner_outbound_clicks", "id", "created_at", 180 * 86400),
     # The same table also holds monthly AI quota counters. Do NOT delete
     # current or recent counters; only keys untouched for four months.
     ("rate_limits", "key", "started", 120 * 86400),
@@ -51,4 +56,9 @@ def cleanup(con, *, now=None, per_table=4000):
 
 def run(handler, con):
     authenticate(handler)
-    return cleanup(con)
+    report = cleanup(con)
+    # Backend-only reconciliation of provider-confirmed subscription purchases.
+    # It cannot execute a partner payout and is safe on duplicate cron runs.
+    from backend.partner_platform import reconcile_confirmed_payments
+    report["partner_reconciliation"] = reconcile_confirmed_payments(con, limit=100)
+    return report

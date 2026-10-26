@@ -306,6 +306,7 @@ def ingest_products(con, partner, body):
 
 
 def offers(con, term):
+    from backend.partner_integrations import VERIFICATION_TTL
     term = _required_text(term, "q", 80)
     if len(term) < 2:
         raise PartnerError(400, "Введите минимум 2 символа")
@@ -315,22 +316,25 @@ def offers(con, term):
         "SELECT p.id,p.name,p.price_kopecks,p.updated_at,a.name AS partner "
         "FROM partner_products p JOIN partner_accounts a ON a.id=p.partner_id "
         "JOIN partner_domain_verifications v ON v.partner_id=a.id AND v.domain=a.allowed_host AND v.status='verified' "
-        "WHERE a.active=1 AND p.available=1 AND lower(p.name) LIKE ? ESCAPE '\\' "
+        "WHERE a.active=1 AND p.available=1 AND v.verified_at>? "
+        "AND lower(p.name) LIKE ? ESCAPE '\\' "
         "ORDER BY p.price_kopecks ASC LIMIT 30",
-        (pattern,),
+        (_now() - VERIFICATION_TTL, pattern),
     ).fetchall()
     return {"offers": [{**dict(row), "buy_path": "/api/partners/out/" + row["id"]}
                        for row in rows]}
 
 
 def outbound(con, user, product_id):
+    from backend.partner_integrations import VERIFICATION_TTL
     if not re.fullmatch(r"[0-9a-f-]{36}\Z", product_id):
         raise PartnerError(404, "Товар не найден")
     row = con.execute(
         "SELECT p.id,p.partner_id,p.url,a.allowed_host FROM partner_products p "
         "JOIN partner_accounts a ON a.id=p.partner_id "
         "JOIN partner_domain_verifications v ON v.partner_id=a.id AND v.domain=a.allowed_host AND v.status='verified' "
-        "WHERE p.id=? AND p.available=1 AND a.active=1", (product_id,),
+        "WHERE p.id=? AND p.available=1 AND a.active=1 AND v.verified_at>?",
+        (product_id, _now() - VERIFICATION_TTL),
     ).fetchone()
     if not row:
         raise PartnerError(404, "Товар не найден")

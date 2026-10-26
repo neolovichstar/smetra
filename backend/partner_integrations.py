@@ -22,6 +22,7 @@ from backend import partner_platform as partner
 EVENT_TYPES = frozenset({"widget_impression", "widget_click", "material_order_reported"})
 KEY_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{12,100}\Z")
 VALID_METHODS = ("dns", "meta")
+VERIFICATION_TTL = 90 * 86400  # Domain ownership is not permanent.
 
 
 def _moment():
@@ -33,7 +34,13 @@ def domain_status(con, account):
         "SELECT domain,token,status,method,verified_at,last_checked_at "
         "FROM partner_domain_verifications WHERE partner_id=?", (account["id"],)
     ).fetchone()
-    return dict(row) if row else {
+    if row:
+        value = dict(row)
+        if (value["status"] == "verified" and
+                (not value["verified_at"] or value["verified_at"] <= _moment() - VERIFICATION_TTL)):
+            value["status"] = "expired"
+        return value
+    return {
         "domain": account["allowed_host"], "status": "not_started",
         "method": None, "verified_at": None, "last_checked_at": None,
     }
@@ -173,8 +180,8 @@ def verify_domain(con, account):
 def require_verified(con, account):
     row = con.execute(
         "SELECT 1 FROM partner_domain_verifications WHERE partner_id=? "
-        "AND domain=? AND status='verified'",
-        (account["id"], account["allowed_host"]),
+        "AND domain=? AND status='verified' AND verified_at>?",
+        (account["id"], account["allowed_host"], _moment() - VERIFICATION_TTL),
     ).fetchone()
     if not row:
         raise partner.PartnerError(403, "Сначала подтвердите домен партнёра")
