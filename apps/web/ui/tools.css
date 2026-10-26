@@ -99,3 +99,47 @@
 #smetra-calculators .smcalc-kicker,#smetra-calculators .smcalc-title>span,#estimate-editor .anti-estimate-kicker{display:none}
 #smetra-calculators .smcalc-header{margin:0 0 16px}
 @media (max-width:800px){#smetra-calculators h1{font-size:var(--fs-24)}}
+
+/* ───────── Phone density ─────────
+   Loaded last. On a 360–430px screen the desktop scale reads as oversized:
+   smaller type, tighter cards, two-up summary tiles, no repeated hints. */
+@media (max-width:640px){
+  body{font-size:var(--fs-14)}
+  #content h1:not(.smetra-document *):not(.quote-document *),.page-head h1{font-size:var(--fs-20);letter-spacing:-.02em}
+  #content h2{font-size:var(--fs-15)}
+  #content h3{font-size:var(--fs-14)}
+  .main{padding-top:var(--s-4)}
+  .topline{margin-bottom:var(--s-4);gap:var(--s-3)}
+  .panel{padding:var(--s-4) 14px}
+  .workspace-home{gap:var(--s-4)}
+  /* Summary tiles: two per row, one line of money each. */
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stat,.dashboard-metric{gap:4px;padding:10px 12px}
+  .stat span,.dashboard-metric-label{font-size:var(--fs-12)}
+  #content .stat strong,#content .dashboard-metric strong,.business-stats .stat strong{font-size:clamp(14px,4.3vw,17px)}
+  .stat small,.dashboard-metric-hint,.dashboard-date{display:none}
+  .dashboard-metric-label svg{display:none}
+  /* Dashboard capture: shortcuts in one swipeable row. */
+  .capture-heading{margin-bottom:var(--s-2)}
+  .capture-shortcuts{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:calc(var(--s-4) * -1);padding-inline:var(--s-4)}
+  .capture-shortcuts::-webkit-scrollbar{display:none}
+  .capture-shortcuts .btn{flex:none}
+  /* Lists and empty states: one line of explanation is enough. */
+  .record-line{padding-block:8px}
+  .record-title strong{font-size:var(--fs-14)}
+  .record-title small,.record-meta,.money-row small{font-size:var(--fs-12)}
+  .empty{padding:var(--s-5) var(--s-1)}
+  .panel>.empty:only-child,#records>.empty,.document-register>.empty,.notifications-panel>.empty{padding:var(--s-6) var(--s-3)}
+  .empty p{font-size:var(--fs-13)}
+  .muted,.help-text,.field-hint{font-size:var(--fs-13)}
+  .assistant-message.assistant .assistant-markdown{font-size:var(--fs-14);line-height:1.55}
+  .assistant-message.user .assistant-markdown{font-size:var(--fs-14)}
+  /* Billing: plan cards. */
+  .catalog-plan{gap:var(--s-2);padding:var(--s-4)}
+  .catalog-plan-price strong{font-size:var(--fs-24)}
+  .catalog-plan ul{gap:6px;font-size:var(--fs-13)}
+  .catalog-billing>.section-top .muted{display:none}
+  /* Empty states inside cards: no illustration, title and one line. */
+  .panel .empty::before{display:none}
+  .btn{font-size:var(--fs-14)}
+}

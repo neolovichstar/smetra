@@ -314,3 +314,39 @@ body.public-quote-mode{background:var(--bg-sunken)}
 .plan::after,.feature-group::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(70% 90% at calc(100% - var(--lx,50%)) calc(100% - var(--ly,50%)),rgba(255,255,255,.045),transparent 70%);transition:opacity .45s ease}
 .plan.is-pressed,.feature-group.is-pressed{z-index:1;will-change:transform}
 .plan.is-pressed::after,.feature-group.is-pressed::after{opacity:1}
+/* ───── Phone density: shorter page, smaller type, no repeated explanations ───── */
+@media (max-width:640px){
+  .hero{padding:var(--s-5) 0 var(--s-7);gap:var(--s-6)}
+  .hero h1{font-size:clamp(28px,8.4vw,34px);line-height:1.06}
+  .hero-kicker,.section-kicker{font-size:var(--fs-12);margin-bottom:var(--s-2)}
+  .hero-lead{margin-top:var(--s-3);font-size:var(--fs-15);line-height:1.5}
+  .hero-actions{margin-top:var(--s-5)}
+  .hero-note{font-size:var(--fs-12)}
+  .section{padding:var(--s-8) 0}
+  .section-head{margin-bottom:var(--s-5)}
+  .section-head h2,.assistant-copy h2,.cta h2{font-size:clamp(24px,7vw,28px)}
+  .section-head p:not(.section-kicker),.assistant-copy>p:not(.section-kicker),.flow-note{display:none}
+  .flow-steps button{font-size:var(--fs-14);padding:10px 2px 12px}
+  .flow-copy h3{font-size:var(--fs-18)}
+  .flow-copy p{font-size:var(--fs-14)}
+  .check-list{gap:var(--s-2);margin:var(--s-4) 0 var(--s-5)}
+  .check-list li{font-size:0}
+  .check-list li strong{font-size:var(--fs-15)}
+  .feature-icon{width:32px;height:32px;margin-bottom:var(--s-3)}
+  .feature-group h3{font-size:var(--fs-18)}
+  .feature-group li{padding:8px 0;font-size:var(--fs-14)}
+  /* Plans: a swipeable row, the next card peeks in. */
+  .plans{display:flex;gap:var(--s-2);margin-inline:calc(var(--content-pad) * -1);padding:0 var(--content-pad) var(--s-1);border:0;border-radius:0;background:none;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:var(--content-pad);scrollbar-width:none}
+  .plans::-webkit-scrollbar{display:none}
+  .plan,.plan+.plan{flex:0 0 84%;border:1px solid var(--line);border-radius:var(--r-4);background:var(--surface-1);scroll-snap-align:start}
+  .plan.is-featured{background:var(--surface-2)}
+  .plan{gap:var(--s-2);padding:var(--s-4)}
+  .plan h3{font-size:var(--fs-18)}
+  .plan-price{min-height:0}
+  .plan-price strong{font-size:var(--fs-28)}
+  .plan ul{gap:6px;font-size:var(--fs-13)}
+  .compare{display:none}
+  .faq-list summary{padding:var(--s-4) 0;font-size:var(--fs-15)}
+  .cta-inner{padding:var(--s-5) 0}
+  .cta-inner p{font-size:var(--fs-14)}
+}
