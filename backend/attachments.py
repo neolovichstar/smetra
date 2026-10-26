@@ -403,7 +403,11 @@ def _route(service, method, parts, query, data):
     values = dict(
         id=fid,
         workspace_id=service.wid,
-        owner_user_id=service.user["id"],
+        # Public intake attachments have no authenticated session: the
+        # verified intake workspace owns those shared files, never a form field.
+        owner_user_id=(service.user["id"] if service.user else service.con.execute(
+            "SELECT owner_id FROM workspaces WHERE id=?", (service.wid,)
+        ).fetchone()["owner_id"]),
         vault_scope=vault_scope,
         **references,
         name=name,
