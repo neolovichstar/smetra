@@ -59,6 +59,19 @@ def prepare_images(payload):
             raise ValueError("Неверный формат изображения") from exc
         if not 0 < len(raw) <= MAX_IMAGE_BYTES:
             raise ValueError("Изображение превышает 2 МБ")
+        # The image decoder verifies structure below; magic validation rejects
+        # fake PNG/JPEG/WebP headers before any parsing.
+        import pathlib
+        from backend.file_security import validate_signature, scan_upload
+        suffix = pathlib.Path(str(item.get("name") or "")).suffix.lower()
+        if suffix == ".webp":
+            if not (raw.startswith(b"RIFF") and raw[8:12] == b"WEBP"):
+                raise ValueError("Сигнатура WebP не совпадает с файлом")
+        elif suffix in (".png", ".jpg", ".jpeg"):
+            validate_signature(str(item["name"]), raw)
+        else:
+            raise ValueError("Поддержка принимает только PNG, JPEG и WebP")
+        scan_upload(raw)
         try:
             with Image.open(io.BytesIO(raw)) as source:
                 if source.format not in ("JPEG", "PNG", "WEBP"):
