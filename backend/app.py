@@ -85,6 +85,10 @@ def db():
         finally:
             con.close()
         return
+    # Never silently switch a cloud instance to an ephemeral SQLite database.
+    # A missing DATABASE_URL must fail closed, not create unrelated user state.
+    if os.getenv("VERCEL") or os.getenv("VERCEL_ENV") in ("production", "preview"):
+        raise RuntimeError("Cloud PostgreSQL is not configured (DATABASE_URL)")
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=10, isolation_level=None)
     try:
