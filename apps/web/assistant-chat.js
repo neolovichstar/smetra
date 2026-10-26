@@ -312,7 +312,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
       context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();refreshFile();refreshJobs();
-      status.textContent=['png','jpg','jpeg'].includes(extension)?'Изображение сохранено в хранилище. Для анализа изображения нужна модель с поддержкой зрения.':'Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
+      status.textContent=['png','jpg','jpeg'].includes(extension)?'Изображение сохранено. Можете спросить ассистента, что на нём.':'Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
     finally{attachButton.disabled=false;fileInput.value=''}
   };
