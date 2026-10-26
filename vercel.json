@@ -24,6 +24,10 @@
       "destination": "/docs.html"
     },
     {
+      "source": "/api/partners/:path*",
+      "destination": "https://smetra.online/api/partners/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index"
     },
