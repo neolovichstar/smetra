@@ -79,10 +79,10 @@ def search_chat_history(service, query, conversation_id=None, limit=8, scanned_l
     query = string(query, "Поиск по истории", 120, True).strip()
     if len(query) < 2:
         raise DomainError(400, "Укажите не менее двух символов")
-    terms = _terms(query)
+    terms = [word.replace("ё", "е") for word in _terms(query)]
     if not terms:
         terms = [query.casefold()]
-    requested = query.casefold()
+    requested = query.casefold().replace("ё", "е")
     if conversation_id is not None and conversation_id != "general":
         conversation_id = string(conversation_id, "Диалог", 80, True)
     max_hits = max(1, min(int(limit), 15))
@@ -99,8 +99,17 @@ def search_chat_history(service, query, conversation_id=None, limit=8, scanned_l
             scanned += 1
             if row["id"] in ignored:
                 continue
-            source = row["content"].casefold()
-            matched = [word for word in terms if word in source]
+            source = row["content"].casefold().replace("ё", "е")
+            # Small inflection-tolerant match supports Russian case endings:
+            # «шпаклёвку» ↔ «шпаклевка» without network embeddings.
+            positions = {}
+            for word in terms:
+                at_word = source.find(word)
+                if at_word < 0 and len(word) >= 7:
+                    at_word = source.find(word[:-2])
+                if at_word >= 0:
+                    positions[word] = at_word
+            matched = list(positions)
             if not matched and requested not in source:
                 continue
             # Ranking rewards phrase matches and multiple distinct terms. More
@@ -113,7 +122,7 @@ def search_chat_history(service, query, conversation_id=None, limit=8, scanned_l
                 continue
             position = source.find(requested)
             if position < 0:
-                position = min(source.index(word) for word in matched)
+                position = min(positions.values())
             plain = row["content"][max(0,position-150):position+530]
             record = {
                 "message_id": row["id"],
