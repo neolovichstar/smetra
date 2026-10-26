@@ -111,5 +111,38 @@ class PartnerMatchingTests(unittest.TestCase):
             offers_for_quote(Service(), "q-other")
 
 
+    def test_production_reads_partner_catalog_outside_the_runtime_role(self):
+        from unittest.mock import patch
+        from backend import partner_matching
+
+        catalog = self.con
+
+        class RuntimeConnection:
+            is_postgres, runtime = True, True
+
+            def execute(self, *args):
+                raise AssertionError("partner tables are closed to the runtime role")
+
+        class ServerConnection:
+            closed = False
+
+            def __init__(self):
+                ServerConnection.instance = self
+
+            def execute(self, *args):
+                return catalog.execute(*args)
+
+            def close(self):
+                ServerConnection.closed = True
+
+        class Service:
+            con = RuntimeConnection()
+            user = {"id": "user-1"}
+
+        with patch("backend.postgres.Connection", ServerConnection):
+            result = partner_matching.offers_for_service(Service(), [{"name": "Плитка керамическая 30x60"}])
+        self.assertEqual(len(result["offers"]), 1)
+        self.assertTrue(ServerConnection.closed)
+
 if __name__ == "__main__":
     unittest.main()

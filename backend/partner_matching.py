@@ -177,6 +177,31 @@ def offers_for(con, user_id, materials, origin=None):
     }
 
 
+class _PartnerCatalog:
+    """Partner tables are server-only: in production they are closed to the
+    row-level-security runtime role that workspace requests use, so the catalog
+    is read through the server connection. Quote lines stay on the user's one."""
+
+    def __init__(self, con):
+        self.con, self.own = con, None
+
+    def __enter__(self):
+        if getattr(self.con, "is_postgres", False) and getattr(self.con, "runtime", False):
+            from backend.postgres import Connection
+            self.own = Connection()
+            return self.own
+        return self.con
+
+    def __exit__(self, *exc):
+        if self.own is not None:
+            self.own.close()
+
+
+def offers_for_service(service, materials):
+    with _PartnerCatalog(service.con) as con:
+        return offers_for(con, service.user["id"], materials)
+
+
 def offers_for_quote(service, quote_id):
     """Material lines of one estimate the user can see."""
     import json
@@ -192,4 +217,4 @@ def offers_for_quote(service, quote_id):
             continue
         materials.append({"name": item.get("product_title") or item.get("name", ""),
                           "quantity": item.get("quantity", ""), "unit": item.get("unit", "")})
-    return offers_for(service.con, service.user["id"], materials)
+    return offers_for_service(service, materials)

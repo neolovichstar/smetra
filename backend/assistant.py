@@ -668,7 +668,7 @@ def read_tool(service, name, args):
 
         return find_knowledge(service, args.get("query", ""))
     if name == "find_partner_offers":
-        from backend.partner_matching import offers_for, offers_for_quote
+        from backend.partner_matching import offers_for_quote, offers_for_service
 
         quote_id = args.get("quote_id")
         if quote_id:
@@ -676,7 +676,7 @@ def read_tool(service, name, args):
         materials = args.get("materials")
         if not isinstance(materials, list) or not materials:
             raise DomainError(400, "Нужна смета или список материалов")
-        return offers_for(service.con, service.user["id"], materials)
+        return offers_for_service(service, materials)
     if name == "search_file_content":
         from backend.assistant_files import search_content
 
