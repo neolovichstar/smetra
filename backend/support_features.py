@@ -94,6 +94,10 @@ def store_images(con, conversation_id, message_id, uploader_id, images, created_
     ).fetchone()[0]
     if int(count) + len(images) > 30:
         raise ValueError("Для одного обращения доступно до 30 скриншотов")
+    used = con.execute("SELECT coalesce(sum(length(content)),0) FROM support_images WHERE uploader_id=?",
+                       (uploader_id,)).fetchone()[0]
+    if int(used or 0) + sum(len(img["content"]) for img in images) > 25_000_000:
+        raise ValueError("Лимит скриншотов поддержки — 25 МБ на пользователя")
     for img in images:
         con.execute(
             "INSERT INTO support_images(id,conversation_id,message_id,uploader_id,mime,content,created_at) "
