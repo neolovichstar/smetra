@@ -88,6 +88,11 @@ def db():
         finally:
             con.close()
         return
+    if os.getenv("VERCEL") or os.getenv("SMETRA_PARTNER_SITE") == "1":
+        # Never let an unconfigured cloud deployment create a disconnected
+        # per-instance SQLite database. All partner API traffic is routed to
+        # the shared production backend through vercel.json.
+        raise RuntimeError("Cloud database unavailable: PostgreSQL is required")
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=10, isolation_level=None)
     try:
