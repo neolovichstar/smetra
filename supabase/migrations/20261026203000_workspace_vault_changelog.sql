@@ -64,7 +64,7 @@ REVOKE ALL ON smetra.product_updates,smetra.product_update_views,smetra.product_
 -- Trigger-owned counters: members never need UPDATE permissions on the public announcement row.
 CREATE OR REPLACE FUNCTION smetra.product_update_count_trigger() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
- AS $
+ AS $$
  BEGIN
   IF TG_TABLE_NAME='product_update_views' THEN
     IF TG_OP='INSERT' THEN
@@ -88,7 +88,7 @@ CREATE OR REPLACE FUNCTION smetra.product_update_count_trigger() RETURNS trigger
   END IF;
   RETURN NULL;
  END;
- $;
+ $$;
 REVOKE ALL ON FUNCTION smetra.product_update_count_trigger() FROM PUBLIC,anon,authenticated;
 CREATE TRIGGER product_update_view_insert AFTER INSERT ON smetra.product_update_views
  FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
