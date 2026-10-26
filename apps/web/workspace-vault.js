@@ -275,8 +275,7 @@
       previewActive=!previewActive;
       pane.hidden=!previewActive;
       toggle.setAttribute('aria-pressed',String(previewActive));
-      toggle.textContent=previewActive?'К редактированию':'Предпросмотр';
-      textarea.hidden=previewActive;
+      toggle.textContent=previewActive?'Скрыть предпросмотр':'Предпросмотр';
       if(previewActive)void preview();
       else textarea.focus();
     };
