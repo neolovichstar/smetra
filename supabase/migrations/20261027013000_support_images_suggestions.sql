@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS smetra.support_images (
   created_at BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS support_images_message_idx ON smetra.support_images(message_id);
+CREATE INDEX IF NOT EXISTS support_images_uploader_idx ON smetra.support_images(uploader_id);
 CREATE INDEX IF NOT EXISTS support_images_conversation_idx ON smetra.support_images(conversation_id);
 
 CREATE TABLE IF NOT EXISTS smetra.support_suggestions (
