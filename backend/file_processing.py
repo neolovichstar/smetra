@@ -115,6 +115,9 @@ def ensure_ready(service, context):
     if not context or context["entity"] != "files":
         return
     row = service.get("files", context["id"])
+    # Images use the vision-model input directly, not the text-index pipeline.
+    if row["mime"] in ("image/png", "image/jpeg"):
+        return
     if row["index_hash"] == row["sha256"] and row["index_status"] in ACTIVE:
         raise DomainError(
             409, "Документ ещё готовится. Дождитесь завершения — сообщение не потрачено"
