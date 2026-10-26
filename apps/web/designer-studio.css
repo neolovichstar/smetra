@@ -32,8 +32,10 @@
 .designer-metrics span{font-size:12px;color:var(--muted,#a3a3a3)}
 .designer-metrics strong{font-size:clamp(16px,2vw,23px);font-weight:610;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .designer-studio .designer-over{color:#f1a4a4}
-.designer-progress{height:4px;background:rgba(140,140,140,.15);border-radius:10px;overflow:hidden;margin-top:14px}
-.designer-progress span{display:block;height:100%;background:#bfc8da;border-radius:10px}
+.designer-progress{display:block;width:100%;height:4px;border:0;background:rgba(140,140,140,.15);border-radius:10px;overflow:hidden;margin-top:14px;appearance:none}
+.designer-progress::-webkit-progress-bar{background:rgba(140,140,140,.15)}
+.designer-progress::-webkit-progress-value{background:#bfc8da}
+.designer-progress::-moz-progress-bar{background:#bfc8da}
 .designer-warning{padding:12px 0 0;color:var(--muted,#bbb);font-size:13px}
 .designer-rooms{display:flex;flex-direction:column;margin-bottom:15px}
 .designer-room{display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(160,160,160,.12);padding:12px 5px}
