@@ -35,8 +35,9 @@ def check_once():
         raise AssertionError("Cabinet returned the partner marketing landing")
 
     docs = fetch("https://console.smetra.online/docs")
-    if "Developer Docs" not in docs:
-        raise AssertionError("Partner Markdown documentation not available at /docs")
+    if ("Developer Docs" not in docs or "<h1>Smetra Partner API</h1>" not in docs
+            or "partner-docs.js" in docs or "Загрузка документации" in docs):
+        raise AssertionError("Documentation must be static pre-rendered HTML without fetch")
 
     source = fetch("https://console.smetra.online/partner-docs.md")
     if not source.lstrip().startswith("# Smetra Partner API"):
