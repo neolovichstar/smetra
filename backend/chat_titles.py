@@ -9,6 +9,7 @@ import re
 import urllib.request
 
 from backend.business import packed
+from backend.assistant_files import _SECRET
 
 TITLE_LIMIT = 38
 _SPACE = re.compile(r"\s+")
@@ -21,7 +22,9 @@ _PREFIX = re.compile(
 
 
 def clean_title(value):
-    text = re.sub(r"<[^>]*>", " ", str(value or ""))
+    text = _SECRET.sub("[секрет скрыт]", re.sub(r"<[^>]*>", " ", str(value or "")))
+    text = re.sub(r"(?i)\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b", "[почта скрыта]", text)
+    text = re.sub(r"(?<!\d)(?:\+7|8)[\s()\-]*\d{3}[\s()\-]*\d{3}[\s()\-]*\d{2}[\s()\-]*\d{2}(?!\d)", "[телефон скрыт]", text)
     text = _SPACE.sub(" ", text.replace("\x00", " ")).strip(" .,:;!?–—-«»\"'*#")
     text = _PREFIX.sub("", text).strip(" .,:;!?–—-«»\"'*#")
     if not text:
@@ -50,8 +53,8 @@ def generate_title(prompt, model, paid=False):
         return "Новый диалог"
     if len(text) < 65 or not os.getenv("OPENROUTER_API_KEY"):
         return fallback_title(text)
-    redacted = re.sub(r"(?i)(?:sk-or-v1-|ghp_|github_pat_)[A-Za-z0-9_-]{8,}",
-                      "[секрет]", text[:650])
+    redacted = _SECRET.sub("[секрет скрыт]", text[:650])
+    redacted = re.sub(r"(?i)\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b", "[почта скрыта]", redacted)
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         packed({
