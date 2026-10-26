@@ -290,3 +290,10 @@
  .changelog-reactions button{min-width:40px}
 }
 @media(prefers-reduced-motion:reduce){.changelog-chevron,.vault-file-tile{transition:none}}
+
+/* Compact release notification: derived from per-user read receipts. */
+#sidebar .sidebar-group button[data-tab="changelog"]{position:relative}
+.sidebar-unread-badge{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:20px;height:20px;padding:0 5px;margin-left:auto;border-radius:999px;background:#ececec;color:#202020;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.sidebar-compact .sidebar-unread-badge{position:absolute;right:3px;top:2px;min-width:8px;width:8px;height:8px;font-size:0;padding:0;box-shadow:0 0 0 2px var(--bg)}
+.changelog-new-indicator{align-self:flex-start;display:inline-flex;align-items:center;min-height:21px;padding:0 7px;border-radius:7px;background:var(--surface-3);border:1px solid var(--line);font-size:10px;font-weight:600;letter-spacing:.015em;color:var(--text-2)}
+@media(max-width:800px){.sidebar-compact .sidebar-unread-badge{position:static;width:auto;height:20px;min-width:20px;font-size:10px;padding:0 5px;box-shadow:none}}
