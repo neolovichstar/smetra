@@ -199,6 +199,12 @@ def report_event(con, account, data):
         "VALUES(?,?,?,?,?,?) ON CONFLICT(partner_id,event_key) DO NOTHING",
         (partner._id(), account["id"], key, kind, amount, _moment()),
     )
+    recorded = con.execute(
+        "SELECT event_type,amount_kopecks FROM partner_site_events "
+        "WHERE partner_id=? AND event_key=?", (account["id"], key)
+    ).fetchone()
+    if not recorded or recorded["event_type"] != kind or int(recorded["amount_kopecks"]) != amount:
+        raise partner.PartnerError(409, "Ключ события уже использован для других данных")
     return {"accepted": True, "trusted": False, "used_for_commissions": False}
 
 
