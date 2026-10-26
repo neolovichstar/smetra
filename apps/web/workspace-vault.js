@@ -61,7 +61,7 @@
   function fileCard(file) {
     const image = file.mime === 'image/jpeg' || file.mime === 'image/png';
     const controls = '<div class="vault-item-actions">' +
-      '<button type="button" data-action="open" data-id="' + esc(file.id) + '" aria-label="Открыть">Открыть</button>' +
+      '<button type="button" data-action="open" data-file-open="' + esc(file.id) + '" data-id="' + esc(file.id) + '" aria-label="Открыть">Открыть</button>' +
       '<button type="button" data-action="ask" data-id="' + esc(file.id) + '">Спросить ИИ</button>' +
       (state.canWrite ? '<button type="button" data-file-manage="' + esc(file.id) + '" data-action="manage" data-id="' + esc(file.id) + '">Данные</button><button type="button" data-action="archive" data-id="' + esc(file.id) + '">' + (file.archived ? 'Восстановить' : 'В архив') + '</button>' +
       '<button type="button" class="is-destructive" data-action="delete" data-id="' + esc(file.id) + '">Удалить</button>' : '') +
