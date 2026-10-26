@@ -133,6 +133,7 @@ def ensure_sqlite_schema(con):
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS support_images_message_idx ON support_images(message_id);
+      CREATE INDEX IF NOT EXISTS support_images_uploader_idx ON support_images(uploader_id);
       CREATE TABLE IF NOT EXISTS support_suggestions (
         id TEXT PRIMARY KEY,
         conversation_id TEXT NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
