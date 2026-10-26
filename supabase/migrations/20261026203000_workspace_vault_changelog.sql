@@ -86,7 +86,7 @@ CREATE OR REPLACE FUNCTION smetra.product_update_count_trigger() RETURNS trigger
       WHERE id=NEW.update_id;
     END IF;
   END IF;
-  RETURN COALESCE(NEW,OLD);
+  RETURN NULL;
  END;
  $;
 REVOKE ALL ON FUNCTION smetra.product_update_count_trigger() FROM PUBLIC,anon,authenticated;
