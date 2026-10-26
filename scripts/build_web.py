@@ -67,9 +67,8 @@ PARTNER_SITE_BRANCH = "feat/partner-platform-foundation-20261026"
 PARTNER_STATIC_FILES = frozenset({
     "index.html", "app.html", "docs.html",
     "partner-console.html", "partner-landing.html", "partner-docs.html",
-    "partner-console.js", "partner-docs.js", "partner-docs.md", "partner-sdk.js",
+    "partner-console.js", "partner-docs.md", "partner-sdk.js",
     "ui/partner-console.css", "ui/partner-landing.css",
-    "vendor/markdown-it-15.0.2.min.js",
     "favicon.ico", "favicon.png",
 })
 
@@ -112,6 +111,7 @@ def build():
     embed_public_styles()
     if os.environ.get("SMETRA_PARTNER_SITE") == "1":
         build_partner_bundle()
+        subprocess.run(["node", str(ROOT / "scripts" / "render_partner_docs.js")], check=True, timeout=20)
     manifest = {
         str(p.relative_to(DIST)).replace("\\", "/"): hashlib.sha256(
             p.read_bytes()
