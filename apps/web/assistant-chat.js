@@ -100,8 +100,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
-  attachmentBar.querySelector('span').textContent='PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
+  attachmentBar.querySelector('span').textContent='Изображения, PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
   const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.id='assistant-background';backgroundButton.textContent='В фоне';backgroundButton.hidden=true;backgroundButton.disabled=true;
@@ -297,7 +297,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const uploadAttachment=async file=>{
     if(!file||attachButton.disabled)return;
     const extension=file.name.toLowerCase().split('.').pop();
-    if(!['pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите PDF, DOCX, XLSX, CSV, TXT или MD до '+maxUploadLabel;return}
+    if(!['png','jpg','jpeg','pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите изображение или документ до '+maxUploadLabel;return}
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -312,7 +312,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
       context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();refreshFile();refreshJobs();
-      status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
+      status.textContent=['png','jpg','jpeg'].includes(extension)?'Изображение сохранено в хранилище. Для анализа изображения нужна модель с поддержкой зрения.':'Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
     finally{attachButton.disabled=false;fileInput.value=''}
   };
