@@ -1145,6 +1145,11 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     extra_vision_turn = False
     # A memory update spends a tool round; leave one more for the actual answer.
     for turn in range(3):
+        # Provider context also grows after tool calls. Reduce only older
+        # request-local excerpts, keeping latest tool replies and call IDs.
+        from backend.context_window import enforce_round_budget
+
+        enforce_round_budget(messages, tools())
         if on_status:
             on_status("Думаю…")
         selection = _MODEL_CONTEXT.set((model, paid_model, on_source))
