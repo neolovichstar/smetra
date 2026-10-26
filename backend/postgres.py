@@ -11,6 +11,8 @@ import sqlite3
 import threading
 import urllib.parse
 from decimal import Decimal
+from contextlib import nullcontext
+from functools import lru_cache
 
 import psycopg
 
@@ -117,6 +119,18 @@ def schema_name():
 
 
 def translate(sql, schema, parameters=False):
+    """Cache SQL translation only, never parameters, rows or authorization state."""
+    # Large bulk INSERTs are one-off statements; do not retain them in the LRU.
+    translator = _translate_cached if len(sql) <= 8192 else _translate
+    return translator(sql, schema, bool(parameters), TABLES)
+
+
+@lru_cache(maxsize=2048)
+def _translate_cached(sql, schema, parameters, tables):
+    return _translate(sql, schema, parameters, tables)
+
+
+def _translate(sql, schema, parameters, tables):
     """Translate our small SQL subset without touching quoted values."""
     ignore = sql.lstrip().upper().startswith("INSERT OR IGNORE")
     sql = re.sub(r"\bINSERT OR IGNORE\b", "INSERT", sql, flags=re.I)
@@ -129,7 +143,7 @@ def translate(sql, schema, parameters=False):
             r"(?<![\w.])([a-z_][a-z_0-9]*)(?![\w])",
             lambda match: (
                 schema + "." + match[1]
-                if match[1] in TABLES
+                if match[1] in tables
                 and not re.search(r"\bAS\s+$", part[: match.start()], re.I)
                 else match[0]
             ),
@@ -381,11 +395,18 @@ class Connection:
             self._release()
 
 
-def throttle(key, limit, window, moment):
-    """Atomic rate limiting shared by all Vercel instances."""
-    connection = Connection()
+def throttle(key, limit, window, moment, *, connection=None):
+    """Atomic distributed limit; reuse an existing unscoped request connection.
+
+    A request already occupies an auth connection. Taking another from the
+    same small pool can deadlock all concurrent requests during a Redis outage.
+    The caller retains ownership of its transaction and connection.
+    """
+    owned = connection is None
+    if owned:
+        connection = Connection()
     try:
-        with connection:
+        with connection if owned else nullcontext():
             row = connection.execute(
                 "INSERT INTO rate_limits(key,count,started) VALUES(?,1,?) "
                 "ON CONFLICT(key) DO UPDATE SET "
@@ -402,4 +423,5 @@ def throttle(key, limit, window, moment):
             ).fetchone()
             return row[0] <= limit
     finally:
-        connection.close()
+        if owned:
+            connection.close()
