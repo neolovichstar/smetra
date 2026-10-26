@@ -15,6 +15,7 @@ window.SmetraSupport = (() => {
     const mine = ++revision, owner = user;
     const active = () => parentActive() && mine === revision && owner === user && tab === 'support';
     const state = { threads: [], current: null, messages: [], sending: false, topic: '' };
+    let threadRevision = 0;
 
     const railCollapsed = (() => { try { return localStorage.getItem('smetra.support.rail-collapsed') === 'true'; } catch { return false; } })();
     view(`<section class="support-studio tg${railCollapsed ? ' is-rail-collapsed' : ''}" aria-label="Поддержка">
@@ -50,6 +51,8 @@ window.SmetraSupport = (() => {
     const status = root.querySelector('#support-status');
     const handoff = root.querySelector('#support-handoff');
     const grow = kit().composer(input, form);
+    const syncSend = () => { send.disabled = state.sending || input.disabled || !input.value.trim(); };
+    input.addEventListener('input', syncSend);
     if (typeof bindRailToggle === 'function') bindRailToggle(root.querySelector('#support-rail-toggle'), root, 'smetra.support.rail-collapsed');
 
     const welcome = () => `<div class="tg-welcome">
@@ -76,7 +79,7 @@ window.SmetraSupport = (() => {
       status.classList.toggle('is-waiting', Boolean(c?.needs_human));
       handoff.hidden = !c || c.needs_human || c.status === 'closed';
       const closed = c?.status === 'closed';
-      input.disabled = closed;
+      input.disabled = closed; syncSend();
       input.placeholder = closed ? 'Обращение закрыто — создайте новое' : 'Сообщение…';
       root.classList.toggle('is-chat-open', Boolean(c) || root.classList.contains('is-composing'));
     };
@@ -108,7 +111,7 @@ window.SmetraSupport = (() => {
         state.topic = button.dataset.supportTopic;
         input.value = state.topic + ': ' + text;
         buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-        input.focus(); grow();
+        input.focus(); grow(); syncSend();
       });
     };
 
@@ -130,6 +133,7 @@ window.SmetraSupport = (() => {
     };
 
     const open = async id => {
+      threadRevision++;
       state.current = state.threads.find(t => t.id === id) || null;
       state.messages = []; paintList(); paintHead();
       log.innerHTML = '<div class="tg-loading" role="status">Загружаем переписку…</div>';
@@ -138,6 +142,7 @@ window.SmetraSupport = (() => {
     };
 
     const fresh = () => {
+      threadRevision++;
       state.current = null; state.messages = []; state.topic = '';
       root.classList.add('is-composing');
       paintList(); paintHead(); paintMessages();
@@ -146,7 +151,7 @@ window.SmetraSupport = (() => {
 
     list.addEventListener('click', event => { const row = event.target.closest('[data-thread]'); if (row) { root.classList.remove('is-composing'); open(row.dataset.thread); } });
     root.querySelector('#support-new').onclick = fresh;
-    root.querySelector('#support-back').onclick = () => { state.current = null; state.messages = []; root.classList.remove('is-chat-open', 'is-composing'); paintList(); paintHead(); paintMessages(); };
+    root.querySelector('#support-back').onclick = () => { threadRevision++; state.current = null; state.messages = []; root.classList.remove('is-chat-open', 'is-composing'); paintList(); paintHead(); paintMessages(); };
 
     handoff.onclick = async () => {
       const c = state.current; if (!c || handoff.disabled) return;
@@ -165,33 +170,41 @@ window.SmetraSupport = (() => {
       event.preventDefault();
       const message = input.value.trim();
       if (!message || state.sending || send.disabled) return;
+      const draft = input.value, target = state.current, submittedRevision = threadRevision;
+      const currentTarget = () => active() && threadRevision === submittedRevision;
+      let accepted = false;
       state.sending = true; send.disabled = true;
+      input.value = ''; grow();
       const optimistic = { id: 'pending', body: message, created_at: Date.now() / 1000, mine: true, kind: 'user', author: 'Вы', pending: true };
       const before = state.messages;
       state.messages = [...before, optimistic];
       root.classList.add('is-chat-open');
       paintMessages(state.current?.needs_human ? '' : kit().typing('Поддержка печатает'));
       try {
-        if (state.current) {
-          await api('/support/threads/' + encodeURIComponent(state.current.id) + '/messages', { method: 'POST', body: JSON.stringify({ message }) });
-          if (!active()) return;
-          if (input.value.trim() === message) { input.value = ''; grow(); }
+        if (target) {
+          await api('/support/threads/' + encodeURIComponent(target.id) + '/messages', { method: 'POST', body: JSON.stringify({ message }) });
+          accepted = true;
+          if (!currentTarget()) return;
           await loadMessages(); await loadThreads();
         } else {
           const subject = (state.topic || message.replace(/\s+/g, ' ').slice(0, 60)).trim();
           const data = await api('/support', { method: 'POST', body: JSON.stringify({ message, subject }) });
-          if (!active()) return;
-          if (input.value.trim() === message) { input.value = ''; grow(); }
+          accepted = true;
+          if (!currentTarget()) return;
           root.classList.remove('is-composing');
           await loadThreads();
-          if (data?.ticket_id) await open(data.ticket_id);
+          if (currentTarget() && data?.ticket_id) await open(data.ticket_id);
         }
       } catch (error) {
-        if (!active()) return;
-        state.messages = before; paintMessages(); notify(error.message);
+        if (!currentTarget()) return;
+        if (!accepted) {
+          if (!input.value) { input.value = draft; grow(); }
+          state.messages = before;
+        } else optimistic.pending = false;
+        paintMessages(); notify(error.message);
       } finally {
         state.sending = false;
-        if (send.isConnected) send.disabled = false;
+        if (active() && send.isConnected) syncSend();
       }
     };
 

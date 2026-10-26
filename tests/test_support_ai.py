@@ -41,6 +41,38 @@ class SupportReplyParsingTests(unittest.TestCase):
         self.assertIn("ИИ", prompt)
 
 
+    def test_rejects_classifier_and_internal_reasoning_instead_of_showing_it(self):
+        cases = (
+            "User Safety: safe",
+            "User Safety: safe\\nAnalysis: internal classification",
+            "<think>internal analysis only</think>",
+            "<think>unfinished internal analysis",
+            {"reply": "User Safety: safe", "escalate": False},
+            {"reply": ["not", "text"]},
+            [],
+        )
+        for raw in cases:
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                community._parse_support_reply(raw)
+
+    def test_extracts_final_answer_after_closed_thinking_block(self):
+        for raw in (
+            '<think>internal classification</think>{"reply":"Откройте «Сметы»","escalate":false}',
+            '<analysis>internal classification</analysis>Откройте «Сметы».',
+        ):
+            with self.subTest(raw=raw):
+                result = community._parse_support_reply(raw)
+                self.assertIn("Откройте «Сметы»", result["reply"])
+                self.assertNotIn("classification", result["reply"])
+
+    def test_old_invalid_assistant_messages_are_masked_but_user_text_is_preserved(self):
+        row = {"id": "fixture", "sender_id": None, "sender_type": "assistant",
+               "body": "User Safety: safe", "metadata": "{}", "created_at": 0}
+        self.assertEqual(community._message_view(row)["body"], community._SUPPORT_UNAVAILABLE_REPLY)
+        row["sender_type"] = "user"
+        self.assertEqual(community._message_view(row)["body"], "User Safety: safe")
+
+
 class SupportReplyTransportTests(unittest.TestCase):
     def setUp(self):
         patcher = patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "SUPPORT_AI_MODEL": "some/model:free"})
@@ -107,6 +139,36 @@ class SupportReplyTransportTests(unittest.TestCase):
             result = community._support_ai_reply({"id": "u"}, {}, [], "Не работает вход")
         self.assertTrue(result["escalate"])
         self.assertEqual(result["reason"], "support_ai_error")
+
+
+    def test_classifier_response_is_retried_and_only_final_answer_is_returned(self):
+        with patch("backend.community.urllib.request.urlopen", side_effect=[
+            reply("User Safety: safe"),
+            reply('{"reply":"Опишите, что не получается с ассистентом.","escalate":false}'),
+        ]) as opener:
+            result = community._support_ai_reply({"id": "u"}, {}, [], "Ассистент и лимиты")
+        self.assertEqual(opener.call_count, 2)
+        self.assertNotIn("User Safety", result["reply"])
+        self.assertFalse(result["escalate"])
+        sent = json.loads(opener.call_args_list[0].args[0].data)
+        self.assertTrue(sent["reasoning"]["exclude"])
+
+    def test_repeated_classifier_response_hands_off_with_a_normal_message(self):
+        with patch("backend.community.urllib.request.urlopen", side_effect=lambda *_args, **_kwargs: reply("User Safety: safe")):
+            result = community._support_ai_reply({"id": "u"}, {}, [], "Ассистент и лимиты")
+        self.assertTrue(result["escalate"])
+        self.assertEqual(result["reason"], "support_ai_error")
+        self.assertNotIn("User Safety", result["reply"])
+
+    def test_malformed_provider_shape_is_bounded_and_does_not_crash_support(self):
+        for shape in ([], {"choices": None}, {"choices": [None]}):
+            with self.subTest(shape=shape), patch(
+                "backend.community.urllib.request.urlopen",
+                side_effect=lambda *_args, **_kwargs: FakeResponse(json.dumps(shape).encode()),
+            ) as opener:
+                result = community._support_ai_reply({"id": "u"}, {}, [], "Как создать смету?")
+            self.assertTrue(result["escalate"])
+            self.assertEqual(opener.call_count, 2)
 
     def test_history_skips_service_messages(self):
         captured = {}
