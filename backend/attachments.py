@@ -256,7 +256,7 @@ def _route(service, method, parts, query, data):
         elif vault_scope == "workspace":
             used,quota = shared_used,shared_limit
         else:
-            used,quota = personal_used + shared_used,personal_limit + shared_limit
+            used,quota = personal_used,personal_limit  # independent buckets; never present summed quota as a plan
         count = service.con.execute(
             "SELECT count(*) FROM files WHERE " + where + type_condition, args,
         ).fetchone()[0]
