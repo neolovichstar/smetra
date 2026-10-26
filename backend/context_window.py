@@ -186,3 +186,54 @@ def build_chat_context(service, conversation_id, prompt, system, profile_text, r
         overhead += estimate_tokens(json.dumps(tool_schemas, ensure_ascii=False))
     messages, older, stats = pack_history(rows, prompt, fixed_tokens=overhead)
     return messages, older, {**stats, "recent_message_ids": [row["id"] for row in rows[:MAX_MESSAGES_IN_PROMPT]]}
+
+
+
+def enforce_round_budget(messages, tool_schemas, *, reserve_tokens=6000):
+    """Bound successive tool rounds without breaking tool-call protocol.
+
+    Tool responses must remain attached to their matching assistant tool_calls.
+    Shorten *older* tool payloads; never discard call IDs, system instructions
+    or the latest model-visible image. Mutates only this request's messages, not
+    saved chat history.
+    """
+    import json
+
+    schema_cost = estimate_tokens(json.dumps(tool_schemas, ensure_ascii=False))
+    target = max(3000, configured_total() - max(2000, reserve_tokens) - schema_cost)
+
+    def used():
+        return sum(estimate_tokens(json.dumps(item, ensure_ascii=False)) for item in messages)
+
+    before = used()
+    if before <= target:
+        return {"compacted": False, "before": before, "after": before, "target": target}
+
+    # Preserve the most recent tool batch: it contains fresh facts the model
+    # asked for. Earlier tool results may be reduced for a later reasoning turn.
+    seen = 0
+    for item in reversed(messages):
+        if item.get("role") != "tool":
+            continue
+        seen += 1
+        if seen <= 4:
+            continue
+        if used() <= target:
+            break
+        content = item.get("content")
+        if isinstance(content, str) and len(content) > 520:
+            item["content"] = _clip(content, 450) + "\n[дальнейшие детали доступны повторным вызовом инструмента]"
+    # Next, compact only older conversation/summary turns, not system prompt
+    # and not the last question, image, or latest model/tool exchange.
+    preserved = set(range(max(0, len(messages) - 7), len(messages)))
+    for index, item in enumerate(messages):
+        if used() <= target:
+            break
+        if index in preserved or item.get("role") not in ("user", "assistant"):
+            continue
+        content = item.get("content")
+        if isinstance(content, str) and len(content) > 260:
+            item["content"] = _clip(content, 220) + "\n[полный текст доступен в истории чата]"
+    after = used()
+    return {"compacted": after < before, "before": before,
+            "after": after, "target": target}
