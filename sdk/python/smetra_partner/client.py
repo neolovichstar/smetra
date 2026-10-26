@@ -39,6 +39,21 @@ class PartnerClient:
                 message = "Partner API error"
             raise PartnerAPIError(exc.code, message) from None
 
+    def profile(self):
+        return self._request("/api/partners/v1/console/profile")
+
+    def products(self, limit=50, cursor=""):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("limit must be 1..100")
+        return self._request("/api/partners/v1/console/products?" +
+                             urllib.parse.urlencode({"limit": limit, "cursor": cursor}))
+
+    def commissions(self, limit=30, cursor=""):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("limit must be 1..100")
+        return self._request("/api/partners/v1/console/commissions?" +
+                             urllib.parse.urlencode({"limit": limit, "cursor": cursor}))
+
     def summary(self):
         return self._request("/api/partners/v1/console/summary")
 
