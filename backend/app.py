@@ -56,7 +56,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 66
+REQUIRED_CLOUD_SCHEMA_VERSION = 67
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -149,6 +149,8 @@ def migrate():
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         con.execute("DELETE FROM email_tokens WHERE expires_at<?", (now() - 86400,))
         business.migrate(con)
+        from backend.community import ensure_sqlite_schema
+        ensure_sqlite_schema(con)
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
