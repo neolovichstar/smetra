@@ -133,6 +133,23 @@ function renderMessages(){
  const rows=state.messages.map(m=>{const mine=Boolean(m.sender_id&&m.sender_id===state.userId);return {id:m.id,body:m.body,created_at:Number(m.created_at||0),mine,kind:m.sender_type==='system'?'system':m.sender_type,author:m.sender_type==='assistant'?'ИИ поддержки':m.sender_type==='admin'?'Сотрудник поддержки':mine?'Вы':(m.sender_name||c.partner_name||'Участник')}});
  const group=c.kind==='object'||c.kind==='community'||state.tab==='support';
  el.innerHTML=K?K.thread(rows,{showAuthors:group}):rows.map(m=>'<article class="comms-message'+(m.mine?' mine':'')+'"><p>'+esc(m.body)+'</p></article>').join('');
+ if(adminQueue()&&K){
+   for(const message of state.messages){
+     const images=Array.isArray(message.metadata?.images)?message.metadata.images:[];
+     if(!images.length)continue;
+     const node=Array.from(el.querySelectorAll('[data-message-id]')).find(n=>n.dataset.messageId===message.id);
+     const bubble=node?.querySelector('.tg-bubble');if(!bubble)continue;
+     const media=document.createElement('div');media.className='support-message-images';
+     for(const img of images){
+       if(!/^[0-9a-f]{32}$/.test(img.id))continue;
+       const link=document.createElement('a');
+       link.href='/api/admin/communication/images/'+img.id;link.target='_blank';link.rel='noopener noreferrer';
+       const thumb=document.createElement('img');thumb.src=link.href;thumb.loading='lazy';thumb.alt=String(img.name||'Скриншот');
+       link.append(thumb);media.append(link);
+     }
+     bubble.querySelector('.tg-meta')?.before(media);
+   }
+ }
  el.scrollTop=el.scrollHeight;
 }
 function queueControls(c){
