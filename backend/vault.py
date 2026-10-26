@@ -56,7 +56,23 @@ def _storage_con(service):
     return getattr(service, "global_con", None) or service.con
 
 
+def _private_stats(service):
+    if getattr(service.con, "is_postgres", False):
+        # SECURITY DEFINER function resolves the authenticated user from the
+        # request session. The scoped RLS connection cannot directly sum
+        # personal files from other workspaces of the same account.
+        schema = service.con.schema
+        row = service.con.execute(
+            f"SELECT used_bytes,quota_bytes FROM {schema}.vault_personal_stats()"
+        ).fetchone()
+        return (int(row["used_bytes"]), int(row["quota_bytes"]))
+    return None
+
+
 def personal_storage_used(service):
+    stats = _private_stats(service)
+    if stats is not None:
+        return stats[0]
     row = _storage_con(service).execute(
         "SELECT coalesce(sum(size),0) FROM files "
         "WHERE owner_user_id=? AND vault_scope='personal'",
@@ -84,6 +100,9 @@ def personal_storage_limit(service):
     from backend.plan_catalog import workspace_summary
     from backend.business import stamp
 
+    stats = _private_stats(service)
+    if stats is not None:
+        return stats[1]
     con = _storage_con(service)
     ids = con.execute(
         "SELECT id FROM workspaces WHERE owner_id=?",
