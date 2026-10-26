@@ -30,6 +30,9 @@ class AssistantRecallTests(unittest.TestCase):
     call = test_business.BusinessFlows.call
 
     def service(self, token):
+        # Workspaces are provisioned lazily at the first authenticated request.
+        code, data = self.call("/workspace", token=token)
+        self.assertEqual(code, 200, data)
         con = self.enterContext(self.mod.db())
         user = con.execute(
             "SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=?",
