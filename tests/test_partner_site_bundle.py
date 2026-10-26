@@ -54,5 +54,24 @@ class PartnerSiteBundleTests(unittest.TestCase):
         self.assertIn("index.html", build_web.PARTNER_STATIC_FILES)
 
 
+class PartnerConsoleSecretsTests(unittest.TestCase):
+    """The long-lived API key is sent once to /session and never kept in the browser."""
+
+    def test_console_never_stores_the_api_key(self):
+        source = (build_web.WEB / "partner-console.js").read_text(encoding="utf-8")
+        self.assertEqual(source.count("api_key"), 1, "api_key may appear only in the sign-in request body")
+        self.assertIn("JSON.stringify({ api_key: key })", source)
+        stored = [line for line in source.splitlines() if "Storage.setItem" in line]
+        self.assertTrue(stored)
+        for line in stored:
+            self.assertNotIn("key", line.replace("smetra.partner.side", "").replace("STORE", "").lower().replace("value", ""))
+        self.assertIn('input.value = ""', source)
+        self.assertIn('credentials: "omit"', source)
+
+    def test_console_has_no_payout_or_commission_writes(self):
+        source = (build_web.WEB / "partner-console.js").read_text(encoding="utf-8")
+        for route in ('"/commissions", { method', "/payout", "/withdraw", "status: \"cleared"):
+            self.assertNotIn(route, source)
+
 if __name__ == "__main__":
     unittest.main()
