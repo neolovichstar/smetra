@@ -51,6 +51,13 @@ def check_once():
     if '"openapi": "3.1.0"' not in openapi:
         raise AssertionError("Partner OpenAPI 3.1 contract missing")
 
+    partner_privacy = fetch("https://console.smetra.online/privacy")
+    if "Обработка данных" not in partner_privacy or "HttpOnly-cookie" not in partner_privacy:
+        raise AssertionError("Partner-specific privacy disclosure missing")
+    partner_terms = fetch("https://console.smetra.online/terms")
+    if "Условия пилотного использования" not in partner_terms or "Автоматические выплаты отключены" not in partner_terms:
+        raise AssertionError("Separate non-binding partner pilot terms missing")
+
     customer = fetch("https://smetra.online/")
     if "Сметра для партнёров" in customer:
         raise AssertionError("Consumer main hostname incorrectly serves partner landing")
