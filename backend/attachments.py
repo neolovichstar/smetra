@@ -283,8 +283,8 @@ def _route(service, method, parts, query, data):
     extension = Path(name).suffix.lower()
     if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
         raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT, MD, DOCX, XLSX и CSV")
-    if assistant_upload and extension not in (".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
-        raise DomainError(400, "Ассистент читает PDF, TXT, MD, DOCX, XLSX и CSV")
+    if assistant_upload and extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
+        raise DomainError(400, "Разрешены фотографии PNG/JPEG и документы PDF, TXT, MD, DOCX, XLSX, CSV")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
