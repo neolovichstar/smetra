@@ -102,6 +102,29 @@ CREATE OR REPLACE FUNCTION smetra.vault_workspace_quota(wid TEXT)
  $quota$;
 REVOKE ALL ON FUNCTION smetra.vault_workspace_quota(TEXT) FROM PUBLIC,anon,authenticated;
 
+-- Single authenticated account-wide storage view. Do not expose user IDs as
+-- function arguments; authorization is always derived from runtime session.
+CREATE OR REPLACE FUNCTION smetra.vault_personal_stats()
+ RETURNS TABLE(used_bytes BIGINT,quota_bytes BIGINT)
+ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=''
+ AS $stats$
+ DECLARE uid TEXT;
+ BEGIN
+   uid:=smetra.runtime_user_id();
+   IF uid IS NULL OR NOT smetra.runtime_workspace_allowed(
+       NULLIF(current_setting('smetra.workspace_id',true),'')
+   ) THEN
+     RAISE EXCEPTION 'Not authorized for vault statistics' USING ERRCODE='42501';
+   END IF;
+   RETURN QUERY
+     SELECT COALESCE(SUM(f.size),0)::BIGINT,smetra.vault_user_quota(uid)
+     FROM smetra.files f
+     WHERE f.owner_user_id=uid AND f.vault_scope='personal';
+ END;
+ $stats$;
+REVOKE ALL ON FUNCTION smetra.vault_personal_stats() FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION smetra.vault_personal_stats() TO smetra_runtime;
+
 -- An authenticated user can never change a file's ownership or cross
 -- workspace, even via a buggy API endpoint. Quota checks lock the billing
 -- principal to serialize uploads from different devices or workspaces.
