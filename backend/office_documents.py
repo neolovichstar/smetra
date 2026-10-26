@@ -20,9 +20,9 @@ def archive(content, mime):
         raise ValueError("office bounds")
     # OOXML is a ZIP container, but it must be a clean standalone ZIP:
     # no prepended executable stub, malformed local header, or trailing overlay.
-    if not content.startswith(b"PK\\x03\\x04".decode("unicode_escape").encode("latin1")):
+    if not content.startswith(b"PK\x03\x04"):
         raise ValueError("ooxml magic")
-    end = content.rfind(b"PK\\x05\\x06".decode("unicode_escape").encode("latin1"),
+    end = content.rfind(b"PK\x05\x06",
                         max(0, len(content) - 65557))
     if end < 0 or end + 22 > len(content) or (
         end + 22 + int.from_bytes(content[end + 20:end + 22], "little") != len(content)
