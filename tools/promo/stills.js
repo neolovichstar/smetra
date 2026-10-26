@@ -1,32 +1,32 @@
-// Ten 1080×1350 promo stills: the 3D iPhone with drops on the glass, real screens, a few words.
+// Ten 1080×1920 (9:16) promo stills: the 3D iPhone with drops on the glass, real screens, a few words.
 import { THREE, createStage } from './phone.js';
 
-const W = 1080, H = 1350;
+const W = 1080, H = 1920;
 const out = document.getElementById('out'), ctx = out.getContext('2d');
 const { gl, camera, phone, screenMat, setDrops, screenTexture } = createStage(W, H);
 
 // cam/look are world coordinates unless `close` is set: then they are in the phone's own frame,
 // so the camera hugs the screen. focus: [centre y 0..1, half-height, angle deg] or null.
 export const STILLS = [
-  { screen: 'dashboard', rot: [0.06, -0.42, 0.04], pos: [0.1, 0.2, 0], cam: [0, 0, 4.0], look: [0, 0.06, 0], fov: 32,
+  { screen: 'dashboard', rot: [0.05, -0.28, 0.03], pos: [0, 0.2, 0], cam: [0, 0, 4.2], look: [0, 0.06, 0], fov: 30,
     kicker: 'Сметы · клиенты · деньги', title: 'Вся работа\nв одном телефоне', sub: 'Для мастеров, бригад и строительных компаний' },
-  { screen: 'quote', close: true, rot: [-0.95, 0.38, 0.6], pos: [0, 0, 0], cam: [0.16, -0.5, 1.5], look: [0.0, 0.02, 0], fov: 30, focus: [0.42, 0.24, -16],
+  { screen: 'quote', rot: [-0.1, 0.26, -0.05], pos: [0, 0.02, 0], cam: [0, 0, 3.1], look: [0, 0.02, 0], fov: 30,
     kicker: 'Смета', title: 'Смета за минуты', sub: 'Позиции, объёмы и итог в одном экране' },
-  { screen: 'assistant', rot: [0.1, 0.55, -0.12], pos: [-0.05, 0.18, 0], cam: [0, 0, 3.2], look: [0, 0.02, 0], fov: 32, focus: [0.42, 0.34, 8],
+  { screen: 'assistant', rot: [0.08, -0.22, 0.06], pos: [0, 0.2, 0], cam: [0, 0, 4.0], look: [0, 0.06, 0], fov: 30,
     kicker: 'ИИ-ассистент', title: 'Опишите работы —\nон посчитает объёмы', sub: 'Итог пересчитывается автоматически' },
-  { screen: 'object', rot: [-1.05, 0.0, 0.42], pos: [0, 0.12, 0], cam: [0, 0.25, 2.55], look: [0, 0.05, 0], fov: 34, focus: [0.4, 0.26, -18],
+  { screen: 'object', rot: [-0.22, 0.24, 0.07], pos: [0, 0.18, 0], cam: [0, 0, 4.0], look: [0, 0.06, 0], fov: 30,
     kicker: 'Объекты', title: 'Замеры по каждому\nпомещению', sub: 'Площади, формулы и план стоимости' },
-  { screen: 'finance', close: true, rot: [-0.7, -0.3, -0.45], pos: [0, 0, 0], cam: [-0.2, -0.5, 1.45], look: [0, 0.2, 0], fov: 30, focus: [0.42, 0.24, 14],
+  { screen: 'finance', rot: [0.1, 0.3, -0.04], pos: [0, 0.04, 0], cam: [0, 0, 3.2], look: [0, 0.02, 0], fov: 30,
     kicker: 'Финансы', title: 'Деньги по заказам', sub: 'Получено, расходы и что ещё к оплате' },
-  { screen: 'quotes', rot: [0.04, -0.62, 0.1], pos: [0.14, 0.2, 0], cam: [0, 0, 3.6], look: [0, 0.05, 0], fov: 32,
+  { screen: 'quotes', rot: [0.04, -0.34, -0.06], pos: [0, 0.2, 0], cam: [0, 0, 4.1], look: [0, 0.06, 0], fov: 30,
     kicker: 'Сметы', title: 'Статусы видны сразу', sub: 'Черновик, отправлена, согласована' },
-  { screen: 'calculators', rot: [-0.22, 0.32, 0.28], pos: [0, 0.2, 0], cam: [0, 0, 3.4], look: [0, 0.04, 0], fov: 32, focus: [0.4, 0.34, 0],
+  { screen: 'calculators', rot: [-0.08, 0.2, 0.1], pos: [0, 0.2, 0], cam: [0, 0, 4.0], look: [0, 0.06, 0], fov: 30,
     kicker: 'Калькуляторы', title: 'Плитка, ламинат,\nкраска, штукатурка', sub: 'С запасом на подрезку и количеством упаковок' },
-  { screen: 'projects', rot: [-0.55, 0.62, 0.35], pos: [0, 0.2, 0], cam: [0, 0.1, 3.2], look: [0, 0.08, 0], fov: 32, focus: [0.38, 0.3, 20],
+  { screen: 'projects', rot: [0.12, -0.24, 0], pos: [0, 0.2, 0], cam: [0, 0, 4.1], look: [0, 0.06, 0], fov: 30,
     kicker: 'Заказы', title: 'От согласования\nдо оплаты', sub: 'Этапы, задачи и поступления по заказу' },
-  { screen: 'quote', rot: [0.12, 1.12, -0.06], pos: [0, 0.2, 0], cam: [0, 0.05, 3.8], look: [0, 0.06, 0], fov: 32,
+  { screen: 'quote', rot: [0.05, 0.5, 0.02], pos: [0, 0.2, 0], cam: [0, 0, 4.0], look: [0, 0.06, 0], fov: 30,
     kicker: 'Клиенту', title: 'Согласование\nпо ссылке', sub: 'Без регистрации и пароля' },
-  { screen: 'dashboard', rot: [-0.62, -0.3, -0.26], pos: [0, -0.62, 0], cam: [0, 0.1, 3.9], look: [0, -0.1, 0], fov: 32, brand: true },
+  { screen: 'dashboard', rot: [-0.14, -0.2, -0.06], pos: [0, -0.32, 0], cam: [0, 0, 4.4], look: [0, 0, 0], fov: 30, brand: true },
 ];
 
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -54,23 +54,23 @@ function shade() {
   // Soft vignette and a dark floor for the type.
   const v = ctx.createRadialGradient(W / 2, H * 0.42, H * 0.3, W / 2, H * 0.45, H * 0.85);
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.8)'); ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-  const f = ctx.createLinearGradient(0, H * 0.62, 0, H); f.addColorStop(0, 'rgba(0,0,0,0)'); f.addColorStop(0.55, 'rgba(0,0,0,.92)'); f.addColorStop(1, '#000');
-  ctx.fillStyle = f; ctx.fillRect(0, H * 0.62, W, H * 0.38);
+  const f = ctx.createLinearGradient(0, H * 0.7, 0, H); f.addColorStop(0, 'rgba(0,0,0,0)'); f.addColorStop(0.55, 'rgba(0,0,0,.92)'); f.addColorStop(1, '#000');
+  ctx.fillStyle = f; ctx.fillRect(0, H * 0.7, W, H * 0.3);
 }
 function type(s) {
   const L = 84;
   ctx.fillStyle = '#fff'; ctx.textBaseline = 'alphabetic';
   if (s.brand) {
-    ctx.textAlign = 'center'; ctx.font = '600 112px Onest'; ctx.letterSpacing = '-5px'; ctx.fillText('сметра.', W / 2, 330);
-    ctx.globalAlpha = 0.6; ctx.font = '400 24px Onest'; ctx.letterSpacing = '5px'; ctx.fillText('SMETRA.ONLINE', W / 2, 392);
+    ctx.textAlign = 'center'; ctx.font = '600 124px Onest'; ctx.letterSpacing = '-5px'; ctx.fillText('сметра.', W / 2, 420);
+    ctx.globalAlpha = 0.6; ctx.font = '400 24px Onest'; ctx.letterSpacing = '5px'; ctx.fillText('SMETRA.ONLINE', W / 2, 486);
     ctx.globalAlpha = 1; ctx.textAlign = 'left'; return;
   }
-  ctx.globalAlpha = 0.55; ctx.font = '500 18px Onest'; ctx.letterSpacing = '4px';
-  const lines = s.title.split('\n'), base = H - 132 - (lines.length - 1) * 52;
-  ctx.fillText(s.kicker.toUpperCase(), L, base - 62);
-  ctx.globalAlpha = 1; ctx.font = '600 46px Onest'; ctx.letterSpacing = '-1.4px';
-  lines.forEach((line, i) => ctx.fillText(line, L, base + i * 52));
-  ctx.globalAlpha = 0.6; ctx.font = '400 21px Onest'; ctx.letterSpacing = '0px'; ctx.fillText(s.sub, L, H - 84);
+  ctx.globalAlpha = 0.55; ctx.font = '500 20px Onest'; ctx.letterSpacing = '4px';
+  const lines = s.title.split('\n'), base = H - 170 - (lines.length - 1) * 62;
+  ctx.fillText(s.kicker.toUpperCase(), L, base - 74);
+  ctx.globalAlpha = 1; ctx.font = '600 56px Onest'; ctx.letterSpacing = '-1.6px';
+  lines.forEach((line, i) => ctx.fillText(line, L, base + i * 62));
+  ctx.globalAlpha = 0.6; ctx.font = '400 25px Onest'; ctx.letterSpacing = '0px'; ctx.fillText(s.sub, L, H - 104);
   ctx.globalAlpha = 1;
 }
 
