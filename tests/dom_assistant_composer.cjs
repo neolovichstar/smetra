@@ -8,7 +8,7 @@ async function setup(enabled=true,voice=false,remaining=3){
  w.load=source=>{const script=w.document.createElement('script');script.textContent=source;w.document.head.append(script)};
  w.load("let user={id:'qa'},tab='assistant'; const escapeHtml=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); const view=html=>document.querySelector('#content').innerHTML=html;");
  w.sessionStorage.setItem('workspace_id','qa-workspace');w.Workspace={currentWorkspaceId:()=> 'qa-workspace'};
- const quota={remaining,limit:3,plan:'free',resets_at:2000000000},requests=[],notices=[];
+ const quota={remaining,limit:3,plan:'free',resets_at:2000000000},requests=[],uploads=[],notices=[];
  let activeRecognition=null,microphoneTrackStopped=false,microphonePermissionRequests=0;
  if(voice){
   Object.defineProperty(w.navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{microphonePermissionRequests++;return {getTracks:()=>[{stop(){microphoneTrackStopped=true}}]}}}});
@@ -24,12 +24,13 @@ async function setup(enabled=true,voice=false,remaining=3){
  w.api=async(path,options={})=>{
   if(path==='/assistant')return {available:true,quota,messages:[],actions:[]};
   if(path==='/assistant/conversations')return {items:[]};
+  if(path==='/files'&&options.method==='POST'){uploads.push(options);return {file:{id:'saved-photo-'+uploads.length}};}
   if(path==='/assistant/jobs'&&options.method==='POST'){requests.push(options);return {job:{id:'job-1',status:'queued'},quota:{...quota,remaining:2}}}
   if(path==='/assistant/jobs')return {enabled,jobs:[]};
   throw Error('Unexpected path: '+path);
  };
  for(const file of ['ui/icons.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));await w.SmetraAssistant();await tick();
- return {w,doc:w.document,requests,notices,recognition:()=>activeRecognition,microphoneTrackStopped:()=>microphoneTrackStopped,microphonePermissionRequests:()=>microphonePermissionRequests,close:()=>dom.window.close()};
+ return {w,doc:w.document,requests,uploads,notices,recognition:()=>activeRecognition,microphoneTrackStopped:()=>microphoneTrackStopped,microphonePermissionRequests:()=>microphonePermissionRequests,close:()=>dom.window.close()};
 }
 (async()=>{
  const failures=[];
@@ -158,7 +159,7 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(doc.querySelector('.assistant-message.assistant strong').textContent,'Ready');assert.equal(doc.querySelector('#assistant-stop').hidden,true);assert.equal(doc.querySelector('#assistant-input').value,'');
  });
 
- await test('text and photos leave the composer before the network replies, using their original snapshot',async({w,doc})=>{
+ await test('text and photos leave the composer before the network replies, using their original snapshot',async({w,doc,uploads})=>{
   const task=deferred(),sent=[],revoked=[];
   w.URL.createObjectURL=()=> 'blob:fixture-photo';w.URL.revokeObjectURL=url=>revoked.push(url);
   const file=new w.File(['photo'],'photo.jpg',{type:'image/jpeg'});
@@ -173,6 +174,8 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(doc.querySelector('.assistant-attachment-preview').hidden,true);
   assert.equal(w.sessionStorage.getItem('smetra.assistant.draft:qa:qa-workspace:global'),null);
   await tick();await tick();
+  assert.equal(uploads.length,1,'sent photo saves to workspace before AI stream');
+  assert.equal(JSON.parse(uploads[0].body).name,'photo.jpg');
   const payload=JSON.parse(sent[0].options.body);
   assert.equal(payload.text,'Проверь это фото');assert.equal(payload.images.length,1);
   assert.equal(payload.images[0].content,'AQID');assert.equal(revoked.length,1);
