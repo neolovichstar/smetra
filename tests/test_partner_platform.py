@@ -292,5 +292,38 @@ class PartnerPlatformTests(unittest.TestCase):
         with self.assertRaises(partner.PartnerError):
             partner.reconcile_confirmed_payments(self.con, limit=101)
 
+    def test_domain_proof_expires_and_requires_renewal_before_product_publication(self):
+        p = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        integration.begin_verification(self.con, p, "dns")
+        with patch("backend.partner_integrations._verify_dns", return_value=True):
+            integration.verify_domain(self.con, p)
+        partner.ingest_products(self.con, p, {"products": [{
+            "sku": "RETENTION-1", "name": "Кирпич облицовочный",
+            "price_kopecks": 9500,
+            "url": "https://partner.shop/brick", "available": True,
+        }]})
+        self.assertEqual(len(partner.offers(self.con, "кирпич")["offers"]), 1)
+        old = int(time.time()) - integration.VERIFICATION_TTL - 30
+        self.con.execute("UPDATE partner_domain_verifications SET verified_at=? WHERE partner_id=?",
+                         (old, p["id"]))
+        self.assertEqual(integration.domain_status(self.con, p)["status"], "expired")
+        with self.assertRaises(partner.PartnerError) as denied:
+            integration.report_event(self.con, p, {"event_key": "old-merchant-event-1",
+                                                    "event_type": "widget_click"})
+        self.assertEqual(denied.exception.status, 403)
+        self.assertEqual(partner.offers(self.con, "кирпич")["offers"], [])
+        existing_customer = self._account("domain-renewal-user")
+        product_id = self.con.execute(
+            "SELECT id FROM partner_products WHERE partner_id=?", (p["id"],)
+        ).fetchone()[0]
+        with self.assertRaises(partner.PartnerError):
+            partner.outbound(self.con, existing_customer, product_id)
+        refreshed = integration.begin_verification(self.con, p, "meta")
+        self.assertEqual(refreshed["status"], "pending")
+        self.assertNotEqual(refreshed["method"], "dns")
+        with patch("backend.partner_integrations._verify_meta", return_value=True):
+            self.assertEqual(integration.verify_domain(self.con, p)["status"], "verified")
+        self.assertEqual(len(partner.offers(self.con, "кирпич")["offers"]), 1)
+
 if __name__ == "__main__":
     unittest.main()
