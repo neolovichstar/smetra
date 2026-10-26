@@ -169,6 +169,18 @@ class Connection:
                 database_url = database_url[1:-1]
         if not database_url.startswith(("postgresql://", "postgres://")):
             raise RuntimeError("Invalid PostgreSQL connection URI: update " + key + " in deployment settings")
+        # Some Supabase examples intended for Prisma append driver-specific
+        # connection hints. libpq/psycopg reject them as invalid URI options.
+        # Strip ONLY known non-libpq tuning hints, preserve security settings.
+        parts = urllib.parse.urlsplit(database_url)
+        qs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+        prisma_hints = {"pgbouncer", "connection_limit", "pool_timeout", "schema"}
+        if any(k in prisma_hints for k, _ in qs):
+            qs = [(k, v) for k, v in qs if k not in prisma_hints]
+            database_url = urllib.parse.urlunsplit((
+                parts.scheme, parts.netloc, parts.path,
+                urllib.parse.urlencode(qs), parts.fragment,
+            ))
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
         self.pool = _connection_pool(database_url, local_test)
