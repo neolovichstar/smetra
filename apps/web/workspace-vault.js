@@ -3,7 +3,12 @@
   'use strict';
   const esc = value => escapeHtml(value);
   const human = bytes => bytes >= 1e9 ? (bytes / 1e9).toFixed(2) + ' ГБ' : bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + ' МБ' : Math.max(0, Math.ceil(bytes / 1024)) + ' КБ';
-  const when = seconds => new Date(seconds * 1000).toLocaleDateString('ru-RU', {day:'numeric',month:'short',year:'numeric'});
+  const when = seconds => new Date(seconds * 1000).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'});
+  const teaser = value => String(value || '').replace(/!\[[^\]]*\]\([^)]*\)/g,' ').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[#*_`>|~]/g,' ').replace(/\s+/g,' ').trim().slice(0,190);
+  const thumbs = {
+    up:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 11h9.4a3 3 0 0 0 2.9-2.2l2-7a2 2 0 0 0-1.9-2.5H14l.8-4.4a2.1 2.1 0 0 0-3.9-1.4L7 10"/></svg>',
+    down:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3Zm0-11h9.4a3 3 0 0 1 2.9 2.2l2 7a2 2 0 0 1-1.9 2.5H14l.8 4.4a2.1 2.1 0 0 1-3.9 1.4L7 14"/></svg>'
+  };
   const fileSymbol = file => {
     const ext = (file.name.split('.').pop() || 'FILE').toUpperCase().slice(0,5);
     return '<span class="vault-file-icon" aria-hidden="true"><svg viewBox="0 0 42 50" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 2h18l10 10v35H7z"/><path d="M25 2v11h10"/><path d="M13 22h16M13 27h16"/></svg><b>' + esc(ext) + '</b></span>';
@@ -23,6 +28,7 @@
     if(section!=='files' && section!=='changelog') cleanup();
   });
   const state = {filter:'images',search:'',offset:0,files:[],result:null,canWrite:false,wid:''};
+  let listRequest=0;
   const activePage = mine => epoch === mine && tab === 'files' && document.querySelector('#vault-root');
 
   async function thumbLoad(mine) {
@@ -79,12 +85,13 @@
     const meter = document.querySelector('#vault-meter');
     meter.value = Math.min(100,Math.round(100 * used / quota));
     const root = document.querySelector('#vault-items');
+    if (!root) return;
     const showingImages = state.filter === 'images';
     root.className = showingImages ? 'vault-gallery' : 'vault-file-grid';
     root.innerHTML = state.files.length ? state.files.map(fileCard).join('') :
       '<div class="vault-empty"><strong>Здесь пока пусто</strong><p>' +
       (state.search ? 'По запросу ничего не найдено.' : state.filter === 'archive' ? 'В архиве нет файлов.' : 'Загрузите файлы или прикрепите их в чате ассистента.') + '</p></div>';
-    document.querySelector('#vault-total').textContent = 'Показано ' + state.files.length + ' из ' + (result.total || 0);
+    document.querySelector('#vault-total').textContent = state.files.length + ' из ' + (result.total || 0) + ' файлов';
     document.querySelector('#vault-more').hidden = state.files.length >= (result.total || 0);
     document.querySelectorAll('#vault-root [data-filter]').forEach(button => {
       const selected = button.dataset.filter === state.filter;
@@ -94,9 +101,10 @@
     thumbLoad(mine);
   }
   async function loadFiles(mine,append=false) {
+    const request=++listRequest;
     const query = new URLSearchParams({q:state.search,archived:state.filter==='archive'?'1':'0',type:state.filter==='images'?'images':state.filter==='files'?'documents':'all',offset:String(append?state.offset:0)});
     const result = await api('/files?' + query.toString());
-    if (!activePage(mine)) return;
+    if (!activePage(mine) || request!==listRequest) return;
     state.result = result;
     state.files = append ? state.files.concat(result.items) : result.items;
     state.offset = state.files.length;
@@ -140,6 +148,7 @@
   async function renderFiles(active=()=>true) {
     cleanup();
     const mine = epoch;
+    ++listRequest;
     const owner = user;
     const preserving = !!document.querySelector('#vault-root');
     const filter = preserving ? state.filter : 'images';
@@ -155,7 +164,7 @@
       '<div class="vault-tools"><div class="vault-space"><span>Использовано места</span><strong id="vault-usage"></strong><progress id="vault-meter" max="100" value="0" aria-label="Использование хранилища"></progress></div>' +
       (state.canWrite ? '<label for="vault-upload" class="btn primary vault-upload">+ Загрузить<input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label>':'') + '</div>' +
       '<div class="vault-bar"><div role="tablist" class="vault-tabs" aria-label="Тип файлов"><button type="button" data-filter="images" role="tab">Изображения</button><button type="button" data-filter="files" role="tab">Файлы</button><button type="button" data-filter="archive" role="tab">Архив</button></div><input id="vault-search" type="search" aria-label="Поиск файлов" placeholder="Поиск по названию"></div>' +
-      '<p id="vault-progress" class="vault-progress" hidden role="status"></p><div id="vault-items"></div>' +
+      '<p id="vault-progress" class="vault-progress" hidden role="status"></p><div id="vault-items" aria-live="polite" aria-relevant="additions text"></div>' +
       '<footer class="vault-footer"><span id="vault-total"></span><button class="btn small" id="vault-more" type="button">Показать ещё</button></footer>' +
       '</section>');
     paint(mine);
@@ -204,22 +213,30 @@
   async function paintNews(mine) {
     if (!activeNews(mine)) return;
     const list=document.querySelector('#changelog-list');
-    list.innerHTML=notes.length ? notes.map(item =>
+    list.innerHTML=notes.length ? notes.map((item,index) =>
       '<article class="changelog-entry'+(openedNote===item.id?' is-open':'')+'" data-id="'+esc(item.id)+'">' +
-      '<button type="button" class="changelog-open" data-note="'+esc(item.id)+'" aria-expanded="'+(openedNote===item.id)+'"><span class="changelog-date">'+when(item.published_at)+'</span>' +
-      '<span class="changelog-title">'+esc(item.title)+'</span><span class="changelog-version">'+esc(item.version||'Обновление')+'</span></button>' +
-      (openedNote===item.id?'<div class="changelog-body assistant-markdown" id="changelog-body"></div>':'') +
-      '<div class="changelog-footer"><span>'+item.view_count+' просмотров</span>' +
-      '<button type="button" data-react="like" data-id="'+esc(item.id)+'" aria-pressed="'+(item.my_reaction==='like')+'">Нравится · '+item.likes+'</button>' +
-      '<button type="button" data-react="dislike" data-id="'+esc(item.id)+'" aria-pressed="'+(item.my_reaction==='dislike')+'">Не нравится · '+item.dislikes+'</button>' +
-      (canPublish?'<button type="button" data-edit="'+esc(item.id)+'">Редактировать</button>':'') +
+      '<button type="button" class="changelog-open" data-note="'+esc(item.id)+'" aria-controls="changelog-content-'+esc(item.id)+'" aria-expanded="'+(openedNote===item.id)+'">' +
+      '<span class="changelog-date">'+when(item.published_at)+'</span><span class="changelog-copy">' +
+      '<span class="changelog-title">'+esc(item.title)+'</span>' +
+      (openedNote===item.id?'':'<span class="changelog-excerpt">'+esc(teaser(item.body))+'</span>') +
+      '</span><span class="changelog-meta">'+(item.version?'<span class="changelog-version">'+esc(item.version)+'</span>':index===0&&item.published?'<span class="changelog-version">Последнее</span>':'') +
+      '<svg class="changelog-chevron" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.65"><path d="m7 5 5 5-5 5"/></svg></span></button>' +
+      (openedNote===item.id?'<div class="changelog-body assistant-markdown" id="changelog-content-'+esc(item.id)+'"></div>':'') +
+      '<div class="changelog-footer"><span class="changelog-views">'+Number(item.view_count||0).toLocaleString('ru-RU')+' просмотров</span>' +
+      (item.published?'<div class="changelog-reactions">' +
+      '<button type="button" data-react="like" data-id="'+esc(item.id)+'" aria-label="Нравится, '+Number(item.likes||0)+'" aria-pressed="'+(item.my_reaction==='like')+'">'+thumbs.up+'<span>'+Number(item.likes||0).toLocaleString('ru-RU')+'</span></button>' +
+      '<button type="button" data-react="dislike" data-id="'+esc(item.id)+'" aria-label="Не нравится, '+Number(item.dislikes||0)+'" aria-pressed="'+(item.my_reaction==='dislike')+'">'+thumbs.down+'<span>'+Number(item.dislikes||0).toLocaleString('ru-RU')+'</span></button></div>':'') +
+      (canPublish?'<button type="button" class="changelog-edit" data-edit="'+esc(item.id)+'">Редактировать</button>':'') +
       (!item.published?'<span class="changelog-draft">Черновик</span>':'')+'</div></article>').join('') :
       '<div class="vault-empty"><strong>Пока нет обновлений</strong><p>Здесь появятся новости о новых функциях Сметры.</p></div>';
     if (openedNote) {
       const entry=notes.find(item=>item.id===openedNote);
       if (entry) {
         const body=await noteMarkup(entry.body);
-        if (activeNews(mine)) document.querySelector('#changelog-body').innerHTML=body;
+        if (activeNews(mine)) {
+          const container=document.getElementById('changelog-content-'+entry.id);
+          if(container) container.innerHTML=body;
+        }
       }
     }
   }
@@ -234,13 +251,38 @@
     dialog.innerHTML='<form class="changelog-form"><h2>'+(note?'Редактировать обновление':'Новая публикация')+'</h2>'+
       '<label>Заголовок<input name="title" required maxlength="160" value="'+esc(note?.title||'')+'"></label>'+
       '<label>Версия<input name="version" maxlength="32" placeholder="Например, 2.1" value="'+esc(note?.version||'')+'"></label>'+
-      '<label>Содержимое Markdown<textarea name="body" required rows="12" maxlength="30000"></textarea></label>'+
+      '<div class="changelog-editor-toolbar"><span>Содержимое Markdown</span><button type="button" data-preview-toggle aria-pressed="false">Предпросмотр</button></div>' +
+      '<textarea name="body" aria-label="Содержимое Markdown" required rows="12" maxlength="30000" spellcheck="true"></textarea>' +
+      '<div class="changelog-preview assistant-markdown" data-preview-pane hidden></div>' +
       '<label class="changelog-published"><input type="checkbox" name="published" '+(!note||note.published?'checked':'')+'> Опубликовать</label>'+
       '<p class="changelog-error" role="alert"></p>'+
       '<div class="changelog-form-actions"><button type="button" data-cancel>Отмена</button><button class="btn primary" type="submit">Сохранить</button></div></form>';
     document.body.append(dialog);dialog.querySelector('textarea').value=note?.body||'';
+    const textarea=dialog.querySelector('textarea[name=body]');
+    const toggle=dialog.querySelector('[data-preview-toggle]');
+    const pane=dialog.querySelector('[data-preview-pane]');
+    let previewActive=false;
+    let previewTimer=null;
+    const preview=async()=>{
+      if(!previewActive)return;
+      try {
+        await window.SmetraLoadFeature('markdown');
+        if(!dialog.isConnected || !previewActive)return;
+        pane.innerHTML=window.SmetraMarkdown.render(textarea.value||'*Напишите текст обновления, чтобы увидеть предпросмотр.*');
+      }catch(error){if(dialog.isConnected)pane.textContent='Не удалось загрузить предпросмотр: '+error.message;}
+    };
+    toggle.onclick=()=>{
+      previewActive=!previewActive;
+      pane.hidden=!previewActive;
+      toggle.setAttribute('aria-pressed',String(previewActive));
+      toggle.textContent=previewActive?'К редактированию':'Предпросмотр';
+      textarea.hidden=previewActive;
+      if(previewActive)void preview();
+      else textarea.focus();
+    };
+    textarea.addEventListener('input',()=>{if(previewActive){clearTimeout(previewTimer);previewTimer=setTimeout(()=>void preview(),250);}});
     const close=()=>dialog.close();dialog.querySelector('[data-cancel]').onclick=close;
-    dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+    dialog.addEventListener('close',()=>{clearTimeout(previewTimer);dialog.remove();},{once:true});
     dialog.querySelector('form').onsubmit=async event=>{
       event.preventDefault();
       const form=event.currentTarget,button=form.querySelector('[type=submit]');
