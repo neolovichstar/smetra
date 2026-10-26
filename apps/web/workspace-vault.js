@@ -141,11 +141,15 @@
     cleanup();
     const mine = epoch;
     const owner = user;
-    const [workspaceResult,result] = await Promise.all([api('/workspace'),api('/files?type=images')]);
+    const preserving = !!document.querySelector('#vault-root');
+    const filter = preserving ? state.filter : 'images';
+    const search = preserving ? state.search : '';
+    const params = new URLSearchParams({q:search,archived:filter==='archive'?'1':'0',type:filter==='images'?'images':filter==='files'?'documents':'all'});
+    const [workspaceResult,result] = await Promise.all([api('/workspace'),api('/files?' + params)]);
     if (!active() || epoch !== mine || owner !== user || tab !== 'files') return;
     state.wid = workspaceResult.workspace?.id || sessionStorage.getItem('workspace_id') || '';
     state.canWrite = workspaceResult.workspace?.role !== 'viewer';
-    state.filter='images'; state.search=''; state.files=result.items; state.result=result; state.offset=result.items.length;
+    state.filter=filter; state.search=search; state.files=result.items; state.result=result; state.offset=result.items.length;
     view('<section id="vault-root" class="vault-root">' +
       head('Хранилище','Все изображения, документы и вложения рабочего пространства в одном месте.') +
       '<div class="vault-tools"><div class="vault-space"><span>Использовано места</span><strong id="vault-usage"></strong><progress id="vault-meter" max="100" value="0" aria-label="Использование хранилища"></progress></div>' +
@@ -156,6 +160,7 @@
       '</section>');
     paint(mine);
     const root = document.querySelector('#vault-root');
+    root.querySelector('#vault-search').value = search;
     let searchTimer,sequence=0;
     root.querySelector('#vault-search').oninput = event => {
       state.search = event.target.value.trim(); state.offset=0;
