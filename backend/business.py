@@ -281,6 +281,11 @@ def migrate(con):
     if "bonus_ai_messages" not in billing_intent_columns:
         con.execute("ALTER TABLE billing_intents ADD COLUMN bonus_ai_messages INTEGER NOT NULL DEFAULT 0")
     con.executescript((Path(__file__).parent / "migrations" / "021_assistant_purchase_bonus.sql").read_text(encoding="utf-8"))
+    file_columns = {r["name"] for r in con.execute("PRAGMA table_info(files)")}
+    if "archived" not in file_columns:
+        con.execute("ALTER TABLE files ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1))")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_files_workspace_archived ON files(workspace_id,archived,created_at DESC)")
+    con.executescript((Path(__file__).parent / "migrations" / "026_vault_changelog.sql").read_text(encoding="utf-8"))
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -2190,7 +2195,9 @@ class Service:
         ):
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
-            self.write_access()
+            # Changelog reactions/views do not need editor permissions.
+            if kind != "changelog":
+                self.write_access()
             if kind == "assistant":
                 from backend.assistant import route
 
@@ -2239,6 +2246,9 @@ class Service:
                 "online_client_payments": False,
                 "uploads": ["png", "jpg", "pdf", "txt"],
             }
+        if kind == "changelog":
+            from backend.changelog import route as changelog_route
+            return changelog_route(self, method, parts, query, data)
         if kind == "files":
             try:
                 from backend.attachments import route
@@ -2453,6 +2463,7 @@ ROUTES = set(ENTITIES) | {
     "documents",
     "transfer",
     "files",
+    "changelog",
     "export",
     "construction",
     "ai",
