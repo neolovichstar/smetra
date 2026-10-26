@@ -102,5 +102,5 @@ CREATE TRIGGER product_update_reaction_delete AFTER DELETE ON smetra.product_upd
  FOR EACH ROW EXECUTE FUNCTION smetra.product_update_count_trigger();
 
 INSERT INTO smetra.schema_migrations(version,applied_at)
- VALUES(40,extract(epoch FROM now())::bigint) ON CONFLICT DO NOTHING;
+ VALUES(65,extract(epoch FROM now())::bigint) ON CONFLICT DO NOTHING;
 COMMIT;
