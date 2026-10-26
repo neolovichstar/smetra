@@ -40,7 +40,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
    await until("![...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Отменить изменение')");
  }
  const restored=await evaluate(`api('/files/${file.id}/metadata').then(r=>r.file)`);assert.equal(restored.name,'resources.md');assert.equal(restored.client_id,file.client_id);assert.equal(restored.sha256,file.sha256);
- await evaluate("document.querySelector('[data-tab=files]').click()");await until("document.querySelector('[data-file-manage]')");
+ await evaluate("document.querySelector('[data-tab=files]').click()");await until("document.querySelector('[data-filter=files]')");await evaluate("document.querySelector('[data-filter=files]').click()");await until("document.querySelector('[data-file-manage]')");
  await evaluate(`document.querySelector('[data-file-manage="${file.id}"]').click()`);await until("document.querySelector('#workspace-dialog form')?.onsubmit");
  await evaluate("document.querySelector('#workspace-dialog [name=name]').value='Ручное название.md';document.querySelector('#workspace-dialog form').requestSubmit()");
  await until("[...document.querySelectorAll('.file-center-row')].some(row=>row.textContent.includes('Ручное название.md'))");
