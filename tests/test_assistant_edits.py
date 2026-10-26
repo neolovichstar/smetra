@@ -120,7 +120,7 @@ class AssistantEditTests(unittest.TestCase):
         with self.mod.db() as con:
             from backend.business import Service
             service = object.__new__(Service)
-            service.con, service.origin = con, "http://localhost"
+            service.con, service.origin, service.role = con, "http://localhost", "owner"
             service.wid = con.execute("SELECT workspace_id FROM quotes WHERE id=?", (quote["id"],)).fetchone()[0]
             record = execute_read(service, "get_record", {"entity": "quotes", "id": quote["id"]})
         self.assertEqual([item["row"] for item in record["items"]], [1, 2, 3])

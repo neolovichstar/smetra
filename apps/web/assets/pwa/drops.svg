@@ -1,0 +1,858 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 1200' width='1200' height='1200'>
+<defs>
+<radialGradient id='b' cx='.5' cy='.62' r='.62'><stop offset='0' stop-color='#fff' stop-opacity='.10'/><stop offset='.6' stop-color='#fff' stop-opacity='.035'/><stop offset='.86' stop-color='#fff' stop-opacity='.16'/><stop offset='1' stop-color='#fff' stop-opacity='.42'/></radialGradient>
+<linearGradient id='r' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fff' stop-opacity='.05'/><stop offset='.55' stop-color='#fff' stop-opacity='.12'/><stop offset='1' stop-color='#fff' stop-opacity='.75'/></linearGradient>
+<radialGradient id='s' cx='.5' cy='.5' r='.5'><stop offset='0' stop-color='#fff' stop-opacity='1'/><stop offset='1' stop-color='#fff' stop-opacity='0'/></radialGradient>
+<filter id='soft' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='1.2'/></filter>
+</defs>
+<ellipse cx='826.7' cy='761.8' rx='2.8' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='826.7' cy='761.3' rx='2.8' ry='2.8' fill='url(#b)'/>
+<ellipse cx='826.7' cy='761.3' rx='2.4' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='825.7' cy='760.1' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 825.7 760.1)'/>
+<ellipse cx='827.2' cy='763.0' rx='1.3' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='949.4' cy='968.1' rx='3.1' ry='3.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='949.4' cy='967.6' rx='3.0' ry='3.1' fill='url(#b)'/>
+<ellipse cx='949.4' cy='967.6' rx='2.6' ry='2.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='948.4' cy='966.3' rx='0.8' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 948.4 966.3)'/>
+<ellipse cx='950.0' cy='969.5' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='287.0' cy='12.2' rx='7.3' ry='7.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='287.0' cy='10.9' rx='7.2' ry='7.2' fill='url(#b)'/>
+<ellipse cx='287.0' cy='10.9' rx='6.8' ry='6.8' fill='none' stroke='url(#r)' stroke-width='0.64'/>
+<ellipse cx='284.6' cy='7.9' rx='1.9' ry='1.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 284.6 7.9)'/>
+<ellipse cx='288.5' cy='15.4' rx='3.3' ry='0.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='91.2' cy='948.6' rx='9.5' ry='9.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='91.2' cy='947.0' rx='9.3' ry='9.0' fill='url(#b)'/>
+<ellipse cx='91.2' cy='947.0' rx='8.9' ry='8.6' fill='none' stroke='url(#r)' stroke-width='0.84'/>
+<ellipse cx='88.0' cy='943.2' rx='2.4' ry='1.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 88.0 943.2)'/>
+<ellipse cx='93.0' cy='952.6' rx='4.3' ry='1.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='53.7' cy='1194.6' rx='3.2' ry='3.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='53.7' cy='1194.0' rx='3.1' ry='3.5' fill='url(#b)'/>
+<ellipse cx='53.7' cy='1194.0' rx='2.7' ry='3.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='52.6' cy='1192.5' rx='0.8' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 52.6 1192.5)'/>
+<ellipse cx='54.3' cy='1196.1' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='734.0' cy='65.2' rx='22.4' ry='21.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='734.0' cy='61.3' rx='21.9' ry='21.8' fill='url(#b)'/>
+<ellipse cx='734.0' cy='61.3' rx='21.5' ry='21.4' fill='none' stroke='url(#r)' stroke-width='1.97'/>
+<ellipse cx='726.5' cy='52.2' rx='5.7' ry='3.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 726.5 52.2)'/>
+<ellipse cx='738.4' cy='74.8' rx='10.1' ry='2.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='144.3' cy='1137.3' rx='7.1' ry='7.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='144.3' cy='1136.0' rx='7.0' ry='7.0' fill='url(#b)'/>
+<ellipse cx='144.3' cy='1136.0' rx='6.6' ry='6.6' fill='none' stroke='url(#r)' stroke-width='0.63'/>
+<ellipse cx='142.0' cy='1133.1' rx='1.8' ry='1.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 142.0 1133.1)'/>
+<ellipse cx='145.7' cy='1140.4' rx='3.2' ry='0.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='979.3' cy='152.5' rx='2.8' ry='3.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='979.3' cy='151.9' rx='2.7' ry='3.1' fill='url(#b)'/>
+<ellipse cx='979.3' cy='151.9' rx='2.3' ry='2.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='978.4' cy='150.6' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 978.4 150.6)'/>
+<ellipse cx='979.8' cy='153.8' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='661.8' cy='414.5' rx='6.1' ry='6.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='661.8' cy='413.4' rx='6.0' ry='6.2' fill='url(#b)'/>
+<ellipse cx='661.8' cy='413.4' rx='5.6' ry='5.8' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='659.7' cy='410.8' rx='1.6' ry='1.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 659.7 410.8)'/>
+<ellipse cx='663.0' cy='417.3' rx='2.8' ry='0.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='47.2' cy='1037.5' rx='2.9' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='47.2' cy='1037.0' rx='2.9' ry='2.8' fill='url(#b)'/>
+<ellipse cx='47.2' cy='1037.0' rx='2.5' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='46.2' cy='1035.8' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 46.2 1035.8)'/>
+<ellipse cx='47.8' cy='1038.7' rx='1.3' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='260.1' cy='1150.2' rx='17.3' ry='19.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='260.1' cy='1146.7' rx='16.9' ry='19.5' fill='url(#b)'/>
+<ellipse cx='260.1' cy='1146.7' rx='16.5' ry='19.1' fill='none' stroke='url(#r)' stroke-width='1.52'/>
+<ellipse cx='254.4' cy='1138.5' rx='4.4' ry='3.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 254.4 1138.5)'/>
+<ellipse cx='263.5' cy='1158.7' rx='7.8' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='907.1' cy='697.5' rx='16.0' ry='17.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='907.1' cy='694.4' rx='15.7' ry='17.4' fill='url(#b)'/>
+<ellipse cx='907.1' cy='694.4' rx='15.3' ry='17.0' fill='none' stroke='url(#r)' stroke-width='1.42'/>
+<ellipse cx='901.7' cy='687.1' rx='4.1' ry='3.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 901.7 687.1)'/>
+<ellipse cx='910.2' cy='705.2' rx='7.2' ry='2.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='571.7' cy='991.2' rx='2.7' ry='2.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='571.7' cy='990.7' rx='2.6' ry='2.5' fill='url(#b)'/>
+<ellipse cx='571.7' cy='990.7' rx='2.2' ry='2.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='570.8' cy='989.7' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 570.8 989.7)'/>
+<ellipse cx='572.2' cy='992.3' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1045.8' cy='500.5' rx='25.3' ry='24.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1045.8' cy='496.0' rx='24.8' ry='24.9' fill='url(#b)'/>
+<ellipse cx='1045.8' cy='496.0' rx='24.4' ry='24.5' fill='none' stroke='url(#r)' stroke-width='2.24'/>
+<ellipse cx='1037.4' cy='485.6' rx='6.5' ry='4.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1037.4 485.6)'/>
+<ellipse cx='1050.8' cy='511.4' rx='11.4' ry='3.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='464.3' cy='1189.0' rx='6.1' ry='6.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='464.3' cy='1187.9' rx='6.0' ry='6.0' fill='url(#b)'/>
+<ellipse cx='464.3' cy='1187.9' rx='5.6' ry='5.6' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='462.3' cy='1185.4' rx='1.6' ry='1.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 462.3 1185.4)'/>
+<ellipse cx='465.5' cy='1191.6' rx='2.7' ry='0.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='114.0' cy='861.2' rx='2.6' ry='2.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='114.0' cy='860.6' rx='2.5' ry='2.9' fill='url(#b)'/>
+<ellipse cx='114.0' cy='860.6' rx='2.1' ry='2.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='113.1' cy='859.4' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 113.1 859.4)'/>
+<ellipse cx='114.5' cy='862.4' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='590.0' cy='661.2' rx='7.1' ry='7.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='590.0' cy='659.8' rx='6.9' ry='7.7' fill='url(#b)'/>
+<ellipse cx='590.0' cy='659.8' rx='6.5' ry='7.3' fill='none' stroke='url(#r)' stroke-width='0.62'/>
+<ellipse cx='587.6' cy='656.6' rx='1.8' ry='1.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 587.6 656.6)'/>
+<ellipse cx='591.4' cy='664.6' rx='3.2' ry='1.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='730.0' cy='668.0' rx='3.1' ry='3.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='730.0' cy='667.4' rx='3.0' ry='3.3' fill='url(#b)'/>
+<ellipse cx='730.0' cy='667.4' rx='2.6' ry='2.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='729.0' cy='666.1' rx='0.8' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 729.0 666.1)'/>
+<ellipse cx='730.6' cy='669.5' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='206.0' cy='419.3' rx='2.9' ry='3.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='206.0' cy='418.7' rx='2.8' ry='3.3' fill='url(#b)'/>
+<ellipse cx='206.0' cy='418.7' rx='2.4' ry='2.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='205.0' cy='417.3' rx='0.7' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 205.0 417.3)'/>
+<ellipse cx='206.5' cy='420.7' rx='1.3' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='715.9' cy='370.3' rx='4.3' ry='3.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='715.9' cy='369.6' rx='4.2' ry='3.9' fill='url(#b)'/>
+<ellipse cx='715.9' cy='369.6' rx='3.8' ry='3.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='714.4' cy='367.9' rx='1.1' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 714.4 367.9)'/>
+<ellipse cx='716.7' cy='372.0' rx='2.0' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='974.9' cy='931.5' rx='2.6' ry='2.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='974.9' cy='931.0' rx='2.5' ry='2.5' fill='url(#b)'/>
+<ellipse cx='974.9' cy='931.0' rx='2.1' ry='2.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='974.0' cy='930.0' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 974.0 930.0)'/>
+<ellipse cx='975.4' cy='932.6' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='806.6' cy='1071.0' rx='13.0' ry='14.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='806.6' cy='1068.3' rx='12.7' ry='14.9' fill='url(#b)'/>
+<ellipse cx='806.6' cy='1068.3' rx='12.3' ry='14.5' fill='none' stroke='url(#r)' stroke-width='1.14'/>
+<ellipse cx='802.3' cy='1062.1' rx='3.3' ry='2.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 802.3 1062.1)'/>
+<ellipse cx='809.2' cy='1077.5' rx='5.9' ry='1.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1181.9' cy='1149.9' rx='5.3' ry='5.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1181.9' cy='1149.0' rx='5.2' ry='5.5' fill='url(#b)'/>
+<ellipse cx='1181.9' cy='1149.0' rx='4.8' ry='5.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1180.1' cy='1146.6' rx='1.3' ry='0.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1180.1 1146.6)'/>
+<ellipse cx='1182.9' cy='1152.4' rx='2.4' ry='0.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='589.5' cy='460.2' rx='22.9' ry='21.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='589.5' cy='456.2' rx='22.4' ry='21.7' fill='url(#b)'/>
+<ellipse cx='589.5' cy='456.2' rx='22.0' ry='21.3' fill='none' stroke='url(#r)' stroke-width='2.02'/>
+<ellipse cx='581.9' cy='447.1' rx='5.8' ry='3.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 581.9 447.1)'/>
+<ellipse cx='594.0' cy='469.7' rx='10.3' ry='2.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='209.6' cy='106.6' rx='22.4' ry='24.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='209.6' cy='102.2' rx='22.0' ry='24.8' fill='url(#b)'/>
+<ellipse cx='209.6' cy='102.2' rx='21.6' ry='24.4' fill='none' stroke='url(#r)' stroke-width='1.98'/>
+<ellipse cx='202.1' cy='91.8' rx='5.7' ry='4.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 202.1 91.8)'/>
+<ellipse cx='214.0' cy='117.5' rx='10.1' ry='3.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='310.8' cy='349.4' rx='2.6' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='310.8' cy='348.9' rx='2.5' ry='2.6' fill='url(#b)'/>
+<ellipse cx='310.8' cy='348.9' rx='2.1' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='309.9' cy='347.8' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 309.9 347.8)'/>
+<ellipse cx='311.3' cy='350.5' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='85.7' cy='407.2' rx='2.8' ry='3.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='85.7' cy='406.6' rx='2.8' ry='3.2' fill='url(#b)'/>
+<ellipse cx='85.7' cy='406.6' rx='2.4' ry='2.8' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='84.8' cy='405.3' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 84.8 405.3)'/>
+<ellipse cx='86.3' cy='408.6' rx='1.3' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='880.8' cy='581.0' rx='29.4' ry='28.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='880.8' cy='576.0' rx='28.8' ry='28.0' fill='url(#b)'/>
+<ellipse cx='880.8' cy='576.0' rx='28.4' ry='27.6' fill='none' stroke='url(#r)' stroke-width='2.59'/>
+<ellipse cx='871.0' cy='564.2' rx='7.5' ry='4.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 871.0 564.2)'/>
+<ellipse cx='886.6' cy='593.3' rx='13.3' ry='3.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='629.4' cy='866.4' rx='27.7' ry='24.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='629.4' cy='861.9' rx='27.2' ry='24.7' fill='url(#b)'/>
+<ellipse cx='629.4' cy='861.9' rx='26.8' ry='24.3' fill='none' stroke='url(#r)' stroke-width='2.44'/>
+<ellipse cx='620.1' cy='851.6' rx='7.1' ry='4.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 620.1 851.6)'/>
+<ellipse cx='634.8' cy='877.2' rx='12.5' ry='3.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1003.9' cy='953.1' rx='3.0' ry='3.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1003.9' cy='952.5' rx='3.0' ry='3.4' fill='url(#b)'/>
+<ellipse cx='1003.9' cy='952.5' rx='2.6' ry='3.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1002.9' cy='951.1' rx='0.8' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1002.9 951.1)'/>
+<ellipse cx='1004.5' cy='954.6' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='512.8' cy='697.8' rx='10.0' ry='11.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='512.8' cy='695.8' rx='9.8' ry='11.2' fill='url(#b)'/>
+<ellipse cx='512.8' cy='695.8' rx='9.4' ry='10.8' fill='none' stroke='url(#r)' stroke-width='0.88'/>
+<ellipse cx='509.4' cy='691.1' rx='2.6' ry='1.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 509.4 691.1)'/>
+<ellipse cx='514.7' cy='702.7' rx='4.5' ry='1.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='640.9' cy='333.6' rx='3.9' ry='4.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='640.9' cy='332.9' rx='3.8' ry='4.2' fill='url(#b)'/>
+<ellipse cx='640.9' cy='332.9' rx='3.4' ry='3.8' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='639.7' cy='331.1' rx='1.0' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 639.7 331.1)'/>
+<ellipse cx='641.7' cy='335.5' rx='1.7' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='821.4' cy='1142.9' rx='2.6' ry='2.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='821.4' cy='1142.5' rx='2.5' ry='2.3' fill='url(#b)'/>
+<ellipse cx='821.4' cy='1142.5' rx='2.1' ry='1.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='820.6' cy='1141.5' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 820.6 1141.5)'/>
+<ellipse cx='821.9' cy='1143.9' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='769.9' cy='1017.1' rx='9.8' ry='10.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='769.9' cy='1015.3' rx='9.6' ry='10.2' fill='url(#b)'/>
+<ellipse cx='769.9' cy='1015.3' rx='9.2' ry='9.8' fill='none' stroke='url(#r)' stroke-width='0.86'/>
+<ellipse cx='766.6' cy='1011.0' rx='2.5' ry='1.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 766.6 1011.0)'/>
+<ellipse cx='771.8' cy='1021.6' rx='4.4' ry='1.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='487.4' cy='1148.1' rx='3.4' ry='3.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='487.4' cy='1147.4' rx='3.3' ry='3.8' fill='url(#b)'/>
+<ellipse cx='487.4' cy='1147.4' rx='2.9' ry='3.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='486.2' cy='1145.8' rx='0.9' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 486.2 1145.8)'/>
+<ellipse cx='488.0' cy='1149.8' rx='1.5' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='116.0' cy='115.3' rx='2.7' ry='2.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='116.0' cy='114.9' rx='2.6' ry='2.4' fill='url(#b)'/>
+<ellipse cx='116.0' cy='114.9' rx='2.2' ry='2.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='115.1' cy='113.9' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 115.1 113.9)'/>
+<ellipse cx='116.5' cy='116.4' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='173.2' cy='1037.6' rx='6.0' ry='6.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='173.2' cy='1036.5' rx='5.9' ry='6.4' fill='url(#b)'/>
+<ellipse cx='173.2' cy='1036.5' rx='5.5' ry='6.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='171.2' cy='1033.8' rx='1.5' ry='1.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 171.2 1033.8)'/>
+<ellipse cx='174.4' cy='1040.4' rx='2.7' ry='0.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='646.2' cy='390.5' rx='2.7' ry='2.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='646.2' cy='390.1' rx='2.6' ry='2.7' fill='url(#b)'/>
+<ellipse cx='646.2' cy='390.1' rx='2.2' ry='2.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='645.3' cy='388.9' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 645.3 388.9)'/>
+<ellipse cx='646.7' cy='391.7' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='201.3' cy='223.2' rx='3.1' ry='3.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='201.3' cy='222.6' rx='3.0' ry='3.1' fill='url(#b)'/>
+<ellipse cx='201.3' cy='222.6' rx='2.6' ry='2.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='200.3' cy='221.4' rx='0.8' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 200.3 221.4)'/>
+<ellipse cx='201.9' cy='224.5' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='658.7' cy='70.7' rx='14.1' ry='15.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='658.7' cy='67.9' rx='13.8' ry='15.2' fill='url(#b)'/>
+<ellipse cx='658.7' cy='67.9' rx='13.4' ry='14.8' fill='none' stroke='url(#r)' stroke-width='1.24'/>
+<ellipse cx='654.0' cy='61.6' rx='3.6' ry='2.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 654.0 61.6)'/>
+<ellipse cx='661.4' cy='77.3' rx='6.3' ry='2.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='917.1' cy='939.7' rx='22.3' ry='19.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='917.1' cy='936.2' rx='21.9' ry='19.7' fill='url(#b)'/>
+<ellipse cx='917.1' cy='936.2' rx='21.5' ry='19.3' fill='none' stroke='url(#r)' stroke-width='1.97'/>
+<ellipse cx='909.7' cy='927.9' rx='5.7' ry='3.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 909.7 927.9)'/>
+<ellipse cx='921.5' cy='948.4' rx='10.1' ry='2.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='81.6' cy='914.5' rx='6.4' ry='5.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='81.6' cy='913.4' rx='6.2' ry='5.9' fill='url(#b)'/>
+<ellipse cx='81.6' cy='913.4' rx='5.8' ry='5.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='79.5' cy='910.9' rx='1.6' ry='1.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 79.5 910.9)'/>
+<ellipse cx='82.9' cy='917.1' rx='2.9' ry='0.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='310.3' cy='833.1' rx='14.1' ry='13.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='310.3' cy='830.6' rx='13.8' ry='13.7' fill='url(#b)'/>
+<ellipse cx='310.3' cy='830.6' rx='13.4' ry='13.3' fill='none' stroke='url(#r)' stroke-width='1.25'/>
+<ellipse cx='305.6' cy='824.9' rx='3.6' ry='2.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 305.6 824.9)'/>
+<ellipse cx='313.1' cy='839.1' rx='6.4' ry='1.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='467.2' cy='372.8' rx='2.6' ry='2.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='467.2' cy='372.2' rx='2.5' ry='2.9' fill='url(#b)'/>
+<ellipse cx='467.2' cy='372.2' rx='2.1' ry='2.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='466.4' cy='371.0' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 466.4 371.0)'/>
+<ellipse cx='467.7' cy='374.0' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='603.7' cy='659.6' rx='3.7' ry='4.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='603.7' cy='658.8' rx='3.7' ry='4.3' fill='url(#b)'/>
+<ellipse cx='603.7' cy='658.8' rx='3.3' ry='3.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='602.5' cy='657.1' rx='0.9' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 602.5 657.1)'/>
+<ellipse cx='604.5' cy='661.5' rx='1.7' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='720.9' cy='610.3' rx='2.6' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='720.9' cy='609.8' rx='2.6' ry='2.8' fill='url(#b)'/>
+<ellipse cx='720.9' cy='609.8' rx='2.2' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='720.0' cy='608.6' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 720.0 608.6)'/>
+<ellipse cx='721.4' cy='611.6' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='382.7' cy='833.5' rx='28.3' ry='29.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='382.7' cy='828.3' rx='27.7' ry='29.0' fill='url(#b)'/>
+<ellipse cx='382.7' cy='828.3' rx='27.3' ry='28.6' fill='none' stroke='url(#r)' stroke-width='2.49'/>
+<ellipse cx='373.3' cy='816.1' rx='7.2' ry='4.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 373.3 816.1)'/>
+<ellipse cx='388.3' cy='846.3' rx='12.7' ry='3.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='84.0' cy='974.0' rx='8.8' ry='10.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='84.0' cy='972.2' rx='8.6' ry='10.1' fill='url(#b)'/>
+<ellipse cx='84.0' cy='972.2' rx='8.2' ry='9.7' fill='none' stroke='url(#r)' stroke-width='0.77'/>
+<ellipse cx='81.1' cy='968.0' rx='2.2' ry='1.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 81.1 968.0)'/>
+<ellipse cx='85.7' cy='978.5' rx='4.0' ry='1.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='383.3' cy='1188.3' rx='4.5' ry='4.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='383.3' cy='1187.6' rx='4.4' ry='4.1' fill='url(#b)'/>
+<ellipse cx='383.3' cy='1187.6' rx='4.0' ry='3.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='381.8' cy='1185.8' rx='1.1' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 381.8 1185.8)'/>
+<ellipse cx='384.2' cy='1190.1' rx='2.0' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='539.3' cy='744.4' rx='16.3' ry='14.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='539.3' cy='741.8' rx='16.0' ry='14.5' fill='url(#b)'/>
+<ellipse cx='539.3' cy='741.8' rx='15.6' ry='14.1' fill='none' stroke='url(#r)' stroke-width='1.44'/>
+<ellipse cx='533.9' cy='735.7' rx='4.2' ry='2.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 533.9 735.7)'/>
+<ellipse cx='542.5' cy='750.8' rx='7.3' ry='1.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='532.5' cy='622.6' rx='11.5' ry='11.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='532.5' cy='620.5' rx='11.3' ry='11.4' fill='url(#b)'/>
+<ellipse cx='532.5' cy='620.5' rx='10.9' ry='11.0' fill='none' stroke='url(#r)' stroke-width='1.02'/>
+<ellipse cx='528.6' cy='615.7' rx='2.9' ry='1.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 528.6 615.7)'/>
+<ellipse cx='534.7' cy='627.6' rx='5.2' ry='1.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='273.4' cy='64.1' rx='5.2' ry='5.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='273.4' cy='63.2' rx='5.1' ry='5.2' fill='url(#b)'/>
+<ellipse cx='273.4' cy='63.2' rx='4.7' ry='4.8' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='271.6' cy='61.0' rx='1.3' ry='0.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 271.6 61.0)'/>
+<ellipse cx='274.4' cy='66.4' rx='2.3' ry='0.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='843.7' cy='979.3' rx='3.3' ry='3.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='843.7' cy='978.7' rx='3.2' ry='3.6' fill='url(#b)'/>
+<ellipse cx='843.7' cy='978.7' rx='2.8' ry='3.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='842.6' cy='977.2' rx='0.8' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 842.6 977.2)'/>
+<ellipse cx='844.3' cy='980.9' rx='1.5' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='286.9' cy='465.0' rx='6.2' ry='6.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='286.9' cy='463.9' rx='6.1' ry='6.3' fill='url(#b)'/>
+<ellipse cx='286.9' cy='463.9' rx='5.7' ry='5.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='284.9' cy='461.2' rx='1.6' ry='1.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 284.9 461.2)'/>
+<ellipse cx='288.1' cy='467.8' rx='2.8' ry='0.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1145.7' cy='113.5' rx='11.1' ry='11.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1145.7' cy='111.5' rx='10.8' ry='11.2' fill='url(#b)'/>
+<ellipse cx='1145.7' cy='111.5' rx='10.4' ry='10.8' fill='none' stroke='url(#r)' stroke-width='0.98'/>
+<ellipse cx='1142.0' cy='106.8' rx='2.8' ry='1.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1142.0 106.8)'/>
+<ellipse cx='1147.9' cy='118.4' rx='5.0' ry='1.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='857.6' cy='1064.6' rx='7.0' ry='7.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='857.6' cy='1063.2' rx='6.8' ry='7.7' fill='url(#b)'/>
+<ellipse cx='857.6' cy='1063.2' rx='6.4' ry='7.3' fill='none' stroke='url(#r)' stroke-width='0.62'/>
+<ellipse cx='855.3' cy='1060.0' rx='1.8' ry='1.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 855.3 1060.0)'/>
+<ellipse cx='859.0' cy='1068.0' rx='3.1' ry='1.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='904.7' cy='800.2' rx='10.9' ry='12.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='904.7' cy='798.1' rx='10.7' ry='12.2' fill='url(#b)'/>
+<ellipse cx='904.7' cy='798.1' rx='10.3' ry='11.8' fill='none' stroke='url(#r)' stroke-width='0.96'/>
+<ellipse cx='901.1' cy='792.9' rx='2.8' ry='2.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 901.1 792.9)'/>
+<ellipse cx='906.8' cy='805.6' rx='4.9' ry='1.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='814.7' cy='303.9' rx='13.6' ry='15.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='814.7' cy='301.2' rx='13.3' ry='15.4' fill='url(#b)'/>
+<ellipse cx='814.7' cy='301.2' rx='12.9' ry='15.0' fill='none' stroke='url(#r)' stroke-width='1.20'/>
+<ellipse cx='810.2' cy='294.7' rx='3.5' ry='2.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 810.2 294.7)'/>
+<ellipse cx='817.4' cy='310.7' rx='6.1' ry='2.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='736.5' cy='987.7' rx='4.9' ry='5.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='736.5' cy='986.7' rx='4.8' ry='5.6' fill='url(#b)'/>
+<ellipse cx='736.5' cy='986.7' rx='4.4' ry='5.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='734.9' cy='984.3' rx='1.3' ry='1.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 734.9 984.3)'/>
+<ellipse cx='737.5' cy='990.2' rx='2.2' ry='0.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='36.5' cy='391.3' rx='29.8' ry='28.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='36.5' cy='386.1' rx='29.2' ry='28.9' fill='url(#b)'/>
+<ellipse cx='36.5' cy='386.1' rx='28.8' ry='28.5' fill='none' stroke='url(#r)' stroke-width='2.63'/>
+<ellipse cx='26.6' cy='374.0' rx='7.6' ry='4.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 26.6 374.0)'/>
+<ellipse cx='42.4' cy='404.0' rx='13.4' ry='3.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='178.0' cy='664.2' rx='5.0' ry='4.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='178.0' cy='663.4' rx='4.9' ry='4.5' fill='url(#b)'/>
+<ellipse cx='178.0' cy='663.4' rx='4.5' ry='4.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='176.3' cy='661.5' rx='1.3' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 176.3 661.5)'/>
+<ellipse cx='179.0' cy='666.2' rx='2.3' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1128.9' cy='889.7' rx='3.8' ry='3.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1128.9' cy='889.0' rx='3.7' ry='3.8' fill='url(#b)'/>
+<ellipse cx='1128.9' cy='889.0' rx='3.3' ry='3.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1127.7' cy='887.4' rx='1.0' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1127.7 887.4)'/>
+<ellipse cx='1129.7' cy='891.4' rx='1.7' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1144.8' cy='844.1' rx='2.6' ry='2.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1144.8' cy='843.7' rx='2.6' ry='2.5' fill='url(#b)'/>
+<ellipse cx='1144.8' cy='843.7' rx='2.2' ry='2.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1144.0' cy='842.6' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1144.0 842.6)'/>
+<ellipse cx='1145.4' cy='845.2' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='768.7' cy='817.2' rx='4.2' ry='4.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='768.7' cy='816.5' rx='4.1' ry='4.0' fill='url(#b)'/>
+<ellipse cx='768.7' cy='816.5' rx='3.7' ry='3.6' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='767.3' cy='814.8' rx='1.1' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 767.3 814.8)'/>
+<ellipse cx='769.6' cy='818.9' rx='1.9' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='396.0' cy='323.6' rx='27.2' ry='30.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='396.0' cy='318.2' rx='26.6' ry='30.3' fill='url(#b)'/>
+<ellipse cx='396.0' cy='318.2' rx='26.2' ry='29.9' fill='none' stroke='url(#r)' stroke-width='2.40'/>
+<ellipse cx='387.0' cy='305.5' rx='6.9' ry='5.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 387.0 305.5)'/>
+<ellipse cx='401.3' cy='337.0' rx='12.3' ry='3.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='816.4' cy='242.0' rx='2.8' ry='2.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='816.4' cy='241.5' rx='2.7' ry='2.9' fill='url(#b)'/>
+<ellipse cx='816.4' cy='241.5' rx='2.3' ry='2.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='815.5' cy='240.3' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 815.5 240.3)'/>
+<ellipse cx='817.0' cy='243.3' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='455.6' cy='1126.5' rx='3.6' ry='3.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='455.6' cy='1125.8' rx='3.5' ry='3.6' fill='url(#b)'/>
+<ellipse cx='455.6' cy='1125.8' rx='3.1' ry='3.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='454.5' cy='1124.3' rx='0.9' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 454.5 1124.3)'/>
+<ellipse cx='456.3' cy='1128.0' rx='1.6' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='739.2' cy='340.2' rx='5.8' ry='5.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='739.2' cy='339.3' rx='5.7' ry='5.4' fill='url(#b)'/>
+<ellipse cx='739.2' cy='339.3' rx='5.3' ry='5.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='737.2' cy='337.0' rx='1.5' ry='0.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 737.2 337.0)'/>
+<ellipse cx='740.3' cy='342.6' rx='2.6' ry='0.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='329.1' cy='230.1' rx='4.9' ry='5.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='329.1' cy='229.1' rx='4.8' ry='5.6' fill='url(#b)'/>
+<ellipse cx='329.1' cy='229.1' rx='4.4' ry='5.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='327.4' cy='226.8' rx='1.2' ry='1.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 327.4 226.8)'/>
+<ellipse cx='330.0' cy='232.6' rx='2.2' ry='0.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='971.0' cy='1120.0' rx='2.6' ry='2.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='971.0' cy='1119.5' rx='2.5' ry='2.7' fill='url(#b)'/>
+<ellipse cx='971.0' cy='1119.5' rx='2.1' ry='2.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='970.1' cy='1118.4' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 970.1 1118.4)'/>
+<ellipse cx='971.5' cy='1121.2' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='601.4' cy='49.9' rx='2.6' ry='2.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='601.4' cy='49.4' rx='2.5' ry='2.7' fill='url(#b)'/>
+<ellipse cx='601.4' cy='49.4' rx='2.1' ry='2.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='600.6' cy='48.3' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 600.6 48.3)'/>
+<ellipse cx='601.9' cy='51.1' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='120.0' cy='375.4' rx='8.3' ry='8.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='120.0' cy='373.9' rx='8.2' ry='8.4' fill='url(#b)'/>
+<ellipse cx='120.0' cy='373.9' rx='7.8' ry='8.0' fill='none' stroke='url(#r)' stroke-width='0.73'/>
+<ellipse cx='117.3' cy='370.4' rx='2.1' ry='1.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 117.3 370.4)'/>
+<ellipse cx='121.7' cy='379.1' rx='3.8' ry='1.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='450.1' cy='183.5' rx='23.5' ry='25.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='450.1' cy='178.8' rx='23.1' ry='25.9' fill='url(#b)'/>
+<ellipse cx='450.1' cy='178.8' rx='22.7' ry='25.5' fill='none' stroke='url(#r)' stroke-width='2.08'/>
+<ellipse cx='442.2' cy='167.9' rx='6.0' ry='4.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 442.2 167.9)'/>
+<ellipse cx='454.7' cy='194.8' rx='10.6' ry='3.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='484.1' cy='662.5' rx='2.9' ry='2.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='484.1' cy='662.0' rx='2.9' ry='2.7' fill='url(#b)'/>
+<ellipse cx='484.1' cy='662.0' rx='2.5' ry='2.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='483.1' cy='660.8' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 483.1 660.8)'/>
+<ellipse cx='484.7' cy='663.7' rx='1.3' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='999.8' cy='1098.6' rx='18.4' ry='20.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='999.8' cy='1094.9' rx='18.0' ry='20.7' fill='url(#b)'/>
+<ellipse cx='999.8' cy='1094.9' rx='17.6' ry='20.3' fill='none' stroke='url(#r)' stroke-width='1.62'/>
+<ellipse cx='993.7' cy='1086.2' rx='4.7' ry='3.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 993.7 1086.2)'/>
+<ellipse cx='1003.4' cy='1107.7' rx='8.3' ry='2.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='698.1' cy='99.1' rx='2.6' ry='2.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='698.1' cy='98.6' rx='2.5' ry='2.9' fill='url(#b)'/>
+<ellipse cx='698.1' cy='98.6' rx='2.1' ry='2.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='697.2' cy='97.4' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 697.2 97.4)'/>
+<ellipse cx='698.6' cy='100.4' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='903.2' cy='238.1' rx='15.7' ry='14.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='903.2' cy='235.5' rx='15.4' ry='14.1' fill='url(#b)'/>
+<ellipse cx='903.2' cy='235.5' rx='15.0' ry='13.7' fill='none' stroke='url(#r)' stroke-width='1.38'/>
+<ellipse cx='897.9' cy='229.6' rx='4.0' ry='2.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 897.9 229.6)'/>
+<ellipse cx='906.2' cy='244.3' rx='7.1' ry='1.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='723.8' cy='743.3' rx='19.0' ry='19.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='723.8' cy='739.8' rx='18.7' ry='19.3' fill='url(#b)'/>
+<ellipse cx='723.8' cy='739.8' rx='18.3' ry='18.9' fill='none' stroke='url(#r)' stroke-width='1.68'/>
+<ellipse cx='717.5' cy='731.8' rx='4.9' ry='3.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 717.5 731.8)'/>
+<ellipse cx='727.6' cy='751.8' rx='8.6' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='359.3' cy='752.3' rx='4.4' ry='5.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='359.3' cy='751.4' rx='4.3' ry='5.0' fill='url(#b)'/>
+<ellipse cx='359.3' cy='751.4' rx='3.9' ry='4.6' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='357.9' cy='749.3' rx='1.1' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 357.9 749.3)'/>
+<ellipse cx='360.2' cy='754.5' rx='2.0' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='83.3' cy='614.5' rx='2.6' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='83.3' cy='614.0' rx='2.5' ry='2.8' fill='url(#b)'/>
+<ellipse cx='83.3' cy='614.0' rx='2.1' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='82.5' cy='612.9' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 82.5 612.9)'/>
+<ellipse cx='83.8' cy='615.8' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='325.1' cy='73.5' rx='2.9' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='325.1' cy='73.0' rx='2.9' ry='2.6' fill='url(#b)'/>
+<ellipse cx='325.1' cy='73.0' rx='2.5' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='324.2' cy='71.9' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 324.2 71.9)'/>
+<ellipse cx='325.7' cy='74.7' rx='1.3' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='814.4' cy='782.9' rx='7.1' ry='6.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='814.4' cy='781.7' rx='6.9' ry='6.5' fill='url(#b)'/>
+<ellipse cx='814.4' cy='781.7' rx='6.5' ry='6.1' fill='none' stroke='url(#r)' stroke-width='0.62'/>
+<ellipse cx='812.1' cy='778.9' rx='1.8' ry='1.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 812.1 778.9)'/>
+<ellipse cx='815.8' cy='785.7' rx='3.2' ry='0.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1114.8' cy='646.5' rx='2.6' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1114.8' cy='646.1' rx='2.6' ry='2.6' fill='url(#b)'/>
+<ellipse cx='1114.8' cy='646.1' rx='2.2' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1113.9' cy='645.0' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1113.9 645.0)'/>
+<ellipse cx='1115.3' cy='647.7' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='867.4' cy='631.0' rx='13.3' ry='12.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='867.4' cy='628.9' rx='13.0' ry='12.0' fill='url(#b)'/>
+<ellipse cx='867.4' cy='628.9' rx='12.6' ry='11.6' fill='none' stroke='url(#r)' stroke-width='1.17'/>
+<ellipse cx='863.0' cy='623.8' rx='3.4' ry='2.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 863.0 623.8)'/>
+<ellipse cx='870.1' cy='636.3' rx='6.0' ry='1.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='638.8' cy='753.5' rx='4.4' ry='4.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='638.8' cy='752.8' rx='4.3' ry='4.1' fill='url(#b)'/>
+<ellipse cx='638.8' cy='752.8' rx='3.9' ry='3.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='637.3' cy='751.0' rx='1.1' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 637.3 751.0)'/>
+<ellipse cx='639.6' cy='755.3' rx='2.0' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='592.7' cy='206.5' rx='14.0' ry='15.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='592.7' cy='203.7' rx='13.8' ry='15.7' fill='url(#b)'/>
+<ellipse cx='592.7' cy='203.7' rx='13.4' ry='15.3' fill='none' stroke='url(#r)' stroke-width='1.24'/>
+<ellipse cx='588.1' cy='197.1' rx='3.6' ry='2.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 588.1 197.1)'/>
+<ellipse cx='595.5' cy='213.4' rx='6.3' ry='2.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1072.8' cy='812.0' rx='18.6' ry='17.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1072.8' cy='808.8' rx='18.2' ry='17.5' fill='url(#b)'/>
+<ellipse cx='1072.8' cy='808.8' rx='17.8' ry='17.1' fill='none' stroke='url(#r)' stroke-width='1.64'/>
+<ellipse cx='1066.6' cy='801.5' rx='4.7' ry='3.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1066.6 801.5)'/>
+<ellipse cx='1076.5' cy='819.7' rx='8.4' ry='2.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1069.8' cy='642.3' rx='17.1' ry='19.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1069.8' cy='638.8' rx='16.8' ry='19.4' fill='url(#b)'/>
+<ellipse cx='1069.8' cy='638.8' rx='16.4' ry='19.0' fill='none' stroke='url(#r)' stroke-width='1.51'/>
+<ellipse cx='1064.1' cy='630.6' rx='4.4' ry='3.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1064.1 630.6)'/>
+<ellipse cx='1073.1' cy='650.8' rx='7.7' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='937.5' cy='43.2' rx='26.2' ry='25.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='937.5' cy='38.6' rx='25.7' ry='25.7' fill='url(#b)'/>
+<ellipse cx='937.5' cy='38.6' rx='25.3' ry='25.3' fill='none' stroke='url(#r)' stroke-width='2.31'/>
+<ellipse cx='928.8' cy='27.8' rx='6.7' ry='4.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 928.8 27.8)'/>
+<ellipse cx='942.7' cy='54.5' rx='11.8' ry='3.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='726.4' cy='903.6' rx='10.4' ry='11.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='726.4' cy='901.6' rx='10.2' ry='11.1' fill='url(#b)'/>
+<ellipse cx='726.4' cy='901.6' rx='9.8' ry='10.7' fill='none' stroke='url(#r)' stroke-width='0.92'/>
+<ellipse cx='723.0' cy='896.9' rx='2.7' ry='1.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 723.0 896.9)'/>
+<ellipse cx='728.5' cy='908.4' rx='4.7' ry='1.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='926.0' cy='885.6' rx='8.6' ry='9.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='926.0' cy='883.9' rx='8.4' ry='9.7' fill='url(#b)'/>
+<ellipse cx='926.0' cy='883.9' rx='8.0' ry='9.3' fill='none' stroke='url(#r)' stroke-width='0.76'/>
+<ellipse cx='923.2' cy='879.8' rx='2.2' ry='1.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 923.2 879.8)'/>
+<ellipse cx='927.7' cy='889.9' rx='3.9' ry='1.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='103.1' cy='488.3' rx='4.6' ry='4.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='103.1' cy='487.5' rx='4.5' ry='4.2' fill='url(#b)'/>
+<ellipse cx='103.1' cy='487.5' rx='4.1' ry='3.8' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='101.6' cy='485.8' rx='1.2' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 101.6 485.8)'/>
+<ellipse cx='104.0' cy='490.2' rx='2.1' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='972.9' cy='438.2' rx='8.2' ry='7.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='972.9' cy='436.9' rx='8.0' ry='7.5' fill='url(#b)'/>
+<ellipse cx='972.9' cy='436.9' rx='7.6' ry='7.1' fill='none' stroke='url(#r)' stroke-width='0.72'/>
+<ellipse cx='970.2' cy='433.7' rx='2.1' ry='1.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 970.2 433.7)'/>
+<ellipse cx='974.5' cy='441.5' rx='3.7' ry='1.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='797.7' cy='254.9' rx='2.6' ry='2.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='797.7' cy='254.5' rx='2.5' ry='2.3' fill='url(#b)'/>
+<ellipse cx='797.7' cy='254.5' rx='2.1' ry='1.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='796.8' cy='253.5' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 796.8 253.5)'/>
+<ellipse cx='798.2' cy='255.9' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='626.5' cy='1059.0' rx='25.6' ry='26.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='626.5' cy='1054.2' rx='25.1' ry='26.2' fill='url(#b)'/>
+<ellipse cx='626.5' cy='1054.2' rx='24.7' ry='25.8' fill='none' stroke='url(#r)' stroke-width='2.26'/>
+<ellipse cx='617.9' cy='1043.2' rx='6.5' ry='4.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 617.9 1043.2)'/>
+<ellipse cx='631.5' cy='1070.5' rx='11.6' ry='3.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='289.4' cy='510.0' rx='2.7' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='289.4' cy='509.5' rx='2.6' ry='2.8' fill='url(#b)'/>
+<ellipse cx='289.4' cy='509.5' rx='2.2' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='288.5' cy='508.3' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 288.5 508.3)'/>
+<ellipse cx='289.9' cy='511.3' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='516.6' cy='455.1' rx='3.3' ry='3.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='516.6' cy='454.4' rx='3.3' ry='3.4' fill='url(#b)'/>
+<ellipse cx='516.6' cy='454.4' rx='2.9' ry='3.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='515.5' cy='453.0' rx='0.9' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 515.5 453.0)'/>
+<ellipse cx='517.3' cy='456.5' rx='1.5' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='645.1' cy='551.4' rx='3.4' ry='3.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='645.1' cy='550.8' rx='3.4' ry='3.1' fill='url(#b)'/>
+<ellipse cx='645.1' cy='550.8' rx='3.0' ry='2.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='644.0' cy='549.5' rx='0.9' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 644.0 549.5)'/>
+<ellipse cx='645.8' cy='552.7' rx='1.6' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='700.4' cy='955.6' rx='19.4' ry='21.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='700.4' cy='951.8' rx='19.1' ry='21.1' fill='url(#b)'/>
+<ellipse cx='700.4' cy='951.8' rx='18.7' ry='20.7' fill='none' stroke='url(#r)' stroke-width='1.72'/>
+<ellipse cx='694.0' cy='942.9' rx='5.0' ry='3.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 694.0 942.9)'/>
+<ellipse cx='704.2' cy='964.8' rx='8.8' ry='2.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1177.7' cy='458.5' rx='15.0' ry='14.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1177.7' cy='455.9' rx='14.7' ry='14.8' fill='url(#b)'/>
+<ellipse cx='1177.7' cy='455.9' rx='14.3' ry='14.4' fill='none' stroke='url(#r)' stroke-width='1.32'/>
+<ellipse cx='1172.7' cy='449.6' rx='3.8' ry='2.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1172.7 449.6)'/>
+<ellipse cx='1180.6' cy='465.0' rx='6.7' ry='1.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='796.4' cy='697.9' rx='2.6' ry='2.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='796.4' cy='697.4' rx='2.5' ry='2.7' fill='url(#b)'/>
+<ellipse cx='796.4' cy='697.4' rx='2.1' ry='2.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='795.5' cy='696.3' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 795.5 696.3)'/>
+<ellipse cx='796.9' cy='699.0' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='254.4' cy='294.9' rx='30.4' ry='33.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='254.4' cy='289.0' rx='29.8' ry='33.0' fill='url(#b)'/>
+<ellipse cx='254.4' cy='289.0' rx='29.4' ry='32.6' fill='none' stroke='url(#r)' stroke-width='2.68'/>
+<ellipse cx='244.3' cy='275.1' rx='7.8' ry='5.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 244.3 275.1)'/>
+<ellipse cx='260.4' cy='309.4' rx='13.7' ry='4.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='580.0' cy='85.8' rx='18.9' ry='18.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='580.0' cy='82.4' rx='18.5' ry='18.6' fill='url(#b)'/>
+<ellipse cx='580.0' cy='82.4' rx='18.1' ry='18.2' fill='none' stroke='url(#r)' stroke-width='1.67'/>
+<ellipse cx='573.7' cy='74.6' rx='4.8' ry='3.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 573.7 74.6)'/>
+<ellipse cx='583.7' cy='94.0' rx='8.5' ry='2.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='599.8' cy='558.8' rx='19.6' ry='19.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='599.8' cy='555.3' rx='19.2' ry='19.4' fill='url(#b)'/>
+<ellipse cx='599.8' cy='555.3' rx='18.8' ry='19.0' fill='none' stroke='url(#r)' stroke-width='1.73'/>
+<ellipse cx='593.3' cy='547.1' rx='5.0' ry='3.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 593.3 547.1)'/>
+<ellipse cx='603.7' cy='567.3' rx='8.9' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='716.1' cy='829.7' rx='10.9' ry='12.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='716.1' cy='827.5' rx='10.7' ry='12.2' fill='url(#b)'/>
+<ellipse cx='716.1' cy='827.5' rx='10.3' ry='11.8' fill='none' stroke='url(#r)' stroke-width='0.96'/>
+<ellipse cx='712.4' cy='822.4' rx='2.8' ry='2.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 712.4 822.4)'/>
+<ellipse cx='718.2' cy='835.1' rx='4.9' ry='1.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='453.8' cy='311.4' rx='15.9' ry='17.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='453.8' cy='308.2' rx='15.6' ry='17.4' fill='url(#b)'/>
+<ellipse cx='453.8' cy='308.2' rx='15.2' ry='17.0' fill='none' stroke='url(#r)' stroke-width='1.40'/>
+<ellipse cx='448.5' cy='300.9' rx='4.0' ry='3.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 448.5 300.9)'/>
+<ellipse cx='456.9' cy='319.1' rx='7.2' ry='2.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1098.8' cy='252.7' rx='17.9' ry='20.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1098.8' cy='249.1' rx='17.5' ry='20.0' fill='url(#b)'/>
+<ellipse cx='1098.8' cy='249.1' rx='17.1' ry='19.6' fill='none' stroke='url(#r)' stroke-width='1.58'/>
+<ellipse cx='1092.8' cy='240.7' rx='4.6' ry='3.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1092.8 240.7)'/>
+<ellipse cx='1102.3' cy='261.5' rx='8.1' ry='2.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='183.1' cy='992.1' rx='11.1' ry='10.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='183.1' cy='990.2' rx='10.9' ry='10.6' fill='url(#b)'/>
+<ellipse cx='183.1' cy='990.2' rx='10.5' ry='10.2' fill='none' stroke='url(#r)' stroke-width='0.98'/>
+<ellipse cx='179.4' cy='985.7' rx='2.8' ry='1.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 179.4 985.7)'/>
+<ellipse cx='185.3' cy='996.8' rx='5.0' ry='1.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='360.1' cy='271.2' rx='12.9' ry='12.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='360.1' cy='269.0' rx='12.7' ry='12.1' fill='url(#b)'/>
+<ellipse cx='360.1' cy='269.0' rx='12.3' ry='11.7' fill='none' stroke='url(#r)' stroke-width='1.14'/>
+<ellipse cx='355.8' cy='263.9' rx='3.3' ry='2.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 355.8 263.9)'/>
+<ellipse cx='362.7' cy='276.5' rx='5.8' ry='1.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='852.7' cy='266.7' rx='7.1' ry='7.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='852.7' cy='265.4' rx='7.0' ry='7.6' fill='url(#b)'/>
+<ellipse cx='852.7' cy='265.4' rx='6.6' ry='7.2' fill='none' stroke='url(#r)' stroke-width='0.63'/>
+<ellipse cx='850.3' cy='262.2' rx='1.8' ry='1.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 850.3 262.2)'/>
+<ellipse cx='854.1' cy='270.1' rx='3.2' ry='1.0' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='777.9' cy='443.6' rx='4.2' ry='3.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='777.9' cy='442.9' rx='4.1' ry='3.9' fill='url(#b)'/>
+<ellipse cx='777.9' cy='442.9' rx='3.7' ry='3.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='776.5' cy='441.3' rx='1.1' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 776.5 441.3)'/>
+<ellipse cx='778.7' cy='445.3' rx='1.9' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='71.7' cy='835.1' rx='2.7' ry='2.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='71.7' cy='834.6' rx='2.7' ry='2.7' fill='url(#b)'/>
+<ellipse cx='71.7' cy='834.6' rx='2.3' ry='2.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='70.8' cy='833.4' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 70.8 833.4)'/>
+<ellipse cx='72.2' cy='836.2' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1054.7' cy='785.4' rx='2.7' ry='2.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1054.7' cy='784.9' rx='2.6' ry='2.4' fill='url(#b)'/>
+<ellipse cx='1054.7' cy='784.9' rx='2.2' ry='2.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1053.8' cy='783.9' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1053.8 783.9)'/>
+<ellipse cx='1055.2' cy='786.4' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='710.9' cy='536.8' rx='14.7' ry='15.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='710.9' cy='534.1' rx='14.4' ry='15.0' fill='url(#b)'/>
+<ellipse cx='710.9' cy='534.1' rx='14.0' ry='14.6' fill='none' stroke='url(#r)' stroke-width='1.30'/>
+<ellipse cx='706.0' cy='527.8' rx='3.7' ry='2.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 706.0 527.8)'/>
+<ellipse cx='713.7' cy='543.4' rx='6.6' ry='1.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='455.6' cy='761.3' rx='27.9' ry='29.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='455.6' cy='756.0' rx='27.4' ry='29.5' fill='url(#b)'/>
+<ellipse cx='455.6' cy='756.0' rx='27.0' ry='29.1' fill='none' stroke='url(#r)' stroke-width='2.46'/>
+<ellipse cx='446.3' cy='743.6' rx='7.1' ry='5.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 446.3 743.6)'/>
+<ellipse cx='461.1' cy='774.3' rx='12.6' ry='3.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='417.0' cy='904.5' rx='4.6' ry='4.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='417.0' cy='903.7' rx='4.5' ry='4.9' fill='url(#b)'/>
+<ellipse cx='417.0' cy='903.7' rx='4.1' ry='4.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='415.5' cy='901.6' rx='1.2' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 415.5 901.6)'/>
+<ellipse cx='417.9' cy='906.7' rx='2.1' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='616.4' cy='272.8' rx='6.2' ry='6.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='616.4' cy='271.6' rx='6.1' ry='6.8' fill='url(#b)'/>
+<ellipse cx='616.4' cy='271.6' rx='5.7' ry='6.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='614.3' cy='268.7' rx='1.6' ry='1.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 614.3 268.7)'/>
+<ellipse cx='617.6' cy='275.8' rx='2.8' ry='0.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='771.1' cy='546.6' rx='2.6' ry='2.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='771.1' cy='546.2' rx='2.5' ry='2.4' fill='url(#b)'/>
+<ellipse cx='771.1' cy='546.2' rx='2.1' ry='2.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='770.3' cy='545.2' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 770.3 545.2)'/>
+<ellipse cx='771.6' cy='547.7' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='202.6' cy='956.1' rx='6.9' ry='6.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='202.6' cy='954.8' rx='6.8' ry='6.7' fill='url(#b)'/>
+<ellipse cx='202.6' cy='954.8' rx='6.4' ry='6.3' fill='none' stroke='url(#r)' stroke-width='0.61'/>
+<ellipse cx='200.3' cy='952.0' rx='1.8' ry='1.1' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 200.3 952.0)'/>
+<ellipse cx='204.0' cy='959.0' rx='3.1' ry='0.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='260.8' cy='62.1' rx='4.1' ry='3.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='260.8' cy='61.4' rx='4.0' ry='3.8' fill='url(#b)'/>
+<ellipse cx='260.8' cy='61.4' rx='3.6' ry='3.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='259.4' cy='59.8' rx='1.0' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 259.4 59.8)'/>
+<ellipse cx='261.6' cy='63.8' rx='1.8' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='748.3' cy='1015.4' rx='2.8' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='748.3' cy='1014.9' rx='2.7' ry='2.6' fill='url(#b)'/>
+<ellipse cx='748.3' cy='1014.9' rx='2.3' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='747.4' cy='1013.8' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 747.4 1013.8)'/>
+<ellipse cx='748.9' cy='1016.6' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='641.2' cy='141.2' rx='2.6' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='641.2' cy='140.7' rx='2.6' ry='2.6' fill='url(#b)'/>
+<ellipse cx='641.2' cy='140.7' rx='2.2' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='640.3' cy='139.6' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 640.3 139.6)'/>
+<ellipse cx='641.7' cy='142.3' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='253.3' cy='836.2' rx='16.3' ry='16.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='253.3' cy='833.2' rx='16.0' ry='16.8' fill='url(#b)'/>
+<ellipse cx='253.3' cy='833.2' rx='15.6' ry='16.4' fill='none' stroke='url(#r)' stroke-width='1.44'/>
+<ellipse cx='247.9' cy='826.1' rx='4.2' ry='2.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 247.9 826.1)'/>
+<ellipse cx='256.5' cy='843.6' rx='7.4' ry='2.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='292.4' cy='719.2' rx='2.6' ry='2.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='292.4' cy='718.8' rx='2.5' ry='2.4' fill='url(#b)'/>
+<ellipse cx='292.4' cy='718.8' rx='2.1' ry='2.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='291.5' cy='717.8' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 291.5 717.8)'/>
+<ellipse cx='292.9' cy='720.2' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='691.6' cy='980.4' rx='3.0' ry='3.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='691.6' cy='979.8' rx='2.9' ry='3.1' fill='url(#b)'/>
+<ellipse cx='691.6' cy='979.8' rx='2.5' ry='2.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='690.6' cy='978.6' rx='0.8' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 690.6 978.6)'/>
+<ellipse cx='692.2' cy='981.7' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1092.9' cy='430.9' rx='4.0' ry='4.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1092.9' cy='430.1' rx='3.9' ry='4.4' fill='url(#b)'/>
+<ellipse cx='1092.9' cy='430.1' rx='3.5' ry='4.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1091.6' cy='428.3' rx='1.0' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1091.6 428.3)'/>
+<ellipse cx='1093.7' cy='432.8' rx='1.8' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='598.1' cy='1068.3' rx='2.6' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='598.1' cy='1067.8' rx='2.5' ry='2.8' fill='url(#b)'/>
+<ellipse cx='598.1' cy='1067.8' rx='2.1' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='597.3' cy='1066.6' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 597.3 1066.6)'/>
+<ellipse cx='598.6' cy='1069.5' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='224.4' cy='1105.2' rx='9.3' ry='8.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='224.4' cy='1103.7' rx='9.2' ry='8.5' fill='url(#b)'/>
+<ellipse cx='224.4' cy='1103.7' rx='8.8' ry='8.1' fill='none' stroke='url(#r)' stroke-width='0.82'/>
+<ellipse cx='221.3' cy='1100.1' rx='2.4' ry='1.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 221.3 1100.1)'/>
+<ellipse cx='226.2' cy='1108.9' rx='4.2' ry='1.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='783.4' cy='472.3' rx='12.2' ry='13.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='783.4' cy='469.8' rx='12.0' ry='13.5' fill='url(#b)'/>
+<ellipse cx='783.4' cy='469.8' rx='11.6' ry='13.1' fill='none' stroke='url(#r)' stroke-width='1.08'/>
+<ellipse cx='779.4' cy='464.2' rx='3.1' ry='2.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 779.4 464.2)'/>
+<ellipse cx='785.8' cy='478.2' rx='5.5' ry='1.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='345.8' cy='111.0' rx='2.6' ry='2.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='345.8' cy='110.6' rx='2.5' ry='2.5' fill='url(#b)'/>
+<ellipse cx='345.8' cy='110.6' rx='2.1' ry='2.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='344.9' cy='109.5' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 344.9 109.5)'/>
+<ellipse cx='346.3' cy='112.1' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='895.2' cy='194.7' rx='17.9' ry='17.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='895.2' cy='191.5' rx='17.5' ry='17.3' fill='url(#b)'/>
+<ellipse cx='895.2' cy='191.5' rx='17.1' ry='16.9' fill='none' stroke='url(#r)' stroke-width='1.58'/>
+<ellipse cx='889.3' cy='184.3' rx='4.6' ry='2.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 889.3 184.3)'/>
+<ellipse cx='898.8' cy='202.3' rx='8.1' ry='2.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='793.5' cy='531.8' rx='2.6' ry='2.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='793.5' cy='531.4' rx='2.6' ry='2.5' fill='url(#b)'/>
+<ellipse cx='793.5' cy='531.4' rx='2.2' ry='2.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='792.6' cy='530.3' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 792.6 530.3)'/>
+<ellipse cx='794.0' cy='532.9' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='749.9' cy='571.5' rx='13.3' ry='13.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='749.9' cy='569.0' rx='13.0' ry='13.7' fill='url(#b)'/>
+<ellipse cx='749.9' cy='569.0' rx='12.6' ry='13.3' fill='none' stroke='url(#r)' stroke-width='1.17'/>
+<ellipse cx='745.5' cy='563.3' rx='3.4' ry='2.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 745.5 563.3)'/>
+<ellipse cx='752.5' cy='577.5' rx='6.0' ry='1.8' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='240.7' cy='594.2' rx='4.6' ry='4.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='240.7' cy='593.4' rx='4.5' ry='4.4' fill='url(#b)'/>
+<ellipse cx='240.7' cy='593.4' rx='4.1' ry='4.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='239.2' cy='591.5' rx='1.2' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 239.2 591.5)'/>
+<ellipse cx='241.6' cy='596.1' rx='2.1' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='243.6' cy='44.2' rx='5.6' ry='5.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='243.6' cy='43.2' rx='5.5' ry='5.3' fill='url(#b)'/>
+<ellipse cx='243.6' cy='43.2' rx='5.1' ry='4.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='241.7' cy='41.0' rx='1.4' ry='0.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 241.7 41.0)'/>
+<ellipse cx='244.7' cy='46.5' rx='2.5' ry='0.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='779.8' cy='541.2' rx='3.2' ry='3.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='779.8' cy='540.6' rx='3.1' ry='3.4' fill='url(#b)'/>
+<ellipse cx='779.8' cy='540.6' rx='2.7' ry='3.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='778.7' cy='539.2' rx='0.8' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 778.7 539.2)'/>
+<ellipse cx='780.4' cy='542.7' rx='1.4' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='452.4' cy='341.0' rx='7.9' ry='8.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='452.4' cy='339.5' rx='7.7' ry='8.3' fill='url(#b)'/>
+<ellipse cx='452.4' cy='339.5' rx='7.3' ry='7.9' fill='none' stroke='url(#r)' stroke-width='0.70'/>
+<ellipse cx='449.8' cy='336.1' rx='2.0' ry='1.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 449.8 336.1)'/>
+<ellipse cx='453.9' cy='344.6' rx='3.6' ry='1.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='822.4' cy='580.4' rx='19.9' ry='19.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='822.4' cy='576.9' rx='19.5' ry='19.4' fill='url(#b)'/>
+<ellipse cx='822.4' cy='576.9' rx='19.1' ry='19.0' fill='none' stroke='url(#r)' stroke-width='1.76'/>
+<ellipse cx='815.8' cy='568.8' rx='5.1' ry='3.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 815.8 568.8)'/>
+<ellipse cx='826.3' cy='588.9' rx='9.0' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='999.6' cy='195.7' rx='23.4' ry='25.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='999.6' cy='191.2' rx='22.9' ry='25.0' fill='url(#b)'/>
+<ellipse cx='999.6' cy='191.2' rx='22.5' ry='24.6' fill='none' stroke='url(#r)' stroke-width='2.06'/>
+<ellipse cx='991.8' cy='180.7' rx='6.0' ry='4.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 991.8 180.7)'/>
+<ellipse cx='1004.2' cy='206.7' rx='10.5' ry='3.2' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='306.5' cy='1178.0' rx='22.6' ry='22.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='306.5' cy='1174.1' rx='22.2' ry='22.0' fill='url(#b)'/>
+<ellipse cx='306.5' cy='1174.1' rx='21.8' ry='21.6' fill='none' stroke='url(#r)' stroke-width='1.99'/>
+<ellipse cx='299.0' cy='1164.8' rx='5.8' ry='3.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 299.0 1164.8)'/>
+<ellipse cx='311.0' cy='1187.7' rx='10.2' ry='2.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1167.2' cy='204.7' rx='4.8' ry='4.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1167.2' cy='203.9' rx='4.7' ry='4.8' fill='url(#b)'/>
+<ellipse cx='1167.2' cy='203.9' rx='4.3' ry='4.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1165.6' cy='201.9' rx='1.2' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1165.6 201.9)'/>
+<ellipse cx='1168.1' cy='206.8' rx='2.2' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='332.3' cy='327.5' rx='10.8' ry='11.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='332.3' cy='325.4' rx='10.6' ry='11.9' fill='url(#b)'/>
+<ellipse cx='332.3' cy='325.4' rx='10.2' ry='11.5' fill='none' stroke='url(#r)' stroke-width='0.96'/>
+<ellipse cx='328.7' cy='320.4' rx='2.8' ry='2.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 328.7 320.4)'/>
+<ellipse cx='334.4' cy='332.8' rx='4.9' ry='1.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1055.2' cy='978.6' rx='22.2' ry='25.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1055.2' cy='974.0' rx='21.8' ry='25.6' fill='url(#b)'/>
+<ellipse cx='1055.2' cy='974.0' rx='21.4' ry='25.2' fill='none' stroke='url(#r)' stroke-width='1.96'/>
+<ellipse cx='1047.8' cy='963.2' rx='5.7' ry='4.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1047.8 963.2)'/>
+<ellipse cx='1059.5' cy='989.8' rx='10.0' ry='3.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='839.1' cy='617.9' rx='7.2' ry='8.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='839.1' cy='616.4' rx='7.0' ry='8.2' fill='url(#b)'/>
+<ellipse cx='839.1' cy='616.4' rx='6.6' ry='7.8' fill='none' stroke='url(#r)' stroke-width='0.63'/>
+<ellipse cx='836.7' cy='613.0' rx='1.8' ry='1.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 836.7 613.0)'/>
+<ellipse cx='840.5' cy='621.5' rx='3.2' ry='1.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='518.3' cy='795.1' rx='11.9' ry='11.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='518.3' cy='793.0' rx='11.7' ry='11.5' fill='url(#b)'/>
+<ellipse cx='518.3' cy='793.0' rx='11.3' ry='11.1' fill='none' stroke='url(#r)' stroke-width='1.05'/>
+<ellipse cx='514.3' cy='788.2' rx='3.0' ry='1.9' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 514.3 788.2)'/>
+<ellipse cx='520.6' cy='800.1' rx='5.4' ry='1.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='113.1' cy='546.0' rx='2.6' ry='2.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='113.1' cy='545.4' rx='2.5' ry='2.8' fill='url(#b)'/>
+<ellipse cx='113.1' cy='545.4' rx='2.1' ry='2.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='112.2' cy='544.3' rx='0.7' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 112.2 544.3)'/>
+<ellipse cx='113.6' cy='547.2' rx='1.2' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='763.3' cy='136.0' rx='2.6' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='763.3' cy='135.5' rx='2.5' ry='2.6' fill='url(#b)'/>
+<ellipse cx='763.3' cy='135.5' rx='2.1' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='762.5' cy='134.4' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 762.5 134.4)'/>
+<ellipse cx='763.8' cy='137.2' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='535.5' cy='853.4' rx='3.7' ry='3.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='535.5' cy='852.8' rx='3.7' ry='3.7' fill='url(#b)'/>
+<ellipse cx='535.5' cy='852.8' rx='3.3' ry='3.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='534.3' cy='851.2' rx='1.0' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 534.3 851.2)'/>
+<ellipse cx='536.3' cy='855.1' rx='1.7' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='872.0' cy='143.7' rx='5.0' ry='4.9' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='872.0' cy='142.8' rx='4.9' ry='4.9' fill='url(#b)'/>
+<ellipse cx='872.0' cy='142.8' rx='4.5' ry='4.5' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='870.3' cy='140.7' rx='1.3' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 870.3 140.7)'/>
+<ellipse cx='873.0' cy='145.8' rx='2.3' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='992.9' cy='1164.8' rx='13.7' ry='13.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='992.9' cy='1162.4' rx='13.5' ry='13.1' fill='url(#b)'/>
+<ellipse cx='992.9' cy='1162.4' rx='13.1' ry='12.7' fill='none' stroke='url(#r)' stroke-width='1.21'/>
+<ellipse cx='988.3' cy='1156.9' rx='3.5' ry='2.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 988.3 1156.9)'/>
+<ellipse cx='995.6' cy='1170.5' rx='6.2' ry='1.7' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='176.9' cy='424.6' rx='20.7' ry='23.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='176.9' cy='420.3' rx='20.3' ry='23.6' fill='url(#b)'/>
+<ellipse cx='176.9' cy='420.3' rx='19.9' ry='23.2' fill='none' stroke='url(#r)' stroke-width='1.83'/>
+<ellipse cx='170.0' cy='410.4' rx='5.3' ry='4.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 170.0 410.4)'/>
+<ellipse cx='181.0' cy='434.9' rx='9.3' ry='3.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='757.4' cy='980.2' rx='4.4' ry='4.2' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='757.4' cy='979.5' rx='4.3' ry='4.2' fill='url(#b)'/>
+<ellipse cx='757.4' cy='979.5' rx='3.9' ry='3.8' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='756.0' cy='977.7' rx='1.1' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 756.0 977.7)'/>
+<ellipse cx='758.3' cy='982.1' rx='2.0' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='415.9' cy='257.8' rx='2.8' ry='2.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='415.9' cy='257.3' rx='2.8' ry='2.5' fill='url(#b)'/>
+<ellipse cx='415.9' cy='257.3' rx='2.4' ry='2.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='414.9' cy='256.3' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 414.9 256.3)'/>
+<ellipse cx='416.4' cy='258.9' rx='1.3' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='220.0' cy='688.6' rx='18.4' ry='19.0' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='220.0' cy='685.2' rx='18.1' ry='19.0' fill='url(#b)'/>
+<ellipse cx='220.0' cy='685.2' rx='17.7' ry='18.6' fill='none' stroke='url(#r)' stroke-width='1.62'/>
+<ellipse cx='213.8' cy='677.2' rx='4.7' ry='3.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 213.8 677.2)'/>
+<ellipse cx='223.6' cy='697.0' rx='8.3' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1002.1' cy='744.5' rx='20.9' ry='19.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1002.1' cy='741.0' rx='20.5' ry='19.4' fill='url(#b)'/>
+<ellipse cx='1002.1' cy='741.0' rx='20.1' ry='19.0' fill='none' stroke='url(#r)' stroke-width='1.84'/>
+<ellipse cx='995.2' cy='732.8' rx='5.3' ry='3.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 995.2 732.8)'/>
+<ellipse cx='1006.2' cy='753.0' rx='9.4' ry='2.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='129.9' cy='1103.4' rx='16.3' ry='15.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='129.9' cy='1100.6' rx='16.0' ry='15.8' fill='url(#b)'/>
+<ellipse cx='129.9' cy='1100.6' rx='15.6' ry='15.4' fill='none' stroke='url(#r)' stroke-width='1.44'/>
+<ellipse cx='124.4' cy='1093.9' rx='4.2' ry='2.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 124.4 1093.9)'/>
+<ellipse cx='133.1' cy='1110.4' rx='7.4' ry='2.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='261.8' cy='476.7' rx='3.3' ry='3.7' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='261.8' cy='476.0' rx='3.3' ry='3.7' fill='url(#b)'/>
+<ellipse cx='261.8' cy='476.0' rx='2.9' ry='3.3' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='260.7' cy='474.5' rx='0.9' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 260.7 474.5)'/>
+<ellipse cx='262.4' cy='478.3' rx='1.5' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='885.0' cy='869.3' rx='21.2' ry='20.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='885.0' cy='865.6' rx='20.8' ry='20.1' fill='url(#b)'/>
+<ellipse cx='885.0' cy='865.6' rx='20.4' ry='19.7' fill='none' stroke='url(#r)' stroke-width='1.87'/>
+<ellipse cx='878.0' cy='857.2' rx='5.4' ry='3.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 878.0 857.2)'/>
+<ellipse cx='889.2' cy='878.1' rx='9.6' ry='2.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='366.6' cy='521.3' rx='4.0' ry='4.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='366.6' cy='520.5' rx='3.9' ry='4.5' fill='url(#b)'/>
+<ellipse cx='366.6' cy='520.5' rx='3.5' ry='4.1' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='365.3' cy='518.6' rx='1.0' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 365.3 518.6)'/>
+<ellipse cx='367.4' cy='523.3' rx='1.8' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='555.0' cy='826.8' rx='25.0' ry='27.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='555.0' cy='821.9' rx='24.5' ry='27.5' fill='url(#b)'/>
+<ellipse cx='555.0' cy='821.9' rx='24.1' ry='27.1' fill='none' stroke='url(#r)' stroke-width='2.21'/>
+<ellipse cx='546.7' cy='810.4' rx='6.4' ry='4.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 546.7 810.4)'/>
+<ellipse cx='559.9' cy='838.9' rx='11.3' ry='3.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='738.3' cy='1175.9' rx='2.9' ry='3.3' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='738.3' cy='1175.3' rx='2.9' ry='3.3' fill='url(#b)'/>
+<ellipse cx='738.3' cy='1175.3' rx='2.5' ry='2.9' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='737.4' cy='1173.9' rx='0.7' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 737.4 1173.9)'/>
+<ellipse cx='738.9' cy='1177.3' rx='1.3' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1085.6' cy='206.0' rx='6.9' ry='7.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1085.6' cy='204.7' rx='6.7' ry='7.1' fill='url(#b)'/>
+<ellipse cx='1085.6' cy='204.7' rx='6.3' ry='6.7' fill='none' stroke='url(#r)' stroke-width='0.61'/>
+<ellipse cx='1083.3' cy='201.8' rx='1.7' ry='1.2' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1083.3 201.8)'/>
+<ellipse cx='1086.9' cy='209.1' rx='3.1' ry='0.9' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='963.7' cy='866.3' rx='2.7' ry='2.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='963.7' cy='865.9' rx='2.6' ry='2.4' fill='url(#b)'/>
+<ellipse cx='963.7' cy='865.9' rx='2.2' ry='2.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='962.8' cy='864.9' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 962.8 864.9)'/>
+<ellipse cx='964.2' cy='867.4' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='172.6' cy='762.3' rx='3.9' ry='4.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='172.6' cy='761.5' rx='3.8' ry='4.1' fill='url(#b)'/>
+<ellipse cx='172.6' cy='761.5' rx='3.4' ry='3.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='171.3' cy='759.8' rx='1.0' ry='0.7' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 171.3 759.8)'/>
+<ellipse cx='173.4' cy='764.1' rx='1.7' ry='0.5' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='1138.8' cy='1156.4' rx='2.6' ry='2.6' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='1138.8' cy='1156.0' rx='2.5' ry='2.6' fill='url(#b)'/>
+<ellipse cx='1138.8' cy='1156.0' rx='2.1' ry='2.2' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='1137.9' cy='1154.9' rx='0.7' ry='0.4' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 1137.9 1154.9)'/>
+<ellipse cx='1139.3' cy='1157.6' rx='1.2' ry='0.3' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='529.5' cy='898.1' rx='5.1' ry='4.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='529.5' cy='897.2' rx='5.0' ry='4.8' fill='url(#b)'/>
+<ellipse cx='529.5' cy='897.2' rx='4.6' ry='4.4' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='527.8' cy='895.2' rx='1.3' ry='0.8' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 527.8 895.2)'/>
+<ellipse cx='530.5' cy='900.2' rx='2.3' ry='0.6' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='914.5' cy='272.6' rx='3.8' ry='3.4' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='914.5' cy='272.0' rx='3.7' ry='3.4' fill='url(#b)'/>
+<ellipse cx='914.5' cy='272.0' rx='3.3' ry='3.0' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='913.2' cy='270.6' rx='1.0' ry='0.6' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 913.2 270.6)'/>
+<ellipse cx='915.2' cy='274.1' rx='1.7' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='207.8' cy='501.8' rx='24.6' ry='23.8' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='207.8' cy='497.6' rx='24.1' ry='23.8' fill='url(#b)'/>
+<ellipse cx='207.8' cy='497.6' rx='23.7' ry='23.4' fill='none' stroke='url(#r)' stroke-width='2.17'/>
+<ellipse cx='199.6' cy='487.6' rx='6.3' ry='4.0' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 199.6 487.6)'/>
+<ellipse cx='212.7' cy='512.3' rx='11.1' ry='3.1' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='423.9' cy='645.1' rx='3.4' ry='3.1' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='423.9' cy='644.6' rx='3.3' ry='3.1' fill='url(#b)'/>
+<ellipse cx='423.9' cy='644.6' rx='2.9' ry='2.7' fill='none' stroke='url(#r)' stroke-width='0.60'/>
+<ellipse cx='422.8' cy='643.3' rx='0.9' ry='0.5' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 422.8 643.3)'/>
+<ellipse cx='424.6' cy='646.5' rx='1.5' ry='0.4' fill='url(#s)' fill-opacity='.35'/>
+<ellipse cx='68.3' cy='102.7' rx='8.0' ry='7.5' fill='#000' fill-opacity='.55' filter='url(#soft)'/>
+<ellipse cx='68.3' cy='101.3' rx='7.9' ry='7.5' fill='url(#b)'/>
+<ellipse cx='68.3' cy='101.3' rx='7.5' ry='7.1' fill='none' stroke='url(#r)' stroke-width='0.71'/>
+<ellipse cx='65.7' cy='98.1' rx='2.0' ry='1.3' fill='url(#s)' fill-opacity='.95' transform='rotate(-28 65.7 98.1)'/>
+<ellipse cx='69.9' cy='106.0' rx='3.6' ry='1.0' fill='url(#s)' fill-opacity='.35'/>
+</svg>

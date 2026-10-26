@@ -43,6 +43,8 @@ TABLES = TABLES | frozenset(
     "product_sources product_price_observations cloud_connections cloud_oauth_states cloud_folder_bindings cloud_files document_processing_jobs cloud_watch_channels".split()
 )
 TABLES = TABLES | frozenset("object_chat_threads object_chat_messages project_cash_risks".split())
+TABLES = TABLES | frozenset("partner_accounts partner_api_tokens partner_clicks partner_attributions partner_commissions partner_products partner_outbound_clicks partner_domain_verifications partner_site_events partner_console_sessions partner_members partner_invites partner_sso_codes".split())
+TABLES = TABLES | frozenset("ai_token_wallets ai_token_ledger assistant_bonus_grants assistant_bonus_usage".split())
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
@@ -156,7 +158,30 @@ class Connection:
         self.nested = False
         self.pool = None
         self.raw = None
-        database_url = os.environ["RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"]
+        key = "RUNTIME_DATABASE_URL" if runtime else "DATABASE_URL"
+        database_url = os.environ[key].strip()
+        # Some Vercel dashboards receive an accidentally pasted .env assignment
+        # (DATABASE_URL=postgresql://...) as the VALUE of DATABASE_URL. libpq
+        # otherwise parses DATABASE_URL as an unsupported connection option.
+        # Accept only this unambiguous copy/paste error, and never log the DSN.
+        if database_url.startswith(key + "="):
+            database_url = database_url[len(key) + 1:].strip()
+            if len(database_url) >= 2 and database_url[0] == database_url[-1] and database_url[0] in ("'", '"'):
+                database_url = database_url[1:-1]
+        if not database_url.startswith(("postgresql://", "postgres://")):
+            raise RuntimeError("Invalid PostgreSQL connection URI: update " + key + " in deployment settings")
+        # Some Supabase examples intended for Prisma append driver-specific
+        # connection hints. libpq/psycopg reject them as invalid URI options.
+        # Strip ONLY known non-libpq tuning hints, preserve security settings.
+        parts = urllib.parse.urlsplit(database_url)
+        qs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+        prisma_hints = {"pgbouncer", "connection_limit", "pool_timeout", "schema"}
+        if any(k in prisma_hints for k, _ in qs):
+            qs = [(k, v) for k, v in qs if k not in prisma_hints]
+            database_url = urllib.parse.urlunsplit((
+                parts.scheme, parts.netloc, parts.path,
+                urllib.parse.urlencode(qs), parts.fragment,
+            ))
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
         self.pool = _connection_pool(database_url, local_test)

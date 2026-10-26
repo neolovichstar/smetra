@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#09090a">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Кабинет партнёра · Сметра</title>
+<link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/ui/partner-base.css?v=p1">
+<link rel="stylesheet" href="/ui/partner-console.css?v=p1">
+<script src="/partner-console.js?v=p1" defer></script>
+</head>
+<body class="pc">
+<a class="skip-link" href="#view">К содержанию</a>
+
+<!-- Sign in with the Smetra account (email or Yandex ID). An API key is the fallback for integrators and is never stored. -->
+<main class="pc-signin" id="signin" aria-labelledby="signin-title">
+  <div class="pc-signin-card">
+    <a class="p-brand" href="/"><span>сметра<b>.</b></span><small>partners</small></a>
+    <h1 id="signin-title">Кабинет партнёра</h1>
+    <p class="pc-signin-lead">Войдите тем же аккаунтом, что и на smetra.online: через почту или Яндекс ID.</p>
+    <p class="p-error" id="key-error" role="alert" hidden></p>
+    <div id="sso-choose" class="pc-choose" hidden></div>
+    <a class="p-btn is-primary pc-sso" id="sso-start" href="https://smetra.online/api/partners/sso/start">Войти через аккаунт Сметры</a>
+    <p class="p-hint">Нет доступа? Попросите владельца кабинета пригласить вашу почту или напишите на <a href="mailto:sales@smetra.online">sales@smetra.online</a>.</p>
+    <details class="pc-key-login">
+      <summary>Войти ключом Partner API</summary>
+      <form id="connect" class="pc-signin-form" novalidate>
+        <label class="p-field" for="key"><span>Ключ Partner API</span>
+          <input id="key" class="p-input" type="password" autocomplete="off" spellcheck="false" placeholder="smp_live_…" required aria-describedby="key-error">
+        </label>
+        <button class="p-btn" type="submit">Войти ключом</button>
+        <p class="p-hint">Ключ используется один раз для сессии на час и в браузере не сохраняется.</p>
+      </form>
+    </details>
+    <nav class="pc-signin-links" aria-label="Справка"><a href="/">О программе</a><a href="/docs">Документация API</a><a href="/privacy">Обработка данных</a></nav>
+  </div>
+</main>
+
+<!-- Console shell -->
+<div class="pc-app" id="dashboard" hidden>
+  <aside class="pc-side" aria-label="Разделы кабинета">
+    <div class="pc-side-head">
+      <a class="p-brand" href="#/overview" aria-label="Обзор"><span>сметра<b>.</b></span><small>partners</small></a>
+      <button class="p-icon-btn pc-collapse" type="button" aria-label="Свернуть меню" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15"/></svg></button>
+    </div>
+    <nav class="pc-nav" id="pc-nav"></nav>
+    <div class="pc-side-foot">
+      <a class="pc-nav-link" href="/docs" target="_blank" rel="noopener"><span class="pc-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></span><span class="pc-nav-text">Документация</span></a>
+    </div>
+  </aside>
+
+  <div class="pc-main">
+    <header class="pc-top">
+      <div class="pc-top-id">
+        <strong id="partner-name">Партнёр</strong>
+        <span class="pc-top-meta" id="partner-meta"></span>
+      </div>
+      <span class="pc-top-user" id="top-user" hidden></span>
+      <div class="pc-top-actions">
+        <span class="pc-session" id="session-left" title="Сессия консоли"></span>
+        <button class="p-btn is-quiet is-small" id="signout" type="button">Выйти</button>
+      </div>
+    </header>
+    <main class="pc-view" id="view" tabindex="-1" aria-live="polite"></main>
+  </div>
+
+  <nav class="pc-tabbar" aria-label="Разделы" id="pc-tabbar"></nav>
+</div>
+
+<div class="pc-sheet" id="pc-more" hidden>
+  <div class="pc-sheet-backdrop" data-close></div>
+  <div class="pc-sheet-body" role="dialog" aria-modal="true" aria-label="Все разделы"><div class="pc-sheet-grip" aria-hidden="true"></div><nav id="pc-more-nav"></nav></div>
+</div>
+<div class="p-toast-host" id="toasts" aria-live="polite"></div>
+<noscript><p class="pc-noscript">Кабинету нужен JavaScript. Документация доступна без него: <a href="/docs">/docs</a>.</p></noscript>
+</body>
+</html>

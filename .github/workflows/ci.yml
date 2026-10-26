@@ -1,5 +1,10 @@
 name: CI
 on: [push, pull_request]
+# Many small fixes should not run multiple overlapping Android/browser builds.
+# Keep the newest result for each PR or branch and save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -28,6 +33,10 @@ jobs:
           node tests/assistant_markdown.cjs
           node tests/pwa_cache.cjs
           node tests/quote_money.cjs
+          node tests/landing_contract.cjs
+          node tests/calculators.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_calculator_handoff.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/estimate_audit.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_communication.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_api_transport.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_capability.cjs
@@ -43,6 +52,9 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_settings_buttons.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_app_actions.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_native_bridge.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_tabbar.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_ux.cjs
       - run: python scripts/build_web.py
       - uses: actions/upload-artifact@v4
         with:
@@ -66,6 +78,8 @@ jobs:
             cat data/chrome.log
             exit 1
           fi
+          # Unlike /health this probes /api/me, which MUST reach PostgreSQL.
+          python scripts/smoke_production.py --base-url http://localhost:8082
           node tests/browser_flows.cjs
           node tests/browser_quote_review.cjs
           node tests/browser_quote_editor.cjs
@@ -145,6 +159,9 @@ jobs:
           java -cp data/native-session-tests ru.smetra.mobile.NativeSessionWorkTest
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeImageSize.java tests/NativeImageSizeTest.java
           java -cp data/native-session-tests ru.smetra.mobile.NativeImageSizeTest
+          curl -sSfL -o data/org-json.jar https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
+          javac -cp data/org-json.jar -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/BridgeProtocol.java tests/BridgeProtocolTest.java
+          java -cp data/native-session-tests:data/org-json.jar ru.smetra.mobile.BridgeProtocolTest
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:

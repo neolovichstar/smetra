@@ -16,8 +16,34 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-form')?.onsubmit");
- await fill('#name','Growth QA');await fill('#email','growth-'+Date.now()+'@test.invalid');await fill('#password','isolated growth password');await click('#legal-consent');await click('#auth-submit');
- await until("document.querySelector('[data-activation=estimate]')");await shot('growth-first-run-mobile');await click('[data-activation=estimate]');
+ const emailSignupShown=await evaluate("(()=>{const el=document.querySelector('#email-disclosure');return !!el&&!el.classList.contains('hidden')&&getComputedStyle(el).display!=='none'&&el.getClientRects().length>0})()");
+ if(emailSignupShown){
+  await fill('#name','Growth QA');
+  await fill('#email','growth-'+Date.now()+'@test.invalid');
+  await fill('#password','secure comparison password');
+  await click('#legal-consent');await click('#auth-submit');
+ }else{
+  // Seed an isolated localhost QA session without enabling unverified signup
+  // in the public registration form or weakening production authentication.
+  const registration=await fetch(site+'/api/auth/register',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({name:'Growth QA',email:'growth-'+Date.now()+'@test.invalid',
+    password:'secure comparison password',legal_acceptance:true,
+    legal_version:'2026-10-19-registration-v1'})
+  });
+  const account=await registration.json();
+  assert.equal(registration.status,200,'QA account: '+JSON.stringify(account).slice(0,180));
+  assert.ok(account.token,'QA session token must exist');
+  await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
+  await send('Page.navigate',{url:site+'/app#dashboard'});
+ }
+ await until("typeof user==='object'&&user?.id&&document.querySelector('#content')");
+ // Let the first section render finish: started earlier, it would replace the starter catalog.
+ await until("document.querySelector('#content h1')&&!document.querySelector('#content .page-loading')");
+ // The compact dashboard no longer displays the older onboarding banner.
+ // Exercise the starter catalog directly instead of requiring a retired CTA.
+ await evaluate("SmetraLoadFeature('growth').then(()=>SmetraGrowth.start('estimate'))");
+ await until("document.querySelector('[data-starter=repair]')");await shot('growth-first-run-mobile');
  await until("document.querySelector('[data-starter=repair]')");assert.equal(await evaluate("document.querySelectorAll('[data-starter]').length"),7);
  await click('[data-starter=repair]');await until("document.querySelector('#estimate-editor')");
  assert.equal(await evaluate("api('/quotes').then(r=>r.quotes.length)"),0,'Picking a starter must not activate or create a quote');

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#09090a">
+<meta name="description" content="Партнёрская программа «Сметры» для магазинов стройматериалов, маркетплейсов и поставщиков: материалы из смет ведут на ваш сайт, подписки привлечённых пользователей приносят комиссию.">
+<title>Сметра для партнёров — материалы из смет в ваш магазин</title>
+<link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/ui/partner-base.css?v=p1">
+<link rel="stylesheet" href="/ui/partner-landing.css?v=p1">
+<script src="/partner-landing.js?v=p1" defer></script>
+</head>
+<body class="pl">
+<a class="skip-link" href="#main">К содержанию</a>
+<header class="pl-nav" id="top">
+  <a class="p-brand" href="/" aria-label="Сметра для партнёров — на главную"><span>сметра<b>.</b></span><small>partners</small></a>
+  <nav class="pl-links" aria-label="Разделы">
+    <a href="#how">Как это работает</a>
+    <a href="#money">Монетизация</a>
+    <a href="#integration">Интеграция</a>
+    <a href="#faq">Вопросы</a>
+    <a href="/docs">Документация</a>
+  </nav>
+  <a class="p-btn is-small pl-nav-cta" href="/app">Кабинет партнёра</a>
+  <button class="p-icon-btn pl-menu" type="button" aria-expanded="false" aria-controls="pl-drawer" aria-label="Открыть меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8h16M4 16h16"/></svg></button>
+</header>
+<div class="pl-drawer" id="pl-drawer" hidden>
+  <a href="#how">Как это работает</a><a href="#money">Монетизация</a><a href="#integration">Интеграция</a><a href="#faq">Вопросы</a><a href="/docs">Документация</a><a href="/app">Кабинет партнёра</a>
+</div>
+
+<main id="main">
+<section class="pl-hero" aria-labelledby="hero-title">
+  <div class="pl-hero-copy">
+    <p class="pl-eyebrow"><span>Партнёрская программа</span><span class="pl-dot" aria-hidden="true"></span><span>пилот</span></p>
+    <h1 id="hero-title">Смета уже знает, что&nbsp;купить. <span>Пусть купят у&nbsp;вас.</span></h1>
+    <p class="pl-lead">«Сметра» — сервис, в котором строители и ремонтные компании считают объекты. Подключите каталог, и материалы из смет поведут на страницы вашего магазина.</p>
+    <div class="pl-actions">
+      <a class="p-btn is-primary" href="mailto:sales@smetra.online?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%81%D1%82%D0%B2%D0%BE%20%D1%81%D0%BE%20%D0%A1%D0%BC%D0%B5%D1%82%D1%80%D0%BE%D0%B9">Стать партнёром</a>
+      <a class="p-btn" href="/docs">Изучить API</a>
+    </div>
+    <a class="pl-signin" href="/app">Уже партнёр? Войти в кабинет <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
+  </div>
+
+  <figure class="pl-scene" data-scene>
+    <div class="pl-scene-stage">
+      <svg class="pl-scene-fallback" viewBox="0 0 640 520" role="img" aria-label="План помещения, разметка элементов, список материалов и заказ в магазине партнёра">
+        <g fill="none" stroke-linejoin="round">
+          <path d="M120 300 320 185l200 115-200 115z" fill="#151518" stroke="rgba(255,255,255,.14)"/>
+          <path d="M120 300v-36l200-115v36M320 185l200 115v-36L320 149" stroke="rgba(255,255,255,.28)"/>
+          <path d="M220 242 320 300l100-58" stroke="rgba(255,255,255,.22)"/>
+          <path d="M240 290 320 244l80 46-80 46z" fill="rgba(143,167,216,.18)" stroke="rgba(143,167,216,.6)"/>
+          <path d="M330 210 420 262" stroke="rgba(98,194,148,.75)" stroke-width="3"/>
+        </g>
+        <g font-family="Onest,system-ui,sans-serif" font-size="13" fill="#f3f3f4">
+          <rect x="430" y="88" width="168" height="112" rx="10" fill="#151518" stroke="rgba(255,255,255,.12)"/>
+          <text x="446" y="114" fill="#73737c" font-size="11">Материалы</text>
+          <text x="446" y="138">Ламинат, м²</text><text x="582" y="138" text-anchor="end">23,8</text>
+          <text x="446" y="160">Плитка, м²</text><text x="582" y="160" text-anchor="end">7,6</text>
+          <text x="446" y="182">Гипсокартон, м²</text><text x="582" y="182" text-anchor="end">17,6</text>
+          <rect x="430" y="384" width="168" height="56" rx="10" fill="#f3f3f4"/>
+          <text x="446" y="408" fill="#09090a" font-weight="600">Корзина магазина</text>
+          <text x="446" y="426" fill="#55555d" font-size="11">3 позиции · переход к вам</text>
+        </g>
+      </svg>
+      <canvas class="pl-scene-canvas" aria-hidden="true"></canvas>
+      <div class="pl-scene-labels" aria-hidden="true"></div>
+    </div>
+    <figcaption class="pl-scene-steps">
+      <span class="visually-hidden">Пример: как смета превращается в заказ.</span>
+      <div role="tablist" aria-label="Шаги: от плана к заказу">
+        <button type="button" role="tab" aria-selected="true" data-step="0"><span>01</span>План</button>
+        <button type="button" role="tab" aria-selected="false" data-step="1"><span>02</span>Элементы</button>
+        <button type="button" role="tab" aria-selected="false" data-step="2"><span>03</span>Материалы</button>
+        <button type="button" role="tab" aria-selected="false" data-step="3"><span>04</span>Заказ</button>
+      </div>
+      <p class="pl-scene-text" aria-live="polite">Специалист размечает помещение: стены, пол, проёмы.</p>
+    </figcaption>
+  </figure>
+</section>
+
+<section class="pl-section" id="how" aria-labelledby="how-title">
+  <header class="pl-head"><span class="pl-index">02</span><h2 id="how-title">Как это работает</h2><p>Покупатель приходит не за идеей, а с готовым списком материалов. Ваша задача — быть в этом списке.</p></header>
+  <ol class="pl-steps">
+    <li><span class="pl-step-num">01</span><h3>Смета</h3><p>Специалист описывает объект: помещения, площади, работы. «Сметра» считает объёмы.</p></li>
+    <li><span class="pl-step-num">02</span><h3>Подбор материалов</h3><p>Из сметы получается перечень материалов. Рядом — предложения из подтверждённых каталогов партнёров.</p></li>
+    <li><span class="pl-step-num">03</span><h3>Покупка</h3><p>Пользователь переходит на страницу товара в вашем магазине. Заказ и оплата остаются у вас.</p></li>
+    <li><span class="pl-step-num">04</span><h3>Статистика</h3><p>Переходы, регистрации и подтверждённые оплаты видны в кабинете партнёра по дням.</p></li>
+  </ol>
+</section>
+
+<section class="pl-section" aria-labelledby="value-title">
+  <header class="pl-head"><span class="pl-index">03</span><h2 id="value-title">Что получает магазин</h2></header>
+  <div class="pl-value">
+    <article><h3>Целевой трафик</h3><p>Переход происходит в момент, когда объём уже посчитан и человек готов покупать.</p></article>
+    <article><h3>Профессиональные покупатели</h3><p>Прорабы, бригады и ремонтные компании ведут объекты постоянно и закупают регулярно.</p></article>
+    <article><h3>Данные о результатах</h3><p>Воронка от перехода до оплаты, клики по материалам и выгрузка в CSV — без персональных данных покупателей.</p></article>
+  </div>
+</section>
+
+<section class="pl-section" aria-labelledby="mutual-title">
+  <header class="pl-head"><span class="pl-index">04</span><h2 id="mutual-title">Двустороннее партнёрство</h2><p>Поток работает в обе стороны и учитывается сервером «Сметры».</p></header>
+  <div class="pl-flows">
+    <div class="pl-flow">
+      <p class="pl-flow-dir"><b>Магазин</b><svg viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M0 6h38M33 1l5 5-5 5"/></svg><b>Сметра</b></p>
+      <h3>Вы рекомендуете «Сметру»</h3>
+      <p>Партнёрская ссылка или виджет «Создать смету» на вашем сайте. Новые аккаунты после перехода закрепляются за вами по первому касанию.</p>
+    </div>
+    <div class="pl-flow">
+      <p class="pl-flow-dir"><b>Сметра</b><svg viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M0 6h38M33 1l5 5-5 5"/></svg><b>Магазин</b></p>
+      <h3>«Сметра» ведёт покупателей к вам</h3>
+      <p>Материалы из смет показываются с вашими ценами и ссылками. Переход ведёт прямо на страницу товара на вашем домене.</p>
+    </div>
+  </div>
+</section>
+
+<section class="pl-section" id="money" aria-labelledby="money-title">
+  <header class="pl-head"><span class="pl-index">05</span><h2 id="money-title">Монетизация</h2><p>Комиссия с подписок пользователей, которых вы привели. Процент и срок фиксируются в договоре.</p></header>
+  <dl class="pl-terms">
+    <div><dt>База расчёта</dt><dd>Только подписки, оплата которых подтверждена платёжной системой. Тестовые платежи не учитываются.</dd></div>
+    <div><dt>Период удержания</dt><dd>30 дней на возможный возврат. При возврате начисление аннулируется.</dd></div>
+    <div><dt>Срок начислений</dt><dd>Действует в течение согласованного периода с первой оплаты пользователя.</dd></div>
+    <div><dt>Крупные сети</dt><dd>Индивидуальные условия, отдельная интеграция каталога и совместные размещения.</dd></div>
+  </dl>
+  <p class="pl-note"><span class="p-pill is-warn">Пилот</span><span>Сейчас ведётся учёт начислений. Автоматические выплаты включаются после подписания договора.</span></p>
+</section>
+
+<section class="pl-section" id="integration" aria-labelledby="int-title">
+  <header class="pl-head"><span class="pl-index">06</span><h2 id="int-title">Технологическая интеграция</h2><p>REST API с открытой схемой, готовые SDK и понятные ограничения.</p></header>
+  <div class="pl-int">
+    <ul class="pl-int-list">
+      <li><h3>Partner API</h3><p>Профиль, аналитика, каталог, начисления, домен. Схема OpenAPI 3.1.</p></li>
+      <li><h3>SDK</h3><p>Виджет для сайта без ключей и клиент на Python для сервера.</p></li>
+      <li><h3>Партнёрские ссылки</h3><p>Одна ссылка для сайта, рассылок и кабинета покупателя.</p></li>
+      <li><h3>Загрузка каталога</h3><p>JSON-пакеты до 100 товаров. Ссылки — только на ваш подтверждённый домен.</p></li>
+    </ul>
+    <div class="p-code pl-int-code">
+      <div class="p-code-head"><span>POST /api/partners/v1/console/catalog</span></div>
+<pre><code>curl https://console.smetra.online/api/partners/v1/console/catalog \
+  -H "Authorization: Partner $SMETRA_PARTNER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"products":[{
+        "sku": "TILE-30x60-GR",
+        "name": "Плитка 30×60 серая",
+        "price_kopecks": 189000,
+        "url": "https://shop.example.ru/p/tile-30x60",
+        "available": true }]}'</code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="pl-section" aria-labelledby="sec-title">
+  <header class="pl-head"><span class="pl-index">07</span><h2 id="sec-title">Безопасность и прозрачность</h2></header>
+  <div class="pl-sec">
+    <div><h3>Подтверждение домена</h3><p>DNS TXT или meta-тег. Пока домен не подтверждён, ваши товары не показываются пользователям.</p></div>
+    <div><h3>Учёт платежей</h3><p>Начисления — только по оплатам, проверенным платёжной системой. Данные, присланные магазином, учитываются отдельно.</p></div>
+    <div><h3>Разделение данных</h3><p>Партнёр видит только свои показатели. Имена, почта и заказы покупателей не передаются.</p></div>
+    <div><h3>Доступ сотрудников</h3><p>Вход аккаунтом «Сметры», роли для каждого сотрудника, удаление действует сразу. Ключ API хранится только в виде хеша.</p></div>
+  </div>
+</section>
+
+<section class="pl-section" aria-labelledby="join-title">
+  <header class="pl-head"><span class="pl-index">08</span><h2 id="join-title">Как подключиться</h2></header>
+  <ol class="pl-timeline">
+    <li><b>Заявка</b><span>Напишите нам: магазин, домен, регионы.</span></li>
+    <li><b>Условия</b><span>Согласуем процент, срок и формат сотрудничества.</span></li>
+    <li><b>Доступ</b><span>Открываем кабинет вашему аккаунту «Сметры» и выдаём ключ API.</span></li>
+    <li><b>Домен</b><span>Подтверждаете сайт магазина через DNS или meta-тег.</span></li>
+    <li><b>Каталог и ссылки</b><span>Загружаете товары, ставите ссылку или виджет.</span></li>
+    <li><b>Запуск</b><span>Следите за переходами и оплатами в кабинете.</span></li>
+  </ol>
+</section>
+
+<section class="pl-section" id="faq" aria-labelledby="faq-title">
+  <header class="pl-head"><span class="pl-index">09</span><h2 id="faq-title">Вопросы</h2></header>
+  <div class="pl-faq">
+    <details><summary>Какие товары можно загрузить?</summary><p>Строительные и отделочные материалы с ценой, наличием и ссылкой на страницу товара на вашем подтверждённом HTTPS-домене. Один запрос — до 100 товаров; повторная загрузка того же SKU обновляет позицию.</p></details>
+    <details><summary>С чего начисляется комиссия?</summary><p>С подписок пользователей, которые зарегистрировались после перехода по вашей ссылке, и только по подтверждённым платежам. Покупки материалов в вашем магазине — ваша выручка, комиссию с них «Сметра» не берёт.</p></details>
+    <details><summary>Когда и как происходят выплаты?</summary><p>В пилоте начисления учитываются, но автоматические выплаты отключены. Порядок выплат, документы и сверка закрепляются в договоре до первой выплаты.</p></details>
+    <details><summary>Что нужно от магазина?</summary><p>Собственный домен с HTTPS, возможность добавить DNS-запись или meta-тег и выгружать каталог в JSON. Для виджета достаточно вставить скрипт на сайт.</p></details>
+    <details><summary>Кто получает доступ к кабинету?</summary><p>Сотрудники входят своим аккаунтом «Сметры» — почтой или через Яндекс ID. Владелец кабинета приглашает коллег по почте и назначает роль: администратор, аналитик или каталог. Для серверной интеграции выдаём отдельный ключ Partner API.</p></details>
+    <details><summary>Какие данные о покупателях я увижу?</summary><p>Только обезличенные показатели: переходы, регистрации, оплаты, суммы начислений. Персональные данные пользователей «Сметры» партнёрам не передаются.</p></details>
+  </div>
+</section>
+
+<section class="pl-cta" aria-labelledby="cta-title">
+  <span class="pl-index">10</span>
+  <h2 id="cta-title">Подключим ваш магазин к сметам</h2>
+  <p>Расскажите о каталоге и регионах. Ответим и предложим формат пилота.</p>
+  <div class="pl-actions">
+    <a class="p-btn is-primary" href="mailto:sales@smetra.online?subject=%D0%9F%D0%B0%D1%80%D1%82%D0%BD%D1%91%D1%80%D1%81%D1%82%D0%B2%D0%BE%20%D1%81%D0%BE%20%D0%A1%D0%BC%D0%B5%D1%82%D1%80%D0%BE%D0%B9">Написать команде</a>
+    <a class="p-btn" href="/docs">Документация API</a>
+  </div>
+  <p class="pl-mail">sales@smetra.online</p>
+</section>
+</main>
+
+<footer class="pl-foot">
+  <span class="p-brand"><span>сметра<b>.</b></span><small>partners</small></span>
+  <nav aria-label="Документы"><a href="/docs">Документация</a><a href="/partner-openapi.json">OpenAPI</a><a href="/privacy">Обработка данных</a><a href="/terms">Условия пилота</a><a href="https://smetra.online" rel="noopener">smetra.online</a></nav>
+  <small>© 2026 Сметра</small>
+</footer>
+</body>
+</html>

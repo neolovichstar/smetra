@@ -6,41 +6,30 @@
   <title>Кабинет · Сметра</title>
   <meta name="theme-color" content="#000000">
   <link rel="manifest" href="/manifest.webmanifest">
-  <script src="/pwa.js" defer></script>
-  <script src="/theme-init.js"></script>
+  <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="сметра.">
+  <script src="/pwa.js?v=20261026-r21" defer></script>
+  <script src="/theme-init.js?v=20261026-r21"></script>
   <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/black.css?v=20261023-workspace-canvas-v1">
-  <link rel="stylesheet" href="/cabinet.css">
-  <link rel="stylesheet" href="/assistant.css">
-  <link rel="stylesheet" href="/admin.css">
-  <link rel="stylesheet" href="/file-preview.css">
-  <link rel="stylesheet" href="/construction.css">
-  <link rel="stylesheet" href="/file-editor.css">
-  <link rel="stylesheet" href="/quote-review.css">
-  <link rel="stylesheet" href="/product-ui.css">
-  <link rel="stylesheet" href="/themes.css">
-  <link rel="stylesheet" href="/assistant-studio.css?v=20261022-glass-composer-v1">
-  <link rel="stylesheet" href="/select-menu.css">
-  <link rel="stylesheet" href="/data-export.css">
-  <link rel="stylesheet" href="/design-system.css">
-  <link rel="stylesheet" href="/ui-foundation.css?v=20261024-visible-icons-v8">
-  <link rel="stylesheet" href="/quote-editor.css?v=20261022-quote-editor-v1">
-  <link rel="stylesheet" href="/premium-tools.css">
-  <link rel="stylesheet" href="/dashboard-polish.css?v=20261024-minimal-v1">
-  <link rel="stylesheet" href="/auth-layout-v2.css?v=20261024-v2">
-  <link rel="stylesheet" href="/cabinet-refinement.css?v=20261024-v1">
-  <link rel="stylesheet" href="/workspace-layout-v3.css?v=20261024-v3">
-  <link rel="stylesheet" href="/cabinet-alignment-v4.css?v=20261024-flat-v4">
-  <link rel="stylesheet" href="/auth-email.css?v=20261024-v2">
-  <link rel="stylesheet" href="/field-flows.css?v=20261024-v1">
-  <link rel="stylesheet" href="/interface-audit.css?v=20261024-v1">
-  <link rel="stylesheet" href="/auth-motion-fix.css?v=20261024-alignment-v2">
-  <link rel="stylesheet" href="/sidebar-motion-v2.css?v=20261024-v3">
-  <link rel="stylesheet" href="/assistant-markdown-modern.css?v=20261024-v3">
-  <link rel="stylesheet" href="/assistant-interactions.css?v=20261024-mobile-history-v5">
-  <link rel="stylesheet" href="/quote-visual-core.css?v=20261024-live-v1">
-  <link rel="stylesheet" href="/dashboard-reference.css?v=20261024-reference-cards-v3">
+  <link rel="preload" href="/assets/pwa/drops.svg" as="image">
+  <link rel="stylesheet" href="/ui/tokens.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/base.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/components.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/shell.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/workspace.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/editor.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/assistant.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/modules.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/tools.css?v=20261026-r21">
+  <script src="/ui/native.js?v=20261026-r21"></script>
+  <script src="/ui/icons.js?v=20261026-r21"></script>
+  <script src="/ui/dialog.js?v=20261026-r21"></script>
+  <script src="/ui/chat-kit.js?v=20261026-r21"></script>
+  <script src="/ui/context-menu.js?v=20261026-r21" defer></script>
+  <script src="/ui/plans.js?v=20261026-r21"></script>
+  <script src="/ui/bubbles.js?v=20261026-r21" defer></script>
 </head>
 <body class="workspace-page smetra-app-booting" data-app-state="boot">
   <div id="app-startup" class="app-startup" role="status" aria-live="polite">
@@ -58,13 +47,11 @@
         <button id="sidebar-collapse" class="desktop-menu-toggle" type="button" aria-label="Свернуть меню" aria-controls="sidebar" aria-expanded="true"><span></span><span></span></button>
         <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Открыть разделы" aria-controls="sidebar" aria-expanded="false"><span></span><span></span></button>
         <a class="brand" href="/">сметра<span class="brand-mark">.</span></a>
-        <span class="app-nav-caption">рабочее пространство</span>
-      </div>
+              </div>
       <div class="app-nav-center-spacer" aria-hidden="true"></div>
       <div class="app-nav-actions">
-        <button class="nav-search" id="command-open" type="button"><span>Найти в Сметре</span><kbd>Ctrl K</kbd></button>
-        
-        <button class="btn small" id="theme" type="button">Тема</button>
+        <button class="nav-search" id="command-open" type="button" aria-label="Поиск по Сметре"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span>Поиск</span><kbd>Ctrl K</kbd></button>
+        <button id="theme" type="button" aria-label="Сменить тему"></button>
       </div>
     </div>
   </header>
@@ -83,13 +70,21 @@
   <main id="auth" class="auth-wrap hidden">
     <section class="auth-story" aria-label="О Сметре">
       <div class="auth-story-content">
-        <span class="auth-story-kicker">ВСЁ ДЛЯ ВАШЕЙ РАБОТЫ</span>
-        <h2>От идеи<br>до результата<span>.</span></h2>
-        <p>Сметы, клиенты и управление объектами в одном понятном пространстве.</p>
-        <div class="auth-story-art" aria-hidden="true">
-          <img class="auth-art" src="/assets/black/unfold.png" width="1254" height="1254" loading="lazy" decoding="async" alt="">
-        </div>
-        <div class="auth-story-foot"><span>СМЕТРА</span><span>РАБОТА ПОД КОНТРОЛЕМ</span></div>
+        <h2>От первой заявки до оплаты<span>.</span></h2>
+        <p>Сметы, клиенты, объекты и платежи — в одном рабочем пространстве на сайте и в Android-приложении.</p>
+        <figure class="auth-sample" aria-label="Пример сметы в Сметре">
+          <figcaption><span>Пример сметы</span><span class="pill status-sent">Отправлена</span></figcaption>
+          <strong class="auth-sample-title">Ванная, ул. Садовая 5</strong>
+          <div class="auth-sample-line"><span>Демонтаж плитки</span><span>24 м²</span><b>10 800 ₽</b></div>
+          <div class="auth-sample-line"><span>Гидроизоляция</span><span>8,5 м²</span><b>6 375 ₽</b></div>
+          <div class="auth-sample-line"><span>Укладка керамогранита</span><span>24 м²</span><b>43 200 ₽</b></div>
+          <div class="auth-sample-total"><span>Итого</span><b>60 375 ₽</b></div>
+        </figure>
+        <ul class="auth-points">
+          <li>Клиент согласует смету по ссылке, без регистрации</li>
+          <li>ИИ-ассистент готовит черновик по описанию и фото</li>
+          <li>Суммы и итоги всегда считает Сметра</li>
+        </ul>
       </div>
     </section>
 
@@ -145,7 +140,7 @@
         <div class="auth-provider-block">
           <div class="auth-provider-divider" aria-hidden="true"><span>Быстрый и безопасный вход</span></div>
           <div id="provider-buttons" class="provider-buttons single" aria-label="Вход через Яндекс ID">
-            <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+            <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
           </div>
           <p id="provider-note" class="auth-provider-pending">Один аккаунт для сайта и приложения.</p>
         </div>
@@ -161,7 +156,7 @@
       <div class="sidebar-scroll">
         <div class="sidebar-group"><span class="sidebar-heading">Основное</span><button data-tab="dashboard" class="active">Сегодня</button><button data-tab="assistant">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="projects">Проекты</button><button data-tab="clients">Клиенты</button></div>
         <div class="sidebar-group"><span class="sidebar-heading">Работа</span><button data-tab="construction">Объекты и замеры</button><button data-tab="fieldwork">Инструменты смет</button><button data-tab="inbox">Полученные сметы</button><button data-tab="leads">Лиды</button><button data-tab="tasks">Задачи</button><button data-tab="calendar">Календарь</button><button data-tab="finance">Платежи</button></div>
-        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="premium">Материалы</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button><button data-tab="chats">Чаты объектов</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Библиотека</span><button data-tab="catalog">Расценки</button><button data-tab="calculators">Калькуляторы</button><button data-tab="premium">Материалы</button><button data-tab="files">Файлы</button><button data-tab="documents">Документы</button><button data-tab="team">Команда</button><button data-tab="chats">Чаты объектов</button></div>
         <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="notifications">Уведомления</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
       </div>
       <div class="sidebar-foot">
@@ -175,18 +170,28 @@
       </div>
     </aside>
     <main class="main" id="content" tabindex="-1"></main>
+    <nav id="mobile-tabbar" class="mobile-tabbar" aria-label="Быстрые разделы">
+      <button type="button" data-tab="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/></svg><span>Главная</span></button>
+      <button type="button" data-tab="quotes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/></svg><span>Сметы</span></button>
+      <button type="button" data-tab="assistant" class="tabbar-primary"><span class="tabbar-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg></span><span>Ассистент</span></button>
+      <button type="button" data-tab="construction"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v16"/><path d="M3 8h5M3 12h3M3 16h5M16 3v5M12 3v3M8 3v5"/></svg><span>Объекты</span></button>
+      <button type="button" id="tabbar-more" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>Ещё</span></button>
+    </nav>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261024-live-v1" defer></script>
-  <script src="/select-menu.js" defer></script>
-  <script src="/app.js?v=20261024-auth-motion-v1" defer></script>
-  <script src="/workspace.js?v=20261024-p0-integrity-v1" defer></script>
-  <script src="/field-flows.js?v=20261024-v1" defer></script>
-  <script src="/black.js?v=20261024-oauth-motion-v1" defer></script>
-  <script src="/auth-email.js?v=20261024-auth-motion-v1" defer></script>
-  <script src="/file-preview.js" defer></script>
-  <script src="/file-editor.js" defer></script>
-  <script src="/product-ui.js?v=20261024-nav-stable-v4" defer></script>
-<script src="/communication-center.js?v=20261024-csp-p1" defer></script>
+  <script src="/features.js?v=20261026-r21" defer></script>
+  <script src="/select-menu.js?v=20261026-r21" defer></script>
+  <script src="/app.js?v=20261026-r21" defer></script>
+  <script src="/workspace.js?v=20261026-r21" defer></script>
+  <script src="/field-flows.js?v=20261026-r21" defer></script>
+  <script src="/black.js?v=20261026-r21" defer></script>
+  <script src="/auth-email.js?v=20261026-r21" defer></script>
+  <script src="/file-preview.js?v=20261026-r21" defer></script>
+  <script src="/file-editor.js?v=20261026-r21" defer></script>
+  <script src="/product-ui.js?v=20261026-r21" defer></script>
+<script src="/support-chat.js?v=20261026-r21" defer></script>
+<script src="/communication-center.js?v=20261026-r21" defer></script>
+<script src="/ui/tabbar.js?v=20261026-r21" defer></script>
+<script src="/ui/ux.js?v=20261026-r21" defer></script>
 </body>
 </html>

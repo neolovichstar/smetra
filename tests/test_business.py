@@ -768,6 +768,74 @@ class BusinessFlows(unittest.TestCase):
         self.assertEqual(consent_code, 200, consent)
         return result["token"], result["user"]["id"]
 
+    def test_usage_summary_reports_what_is_left(self):
+        token, _ = self.account("usage-owner")
+        other, _ = self.account("usage-other")
+        self.assertEqual(self.call("/quotes", "POST", {"title": "Ванная", "client": "Клиент", "amount": 10000}, token)[0], 201)
+        status, usage = self.call("/usage", token=token)
+        self.assertEqual(status, 200, usage)
+        self.assertEqual(usage["plan"]["tier"], "starter")
+        self.assertEqual((usage["quotes"]["used"], usage["quotes"]["limit"], usage["quotes"]["remaining"], usage["quotes"]["remaining_pct"]), (1, 10, 9, 90))
+        self.assertEqual(usage["tokens"]["remaining"], usage["tokens"]["limit"] - usage["tokens"]["used"])
+        self.assertEqual(usage["storage"]["used"], 0)
+        self.assertEqual(usage["storage"]["remaining_pct"], 100)
+        self.assertEqual((usage["seats"]["used"], usage["seats"]["limit"]), (1, 1))
+        self.assertEqual(usage["records"]["quotes"], 1)
+        # Another account sees only its own usage.
+        self.assertEqual(self.call("/usage", token=other)[1]["records"]["quotes"], 0)
+        self.assertEqual(self.call("/usage", "POST", {}, token)[0], 404)
+
+    def test_order_money_today_and_isolation(self):
+        token, _ = self.account("finance-owner")
+        status, created = self.call("/projects", "POST", {"name": "Кухня", "amount_kopecks": 100_000, "internal_cost": 60_000, "currency": "RUB"}, token)
+        self.assertEqual(status, 201, created)
+        project = created["item"]["id"]
+        paid_status, paid = self.call("/receipts", "POST", {"project_id": project, "amount_kopecks": 30_000, "method": "cash"}, token, key="finance-order-payment-key")
+        self.assertEqual(paid_status, 201, paid)
+        self.assertEqual(self.call("/expenses", "POST", {"project_id": project, "amount_kopecks": 70_000, "category": "Плитка"}, token, key="finance-order-expense-key")[0], 201)
+        from backend.business import business_date
+
+        tomorrow = (business_date() + dt.timedelta(days=1)).isoformat()
+        stage_status, stage = self.call("/stages", "POST", {"project_id": project, "name": "Черновая отделка", "due_date": tomorrow, "amount_kopecks": 0}, token)
+        self.assertEqual(stage_status, 201, stage)
+
+        finance = self.call("/projects/" + project, token=token)[1]["item"]["finance"]
+        self.assertEqual(
+            (finance["paid"], finance["receivable"], finance["actual_cost"], finance["overrun"], finance["forecast_profit"], finance["cash_result"]),
+            (30_000, 70_000, 70_000, 10_000, 30_000, -40_000),
+        )
+
+        actions = self.call("/dashboard", token=token)[1]["actions"]
+        self.assertEqual(actions["summary"]["money"]["receivable"], 70_000)
+        self.assertEqual(actions["summary"]["money"]["forecast_profit"], 30_000)
+        titles = {item["title"]: item for item in actions["items"]}
+        self.assertEqual(titles["Перерасход по заказу"]["entity_id"], project)
+        self.assertEqual(titles["Перерасход по заказу"]["amount_kopecks"], 10_000)
+        self.assertIn("Скоро срок этапа", titles, (actions["items"], stage))
+        self.assertIn("Черновая отделка", titles["Скоро срок этапа"]["detail"])
+
+        orders = self.call("/overview/orders", token=token)[1]["items"]
+        self.assertEqual([(o["id"], o["receivable"], o["overrun"]) for o in orders], [(project, 70_000, 10_000)])
+        status, report = self.call("/transfer/orders?format=csv", token=token, raw=True)
+        self.assertEqual(status, 200)
+        lines = report.decode("utf-8-sig").splitlines()
+        self.assertTrue(lines[0].startswith("Заказ,Статус,Валюта,Стоимость"))
+        self.assertIn("Кухня", lines[1])
+        self.assertIn("-400.00", lines[1])
+        status, book = self.call("/transfer/orders?format=xlsx", token=token, raw=True)
+        self.assertEqual(status, 200)
+        from openpyxl import load_workbook
+
+        sheet = load_workbook(io.BytesIO(book)).active
+        header = [cell.value for cell in sheet[1]]
+        row = dict(zip(header, [cell.value for cell in sheet[2]]))
+        self.assertEqual((row["Заказ"], row["К получению"], row["Денежный результат"]), ("Кухня", 700, -400))
+
+        other, _ = self.account("finance-stranger")
+        self.assertEqual(self.call("/projects/" + project, token=other)[0], 404)
+        money = self.call("/dashboard", token=other)[1]["actions"]["summary"]["money"]
+        self.assertEqual((money["receivable"], money["forecast_profit"], money["overruns"]), (0, None, []))
+
     def test_workspace_export_is_paged_owner_only_and_omits_bearer_secrets(self):
         from backend.data_export import _clean
 
@@ -1260,6 +1328,90 @@ class BusinessFlows(unittest.TestCase):
             )[0],
             409,
         )
+
+    def test_finance_permission_hides_costs_from_members_until_granted(self):
+        owner, _ = self.account("finance-perm-owner")
+        member, member_id = self.account("finance-perm-member")
+        q = self.quote(owner)
+        _, created = self.call("/projects", "POST", {"name": "Ванная", "amount_kopecks": 50_000, "internal_cost": 30_000}, owner)
+        project = created["item"]["id"]
+        self.assertEqual(self.call("/expenses", "POST", {"project_id": project, "amount_kopecks": 35_000, "category": "Плитка"}, owner, key="finance-perm-expense-key")[0], 201)
+        wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("UPDATE workspaces SET plan='team_month',subscription_status='active',entitlement_until=?,seat_limit=5 WHERE id=?", (self.mod.now() + 86400, wid))
+        self.assertEqual(self.call("/workspace/members", "POST", {"email": "finance-perm-member@test.invalid", "role": "member"}, owner)[0], 200)
+
+        def json_text(value):
+            return json.dumps(value, ensure_ascii=False)
+
+        def hidden_everywhere():
+            quote = self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"]
+            self.assertNotIn("internal_cost", quote)
+            self.assertNotIn("profit", quote)
+            self.assertNotIn("cost_price", quote["items"][0])
+            self.assertEqual(quote["amount_kopecks"], q["amount_kopecks"], "Client prices stay visible")
+            item = self.call("/projects/" + project, token=member, workspace=wid)[1]["item"]
+            self.assertNotIn("expenses", item)
+            self.assertNotIn("internal_cost", item)
+            self.assertEqual(set(item["finance"]) & {"planned_cost", "actual_cost", "forecast_profit", "cash_result", "overrun"}, set())
+            self.assertEqual(item["finance"]["receivable"], 50_000)
+            self.assertEqual(self.call("/expenses", token=member, workspace=wid)[0], 403)
+            self.assertEqual(self.call("/transfer/orders", token=member, workspace=wid)[0], 403)
+            orders = self.call("/overview/orders", token=member, workspace=wid)[1]["items"]
+            self.assertEqual(set(orders[0]) & {"planned_cost", "actual_cost", "forecast_profit", "cash_result"}, set())
+            dashboard = self.call("/dashboard", token=member, workspace=wid)[1]
+            self.assertFalse(dashboard["capabilities"]["finance"])
+            self.assertNotIn("forecast_profit", dashboard["actions"]["summary"]["money"])
+            self.assertNotIn("Перерасход по заказу", [i["title"] for i in dashboard["actions"]["items"]])
+            self.assertNotIn("cash_profit", json_text(self.call("/overview", token=member, workspace=wid)[1]))
+            for feed in ("/activity", "/notifications", "/overview"):
+                self.assertNotIn("Расход записан", json_text(self.call(feed, token=member, workspace=wid)[1]), feed)
+
+        hidden_everywhere()
+
+        # Editing blind keeps the real cost; a typed cost is ignored.
+        quote = self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"]
+        items = [{**row, "name": "Переименовано", "cost_price": 1} for row in quote["items"]]
+        status, saved = self.call("/quotes/" + q["id"], "PATCH", {"revision": quote["revision"], "items": items}, member, wid)
+        self.assertEqual(status, 200, saved)
+        owner_view = self.call("/quotes/" + q["id"], token=owner)[1]["quote"]
+        self.assertEqual(owner_view["items"][0]["name"], "Переименовано")
+        self.assertEqual(owner_view["items"][0]["cost_price"], 4000)
+        self.assertEqual(owner_view["internal_cost"], q["internal_cost"])
+
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": True}, member, wid)[0], 403)
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": "yes"}, owner)[0], 400)
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": True}, owner)[0], 200)
+        members = {m["user_id"]: m for m in self.call("/workspace/members", token=owner)[1]["items"]}
+        self.assertTrue(members[member_id]["finance_access"])
+        self.assertIn("internal_cost", self.call("/quotes/" + q["id"], token=member, workspace=wid)[1]["quote"])
+        self.assertEqual(self.call("/expenses", token=member, workspace=wid)[0], 200)
+        self.assertTrue(self.call("/dashboard", token=member, workspace=wid)[1]["capabilities"]["finance"])
+        self.assertIn("Расход записан", json_text(self.call("/activity", token=member, workspace=wid)[1]))
+
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": False}, owner)[0], 200)
+        hidden_everywhere()
+
+        # Removal clears the grant, so a later invitation starts without it.
+        self.assertEqual(self.call("/workspace/members/" + member_id, "PATCH", {"finance_access": True}, owner)[0], 200)
+        self.assertEqual(self.call("/workspace/members/" + member_id, "DELETE", None, owner)[0], 200)
+        self.assertEqual(self.call("/quotes/" + q["id"], token=member, workspace=wid)[0], 404)
+        self.assertEqual(self.call("/workspace/members", "POST", {"email": "finance-perm-member@test.invalid", "role": "member"}, owner)[0], 200)
+        hidden_everywhere()
+
+    def test_assistant_read_tools_follow_the_finance_permission(self):
+        from backend import assistant
+
+        class Hidden:
+            def finance_visible(self):
+                return False
+
+        original = assistant.read_tool
+        assistant.read_tool = lambda service, name, args: {"internal_cost": 1, "items": [{"name": "x", "cost_price": 2, "unit_price": 3}]}
+        try:
+            self.assertEqual(assistant.execute_read(Hidden(), "list_records", {}), {"items": [{"name": "x", "unit_price": 3}]})
+        finally:
+            assistant.read_tool = original
 
     def test_compare_versions_is_private_read_only_and_validates_selectors(self):
         owner, _ = self.account("compare-owner")

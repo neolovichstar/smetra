@@ -22,11 +22,12 @@ from email.message import EmailMessage
 from backend.plan_catalog import PURCHASES
 
 try:
-    from backend import business, mytracker, revenue
+    from backend import business, mytracker, revenue, token_packs
 except ModuleNotFoundError:
     import business
     import mytracker
     import revenue
+    import token_packs
 
 try:
     from backend.estimate_safety import LEGAL_CONSENT_VERSION, REGISTRATION_CONSENT_VERSION
@@ -42,17 +43,20 @@ COOKIE_SECURE = ORIGIN.startswith("https://")
 # Browser deployments may be reached through the canonical domain and the
 # historical Vercel alias. Origin checks must compare exact, trusted origins,
 # never a suffix match or an untrusted Host/X-Forwarded-Host header.
+PARTNER_CONSOLE_ORIGIN = os.getenv("PARTNER_CONSOLE_ORIGIN", "https://console.smetra.online").rstrip("/")
 BROWSER_ORIGINS = frozenset({
     ORIGIN,
     "https://smetra.online",
     "https://www.smetra.online",
     "https://smetra.vercel.app",
+    "https://console.smetra.online",
+    PARTNER_CONSOLE_ORIGIN,
 })
 _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 56
+REQUIRED_CLOUD_SCHEMA_VERSION = 64
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -84,6 +88,10 @@ def db():
         finally:
             con.close()
         return
+    # Never silently switch a cloud instance to an ephemeral SQLite database.
+    # A missing DATABASE_URL must fail closed, not create unrelated user state.
+    if os.getenv("VERCEL") or os.getenv("VERCEL_ENV") in ("production", "preview"):
+        raise RuntimeError("Cloud PostgreSQL is not configured (DATABASE_URL)")
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=10, isolation_level=None)
     try:
@@ -144,6 +152,8 @@ def migrate():
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
+        from backend.ai_tokens import ensure_schema as ensure_ai_tokens
+        ensure_ai_tokens(con)
 
 
 def now():
@@ -208,6 +218,9 @@ def hash_password(password, salt=None):
     salt = salt or secrets.token_bytes(16)
     digest = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
     return base64.b64encode(salt + digest).decode()
+
+
+_TIMING_DUMMY_HASH = base64.b64encode(bytes(16) + bytes(64)).decode()
 
 
 def verify_password(password, encoded):
@@ -469,7 +482,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
+                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
@@ -492,7 +505,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     # /api/cron/push verifies its own dedicated server secret.
                 if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
-                if root == "mobile" and path != "/api/mobile/presentation":
+                if root == "mobile" and path not in ("/api/mobile/presentation", "/api/mobile/compat"):
+                    raise ApiError(404, "Не найдено")
+            # Never expose main customer routes through the partner hostname.
+            console_host = self.headers.get("Host", "").split(":")[0].lower()
+            if console_host == "console.smetra.online":
+                site_assets = {
+                    "/", "/app", "/docs", "/privacy", "/terms",
+                    "/partner-landing.js", "/partner-scene.js", "/partner-console.js", "/partner-docs-ui.js",
+                    "/partner-docs.md", "/partner-openapi.json", "/partner-sdk.js",
+                    "/ui/partner-base.css", "/ui/partner-landing.css", "/ui/partner-console.css", "/ui/partner-docs.css",
+                    "/vendor/three-0.170.0.module.min.js", "/vendor/qrcode-generator-1.4.4.js",
+                    "/assets/fonts/onest-variable.woff2", "/favicon.ico", "/favicon.png",
+                }
+                if method == "GET" and path in site_assets:
+                    asset = {"/": "/partner-landing", "/app": "/partner-console",
+                             "/docs": "/partner-docs", "/privacy": "/partner-privacy",
+                             "/terms": "/partner-terms"}.get(path, path)
+                    return self.static(asset)
+                if not (path.startswith("/api/partners/console/") or
+                        path.startswith("/api/partners/v1/console/")):
                     raise ApiError(404, "Не найдено")
             if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
                 self.require_origin()
@@ -500,6 +532,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 from backend.identity import route as identity_route
 
                 identity_route(self, None, method, path, query, ORIGIN)
+            elif method == "GET" and path == "/api/billing/catalog":
+                from backend.plan_catalog import public_catalog
+
+                plans = [
+                    {"code": code, "name": item["name"], "month": item["monthly_kopecks"],
+                     "year": item["yearly_kopecks"]}
+                    for code, item in public_catalog().items()
+                ]
+                self.send_json(200, {"plans": plans})
+            elif method == "GET" and path == "/api/mobile/compat":
+                # The web UI updates by itself; native features need a recent APK.
+                # Below the minimum the app shows a blocking update screen.
+                def version(name, default):
+                    try:
+                        return max(0, int(os.getenv(name, str(default))))
+                    except ValueError:
+                        return default
+                self.send_json(200, {
+                    "platform": "android",
+                    "bridge_protocol": 1,
+                    "min_version_code": version("ANDROID_MIN_VERSION_CODE", 0),
+                    "latest_version_code": version("ANDROID_LATEST_VERSION_CODE", 41),
+                    "store_url": "https://www.rustore.ru/catalog/app/ru.smetra.mobile",
+                    "message": os.getenv("ANDROID_UPDATE_MESSAGE", "")[:300],
+                })
             elif method == "GET" and path == "/api/mobile/presentation":
                 presentation = json.loads((ROOT / "backend" / "mobile_presentation.json").read_text(encoding="utf-8"))
                 self.send_json(200, presentation)
@@ -545,6 +602,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("SELECT 1")
             return self.send_json(200, {"ok": True})
         public = {
+            "/partner-landing": ("partner-landing.html", "text/html"),
+            "/partner-privacy": ("partner-privacy.html", "text/html"),
+            "/partner-terms": ("partner-terms.html", "text/html"),
+            "/partner-console": ("partner-console.html", "text/html"),
+            "/partner-docs": ("partner-docs.html", "text/html"),
+            "/partner-docs.html": ("partner-docs.html", "text/html"),
+            "/partner-docs.md": ("partner-docs.md", "text/markdown"),
+            "/partner-openapi.json": ("partner-openapi.json", "application/json"),
             "/": ("index.html", "text/html"),
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
@@ -554,100 +619,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),
-            "/change.js": ("change.js", "text/javascript"),
-            "/style.css": ("style.css", "text/css"),
-            "/app.js": ("app.js", "text/javascript"),
-            "/experience.js": ("experience.js", "text/javascript"),
-            "/assets/obsidian-folio.png": ("assets/obsidian-folio.png", "image/png"),
-            "/assets/black-titanium.png": ("assets/black-titanium.png", "image/png"),
             "/favicon.ico": ("favicon.ico", "image/x-icon"),
+            "/favicon.png": ("favicon.png", "image/png"),
             "/robots.txt": ("robots.txt", "text/plain"),
             "/sitemap.xml": ("sitemap.xml", "application/xml"),
             "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
-            "/service-worker.js": ("service-worker.js", "text/javascript"),
-            "/pwa.js": ("pwa.js", "text/javascript"),
             "/offline.html": ("offline.html", "text/html"),
             "/offline.css": ("offline.css", "text/css"),
-            "/theme-init.js": ("theme-init.js", "text/javascript"),
-            "/themes.css": ("themes.css", "text/css"),
             "/assets/fonts/onest-variable.woff2": ("assets/fonts/onest-variable.woff2", "font/woff2"),
+            "/vendor/markdown-it-15.0.2.min.js": ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
+            "/vendor/three-0.170.0.module.min.js": ("vendor/three-0.170.0.module.min.js", "text/javascript"),
+            "/vendor/three-rounded-box-0.170.0.js": ("vendor/three-rounded-box-0.170.0.js", "text/javascript"),
+            "/vendor/three-room-environment-0.170.0.js": ("vendor/three-room-environment-0.170.0.js", "text/javascript"),
+            "/vendor/qrcode-generator-1.4.4.js": ("vendor/qrcode-generator-1.4.4.js", "text/javascript"),
+            "/assets/landing/room.webp": ("assets/landing/room.webp", "image/webp"),
+            "/assets/pwa/drops.svg": ("assets/pwa/drops.svg", "image/svg+xml"),
+            "/assets/pwa/icon-192.png": ("assets/pwa/icon-192.png", "image/png"),
+            "/assets/pwa/icon-512.png": ("assets/pwa/icon-512.png", "image/png"),
+            "/assets/pwa/icon-maskable-512.png": ("assets/pwa/icon-maskable-512.png", "image/png"),
+            "/assets/pwa/apple-touch-icon.png": ("assets/pwa/apple-touch-icon.png", "image/png"),
         }
-        for weight in (400, 500, 600, 700, 800):
-            font = f"assets/fonts/manrope-{weight}.ttf"
-            public["/" + font] = (font, "font/ttf")
-        for name, mime in (
-            ("black.css", "text/css"),
-            ("auth-email.css", "text/css"),
-            ("auth-email.js", "text/javascript"),
-            ("auth-layout-v2.css", "text/css"),
-            ("landing-refinement.css", "text/css"),
-            ("cabinet-refinement.css", "text/css"),
-            ("workspace-layout-v3.css", "text/css"),
-            ("cabinet-alignment-v4.css", "text/css"),
-            ("cabinet.css", "text/css"),
-            ("product-ui.css", "text/css"),
-            ("product-ui.js", "text/javascript"),
-            ("assistant.css", "text/css"),
-            ("construction.css", "text/css"),
-            ("construction.js", "text/javascript"),
-            ("field-flows.js", "text/javascript"),
-            ("field-flows.css", "text/css"),
-            ("interface-audit.css", "text/css"),
-            ("auth-motion-fix.css", "text/css"),
-            ("sidebar-motion-v2.css", "text/css"),
-            ("assistant-markdown-modern.css", "text/css"),
-            ("assistant-interactions.css", "text/css"),
-            ("quote-visual-core.css", "text/css"),
-            ("dashboard-reference.css", "text/css"),
-            ("quote-visual-core.js", "text/javascript"),
-            ("quote-layout-renderer.js", "text/javascript"),
-            ("ai-workspace.js", "text/javascript"),
-            ("file-editor.css", "text/css"),
-            ("file-editor.js", "text/javascript"),
-            ("file-preview.css", "text/css"),
-            ("file-preview.js", "text/javascript"),
-            ("black.js", "text/javascript"),
-            ("assistant-chat.js", "text/javascript"),
-            ("profile-ui.js", "text/javascript"),
-            ("features.js", "text/javascript"),
-            ("chat-markdown.js", "text/javascript"),
-            ("vendor/markdown-it-15.0.2.min.js", "text/javascript"),
-            ("assistant-studio.css", "text/css"),
-            ("premium-tools.css", "text/css"),
-            ("premium-tools.js", "text/javascript"),
-            ("communication-center.js", "text/javascript"),
-            ("communication-center.css", "text/css"),
-            ("ecosystem-billing.js", "text/javascript"),
-            ("object-chats.js", "text/javascript"),
-            ("landing.js", "text/javascript"),
-            ("assets/black/unfold.png", "image/png"),
-            ("assets/black/flight.png", "image/png"),
-        ):
-            public["/" + name] = (name, mime)
-        public["/workspace.js"] = ("workspace.js", "text/javascript")
-        public["/admin.js"] = ("admin.js", "text/javascript")
-        public["/admin.css"] = ("admin.css", "text/css")
-        public["/growth.js"] = ("growth.js", "text/javascript")
-        public["/quote-review.js"] = ("quote-review.js", "text/javascript")
-        public["/quote-editor-state.js"] = ("quote-editor-state.js", "text/javascript")
-        public["/select-menu.js"] = ("select-menu.js", "text/javascript")
-        public["/select-menu.css"] = ("select-menu.css", "text/css")
-        public["/data-export.js"] = ("data-export.js", "text/javascript")
-        public["/data-export.css"] = ("data-export.css", "text/css")
-        public["/quote-review.css"] = ("quote-review.css", "text/css")
-        public["/design-system.css"] = ("design-system.css", "text/css")
-        public["/ui-foundation.css"] = ("ui-foundation.css", "text/css")
-        public["/quote-editor.css"] = ("quote-editor.css", "text/css")
-        public["/dashboard-polish.css"] = ("dashboard-polish.css", "text/css")
-        for name in (
-            "reference-hero",
-            "reference-sphere",
-            "reference-cube",
-            "reference-pyramid",
-            "reference-ribbon",
-        ):
-            asset = f"assets/{name}.png"
-            public["/" + asset] = (asset, "image/png")
+        # Every top-level script is public; the build validates them with node --check.
+        js_asset = re.fullmatch(r"/([a-z0-9-]{1,40})\.js", path)
+        if js_asset and (WEB / f"{js_asset[1]}.js").is_file():
+            public[path] = (f"{js_asset[1]}.js", "text/javascript")
         for name in (
             "arrow-up-right",
             "arrow-up",
@@ -693,6 +688,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             icon = f"assets/icons/{name}.svg"
             public["/" + icon] = (icon, "image/svg+xml")
+        # The shared interface system lives in apps/web/ui as flat CSS/JS files.
+        ui_asset = re.fullmatch(r"/ui/([a-z0-9-]{1,40})\.(css|js)", path)
+        if ui_asset and (WEB / "ui" / f"{ui_asset[1]}.{ui_asset[2]}").is_file():
+            public[path] = (
+                f"ui/{ui_asset[1]}.{ui_asset[2]}",
+                "text/css" if ui_asset[2] == "css" else "text/javascript",
+            )
         if path not in public:
             raise ApiError(404, "Страница не найдена")
         file, typ = public[path]
@@ -712,7 +714,197 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def partner_redirect(self, target, cookie=None):
+        self.send_response(302)
+        self.send_header("Location", target)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+
     def api(self, method, path, query, con):
+        # Stable versioned public contract with aliases for existing pilot clients.
+        if path.startswith("/api/partners/v1/"):
+            path = "/api/partners/" + path[len("/api/partners/v1/"):]
+        if path.startswith("/api/partners/"):
+            from backend import partner_platform as partner
+            try:
+                if method == "GET" and re.fullmatch(r"/api/partners/r/[a-z0-9_-]{3,40}", path):
+                    self.throttle("partner-visit:" + self.client_address[0], 40, 3600)
+                    token = partner.begin_visit(con, path.rsplit("/", 1)[1])
+                    return self.partner_redirect(ORIGIN + "/app?register=1",
+                        partner.cookie_header(token, COOKIE_SECURE))
+                if path == "/api/partners/offers" and method == "GET":
+                    user = self.auth(con)
+                    self.throttle("partner-offers:" + user["id"], 40, 3600)
+                    return self.send_json(200, partner.offers(con, query.get("q", [""])[0]))
+                if method == "GET" and re.fullmatch(r"/api/partners/out/[0-9a-f-]{36}", path):
+                    user = self.auth(con)
+                    self.throttle("partner-out:" + user["id"], 40, 3600)
+                    return self.partner_redirect(partner.outbound(con, user, path.rsplit("/", 1)[1]))
+                if path.startswith("/api/partners/admin/"):
+                    admin = self.auth(con, True)
+                    self.throttle("partner-admin:" + admin["id"], 20, 3600)
+                    if path == "/api/partners/admin/reconcile" and method == "POST":
+                        data = self.body()
+                        if not isinstance(data, dict) or set(data) - {"limit"}:
+                            raise ApiError(400, "Некорректная сверка")
+                        self.throttle("partner-reconcile:" + admin["id"], 6, 3600)
+                        with business.transaction(con, lock_scopes=("partner:reconcile",)):
+                            result = partner.reconcile_confirmed_payments(con, data.get("limit", 100))
+                            audit(con, admin["id"], "partner.commissions_reconciled",
+                                  str(result["created"]))
+                        return self.send_json(200, result)
+                    if path == "/api/partners/admin/accounts" and method == "GET":
+                        return self.send_json(200, partner.list_partners(con))
+                    if path == "/api/partners/admin/accounts" and method == "POST":
+                        created = partner.create_partner(con, self.body())
+                        audit(con, admin["id"], "partner.created", created["id"])
+                        return self.send_json(201, created)
+                    if method == "POST" and re.fullmatch(
+                            r"/api/partners/admin/accounts/[0-9a-f-]{36}/rotate-key", path):
+                        partner_id = path.split("/")[-2]
+                        rotated = partner.rotate_api_key(con, partner_id)
+                        audit(con, admin["id"], "partner.key_rotated", partner_id)
+                        return self.send_json(200, rotated)
+                    if method == "POST" and re.fullmatch(
+                            r"/api/partners/admin/accounts/[0-9a-f-]{36}/owner", path):
+                        from backend import partner_access as access
+                        data = self.body()
+                        if not isinstance(data, dict) or set(data) != {"email"}:
+                            raise ApiError(400, "Ожидается email")
+                        partner_id = path.split("/")[-2]
+                        result = access.admin_invite_owner(con, partner_id, data["email"])
+                        audit(con, admin["id"], "partner.owner_invited", partner_id)
+                        return self.send_json(201, result)
+                    if method == "POST" and re.fullmatch(
+                            r"/api/partners/admin/accounts/[0-9a-f-]{36}/state", path):
+                        data = self.body()
+                        if not isinstance(data, dict) or set(data) != {"active"}:
+                            raise ApiError(400, "Ожидается active")
+                        partner_id = path.split("/")[-2]
+                        updated = partner.set_partner_active(con, partner_id, data["active"])
+                        audit(con, admin["id"], "partner.state_changed", partner_id)
+                        return self.send_json(200, updated)
+                if path == "/api/partners/sso/start" and method == "GET":
+                    # On smetra.online: the account session cookie lives here, the console cannot read it.
+                    from backend import partner_access as access
+                    try:
+                        user = self.auth(con)
+                    except ApiError:
+                        return self.partner_redirect(ORIGIN + "/app?partner_sso=1")
+                    self.throttle("partner-sso:" + user["id"], 30, 3600)
+                    code = access.begin_sso(con, user)
+                    # Fragment, not query: the code never reaches logs or the Referer header.
+                    return self.partner_redirect(PARTNER_CONSOLE_ORIGIN + "/app#sso=" + code)
+                if path == "/api/partners/console/session/sso" and method == "POST":
+                    from backend import partner_access as access
+                    self.throttle("partner-login:" + self.client_address[0], 20, 900)
+                    data = self.body()
+                    if not isinstance(data, dict) or not set(data) <= {"code", "partner_id"} or "code" not in data:
+                        raise ApiError(400, "Некорректный вход")
+                    partner_id = data.get("partner_id")
+                    if partner_id is not None and (not isinstance(partner_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", partner_id)):
+                        raise ApiError(400, "Некорректный партнёр")
+                    result = access.exchange_sso(con, data["code"], partner_id)
+                    if "session_token" in result:
+                        audit(con, None, "partner.console_signed_in", result["partner"]["id"])
+                    return self.send_json(201 if "session_token" in result else 200, result)
+                if path == "/api/partners/console/session" and method == "POST":
+                    self.throttle("partner-login:" + self.client_address[0], 8, 900)
+                    data = self.body()
+                    if set(data) != {"api_key"} or not isinstance(data["api_key"], str):
+                        raise ApiError(400, "Нужен ключ партнёра")
+                    return self.send_json(201, partner.new_console_session(con, "Partner " + data["api_key"]))
+                if path == "/api/partners/console/logout" and method == "POST":
+                    partner.revoke_console_session(con, self.headers.get("Authorization"))
+                    return self.send_json(200, {"ok": True})
+                if path.startswith("/api/partners/console/"):
+                    from backend import partner_access as access
+                    from backend import partner_integrations as integration
+                    org, role, member = access.console_access(con, self.headers.get("Authorization"))
+                    if path == "/api/partners/console/me" and method == "GET":
+                        return self.send_json(200, access.me(con, org, role, member))
+                    if path == "/api/partners/console/summary" and method == "GET":
+                        access.require(role, "summary")
+                        self.throttle("partner-console:" + org["id"], 100, 3600)
+                        return self.send_json(200, partner.summary(con, org))
+                    if path == "/api/partners/console/profile" and method == "GET":
+                        return self.send_json(200, partner.partner_profile(con, org))
+                    if path in ("/api/partners/console/products", "/api/partners/console/commissions") and method == "GET":
+                        access.require(role, "products" if path.endswith("products") else "commissions")
+                        self.throttle("partner-page:" + org["id"], 120, 3600)
+                        raw_limit = query.get("limit", ["50" if path.endswith("products") else "30"])[0]
+                        if not isinstance(raw_limit, str) or not re.fullmatch(r"[1-9][0-9]{0,2}", raw_limit):
+                            raise ApiError(400, "Некорректный размер страницы")
+                        limit = int(raw_limit)
+                        cursor = query.get("cursor", [""])[0]
+                        result = (partner.catalog_page(con, org, limit, cursor)
+                                  if path.endswith("products") else
+                                  partner.commission_page(con, org, limit, cursor))
+                        return self.send_json(200, result)
+                    if path == "/api/partners/console/catalog" and method == "POST":
+                        access.require(role, "catalog_write")
+                        self.throttle("partner-catalog:" + org["id"], 20, 3600)
+                        result = partner.ingest_products(con, org, self.body())
+                        audit(con, member, "partner.catalog_updated", org["id"], str(result["accepted"]))
+                        return self.send_json(200, result)
+                    if path == "/api/partners/console/team" and method == "GET":
+                        access.require(role, "team")
+                        return self.send_json(200, access.team(con, org))
+                    if path == "/api/partners/console/team/invites" and method == "POST":
+                        access.require(role, "team")
+                        self.throttle("partner-team:" + org["id"], 30, 3600)
+                        result = access.invite(con, org, role, member, self.body())
+                        audit(con, member, "partner.member_invited", org["id"], result["role"])
+                        return self.send_json(201, result)
+                    team_item = re.fullmatch(r"/api/partners/console/team/(invites|members)/([0-9a-f-]{36})/(revoke|role|remove)", path)
+                    if team_item and method == "POST":
+                        access.require(role, "team")
+                        self.throttle("partner-team:" + org["id"], 30, 3600)
+                        kind, item, action = team_item.groups()
+                        if kind == "invites" and action == "revoke":
+                            result = access.revoke_invite(con, org, item)
+                        elif kind == "members" and action == "role":
+                            result = access.change_role(con, org, role, member, item, self.body())
+                        elif kind == "members" and action == "remove":
+                            result = access.remove_member(con, org, role, member, item)
+                        else:
+                            raise ApiError(404, "Не найдено")
+                        audit(con, member, "partner.team_" + kind[:-1] + "_" + action, org["id"], item)
+                        return self.send_json(200, result)
+                    self.throttle("partner-api:" + org["id"], 120, 3600)
+                    if path == "/api/partners/console/domain" and method == "GET":
+                        return self.send_json(200, integration.domain_status(con, org))
+                    if path == "/api/partners/console/domain" and method == "POST":
+                        access.require(role, "domain_write")
+                        data = self.body()
+                        if set(data) != {"method"}:
+                            raise ApiError(400, "Некорректные параметры домена")
+                        result = integration.begin_verification(con, org, data["method"])
+                        audit(con, member, "partner.domain_challenge_created", org["id"], data["method"])
+                        return self.send_json(200, result)
+                    if path == "/api/partners/console/domain/verify" and method == "POST":
+                        access.require(role, "domain_write")
+                        self.throttle("partner-verify:" + org["id"], 6, 900)
+                        result = integration.verify_domain(con, org)
+                        audit(con, member, "partner.domain_check", org["id"], result["status"])
+                        return self.send_json(200, result)
+                    if path == "/api/partners/console/analytics" and method == "GET":
+                        access.require(role, "analytics")
+                        days = query.get("days", ["30"])[0]
+                        if not isinstance(days, str) or days not in ("7", "30", "90"):
+                            raise ApiError(400, "Период: 7, 30 или 90 дней")
+                        return self.send_json(200, integration.analytics(con, org, int(days)))
+                    if path == "/api/partners/console/events" and method == "POST":
+                        access.require(role, "events")
+                        self.throttle("partner-event:" + org["id"], 300, 3600)
+                        return self.send_json(202, integration.report_event(con, org, self.body()))
+            except partner.PartnerError as err:
+                raise ApiError(err.status, err.message) from None
+            raise ApiError(404, "Не найдено")
         if path == "/api/shared-inbox" or path.startswith("/api/shared-inbox/"):
             from backend.estimate_sharing import recipient_route
             return self.send_json(*recipient_route(self,con,method,path))
@@ -725,7 +917,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == '/api/billing/pricing' and method == 'GET':
             experiment,variants=revenue.configuration()
             cheapest=min(variants.values(),key=lambda v:v['month'])
-            return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment})
+            # Public plan list for the landing page. Prices come from the server
+            # catalog; PRO Solo follows the active pricing experiment.
+            from backend.plan_catalog import public_catalog
+            plans=[]
+            for code,plan in public_catalog().items():
+                month,year=plan['monthly_kopecks'],plan['yearly_kopecks']
+                if code=='pro_solo':
+                    month,year=cheapest['month'],cheapest['year']
+                plans.append({'code':code,'name':plan['name'].split(' / ')[0],'month':month,'year':year,
+                              'seats':plan['seats'],'storage_bytes':plan['storage_bytes'],'free_quotes':plan['free_quotes']})
+            return self.send_json(200,{'month':cheapest['month'],'year':cheapest['year'],'from_price':len(variants)>1,'experiment':experiment,'plans':plans})
         if path == "/api/cron/assistant" and method == "GET":
             from backend.assistant_jobs import run_one
 
@@ -934,12 +1136,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             email = str(data.get("email", "")).lower().strip()
             self.throttle("login-account:" + hashlib.sha256(email[:254].encode()).hexdigest(), 20, 300)
             user = con.execute(
-                "SELECT * FROM users WHERE email=?",
+                "SELECT * FROM users WHERE email=? AND deleted_at IS NULL",
                 (email,),
             ).fetchone()
-            if not user or not verify_password(
-                str(data.get("password", "")), user["password_hash"]
-            ):
+            password = data.get("password", "")
+            if not isinstance(password, str) or len(password) > 256:
+                raise ApiError(401, "Неверная почта или пароль")
+            # Hash even for unknown addresses so response time does not reveal accounts.
+            matched = verify_password(password, user["password_hash"] if user else _TIMING_DUMMY_HASH)
+            if not user or not matched:
                 raise ApiError(401, "Неверная почта или пароль")
             if user["blocked"]:
                 raise ApiError(403, "Аккаунт заблокирован")
@@ -1062,6 +1267,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
         if path == "/api/me" and method == "GET":
+            from backend.partner_platform import capture
+            capture(con, user, self.headers.get("Cookie", ""))
             revenue.visit(con, user)
             return self.send_json(200, {"user": user_view(user, con)})
         if path == "/api/admin/revenue" and method == "GET":
@@ -1206,6 +1413,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "payments": [dict(r) for r in payments],
                     "plans": {k: v['amount_kopecks'] for k, v in offer['plans'].items()},
                     "pricing": offer,
+                    "tokens": token_packs.offer(),
                     "checkout_mode": yookassa_mode(user),
                     "email_verified": user["email_verified_at"] is not None,
                 },
@@ -1213,6 +1421,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/billing/checkout" and method == "POST":
             if user["email_verified_at"] is None:
                 raise ApiError(403, "Подтвердите почту перед оплатой")
+            from backend.partner_platform import capture
+            capture(con, user, self.headers.get("Cookie", ""))
             data = self.body()
             plan = data.get("plan")
             key = self.headers.get("Idempotency-Key", "")
@@ -1284,6 +1494,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except ValueError:
                 raise ApiError(409,"Conflicting checkout") from None
             return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"]})
+        if path == "/api/billing/tokens/checkout" and method == "POST":
+            return self.token_checkout(con, user)
         if path == "/api/billing/sync" and method == "POST":
             self.throttle("sync:" + user["id"], 5, 60)
             rows = con.execute(
@@ -1390,38 +1602,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("UPDATE support SET status=? WHERE id=?", (status, target))
                 audit(con, user["id"], "admin.support." + status, target)
             return self.send_json(200, {"ok": True})
-        if path.startswith("/api/admin/users/") and method == "PATCH":
+        if path.startswith("/api/admin/users/") and method in ("GET", "PATCH"):
+            from backend import admin_users
             target = path.removeprefix("/api/admin/users/")
-            data = self.body()
-            action = data.get("action")
-            reason = data.get("reason", "")
-            if not isinstance(reason, str) or len(reason.strip()) > 200:
-                raise ApiError(400, "Некорректная причина")
-            if target == user["id"] and action == "block":
-                raise ApiError(409, "Нельзя заблокировать себя")
-            if not con.execute("SELECT 1 FROM users WHERE id=?", (target,)).fetchone():
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", target):
                 raise ApiError(404, "Пользователь не найден")
-            if action in ("block", "unblock"):
-                con.execute(
-                    "UPDATE users SET blocked=? WHERE id=?",
-                    (int(action == "block"), target),
-                )
-                if action == "block":
-                    con.execute("DELETE FROM sessions WHERE user_id=?", (target,))
-            elif action == "grant":
-                con.execute(
-                    "UPDATE users SET plan='pro',entitlement_until=max(coalesce(entitlement_until,0),?)+? WHERE id=?",
-                    (now(), 31 * 86400, target),
-                )
-            elif action == "revoke":
-                con.execute(
-                    "UPDATE users SET plan='free',entitlement_until=0 WHERE id=?",
-                    (target,),
-                )
-            else:
-                raise ApiError(400, "Неизвестное действие")
-            audit(con, user["id"], "admin." + action, target, reason.strip())
-            return self.send_json(200, {"ok": True})
+            if method == "GET":
+                return self.send_json(200, admin_users.detail(con, target))
+            self.throttle("admin-user-action:" + user["id"], 120, 60)
+            return self.send_json(200, admin_users.act(con, user, target, self.body(), audit))
         raise ApiError(404, "Маршрут не найден")
 
     def quote_view(self, r):
@@ -1513,6 +1702,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ):
             raise ApiError(409, "Платёж получен не от выбранного магазина")
 
+    def token_checkout(self, con, user):
+        """One-time token pack. Mirrors subscription checkout; grants happen in apply_payment."""
+        if user["email_verified_at"] is None:
+            raise ApiError(403, "Подтвердите почту перед оплатой")
+        data = self.body()
+        millions = data.get("millions")
+        key = self.headers.get("Idempotency-Key", "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", key):
+            raise ApiError(400, "Неверный ключ запроса")
+        amount = token_packs.price(millions)
+        plan = token_packs.code(millions)
+        expected = data.get("expected_amount_kopecks")
+        if expected is not None and expected != amount:
+            raise ApiError(409, "Цена токенов изменилась. Обновите страницу.")
+        mode = yookassa_mode(user)
+        if mode == "off":
+            raise ApiError(503, "Оплата пока недоступна")
+        self.throttle("token-checkout:" + user["id"], 10, 600)
+        previous = con.execute("SELECT * FROM payments WHERE user_id=? AND idempotency_key=?", (user["id"], key)).fetchone()
+        if previous:
+            if previous["plan"] != plan or previous["amount_kopecks"] != amount:
+                raise ApiError(409, "Ключ уже использован для другой покупки")
+            refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous["id"],)).fetchone()
+            return self.send_json(200, {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"]})
+        workspace_id = business.ensure_workspace(con, user)
+        con.execute(
+            "INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages,workspace_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_key) DO NOTHING",
+            (uid(), user["id"], key, plan, amount, 1, "tokens", revenue.source(data.get("source")), int(mode == "test"), now(), 0, workspace_id),
+        )
+        intent = con.execute("SELECT * FROM billing_intents WHERE user_id=? AND request_key=?", (user["id"], key)).fetchone()
+        if intent["plan"] != plan or intent["amount_kopecks"] != amount:
+            raise ApiError(409, "Ключ уже использован для другой покупки")
+        request = {
+            "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
+            "capture": True,
+            "confirmation": {"type": "redirect", "return_url": ORIGIN + "/app?payment=return#billing"},
+            "description": f"Токены ассистента Сметры: {millions} млн",
+            "metadata": {"user_id": user["id"], "plan": plan},
+        }
+        provider_key = hashlib.sha256(("tokens:v1:" + user["id"] + ":" + key).encode()).hexdigest()
+        result = self.provider_call("/payments", "POST", request, provider_key)
+        self.verify_yookassa_shop(result)
+        if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
+            raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
+        if not result.get("id") or not result.get("confirmation", {}).get("confirmation_url", "").startswith("https://"):
+            raise ApiError(502, "Платежный сервис вернул неполный ответ")
+        try:
+            saved, created = revenue.persist_checkout(con, user, key, plan, intent, result)
+        except ValueError:
+            raise ApiError(409, "Conflicting checkout") from None
+        return self.send_json(201 if created else 200, {"url": saved["confirmation_url"], "status": saved["status"]})
+
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)
         if (
@@ -1543,7 +1785,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE payments SET status=?, activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
                         (status, status, now(), local["id"]),
                     )
-                    if status == "succeeded":
+                    pack = token_packs.millions_of(local["plan"])
+                    if status == "succeeded" and pack:
+                        # A token pack never changes the subscription; it only fills the wallet.
+                        from backend import ai_tokens
+                        ai_tokens.credit(con, local["user_id"], pack * token_packs.MILLION, "purchase",
+                                         f"{pack} млн", "payment:" + local["id"])
+                        terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?', (local['id'],)).fetchone()
+                        if terms and not terms['is_test']:
+                            revenue.record(con, local['user_id'], 'payment_success', terms['source'], terms['variant'], 'payment:' + local['id'] + ':succeeded')
+                    elif status == "succeeded":
                         terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
                         prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
                         grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
@@ -1561,8 +1812,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
                             )
                         revenue.rebuild_workspace_entitlement(con, local["user_id"], terms["workspace_id"] if terms else None)
+                        from backend.partner_platform import record_subscription_payment
+                        record_subscription_payment(con, local)
                         newly_succeeded = True
-                    if status in ('succeeded','canceled'):
+                    if status in ('succeeded','canceled') and not pack:
                         revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
@@ -1622,10 +1875,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             now(),
                         ),
                     )
+                    from backend.partner_platform import reverse_subscription_payment
+                    reverse_subscription_payment(con, payment["id"])
+                    pack = token_packs.millions_of(payment["plan"])
+                if not existing and pack:
+                    from backend import ai_tokens
+                    # Tokens already spent cannot be taken back; the rest of the pack is.
+                    moved = con.execute("SELECT delta FROM ai_token_ledger WHERE user_id=? AND ref=?",
+                                        (payment["user_id"], "payment:" + payment["id"])).fetchone()
+                    if moved:
+                        ai_tokens._wallet_add(con, payment["user_id"], -int(moved["delta"]), "refund_revoke", "", "refund:" + payment["id"])
+                    event(con, payment["user_id"], "payment_refunded")
+                    audit(con, None, "payment.refunded", payment["id"])
+                elif not existing:
                     # Rebuild remaining paid time without the refunded grant.
                     grants = con.execute(
                         """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
                         WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
+                        AND p.plan NOT LIKE 'tokens_%'
                         AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
                         ORDER BY p.activated_at,p.created_at,p.id""",
                         (payment["user_id"],),
@@ -1645,6 +1912,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     revenue.rebuild_workspace_entitlement(con, payment["user_id"], refunded_terms["workspace_id"] if refunded_terms else None)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
+                    from backend import ai_tokens
+                    ai_tokens.revoke_purchase_bonus(con, payment["user_id"], payment["id"])
                     event(con, payment["user_id"], "payment_refunded")
                     terms=con.execute('SELECT is_test,source,variant FROM billing_intents WHERE payment_id=?',(payment['id'],)).fetchone()
                     if terms and not terms['is_test']:

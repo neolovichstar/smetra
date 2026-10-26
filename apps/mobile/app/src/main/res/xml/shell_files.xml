@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the app's own cache folders are shared: camera captures and files sent to other apps. -->
+<paths>
+    <cache-path name="captures" path="captures/" />
+    <cache-path name="shared" path="shared/" />
+</paths>

@@ -14,7 +14,7 @@ from backend.business import DomainError as ApiError
 try:
     from backend import postgres as _postgres
     _postgres.TABLES = _postgres.TABLES | frozenset(
-        {"chat_conversations", "chat_members", "chat_messages", "app_presence"}
+        {"chat_conversations", "chat_members", "chat_messages", "app_presence", "billing_subscriptions"}
     )
 except (ImportError, AttributeError):
     pass
@@ -239,6 +239,10 @@ def _message_view(row):
         "id": row["id"], "sender_id": row["sender_id"],
         "sender_type": row["sender_type"], "body": row["body"],
         "metadata": _json(row["metadata"]), "created_at": row["created_at"],
+        # Display name lets group chats label bubbles like a messenger.
+        # Staff names stay private: only peer users are labelled by name.
+        "sender_name": (row["sender_name"] if "sender_name" in row.keys()
+                        and row["sender_type"] == "user" else None),
     }
 
 
@@ -265,9 +269,9 @@ def _list_conversations(con, user_id, kinds, include_user=False):
     rows = con.execute(
         "SELECT c.*, "
         "(SELECT m.body FROM chat_messages m WHERE m.conversation_id=c.id "
-        " ORDER BY m.created_at DESC,m.id DESC LIMIT 1) AS last_message, "
+        " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_message, "
         "(SELECT m.created_at FROM chat_messages m WHERE m.conversation_id=c.id "
-        " ORDER BY m.created_at DESC,m.id DESC LIMIT 1) AS last_message_at, "
+        " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_message_at, "
         "(SELECT COUNT(*) FROM chat_messages m JOIN chat_members mine "
         " ON mine.conversation_id=m.conversation_id AND mine.user_id=? "
         " WHERE m.conversation_id=c.id AND m.created_at>mine.last_read_at "
@@ -291,8 +295,12 @@ def _list_conversations(con, user_id, kinds, include_user=False):
 def _messages(con, conversation_id, after=0, limit=100):
     limit = max(1, min(int(limit), 100))
     rows = con.execute(
-        "SELECT id,sender_id,sender_type,body,metadata,created_at FROM chat_messages "
-        "WHERE conversation_id=? AND created_at>? ORDER BY created_at,id LIMIT ?",
+        "SELECT m.id,m.sender_id,m.sender_type,m.body,m.metadata,m.created_at,u.name AS sender_name "
+        "FROM chat_messages m LEFT JOIN users u ON u.id=m.sender_id "
+        # Replies are often written in the same second as the question; keep
+        # the question first so the thread reads in conversation order.
+        "WHERE m.conversation_id=? AND m.created_at>? ORDER BY m.created_at,"
+        "CASE m.sender_type WHEN 'user' THEN 0 WHEN 'system' THEN 1 ELSE 2 END,m.id LIMIT ?",
         (conversation_id, int(after or 0), limit),
     ).fetchall()
     return [_message_view(row) for row in rows]
@@ -469,91 +477,169 @@ def send_quote_to_user(con, workspace_id, quote_id, owner_id, recipient_id, quot
     }
 
 
+def _plan_lines():
+    from backend.plan_catalog import public_catalog
+
+    lines = []
+    for item in public_catalog().values():
+        month = int(item["monthly_kopecks"] or 0) // 100
+        year = int(item["yearly_kopecks"] or 0) // 100
+        price = "бесплатно" if not month else f"{month} ₽ в месяц" + (f" или {year} ₽ в год" if year else "")
+        quotes = "до " + str(item["free_quotes"]) + " смет" if item.get("free_quotes") else "безлимитные сметы"
+        lines.append(f"{item['name']}: {price}, {quotes}, мест: {item['seats']}")
+    return "; ".join(lines)
+
+
+SUPPORT_PRODUCT_GUIDE = (
+    "Разделы кабинета (левое меню): «Сегодня» — сводка и быстрый черновик сметы по описанию; "
+    "«Ассистент» — ИИ-чат, который готовит черновики и правки смет, но любые изменения применяются "
+    "только после кнопки «Применить»; суммы и итоги всегда считает сервер Сметры, а не ИИ; "
+    "«Сметы» — список, редактор позиций, версии, публикация клиентской ссылки, согласование клиентом "
+    "без регистрации, PDF/Excel; «Проекты» — согласованные сметы в работе; «Клиенты» — контакты и история; "
+    "«Объекты и замеры» — помещения, объёмы, журнал работ, закупки и допработы; «Инструменты смет» — "
+    "смета на слух (голос), разбор PDF дизайн-проекта, геометрия помещения; «Полученные сметы» — "
+    "предложения, присланные вам; «Лиды», «Задачи», «Календарь», «Платежи» — учёт заявок, дел и денег; "
+    "«Расценки» — собственный прайс с импортом и экспортом CSV; «Калькуляторы» — бесплатный расчёт "
+    "плитки, ламината, краски, штукатурки и бетона с переносом количества в новую смету; «Материалы» — "
+    "облачные папки и мониторинг цен; «Файлы», «Документы», «Команда», «Чаты объектов»; "
+    "«Уведомления», «Тариф и оплата», «Поддержка», «Чаты и сообщения» (центр общения: личные чаты по "
+    "публичному ID вида SM-…, чаты объектов TEAM, сообщество), «Настройки» (профиль, аккаунт и вход, "
+    "ассистент, тема, экспорт данных, удаление аккаунта). В редакторе сметы есть автоматическая "
+    "проверка «Антисмета». Веб и Android используют один аккаунт. Вход — по почте (код или пароль) "
+    "или через Яндекс ID. Оплата — разово через ЮKassa за выбранный период, без автосписаний. "
+)
+
+
 def _support_prompt(user, user_stats):
     return (
-        "Ты — бесплатный виртуальный специалист поддержки сервиса «сметра.». "
-        "Общайся естественно, тепло и коротко на русском языке, как внимательный человек, "
-        "а не робот и не рекламный текст. Не сообщай пользователю, что ты постоянно следишь за ним. "
-        "Ты знаешь подтверждённые разделы продукта: Сегодня, Ассистент, Сметы, Проекты, "
-        "Клиенты, Объекты, Лиды, Задачи, Календарь, Платежи, Расценки, Файлы, Документы, "
-        "Команда, Уведомления, Тариф и оплата, Профиль и Поддержка. В сметах доступны черновики, "
-        "версии, публикация ссылки и согласование клиентом; отдельные бизнес-разделы зависят от "
-        "рабочего пространства и прав доступа. Ассистент может подготовить черновик/изменение, "
-        "но пользователь должен подтвердить внешне значимые действия. Веб-кабинет и Android "
-        "используют общий аккаунт и общий серверный API. Для входа используется почта/пароль "
-        "или настроенный OAuth-провайдер. "
-        "При ответе давай короткие пошаговые инструкции с точными названиями разделов из "
-        "интерфейса. Если не знаешь, на каком экране пользователь находится, задай один короткий "
-        "уточняющий вопрос. Текущий доступ, фактические оплаты, наличие команды и техническое "
-        "состояние интеграций сверяй только по переданному live-контексту, не по догадке. "
-        "Не обещай функций, которых нет в этом контексте; не выдумывай статусы платежей, "
-        "сроки, цены, контакты или наличие интеграций. Тебе передаётся свежий, сокращённый "
-        "контекст аккаунта и состояние серверных интеграций; опирайся на эти данные для "
-        "диагностики, но не раскрывай внутренние переменные, названия секретов или устройство "
-        "инфраструктуры. Если данные отсутствуют, скажи об этом прямо. Не проси пароль, коды "
-        "входа, полные данные карты или секреты. Не раскрывай сведения других пользователей. "
-        "Если вопрос зависит от проверки аккаунта, платежа или ошибки, которую ты не можешь "
-        "подтвердить, честно объясни это и передай сотруднику. "
-        "Если пользователь просит человека, сотрудника, оператора или менеджера — обязательно "
-        "эскалируй обращение. Возвращай только JSON-объект с полями reply (строка), "
-        "escalate (boolean), reason (короткая строка). "
-        "Сведения о текущем пользователе, которыми можно пользоваться только в рамках его обращения: "
+        "Ты — специалист поддержки сервиса «Сметра» (сметы для ремонта и отделки). "
+        "Отвечай по-русски, тепло и по делу, как живой человек в мессенджере: 1–5 коротких "
+        "предложений или короткий нумерованный список шагов. Без канцелярита, рекламы и эмодзи. "
+        "Называй разделы и кнопки точно так, как в интерфейсе, в «кавычках». "
+        + SUPPORT_PRODUCT_GUIDE
+        + "Тарифы (цены от сервера, не меняй их): " + _plan_lines() + ". "
+        "Если не хватает данных, задай один уточняющий вопрос. Текущий тариф, оплаты, команду и "
+        "состояние интеграций бери только из live-контекста ниже; если его нет — так и скажи. "
+        "Не обещай функций, которых нет в описании; не выдумывай статусы платежей, сроки, цены, "
+        "контакты. Не проси пароль, коды входа, данные карты и секреты; не раскрывай внутренние "
+        "переменные и чужие данные. Возврат денег, спорные списания, блокировки, ошибки, которые "
+        "ты не можешь проверить, и прямые просьбы позвать человека, оператора или менеджера — "
+        "эскалируй сотруднику (escalate=true) и коротко скажи, что передал вопрос и ответ придёт в "
+        "этот чат. В остальных случаях решай сам, escalate=false. "
+        "Ответ — только JSON-объект: {\"reply\": строка, \"escalate\": true|false, "
+        "\"reason\": короткая строка}. "
+        "Live-контекст аккаунта (используй только для этого обращения): "
         + json.dumps(user_stats, ensure_ascii=False)
     )
+
+
+def _parse_support_reply(raw):
+    """Accept strict JSON, fenced JSON or plain prose from free models."""
+    if isinstance(raw, dict):
+        return raw
+    text = str(raw or "").strip()
+    if not text:
+        raise ValueError("empty support reply")
+    fenced = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE).strip()
+    for candidate in (fenced, (re.search(r"\{.*\}", fenced, re.S) or [None])[0]):
+        if not candidate:
+            continue
+        try:
+            decoded = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(decoded, dict) and str(decoded.get("reply") or "").strip():
+            return decoded
+    # Prose without the JSON envelope is still a usable answer.
+    if fenced.startswith("{"):
+        raise ValueError("malformed support payload")
+    return {"reply": fenced, "escalate": False, "reason": ""}
+
+
+def _support_completion(payload, timeout):
+    from backend.model_transport import FREE_ROUTER
+
+    def call(body):
+        request = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=json.dumps(body).encode(),
+            headers={
+                "Authorization": "Bearer " + os.getenv("OPENROUTER_API_KEY", "").strip(),
+                "Content-Type": "application/json",
+                "HTTP-Referer": ORIGIN,
+                "X-Title": "Smetra Support",
+            },
+            method="POST",
+        )
+        # Support has its own bounded JSON-mode/free-router retry. Do not call
+        # open_completion here: its retry would multiply support requests.
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read(500_000).decode("utf-8"))
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    try:
+        return _parse_support_reply(call(payload))
+    except urllib.error.HTTPError as error:
+        # Authentication and account-wide provider rate limits cannot be
+        # recovered by immediately making another paid/upstream request.
+        if error.code in (401, 403, 429):
+            raise
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError, TypeError):
+        pass
+    # Retry with a free model and without strict JSON mode, which is rejected
+    # by some free providers. The system prompt still requests JSON.
+    retry = {**payload, "model": FREE_ROUTER}
+    retry.pop("response_format", None)
+    return _parse_support_reply(call(retry))
 
 
 def _support_ai_reply(user, user_stats, history, message):
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     human_requested = wants_human(message)
+    if human_requested:
+        # Never hold a support conversation waiting for the model when the
+        # user explicitly asks to speak with an employee.
+        return {
+            "reply": "Передал обращение сотруднику поддержки. Ответ придёт в этот чат.",
+            "escalate": True, "reason": "user_requested_human",
+        }
     if not api_key:
         return {
             "reply": "Не хочу гадать и вводить вас в заблуждение: автоматическая поддержка сейчас недоступна. "
-                     "Я передал обращение сотруднику — напишите, пожалуйста, что именно произошло.",
+                     "Я передал обращение сотруднику — ответ придёт в этот чат.",
             "escalate": True, "reason": "support_ai_unavailable",
         }
     messages = [{"role": "system", "content": _support_prompt(user, user_stats)}]
-    for row in history[-8:]:
-        role = "user" if row["sender_type"] == "user" else "assistant"
-        messages.append({"role": role, "content": str(row["body"])[:4000]})
+    for row in history[-12:]:
+        if row["sender_type"] == "system":
+            continue
+        body = str(row["body"])[:4000]
+        if row["sender_type"] == "admin":
+            body = "Сотрудник поддержки ответил: " + body
+        messages.append({"role": "user" if row["sender_type"] == "user" else "assistant", "content": body})
     messages.append({"role": "user", "content": message})
-    payload = json.dumps({
+    payload = {
         "model": os.getenv("SUPPORT_AI_MODEL") or os.getenv("OPENROUTER_MODEL") or "openrouter/free",
         "messages": messages,
-        "temperature": 0.25,
-        "max_tokens": 600,
+        "temperature": 0.3,
+        "max_tokens": 700,
         "response_format": {"type": "json_object"},
-    }).encode()
-    request = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions",
-        data=payload,
-        headers={
-            "Authorization": "Bearer " + api_key,
-            "Content-Type": "application/json",
-            "HTTP-Referer": ORIGIN,
-            "X-Title": "Smetra Support",
-        },
-        method="POST",
-    )
+    }
     try:
-        try:
-            timeout = max(4, min(14, int(os.getenv("SUPPORT_AI_TIMEOUT_SECONDS", "10"))))
-        except ValueError:
-            timeout = 10
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read(500_000).decode("utf-8"))
-        raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        decoded = json.loads(raw) if isinstance(raw, str) else raw
-        if not isinstance(decoded, dict):
-            raise ValueError("invalid support model payload")
+        timeout = max(4, min(20, int(os.getenv("SUPPORT_AI_TIMEOUT_SECONDS", "12"))))
+    except ValueError:
+        timeout = 12
+    try:
+        decoded = _support_completion(payload, timeout)
         reply = _text(decoded.get("reply"), 3000, required=True)
-        escalate = bool(decoded.get("escalate")) or human_requested
+        escalate = decoded.get("escalate") is True
         reason = _text(decoded.get("reason"), 120) if escalate else ""
         return {"reply": reply, "escalate": escalate,
                 "reason": reason or ("user_requested_human" if human_requested else "ai_handoff")}
-    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError, TypeError):
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError, TypeError, ApiError):
         return {
-            "reply": "Пока не получается надёжно проверить ответ автоматически. "
-                     "Я передал ваше обращение специалисту; переписка сохранена здесь.",
+            "reply": "Пока не получается надёжно ответить автоматически. "
+                     "Я передал ваше обращение специалисту — ответ придёт в этот чат.",
             "escalate": True, "reason": "support_ai_error",
         }
 
@@ -935,6 +1021,21 @@ def _admin_overview(con):
     }
 
 
+SUPPORT_STAGES = ("new", "in_progress", "waiting_user", "resolved")
+
+
+def _support_stage(row):
+    """Queue status derived from stored facts; no extra column to drift."""
+    if row["status"] == "closed":
+        return "resolved"
+    last = row["last_sender_type"]
+    if row["assigned_admin_id"]:
+        return "waiting_user" if last == "admin" else "in_progress"
+    if last == "assistant" and not row["needs_human"]:
+        return "waiting_user"
+    return "new"
+
+
 def _admin_route(handler, method, path, query, con):
     admin = _auth(handler, con, admin=True)
     if path == "/api/admin/communication/overview" and method == "GET":
@@ -946,11 +1047,31 @@ def _admin_route(handler, method, path, query, con):
             "(SELECT m.created_at FROM chat_messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC,m.id DESC LIMIT 1) AS last_message_at, "
             "0 AS unread_count,'' AS partner_id,'' AS partner_name,"
             "(SELECT u.name FROM users u WHERE u.id=c.created_by) AS user_name,"
-            "(SELECT u.email FROM users u WHERE u.id=c.created_by) AS user_email "
+            "(SELECT u.email FROM users u WHERE u.id=c.created_by) AS user_email,"
+            "(SELECT m.sender_type FROM chat_messages m WHERE m.conversation_id=c.id AND m.sender_type<>'system' "
+            " ORDER BY m.created_at DESC,CASE m.sender_type WHEN 'user' THEN 0 WHEN 'assistant' THEN 1 ELSE 2 END DESC,m.id DESC LIMIT 1) AS last_sender_type,"
+            "(SELECT u.name FROM users u WHERE u.id=c.assigned_admin_id) AS assigned_admin_name "
             "FROM chat_conversations c WHERE c.kind='support' "
             "ORDER BY c.needs_human DESC,c.status ASC,c.updated_at DESC LIMIT 150"
         ).fetchall()
-        return handler.send_json(200, {"threads": [_conversation_view(row) for row in rows]})
+        threads = []
+        for row in rows:
+            view = _conversation_view(row)
+            view["stage"] = _support_stage(row)
+            view["assigned_admin_name"] = row["assigned_admin_name"] or ""
+            view["assigned_to_me"] = row["assigned_admin_id"] == admin["id"]
+            threads.append(view)
+        stage = (query.get("stage") or [""])[0] if isinstance(query, dict) else ""
+        if stage in SUPPORT_STAGES:
+            threads = [thread for thread in threads if thread["stage"] == stage]
+        return handler.send_json(200, {"threads": threads})
+    if path == "/api/admin/communication/admins" and method == "GET":
+        rows = con.execute(
+            "SELECT id,name,email FROM users WHERE role='admin' AND deleted_at IS NULL ORDER BY name LIMIT 50"
+        ).fetchall()
+        return handler.send_json(200, {"admins": [
+            {"id": row["id"], "name": row["name"] or row["email"], "me": row["id"] == admin["id"]} for row in rows
+        ]})
     match = re.fullmatch(r"/api/admin/communication/threads/([A-Za-z0-9_-]+)(?:/(messages))?", path)
     if match:
         conversation_id, action = match.group(1), match.group(2) or ""
@@ -975,8 +1096,20 @@ def _admin_route(handler, method, path, query, con):
         if method == "PATCH" and not action:
             data = handler.body()
             action_name = _text(data.get("action"), 20, required=True)
-            if action_name not in ("close", "reopen", "assign", "release"):
+            if action_name not in ("close", "reopen", "assign", "release", "transfer"):
                 raise ApiError(400, "Неизвестное действие")
+            if action_name == "transfer":
+                target = _text(data.get("admin_id"), 80, required=True)
+                if not con.execute(
+                    "SELECT 1 FROM users WHERE id=? AND role='admin' AND deleted_at IS NULL", (target,)
+                ).fetchone():
+                    raise ApiError(400, "Сотрудник не найден")
+                con.execute(
+                    "UPDATE chat_conversations SET assigned_admin_id=?,needs_human=0,status='open',updated_at=? WHERE id=?",
+                    (target, now(), conversation_id),
+                )
+                audit(con, admin["id"], "admin.support.transfer", conversation_id + ":" + target)
+                return handler.send_json(200, {"ok": True})
             if action_name == "close":
                 con.execute(
                     "UPDATE chat_conversations SET status='closed',needs_human=0,updated_at=? WHERE id=?",

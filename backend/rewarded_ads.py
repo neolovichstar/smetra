@@ -4,7 +4,7 @@ import hmac
 import os
 import secrets
 from backend.business import DomainError, business_date, identity, stamp, transaction
-from backend import assistant
+from backend import ai_tokens, assistant
 
 
 def route(service, method, data):
@@ -17,9 +17,9 @@ def route(service, method, data):
             "SELECT id FROM assistant_ad_reward_credits WHERE user_id=? AND reward_date=?",
             (user_id, today),
         ).fetchone()
-        eligible = bool(unit and current["plan"] == "free" and current["remaining"] <= 0 and not claimed)
+        eligible = bool(unit and current["plan"] == "free" and current["remaining"] < ai_tokens.MIN_START_TOKENS and not claimed)
         return 200, {"enabled": bool(unit), "available": eligible, "claimed_today": bool(claimed),
-                     "amount": 3, "ad_unit_id": unit if eligible else "",
+                     "amount": ai_tokens.AD_REWARD_TOKENS, "unit": "tokens", "ad_unit_id": unit if eligible else "",
                      "quota": assistant.public_quota(service)}
     if method != "POST":
         raise DomainError(405, "Требуется POST")
@@ -29,7 +29,7 @@ def route(service, method, data):
         raise DomainError(403, "Реклама отключена на платном тарифе")
     with transaction(service.con, lock_scopes=(f"user:{user_id}",)):
         if data.get("operation") == "start":
-            if assistant.quota(service)["remaining"] > 0:
+            if assistant.quota(service)["remaining"] >= ai_tokens.MIN_START_TOKENS:
                 raise DomainError(409, "Сначала израсходуйте доступные запросы")
             if service.con.execute("SELECT id FROM assistant_ad_reward_credits WHERE user_id=? AND reward_date=?", (user_id, today)).fetchone():
                 raise DomainError(409, "Бонус за сегодня уже получен")
@@ -46,7 +46,7 @@ def route(service, method, data):
         if not attempt or not hmac.compare_digest(attempt["nonce_hash"], hashlib.sha256(nonce.encode()).hexdigest()):
             raise DomainError(400, "Недействительная попытка просмотра")
         if attempt["status"] == "completed":
-            return 200, {"granted": 3, "replayed": True, "quota": assistant.public_quota(service)}
+            return 200, {"granted": ai_tokens.AD_REWARD_TOKENS, "unit": "tokens", "replayed": True, "quota": assistant.public_quota(service)}
         if attempt["expires_at"] <= stamp():
             raise DomainError(410, "Попытка просмотра истекла")
         # No trusted server receipt exists in this integration. SDK completion
@@ -56,8 +56,10 @@ def route(service, method, data):
         if existing:
             raise DomainError(409, "Бонус за сегодня уже получен")
         service.con.execute(
-            "INSERT INTO assistant_ad_reward_credits(id,user_id,attempt_id,reward_date,amount,remaining,created_at,expires_at) VALUES(?,?,?,?,3,3,?,?)",
+            "INSERT INTO assistant_ad_reward_credits(id,user_id,attempt_id,reward_date,amount,remaining,created_at,expires_at) VALUES(?,?,?,?,3,0,?,?)",
             (identity(), user_id, attempt["id"], today, now, now + 86400),
         )
+        # The daily row above prevents a second claim; the tokens go to the wallet.
+        ai_tokens.credit(service.con, user_id, ai_tokens.AD_REWARD_TOKENS, "ad_reward", "", "ad:" + attempt["id"])
         service.con.execute("UPDATE assistant_ad_attempts SET status='completed',completed_at=? WHERE id=?", (now, attempt["id"]))
-    return 200, {"granted": 3, "quota": assistant.public_quota(service)}
+    return 200, {"granted": ai_tokens.AD_REWARD_TOKENS, "unit": "tokens", "quota": assistant.public_quota(service)}

@@ -344,6 +344,8 @@ TRANSFER_COLUMNS = {
 
 
 def transfer(service, method, parts, query, data):
+    if parts and parts[0] == "orders" and method == "GET":
+        return orders_report(service, query)
     if not parts or parts[0] not in TRANSFER_COLUMNS:
         raise DomainError(404, "Этот тип импорта не поддерживается")
     kind = parts[0]
@@ -463,3 +465,31 @@ def transfer(service, method, parts, query, data):
             raise DomainError(err.status, f"Строка {index}: {err.message}") from None
     service.emit(kind, service.wid, "Данные импортированы", str(len(rows)))
     return 201, {"count": len(rows)}
+
+
+def orders_report(service, query):
+    """Money by order for the accountant: same server figures as the order card."""
+    if not service.finance_visible():
+        raise DomainError(403, "Отчёт по деньгам доступен владельцу, администратору и менеджеру")
+    from backend import order_finance
+
+    spreadsheet = query.get("format", ["csv"])[0] == "xlsx"
+    rows = order_finance.report_rows(order_finance.order_report(service.con, service.wid), numeric=spreadsheet)
+    # Text cells (order names) must not start a spreadsheet formula; money cells are plain numbers.
+    text = {0, 1}
+    rows = [[("'" + value) if i in text and isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else value for i, value in enumerate(row)] for row in rows]
+    if spreadsheet:
+        try:
+            from openpyxl import Workbook
+        except ImportError:
+            raise DomainError(503, "Установите openpyxl на сервере") from None
+        book = Workbook(write_only=True)
+        sheet = book.create_sheet("Заказы")
+        for row in rows:
+            sheet.append(row)
+        stream = io.BytesIO()
+        book.save(stream)
+        return 200, Download(stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "orders.xlsx")
+    stream = io.StringIO(newline="")
+    csv.writer(stream).writerows(rows)
+    return 200, Download(stream.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8", "orders.csv")

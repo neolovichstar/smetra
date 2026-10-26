@@ -22,6 +22,34 @@ except ZoneInfoNotFoundError:
     BUSINESS_TIMEZONE = dt.timezone(dt.timedelta(hours=3))
 
 
+# Internal economics a team member sees only with the finance permission.
+# Prices, contract amounts and client payments stay visible: they are needed
+# to work with the client. Costs, margins and spending are not.
+FINANCE_KEYS = frozenset((
+    "internal_cost", "cost_price", "cost_total", "profit", "planned_cost", "actual_cost",
+    "cash_profit", "planned_profit", "forecast_profit", "cash_result", "budget_used_pct",
+    "overrun", "overruns", "orders_with_costs", "orders_without_costs", "expenses",
+    "planned_cost_kopecks", "cost_kopecks", "actual_cost_kopecks",
+))
+FINANCE_ROLES = ("owner", "admin", "manager")
+
+
+# Events whose text is itself internal economics (the detail holds the amount).
+FINANCE_EVENTS = frozenset(("Расход записан",))
+
+
+def finance_event(value):
+    return isinstance(value, dict) and (value.get("action") in FINANCE_EVENTS or value.get("message") in FINANCE_EVENTS)
+
+
+def without_finance(value):
+    if isinstance(value, dict):
+        return {k: without_finance(v) for k, v in value.items() if k not in FINANCE_KEYS}
+    if isinstance(value, list):
+        return [without_finance(v) for v in value if not finance_event(v)]
+    return value
+
+
 class DomainError(Exception):
     def __init__(self, status, message):
         super().__init__(message)
@@ -126,7 +154,7 @@ def choice(value, options, label):
     return value
 
 
-def calculate(items):
+def calculate(items, *, allow_zero_total=False):
     if not isinstance(items, list) or not 1 <= len(items) <= 200:
         raise DomainError(400, "Добавьте от 1 до 200 позиций")
     result, total, cost, line_ids = [], 0, 0, set()
@@ -222,7 +250,7 @@ def calculate(items):
         if included:
             total += subtotal
             cost += cost_total
-    integer(total, "Итоговая стоимость", 1)
+    integer(total, "Итоговая стоимость", 0 if allow_zero_total else 1)
     integer(cost, "Общая себестоимость")
     return result, total, cost
 
@@ -352,6 +380,22 @@ def migrate(con):
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     con.executescript((Path(__file__).parent / "migrations" / "027_ecosystem_plans.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "028_object_chats.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "034_partner_platform.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "035_partner_verification_analytics.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "036_partner_members.sql").read_text(encoding="utf-8"))
+    if "user_id" not in {r["name"] for r in con.execute("PRAGMA table_info(partner_console_sessions)")}:
+        con.execute("ALTER TABLE partner_console_sessions ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE")
+    # Python casefold handles Cyrillic correctly; SQLite's lower() only handles ASCII.
+    partner_columns = {r["name"] for r in con.execute("PRAGMA table_info(partner_products)")}
+    if "search_name" not in partner_columns:
+        con.execute("ALTER TABLE partner_products ADD COLUMN search_name TEXT NOT NULL DEFAULT ''")
+    pending_names = con.execute(
+        "SELECT id,name FROM partner_products WHERE search_name=''"
+    ).fetchall()
+    for item in pending_names:
+        con.execute("UPDATE partner_products SET search_name=? WHERE id=?",
+                    (item["name"].casefold(), item["id"]))
+
     assistant_columns = {r["name"] for r in con.execute("PRAGMA table_info(assistant_messages)")}
     if "conversation_id" not in assistant_columns:
         con.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT REFERENCES assistant_conversations(id) ON DELETE SET NULL")
@@ -545,6 +589,8 @@ def migrate(con):
         con.execute("ALTER TABLE assistant_jobs ADD COLUMN ad_reward_id TEXT")
     from backend.community import ensure_sqlite_schema
     ensure_sqlite_schema(con)
+    from backend.ai_tokens import ensure_schema as ensure_ai_tokens
+    ensure_ai_tokens(con)
     push_columns = {r["name"] for r in con.execute("PRAGMA table_info(push_outbox)")}
     if "recipient_user_id" not in push_columns:
         con.execute("ALTER TABLE push_outbox ADD COLUMN recipient_user_id TEXT REFERENCES users(id) ON DELETE CASCADE")
@@ -822,7 +868,15 @@ class Service:
             data.get("custom_fields", json.loads(old["custom_fields"]) if old else {}),
         )
         if "items" in data:
-            items, total, cost = calculate(data["items"])
+            if not self.finance_visible() and isinstance(data["items"], list):
+                # The editor cannot see costs, so it must not overwrite them:
+                # a line keeps its stored cost, a new line starts without one.
+                stored = {item.get("line_id"): item.get("cost_price", 0) for item in (self.quote_view(old)["items"] if old else [])}
+                data = {**data, "items": [
+                    {**item, "cost_price": stored.get(item.get("line_id"), 0)} if isinstance(item, dict) else item
+                    for item in data["items"]
+                ]}
+            items, total, cost = calculate(data["items"], allow_zero_total=(old is None or old["status"] == "draft"))
             if old:
                 from backend.quote_versions import carry_identities
 
@@ -997,6 +1051,10 @@ class Service:
         if row["approval_state"] in ("sent", "viewed"):
             raise DomainError(409, "Эта версия уже отправлена")
         snapshot = self.quote_view(row)
+        if row["amount_kopecks"] <= 0 or (row["itemized"] and any(
+            item.get("unit_price", 0) <= 0 for item in snapshot.get("items", [])
+        )):
+            raise DomainError(409, "Перед отправкой сметы укажите цены всех работ и материалов")
         # Recalculate persisted rows before creating an immutable offer. A
         # concurrent or legacy writer must never publish inconsistent money.
         from backend.quote_integrity import InvalidSnapshot, verify_totals
@@ -1610,6 +1668,11 @@ class Service:
                     result["actual_cost"] = sum(
                         p["amount_kopecks"] for p in result["expenses"]
                     )
+                    from backend import order_finance
+
+                    result["finance"] = order_finance.summarize(
+                        result["amount_kopecks"], result["internal_cost"], result["paid"], result["actual_cost"]
+                    )
                 if kind == "clients":
                     result["quotes"] = [
                         self.quote_view(r)
@@ -2031,6 +2094,21 @@ class Service:
             (self.wid,),
         ):
             add("quote", row, "Клиент вернулся к смете", "Открыть смету", row["title"])
+        from backend import order_finance
+
+        currency = self.con.execute("SELECT currency FROM workspaces WHERE id=?", (self.wid,)).fetchone()[0] or "RUB"
+        money = order_finance.workspace_money(self.con, self.wid, currency)
+        for over in money["overruns"][:3] if self.finance_visible() else ():
+            add("project", over, "Перерасход по заказу", "Открыть проект", over["name"], amount=over["overrun"])
+        soon = (business_date() + dt.timedelta(days=3)).isoformat()
+        for row in self.con.execute(
+            "SELECT s.project_id AS id,s.name,s.due_date,p.name AS project,p.currency FROM project_stages s "
+            "JOIN projects p ON p.id=s.project_id AND p.workspace_id=s.workspace_id "
+            "WHERE s.workspace_id=? AND s.status!='done' AND p.status NOT IN ('completed','cancelled') "
+            "AND s.due_date!='' AND s.due_date>=? AND s.due_date<=? ORDER BY s.due_date LIMIT 5",
+            (self.wid, today, soon),
+        ):
+            add("project", row, "Срок этапа сегодня" if row["due_date"] == today else "Скоро срок этапа", "Открыть проект", row["project"] + " · " + row["name"], row["due_date"])
 
         active = self.con.execute(
             "SELECT count(*) FROM projects WHERE workspace_id=? AND status NOT IN ('completed','cancelled')",
@@ -2062,6 +2140,7 @@ class Service:
                 waiting_payments=waiting,
                 approved_this_month=approved,
                 received_this_month=received,
+                money=money,
             ),
         )
 
@@ -2131,9 +2210,10 @@ class Service:
     def workspace(self, method, parts, data):
         if parts and parts[0] == "members":
             if method == "GET":
+                granted = set(json.loads(self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()["settings"]).get("finance_access") or [])
                 return 200, {
                     "items": [
-                        dict(r)
+                        dict(r, finance_access=r["role"] in FINANCE_ROLES or r["user_id"] in granted)
                         for r in self.con.execute(
                             "SELECT m.user_id,m.role,u.name,u.email FROM workspace_members m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=?",
                             (self.wid,),
@@ -2181,6 +2261,26 @@ class Service:
                 )
                 self.emit("workspace", self.wid, "Роль участника изменена", role)
                 return 200, {"ok": True}
+            if method == "PATCH" and len(parts) == 2:
+                target = self.con.execute(
+                    "SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?",
+                    (self.wid, parts[1]),
+                ).fetchone()
+                if not target:
+                    raise DomainError(404, "Участник не найден")
+                if not isinstance(data.get("finance_access"), bool):
+                    raise DomainError(400, "Укажите доступ к финансам")
+                if target["role"] in FINANCE_ROLES:
+                    raise DomainError(409, "Эта роль всегда видит финансы")
+                row = self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()
+                settings = json.loads(row["settings"])
+                granted = [uid for uid in settings.get("finance_access") or [] if uid != parts[1]]
+                if data["finance_access"]:
+                    granted.append(parts[1])
+                settings["finance_access"] = granted
+                self.con.execute("UPDATE workspaces SET settings=? WHERE id=?", (json.dumps(settings, ensure_ascii=False), self.wid))
+                self.emit("workspace", self.wid, "Доступ к финансам " + ("открыт" if data["finance_access"] else "закрыт"))
+                return 200, {"ok": True, "finance_access": data["finance_access"]}
             if method == "DELETE" and len(parts) == 2:
                 target = self.con.execute(
                     "SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?",
@@ -2196,6 +2296,12 @@ class Service:
                     "DELETE FROM workspace_members WHERE workspace_id=? AND user_id=?",
                     (self.wid, parts[1]),
                 )
+                # A removed member must not regain finance access if invited again.
+                row = self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()
+                settings = json.loads(row["settings"])
+                if parts[1] in (settings.get("finance_access") or []):
+                    settings["finance_access"] = [uid for uid in settings["finance_access"] if uid != parts[1]]
+                    self.con.execute("UPDATE workspaces SET settings=? WHERE id=?", (json.dumps(settings, ensure_ascii=False), self.wid))
                 self.emit("workspace", self.wid, "Участник удалён")
                 return 200, {"ok": True}
         row = self.con.execute(
@@ -2353,7 +2459,32 @@ class Service:
                 return self.route(method, kind, rest, query, data)
         return self.route(method, kind, rest, query, data)
 
+    def finance_visible(self):
+        """Owner, admin and manager see costs; others only when the owner grants it."""
+        if getattr(self, "role", None) in FINANCE_ROLES:
+            return True
+        if not getattr(self, "user", None) or not getattr(self, "wid", None):
+            return False
+        cached = getattr(self, "_finance_grant", None)
+        if cached is None or cached[0] != (self.wid, self.user["id"]):
+            row = self.con.execute("SELECT settings FROM workspaces WHERE id=?", (self.wid,)).fetchone()
+            granted = self.user["id"] in (json.loads(row["settings"]).get("finance_access") or []) if row else False
+            self._finance_grant = cached = ((self.wid, self.user["id"]), granted)
+        return cached[1]
+
     def route(self, method, kind, parts, query, data):
+        visible = self.finance_visible()
+        if not visible and kind == "expenses" and method == "GET":
+            raise DomainError(403, "Расходы видят владелец, администратор и менеджер")
+        if not visible and method in ("POST", "PATCH") and isinstance(data, dict):
+            # Costs typed blind would overwrite real ones; stored values stay.
+            data = {k: v for k, v in data.items() if k not in ("cost_price", "internal_cost")}
+        result = self.routed(method, kind, parts, query, data)
+        if visible or not isinstance(result, tuple) or len(result) < 2 or not isinstance(result[1], (dict, list)):
+            return result
+        return (result[0], without_finance(result[1]), *result[2:])
+
+    def routed(self, method, kind, parts, query, data):
         if kind == "dashboard" and method == "GET":
             _, context = self.workspace("GET", [], {})
             _, overview = self.overview(limit=4)
@@ -2398,6 +2529,7 @@ class Service:
                 "ai_drafting": available(),
                 "online_client_payments": False,
                 "uploads": ["png", "jpg", "pdf", "txt"],
+                "finance": self.finance_visible(),
             }
         if kind == "files":
             try:
@@ -2425,6 +2557,10 @@ class Service:
             return fn(self, method, parts, query, data)
         if kind == "workspace":
             return self.workspace(method, parts, data)
+        if kind == "usage" and method == "GET" and not parts:
+            from backend.usage import summary as usage_summary
+
+            return usage_summary(self)
         if kind == "intake":
             return self.intake(method, data)
         if kind == "quotes":
@@ -2434,6 +2570,10 @@ class Service:
         if kind in ("receipts", "expenses"):
             return self.money(kind, method, query, data)
         if kind == "overview" and method == "GET":
+            if parts == ["orders"]:
+                from backend import order_finance
+
+                return 200, {"items": order_finance.order_report(self.con, self.wid)}
             return self.overview()
         if kind == "search" and method == "GET":
             term = string(query.get("q", [""])[0], "Поиск", 100)
@@ -2598,6 +2738,7 @@ ROUTES = set(ENTITIES) | {
     "intake",
     "assistant",
     "workspace",
+    "usage",
     "quotes",
     "public",
     "overview",

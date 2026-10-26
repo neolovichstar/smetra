@@ -1,10 +1,8 @@
 import http.client
 import json
 import os
-import concurrent.futures
 import contextlib
 import base64
-import hashlib
 import sqlite3
 import time
 import unittest
@@ -55,7 +53,7 @@ class IdentityAssistantTests(unittest.TestCase):
         with patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"):
             status, _ = self.call("/assistant/chat", "POST", {"text": "Что дальше?", "context": context}, stranger)
             self.assertEqual(status, 404)
-            self.assertEqual(self.call("/assistant", token=stranger)[1]["quota"]["remaining"], 3)
+            self.assertEqual(self.call("/assistant", token=stranger)[1]["quota"]["used"], 0)
             with patch("backend.assistant.query_model", return_value={"content": "Проверю клиента."}) as provider:
                 status, _ = self.call("/assistant/chat", "POST", {"text": "Что дальше?", "context": context}, owner)
         self.assertEqual(status, 200)
@@ -456,6 +454,65 @@ class IdentityAssistantTests(unittest.TestCase):
         self.assertEqual(len(self.call("/clients", token=token)[1]["items"]), 1)
         self.assertEqual(self.call("/assistant", token=stranger)[1]["messages"], [])
 
+    def test_quote_draft_without_client_is_created_and_remains_openable(self):
+        owner, _ = self.account("assistant-quote-no-client")
+        stranger, _ = self.account("assistant-quote-stranger")
+        response = {
+            "content": None,
+            "tool_calls": [{
+                "id": "draft-kitchen", "type": "function",
+                "function": {
+                    "name": "create_quotes",
+                    "arguments": json.dumps({
+                        "title": "Ремонт кухни",
+                        "items": [{
+                            "name": "Грунтовка стен",
+                            "quantity": "1", "unit": "м²",
+                            "unit_price": 0,
+                        }],
+                    }),
+                },
+            }],
+        }
+        with (
+            patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"),
+            patch("backend.assistant.query_model", return_value=response),
+        ):
+            status, proposed = self.call("/assistant/chat", "POST", {"text": "Составь смету кухни"}, owner)
+        self.assertEqual(status, 200, proposed)
+        action = proposed["actions"][0]
+        self.assertEqual(action["arguments"]["client"], "Клиент не указан")
+        # Pending actions created by an older release lack the client field.
+        # They must remain applicable after the backend-only hotfix.
+        with self.mod.db() as con:
+            stored = con.execute(
+                "SELECT arguments FROM assistant_actions WHERE id=?", (action["id"],)
+            ).fetchone()
+            legacy = json.loads(stored["arguments"])
+            legacy.pop("client", None)
+            con.execute(
+                "UPDATE assistant_actions SET arguments=? WHERE id=?",
+                (json.dumps(legacy), action["id"]),
+            )
+        self.assertEqual(self.call("/quotes", token=owner)[1]["quotes"], [])
+        rejected = self.call("/assistant/confirm", "POST", {"id": action["id"]}, stranger)
+        self.assertEqual(rejected[0], 404)
+        status, applied = self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner)
+        self.assertEqual(status, 200, applied)
+        quote = applied["result"]["quote"]
+        self.assertEqual(quote["title"], "Ремонт кухни")
+        self.assertEqual(quote["client"], "Клиент не указан")
+        self.assertEqual(quote["status"], "draft")
+        self.assertEqual(quote["amount_kopecks"], 0)
+        self.assertEqual(self.call("/quotes/" + quote["id"] + "/publish", "POST", {
+            "revision": quote["revision"], "review_confirmed": True,
+        }, owner)[0], 409, "Unknown prices must never become a published client offer")
+        self.assertEqual(self.call("/assistant/confirm", "POST", {"id": action["id"]}, owner)[0], 200)
+        self.assertEqual(len(self.call("/quotes", token=owner)[1]["quotes"]), 1)
+        recent = self.call("/assistant", token=owner)[1]["recent_actions"]
+        self.assertTrue(any(item.get("quote_id") == quote["id"] for item in recent))
+        self.assertEqual(self.call("/quotes/" + quote["id"], token=stranger)[0], 404)
+
     def test_assistant_markdown_edit_is_reviewed_and_revision_checked(self):
         owner, _ = self.account("assistant-markdown-owner")
         stranger, _ = self.account("assistant-markdown-stranger")
@@ -527,21 +584,30 @@ class IdentityAssistantTests(unittest.TestCase):
         ):
             query_model([])
 
-    def test_assistant_free_monthly_quota_is_atomic(self):
-        token, _ = self.account("assistant-free-quota")
+    def test_assistant_free_monthly_tokens_are_metered_and_exhausted(self):
+        token, user_id = self.account("assistant-free-quota")
+        from backend import ai_tokens
+
+        usage = {"prompt_tokens": 9000, "completion_tokens": 1000, "total_tokens": 10000}
         with (
             patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"),
-            patch("backend.assistant.query_model", return_value={"content": "Готово."}),
+            patch("backend.assistant.query_model", return_value={"content": "Готово.", "_usage": usage}),
         ):
-            self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["remaining"], 3)
-            for _ in range(2):
-                self.assertEqual(self.call("/assistant/chat", "POST", {"text": "Привет"}, token)[0], 200)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                results = list(pool.map(lambda _: self.call("/assistant/chat", "POST", {"text": "Ещё"}, token)[0], range(2)))
-            self.assertEqual(sorted(results), [200, 429])
-            self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["remaining"], 0)
+            quota = self.call("/assistant", token=token)[1]["quota"]
+            self.assertEqual((quota["unit"], quota["remaining"]), ("tokens", ai_tokens.MONTHLY_TOKENS["starter"]))
+            status, result = self.call("/assistant/chat", "POST", {"text": "Привет"}, token)
+            self.assertEqual(status, 200)
+            self.assertEqual(result["tokens_used"], 10000)
+            self.assertEqual(result["quota"]["used"], 10000)
+            # Leave less than a request needs: the next message is refused, nothing more is charged.
+            with contextlib.closing(sqlite3.connect(self.mod.DB_PATH)) as con:
+                con.execute("UPDATE rate_limits SET count=? WHERE key=?",
+                            (ai_tokens.MONTHLY_TOKENS["starter"] - 100, ai_tokens.month_key(user_id)))
+                con.commit()
+            self.assertEqual(self.call("/assistant/chat", "POST", {"text": "Ещё"}, token)[0], 429)
+            self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["remaining"], 100)
 
-    def test_failed_provider_call_refunds_quota(self):
+    def test_failed_provider_call_costs_no_tokens(self):
         token, _ = self.account("assistant-provider-failure")
         from backend.business import DomainError
 
@@ -550,25 +616,34 @@ class IdentityAssistantTests(unittest.TestCase):
             patch("backend.assistant.query_model", side_effect=DomainError(502, "Модель недоступна")),
         ):
             self.assertEqual(self.call("/assistant/chat", "POST", {"text": "Привет"}, token)[0], 502)
-            self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["remaining"], 3)
+            self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["used"], 0)
 
-    def test_pro_has_separate_bounded_monthly_allowance(self):
+    def test_pro_allowance_then_wallet_tokens(self):
         token, user_id = self.account("assistant-pro-quota")
+        from backend import ai_tokens
+
         with contextlib.closing(sqlite3.connect(self.mod.DB_PATH)) as con:
             con.execute("UPDATE users SET plan='pro',entitlement_until=? WHERE id=?", (int(time.time())+86400,user_id))
             con.commit()
+        usage = {"prompt_tokens": 4000, "completion_tokens": 1000, "total_tokens": 5000}
         with (
             patch.dict(os.environ, OPENROUTER_API_KEY="test-not-real"),
-            patch("backend.assistant.query_model", return_value={"content": "Готово."}),
+            patch("backend.assistant.query_model", return_value={"content": "Готово.", "_usage": usage}),
         ):
-            quota=self.call("/assistant", token=token)[1]["quota"]
-            self.assertEqual((quota["limit"],quota["remaining"]),(100,100))
-            key=hashlib.sha256(f"assistant:month:{quota['period']}:{user_id}".encode()).hexdigest()
+            quota = self.call("/assistant", token=token)[1]["quota"]
+            self.assertEqual(quota["monthly_limit"], ai_tokens.MONTHLY_TOKENS["pro_solo"])
             with contextlib.closing(sqlite3.connect(self.mod.DB_PATH)) as con:
-                con.execute("INSERT INTO rate_limits(key,count,started) VALUES(?,?,?)",(key,99,int(time.time())))
+                con.execute("INSERT INTO rate_limits(key,count,started) VALUES(?,?,?)",
+                            (ai_tokens.month_key(user_id), ai_tokens.MONTHLY_TOKENS["pro_solo"] - 2000, int(time.time())))
+                con.execute("INSERT INTO ai_token_wallets(user_id,balance,updated_at) VALUES(?,?,?)", (user_id, 10000, int(time.time())))
                 con.commit()
-            self.assertEqual(self.call("/assistant/chat", "POST", {"text": "Последний"}, token)[0],200)
-            self.assertEqual(self.call("/assistant/chat", "POST", {"text": "Ещё"}, token)[0],429)
+            status, result = self.call("/assistant/chat", "POST", {"text": "Последний"}, token)
+            self.assertEqual(status, 200)
+            # 2 000 from the month, 3 000 from the wallet.
+            self.assertEqual((result["quota"]["monthly_remaining"], result["quota"]["wallet"]), (0, 7000))
+            with contextlib.closing(sqlite3.connect(self.mod.DB_PATH)) as con:
+                reasons = [row[0] for row in con.execute("SELECT bucket FROM ai_token_ledger WHERE user_id=? ORDER BY bucket", (user_id,))]
+            self.assertEqual(reasons, ["monthly", "wallet"])
 
     def test_stream_sends_deltas_and_final_message(self):
         token, _ = self.account("assistant-stream")

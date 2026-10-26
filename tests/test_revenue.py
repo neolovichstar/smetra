@@ -51,32 +51,26 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual((grant['amount'],grant['remaining']),(50,50))
         self.assertEqual(self.con.execute('SELECT count(*) FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()[0],1,'duplicate payment confirmation cannot duplicate the bonus')
 
+        from backend import ai_tokens
         service=SimpleNamespace(con=self.con,user=self.con.execute('SELECT * FROM users WHERE id=?',(self.user['id'],)).fetchone())
         quota_key=assistant.quota(service)['key']
-        self.con.execute('INSERT INTO rate_limits(key,count,started) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count',(quota_key,100,revenue.now()))
+        self.con.execute('INSERT INTO rate_limits(key,count,started) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count',(quota_key,10**9,revenue.now()))
+        # The request-era gift becomes wallet tokens once; the grant is emptied.
         before=assistant.quota(service)
-        self.assertEqual(before['purchase_bonus_remaining'],50)
-        self.assertEqual(before['remaining'],50)
+        self.assertEqual(before['wallet'],50*ai_tokens.REQUEST_TOKENS)
+        self.assertEqual(before['remaining'],50*ai_tokens.REQUEST_TOKENS)
+        self.assertEqual(self.con.execute('SELECT remaining FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()[0],0)
+        self.assertEqual(assistant.quota(service)['wallet'],50*ai_tokens.REQUEST_TOKENS,'conversion happens once')
         reservation=assistant.reserve(service)
-        self.assertEqual(reservation['bonus_grant_id'],grant['id'])
-        spent=assistant.quota(service)
-        self.assertEqual(spent['purchase_bonus_remaining'],49)
-        self.assertEqual(spent['remaining'],49)
         assistant.release(service,reservation)
-        restored=assistant.quota(service)
-        self.assertEqual(restored['purchase_bonus_remaining'],50,'failed assistant requests return the reserved bonus credit')
-        self.assertEqual(restored['remaining'],50)
-
-        # A later request spends exactly one gift credit. A full refund removes only the unused balance.
-        reservation=assistant.reserve(service)
-        self.assertEqual(reservation['bonus_grant_id'],grant['id'])
-        used=assistant.quota(service)
-        self.assertEqual(used['purchase_bonus_remaining'],49)
+        self.assertEqual(assistant.quota(service)['wallet'],50*ai_tokens.REQUEST_TOKENS,'a failed request costs nothing')
+        ai_tokens.charge(service,20000)
+        self.assertEqual(assistant.quota(service)['wallet'],50*ai_tokens.REQUEST_TOKENS-20000)
         handler=object.__new__(Handler)
         handler.apply_refund(self.con,{'id':'refund-'+key,'payment_id':remote['id'],'status':'succeeded','amount':remote['amount']})
         revoked=self.con.execute('SELECT remaining FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()
         self.assertEqual(revoked['remaining'],0)
-        self.assertEqual(assistant.quota(service)['remaining'],0,'unused purchase credits are revoked on a full refund')
+        self.assertEqual(assistant.quota(service)['remaining'],0,'unused purchase tokens are revoked on a full refund')
 
         annual=self.account('annual-bonus')
         annual_payment,_=self.purchase(annual,key='annual_bonus_checkout',plan='pro_year')
