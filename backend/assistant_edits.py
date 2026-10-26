@@ -69,6 +69,56 @@ def prepare_bulk(service, data):
             "_undo_fields": {"items": items}, "_preview": preview}
 
 
+
+def prepare_batch(service, data):
+    """One atomic confirmation for several validated changes to one draft."""
+    record = service.get("quotes", string(data.get("id", ""), "Смета", 80, True))
+    snapshot = quote_snapshot(service, record)
+    edits = data.get("edits")
+    if not isinstance(edits, list) or not 1 <= len(edits) <= 12:
+        raise DomainError(400, "Передайте от 1 до 12 изменений одной сметы")
+    original = copy.deepcopy(snapshot["items"])
+    changed = copy.deepcopy(original)
+    original_total = snapshot["amount_kopecks"]
+    total = original_total
+    differences = {}
+
+    class _WorkingQuote:
+        def get(self, table, item_id):
+            return service.get(table, item_id)
+
+        def quote_view(self, row):
+            view = dict(snapshot)
+            view["items"] = copy.deepcopy(changed)
+            view["amount_kopecks"] = total
+            return view
+
+    for edit in edits:
+        if not isinstance(edit, dict) or set(edit) - {"rows", "field", "operation", "value"}:
+            raise DomainError(400, "Неверная операция редактирования сметы")
+        next_items = prepare_bulk(_WorkingQuote(), {"id": record["id"], **edit})
+        changed = next_items["items"]
+        total = next_items["_preview"]["after_total"]
+        for delta in next_items["_preview"]["rows"]:
+            key = (delta["row"], delta["field"])
+            if key not in differences:
+                differences[key] = dict(delta)
+            else:
+                differences[key]["after"] = delta["after"]
+                differences[key]["after_amount"] = delta["after_amount"]
+    rows = [item for item in differences.values() if item["before"] != item["after"]]
+    if not rows:
+        raise DomainError(409, "Смета уже содержит эти значения")
+    rows.sort(key=lambda row: (row["row"], row["field"]))
+    preview = {"kind": "quote_items", "title": snapshot["title"],
+               "currency": snapshot["currency"],
+               "before_total": original_total, "after_total": total,
+               "rows": rows}
+    return {"id": record["id"], "revision": record["revision"],
+            "items": changed, "_undo_fields": {"items": original},
+            "_preview": preview}
+
+
 def prepare_structure(service, data):
     record = service.get('quotes', string(data.get('id', ''), 'Смета', 80, True))
     quote = quote_snapshot(service, record)
