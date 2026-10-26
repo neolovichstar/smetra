@@ -106,6 +106,8 @@ def pack_history(rows_desc, current_prompt, *, fixed_tokens=0, total_tokens=None
     recent_ids = {row["id"] for row in recent}
     older = [row for row in rows if row["id"] not in recent_ids]
     terms = _keywords(current_prompt)
+    from backend.assistant_files import _SECRET
+
     selected = []
     used = 0
     # Source excerpts are not rewriting: exact words from historic turns, not
@@ -116,7 +118,7 @@ def pack_history(rows_desc, current_prompt, *, fixed_tokens=0, total_tokens=None
             break
         if _rank(row, terms) < 5 and len(selected) >= 3:
             continue
-        excerpt = _clip(row["content"].strip(), 540)
+        excerpt = _SECRET.sub("[секрет скрыт]", _clip(row["content"].strip(), 540))
         excerpt = excerpt.replace("\u0000", " ")
         label = "Пользователь" if row["role"] == "user" else "Ассистент"
         text = f"[{label}; id={row['id'][:40]}] {excerpt}"
