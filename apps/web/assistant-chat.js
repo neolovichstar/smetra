@@ -685,7 +685,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }
     messages.append(item);return {item,body};
   };
+  const renderedProposalIds=new Set();
   const addAction=action=>{
+    if(!action || !action.id || renderedProposalIds.has(action.id))return;
+    renderedProposalIds.add(action.id);
     if(action?.tool&&/quote/.test(action.tool))quotePreview?.propose(action).catch(()=>{});
     const item=document.createElement('section');item.className='assistant-proposal';
     const markdownEdit=action.tool==='replace_markdown_text';
@@ -923,16 +926,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(!response.ok){let error;try{error=(await response.json()).error}catch{}throw Error(error||`Ошибка ${response.status}`)}
       if(!response.body)throw Error('Браузер не поддерживает потоковый ответ');
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+      let hasModelProgress=false;
       const eventBlock=block=>{
         const lines=block.split(/\r?\n/);const kind=lines.find(line=>line.startsWith('event:'))?.slice(6).trim();
         const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
-        if(kind==='ready'){renderQuota(payload.quota);setActivity('Думаю…');status.textContent='Формулирую ответ…'}
-        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();setActivity('Пишу ответ…');status.textContent='Пишу ответ…'}
-        if(kind==='status'){setActivity(payload.text);status.textContent=payload.text}
-        if(kind==='web_source'){showSource(payload);setActivity('Проверяю источники…')}
-        if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});setActivity('Конструирую смету…')}
+        if(kind==='ready'){renderQuota(payload.quota);if(!hasModelProgress){setActivity('Анализирую запрос…');status.textContent='Анализирую запрос…'}}
+        if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();if(!hasModelProgress){setActivity('Формирую ответ…');status.textContent='Формирую ответ…'}}
+        if(kind==='status'&&typeof payload.text==='string'&&payload.text.trim()){hasModelProgress=true;setActivity(payload.text.trim());status.textContent=payload.text.trim()}
+        if(kind==='web_source'){showSource(payload);if(!hasModelProgress)setActivity('Проверяю источники…')}
+        if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});if(!hasModelProgress)setActivity('Конструирую смету…')}
         if(kind==='done'){if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error)}
       };
