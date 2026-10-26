@@ -333,5 +333,23 @@ class PartnerPlatformTests(unittest.TestCase):
             self.assertEqual(integration.verify_domain(self.con, p)["status"], "verified")
         self.assertEqual(len(partner.offers(self.con, "кирпич")["offers"]), 1)
 
+    def test_domain_challenge_expires_and_renewal_rotates_timestamp(self):
+        p = partner.auth_partner(self.con, "Partner " + self.partner["api_key"])
+        integration.begin_verification(self.con, p, "dns")
+        old = int(time.time()) - integration.CHALLENGE_TTL - 100
+        self.con.execute("UPDATE partner_domain_verifications SET created_at=? WHERE partner_id=?",
+                         (old, p["id"]))
+        with self.assertRaises(partner.PartnerError) as error:
+            with patch("backend.partner_integrations._verify_dns", return_value=True):
+                integration.verify_domain(self.con, p)
+        self.assertEqual(error.exception.status, 409)
+        refreshed = integration.begin_verification(self.con, p, "dns")
+        self.assertEqual(refreshed["status"], "pending")
+        self.assertGreater(self.con.execute(
+            "SELECT created_at FROM partner_domain_verifications WHERE partner_id=?",
+            (p["id"],)).fetchone()[0], old)
+        with patch("backend.partner_integrations._verify_dns", return_value=True):
+            self.assertEqual(integration.verify_domain(self.con, p)["status"], "verified")
+
 if __name__ == "__main__":
     unittest.main()
