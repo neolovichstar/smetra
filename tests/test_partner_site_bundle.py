@@ -31,6 +31,12 @@ class PartnerSiteBundleTests(unittest.TestCase):
             self.assertIn("id=\"connect\"", login)
             self.assertIn("Developer Docs", docs)
             self.assertNotIn("consumer landing", landing)
+            self.assertTrue((output / "privacy.html").is_file())
+            self.assertTrue((output / "terms.html").is_file())
+            self.assertIn("партнёрской платформы",
+                          (output / "privacy.html").read_text(encoding="utf-8"))
+            self.assertNotIn("МУРАВЬЕВ", (output / "privacy.html").read_text(encoding="utf-8"))
+
             self.assertFalse((output / "admin.html").exists())
             self.assertFalse((output / "assistant-chat.js").exists())
 
