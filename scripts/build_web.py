@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -62,6 +63,41 @@ def embed_public_styles():
     print(f"Public landing CSS: {len(css.encode('utf-8'))} bytes in HTML, CSP hash verified")
 
 
+PARTNER_SITE_BRANCH = "feat/partner-platform-foundation-20261026"
+PARTNER_STATIC_FILES = frozenset({
+    "index.html", "app.html", "docs.html", "privacy.html", "terms.html",
+    "partner-console.html", "partner-landing.html", "partner-docs.html",
+    "partner-landing.js", "partner-scene.js", "partner-console.js", "partner-docs-ui.js",
+    "partner-docs.md", "partner-openapi.json", "partner-sdk.js",
+    "ui/partner-base.css", "ui/partner-landing.css", "ui/partner-console.css", "ui/partner-docs.css",
+    "vendor/three-0.170.0.module.min.js", "vendor/qrcode-generator-1.4.4.js",
+    "assets/fonts/onest-variable.woff2",
+    "favicon.ico", "favicon.png",
+})
+
+
+def build_partner_bundle():
+    """Physically isolate the feature-branch partner host from consumer static pages.
+
+    Host rewrites by themselves are insufficient: Vercel may resolve index.html
+    before a conditional route. Remove the product's static files entirely.
+    """
+    if os.environ.get("VERCEL_GIT_COMMIT_REF") != PARTNER_SITE_BRANCH:
+        raise RuntimeError("Refusing partner bundle on an unintended Git branch")
+    (DIST / "index.html").write_bytes((WEB / "partner-landing.html").read_bytes())
+    (DIST / "app.html").write_bytes((WEB / "partner-console.html").read_bytes())
+    (DIST / "docs.html").write_bytes((WEB / "partner-docs.html").read_bytes())
+    (DIST / "privacy.html").write_bytes((WEB / "partner-privacy.html").read_bytes())
+    (DIST / "terms.html").write_bytes((WEB / "partner-terms.html").read_bytes())
+    for asset in list(DIST.rglob("*")):
+        if asset.is_file() and asset.relative_to(DIST).as_posix() not in PARTNER_STATIC_FILES:
+            asset.unlink()
+    for folder in sorted((p for p in DIST.rglob("*") if p.is_dir()), reverse=True):
+        if not any(folder.iterdir()):
+            folder.rmdir()
+    print("Partner-only build: landing at /, partner login at /app, API docs at /docs")
+
+
 def build():
     for source in WEB.glob("*.js"):
         subprocess.run(["node", "--check", str(source)], check=True)
@@ -78,6 +114,9 @@ def build():
     shutil.rmtree(DIST, ignore_errors=True)
     shutil.copytree(WEB, DIST)
     embed_public_styles()
+    if os.environ.get("SMETRA_PARTNER_SITE") == "1":
+        build_partner_bundle()
+        subprocess.run(["node", str(ROOT / "scripts" / "render_partner_docs.js")], check=True, timeout=20)
     manifest = {
         str(p.relative_to(DIST)).replace("\\", "/"): hashlib.sha256(
             p.read_bytes()
