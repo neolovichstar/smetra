@@ -65,7 +65,7 @@ def embed_public_styles():
 
 PARTNER_SITE_BRANCH = "feat/partner-platform-foundation-20261026"
 PARTNER_STATIC_FILES = frozenset({
-    "index.html", "app.html", "docs.html",
+    "index.html", "app.html", "docs.html", "privacy.html", "terms.html",
     "partner-console.html", "partner-landing.html", "partner-docs.html",
     "partner-console.js", "partner-docs.md", "partner-openapi.json", "partner-sdk.js",
     "ui/partner-console.css", "ui/partner-landing.css",
@@ -84,6 +84,8 @@ def build_partner_bundle():
     (DIST / "index.html").write_bytes((WEB / "partner-landing.html").read_bytes())
     (DIST / "app.html").write_bytes((WEB / "partner-console.html").read_bytes())
     (DIST / "docs.html").write_bytes((WEB / "partner-docs.html").read_bytes())
+    (DIST / "privacy.html").write_bytes((WEB / "partner-privacy.html").read_bytes())
+    (DIST / "terms.html").write_bytes((WEB / "partner-terms.html").read_bytes())
     for asset in list(DIST.rglob("*")):
         if asset.is_file() and asset.relative_to(DIST).as_posix() not in PARTNER_STATIC_FILES:
             asset.unlink()

@@ -505,14 +505,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             console_host = self.headers.get("Host", "").split(":")[0].lower()
             if console_host == "console.smetra.online":
                 site_assets = {
-                    "/", "/app", "/docs",
+                    "/", "/app", "/docs", "/privacy", "/terms",
                     "/partner-console.js", "/partner-docs.js", "/partner-docs.md", "/partner-openapi.json",
                     "/partner-sdk.js", "/ui/partner-console.css", "/ui/partner-landing.css",
                     "/vendor/markdown-it-15.0.2.min.js", "/favicon.ico", "/favicon.png",
                 }
                 if method == "GET" and path in site_assets:
                     asset = {"/": "/partner-landing", "/app": "/partner-console",
-                             "/docs": "/partner-docs"}.get(path, path)
+                             "/docs": "/partner-docs", "/privacy": "/partner-privacy",
+                             "/terms": "/partner-terms"}.get(path, path)
                     return self.static(asset)
                 if not (path.startswith("/api/partners/console/") or
                         path.startswith("/api/partners/v1/console/")):
@@ -594,6 +595,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True})
         public = {
             "/partner-landing": ("partner-landing.html", "text/html"),
+            "/partner-privacy": ("partner-privacy.html", "text/html"),
+            "/partner-terms": ("partner-terms.html", "text/html"),
             "/partner-console": ("partner-console.html", "text/html"),
             "/partner-docs": ("partner-docs.html", "text/html"),
             "/partner-docs.html": ("partner-docs.html", "text/html"),
