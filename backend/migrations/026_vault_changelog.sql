@@ -19,3 +19,22 @@ CREATE TABLE IF NOT EXISTS product_update_reactions (
  reaction TEXT NOT NULL CHECK(reaction IN ('like','dislike')),
  updated_at INTEGER NOT NULL,PRIMARY KEY(update_id,user_id)
 );
+
+CREATE TRIGGER IF NOT EXISTS trg_product_view_add AFTER INSERT ON product_update_views BEGIN
+ UPDATE product_updates SET view_count=view_count+1 WHERE id=NEW.update_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_product_view_remove AFTER DELETE ON product_update_views BEGIN
+ UPDATE product_updates SET view_count=view_count-1 WHERE id=OLD.update_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_product_react_add AFTER INSERT ON product_update_reactions BEGIN
+ UPDATE product_updates SET likes=likes+CASE WHEN NEW.reaction='like' THEN 1 ELSE 0 END,
+ dislikes=dislikes+CASE WHEN NEW.reaction='dislike' THEN 1 ELSE 0 END WHERE id=NEW.update_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_product_react_change AFTER UPDATE ON product_update_reactions BEGIN
+ UPDATE product_updates SET likes=likes-CASE WHEN OLD.reaction='like' THEN 1 ELSE 0 END+CASE WHEN NEW.reaction='like' THEN 1 ELSE 0 END,
+ dislikes=dislikes-CASE WHEN OLD.reaction='dislike' THEN 1 ELSE 0 END+CASE WHEN NEW.reaction='dislike' THEN 1 ELSE 0 END WHERE id=NEW.update_id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_product_react_remove AFTER DELETE ON product_update_reactions BEGIN
+ UPDATE product_updates SET likes=likes-CASE WHEN OLD.reaction='like' THEN 1 ELSE 0 END,
+ dislikes=dislikes-CASE WHEN OLD.reaction='dislike' THEN 1 ELSE 0 END WHERE id=OLD.update_id;
+END;
