@@ -262,5 +262,32 @@ class PartnerPlatformTests(unittest.TestCase):
         with self.assertRaises(partner.PartnerError):
             partner.set_partner_active(self.con, p["id"], "true")
 
+    def test_reconcile_is_idempotent_uses_payment_date_and_skips_refunds(self):
+        token = partner.begin_visit(self.con, "materials-market")
+        buyer = self._account("reconcile-buyer")
+        self.assertTrue(partner.capture(self.con, buyer, partner.COOKIE_NAME + "=" + token))
+        payment, remote = self._purchase(buyer, key="reconcile_payment_123456")
+        historic = int(time.time()) - 86400
+        self.con.execute("UPDATE payments SET activated_at=? WHERE id=?",
+                         (historic, payment["id"]))
+        self.con.execute("DELETE FROM partner_commissions WHERE payment_id=?", (payment["id"],))
+        self.con.execute("UPDATE partner_attributions SET first_paid_at=NULL WHERE user_id=?",
+                         (buyer["id"],))
+        repaired = partner.reconcile_confirmed_payments(self.con)
+        self.assertEqual(repaired["created"], 1)
+        self.assertEqual(self.con.execute(
+            "SELECT created_at FROM partner_commissions WHERE payment_id=?",
+            (payment["id"],)).fetchone()[0], historic)
+        self.assertEqual(partner.reconcile_confirmed_payments(self.con)["created"], 0)
+        handler = object.__new__(Handler)
+        handler.apply_refund(self.con, {"id": "reconcile-refund",
+                                         "payment_id": remote["id"],
+                                         "status": "succeeded",
+                                         "amount": remote["amount"]})
+        self.con.execute("DELETE FROM partner_commissions WHERE payment_id=?", (payment["id"],))
+        self.assertEqual(partner.reconcile_confirmed_payments(self.con)["created"], 0)
+        with self.assertRaises(partner.PartnerError):
+            partner.reconcile_confirmed_payments(self.con, limit=101)
+
 if __name__ == "__main__":
     unittest.main()
