@@ -50,7 +50,7 @@ class PartnerHostnameRoutingTests(unittest.TestCase):
         self.assertIn("Обработка данных", privacy)
         code, _, terms = self.request_raw("GET", "/terms", "console.smetra.online")
         self.assertEqual(code, 200)
-        self.assertIn("Пилот", terms)
+        self.assertIn("Условия пилотного использования", terms)
 
     def test_console_host_rejects_customer_endpoints(self):
         for route in ("/admin", "/api/me", "/api/billing", "/api/auth/providers"):
