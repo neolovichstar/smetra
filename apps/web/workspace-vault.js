@@ -219,6 +219,7 @@
       '<span class="changelog-date">'+when(item.published_at)+'</span><span class="changelog-copy">' +
       '<span class="changelog-title">'+esc(item.title)+'</span>' +
       (openedNote===item.id?'':'<span class="changelog-excerpt">'+esc(teaser(item.body))+'</span>') +
+      (item.published&&!item.has_viewed?'<span class="changelog-new-indicator">Не прочитано</span>':'') +
       '</span><span class="changelog-meta">'+(item.version?'<span class="changelog-version">'+esc(item.version)+'</span>':index===0&&item.published?'<span class="changelog-version">Последнее</span>':'') +
       '<svg class="changelog-chevron" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.65"><path d="m7 5 5 5-5 5"/></svg></span></button>' +
       (openedNote===item.id?'<div class="changelog-body assistant-markdown" id="changelog-content-'+esc(item.id)+'"></div>':'') +
@@ -244,6 +245,7 @@
     const result=await api('/changelog');
     if(!activeNews(mine))return;
     notes=result.items;canPublish=result.can_publish;
+    window.SmetraReleaseUnread?.set(result.unread_count);
     await paintNews(mine);
   }
   function editor(note,mine) {
@@ -300,6 +302,7 @@
     const result=await api('/changelog');
     if(!active()||epoch!==mine||owner!==user||tab!=='changelog')return;
     notes=result.items;canPublish=result.can_publish;openedNote='';
+    window.SmetraReleaseUnread?.set(result.unread_count);
     view('<section id="changelog-root" class="vault-root">'+head('Что нового','История изменений Сметры. Оценивайте обновления, чтобы помогать нам делать сервис лучше.')+
       '<div class="changelog-toolbar"><span>Обновления продукта</span>'+(canPublish?'<button class="btn primary" id="changelog-publish">+ Опубликовать</button>':'')+'</div>'+
       '<div id="changelog-list" class="changelog-list"></div></section>');
@@ -325,8 +328,10 @@
         openedNote=openedNote===note.id?'':note.id;
         await paintNews(mine);
         if(openedNote&&note.published){
-          try{await api('/changelog/'+encodeURIComponent(note.id)+'/view',{method:'POST',body:'{}'});await refreshNotes(mine);}
-          catch(err){notify(err.message);}
+          try{
+            await api('/changelog/'+encodeURIComponent(note.id)+'/view',{method:'POST',body:'{}'});
+            if(activeNews(mine))await refreshNotes(mine);
+          }catch(err){notify(err.message);}
         }
       }
     });
