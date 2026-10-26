@@ -57,6 +57,8 @@ def changes(service, row, data):
             # Moving a private file onto an object is an explicit sharing
             # action. Never change its visibility through a rename.
             if row["vault_scope"] == "personal":
+                if service.role not in ("owner", "admin", "manager", "member"):
+                    raise DomainError(403, "Передавать личные файлы команде может только участник с правом записи")
                 from backend.vault import shared_storage_used
                 from backend.attachments import workspace_storage_limit
 
