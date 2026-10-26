@@ -67,8 +67,6 @@ def route(service, method, parts, query, data):
             " VALUES(?,?,?) ON CONFLICT(update_id,user_id) DO NOTHING RETURNING update_id",
             (row["id"],uid,stamp()),
         ).fetchone()
-        if created:
-            service.con.execute("UPDATE product_updates SET view_count=view_count+1 WHERE id=?",(row["id"],))
         return 200, {"viewed":True}
     reaction = data.get("reaction")
     if reaction not in ("like","dislike","none"):
@@ -92,10 +90,4 @@ def route(service, method, parts, query, data):
             "reaction=excluded.reaction,updated_at=excluded.updated_at",
             (row["id"],uid,reaction,stamp()),
         )
-    service.con.execute(
-        "UPDATE product_updates SET likes=likes+?,dislikes=dislikes+? WHERE id=?",
-        ((1 if reaction=="like" else 0)-(1 if old=="like" else 0),
-         (1 if reaction=="dislike" else 0)-(1 if old=="dislike" else 0),
-         row["id"]),
-    )
     return 200, {"reaction":reaction}
