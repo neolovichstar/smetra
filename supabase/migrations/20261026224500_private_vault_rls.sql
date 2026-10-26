@@ -227,35 +227,73 @@ CREATE POLICY vault_files_delete ON smetra.files FOR DELETE TO smetra_runtime
      OR (vault_scope='workspace' AND smetra.vault_can_edit_workspace(workspace_id)))
  );
 
--- Child-table policies must always resolve through the accessible parent file,
--- not a tautological workspace comparison. This also protects OCR text,
--- thumbnails and old Markdown revisions.
+-- Children inherit the visibility and WRITE privileges of their parent file.
+-- In particular, viewers cannot mutate bytes/OCR indexes by supplying an ID.
+CREATE OR REPLACE FUNCTION smetra.vault_can_edit_file(fid TEXT)
+ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
+ AS $canwrite$
+ SELECT EXISTS(
+  SELECT 1 FROM smetra.files f
+  WHERE f.id=fid
+  AND f.workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.runtime_workspace_allowed(f.workspace_id)
+  AND (
+    (f.vault_scope='personal' AND f.owner_user_id=smetra.runtime_user_id())
+    OR (f.vault_scope='workspace' AND smetra.vault_can_edit_workspace(f.workspace_id))
+  )
+ );
+ $canwrite$;
+REVOKE ALL ON FUNCTION smetra.vault_can_edit_file(TEXT) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION smetra.vault_can_edit_file(TEXT) TO smetra_runtime;
+
 DROP POLICY IF EXISTS smetra_runtime_scope ON smetra.file_payloads;
-CREATE POLICY smetra_runtime_scope ON smetra.file_payloads FOR ALL TO smetra_runtime
- USING (EXISTS(SELECT 1 FROM smetra.files f WHERE f.id=file_payloads.file_id))
- WITH CHECK (EXISTS(SELECT 1 FROM smetra.files f WHERE f.id=file_payloads.file_id));
+DROP POLICY IF EXISTS vault_file_payloads_read ON smetra.file_payloads;
+DROP POLICY IF EXISTS vault_file_payloads_write ON smetra.file_payloads;
+CREATE POLICY vault_file_payloads_read ON smetra.file_payloads FOR SELECT TO smetra_runtime
+ USING (EXISTS(SELECT 1 FROM smetra.files f WHERE f.id=file_payloads.file_id));
+CREATE POLICY vault_file_payloads_write ON smetra.file_payloads FOR ALL TO smetra_runtime
+ USING (smetra.vault_can_edit_file(file_id))
+ WITH CHECK (smetra.vault_can_edit_file(file_id));
+
 DROP POLICY IF EXISTS smetra_runtime_scope ON smetra.file_text_chunks;
-CREATE POLICY smetra_runtime_scope ON smetra.file_text_chunks FOR ALL TO smetra_runtime
- USING (workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+DROP POLICY IF EXISTS vault_file_chunks_read ON smetra.file_text_chunks;
+DROP POLICY IF EXISTS vault_file_chunks_write ON smetra.file_text_chunks;
+CREATE POLICY vault_file_chunks_read ON smetra.file_text_chunks FOR SELECT TO smetra_runtime
+ USING (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
   AND smetra.runtime_workspace_allowed(workspace_id)
   AND EXISTS(SELECT 1 FROM smetra.files f
-       WHERE f.id=file_text_chunks.file_id
-         AND f.workspace_id=file_text_chunks.workspace_id))
- WITH CHECK (workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
-  AND smetra.runtime_workspace_allowed(workspace_id)
-  AND EXISTS(SELECT 1 FROM smetra.files f
-       WHERE f.id=file_text_chunks.file_id
-         AND f.workspace_id=file_text_chunks.workspace_id));
+     WHERE f.id=file_text_chunks.file_id AND f.workspace_id=file_text_chunks.workspace_id)
+ );
+CREATE POLICY vault_file_chunks_write ON smetra.file_text_chunks FOR ALL TO smetra_runtime
+ USING (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.vault_can_edit_file(file_id)
+ )
+ WITH CHECK (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.vault_can_edit_file(file_id)
+ );
+
 DROP POLICY IF EXISTS smetra_runtime_scope ON smetra.file_versions;
-CREATE POLICY smetra_runtime_scope ON smetra.file_versions FOR ALL TO smetra_runtime
- USING (workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+DROP POLICY IF EXISTS vault_file_versions_read ON smetra.file_versions;
+DROP POLICY IF EXISTS vault_file_versions_write ON smetra.file_versions;
+CREATE POLICY vault_file_versions_read ON smetra.file_versions FOR SELECT TO smetra_runtime
+ USING (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
   AND smetra.runtime_workspace_allowed(workspace_id)
   AND EXISTS(SELECT 1 FROM smetra.files f
-       WHERE f.id=file_versions.file_id AND f.workspace_id=file_versions.workspace_id))
- WITH CHECK (workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
-  AND smetra.runtime_workspace_allowed(workspace_id)
-  AND EXISTS(SELECT 1 FROM smetra.files f
-       WHERE f.id=file_versions.file_id AND f.workspace_id=file_versions.workspace_id));
+     WHERE f.id=file_versions.file_id AND f.workspace_id=file_versions.workspace_id)
+ );
+CREATE POLICY vault_file_versions_write ON smetra.file_versions FOR ALL TO smetra_runtime
+ USING (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.vault_can_edit_file(file_id)
+ )
+ WITH CHECK (
+  workspace_id=NULLIF(current_setting('smetra.workspace_id',true),'')
+  AND smetra.vault_can_edit_file(file_id)
+ );
 
 INSERT INTO smetra.schema_migrations(version,applied_at)
  VALUES(66,extract(epoch FROM now())::bigint) ON CONFLICT DO NOTHING;
