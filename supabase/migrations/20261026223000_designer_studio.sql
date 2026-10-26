@@ -69,6 +69,6 @@ BEGIN
 END $$;
 
 INSERT INTO smetra.schema_migrations(version,applied_at)
- VALUES (29,extract(epoch from now())::bigint)
+ VALUES (40,extract(epoch from now())::bigint)
  ON CONFLICT DO NOTHING;
 COMMIT;
