@@ -531,6 +531,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ("assistant.css", "text/css"),
             ("construction.css", "text/css"),
             ("construction.js", "text/javascript"),
+            ("designer-studio.js", "text/javascript"),
+            ("designer-studio.css", "text/css"),
             ("ai-workspace.js", "text/javascript"),
             ("file-editor.css", "text/css"),
             ("file-editor.js", "text/javascript"),
