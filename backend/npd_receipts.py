@@ -9,7 +9,7 @@ import re
 import time
 import urllib.parse
 
-URL_PATH = re.compile(r"/api/v1/receipt/([0-9]{12})/([a-zA-Z0-9_-]{6,100})/print\\Z")
+URL_PATH = re.compile(r"/api/v1/receipt/([0-9]{12})/([a-zA-Z0-9_-]{6,100})/print\Z")
 
 
 class NpdReceiptError(ValueError):
@@ -156,12 +156,12 @@ def dispatch(con, mail_fn, limit=8, payment_id=None):
             if not row["email"] or not row["receipt_url"]:
                 raise ValueError("Missing destination or genuine FNS receipt")
             message = (
-                "Здравствуйте!\\n\\n"
-                "Чек из ФНС «Мой налог» по оплате в сервисе «Сметра»:\\n"
+                "Здравствуйте!\n\n"
+                "Чек из ФНС «Мой налог» по оплате в сервисе «Сметра»:\n"
                 + row["receipt_url"]
-                + "\\n\\nСумма платежа: "
+                + "\n\nСумма платежа: "
                 + f"{row['amount_kopecks'] / 100:.2f} ₽"
-                + "\\n\\nЕсли оплата вам не знакома, сообщите на support@smetra.online."
+                + "\n\nЕсли оплата вам не знакома, сообщите на support@smetra.online."
             )
             mail_fn(row["email"], "Сметра — чек из «Мой налог»", message)
         except Exception as exc:
