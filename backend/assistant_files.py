@@ -21,7 +21,7 @@ def list_files(service, query=""):
         raise DomainError(400, "Поисковая фраза слишком длинная")
     # Bounded metadata only; the model must request file content explicitly.
     rows = service.con.execute(
-        "SELECT id,name,mime,size FROM files WHERE workspace_id=? "
+        "SELECT id,name,mime,size FROM files WHERE workspace_id=? AND archived=0 "
         "AND lower(name) LIKE ? ORDER BY created_at DESC LIMIT 20",
         (service.wid, "%" + phrase + "%"),
     ).fetchall()
@@ -82,7 +82,7 @@ def search_content(service, query):
     rows = service.con.execute(
         "SELECT c.file_id,c.page,c.text,f.name FROM file_text_chunks c "
         "JOIN files f ON f.id=c.file_id AND f.workspace_id=c.workspace_id "
-        "WHERE c.workspace_id=? AND c.source_sha256=f.sha256 "
+        "WHERE c.workspace_id=? AND c.source_sha256=f.sha256 AND f.archived=0 "
         "AND instr(lower(c.text),?)>0 ORDER BY f.created_at DESC,c.page LIMIT 10",
         (service.wid, phrase),
     ).fetchall()
