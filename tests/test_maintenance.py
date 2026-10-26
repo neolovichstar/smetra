@@ -97,7 +97,7 @@ class MaintenanceTests(SecurityHardeningTests):
             })
             key = record["api_key"]
             holder = partner.auth_partner(con, "Partner " + key)
-            old_token = partner.begin_visit(con, holder["code"])
+            partner.begin_visit(con, holder["code"])
             old_session = partner.new_console_session(con, "Partner " + key)
             old_hash = __import__("hashlib").sha256(old_session["session_token"].encode()).hexdigest()
             con.execute("UPDATE partner_clicks SET expires_at=? WHERE partner_id=?",
