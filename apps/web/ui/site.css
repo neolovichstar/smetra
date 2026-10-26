@@ -316,6 +316,14 @@ body.public-quote-mode{background:var(--bg-sunken)}
 .plan.is-pressed::after,.feature-group.is-pressed::after{opacity:1}
 /* ───── Phone density: shorter page, smaller type, no repeated explanations ───── */
 @media (max-width:640px){
+  /* Top bar: a floating pill of clear wet glass. */
+  .site-nav,.site-nav.is-scrolled{top:8px;margin:8px 12px 0;border:1px solid rgba(255,255,255,.16);border-radius:28px;background:transparent;backdrop-filter:blur(7px) saturate(1.4);-webkit-backdrop-filter:blur(7px) saturate(1.4);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.05),0 10px 28px -12px rgba(0,0,0,.55);isolation:isolate;overflow:hidden}
+  .site-nav::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--wet-drops) 0 0/200px 64px repeat;opacity:.9}
+  .site-nav::after{content:'';position:absolute;top:0;left:16%;right:16%;height:1px;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)}
+  :root[data-theme="light"] .site-nav{border-color:rgba(255,255,255,.75);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 .5px rgba(0,0,0,.06),0 10px 26px -12px rgba(20,24,40,.3)}
+  .site-nav-inner{width:auto;height:52px;padding:0 6px 0 18px}
+  .site-nav .brand{text-shadow:var(--wet-text-shadow)}
+  .plans{align-items:flex-start}
   .hero{padding:var(--s-5) 0 var(--s-7);gap:var(--s-6)}
   .hero h1{font-size:clamp(28px,8.4vw,34px);line-height:1.06}
   .hero-kicker,.section-kicker{font-size:var(--fs-12);margin-bottom:var(--s-2)}
@@ -337,6 +345,11 @@ body.public-quote-mode{background:var(--bg-sunken)}
   .feature-group li{padding:8px 0;font-size:var(--fs-14)}
   /* Plans: a swipeable row, the next card peeks in. */
   .plans{display:flex;gap:var(--s-2);margin-inline:calc(var(--content-pad) * -1);padding:0 var(--content-pad) var(--s-1);border:0;border-radius:0;background:none;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:var(--content-pad);scrollbar-width:none}
+  .plans::-webkit-scrollbar{display:none}
+  .plan,.plan+.plan{flex:0 0 84%;border:1px solid var(--line);border-radius:var(--r-4);background:var(--surface-1);scroll-snap-align:start}
+  .plan.is-featured{background:var(--surface-2)}
+  /* Plans: a swipeable row, the next card peeks in. */
+  .plans{display:flex;gap:var(--s-2);margin-inline:calc(var(--content-pad) * -1);padding:0 var(--content-pad) var(--s-1);border:0;border-radius:0;background:none;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:var(--content-pad);scrollbar-width:none;perspective:none}
   .plans::-webkit-scrollbar{display:none}
   .plan,.plan+.plan{flex:0 0 84%;border:1px solid var(--line);border-radius:var(--r-4);background:var(--surface-1);scroll-snap-align:start}
   .plan.is-featured{background:var(--surface-2)}

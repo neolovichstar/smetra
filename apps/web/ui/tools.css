@@ -135,7 +135,10 @@
   .assistant-message.assistant .assistant-markdown{font-size:var(--fs-14);line-height:1.55}
   .assistant-message.user .assistant-markdown{font-size:var(--fs-14)}
   /* Billing: plan cards. */
-  .catalog-plan{gap:var(--s-2);padding:var(--s-4)}
+  .catalog-plan-grid{display:flex;gap:var(--s-2);margin-inline:calc(var(--s-4) * -1);padding:0 var(--s-4) var(--s-1);border:0;border-radius:0;background:none;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:var(--s-4);scrollbar-width:none}
+  .catalog-plan-grid::-webkit-scrollbar{display:none}
+  .catalog-plan,.catalog-plan+.catalog-plan{flex:0 0 84%;border:1px solid var(--line);border-radius:var(--r-4);scroll-snap-align:start}
+  .catalog-plan{gap:var(--s-2);padding:var(--s-4);background:var(--surface-1)}
   .catalog-plan-price strong{font-size:var(--fs-24)}
   .catalog-plan ul{gap:6px;font-size:var(--fs-13)}
   .catalog-billing>.section-top .muted{display:none}
