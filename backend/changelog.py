@@ -62,7 +62,7 @@ def route(service, method, parts, query, data):
         raise DomainError(404, "Обновление не найдено")
     uid = service.user["id"]
     if parts[1] == "view":
-        created = service.con.execute(
+        service.con.execute(
             "INSERT INTO product_update_views(update_id,user_id,created_at)"
             " VALUES(?,?,?) ON CONFLICT(update_id,user_id) DO NOTHING RETURNING update_id",
             (row["id"],uid,stamp()),
