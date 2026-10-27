@@ -238,7 +238,7 @@ window.SmetraSupport = (() => {
     form.onsubmit = async event => {
       event.preventDefault();
       const message = input.value.trim();
-      if ((!message && !state.images.length) || state.sending || send.disabled) return;
+      if ((!message && !state.images.length) || state.sending || state.selecting || input.disabled) return;
       const draft = input.value, draftImages=state.images.slice(), target = state.current, submittedRevision = threadRevision;
       const currentTarget = () => active() && threadRevision === submittedRevision;
       let accepted = false;
