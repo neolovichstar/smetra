@@ -212,6 +212,8 @@ def undo(service, action_id):
         state = result.get("undo")
         if row["status"] != "applied" or not isinstance(state, dict) or result.get("undo_until", 0) < stamp():
             raise DomainError(409, "Это действие уже нельзя отменить")
+        if not service.finance_visible() and any(key in state.get("fields", {}) for key in ("cost_price", "internal_cost")):
+            raise DomainError(403, "Для отмены изменения себестоимости нужен доступ к финансам")
         if state.get("mode"):
             from backend.assistant_resources import undo_resource
 

@@ -21,10 +21,7 @@
  const providerLink=host.querySelector('a[data-provider="yandex"]');
  if(providerLink)host.replaceChildren(providerLink);
  const params=new URLSearchParams(location.search);document.body.classList.toggle('auth-password-reset',params.has('reset'));if(params.has('auth_error')){document.querySelector('#auth-status').textContent=errors[params.get('auth_error')]||'Не удалось войти';history.replaceState({},'',location.pathname+location.hash)}
- if(params.has('reset'))document.querySelector('#email-disclosure').open=true;
  const note=document.querySelector('#provider-note');
- const email=document.querySelector('#email-disclosure');
- email.open=true;
  try{
   const data=await api('/auth/providers');
   window.SmetraEmailDeliveryAvailable=data.email_delivery_available===true;

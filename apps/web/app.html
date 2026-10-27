@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="/ui/tokens.css?v=20261026-r21">
   <link rel="stylesheet" href="/ui/base.css?v=20261026-r21">
   <link rel="stylesheet" href="/ui/components.css?v=20261026-r21">
-  <link rel="stylesheet" href="/ui/shell.css?v=20261026-r21">
+  <link rel="stylesheet" href="/ui/shell.css?v=20261027-auth3">
   <link rel="stylesheet" href="/ui/workspace.css?v=20261026-r21">
   <link rel="stylesheet" href="/ui/editor.css?v=20261026-r21">
   <link rel="stylesheet" href="/ui/assistant.css?v=20261026-r21">
@@ -99,8 +99,8 @@
         </div>
         <section id="email-code-flow" class="email-code-flow hidden" aria-label="Вход по коду из письма">
           <form id="email-code-start" class="email-code-start">
-            <div class="field hidden" id="email-code-name-field"><label for="email-code-name">Как к вам обращаться</label><input id="email-code-name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
-            <div class="field"><label for="email-code-address">Электронная почта</label><input id="email-code-address" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="name@example.ru" required></div>
+            <div class="field hidden" id="email-code-name-field"><label for="email-code-name">Как к вам обращаться</label><input id="email-code-name" enterkeyhint="next" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
+            <div class="field"><label for="email-code-address">Электронная почта</label><input id="email-code-address" type="email" autocapitalize="none" spellcheck="false" enterkeyhint="go" autocomplete="email" inputmode="email" maxlength="254" placeholder="name@example.ru" required></div>
             <button type="submit" id="email-code-start-button" class="btn primary full-width">Получить код <span aria-hidden="true">↗</span></button>
             <p class="email-code-help">Отправим одноразовый код на вашу почту. Никаких паролей.</p>
           </form>
@@ -125,12 +125,13 @@
           <summary>Продолжить по почте</summary>
           <form id="auth-form">
             <div class="field hidden" id="name-field"><label for="name">Имя</label><input id="name" autocomplete="name" maxlength="80" placeholder="Ваше имя"></div>
-            <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocomplete="email" placeholder="name@example.ru" required></div>
-            <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
+            <div class="field"><label for="email">Электронная почта</label><input type="email" id="email" autocapitalize="none" spellcheck="false" inputmode="email" enterkeyhint="next" autocomplete="email" placeholder="name@example.ru" required></div>
+            <div class="field"><div class="auth-label-row"><label for="password">Пароль</label><button id="forgot" type="button" class="hidden">Забыли?</button></div><input type="password" id="password" enterkeyhint="go" autocomplete="current-password" minlength="12" placeholder="Не менее 12 символов" required></div>
             <p id="auth-form-error" class="auth-form-error" role="alert"></p>
             <button class="btn primary full-width" id="auth-submit" type="submit">Продолжить <span aria-hidden="true">↗</span></button>
           </form>
         </details>
+        <button id="auth-method-switch" class="auth-method-switch hidden" type="button">Войти с паролем</button>
         <div class="field hidden" id="legal-consent-field">
           <label class="estimate-consent-check" for="legal-consent">
             <input id="legal-consent" type="checkbox">
@@ -181,12 +182,12 @@
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="/features.js?v=20261026-sendfix1" defer></script>
   <script src="/select-menu.js?v=20261026-r21" defer></script>
-  <script src="/app.js?v=20261027-release2" defer></script>
+  <script src="/app.js?v=20261027-auth3" defer></script>
   <script src="/workspace.js?v=20261027-release2" defer></script>
   <script src="/workspace-vault.js?v=20261026-v2" defer></script>
   <script src="/field-flows.js?v=20261026-r21" defer></script>
-  <script src="/black.js?v=20261026-r21" defer></script>
-  <script src="/auth-email.js?v=20261026-r21" defer></script>
+  <script src="/black.js?v=20261027-auth3" defer></script>
+  <script src="/auth-email.js?v=20261027-auth3" defer></script>
   <script src="/file-preview.js?v=20261026-r21" defer></script>
   <script src="/file-editor.js?v=20261026-r21" defer></script>
   <script src="/product-ui.js?v=20261026-r21" defer></script>
