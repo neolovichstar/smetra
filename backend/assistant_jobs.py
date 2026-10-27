@@ -5,6 +5,7 @@ Each attempt rechecks the original session and workspace membership. Mutations
 remain proposals, and proposals/messages/result commit together behind a lease.
 """
 
+import base64
 import hashlib
 import hmac
 import json
@@ -15,6 +16,11 @@ from backend import assistant, file_processing
 
 ACTIVE = ('queued', 'running', 'retry')
 PUBLIC_COLUMNS = 'id,conversation_id,prompt,status,progress,error,attempts,cancel_requested,created_at,updated_at,kind,file_id'
+
+
+class UserBusy(DomainError):
+    def __init__(self):
+        super().__init__(429, 'Ожидаю завершения другого ответа')
 
 
 def authenticate(handler):
@@ -64,6 +70,47 @@ def refund(con, row):
             con.execute('UPDATE assistant_ad_reward_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0', (stamp(), row['quota_key']))
 
 
+def image_attachments(service, values):
+    if values is None:
+        return []
+    if not isinstance(values, list) or len(values) > 3 or len({str(value) for value in values}) != len(values):
+        raise DomainError(400, 'Можно прикрепить до трёх разных фотографий')
+    result, size = [], 0
+    for value in values:
+        row = service.get('files', string(value, 'Фотография', 80, True))
+        if row['mime'] not in ('image/png', 'image/jpeg'):
+            raise DomainError(400, 'Прикрепите фотографию PNG или JPEG')
+        size += row['size']
+        if size > 1_500_000:
+            raise DomainError(413, 'Общий размер фотографий — до 1,5 МБ')
+        result.append({'id': row['id'], 'sha256': row['sha256']})
+    return result
+
+
+def restored_context(service, value):
+    images = []
+    if isinstance(value, dict) and 'attachments' in value:
+        attachments = value['attachments']
+        if not isinstance(attachments, list) or not 1 <= len(attachments) <= 3:
+            raise DomainError(400, 'Некорректные вложения задачи')
+        context = assistant.verified_context(service, value.get('context'))
+        from backend.attachments import download
+
+        total = 0
+        for attachment in attachments:
+            row = service.get('files', attachment['id'])
+            if row['sha256'] != attachment['sha256'] or row['mime'] not in ('image/png', 'image/jpeg'):
+                raise DomainError(409, 'Фотография изменилась. Отправьте запрос заново.')
+            raw = download(row, service.con).data
+            total += len(raw)
+            if total > 1_500_000:
+                raise DomainError(413, 'Общий размер фотографий — до 1,5 МБ')
+            images.append('data:' + row['mime'] + ';base64,' + base64.b64encode(raw).decode('ascii'))
+    else:
+        context = assistant.verified_context(service, value)
+    return context, images
+
+
 def route(service, method, parts, data):
     args = (service.wid, service.user['id'])
     if method == 'GET' and not parts:
@@ -109,7 +156,10 @@ def route(service, method, parts, data):
         raise DomainError(405, 'Метод не поддерживается')
     if len(os.getenv('ASSISTANT_WORKER_SECRET', '')) < 32 or not assistant.available():
         raise DomainError(503, 'Фоновый ассистент пока не подключён')
-    prompt = string(data.get('text', ''), 'Сообщение', 3000, True)
+    attachments = image_attachments(service, data.get('file_ids'))
+    prompt = string(data.get('text', ''), 'Сообщение', 3000, not bool(attachments))
+    if not prompt:
+        prompt = 'Опиши фотографии и помоги по ним с моей задачей. Не угадывай точные размеры и цены.'
     key = string(service.h.headers.get('Idempotency-Key', ''), 'Ключ запроса', 100, True)
     context = assistant.verified_context(service, data.get('context'))
     thread_id = data.get('conversation_id')
@@ -121,7 +171,8 @@ def route(service, method, parts, data):
         if 'context' not in data and selected['context_entity']:
             context = assistant.verified_context(service, {'entity': selected['context_entity'], 'id': selected['context_id']})
     file_processing.ensure_ready(service, context)
-    request_hash = hashlib.sha256(packed([prompt, context, thread_id]).encode()).hexdigest()
+    request_hash = hashlib.sha256(packed([prompt, context, thread_id] + ([attachments] if attachments else [])).encode()).hexdigest()
+    stored_context = {'context': context, 'attachments': attachments} if attachments else context
     service.h.throttle('assistant:' + service.user['id'], 12, 60)
     with transaction(
         service.con,
@@ -141,22 +192,24 @@ def route(service, method, parts, data):
         job_id, now = identity(), stamp()
         service.con.execute(
             'INSERT INTO assistant_jobs(id,workspace_id,user_id,conversation_id,session_hash,request_key,request_hash,prompt,context,quota_key,bonus_grant_id,ad_reward_id,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            (job_id, *args, thread_id, service.h.session_token_hash, key, request_hash, prompt, packed(context), quota_key, bonus_grant_id, reservation.get("ad_reward_id"), now, now, now),
+            (job_id, *args, thread_id, service.h.session_token_hash, key, request_hash, prompt, packed(stored_context), quota_key, bonus_grant_id, reservation.get("ad_reward_id"), now, now, now),
         )
         row = service.con.execute('SELECT * FROM assistant_jobs WHERE id=?', (job_id,)).fetchone()
     return 202, {'job': public(row), 'quota': assistant.public_quota(service)}
 
 
-def claim(con):
+def claim(con, job_id=None):
     now = stamp()
     with transaction(con, lock_scopes=("assistant-queue",)):
         query = (
-            "SELECT * FROM assistant_jobs WHERE (status IN ('queued','retry') AND next_attempt_at<=?) "
-            "OR (status='running' AND lease_until<=?) ORDER BY created_at,id LIMIT 1"
+            "SELECT * FROM assistant_jobs WHERE "
+            + ("id=? AND kind='chat' AND " if job_id is not None else "")
+            + "((status IN ('queued','retry') AND next_attempt_at<=?) "
+            "OR (status='running' AND lease_until<=?)) ORDER BY created_at,id LIMIT 1"
         )
         if getattr(con, "is_postgres", False):
             query += " FOR UPDATE SKIP LOCKED"
-        row = con.execute(query, (now, now)).fetchone()
+        row = con.execute(query, (job_id, now, now) if job_id is not None else (now, now)).fetchone()
         if not row:
             return None
         if row['cancel_requested'] or row['attempts'] >= 3 or row['created_at'] < now - 3600:
@@ -185,10 +238,13 @@ def fail(con, job, error):
         if not row:
             return
         cancelled = bool(row['cancel_requested'])
-        retry = not cancelled and error.status in (429, 502, 503, 504) and row['attempts'] < 3 and row['created_at'] > stamp() - 3600
+        waiting = isinstance(error, UserBusy)
+        retry = not cancelled and error.status in (429, 502, 503, 504) and (waiting or row['attempts'] < 3) and row['created_at'] > stamp() - 3600
         status = 'cancelled' if cancelled else 'retry' if retry else 'failed'
-        con.execute('UPDATE assistant_jobs SET status=?,progress=?,error=?,next_attempt_at=?,lease_token=\'\',lease_until=0,updated_at=? WHERE id=?',
-                    (status, 'Отменено' if cancelled else 'Повторю позже' if retry else 'Не удалось завершить', '' if cancelled else error.message, stamp() + 60 * (3 ** (row['attempts'] - 1)), stamp(), row['id']))
+        delay = 5 if waiting else 60 * (3 ** (row['attempts'] - 1))
+        progress = 'Отменено' if cancelled else error.message if waiting and retry else 'Повторю позже' if retry else 'Не удалось завершить'
+        con.execute("UPDATE assistant_jobs SET status=?,progress=?,error=?,next_attempt_at=?,attempts=attempts-?,lease_token='',lease_until=0,updated_at=? WHERE id=?",
+                    (status, progress, '' if cancelled else error.message, stamp() + delay, int(waiting and retry), stamp(), row['id']))
         if not retry:
             refund(con, row)
         file_processing.terminal(con,row,status,'' if cancelled else error.message)
@@ -200,6 +256,11 @@ def run_one(handler, con, origin):
     job = claim(con)
     if not job:
         return {'ok': True, 'processed': 0}
+    return process_job(handler, con, origin, job)
+
+
+def process_job(handler, con, origin, job, on_event=None):
+    """Execute a claimed job; SSE delivery is optional and never owns persistence."""
     service, lease = Service(handler, con, origin), None
     try:
         user = con.execute(
@@ -224,7 +285,7 @@ def run_one(handler, con, origin):
             from backend.ai_workspace import conversation
 
             conversation(service, job['conversation_id'])
-        context = assistant.verified_context(service, json.loads(job['context']))
+        context, images = restored_context(service, json.loads(job['context']))
         from backend.redis_infra import RedisUnavailable, acquire_lock
 
         try:
@@ -232,15 +293,18 @@ def run_one(handler, con, origin):
         except RedisUnavailable:
             raise DomainError(503, 'Ассистент временно недоступен') from None
         if lease is None:
-            raise DomainError(429, 'Ожидаю завершения другого ответа')
+            raise UserBusy()
         service.assistant_deferred_actions = []
 
         def progress(message):
             row = con.execute("UPDATE assistant_jobs SET progress=?,updated_at=? WHERE id=? AND lease_token=? AND status='running' AND cancel_requested=0 RETURNING id", (message[:120], stamp(), job['id'], job['lease_token'])).fetchone()
             if not row:
                 raise DomainError(409, 'Задача отменена')
+            if on_event:
+                on_event('status', {'text': message[:120]})
 
         def complete(result):
+            validate()
             # This fence is in the same transaction as messages and proposals.
             row = service.con.execute(
                 "UPDATE assistant_jobs SET status='completed',progress='Готово',result=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND status='running' AND lease_token=? AND lease_until>? AND cancel_requested=0 RETURNING id",
@@ -265,7 +329,16 @@ def run_one(handler, con, origin):
             process(service,job,complete,progress,validate)
         else:
             file_processing.ensure_ready(service,context)
-            assistant.answer_chat(service, job['prompt'], context=context, conversation_id=job['conversation_id'], on_status=progress, on_commit=complete)
+            options = {'context': context, 'conversation_id': job['conversation_id'], 'on_status': progress, 'on_commit': complete}
+            if images:
+                options['image_url'] = images
+            if on_event:
+                options.update(
+                    on_delta=lambda text: on_event('delta', {'text': text}),
+                    on_source=lambda source: on_event('web_source', source),
+                    on_design=lambda design: on_event('quote_design', design),
+                )
+            assistant.answer_chat(service, job['prompt'], **options)
         if service.runtime_connection:
             service.runtime_connection.finish(True)
             service.runtime_connection = None

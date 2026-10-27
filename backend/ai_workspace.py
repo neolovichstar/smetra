@@ -106,6 +106,8 @@ def _conversations(service, method, parts, data):
                 "SELECT * FROM assistant_conversations c WHERE c.workspace_id=? AND c.user_id=? "
                 "AND c.title='Новый диалог' AND c.context_entity='' AND NOT EXISTS("
                 "SELECT 1 FROM assistant_messages m WHERE m.conversation_id=c.id) "
+                "AND NOT EXISTS(SELECT 1 FROM assistant_jobs j WHERE j.conversation_id=c.id "
+                "AND j.status IN ('queued','running','retry')) "
                 "ORDER BY c.created_at DESC LIMIT 1",
                 (service.wid, service.user["id"]),
             ).fetchone()
