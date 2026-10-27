@@ -181,8 +181,13 @@ def tier_of(service):
     from backend.entitlements import workspace_plan_row, evaluate_workspace_plan
     if getattr(service, "wid", None):
         return evaluate_workspace_plan(workspace_plan_row(service.con, service.wid, stamp()), "clean_export", stamp())["tier"]
-    user = service.user
-    paid = user["plan"] == "pro" and (user["entitlement_until"] or 0) > stamp()
+    # A Service may retain its initial user snapshot after a payment or refund.
+    # Never grant paid tokens from that stale snapshot: read the live DB row.
+    user = service.con.execute(
+        "SELECT plan,entitlement_until FROM users WHERE id=?",
+        (service.user["id"],),
+    ).fetchone()
+    paid = user is not None and user["plan"] == "pro" and int(user["entitlement_until"] or 0) > stamp()
     return "pro_solo" if paid else "starter"
 
 
