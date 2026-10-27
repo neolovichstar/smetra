@@ -11,7 +11,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, features
 import backend.app as app
 import backend.community as community
 from backend.support_features import prepare_images, is_suggestion
@@ -84,6 +84,48 @@ class SupportFeaturesTests(unittest.TestCase):
         self.assertEqual(self.call("/api/support/images/"+image_id,who="bob")[0],404)
         self.assertEqual(self.call("/api/admin/communication/images/"+image_id,who="admin",binary=True)[0],200)
         self.assertIn(self.call("/api/admin/communication/images/"+image_id,who="bob")[0],(401,403))
+
+    def test_webp_upload_is_private_and_served_with_actual_mime(self):
+        if not features.check("webp"):
+            self.skipTest("Pillow built without WebP")
+        buffer = io.BytesIO()
+        Image.new("RGB", (120, 80), (19, 18, 17)).save(buffer, format="WEBP", lossless=True)
+        raw = buffer.getvalue()
+        payload = [{"name": "error.webp", "content": base64.b64encode(raw).decode()}]
+        transformed = prepare_images(payload)
+        self.assertEqual(transformed[0]["mime"], "image/webp")
+        self.assertTrue(transformed[0]["content"].startswith(b"RIFF"))
+        self.assertEqual(transformed[0]["content"][8:12], b"WEBP")
+        self.assertTrue(transformed[0]["name"].endswith(".webp"))
+        with patch("backend.support_features.extract_screenshot_text", return_value=("Ошибка 500", True)), \
+             patch.object(community, "_support_ai_reply", return_value={
+                 "reply": "Проверено", "escalate": False, "reason": "", "suggestion": False
+             }):
+            status, created = self.call("/api/support", "POST", {
+                "message": "Ошибка на скриншоте", "images": payload
+            })
+        self.assertEqual(status, 201, created)
+        thread_id = created["ticket_id"]
+        _, messages = self.call("/api/support/threads/" + thread_id + "/messages")
+        mine = next(msg for msg in messages["messages"] if msg["sender_type"] == "user")
+        image_id = mine["metadata"]["images"][0]["id"]
+        req = urllib.request.Request(
+            self.base + "/api/support/images/" + image_id,
+            headers={"Authorization": "Bearer " + self.tokens["alice"]},
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            self.assertEqual(response.headers["Content-Type"], "image/webp")
+            self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+            served = response.read()
+        self.assertTrue(served.startswith(b"RIFF"))
+        self.assertEqual(served[8:12], b"WEBP")
+        self.assertEqual(self.call("/api/support/images/" + image_id, who="bob")[0], 404)
+
+    def test_webp_fake_magic_rejected(self):
+        for fake in (b"MZ" + b"\\x00" * 40, b"RIFF" + b"\\x00" * 12):
+            with self.subTest(fake=fake), self.assertRaises(ValueError):
+                prepare_images([{"name": "fake.webp",
+                                "content": base64.b64encode(fake).decode()}])
 
     def test_suggestion_pipeline_and_admin_triage(self):
         with patch.object(community, "_support_ai_reply", return_value={"reply":"Спасибо за идею","escalate":False,"reason":"","suggestion":True}):
