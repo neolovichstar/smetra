@@ -70,7 +70,13 @@ class RevenueTests(unittest.TestCase):
         handler.apply_refund(self.con,{'id':'refund-'+key,'payment_id':remote['id'],'status':'succeeded','amount':remote['amount']})
         revoked=self.con.execute('SELECT remaining FROM assistant_bonus_grants WHERE payment_id=?',(local['id'],)).fetchone()
         self.assertEqual(revoked['remaining'],0)
-        self.assertEqual(assistant.quota(service)['remaining'],0,'unused purchase tokens are revoked on a full refund')
+        after_refund=assistant.quota(service)
+        # Revoking Pro must remove all premium allowance and unused gift tokens.
+        # The account still retains its legitimate free-tier monthly allotment.
+        self.assertEqual(after_refund['tier'],'starter')
+        self.assertEqual(after_refund['wallet'],0)
+        self.assertEqual(after_refund['monthly_limit'],ai_tokens.MONTHLY_TOKENS['starter'])
+        self.assertEqual(after_refund['remaining'],ai_tokens.MONTHLY_TOKENS['starter'])
 
         annual=self.account('annual-bonus')
         annual_payment,_=self.purchase(annual,key='annual_bonus_checkout',plan='pro_year')
