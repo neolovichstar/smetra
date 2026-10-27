@@ -37,6 +37,22 @@ if (-not (Test-Path -LiteralPath $keyPath)) {
     Write-Host 'Уже существующий приватный ключ сохранён. Перезапись запрещена.'
 }
 
+# На Windows age может создать ключ с унаследованными правами чтения.
+# Убираем наследование и все старые разрешения, оставляя доступ владельцу.
+$acl = Get-Acl -LiteralPath $keyPath
+$acl.SetAccessRuleProtection($true, $false)
+foreach ($entry in @($acl.Access)) {
+    [void]$acl.RemoveAccessRuleSpecific($entry)
+}
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$privateRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+    $currentUser,
+    [System.Security.AccessControl.FileSystemRights]::FullControl,
+    [System.Security.AccessControl.AccessControlType]::Allow
+)
+$acl.AddAccessRule($privateRule)
+Set-Acl -LiteralPath $keyPath -AclObject $acl
+
 $recipient = (& age-keygen -y $keyPath | Select-Object -First 1).Trim()
 if ($LASTEXITCODE -ne 0 -or $recipient -notmatch '^age1[023456789acdefghjklmnpqrstuvwxyz]+$') {
     throw 'Не удалось проверить публичный ключ шифрования.'
