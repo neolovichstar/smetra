@@ -63,7 +63,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.equal(doc.querySelector('#premium-folder-submit').disabled,true,'Cannot sync a disconnected cloud');
   assert.match(doc.querySelector('#premium-folder-entries').textContent,/Подключите облако/);
   assert.equal(calls.length,beforeSelect,'Selecting a card never initiates OAuth or disconnect');
-  cards[0].querySelector('.premium-connect-select').click();
+  cards[0].click(); // Whole card outside small action selects.
   await new Promise(r=>setTimeout(r,25));
   assert.ok(cards[0].classList.contains('is-selected'));
   assert.equal(doc.querySelector('#premium-folder-submit').disabled,false);

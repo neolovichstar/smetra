@@ -196,6 +196,12 @@
     document.querySelectorAll('[data-premium-select]').forEach(button=>{
       button.addEventListener('click',()=>selectCloud(button.dataset.premiumSelect));
     });
+    // Empty card area also selects. OAuth/disconnect only via the small action.
+    document.querySelector('.premium-connect-row')?.addEventListener('click',event=>{
+      if(event.target.closest('[data-premium-select],[data-premium-connect],[data-premium-disconnect]'))return;
+      const card=event.target.closest('[data-cloud-card]');
+      if(card)selectCloud(card.dataset.cloudCard);
+    });
     folderBack?.addEventListener('click',()=>{folderPath.pop();void browseFolder()});
     folderNext?.addEventListener('click',()=>{if(folderCursor)void browseFolder(true)});
     if(folderConnection?.value)void browseFolder();
