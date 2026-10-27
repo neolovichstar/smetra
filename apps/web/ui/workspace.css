@@ -456,6 +456,7 @@
   .hub-tabs[role=tablist]>.hub-tab{flex:none;width:auto;min-height:36px;padding:0 12px;border-radius:var(--r-pill);white-space:nowrap;font-size:var(--fs-13)}
   .hub-tab svg{display:none}
   .hub-tabs[role=tablist]>.hub-tab.is-danger{margin-top:0}
+  .hub-tabs[role=tablist]>.hub-tab:last-child{margin-right:16px}
   .hub-main{padding:var(--s-5) var(--s-4) var(--s-8)}
   .hub-head h1{font-size:var(--fs-24)}
   .hub-row{flex-direction:column;align-items:flex-start}

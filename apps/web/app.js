@@ -462,9 +462,27 @@ async function renderAccountHub(active){
   </section>`);
   bindRailToggle(document.querySelector('#hub-rail-toggle'),document.querySelector('.hub'),'smetra.hub.rail-collapsed');
   const tabs=[...document.querySelectorAll('[data-hub-tab]')];
+  const tabList=document.querySelector('.hub-tabs');
+  const revealSelectedTab=()=>{
+    if(!tabList.isConnected)return;
+    const horizontal=getComputedStyle(tabList).flexDirection==='row';
+    tabList.setAttribute('aria-orientation',horizontal?'horizontal':'vertical');
+    if(!horizontal||tabList.scrollWidth<=tabList.clientWidth)return;
+    const selected=tabs.find(button=>button.getAttribute('aria-selected')==='true');
+    if(!selected)return;
+    const rail=tabList.getBoundingClientRect(),button=selected.getBoundingClientRect(),inset=32;
+    if(button.left<rail.left+inset)tabList.scrollLeft+=button.left-rail.left-inset;
+    else if(button.right>rail.right-inset)tabList.scrollLeft+=button.right-rail.right+inset;
+  };
+  revealSelectedTab();
+  if(typeof ResizeObserver!=='undefined'){
+    const observer=new ResizeObserver(()=>{if(tabList.isConnected)revealSelectedTab();else observer.disconnect()});
+    observer.observe(tabList);
+  }
   const select=(id,focus=false)=>{
-    tabs.forEach(button=>{const on=button.dataset.hubTab===id;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;if(on&&focus)button.focus()});
+    tabs.forEach(button=>{const on=button.dataset.hubTab===id;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;if(on&&focus)button.focus({preventScroll:true})});
     document.querySelectorAll('.hub-panel').forEach(panel=>panel.hidden=panel.id!=='hub-panel-'+id);
+    revealSelectedTab();
     if(id!=='profile')try{sessionStorage.setItem('smetra.settings.tab',id)}catch{}
     const route=id==='profile'?'profile':'settings';
     if(tab!==route){tab=route;history.replaceState({},'',location.pathname+location.search+'#'+route);document.querySelectorAll('#sidebar [data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab===route));$('#sidebar-profile')?.classList.toggle('active',route==='profile')}

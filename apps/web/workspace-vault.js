@@ -14,9 +14,48 @@
     return '<span class="vault-file-icon" aria-hidden="true"><svg viewBox="0 0 42 50" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 2h18l10 10v35H7z"/><path d="M25 2v11h10"/><path d="M13 22h16M13 27h16"/></svg><b>' + esc(ext) + '</b></span>';
   };
   const head = (title,description) => '<header class="vault-head"><span class="vault-eyebrow">СМЕТРА / РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>' + title + '</h1><p>' + description + '</p></header>';
-  let epoch = 0, thumbAbort = null, thumbUrls = [];
+  let epoch = 0, thumbAbort = null, thumbUrls = [], openFileMenu = null;
+  const icon = name => window.SmetraIcons.svg(name,18);
+  function closeFileMenu(restoreFocus=false) {
+    if (!openFileMenu) return;
+    const {panel,trigger} = openFileMenu;
+    openFileMenu = null;
+    if (typeof panel.hidePopover === 'function' && panel.matches(':popover-open')) panel.hidePopover();
+    panel.hidden = true;
+    trigger.setAttribute('aria-expanded','false');
+    if (restoreFocus && trigger.isConnected) trigger.focus({preventScroll:true});
+  }
+  function toggleFileMenu(trigger) {
+    if (openFileMenu?.trigger === trigger) { closeFileMenu(true); return; }
+    closeFileMenu();
+    const panel = document.getElementById(trigger.getAttribute('aria-controls'));
+    if (!panel) return;
+    panel.hidden = false;
+    if (typeof panel.showPopover === 'function') panel.showPopover();
+    openFileMenu = {panel,trigger};
+    trigger.setAttribute('aria-expanded','true');
+    const anchor = trigger.getBoundingClientRect(), size = panel.getBoundingClientRect();
+    const bottomBar = document.querySelector('#mobile-tabbar');
+    const bottom = bottomBar && getComputedStyle(bottomBar).display !== 'none'
+      ? Math.min(innerHeight,bottomBar.getBoundingClientRect().top) : innerHeight;
+    panel.style.left = Math.max(8,Math.min(anchor.right-size.width,innerWidth-size.width-8)) + 'px';
+    panel.style.top = Math.max(8,Math.min(anchor.bottom+6,bottom-size.height-8)) + 'px';
+    panel.querySelector('button')?.focus({preventScroll:true});
+    panel.ontoggle = event => {
+      if (event.newState === 'closed' && openFileMenu?.panel === panel) closeFileMenu();
+    };
+  }
+  document.addEventListener('pointerdown',event => {
+    if (openFileMenu && !openFileMenu.panel.contains(event.target) && !openFileMenu.trigger.contains(event.target)) closeFileMenu();
+  });
+  document.addEventListener('keydown',event => {
+    if (event.key === 'Escape' && openFileMenu) { event.preventDefault(); closeFileMenu(true); }
+  });
+  window.addEventListener('resize',() => closeFileMenu());
+
   function cleanup() {
     ++epoch;
+    closeFileMenu();
     if (thumbAbort) thumbAbort.abort();
     thumbAbort = null;
     for (const url of thumbUrls) URL.revokeObjectURL(url);
@@ -66,11 +105,16 @@
 
   function fileCard(file) {
     const image = file.mime === 'image/jpeg' || file.mime === 'image/png';
+    const action = (name,label,symbol,extra='') => '<button type="button" data-action="' + name + '" data-id="' + esc(file.id) + '" aria-label="' + label + '" title="' + label + '" ' + extra + '>' + icon(symbol) + '</button>';
+    const menuId = 'vault-menu-' + file.id;
     const controls = '<div class="vault-item-actions">' +
-      '<button type="button" data-action="open" data-file-open="' + esc(file.id) + '" data-id="' + esc(file.id) + '" aria-label="Открыть">Открыть</button>' +
-      '<button type="button" data-action="ask" data-id="' + esc(file.id) + '">Спросить ИИ</button>' +
-      (state.canWrite ? '<button type="button" data-file-manage="' + esc(file.id) + '" data-action="manage" data-id="' + esc(file.id) + '">Данные</button><button type="button" data-action="archive" data-id="' + esc(file.id) + '">' + (file.archived ? 'Восстановить' : 'В архив') + '</button>' +
-      '<button type="button" class="is-destructive" data-action="delete" data-id="' + esc(file.id) + '">Удалить</button>' : '') +
+      action('open','Открыть','arrow-up-right','data-file-open="' + esc(file.id) + '"') +
+      action('ask','Спросить ИИ','sparkle') +
+      (state.canWrite ? '<button type="button" data-action="menu" data-id="' + esc(file.id) + '" aria-label="Действия с файлом" title="Действия с файлом" aria-expanded="false" aria-controls="' + esc(menuId) + '">' + icon('more') + '</button>' +
+      '<div class="vault-menu-panel" id="' + esc(menuId) + '" popover="auto" hidden aria-label="Действия с файлом">' +
+      '<button type="button" data-file-manage="' + esc(file.id) + '" data-action="manage" data-id="' + esc(file.id) + '">' + icon('info') + '<span>Сведения о файле</span></button>' +
+      '<button type="button" data-action="archive" data-id="' + esc(file.id) + '">' + icon(file.archived ? 'refresh' : 'folder') + '<span>' + (file.archived ? 'Восстановить' : 'В архив') + '</span></button>' +
+      '<button type="button" class="is-destructive" data-action="delete" data-id="' + esc(file.id) + '">' + icon('trash') + '<span>Удалить</span></button></div>' : '') +
       '</div>';
     if (image) return '<article class="vault-image-tile"><button type="button" class="vault-image-preview" data-action="open" data-id="' + esc(file.id) + '" aria-label="Просмотреть ' + esc(file.name) + '"><img data-thumb="' + esc(file.id) + '" alt="' + esc(file.name) + '" loading="lazy" decoding="async"></button>' +
       '<div class="vault-image-info"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + '</small></div>' + controls + '</article>';
@@ -79,6 +123,7 @@
   }
   function paint(mine) {
     if (!activePage(mine)) return;
+    closeFileMenu();
     const result = state.result;
     const used = result.used_bytes || 0, quota = result.quota_bytes || 100000000;
     document.querySelector('#vault-usage').textContent = human(used) + ' из ' + human(quota);
@@ -162,7 +207,7 @@
     view('<section id="vault-root" class="vault-root">' +
       head('Хранилище','Все изображения, документы и вложения рабочего пространства в одном месте.') +
       '<div class="vault-tools"><div class="vault-space"><span>Использовано места</span><strong id="vault-usage"></strong><progress id="vault-meter" max="100" value="0" aria-label="Использование хранилища"></progress></div>' +
-      (state.canWrite ? '<label for="vault-upload" class="btn primary vault-upload">+ Загрузить<input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label>':'') + '</div>' +
+      (state.canWrite ? '<button type="button" id="vault-upload-trigger" class="btn primary vault-upload">' + icon('plus') + '<span>Загрузить</span></button><input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden>':'') + '</div>' +
       '<div class="vault-bar"><div role="tablist" class="vault-tabs" aria-label="Тип файлов"><button type="button" data-filter="images" role="tab">Изображения</button><button type="button" data-filter="files" role="tab">Файлы</button><button type="button" data-filter="archive" role="tab">Архив</button></div><input id="vault-search" type="search" aria-label="Поиск файлов" placeholder="Поиск по названию"></div>' +
       '<p id="vault-progress" class="vault-progress" hidden role="status"></p><div id="vault-items" aria-live="polite" aria-relevant="additions text"></div>' +
       '<footer class="vault-footer"><span id="vault-total"></span><button class="btn small" id="vault-more" type="button">Показать ещё</button></footer>' +
@@ -178,6 +223,7 @@
       searchTimer=setTimeout(()=>{if(request===sequence)loadFiles(mine).catch(err=>notify(err.message));},240);
     };
     root.querySelector('#vault-more').onclick = () => loadFiles(mine,true).catch(err=>notify(err.message));
+    root.querySelector('#vault-upload-trigger')?.addEventListener('click',() => root.querySelector('#vault-upload').click());
     root.querySelector('#vault-upload')?.addEventListener('change',event => {
       upload(Array.from(event.target.files),mine).catch(err=>notify(err.message));
       event.target.value='';
@@ -190,6 +236,8 @@
       const file = state.files.find(item=>item.id===button.dataset.id);
       if (!file) return;
       const action = button.dataset.action;
+      if (action === 'menu') { toggleFileMenu(button); return; }
+      closeFileMenu();
       if (action === 'open') return window.SmetraFilePreview?.open(file,state.wid);
       if (action === 'ask') return ask(file).catch(err=>notify(err.message));
       if (action === 'manage') return window.Workspace.manageFile(file.id).catch(err=>notify(err.message));

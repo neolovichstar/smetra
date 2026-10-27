@@ -13,6 +13,16 @@ const f=JSON.parse(fs.readFileSync(process.env.SMETRA_PROFILE_FIXTURE||'data/pro
  await p.getByRole('dialog').waitFor({state:'detached'});
  await p.waitForFunction(()=>document.querySelector('#sidebar-avatar img')?.complete&&document.querySelector('#sidebar-avatar img').naturalWidth===384);
  checks.push('avatar upload updates sidebar with scrubbed 384px image');
+ for(const width of [320,390,768,1440]){
+  await p.setViewportSize({width,height:960});
+  await p.locator('#hub-tab-data').evaluate(button=>button.click());
+  await p.reload();await p.locator('#hub-tab-data[aria-selected=true]').waitFor({state:'attached'});
+  await p.waitForFunction(()=>{const button=document.querySelector('#hub-tab-data'),rail=button?.parentElement;if(!rail||getComputedStyle(rail).flexDirection!=='row')return true;const b=button.getBoundingClientRect(),r=rail.getBoundingClientRect();return b.left>=r.left&&b.right<=r.right-20});
+  assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ }
+ checks.push('restored account tab remains fully visible at 320/390/768/1440px');
+ await p.setViewportSize({width:1440,height:960});
+ await p.locator('#hub-tab-account').evaluate(button=>button.click());
  await p.reload();await p.locator('#hub-avatar-controls [data-avatar-upload]').waitFor();
  assert.equal(await p.getByText('Подтянуть из Яндекса',{exact:true}).count(),0);
  await p.locator('#hub-tab-public').click();await p.locator('#public-profile-form').waitFor({state:'visible'});
@@ -30,10 +40,10 @@ const f=JSON.parse(fs.readFileSync(process.env.SMETRA_PROFILE_FIXTURE||'data/pro
  await q.goto(base+f.profiles[0].url);await q.getByRole('link',{name:'Написать',exact:true}).click();
  await q.locator('#auth-submit').waitFor({state:'visible'});await q.locator('#email').fill(recipient.email);await q.locator('#password').fill('secure twelve password');await q.locator('#auth-submit').click();
  await q.locator('#communication-center.is-open').waitFor({timeout:20000});await q.locator('#comms-message').fill('Здравствуйте, хочу обсудить ремонт');await q.locator('#comms-compose button[type=submit]').click();
- await q.getByText('Здравствуйте, хочу обсудить ремонт',{exact:true}).waitFor();checks.push('message intent survives guest login and text is delivered');
+ await q.locator('#comms-messages').getByText('Здравствуйте, хочу обсудить ремонт',{exact:true}).last().waitFor();checks.push('message intent survives guest login and text is delivered');
  await p.goto(base+f.profiles[1].url);await p.getByRole('link',{name:'Отправить смету',exact:true}).click();await p.getByRole('dialog').waitFor();
  assert(!(await p.locator('#profile-quote-select').textContent()).includes('черновик'));
- await p.getByRole('button',{name:'Отправить смету',exact:true}).click();await p.getByRole('dialog').waitFor({state:'detached'});await p.getByText('Создано обсуждение сметы',{exact:false}).waitFor();
+ await p.getByRole('button',{name:'Отправить смету',exact:true}).click();await p.getByRole('dialog').waitFor({state:'detached'});await p.locator('#comms-messages').getByText('Создано обсуждение сметы',{exact:false}).first().waitFor();
  const chats=(await (await anon.request.get(base+'/api/profile/chats')).json()).chats;assert(chats.some(c=>c.quote_id===f.quote.id));checks.push('published quote chooser excludes drafts and delivers recipient chat');
  await p.goto(base+'/app#premium');await p.locator('.premium-connect img').first().waitFor();
  assert.equal(await p.locator('.premium-connect img').count(),2);await p.waitForFunction(()=>[...document.querySelectorAll('.premium-connect img')].every(i=>i.complete&&i.naturalWidth>0));

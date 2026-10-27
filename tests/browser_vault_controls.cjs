@@ -1,0 +1,51 @@
+/* Real isolated API/browser flow for storage actions at desktop/mobile widths. */
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {chromium}=require(process.env.SMETRA_PLAYWRIGHT_MODULE||'playwright');
+const base=process.env.SMETRA_TEST_ORIGIN||'http://localhost:8084';
+assert(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Use an isolated local fixture');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.SMETRA_CHROME_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
+ const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],checks=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ const login=await context.request.post(base+'/api/auth/login',{data:{email:'android-design@test.invalid',password:'android design test only'}});
+ const user=await login.json();assert(user.token);
+ await context.addCookies([{name:'session',value:user.token,url:base,httpOnly:true,sameSite:'Lax'}]);
+ await page.goto(base+'/app#files');await page.locator('#vault-root').waitFor();
+ const chooser=page.waitForEvent('filechooser');await page.locator('#vault-upload-trigger').click();
+ const name='Проверка ровных кнопок и очень длинного названия '+Date.now()+'.png';
+ await (await chooser).setFiles({name,mimeType:'image/png',buffer:fs.readFileSync(process.env.SMETRA_VAULT_IMAGE||'data/profile-avatar.png')});
+ await page.getByText(name,{exact:true}).waitFor();
+ const tile=page.locator('.vault-image-tile').filter({has:page.getByText(name,{exact:true})});
+ await tile.locator('img').evaluate(img=>img.decode());
+ const id=await tile.locator('[data-action=menu]').getAttribute('data-id'),menu=page.locator('[id="vault-menu-'+id+'"]'),trigger=tile.locator('[data-action=menu]');
+ for(const width of [320,360,390,768,1440,1920]){
+  await page.setViewportSize({width,height:width<700?844:960});
+  await tile.scrollIntoViewIfNeeded();
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+width);
+  const buttons=await tile.locator('.vault-item-actions>button').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {w:r.width,h:r.height,y:r.top,r:getComputedStyle(n).borderRadius}}));
+  assert.equal(buttons.length,3);assert(buttons.every(b=>b.w>=36&&Math.abs(b.h-b.w)<1&&b.r==='50%'),JSON.stringify(buttons));
+  assert(buttons.every(b=>Math.abs(b.y-buttons[0].y)<1),'misaligned actions '+width);
+  await trigger.click();await menu.waitFor({state:'visible'});
+  assert.equal(await trigger.getAttribute('aria-expanded'),'true');
+  const bounds=await menu.evaluate(n=>{const r=n.getBoundingClientRect(),bar=document.querySelector('#mobile-tabbar');return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,edge:bar&&getComputedStyle(bar).display!=='none'?bar.getBoundingClientRect().top:innerHeight,w:innerWidth}});
+  assert(bounds.left>=0&&bounds.right<=bounds.w+1&&bounds.top>=0&&bounds.bottom<=bounds.edge+1,JSON.stringify({width,bounds}));
+  await page.screenshot({path:'data/qa/vault-controls-'+width+'.png'});
+  await page.keyboard.press('Escape');await menu.waitFor({state:'hidden'});assert(await trigger.evaluate(n=>n===document.activeElement));
+  checks.push('aligned actions and accessible menu at '+width+'px');
+ }
+ await trigger.click();await menu.getByRole('button',{name:'В архив',exact:true}).click();await tile.waitFor({state:'detached'});
+ await page.locator('[data-filter=archive]').click();await page.getByText(name,{exact:true}).waitFor();
+ const archived=page.locator('.vault-image-tile').filter({has:page.getByText(name,{exact:true})});
+ await archived.locator('[data-action=menu]').click();await page.locator('[id="vault-menu-'+id+'"]').getByRole('button',{name:'Восстановить',exact:true}).click();await archived.waitFor({state:'detached'});
+ await page.locator('[data-filter=images]').click();await page.getByText(name,{exact:true}).waitFor();
+ checks.push('upload, archive and restore persist through API');
+ await tile.locator('[data-action=menu]').click();await menu.getByRole('button',{name:'Сведения о файле'}).click();await page.locator('#workspace-dialog[open]').waitFor();
+ await page.keyboard.press('Escape');await page.locator('#workspace-dialog').waitFor({state:'hidden'});
+ await tile.locator('.vault-item-actions>[data-action=open]').click();await page.locator('.file-preview-dialog[open]').waitFor();await page.locator('.file-preview-close').click();
+ checks.push('metadata dialog and image preview open');
+ await tile.locator('[data-action=menu]').click();
+ page.once('dialog',d=>d.accept());await menu.getByRole('button',{name:'Удалить',exact:true}).click();await tile.waitFor({state:'detached'});
+ await page.reload();await page.locator('#vault-root').waitFor();assert.equal(await page.getByText(name,{exact:true}).count(),0);
+ checks.push('delete persists after reload');
+ assert.deepEqual(errors,[]);fs.writeFileSync('data/qa/vault-controls-result.json',JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({checks,errors}));await browser.close();
+})().catch(e=>{console.error(e.stack);process.exit(1)});

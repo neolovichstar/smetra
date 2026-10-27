@@ -274,6 +274,22 @@ def search(con, value):
     return [profile_view(row) for row in rows]
 
 
+# Profile routes use the account connection, so enforce the same live workspace
+# membership and sharing roles as the workspace API before exposing a quote.
+CONTACT_QUOTE_ACCESS = (
+    "FROM quotes q JOIN workspace_members m ON m.workspace_id=q.workspace_id "
+    "AND m.user_id=q.user_id AND m.role IN ('owner','admin','manager') "
+    "WHERE q.user_id=? "
+)
+
+
+def contact_quote(con, user_id, quote_id):
+    return con.execute(
+        "SELECT q.* " + CONTACT_QUOTE_ACCESS + "AND q.id=?",
+        (user_id, quote_id),
+    ).fetchone()
+
+
 def require_contact(con, user_id, kind):
     row = con.execute(
         "SELECT allow_messages,allow_quotes FROM public_profiles WHERE user_id=?",
@@ -303,13 +319,21 @@ def store_avatar(con, user, raw):
         result = subprocess.run(
             [
                 sys.executable,
-                "-I",
+                "-S",
+                "-B",
                 str(Path(__file__).with_name("avatar_processor.py")),
             ],
             input=content,
             capture_output=True,
             timeout=6,
-            env={"PATH": os.defpath, "LANG": "C.UTF-8"},
+            env={
+                "PATH": os.defpath,
+                "LANG": "C.UTF-8",
+                "PYTHONUTF8": "1",
+                # Vercel vendors Pillow outside the base interpreter's site-packages.
+                # Forward import paths only; the decoder gets no app credentials.
+                "PYTHONPATH": os.pathsep.join(str(Path(p).resolve()) for p in sys.path),
+            },
             cwd="/tmp",
             check=False,
         )
@@ -432,9 +456,10 @@ def route(handler, con, method, path, query):
             return handler.send_json(200, {"avatar_url": ""})
     if path == "/api/profile/shareable-quotes" and method == "GET":
         rows = con.execute(
-            "SELECT id,title,published_version,amount_kopecks,currency FROM quotes WHERE user_id=? "
-            "AND published_version>0 AND approval_state IN ('sent','viewed','changes_requested') "
-            "AND (expires_at IS NULL OR expires_at=0 OR expires_at>?) ORDER BY updated_at DESC LIMIT 100",
+            "SELECT q.id,q.title,q.published_version,q.amount_kopecks,q.currency "
+            + CONTACT_QUOTE_ACCESS
+            + "AND q.published_version>0 AND q.approval_state IN ('sent','viewed','changes_requested') "
+            "AND (q.expires_at IS NULL OR q.expires_at=0 OR q.expires_at>?) ORDER BY q.updated_at DESC LIMIT 100",
             (user["id"], stamp()),
         ).fetchall()
         return handler.send_json(200, {"quotes": [dict(row) for row in rows]})
