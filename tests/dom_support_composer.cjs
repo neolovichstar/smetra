@@ -58,5 +58,21 @@ async function setup(existing=false){
   task.reject(Error('Network unavailable'));await tick();assert.equal(input.value,'Другой вопрос');
   assert.doesNotMatch(doc.querySelector('#support-messages').textContent,/Первый вопрос/);
  });
+ await test('PNG screenshot is compressed to JPEG with matching name and cleared after submit',async({w,doc,task,posts})=>{
+  w.createImageBitmap=async()=>({width:320,height:180,close(){}});
+  w.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){}});
+  w.HTMLCanvasElement.prototype.toDataURL=()=> 'data:image/jpeg;base64,'+'A'.repeat(120);
+  const upload=doc.querySelector('#support-image-input');
+  Object.defineProperty(upload,'files',{configurable:true,value:[{name:'broken-screen.png',type:'image/png',size:1200}]});
+  upload.dispatchEvent(new w.Event('change'));await tick();await tick();
+  assert.equal(doc.querySelectorAll('[data-remove-image]').length,1);
+  doc.querySelector('#support-form').requestSubmit();
+  assert.equal(posts.length,1);
+  assert.equal(posts[0].body.images.length,1);
+  assert.equal(posts[0].body.images[0].name,'broken-screen.jpg');
+  assert.equal(posts[0].body.images[0].content.length,120);
+  assert.equal(doc.querySelectorAll('[data-remove-image]').length,0);
+  task.resolve({ticket_id:'thread-1'});await tick();
+ });
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exitCode=1});
