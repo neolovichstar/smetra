@@ -236,7 +236,8 @@ class EmailOTPTests(unittest.TestCase):
         js=(web/"auth-email.js").read_text()
         self.assertEqual(html.count('inputmode="numeric"'),6)
         self.assertIn("clipboardData",js)
-        self.assertIn("smetra:email-capability",js)
+        self.assertIn('autocomplete="one-time-code"',html)
+        # Capability/method transitions are exercised by dom_auth_email.cjs.
 
 
 if __name__ == "__main__":
