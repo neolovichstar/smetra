@@ -164,3 +164,35 @@ class PublicProfilePostgresTests(unittest.TestCase):
             runtime.finish(False)
         finally:
             runtime.close()
+
+
+    def test_quote_picker_and_lookup_require_current_sharing_role(self):
+        from types import SimpleNamespace
+        from backend.public_profiles import contact_quote, route
+
+        user, wid = self.users[0], self.workspaces[0]
+        quote_id = str(uuid.uuid4())
+        self.admin.execute(
+            "INSERT INTO quotes(id,user_id,workspace_id,title,client,description,amount_kopecks,status,public_token,created_at,updated_at,published_version,approval_state) "
+            "VALUES(?,?,?,'Private team quote','Client','',100,'sent',?,0,0,1,'sent')",
+            (quote_id, user["id"], wid, secrets.token_hex(16)),
+        )
+        self.addCleanup(self.admin.execute, "DELETE FROM quotes WHERE id=?", (quote_id,))
+        handler = SimpleNamespace(auth=lambda con: user, send_json=lambda status, payload: (status, payload))
+
+        def visible_ids():
+            status, payload = route(handler, self.admin, "GET", "/api/profile/shareable-quotes", {})
+            self.assertEqual(status, 200)
+            return [quote["id"] for quote in payload["quotes"]]
+
+        self.assertEqual(contact_quote(self.admin, user["id"], quote_id)["id"], quote_id)
+        self.assertIn(quote_id, visible_ids())
+        self.assertIsNone(contact_quote(self.admin, self.users[1]["id"], quote_id))
+        self.admin.execute("UPDATE workspace_members SET role='viewer' WHERE workspace_id=? AND user_id=?", (wid, user["id"]))
+        self.assertIsNone(contact_quote(self.admin, user["id"], quote_id))
+        self.assertNotIn(quote_id, visible_ids())
+        self.admin.execute("UPDATE workspace_members SET role='manager' WHERE workspace_id=? AND user_id=?", (wid, user["id"]))
+        self.assertIn(quote_id, visible_ids())
+        self.admin.execute("DELETE FROM workspace_members WHERE workspace_id=? AND user_id=?", (wid, user["id"]))
+        self.assertIsNone(contact_quote(self.admin, user["id"], quote_id))
+        self.assertNotIn(quote_id, visible_ids())

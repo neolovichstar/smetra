@@ -3,6 +3,11 @@
 import base64
 import io
 import json
+import os
+import subprocess
+import tempfile
+import venv
+from pathlib import Path
 import unittest
 import urllib.request
 import urllib.parse
@@ -354,6 +359,38 @@ class PublicProfilesTests(unittest.TestCase):
                 save_profile(con, stale_user, {"revision": 0, "published": True})
             with self.assertRaises(DomainError):
                 store_avatar(con, stale_user, raw)
+
+
+    def test_avatar_processor_works_with_vendored_serverless_dependencies(self):
+        import PIL
+
+        output = io.BytesIO()
+        Image.new("RGB", (40, 60), "gray").save(output, "PNG")
+        package_root = str(Path(PIL.__file__).resolve().parents[1])
+        repo_root = str(Path(__file__).resolve().parents[1])
+        bootstrap = (
+            "import sys;sys.path[:0]=" + repr([repo_root, package_root]) + "\n"
+            "import sqlite3\n"
+            "from backend.public_profiles import ensure_schema,store_avatar\n"
+            "con=sqlite3.connect(':memory:');con.row_factory=sqlite3.Row\n"
+            'con.execute("CREATE TABLE users(id TEXT PRIMARY KEY,blocked INTEGER DEFAULT 0,deleted_at INTEGER)")\n'
+            "user={'id':'11111111-2222-3333-4444-555555555555','avatar_id':''}\n"
+            "con.execute('INSERT INTO users(id) VALUES(?)',(user['id'],));con.commit();ensure_schema(con)\n"
+            "print(store_avatar(con,user,sys.stdin.read()))\n"
+        )
+        # The child interpreter has no installed packages; the parent receives
+        # the vendored dependency path, as it does on Vercel.
+        with tempfile.TemporaryDirectory() as folder:
+            venv.EnvBuilder(with_pip=False, symlinks=True).create(folder)
+            executable = str(Path(folder) / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
+            result = subprocess.run(
+                [executable, "-S", "-c", bootstrap],
+                input=base64.b64encode(output.getvalue()).decode(),
+                capture_output=True, text=True, timeout=15,
+                env={"PATH": os.defpath, "LANG": "C.UTF-8"},
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("/api/public/avatars/SM-", result.stdout)
 
 
 del Flows

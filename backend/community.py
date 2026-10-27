@@ -809,48 +809,59 @@ def _public_id_route(handler, method, path, query, con, user):
         target_public_id = normalize_public_id(data.get("public_id"))
         if not target_public_id:
             raise ApiError(400, "Укажите публичный ID клиента")
-        quote = con.execute(
-            "SELECT id,title,public_token,published_version,approval_state,expires_at,workspace_id FROM quotes WHERE id=? AND user_id=?",
-            (quote_id, user["id"]),
-        ).fetchone()
+        if user["email_verified_at"] is None:
+            raise ApiError(403, "Подтвердите почту перед отправкой сметы")
+        from backend.public_profiles import contact_quote
+        from backend.business import transaction
+
+        quote = contact_quote(con, user["id"], quote_id)
         if not quote:
             raise ApiError(404, "Смета не найдена")
-        if not quote["published_version"] or quote["approval_state"] not in ("sent", "viewed", "changes_requested"):
-            raise ApiError(409, "Сначала опубликуйте смету для согласования")
-        if quote["expires_at"] and quote["expires_at"] <= now():
-            raise ApiError(410, "Срок согласования сметы истёк")
-        if "version" in data and (type(data["version"]) is not int or data["version"] != quote["published_version"]):
-            raise ApiError(409, "Версия сметы изменилась. Выберите её заново")
-        from backend.estimate_sharing import _load_snapshot
-        _load_snapshot(con, {"quote_id": quote["id"], "workspace_id": quote["workspace_id"],
-                             "quote_version": quote["published_version"]})
-        target = con.execute(
-            "SELECT id,name FROM users WHERE upper(replace(id,'-',''))=? "
-            "AND id<>? AND deleted_at IS NULL AND blocked=0",
-            (target_public_id, user["id"]),
-        ).fetchone()
-        if not target:
-            raise ApiError(404, "Пользователь не найден")
-        from backend.public_profiles import require_contact
-        require_contact(con, target["id"], "quote")
-        estimate_key = "estimate:" + quote_id + ":" + target["id"]
-        existing = con.execute(
-            "SELECT id FROM chat_conversations WHERE direct_key=?", (estimate_key,)
-        ).fetchone()
-        conversation_id = _new_conversation(
-            con, "estimate", "Смета: " + _text(quote["title"], 150),
-            user["id"], quote_id=quote_id, direct_key=estimate_key
-        )
-        _add_member(con, conversation_id, user["id"], "owner")
-        _add_member(con, conversation_id, target["id"], "client")
-        if not existing:
-            public_url = ORIGIN + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
-            _add_message(
-                con, conversation_id, user["id"], "user",
-                "Создано обсуждение сметы «" + _text(quote["title"], 150) +
-                "». Клиентскую версию можно открыть по ссылке: " + public_url,
-                {"event": "estimate_chat_created", "quote_id": quote_id},
+        # Member removal/demotion and quote publication acquire these same locks.
+        # Recheck inside the transaction so an in-flight share cannot outlive access.
+        with transaction(con, lock_scopes=(f"workspace:{quote['workspace_id']}", f"user:{user['id']}")):
+            current = _auth(handler, con)
+            if current["email_verified_at"] is None:
+                raise ApiError(403, "Подтвердите почту перед отправкой сметы")
+            quote = contact_quote(con, user["id"], quote_id)
+            if not quote:
+                raise ApiError(404, "Смета не найдена")
+            if not quote["published_version"] or quote["approval_state"] not in ("sent", "viewed", "changes_requested"):
+                raise ApiError(409, "Сначала опубликуйте смету для согласования")
+            if quote["expires_at"] and quote["expires_at"] <= now():
+                raise ApiError(410, "Срок согласования сметы истёк")
+            if "version" in data and (type(data["version"]) is not int or data["version"] != quote["published_version"]):
+                raise ApiError(409, "Версия сметы изменилась. Выберите её заново")
+            from backend.estimate_sharing import _load_snapshot
+            _load_snapshot(con, {"quote_id": quote["id"], "workspace_id": quote["workspace_id"],
+                                 "quote_version": quote["published_version"]})
+            target = con.execute(
+                "SELECT id,name FROM users WHERE upper(replace(id,'-',''))=? "
+                "AND id<>? AND deleted_at IS NULL AND blocked=0",
+                (target_public_id, user["id"]),
+            ).fetchone()
+            if not target:
+                raise ApiError(404, "Пользователь не найден")
+            from backend.public_profiles import require_contact
+            require_contact(con, target["id"], "quote")
+            estimate_key = "estimate:" + quote_id + ":" + target["id"]
+            existing = con.execute(
+                "SELECT id FROM chat_conversations WHERE direct_key=?", (estimate_key,)
+            ).fetchone()
+            conversation_id = _new_conversation(
+                con, "estimate", "Смета: " + _text(quote["title"], 150),
+                user["id"], quote_id=quote_id, direct_key=estimate_key
             )
+            _add_member(con, conversation_id, user["id"], "owner")
+            _add_member(con, conversation_id, target["id"], "client")
+            if not existing:
+                public_url = ORIGIN + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
+                _add_message(
+                    con, conversation_id, user["id"], "user",
+                    "Создано обсуждение сметы «" + _text(quote["title"], 150) +
+                    "». Клиентскую версию можно открыть по ссылке: " + public_url,
+                    {"event": "estimate_chat_created", "quote_id": quote_id},
+                )
         return handler.send_json(200, {"chat": {
             "id": conversation_id, "kind": "estimate", "subject": "Смета: " + quote["title"],
             "quote_id": quote_id, "partner_name": target["name"],
