@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS smetra.support_images (
   conversation_id TEXT NOT NULL REFERENCES smetra.chat_conversations(id) ON DELETE CASCADE,
   message_id TEXT NOT NULL REFERENCES smetra.chat_messages(id) ON DELETE CASCADE,
   uploader_id TEXT NOT NULL REFERENCES smetra.users(id) ON DELETE CASCADE,
-  mime TEXT NOT NULL CHECK(mime='image/jpeg'),
+  mime TEXT NOT NULL CHECK(mime IN ('image/webp','image/jpeg')),
   content BYTEA NOT NULL CHECK(octet_length(content) BETWEEN 1 AND 700000),
   created_at BIGINT NOT NULL
 );
