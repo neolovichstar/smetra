@@ -20,7 +20,10 @@ async function setup(enabled=true,voice=false,remaining=3){
   };
  }
  w.notify=text=>notices.push(text);w.scrollTo=()=>{};
- w.TextDecoder=TextDecoder;
+ w.TextDecoder=TextDecoder;w.proposalFields=()=>'';
+ w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){
+  controller.enqueue(new TextEncoder().encode('event: background\ndata: {"job":{"id":"job-1","status":"running"}}\n\n'));controller.close();
+ }})});
  w.api=async(path,options={})=>{
   if(path==='/assistant')return {available:true,quota,messages:[],actions:[]};
   if(path==='/assistant/conversations')return {items:[]};
@@ -68,7 +71,6 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(rec.onresult,null,'late recognition events must not update a detached composer');
  },true,true);
  await test('submitting background job aborts speech before clearing the editor',async({w,doc,recognition,requests})=>{
-  doc.querySelector('#assistant-background').click();
   const input=doc.querySelector('#assistant-input');
   doc.querySelector('#assistant-voice').click();await tick();
   const rec=recognition();
@@ -100,27 +102,27 @@ async function setup(enabled=true,voice=false,remaining=3){
   doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(requests.length,0,'blank prompts must not queue work');
   type(w,doc,'Prepare estimate');assert.equal(button.type,'submit');assert.equal(button.disabled,false);assert.equal(voice.disabled,false);
  });
- await test('background mode selects delivery and uses the shared submit button',async({w,doc,requests})=>{
-  const mode=doc.querySelector('#assistant-background');assert.ok(mode);mode.click();assert.equal(mode.getAttribute('aria-pressed'),'true');assert.equal(requests.length,0);
-  type(w,doc,'Prepare estimate');doc.querySelector('#assistant-form').requestSubmit();await tick();
+ await test('every message is queued automatically without a background button',async({w,doc,requests})=>{
+  assert.equal(doc.querySelector('#assistant-background'),null);
+  type(w,doc,'Prepare estimate');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
   assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].body).text,'Prepare estimate');assert.ok(requests[0].headers['Idempotency-Key']);
-  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,true,'empty composer cannot send');
-  assert.equal(doc.querySelector('#assistant-voice').disabled,false,'microphone stays available when the composer resets');
-  assert.ok(doc.querySelector('#assistant-status').textContent.length>0);
+  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(doc.querySelector('#assistant-send').disabled,true);
+  assert.equal(doc.querySelector('#assistant-voice').disabled,false);assert.match(doc.querySelector('#assistant-status').textContent,/сохранён|диалоге/);
  });
- await test('missing worker cannot be selected or receive a job',async({w,doc,requests})=>{
-  const mode=doc.querySelector('#assistant-background');assert.ok(mode);assert.equal(mode.hidden,true);assert.equal(mode.disabled,true);
-  mode.click();type(w,doc,'Prepare estimate');assert.equal(mode.getAttribute('aria-pressed'),'false');assert.equal(requests.length,0);
+ await test('unconfigured worker blocks submission without exposing a mode switch',async({w,doc,requests})=>{
+  assert.equal(doc.querySelector('#assistant-background'),null);
+  type(w,doc,'Prepare estimate');assert.equal(doc.querySelector('#assistant-send').disabled,true);
+  doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(requests.length,0);
  },false);
  await test('failed queue requests keep draft and reuse their idempotency key',async({w,doc})=>{
   const original=w.api,keys=[];w.api=async(path,options={})=>{if(path==='/assistant/jobs'&&options.method==='POST'){keys.push(options.headers['Idempotency-Key']);throw Error('Queue unavailable')}return original(path,options)};
-  doc.querySelector('#assistant-background').click();type(w,doc,'Keep this draft');
+  type(w,doc,'Keep this draft');
   for(let i=0;i<2;i++){doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(doc.querySelector('#assistant-input').value,'Keep this draft')}
   assert.equal(keys.length,2);assert.equal(keys[0],keys[1]);assert.match(doc.querySelector('#assistant-status').textContent,/Queue unavailable/);
  });
  await test('queue response after navigation cannot clear another page or its draft',async({w,doc})=>{
   const task=deferred(),original=w.api;w.api=(path,options={})=>path==='/assistant/jobs'&&options.method==='POST'?task.promise:original(path,options);
-  doc.querySelector('#assistant-background').click();type(w,doc,'Keep pending draft');doc.querySelector('#assistant-form').requestSubmit();await tick();
+  type(w,doc,'Keep pending draft');doc.querySelector('#assistant-form').requestSubmit();await tick();
   w.eval("tab='support'");doc.querySelector('#content').textContent='Support';w.sessionStorage.setItem('smetra.assistant.draft:qa:qa-workspace:global','New unsent draft');task.resolve({job:{id:'qa'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});await tick();
   assert.equal(doc.querySelector('#content').textContent,'Support');assert.equal(w.sessionStorage.getItem('smetra.assistant.draft:qa:qa-workspace:global'),'New unsent draft');
  });
@@ -148,18 +150,18 @@ async function setup(enabled=true,voice=false,remaining=3){
   await w.SmetraAssistant();await tick();
   assert.equal(doc.querySelector('.assistant-job'),null,'dismissed task must not reappear from a stale queue response');
  });
- await test('normal send still streams Markdown without queueing',async({w,doc,requests})=>{
+ await test('normal send queues once and streams the same durable job',async({w,doc,requests})=>{
   let sent;
   w.fetch=async(path,options)=>{sent={path,options};return {ok:true,body:new ReadableStream({start(controller){
    const event=(kind,payload)=>controller.enqueue(new TextEncoder().encode('event: '+kind+'\ndata: '+JSON.stringify(payload)+'\n\n'));
    event('delta',{text:'**Ready**'});event('done',{answer:'**Ready**',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});controller.close();
   }})}};
   type(w,doc,'Normal question');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
-  assert.equal(sent.path,'/api/assistant/stream');assert.equal(JSON.parse(sent.options.body).text,'Normal question');assert.equal(requests.length,0);
+  assert.equal(sent.path,'/api/assistant/stream');assert.equal(JSON.parse(sent.options.body).job_id,'job-1');assert.equal(JSON.parse(requests[0].body).text,'Normal question');assert.equal(requests.length,1);
   assert.equal(doc.querySelector('.assistant-message.assistant strong').textContent,'Ready');assert.equal(doc.querySelector('#assistant-stop').hidden,true);assert.equal(doc.querySelector('#assistant-input').value,'');
  });
 
- await test('text and photos leave the composer before the network replies, using their original snapshot',async({w,doc,uploads})=>{
+ await test('text and photos leave the composer before the network replies, using their original snapshot',async({w,doc,uploads,requests})=>{
   const task=deferred(),sent=[],revoked=[];
   w.URL.createObjectURL=()=> 'blob:fixture-photo';w.URL.revokeObjectURL=url=>revoked.push(url);
   const file=new w.File(['photo'],'photo.jpg',{type:'image/jpeg'});
@@ -176,28 +178,29 @@ async function setup(enabled=true,voice=false,remaining=3){
   await tick();await tick();
   assert.equal(uploads.length,1,'sent photo saves to workspace before AI stream');
   assert.equal(JSON.parse(uploads[0].body).name,'photo.jpg');
-  const payload=JSON.parse(sent[0].options.body);
-  assert.equal(payload.text,'Проверь это фото');assert.equal(payload.images.length,1);
-  assert.equal(payload.images[0].content,'AQID');assert.equal(revoked.length,1);
+  const payload=JSON.parse(requests[0].body);
+  assert.equal(payload.text,'Проверь это фото');assert.equal(payload.file_ids.length,1);
+  assert.equal(payload.file_ids[0],'saved-photo-1');assert.equal(JSON.parse(sent[0].options.body).job_id,'job-1');assert.equal(revoked.length,1);
   task.resolve({ok:true,body:new ReadableStream({start(controller){
    controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Проверено',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));controller.close();
   }})});
   await tick();await tick();assert.equal(doc.querySelector('#assistant-input').value,'');
  });
- await test('failed normal send restores its text and photo for retry',async({w,doc})=>{
+ await test('failed queue save restores text and photo for an idempotent retry',async({w,doc})=>{
   let created=0,revoked=0;w.URL.createObjectURL=()=> 'blob:fixture-'+(++created);w.URL.revokeObjectURL=()=>revoked++;
   const file=new w.File(['photo'],'retry.jpg',{type:'image/jpeg'});
   Object.defineProperty(file,'arrayBuffer',{value:async()=>Uint8Array.from([1]).buffer});
   const picker=doc.querySelector('#assistant-attach-input');
   Object.defineProperty(picker,'files',{configurable:true,value:[file]});await picker.onchange();
-  type(w,doc,'Не потеряй вложение');w.fetch=async()=>{throw Error('Network unavailable')};
+  const original=w.api;w.api=async(path,options={})=>{if(path==='/assistant/jobs'&&options.method==='POST')throw Error('Network unavailable');return original(path,options)};
+  type(w,doc,'Не потеряй вложение');
   doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
   assert.equal(doc.querySelector('#assistant-input').value,'Не потеряй вложение');
   assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,1);
   assert.equal(created,2,'restored photo receives a fresh preview URL');assert.equal(revoked,1);
   assert.match(doc.querySelector('.assistant-error').textContent,/Network unavailable/);
  });
- await test('sending a selected document clears its chip while preserving the request context',async({w,doc})=>{
+ await test('sending a selected document snapshots context and remains saved after stream loss',async({w,doc,requests})=>{
   const original=w.api,task=deferred();let sent;
   const context={entity:'files',id:'document-1',label:'estimate.pdf',workspace_id:'qa-workspace'};
   w.sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));
@@ -212,10 +215,11 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,0);
   assert.ok(doc.querySelector('#assistant-context').classList.contains('hidden'));
   assert.equal(w.sessionStorage.getItem('smetra.assistant.context'),null);
-  assert.equal(sent.context.entity,'files');assert.equal(sent.context.id,'document-1');
+  assert.equal(sent.job_id,'job-1');const submitted=JSON.parse(requests[0].body);assert.equal(submitted.context.entity,'files');assert.equal(submitted.context.id,'document-1');
   task.resolve({ok:false,status:503,json:async()=>({error:'Try again'})});await tick();await tick();
-  assert.equal(doc.querySelector('#assistant-input').value,'Проверь документ');
-  assert.equal(doc.querySelectorAll('.assistant-attachment-document').length,1);
+  assert.equal(doc.querySelector('#assistant-input').value,'');
+  assert.equal(doc.querySelectorAll('.assistant-attachment-document').length,0);
+  assert.match(doc.querySelector('#assistant-status').textContent,/сохранён/);
  });
 
  await test('a sent document is detached from a named conversation after success',async({w,doc})=>{
@@ -243,7 +247,7 @@ async function setup(enabled=true,voice=false,remaining=3){
  await test('an accepted background job clears the composer before its reply arrives',async({w,doc})=>{
   const task=deferred(),original=w.api;
   w.api=(path,options={})=>path==='/assistant/jobs'&&options.method==='POST'?task.promise:original(path,options);
-  doc.querySelector('#assistant-background').click();type(w,doc,'Фоновая задача');
+  type(w,doc,'Фоновая задача');
   doc.querySelector('#assistant-form').requestSubmit();
   assert.equal(doc.querySelector('#assistant-input').value,'');
   task.resolve({job:{id:'job'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});await tick();
@@ -260,8 +264,8 @@ async function setup(enabled=true,voice=false,remaining=3){
  });
  await test('in-flight queue submission cannot be sent twice',async({w,doc})=>{
   const task=deferred(),original=w.api;let calls=0;w.api=(path,options={})=>{if(path==='/assistant/jobs'&&options.method==='POST'){calls++;return task.promise}return original(path,options)};
-  doc.querySelector('#assistant-background').click();type(w,doc,'One job');doc.querySelector('#assistant-form').requestSubmit();await tick();
-  assert.equal(doc.querySelector('#assistant-input').disabled,true);assert.equal(doc.querySelector('#assistant-send').disabled,true);assert.equal(doc.querySelector('#assistant-background').disabled,true);
+  type(w,doc,'One job');doc.querySelector('#assistant-form').requestSubmit();await tick();
+  assert.equal(doc.querySelector('#assistant-input').disabled,false,'next draft remains editable');assert.equal(doc.querySelector('#assistant-send').disabled,true);assert.equal(doc.querySelector('#assistant-background'),null);
   doc.querySelector('#assistant-form').requestSubmit();await tick();assert.equal(calls,1);task.resolve({job:{id:'qa'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});await tick();
  });
  await test('a photo without text changes microphone into Send and can be removed',async({w,doc})=>{
@@ -285,9 +289,104 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.equal(doc.querySelector('#assistant-input').required,true);
   assert.equal(revoked,1);
  });
- await test('hidden mode and stop controls stay hidden under the shipped CSS',async({w,doc})=>{
+ await test('background switch is absent and idle Stop remains hidden under shipped CSS',async({w,doc})=>{
   const style=doc.createElement('style');style.textContent=['ui/tokens.css','ui/base.css','ui/components.css','ui/assistant.css'].map(file=>fs.readFileSync('apps/web/'+file,'utf8')).join('\n');doc.head.append(style);
-  assert.equal(w.getComputedStyle(doc.querySelector('#assistant-background')).display,'none');assert.equal(w.getComputedStyle(doc.querySelector('#assistant-stop')).display,'none');
+  assert.equal(doc.querySelector('#assistant-background'),null);assert.equal(w.getComputedStyle(doc.querySelector('#assistant-stop')).display,'none');
  },false);
+ await test('done frame unlocks the composer without waiting for socket EOF',async({w,doc})=>{
+  let cancelled=0;
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){
+   controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Готово без EOF',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));
+  },cancel(){cancelled++}})});
+  type(w,doc,'Заверши ответ');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();await tick();
+  assert.match(doc.querySelector('#assistant-messages').textContent,/Готово без EOF/);
+  assert.equal(doc.querySelector('#assistant-stop').hidden,true);assert.equal(cancelled,1);
+  type(w,doc,'Следующий вопрос');assert.equal(doc.querySelector('#assistant-send').disabled,false);
+ });
+ await test('completed foreground reply does not rebuild the chat or erase the next draft',async({w,doc})=>{
+   const oldApi=w.api;
+   let stream,finished=false;
+   w.api=async(path,options={})=>{
+    if(path==='/assistant/jobs'&&!options.method)return {enabled:true,jobs:[{id:'job-1',kind:'chat',status:finished?'completed':'running',conversation_id:null,prompt:'Первый вопрос'}]};
+    return oldApi(path,options);
+   };
+   w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){stream=controller}})});
+   type(w,doc,'Первый вопрос');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+   const editor=type(w,doc,'Следующий черновик');
+   finished=true;
+   stream.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Первый ответ',actions:[]})+'\n\n'));
+   stream.close();await tick();await tick();await tick();
+   assert.equal(doc.querySelector('#assistant-input'),editor);
+   assert.equal(editor.value,'Следующий черновик');
+   assert.match(doc.querySelector('#assistant-messages').textContent,/Первый ответ/);
+  });
+  await test('split UTF-8 and a final SSE frame without separator remain readable',async({w,doc})=>{
+  const answer='Смета: 1 234,56 ₽';
+  const bytes=new TextEncoder().encode('event: delta\r\ndata: '+JSON.stringify({text:answer})+'\r\n\r\nevent: done\r\ndata: '+JSON.stringify({answer,actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}}));
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){for(let i=0;i<bytes.length;i+=3)controller.enqueue(bytes.slice(i,i+3));controller.close()}})});
+  type(w,doc,'Проверь символы');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(doc.querySelector('.assistant-message.assistant .assistant-markdown').textContent.trim(),answer);
+  assert.equal(doc.querySelector('#assistant-stop').hidden,true);
+ });
+ await test('accepted work survives a lost stream without restoring or resending its prompt',async({w,doc,requests})=>{
+  w.fetch=async()=>{throw Error('Socket lost')};
+  type(w,doc,'Сохранённая задача');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(requests.length,1);assert.equal(doc.querySelector('#assistant-input').value,'');
+  assert.equal(doc.querySelector('.assistant-error'),null);assert.match(doc.querySelector('#assistant-status').textContent,/сохранён/);
+  assert.equal(doc.querySelector('#assistant-stop').hidden,true);
+ });
+ await test('late SSE completion cannot insert proposals or change quota in another chat view',async({w,doc,notices})=>{
+  let controller;
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(value){controller=value}})});
+  type(w,doc,'Старый запрос');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  doc.dispatchEvent(new w.Event('smetra:before-view'));await w.SmetraAssistant();await tick();
+  type(w,doc,'Новый несохранённый черновик');
+  controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Старый ответ',actions:[{id:'old-action',tool:'create_clients',summary:'Не вставлять',arguments:{name:'Old'}}],quota:{remaining:0,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));
+  await tick();await tick();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'Новый несохранённый черновик');
+  assert.equal(doc.querySelector('#assistant-send').disabled,false);assert.equal(doc.querySelector('.assistant-proposal'),null);
+  assert.doesNotMatch(doc.querySelector('#assistant-messages').textContent,/Старый ответ/);assert.deepEqual(notices,[]);
+ });
+ await test('Stop cancels the durable job instead of only hiding the local stream',async({w,doc})=>{
+  const original=w.api;let cancelled=0;
+  w.api=async(path,options={})=>{if(path==='/assistant/jobs/job-1'&&options.method==='DELETE'){cancelled++;return {quota:{remaining:3,limit:3,plan:'free'}}}return original(path,options)};
+  w.fetch=(path,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new w.DOMException('Stopped','AbortError')),{once:true}));
+  type(w,doc,'Останови меня');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  doc.querySelector('#assistant-stop').click();await tick();await tick();
+  assert.equal(cancelled,1);assert.equal(doc.querySelector('#assistant-input').value,'Останови меня');
+  assert.equal(doc.querySelector('.assistant-error'),null);assert.match(doc.querySelector('#assistant-status').textContent,/остановлен/);
+ });
+ await test('new dialog stays available while a saved response is running',async({w,doc})=>{
+  const original=w.api;let created=0,controller;
+  const thread={id:'new-thread',title:'Новый диалог',context_entity:'',context_id:''};
+  w.api=async(path,options={})=>{
+   if(path==='/assistant/conversations'&&options.method==='POST'){created++;return {conversation:thread}}
+   if(path==='/assistant/conversations'&&created)return {items:[thread]};
+   if(path==='/assistant/conversations/new-thread')return {conversation:thread,messages:[]};
+   return original(path,options);
+  };
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(value){controller=value}})});
+  type(w,doc,'Первый запрос');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(doc.querySelector('#assistant-new-thread').disabled,false);
+  doc.querySelector('#assistant-new-thread').click();await tick();await tick();
+  assert.equal(created,1);assert.equal(w.sessionStorage.getItem('smetra.assistant.conversation'),'new-thread');
+  controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Первый ответ',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));await tick();
+  assert.doesNotMatch(doc.querySelector('#assistant-messages').textContent,/Первый ответ/);
+ });
+ await test('pending proposals are scoped to their conversation and old creation cards do not return',async({w,doc})=>{
+  const original=w.api;const thread={id:'thread-a',title:'A',context_entity:'',context_id:''};
+  w.api=async(path,options={})=>{
+   if(path==='/assistant')return {available:true,quota:{remaining:3,limit:3,plan:'free'},messages:[],actions:[
+    {id:'own',conversation_id:'thread-a',tool:'create_clients',summary:'Только свой чат',arguments:{}},
+    {id:'other',conversation_id:'thread-b',tool:'create_clients',summary:'Чужой диалог',arguments:{}}
+   ],recent_actions:[{id:'old-created',quote_id:'q',summary:'Старый черновик'}]};
+   if(path==='/assistant/conversations')return {items:[thread]};
+   if(path==='/assistant/conversations/thread-a')return {conversation:thread,messages:[]};
+   return original(path,options);
+  };
+  w.sessionStorage.setItem('smetra.assistant.conversation','thread-a');await w.SmetraAssistant();await tick();
+  const text=doc.querySelector('#assistant-actions').textContent;assert.match(text,/Только свой чат/);assert.doesNotMatch(text,/Чужой диалог|Старый черновик/);
+ });
+
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exit(1)});

@@ -142,6 +142,15 @@ jobs:
           grep -Fq PROFILE_FIXTURE_READY data/profile-fixture.log || { cat data/profile-fixture.log; exit 1; }
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_public_profiles.cjs
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_vault_controls.cjs
+      - name: Durable assistant streaming, navigation and cancellation
+        run: |
+          SMETRA_ACTION_QA=1 SMETRA_DURABLE_QA=1 SMETRA_FIXTURE_PORT=8085 python scripts/android_ui_fixture.py > data/durable-fixture.log 2>&1 &
+          task_durable_pid=$!
+          trap 'kill "$task_durable_pid"' EXIT
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/durable-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/durable-fixture.log || { cat data/durable-fixture.log; exit 1; }
+          python -c "from PIL import Image; Image.new('RGB', (320, 240), 'steelblue').save('data/durable-photo.png')"
+          SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_assistant_durable.cjs
       - name: Browser fixture diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -156,6 +165,8 @@ jobs:
             data/qa/quote-review-*.png
             data/qa/quote-editor-*.png
             data/qa/vault-controls-*.png
+            data/qa/assistant-durable-*.png
+            data/qa/assistant-durable-browser-result.json
   android:
     runs-on: ubuntu-latest
     steps:
@@ -238,8 +249,11 @@ jobs:
                   "20260927214435_russian_identity_and_assistant.sql",
                   "20260929130000_client_intake.sql",
                   "20260929211944_runtime_rls.sql",
+                  "20260930044414_ai_workspace.sql",
+                  "20261003132133_assistant_background_jobs.sql",
               ):
                   con.execute((Path("supabase/migrations") / filename).read_text())
+              con.execute("ALTER TABLE smetra.assistant_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat', ADD COLUMN file_id TEXT")
               # Only the communication table/index/grant definitions are needed
               # here; the rest of migration 51 depends on billing/reward schemas.
               communication = Path("supabase/migrations/20261024010000_communication_rewards.sql").read_text()
@@ -249,4 +263,4 @@ jobs:
               con.execute("CREATE ROLE smetra_ci_runtime LOGIN PASSWORD 'fixture-only' IN ROLE smetra_runtime")
           PY
       - name: Verify pool saturation, atomic fallback limits, SSE durability and RLS
-        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls tests.test_backend_security_delivery.PostgresChatPrivacyTests tests.test_public_profiles_postgres -v
+        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls tests.test_backend_security_delivery.PostgresChatPrivacyTests tests.test_public_profiles_postgres tests.test_assistant_delivery_postgres -v

@@ -250,6 +250,11 @@ def main():
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
             prompt = next((message['content'] for message in reversed(messages) if message['role'] == 'user'), '')
+            if os.getenv('SMETRA_DURABLE_QA') == '1' and prompt in ('UI durable question', 'UI cancel durable question'):
+                on_delta('Поток начат. ')
+                time.sleep(3)
+                on_delta('Ответ сохранён.')
+                return {'content': 'Поток начат. Ответ сохранён.'}
             if os.getenv('SMETRA_ACTION_QA') == '1' and prompt == 'UI slow question':
                 on_delta('Тестовый поток начат. ')
                 time.sleep(1)
@@ -314,7 +319,8 @@ def main():
                 except OSError:
                     pass
 
-        threading.Thread(target=background_fixture, daemon=True).start()
+        if os.getenv('SMETRA_DURABLE_QA') != '1':
+            threading.Thread(target=background_fixture, daemon=True).start()
         file = call('/files', {'assistant_upload': True, 'name': 'brief.txt',
                     'content': base64.b64encode(b'file context').decode()}, token)['file']
         call('/assistant/conversations', {'title': 'Бриф проекта', 'context_entity': 'files', 'context_id': file['id']}, token)

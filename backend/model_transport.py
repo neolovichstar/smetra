@@ -1,6 +1,7 @@
 """Bounded failover before any response bytes are consumed."""
 import json
 import logging
+import time
 import urllib.error
 import urllib.request
 
@@ -14,6 +15,7 @@ def open_completion(request, timeout):
     Keep tools, images and response schemas intact. The free router filters by
     those capabilities, and cannot silently bill a paid fallback model.
     """
+    started = time.monotonic()
     payload = json.loads(request.data)
     model = payload.get("model", "")
     try:
@@ -33,4 +35,7 @@ def open_completion(request, timeout):
         request.full_url, json.dumps(payload).encode(),
         dict(request.header_items()), method=request.get_method(),
     )
-    return urllib.request.urlopen(fallback, timeout=timeout)
+    remaining = timeout - (time.monotonic() - started)
+    if remaining <= 0:
+        raise urllib.error.URLError("Completion deadline exceeded")
+    return urllib.request.urlopen(fallback, timeout=remaining)
