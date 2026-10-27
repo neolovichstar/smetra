@@ -309,7 +309,7 @@
       if(event.target.id!=='admin-user-search')return;
       clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=event.target.value.trim();state.offset=0;loadUsers()},250);
     };
-    content.querySelector('#admin-section').onchange=event=>{
+    content.querySelector('#admin-section').onchange=async event=>{
       if(event.target.id==='admin-user-filter'){state.status=event.target.value;state.offset=0;loadUsers();}
       if(event.target.id==='admin-idea-filter'){state.ideaStatus=event.target.value;loadIdeas();}
       const idea=event.target.closest('[data-admin-idea]');
