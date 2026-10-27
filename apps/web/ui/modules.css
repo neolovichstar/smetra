@@ -586,3 +586,19 @@ html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-sel
   .construction-inline>label{flex-basis:auto}
   .construction-intro .construction-inline .btn{justify-content:center}
 }
+
+
+/* Private, compressed screenshot attachments in support messenger. */
+.support-studio .tg-compose{flex-wrap:wrap}
+.support-studio .tg-image-attach{flex:none;display:grid;place-items:center;width:46px;height:46px;border:0;border-radius:50%;background:var(--surface-2);color:var(--text-2);transition:background .15s,color .15s}
+.support-studio .tg-image-attach:hover:not(:disabled){background:var(--surface-3);color:var(--text)}
+.support-studio .tg-image-attach:disabled{opacity:.4}
+.support-image-preview{order:-1;flex-basis:100%;display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;padding:4px 2px}
+.support-image-preview[hidden]{display:none}
+.support-attachment-chip{position:relative;display:inline-grid;place-items:center;width:76px;height:76px;border:1px solid var(--line);border-radius:12px;overflow:visible;background:var(--surface-2)}
+.support-attachment-chip img{width:100%;height:100%;object-fit:cover;border-radius:11px}
+.support-attachment-chip button{position:absolute;top:-8px;right:-8px;display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:var(--surface-4);border:1px solid var(--line-strong);color:var(--text)}
+.support-message-images{display:flex;flex-wrap:wrap;gap:7px;max-width:100%;margin:8px 0 0}
+.support-message-images a{display:block;max-width:100%;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.support-message-images img{display:block;max-width:min(100%,280px);max-height:240px;object-fit:contain}
+.support-message-images a:focus-visible,.support-attachment-chip button:focus-visible,.tg-image-attach:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

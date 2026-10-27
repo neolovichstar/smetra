@@ -20,6 +20,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Syntax check for critical browser modules
+        run: |
+          node --check apps/web/admin.js
+          node --check apps/web/support-chat.js
+          node --check apps/web/communication-center.js
+          node --check apps/web/workspace-vault.js
       - run: python -m compileall -q backend
       - run: pip install -r requirements-dev.txt
       - run: pip install pip-audit==2.10.1
@@ -52,6 +58,7 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_assistant_composer.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_support_composer.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_settings_buttons.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_admin_suggestions.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_app_actions.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_native_bridge.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_tabbar.cjs

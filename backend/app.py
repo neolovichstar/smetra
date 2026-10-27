@@ -56,7 +56,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 66
+REQUIRED_CLOUD_SCHEMA_VERSION = 67
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -149,6 +149,8 @@ def migrate():
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         con.execute("DELETE FROM email_tokens WHERE expires_at<?", (now() - 86400,))
         business.migrate(con)
+        from backend.community import ensure_sqlite_schema
+        ensure_sqlite_schema(con)
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
@@ -360,7 +362,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 2_600_000 if self.command == "POST" and (path == "/api/support" or (path.startswith("/api/support/threads/") and path.endswith("/messages"))) else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":

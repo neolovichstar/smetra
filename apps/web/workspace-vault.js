@@ -80,8 +80,10 @@
   function paint(mine) {
     if (!activePage(mine)) return;
     const result = state.result;
-    const used = result.used_bytes || 0, quota = result.quota_bytes || 100000000;
+    const used = result.personal_used_bytes ?? result.used_bytes ?? 0;
+    const quota = result.personal_quota_bytes ?? result.quota_bytes ?? 100000000;
     document.querySelector('#vault-usage').textContent = human(used) + ' из ' + human(quota);
+    document.querySelector('#vault-shared-usage').textContent = 'Общее пространство: ' + human(result.workspace_used_bytes ?? 0) + ' из ' + human(result.workspace_quota_bytes ?? 100000000);
     const meter = document.querySelector('#vault-meter');
     meter.value = Math.min(100,Math.round(100 * used / quota));
     const root = document.querySelector('#vault-items');
@@ -161,7 +163,7 @@
     state.filter=filter; state.search=search; state.files=result.items; state.result=result; state.offset=result.items.length;
     view('<section id="vault-root" class="vault-root">' +
       head('Хранилище','Все изображения, документы и вложения рабочего пространства в одном месте.') +
-      '<div class="vault-tools"><div class="vault-space"><span>Использовано места</span><strong id="vault-usage"></strong><progress id="vault-meter" max="100" value="0" aria-label="Использование хранилища"></progress></div>' +
+      '<div class="vault-tools"><div class="vault-space"><span>Личное хранилище</span><strong id="vault-usage"></strong><progress id="vault-meter" max="100" value="0" aria-label="Личное хранилище"></progress><small id="vault-shared-usage"></small></div>' +
       (state.canWrite ? '<label for="vault-upload" class="btn primary vault-upload">+ Загрузить<input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label>':'') + '</div>' +
       '<div class="vault-bar"><div role="tablist" class="vault-tabs" aria-label="Тип файлов"><button type="button" data-filter="images" role="tab">Изображения</button><button type="button" data-filter="files" role="tab">Файлы</button><button type="button" data-filter="archive" role="tab">Архив</button></div><input id="vault-search" type="search" aria-label="Поиск файлов" placeholder="Поиск по названию"></div>' +
       '<p id="vault-progress" class="vault-progress" hidden role="status"></p><div id="vault-items" aria-live="polite" aria-relevant="additions text"></div>' +

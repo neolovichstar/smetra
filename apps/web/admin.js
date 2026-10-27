@@ -1,6 +1,6 @@
 /* Owner console: compact, task-oriented, and deliberately separate from the customer workspace. */
 (() => {
-  const state = {section:'users', search:'', status:'all', offset:0, support:'open', overview:null, users:[], total:0, request:0};
+  const state = {section:'users', search:'', status:'all', offset:0, support:'open', ideaStatus:'all', ideas:[], overview:null, users:[], total:0, request:0};
   const auditNames = {'admin.block':'Блокировка','admin.unblock':'Разблокировка','admin.grant':'Доступ Про выдан','admin.revoke':'Доступ Про отозван','admin.tokens':'Изменение токенов','admin.sessions_revoke':'Сеансы завершены','admin.role.admin':'Выданы права администратора','admin.role.user':'Сняты права администратора','admin.set_plan.free':'Тариф: Старт','admin.set_plan.pro_solo':'Тариф: PRO Solo','admin.set_plan.pro_plus':'Тариф: PRO Plus','admin.set_plan.team':'Тариф: Team','admin.support.open':'Обращение открыто','admin.support.closed':'Обращение закрыто'};
   const paymentNames = {pending:'Ожидает',succeeded:'Оплачен',canceled:'Отменён',refunded:'Возврат'};
   const time = seconds => seconds ? date(seconds) : '—';
@@ -26,6 +26,7 @@
         <button data-admin-section="users" type="button">Пользователи</button>
         <button data-admin-section="revenue" type="button">Выручка и активация</button>
         <button data-admin-section="support" type="button">Поддержка <span>${count(state.overview.tickets.filter(t=>t.status==='open').length)}</span></button>
+        <button data-admin-section="ideas" type="button">Предложения</button>
         <button data-admin-section="payments" type="button">Платежи</button>
         <button data-admin-section="audit" type="button">Журнал</button>
       </nav><section id="admin-section" class="admin-section" aria-live="polite"></section>
@@ -82,6 +83,27 @@
       <div class="admin-ticket-list">${tickets.length?tickets.map(t=>`<article class="admin-ticket"><div class="admin-ticket-top"><span>${label(t.email)}</span><time>${time(t.created_at)}</time></div><p>${label(t.message)}</p><div class="admin-ticket-actions"><span class="admin-state ${t.status==='open'?'admin-state-blue':''}"><i></i>${t.status==='open'?'Требует ответа':'Закрыто'}</span><button type="button" data-admin-ticket="${label(t.id)}" data-status="${t.status==='open'?'closed':'open'}">${t.status==='open'?'Закрыть обращение':'Открыть снова'} <span aria-hidden="true">↗</span></button></div></article>`).join(''):empty(state.support==='open'?'Открытых обращений нет':'Закрытых обращений нет','Новые сообщения появятся здесь.')}</div>`;
   }
 
+  function ideasSection() {
+    const names={new:'Новое',reviewing:'На рассмотрении',planned:'В планах',done:'Реализовано',declined:'Отклонено'};
+    return '<div class="admin-section-head"><div><span class="admin-section-index">ПРОДУКТ / ОБРАТНАЯ СВЯЗЬ</span><h2>Предложения</h2><p>Идеи пользователей, обнаруженные ИИ поддержки. Каждая запись сохраняет исходный текст и ссылку на обращение.</p></div><span class="admin-section-count">'+count(state.ideas.length)+' предложений</span></div>'
+      +'<div class="admin-controls"><label class="admin-filter">Статус <select id="admin-idea-filter"><option value="all">Все</option>'+Object.entries(names).map(([id,title])=>'<option value="'+id+'"'+(state.ideaStatus===id?' selected':'')+'>'+title+'</option>').join('')+'</select></label></div>'
+      +'<div class="admin-ticket-list">'+(state.ideas.length?state.ideas.map(s=>'<article class="admin-ticket"><div class="admin-ticket-top"><span>'+label(s.email)+'</span><time>'+time(s.created_at)+'</time></div><h3>'+label(s.title)+'</h3><p>'+label(s.body)+'</p><div class="admin-ticket-actions"><a class="btn small" href="#admin" data-admin-open-support="'+label(s.conversation_id)+'">Обращение #'+label(s.conversation_id.slice(0,8))+'</a><label class="admin-filter"><span class="sr-only">Статус идеи</span><select data-admin-idea="'+label(s.id)+'">'+Object.entries(names).map(([id,title])=>'<option value="'+id+'"'+(s.status===id?' selected':'')+'>'+title+'</option>').join('')+'</select></label></div></article>').join(''):empty('Предложений пока нет','Когда пользователи предложат новые функции или улучшения, они появятся здесь.'))+'</div>';
+  }
+
+  async function loadIdeas() {
+    const current=++state.request,owner=user;
+    const target=document.querySelector('#admin-section');
+    if(target)target.innerHTML='<p class="admin-loading">Загружаем предложения…</p>';
+    try {
+      const data=await api('/admin/communication/suggestions?status='+encodeURIComponent(state.ideaStatus));
+      if(current!==state.request||user!==owner||tab!=='admin'||state.section!=='ideas')return;
+      state.ideas=Array.isArray(data.suggestions)?data.suggestions:[];
+      target.innerHTML=ideasSection();
+    } catch(error) {
+      if(current===state.request&&target)target.innerHTML='<p class="admin-error">'+label(error.message)+'</p>';
+    }
+  }
+
   function paymentsSection() {
     const rows = state.overview.payments || [];
     return `<div class="admin-section-head"><div><span class="admin-section-index">03 / ОПЛАТЫ</span><h2>Платежи</h2><p>Последние 50 операций по подписке.</p></div><span class="admin-section-count">${count(rows.length)} операций</span></div>
@@ -105,6 +127,7 @@
       button.classList.toggle('active',active);
       button.setAttribute('aria-current',active?'page':'false');
     });
+    if(state.section==='ideas'){loadIdeas();return;}
     if(state.section==='revenue'){
       target.innerHTML='<p class="admin-loading">Считаем подтверждённые оплаты и воронку…</p>';
       const owner=user,current=++state.request;
@@ -276,6 +299,8 @@
       if(page){state.offset+=page.dataset.adminPage==='next'?25:-25;loadUsers();return;}
       const filter=event.target.closest('[data-admin-support-filter]');
       if(filter){state.support=filter.dataset.adminSupportFilter;renderSection();return;}
+      const support=event.target.closest('[data-admin-open-support]');
+      if(support){event.preventDefault();if(window.SmetraCommunication?.openTicket)await window.SmetraCommunication.openTicket(support.dataset.adminOpenSupport);else notify('Центр общения недоступен');return;}
       const ticket=event.target.closest('[data-admin-ticket]');
       if(ticket){ticket.disabled=true;try{await api('/admin/support/'+encodeURIComponent(ticket.dataset.adminTicket),{method:'PATCH',body:JSON.stringify({status:ticket.dataset.status})});state.overview=await api('/admin/overview');renderSection();notify('Статус обращения обновлён');}catch(error){ticket.disabled=false;notify(error.message)}}
     };
@@ -284,8 +309,11 @@
       if(event.target.id!=='admin-user-search')return;
       clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=event.target.value.trim();state.offset=0;loadUsers()},250);
     };
-    content.querySelector('#admin-section').onchange=event=>{
+    content.querySelector('#admin-section').onchange=async event=>{
       if(event.target.id==='admin-user-filter'){state.status=event.target.value;state.offset=0;loadUsers();}
+      if(event.target.id==='admin-idea-filter'){state.ideaStatus=event.target.value;loadIdeas();}
+      const idea=event.target.closest('[data-admin-idea]');
+      if(idea){idea.disabled=true;try{await api('/admin/communication/suggestions/'+encodeURIComponent(idea.dataset.adminIdea),{method:'PATCH',body:JSON.stringify({status:idea.value})});notify('Статус предложения обновлён');}catch(error){notify(error.message);await loadIdeas();}finally{if(idea.isConnected)idea.disabled=false;}}
     };
     renderSection();
   };
