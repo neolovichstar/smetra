@@ -1,0 +1,93 @@
+name: Encrypted PostgreSQL backup
+
+# Scheduled workflows execute only on GitHub's default branch.
+on:
+  schedule:
+    - cron: '37 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smetra-postgresql-backup
+  cancel-in-progress: false
+
+jobs:
+  encrypted-backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      DATABASE_URL: ${{ secrets.SMETRA_BACKUP_DATABASE_URL }}
+      AGE_RECIPIENT: ${{ vars.SMETRA_BACKUP_AGE_RECIPIENT }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require encrypted backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "::error::SMETRA_BACKUP_DATABASE_URL repository secret is missing"
+            exit 1
+          fi
+          if [[ ! "${AGE_RECIPIENT:-}" =~ ^age1[023456789acdefghjklmnpqrstuvwxyz]+$ ]]; then
+            echo "::error::SMETRA_BACKUP_AGE_RECIPIENT repository variable must contain an age public recipient"
+            exit 1
+          fi
+      - name: Install PostgreSQL 17 client and age encryption
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/lib/postgresql/17/bin/pg_dump ]; then
+            sudo install -d -m 0755 /etc/apt/keyrings
+            curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/keyrings/pgdg.asc >/dev/null
+            . /etc/os-release
+            echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client-17
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y age
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          age --version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install pinned Python requirements
+        run: pip install -r requirements.txt
+      - name: Create backup, verify dump and encrypt before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          private_dir="$(mktemp -d "${RUNNER_TEMP}/smetra-private.XXXXXXXX")"
+          encrypted_dir="$(mktemp -d "${RUNNER_TEMP}/smetra-encrypted.XXXXXXXX")"
+          echo "ENCRYPTED_DIR=$encrypted_dir" >> "$GITHUB_ENV"
+          cleanup() { rm -rf -- "$private_dir"; }
+          trap cleanup EXIT
+          label="smetra-$(date -u +'%Y%m%dT%H%M%SZ')-run${GITHUB_RUN_ID}"
+          dump="$private_dir/$label.dump"
+          package="$encrypted_dir/$label.tar.age"
+          python -m backend.manage backup --schema smetra --output "$dump" >/dev/null
+          pg_restore --list "$dump" >/dev/null
+          test -s "$dump"
+          test -s "$dump.json"
+          tar -cf - -C "$private_dir" "$label.dump" "$label.dump.json" \
+            | age --encrypt -r "$AGE_RECIPIENT" -o "$package"
+          test -s "$package"
+          (cd "$encrypted_dir" && sha256sum "$label.tar.age" > "$label.tar.age.sha256")
+          echo "ARTIFACT_NAME=$label" >> "$GITHUB_ENV"
+          echo "Encrypted backup ready: $label"
+      - name: Upload encrypted archive only (30-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ENCRYPTED_DIR }}/*.age*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
