@@ -76,6 +76,10 @@ try {
     if ($secure) { $secure.Dispose() }
 }
 Write-Host 'Секрет подключения к БД сохранён в GitHub Actions.'
+# Включаем расписание только после успешной установки ключа и секрета.
+'true' | & gh variable set SMETRA_BACKUP_ENABLED -R $Repository
+if ($LASTEXITCODE -ne 0) { throw 'Не удалось включить ежедневное резервное копирование.' }
+Write-Host 'Задание резервного копирования активировано.'
 Write-Host "Приватный ключ находится в $keyPath"
 Write-Host 'Сделайте офлайн-копию ключа. Если его потерять, архивы расшифровать нельзя.'
 Write-Host 'После включения workflow в основной ветке запустите его вручную в GitHub Actions.'
