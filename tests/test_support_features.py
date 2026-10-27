@@ -102,7 +102,9 @@ class SupportFeaturesTests(unittest.TestCase):
 
     def test_invalid_image_rejected_without_ticket(self):
         self.assertEqual(self.call("/api/support","POST",{"message":"Проверьте файл","images":[{"name":"x.png","content":base64.b64encode(b"<html>").decode()}]})[0],400)
-        self.assertEqual(self.call("/api/support","POST",{"message":"Проверьте файл","images":[{"name":"x","content":"x"*2_900_000}]})[0],413)
+        self.assertEqual(self.call("/api/support","POST",{"message":"Проверьте файл","images":[{"name":"x.png","content":"x"*120_000}]})[0],400)
+        with self.assertRaises(ValueError):
+            prepare_images([{"name":"x.png","content":"x"*2_900_000}])
 
     def test_no_false_idea_from_regular_support(self):
         self.assertFalse(is_suggestion("При входе ошибка 500. Что делать?"))
