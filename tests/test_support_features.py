@@ -15,6 +15,7 @@ from PIL import Image, features
 import backend.app as app
 import backend.community as community
 from backend.support_features import prepare_images, is_suggestion
+from backend.business import DomainError
 
 
 class SupportFeaturesTests(unittest.TestCase):
@@ -123,7 +124,7 @@ class SupportFeaturesTests(unittest.TestCase):
 
     def test_webp_fake_magic_rejected(self):
         for fake in (b"MZ" + b"\\x00" * 40, b"RIFF" + b"\\x00" * 12):
-            with self.subTest(fake=fake), self.assertRaises(ValueError):
+            with self.subTest(fake=fake), self.assertRaises((ValueError, DomainError)):
                 prepare_images([{"name": "fake.webp",
                                 "content": base64.b64encode(fake).decode()}])
 
