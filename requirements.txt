@@ -6,3 +6,4 @@ psycopg[binary]==3.3.3
 psycopg-pool==3.3.0
 upstash-redis==1.8.0
 cryptography==50.0.2
+Pillow==13.0.0

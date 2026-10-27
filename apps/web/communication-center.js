@@ -83,7 +83,7 @@ async function open(tab='direct'){
 function close(){state.open=false;clearInterval(state.poll);state.poll=null;const el=$('#communication-center');if(el){el.classList.remove('is-open');el.setAttribute('aria-hidden','true')}document.body.classList.remove('comms-scroll-locked');$('#sidebar-open-comms')?.removeAttribute('aria-current')}
 function renderTools(){
  const el=$('#comms-tools');if(!el)return;
- if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека по ID</label><input id="comms-id" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Точный поиск по публичному ID. Почта и закрытые данные не раскрываются.</p><div id="comms-found"></div></form><details class="comms-quote-details"><summary>Создать чат по смете</summary><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form></details>';
+ if(state.tab==='direct')el.innerHTML='<form class="comms-form" id="comms-direct-form"><label for="comms-id">Найти человека</label><input id="comms-id" maxlength="80" placeholder="Имя, @ник или SM-…" required><button class="comms-btn" type="submit">'+icon('search')+' Найти пользователя</button><p class="comms-note">Поиск по имени и @нику среди открытых профилей. По полному ID можно найти знакомого. <a href="/people" target="_blank" rel="noopener">Все профили ↗</a></p><div id="comms-found"></div></form><details class="comms-quote-details"><summary>Создать чат по смете</summary><form class="comms-form" id="comms-quote-form"><label for="comms-quote-id">Обсуждение по смете</label><input id="comms-quote-id" maxlength="80" placeholder="ID сметы" required><label for="comms-quote-client">Публичный ID клиента</label><input id="comms-quote-client" maxlength="40" placeholder="SM-…" required><button class="comms-btn" type="submit">Создать чат сметы</button><p class="comms-note">Чат будет закреплён за точным ID сметы и доступен участникам.</p></form></details>';
  else if(state.tab==='object'){
  const enabled=state.workspaces.filter(w=>w.enabled);
  el.innerHTML=enabled.length?'<form class="comms-form" id="comms-object-form"><label for="comms-workspace">Рабочее пространство TEAM</label><select id="comms-workspace">'+enabled.map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join('')+'</select><label for="comms-object-name">Название объекта или бригады</label><input id="comms-object-name" maxlength="120" placeholder="Например, ЖК Октябрьский"><button class="comms-btn" type="submit">'+icon('plus')+' Создать чат объекта</button><p class="comms-note">Участники добавятся из списка команды.</p></form>':'<div class="comms-form"><p class="comms-note">Объектные чаты доступны рабочим пространствам с активным тарифом TEAM / Компания.</p></div>';
@@ -106,12 +106,12 @@ function renderList(){
  const all=(state.tab==='community'?state.channels:state.chats).filter(row=>!adminQueue()||!state.stage||row.stage===state.stage);
  const query=($('#comms-search')?.value||'').trim().toLocaleLowerCase('ru');
  const rows=query?all.filter(row=>(rowTitle(row)+' '+(row.last_message||'')).toLocaleLowerCase('ru').includes(query)):all;
- if(!rows.length){el.innerHTML='<div class="comms-empty comms-empty-list"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>'+(query?'Ничего не найдено':'Пока пусто')+'</h3><p>'+(query?'Попробуйте другое имя.':state.tab==='direct'?'Нажмите карандаш и найдите человека по публичному ID.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Очередь пуста.')+'</p></div>';return}
+ if(!rows.length){el.innerHTML='<div class="comms-empty comms-empty-list"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>'+(query?'Ничего не найдено':'Пока пусто')+'</h3><p>'+(query?'Попробуйте другое имя.':state.tab==='direct'?'Нажмите карандаш и найдите человека по имени или @нику.':state.tab==='object'?'Создайте чат объекта в TEAM.':state.tab==='community'?'Каналы появятся после загрузки.':'Очередь пуста.')+'</p></div>';return}
  el.innerHTML=rows.map(row=>{
  const title=rowTitle(row),id=row.id,K=kit();
  const preview=row.last_message|| (row.needs_human?'Ожидает сотрудника':row.kind==='community'?'Профессиональный канал':'Открыть переписку');
  const unread=Number(row.unread_count||0);
- const avatar=row.kind==='object'?icon('users'):row.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1).toUpperCase()));
+ const avatar=row.partner_avatar_url&&window.SmetraUserAvatar?window.SmetraUserAvatar({name:title,avatar_url:row.partner_avatar_url}):row.kind==='object'?icon('users'):row.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1).toUpperCase()));
  return '<button type="button" role="listitem" class="comms-row tg-row'+(state.current&&state.current.id===id?' active is-active':'')+'" data-conv="'+esc(id)+'"><span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><span class="comms-copy tg-row-copy"><span class="tg-row-top"><span class="comms-label">'+esc(title)+'</span><time class="comms-time">'+esc(K?K.stamp(row.last_message_at||row.updated_at||row.created_at):time(row.last_message_at||row.updated_at||row.created_at))+'</time></span><span class="tg-row-bottom"><span class="comms-preview tg-preview">'+esc(preview)+'</span>'+(adminQueue()&&row.stage?'<i class="tg-badge comms-stage-badge is-'+esc(row.stage)+'">'+esc(stageName(row.stage))+'</i>':row.needs_human?'<i class="comms-human-needed tg-badge is-waiting" aria-label="Требуется сотрудник">сотрудник</i>':unread?'<span class="tg-unread">'+unread+'</span>':'')+'</span></span></button>';
  }).join('');
 }
@@ -123,8 +123,8 @@ function renderMessages(){
  const c=state.current,title=rowTitle(c),K=kit();
  shell?.classList.add('is-chat-open');head.hidden=false;compose.hidden=false;
  const subtitle=c.kind==='estimate'?'Обсуждение сметы':c.kind==='object'?'Команда рабочего пространства':c.kind==='community'?'Открытый профессиональный канал':state.tab==='support'?'Обращение пользователя'+(c.user_email?' · '+c.user_email:''):(c.partner_public_id?'ID '+c.partner_public_id:'Личная переписка');
- const avatar=c.kind==='object'?icon('users'):c.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1)));
- head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+esc(title)+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(adminQueue()?queueControls(c):c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
+ const avatar=c.partner_avatar_url&&window.SmetraUserAvatar?window.SmetraUserAvatar({name:title,avatar_url:c.partner_avatar_url}):c.kind==='object'?icon('users'):c.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1)));
+ head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+(c.kind==='direct'&&c.partner_profile_url&&/^\/u\/[A-Za-z0-9_-]+$/.test(c.partner_profile_url)?'<a class="comms-profile-link" href="'+esc(c.partner_profile_url)+'" target="_blank" rel="noopener">'+esc(title)+'</a>':esc(title))+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(adminQueue()?queueControls(c):c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
  head.querySelector('[data-chat-back]').onclick=()=>{state.current=null;state.messages=[];renderList();renderMessages()};
  if(adminQueue())bindQueueControls(head,c);
  compose.querySelector('.comms-banner')?.remove();
@@ -187,11 +187,17 @@ async function sendMessage(e){
  await api(path,{method:'POST',body:JSON.stringify({message})});box.value='';box.dispatchEvent(new Event('input'));await loadMessages(true);await refresh(false)
  }catch(error){notify(error.message)}finally{state.busy=false;renderMessages()}
 }
+let personSearchRevision=0;
 async function findPerson(){
- const value=$('#comms-id')?.value.trim();const out=$('#comms-found');if(!value||!out)return;out.textContent='Ищем…';
- try{const d=await api('/profile/directory?q='+encodeURIComponent(value));const p=d.user;out.innerHTML='<div class="comms-found-person">'+esc(p.name)+' <code class="comms-found-id">'+esc(p.public_id)+'</code> <button class="comms-btn" type="button" id="comms-start-chat">Написать</button></div>';$('#comms-start-chat').onclick=async()=>{try{const x=await api('/profile/chats',{method:'POST',body:JSON.stringify({public_id:p.public_id})});state.tab='direct';state.current=null;await refresh(true);await select(x.chat.id)}catch(error){notify(error.message)}}
- }catch(error){out.innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
+ const value=$('#comms-id')?.value.trim(),out=$('#comms-found'),attempt=++personSearchRevision;if(!value||!out)return;out.textContent='Ищем…';
+ try{
+  const d=await api('/profile/directory?q='+encodeURIComponent(value));if(attempt!==personSearchRevision||!out.isConnected)return;
+  const people=d.users||(d.user?[d.user]:[]);
+  out.innerHTML=people.length?people.map(p=>'<div class="comms-found-person">'+(window.SmetraUserAvatar?'<span class="public-avatar" aria-hidden="true">'+window.SmetraUserAvatar(p)+'</span>':'')+'<div class="comms-found-copy">'+(p.url?'<a href="'+esc(p.url)+'" target="_blank" rel="noopener">'+esc(p.name)+' ↗</a>':esc(p.name))+'<small>'+esc(p.handle?'@'+p.handle:p.public_id)+'</small></div><button class="comms-btn" type="button" data-start-person="'+esc(p.public_id)+'">Написать</button></div>').join(''):'<p class="comms-note">Никого не нашли. Попробуйте другое имя или точный ID.</p>';
+  out.querySelectorAll('[data-start-person]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const x=await api('/profile/chats',{method:'POST',body:JSON.stringify({public_id:button.dataset.startPerson})});await showChat(x.chat.id)}catch(error){notify(error.message)}finally{if(button.isConnected)button.disabled=false}});
+ }catch(error){if(attempt===personSearchRevision&&out.isConnected)out.innerHTML='<div class="comms-error">'+esc(error.message)+'</div>'}
 }
+async function showChat(id){if(!state.open)await open('direct');state.tab='direct';await refresh(true);await select(id)}
 async function createQuoteChat(){
  const quote_id=$('#comms-quote-id')?.value.trim(),public_id=$('#comms-quote-client')?.value.trim();
  if(!quote_id||!public_id)return;
@@ -281,5 +287,6 @@ function reset(){
  sessionEpoch++;close();state.current=null;state.messages=[];state.chats=[];state.channels=[];state.workspaces=[];state.userId='';state.publicId='';state.role='user';state.mode='user';state.busy=false;state.adminLoading=false;state.lastWaitingHuman=null;
  if($('#communication-center')){renderList();renderMessages();$('#comms-tools')?.replaceChildren();$('#comms-my-id code').textContent='';}
 }
-window.SmetraCommunication={open,close,reset,startPresence,refresh:()=>refresh(true)};
+window.addEventListener('hashchange',()=>{if(state.open)close()});
+window.SmetraCommunication={open,close,reset,showChat,startPresence,refresh:()=>refresh(true)};
 })();

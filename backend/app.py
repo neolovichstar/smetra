@@ -56,7 +56,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 66
+REQUIRED_CLOUD_SCHEMA_VERSION = 67
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -154,6 +154,8 @@ def migrate():
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
         from backend.ai_tokens import ensure_schema as ensure_ai_tokens
         ensure_ai_tokens(con)
+        from backend.public_profiles import ensure_schema as ensure_public_profiles
+        ensure_public_profiles(con)
 
 
 def now():
@@ -249,10 +251,8 @@ def event(con, user_id, name):
 
 def user_view(user, con):
     expiry = user["entitlement_until"] or 0
-    avatar_id = user["avatar_id"] if "avatar_id" in user.keys() else ""
-    avatar_url = ("https://avatars.yandex.net/get-yapic/" + avatar_id + "/islands-200"
-                  if avatar_id and re.fullmatch(r"[A-Za-z0-9_/-]{1,150}", avatar_id)
-                  else "")
+    from backend.public_profiles import avatar_url as profile_avatar_url
+    avatar_url = profile_avatar_url(con, user)
     return {
         "id": user["id"],
         "email": user["email"],
@@ -370,7 +370,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size = int(lengths[0]) if lengths else 0
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
-        maximum = 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        maximum = 1_450_000 if path == "/api/profile/avatar" else 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":
@@ -620,7 +620,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with db() as con:
                 con.execute("SELECT 1")
             return self.send_json(200, {"ok": True})
+        if path == "/people" or re.fullmatch(r"/u/(?:[A-Za-z][A-Za-z0-9_]{2,31}|SM-[A-Fa-f0-9]{32})", path):
+            path = "/public-profile"
         public = {
+            "/public-profile": ("public-profile.html", "text/html"),
+            "/assets/providers/yandex-disk.svg": ("assets/providers/yandex-disk.svg", "image/svg+xml"),
+            "/assets/providers/google-drive.png": ("assets/providers/google-drive.png", "image/png"),
             "/partner-landing": ("partner-landing.html", "text/html"),
             "/partner-privacy": ("partner-privacy.html", "text/html"),
             "/partner-terms": ("partner-terms.html", "text/html"),
@@ -927,6 +932,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/shared-inbox" or path.startswith("/api/shared-inbox/"):
             from backend.estimate_sharing import recipient_route
             return self.send_json(*recipient_route(self,con,method,path))
+        from backend.public_profiles import handles as public_profile_handles, route as public_profile_route
+        if public_profile_handles(path):
+            return public_profile_route(self, con, method, path, query)
         from backend.community import handles, route as communication_route
         if handles(path):
             result = communication_route(self, method, path, query, con)
@@ -1396,6 +1404,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.execute("DELETE FROM support WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM email_tokens WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM user_profiles WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM public_profiles WHERE user_id=?", (user["id"],))
+                    con.execute("DELETE FROM profile_avatars WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM assistant_memory WHERE user_id=?", (user["id"],))
                     con.execute("DELETE FROM pricing_assignments WHERE user_id=?", (user['id'],))
                     con.execute("DELETE FROM referral_rewards WHERE inviter_id=? OR invitee_id=?", (user['id'],user['id']))
@@ -1405,7 +1415,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE events SET user_id=NULL WHERE user_id=?", (user["id"],)
                     )
                     con.execute(
-                        "UPDATE users SET email=?,name='Удалённый аккаунт',password_hash=?,blocked=1,role='user',deleted_at=? WHERE id=?",
+                        "UPDATE users SET email=?,name='Удалённый аккаунт',avatar_id='',password_hash=?,blocked=1,role='user',deleted_at=? WHERE id=?",
                         (
                             "deleted-" + user["id"] + "@invalid.local",
                             hash_password(secrets.token_urlsafe(32)),
