@@ -27,7 +27,7 @@
     const section=location.hash.slice(1);
     if(section!=='files' && section!=='changelog') cleanup();
   });
-  const state = {filter:'images',search:'',offset:0,files:[],result:null,canWrite:false,wid:''};
+  const state = {filter:'images',search:'',offset:0,files:[],result:null,canWrite:false,canUpload:false,wid:''};
   let listRequest=0;
   const activePage = mine => epoch === mine && tab === 'files' && document.querySelector('#vault-root');
 
@@ -58,6 +58,7 @@
         } catch (err) {
           if (err.name === 'AbortError') return;
           node.classList.add('is-unavailable');
+          node.closest('.vault-image-preview')?.classList.add('is-unavailable');
         }
       }
     }
@@ -65,25 +66,37 @@
   }
 
   function fileCard(file) {
-    const image = file.mime === 'image/jpeg' || file.mime === 'image/png';
+    const image = String(file.mime || '').startsWith('image/');
+    const editable = state.canWrite || file.vault_scope === 'personal';
+    const id = esc(file.id);
     const controls = '<div class="vault-item-actions">' +
-      '<button type="button" data-action="open" data-file-open="' + esc(file.id) + '" data-id="' + esc(file.id) + '" aria-label="Открыть">Открыть</button>' +
-      '<button type="button" data-action="ask" data-id="' + esc(file.id) + '">Спросить ИИ</button>' +
-      (state.canWrite ? '<button type="button" data-file-manage="' + esc(file.id) + '" data-action="manage" data-id="' + esc(file.id) + '">Данные</button><button type="button" data-action="archive" data-id="' + esc(file.id) + '">' + (file.archived ? 'Восстановить' : 'В архив') + '</button>' +
-      '<button type="button" class="is-destructive" data-action="delete" data-id="' + esc(file.id) + '">Удалить</button>' : '') +
-      '</div>';
-    if (image) return '<article class="vault-image-tile"><button type="button" class="vault-image-preview" data-action="open" data-id="' + esc(file.id) + '" aria-label="Просмотреть ' + esc(file.name) + '"><img data-thumb="' + esc(file.id) + '" alt="' + esc(file.name) + '" loading="lazy" decoding="async"></button>' +
+      '<button type="button" class="vault-action-primary" data-action="open" data-file-open="' + id + '" data-id="' + id + '" aria-label="Открыть">Открыть</button>' +
+      '<button type="button" class="vault-action-primary" data-action="ask" data-id="' + id + '">Спросить ИИ</button>' +
+      (editable ? '<details class="vault-action-more"><summary aria-label="Другие действия с файлом" title="Другие действия"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary><div class="vault-action-dropdown">' +
+        '<button type="button" data-file-manage="' + id + '" data-action="manage" data-id="' + id + '">Данные файла</button>' +
+        '<button type="button" data-action="archive" data-id="' + id + '">' + (file.archived ? 'Восстановить' : 'В архив') + '</button>' +
+        '<button type="button" class="is-destructive" data-action="delete" data-id="' + id + '">Удалить</button>' +
+        '</div></details>' : '') + '</div>';
+    if (image) return '<article class="vault-image-tile"><button type="button" class="vault-image-preview" data-action="open" data-id="' + id + '" aria-label="Просмотреть ' + esc(file.name) + '"><img data-thumb="' + id + '" alt="' + esc(file.name) + '" loading="lazy" decoding="async"><span class="vault-image-fallback" aria-hidden="true">Нет предпросмотра</span></button>' +
       '<div class="vault-image-info"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + '</small></div>' + controls + '</article>';
-    return '<article class="vault-file-tile file-center-row">' + fileSymbol(file) +
+    return '<article class="vault-file-tile">' + fileSymbol(file) +
       '<div class="vault-file-details"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + ' · ' + when(file.created_at) + '</small></div>' + controls + '</article>';
   }
   function paint(mine) {
     if (!activePage(mine)) return;
     const result = state.result;
-    const used = result.used_bytes || 0, quota = result.quota_bytes || 100000000;
-    document.querySelector('#vault-usage').textContent = human(used) + ' из ' + human(quota);
-    const meter = document.querySelector('#vault-meter');
-    meter.value = Math.min(100,Math.round(100 * used / quota));
+    // Personal quota belongs to the account; workspace quota belongs to the team.
+    // Never sum these into an apparent single plan limit (e.g. 10 GB vs 5 GB).
+    const personalUsed = result.personal_used_bytes ?? result.used_bytes ?? 0;
+    const personalQuota = result.personal_quota_bytes ?? result.quota_bytes ?? 100000000;
+    const sharedUsed = result.workspace_used_bytes ?? 0;
+    const sharedQuota = result.workspace_quota_bytes ?? 0;
+    document.querySelector('#vault-usage').textContent = human(personalUsed) + ' из ' + human(personalQuota);
+    document.querySelector('#vault-meter').value = personalQuota > 0 ? Math.min(100, Math.round(100 * personalUsed / personalQuota)) : 0;
+    const teamSpace = document.querySelector('#vault-team-space');
+    teamSpace.hidden = sharedQuota <= 0;
+    document.querySelector('#vault-team-usage').textContent = human(sharedUsed) + ' из ' + human(sharedQuota);
+    document.querySelector('#vault-team-meter').value = sharedQuota > 0 ? Math.min(100, Math.round(100 * sharedUsed / sharedQuota)) : 0;
     const root = document.querySelector('#vault-items');
     if (!root) return;
     const showingImages = state.filter === 'images';
@@ -112,7 +125,7 @@
   }
 
   async function upload(files,mine) {
-    if (!state.canWrite || !files.length) return;
+    if (!state.canUpload || !files.length) return;
     const max = state.result?.max_upload_bytes || 3000000;
     if (files.length > 10) { notify('За раз можно загрузить до 10 файлов'); return; }
     const progress = document.querySelector('#vault-progress');
@@ -158,12 +171,15 @@
     if (!active() || epoch !== mine || owner !== user || tab !== 'files') return;
     state.wid = workspaceResult.workspace?.id || sessionStorage.getItem('workspace_id') || '';
     state.canWrite = workspaceResult.workspace?.role !== 'viewer';
+    state.canUpload = true; // Private assistant uploads remain available to workspace viewers.
     state.filter=filter; state.search=search; state.files=result.items; state.result=result; state.offset=result.items.length;
     view('<section id="vault-root" class="vault-root">' +
       head('Хранилище','Все изображения, документы и вложения рабочего пространства в одном месте.') +
-      '<div class="vault-tools"><div class="vault-space"><span>Использовано места</span><strong id="vault-usage"></strong><progress id="vault-meter" max="100" value="0" aria-label="Использование хранилища"></progress></div>' +
-      (state.canWrite ? '<label for="vault-upload" class="btn primary vault-upload">+ Загрузить<input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label>':'') + '</div>' +
-      '<div class="vault-bar"><div role="tablist" class="vault-tabs" aria-label="Тип файлов"><button type="button" data-filter="images" role="tab">Изображения</button><button type="button" data-filter="files" role="tab">Файлы</button><button type="button" data-filter="archive" role="tab">Архив</button></div><input id="vault-search" type="search" aria-label="Поиск файлов" placeholder="Поиск по названию"></div>' +
+      '<div class="vault-tools"><div class="vault-usage-grid">' +
+      '<div class="vault-space"><div class="vault-space-caption"><span>Личное хранилище</span><strong id="vault-usage"></strong></div><progress id="vault-meter" max="100" value="0" aria-label="Использовано личного хранилища"></progress></div>' +
+      '<div class="vault-space" id="vault-team-space"><div class="vault-space-caption"><span>Пространство команды</span><strong id="vault-team-usage"></strong></div><progress id="vault-team-meter" max="100" value="0" aria-label="Использовано пространства команды"></progress></div>' +
+      '</div><label for="vault-upload" class="btn primary vault-upload"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v16M4 12h16"/></svg><span>Загрузить файлы</span><input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label></div>' +
+      '<div class="vault-bar"><div role="tablist" class="vault-tabs" aria-label="Тип файлов"><button type="button" data-filter="images" role="tab">Изображения</button><button type="button" data-filter="files" role="tab">Файлы</button><button type="button" data-filter="archive" role="tab">Архив</button></div><label class="vault-search-field"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10.8" cy="10.8" r="6.7"/><path d="m16 16 4.3 4.3"/></svg><input id="vault-search" type="search" aria-label="Поиск файлов" placeholder="Найти файл"></label></div>' +
       '<p id="vault-progress" class="vault-progress" hidden role="status"></p><div id="vault-items" aria-live="polite" aria-relevant="additions text"></div>' +
       '<footer class="vault-footer"><span id="vault-total"></span><button class="btn small" id="vault-more" type="button">Показать ещё</button></footer>' +
       '</section>');
@@ -193,7 +209,7 @@
       if (action === 'open') return window.SmetraFilePreview?.open(file,state.wid);
       if (action === 'ask') return ask(file).catch(err=>notify(err.message));
       if (action === 'manage') return window.Workspace.manageFile(file.id).catch(err=>notify(err.message));
-      if (!state.canWrite) return;
+      if (!state.canWrite && file.vault_scope !== 'personal') return;
       if (action === 'delete' && !confirm('Удалить «' + file.name + '» без возможности восстановления?')) return;
       button.disabled = true;
       try {
