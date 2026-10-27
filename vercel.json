@@ -50,6 +50,14 @@
     {
       "source": "/contacts",
       "destination": "/contacts.html"
+    },
+    {
+      "source": "/people",
+      "destination": "/public-profile.html"
+    },
+    {
+      "source": "/u/:slug",
+      "destination": "/public-profile.html"
     }
   ],
   "headers": [

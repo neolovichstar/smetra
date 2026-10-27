@@ -4,10 +4,11 @@ function userAvatarMarkup(person) {
   const safeName=String(person?.name||'Сметра');
   const first=escapeHtml(safeName.trim().slice(0,1).toLocaleUpperCase('ru-RU'));
   const value=String(person?.avatar_url||'');
-  const valid=/^https:\/\/avatars\.yandex\.net\/get-yapic\/[a-zA-Z0-9_/-]{1,150}\/islands-200$/.test(value);
+  const valid=/^\/api\/public\/avatars\/SM-[A-F0-9]{32}\/[a-f0-9]{64}\.webp$/i.test(value)||/^https:\/\/avatars\.yandex\.net\/get-yapic\/[a-zA-Z0-9_/-]{1,150}\/islands-200$/.test(value);
   return valid?'<span class="user-avatar-fallback">'+first+'</span><img class="user-avatar-image" src="'+escapeHtml(value)+'" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">':'<span class="user-avatar-fallback">'+first+'</span>';
 }
 window.SmetraUserAvatar=userAvatarMarkup;
+window.SmetraPublicProfile?.captureIntent();
 // Failed remote images reveal the neutral initial without inline event handlers.
 document.addEventListener('error',event=>{
   if(event.target?.matches?.('.user-avatar-image'))event.target.remove();
@@ -298,6 +299,7 @@ function showBootError(message){
   if(button)button.hidden=false;
 }
 function showAuth(){
+  window.SmetraPublicProfile?.reset();
   SmetraReleaseUnread.reset();
   window.SmetraFieldFlows?.stop?.();
   window.SmetraCommunication?.reset();
@@ -345,6 +347,7 @@ async function showApp(){
     window.SmetraCommunication?.startPresence?.();
     void SmetraReleaseUnread.refresh(true);
     window.SmetraWarmFeatures?.();
+    void window.SmetraPublicProfile?.resume({api,user:owner,active:()=>user===owner&&authRevision===attempt,notify});
     try{
       const draft=JSON.parse(sessionStorage.getItem('smetra.previewDraft')||'null');
       if(draft&&window.Workspace){
@@ -395,7 +398,7 @@ function bindRailToggle(button,root,key){
   };
 }
 // Profile and settings share one hub with its own section rail, like the assistant.
-const accountHubTabs=[['profile','Профиль','user'],['account','Аккаунт и вход','key'],['usage','Использование','gauge'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
+const accountHubTabs=[['profile','Профиль','user'],['public','Публичный профиль','users'],['account','Аккаунт и вход','key'],['usage','Использование','gauge'],['assistant','Ассистент','sparkle'],['appearance','Внешний вид','sun'],['data','Данные и экспорт','download'],['danger','Удаление аккаунта','trash']];
 function accountHubTab(){
   if(tab==='profile')return 'profile';
   try{const saved=sessionStorage.getItem('smetra.settings.tab');if(saved&&saved!=='profile'&&accountHubTabs.some(item=>item[0]===saved))return saved}catch{}
@@ -435,7 +438,6 @@ async function renderUsage(active){
 }
 async function renderAccountHub(active){
   const owner=user,current=accountHubTab(),icon=name=>window.SmetraIcons?.svg(name,18)||'';
-  const yandexPhoto=user.avatar_url?'Фото подтянуто из Яндекс ID.':'Фото подтянется из Яндекс ID после подтверждения доступа.';
   const railCollapsed=(()=>{try{return localStorage.getItem('smetra.hub.rail-collapsed')==='true'}catch{return false}})();
   view(`<section class="hub${railCollapsed?' is-rail-collapsed':''}" aria-label="Профиль и настройки">
     <nav class="hub-rail" aria-label="Разделы настроек">
@@ -444,11 +446,12 @@ async function renderAccountHub(active){
       <div class="hub-tabs" role="tablist" aria-orientation="vertical">${accountHubTabs.map(([id,label,name])=>`<button type="button" role="tab" id="hub-tab-${id}" class="hub-tab${id==='danger'?' is-danger':''}" data-hub-tab="${id}" title="${label}" aria-controls="hub-panel-${id}" aria-selected="${id===current}" tabindex="${id===current?0:-1}">${icon(name)}<span>${label}</span></button>`).join('')}</div>
     </nav>
     <div class="hub-main">
-      <section class="hub-panel" id="hub-panel-profile" role="tabpanel" aria-labelledby="hub-tab-profile"${current==='profile'?'':' hidden'}><header class="hub-head"><h1>Профиль</h1></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
+      <section class="hub-panel" id="hub-panel-profile" role="tabpanel" aria-labelledby="hub-tab-profile"${current==='profile'?'':' hidden'}><header class="hub-head"><h1>Профиль</h1><button class="btn small" type="button" data-open-public-profile>Настроить публичный профиль ↗</button></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
+      <section class="hub-panel" id="hub-panel-public" role="tabpanel" aria-labelledby="hub-tab-public"${current==='public'?'':' hidden'}><header class="hub-head"><h1>Публичный профиль</h1><p>Страница, которой можно поделиться с клиентами и коллегами.</p></header><div id="hub-public-profile-host"></div></section>
       <section class="hub-panel" id="hub-panel-account" role="tabpanel" aria-labelledby="hub-tab-account"${current==='account'?'':' hidden'}><header class="hub-head"><h1>Аккаунт и вход</h1></header>
         <div class="hub-card"><div class="hub-row"><div><strong>Электронная почта</strong><small>${escapeHtml(user.email)}</small></div><span class="pill ${user.email_verified?'status-accepted':'status-draft'}">${user.email_verified?'Подтверждена':'Не подтверждена'}</span></div>
         <div class="hub-row"><div><strong>Публичный ID</strong><small>По нему вас находят в центре общения. Почта не раскрывается.</small></div><span class="hub-id"><code id="hub-public-id">…</code><button class="icon-button" type="button" id="hub-copy-id" aria-label="Скопировать ID" title="Скопировать ID">${icon('copy')}</button></span></div>
-        <div class="hub-row"><div class="hub-photo"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>Фото профиля</strong><small>${yandexPhoto}</small></div></div><a class="btn" id="hub-yandex-photo" href="/api/auth/oauth/yandex/start?link=1">${icon('refresh')}Подтянуть из Яндекса</a></div></div>
+        <div class="hub-row"><div class="hub-photo"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>Фото профиля</strong><small>Ваше фото в переписках и публичном профиле. JPEG, PNG или WebP.</small></div></div><div class="avatar-upload-controls" id="hub-avatar-controls"></div></div></div>
       </section>
       <section class="hub-panel" id="hub-panel-usage" role="tabpanel" aria-labelledby="hub-tab-usage"${current==='usage'?'':' hidden'}><header class="hub-head"><h1>Использование</h1></header><div id="hub-usage-host" class="hub-card usage-card" aria-busy="true"><p class="muted">Загружаем…</p></div></section>
       <section class="hub-panel" id="hub-panel-assistant" role="tabpanel" aria-labelledby="hub-tab-assistant"${current==='assistant'?'':' hidden'}><header class="hub-head"><h1>Ассистент</h1></header><div class="settings-page"><section id="settings-personalization" class="settings-personalization-host"></section></div></section>
@@ -467,6 +470,12 @@ async function renderAccountHub(active){
     if(tab!==route){tab=route;history.replaceState({},'',location.pathname+location.search+'#'+route);document.querySelectorAll('#sidebar [data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab===route));$('#sidebar-profile')?.classList.toggle('active',route==='profile')}
   };
   tabs.forEach(button=>button.onclick=()=>select(button.dataset.hubTab));
+  $('[data-open-public-profile]')?.addEventListener('click',()=>select('public'));
+  window.SmetraPublicProfile?.mountAvatar({host:$('#hub-avatar-controls'),user:owner,api,active,notify,onChange:url=>{
+    if(!active())return;owner.avatar_url=url;clearApiCache();
+    document.querySelectorAll('#sidebar-avatar,.hub-avatar').forEach(node=>node.innerHTML=userAvatarMarkup(owner));
+  }});
+  void window.SmetraPublicProfile?.mountSettings({host:$('#hub-public-profile-host'),user:owner,api,active});
   document.querySelector('.hub-tabs').addEventListener('keydown',event=>{const index=tabs.findIndex(button=>button.getAttribute('aria-selected')==='true');const step={ArrowDown:1,ArrowRight:1,ArrowUp:-1,ArrowLeft:-1}[event.key];if(!step)return;event.preventDefault();select(tabs[(index+step+tabs.length)%tabs.length].dataset.hubTab,true)});
   syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);
   const deleteAccountButton=$('#delete-account');

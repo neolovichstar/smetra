@@ -311,7 +311,26 @@ def _list_conversations(con, user_id, kinds, include_user=False):
         + access_sql + "ORDER BY c.updated_at DESC,c.id DESC LIMIT 100",
         (user_id, user_id, user_id, user_id, user_id, *kinds, *access_args),
     ).fetchall()
-    return [_conversation_view(row, include_user=include_user) for row in rows]
+    views = [_conversation_view(row, include_user=include_user) for row in rows]
+    peer_ids = sorted({row["partner_id"] for row in rows if row["partner_id"]})
+    if peer_ids:
+        placeholders = ",".join("?" for _ in peer_ids)
+        peers = con.execute(
+            "SELECT u.id,u.avatar_id,a.content_hash,p.published,p.handle,p.display_name FROM users u "
+            "LEFT JOIN profile_avatars a ON a.user_id=u.id LEFT JOIN public_profiles p ON p.user_id=u.id "
+            "WHERE u.id IN (" + placeholders + ") AND u.deleted_at IS NULL AND u.blocked=0", peer_ids,
+        ).fetchall()
+        from backend.public_profiles import public_id
+        by_id = {peer["id"]: peer for peer in peers}
+        for row, view in zip(rows, views):
+            peer = by_id.get(row["partner_id"])
+            if peer:
+                from backend.public_profiles import avatar_url_for
+                view["partner_avatar_url"] = avatar_url_for(peer["id"], peer["avatar_id"], peer["content_hash"])
+                view["partner_profile_url"] = "/u/" + (peer["handle"] or public_id(peer["id"])) if peer["published"] else ""
+                if peer["published"]:
+                    view["partner_name"] = peer["display_name"]
+    return views
 
 
 def _messages(con, conversation_id, after=0, limit=100):
@@ -732,20 +751,23 @@ def _public_id_route(handler, method, path, query, con, user):
     if path == "/api/profile/directory" and method == "GET":
         handler.throttle("profile-lookup:" + user["id"], 30, 60)
         value = (query.get("q") or [""])[0]
+        from backend.public_profiles import search, avatar_url, get_public, id_from_public
         normalized = normalize_public_id(value)
         if not normalized:
-            raise ApiError(400, "Введите публичный ID целиком, например SM-…")
+            people = search(con, value)
+            return handler.send_json(200, {"users": people, "user": people[0] if len(people) == 1 else None})
         row = con.execute(
-            "SELECT id,name FROM users WHERE upper(replace(id,'-',''))=? "
-            "AND id<>? AND deleted_at IS NULL AND blocked=0",
-            (normalized, user["id"]),
+            "SELECT id,name,avatar_id FROM users WHERE id=? AND id<>? AND deleted_at IS NULL AND blocked=0",
+            (id_from_public("SM-" + normalized), user["id"]),
         ).fetchone()
         if not row:
             raise ApiError(404, "Пользователь с таким ID не найден")
-        return handler.send_json(200, {
-            "user": {"id": row["id"], "name": row["name"],
-                     "public_id": make_public_id(row["id"])}
-        })
+        try:
+            person = get_public(con, "SM-" + normalized)
+        except ApiError:
+            person = {"id": row["id"], "name": row["name"], "public_id": make_public_id(row["id"]),
+                      "avatar_url": avatar_url(con, row), "url": "", "allow_messages": True, "allow_quotes": True}
+        return handler.send_json(200, {"user": person, "users": [person]})
     if path == "/api/profile/chats" and method == "GET":
         return handler.send_json(200, {
             "chats": _list_conversations(con, user["id"], ("direct", "object", "estimate"))
@@ -765,6 +787,8 @@ def _public_id_route(handler, method, path, query, con, user):
             raise ApiError(404, "Пользователь не найден")
         if target["id"] == user["id"]:
             raise ApiError(400, "Нельзя открыть личный чат с самим собой")
+        from backend.public_profiles import require_contact
+        require_contact(con, target["id"], "message")
         direct_key = ":".join(sorted((user["id"], target["id"])))
         conversation_id = _new_conversation(
             con, "direct", target["name"], user["id"], direct_key=direct_key
@@ -779,17 +803,27 @@ def _public_id_route(handler, method, path, query, con, user):
             "partner_name": target["name"], "partner_public_id": make_public_id(target["id"]),
         }})
     if path == "/api/profile/quote-chats" and method == "POST":
+        handler.throttle("quote-chat-create:" + user["id"], 10, 3600)
         data = handler.body()
         quote_id = _text(data.get("quote_id"), 80, required=True)
         target_public_id = normalize_public_id(data.get("public_id"))
         if not target_public_id:
             raise ApiError(400, "Укажите публичный ID клиента")
         quote = con.execute(
-            "SELECT id,title,public_token FROM quotes WHERE id=? AND user_id=?",
+            "SELECT id,title,public_token,published_version,approval_state,expires_at,workspace_id FROM quotes WHERE id=? AND user_id=?",
             (quote_id, user["id"]),
         ).fetchone()
         if not quote:
             raise ApiError(404, "Смета не найдена")
+        if not quote["published_version"] or quote["approval_state"] not in ("sent", "viewed", "changes_requested"):
+            raise ApiError(409, "Сначала опубликуйте смету для согласования")
+        if quote["expires_at"] and quote["expires_at"] <= now():
+            raise ApiError(410, "Срок согласования сметы истёк")
+        if "version" in data and (type(data["version"]) is not int or data["version"] != quote["published_version"]):
+            raise ApiError(409, "Версия сметы изменилась. Выберите её заново")
+        from backend.estimate_sharing import _load_snapshot
+        _load_snapshot(con, {"quote_id": quote["id"], "workspace_id": quote["workspace_id"],
+                             "quote_version": quote["published_version"]})
         target = con.execute(
             "SELECT id,name FROM users WHERE upper(replace(id,'-',''))=? "
             "AND id<>? AND deleted_at IS NULL AND blocked=0",
@@ -797,6 +831,8 @@ def _public_id_route(handler, method, path, query, con, user):
         ).fetchone()
         if not target:
             raise ApiError(404, "Пользователь не найден")
+        from backend.public_profiles import require_contact
+        require_contact(con, target["id"], "quote")
         estimate_key = "estimate:" + quote_id + ":" + target["id"]
         existing = con.execute(
             "SELECT id FROM chat_conversations WHERE direct_key=?", (estimate_key,)

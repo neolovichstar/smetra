@@ -35,7 +35,8 @@ class CommunicationHelpersTests(unittest.TestCase):
         con.execute("PRAGMA foreign_keys=ON")
         con.execute(
             "CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL, "
-            "email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user')"
+            "email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user', "
+            "avatar_id TEXT NOT NULL DEFAULT '', blocked INTEGER NOT NULL DEFAULT 0, deleted_at INTEGER)"
         )
         con.executemany(
             "INSERT INTO users(id,name,email,role) VALUES(?,?,?,?)",
@@ -45,6 +46,8 @@ class CommunicationHelpersTests(unittest.TestCase):
             ],
         )
         ensure_sqlite_schema(con)
+        from backend.public_profiles import ensure_schema
+        ensure_schema(con)
         chat_id = _new_conversation(
             con, "direct", "Мария", "user-a", direct_key="user-a:user-b"
         )
