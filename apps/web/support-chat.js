@@ -82,7 +82,7 @@ window.SmetraSupport = (() => {
           canvas.getContext('2d', {alpha:false}).drawImage(bitmap,0,0,canvas.width,canvas.height);
           const url=canvas.toDataURL('image/jpeg',quality);
           const data=url.split(',')[1];
-          if (data.length < 750_000) return {name:file.name.slice(0,90),content:data,preview:url};
+          if (data.length < 750_000) return {name:(file.name.replace(/\.[^.]+$/, '').slice(0,84) || 'screenshot') + '.jpg',content:data,preview:url};
           scale*=.75;
         }
         throw Error('Не удалось достаточно сжать скриншот');
