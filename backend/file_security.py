@@ -17,6 +17,7 @@ IMAGE_SIGNATURES = {
     ".png": (b"\x89PNG\r\n\x1a\n",),
     ".jpg": (b"\xff\xd8\xff",),
     ".jpeg": (b"\xff\xd8\xff",),
+    ".webp": (b"RIFF",),  # RIFF + size + WEBP; checked separately below
 }
 OFFICE_SIGNATURES = {".docx", ".xlsx"}
 TEXT_EXTENSIONS = {".txt", ".md", ".csv"}
@@ -38,7 +39,7 @@ def validate_signature(filename, content):
     if not isinstance(content, bytes) or not content:
         raise DomainError(400, "Файл пустой или повреждён")
     if ext in IMAGE_SIGNATURES:
-        if not content.startswith(IMAGE_SIGNATURES[ext]):
+        if not content.startswith(IMAGE_SIGNATURES[ext]) or (ext == ".webp" and (len(content) < 16 or content[8:12] != b"WEBP")):
             raise DomainError(400, "Сигнатура изображения не соответствует расширению")
         return
     if ext in OFFICE_SIGNATURES:
