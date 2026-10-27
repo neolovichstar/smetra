@@ -75,14 +75,27 @@ window.SmetraSupport = (() => {
       try {
         if (bitmap.width * bitmap.height > 18_000_000) throw Error('Слишком большое разрешение изображения');
         let scale = Math.min(1, 1440 / Math.max(bitmap.width, bitmap.height));
-        for (const quality of [.76,.65,.50]) {
+        const stem = file.name.replace(/\.[^.]+$/, '').slice(0,84) || 'screenshot';
+        for (let attempt=0; attempt<4; attempt++) {
           const canvas=document.createElement('canvas');
           canvas.width=Math.max(1,Math.round(bitmap.width*scale));
           canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-          canvas.getContext('2d', {alpha:false}).drawImage(bitmap,0,0,canvas.width,canvas.height);
-          const url=canvas.toDataURL('image/jpeg',quality);
-          const data=url.split(',')[1];
-          if (data.length < 750_000) return {name:(file.name.replace(/\.[^.]+$/, '').slice(0,84) || 'screenshot') + '.jpg',content:data,preview:url};
+          const ctx=canvas.getContext('2d', {alpha:false});
+          if (!ctx) throw Error('Браузер не поддерживает обработку скриншотов');
+          ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+          // WebP first. Browsers without WebP sometimes silently return PNG:
+          // verify the data URL MIME before attaching its file extension.
+          for (const [mime, quality, extension] of [
+            ['image/webp',.88,'.webp'],
+            ['image/webp',.76,'.webp'],
+            ['image/jpeg',.82,'.jpg'],
+            ['image/jpeg',.68,'.jpg']
+          ]) {
+            const url=canvas.toDataURL(mime,quality);
+            if (!url.startsWith('data:'+mime+';base64,')) continue;
+            const data=url.slice(url.indexOf(',')+1);
+            if (data.length < 750_000) return {name:stem+extension,content:data,preview:url};
+          }
           scale*=.75;
         }
         throw Error('Не удалось достаточно сжать скриншот');
