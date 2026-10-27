@@ -128,7 +128,7 @@ def ensure_sqlite_schema(con):
         conversation_id TEXT NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
         message_id TEXT NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
         uploader_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        mime TEXT NOT NULL CHECK(mime='image/jpeg'),
+        mime TEXT NOT NULL CHECK(mime IN ('image/webp','image/jpeg')),
         content BLOB NOT NULL CHECK(length(content) BETWEEN 1 AND 700000),
         created_at INTEGER NOT NULL
       );
