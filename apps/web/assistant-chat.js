@@ -751,7 +751,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
           : window.confirm(action.summary+'? Это действие нельзя отменить.');
         if(!accepted)return;
       }
-      const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
+      const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);try{if(action.tool==='publish_quote'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview())){buttons.forEach(button=>button.disabled=false);return}const result=await api('/assistant/confirm',{method:'POST',body:JSON.stringify({id:action.id})});item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);quotePreview?.refresh().catch(()=>{});notify(result.result?.quote?.id?'Смета сохранена в разделе «Сметы».':'Изменения сохранены')}catch(error){const state=item.querySelector('.assistant-proposal-state');if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}notify(error.message);buttons.forEach(button=>button.disabled=false)}};
     item.querySelector('[data-dismiss]').onclick=async()=>{
       const dismiss=item.querySelector('[data-dismiss]');
       if(dismiss.disabled)return;
@@ -776,6 +776,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     note.innerHTML=assistantIcon('book',14);note.append(text,manage);item.append(note);
   };
   const renderSavedAction=(item,action,undoable,documentId,quoteId)=>{
+    // A confirmed new quote lives in «Сметы», not as a sticky banner in the chat.
+    // The same branch handles recent_actions returned when the assistant is reopened.
+    // Do not remove the undo controls for changes to existing estimates.
+    if(quoteId && !undoable){item.remove();return;}
     item.replaceChildren();item.classList.add('is-saved');const title=document.createElement('p');title.className='assistant-saved-title';
     title.textContent=(quoteId?'Черновик создан · ':'Сохранено · ')+action.summary;item.append(title);
     if(quoteId){

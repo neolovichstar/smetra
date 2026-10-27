@@ -36,6 +36,31 @@ async function setup(enabled=true,voice=false,remaining=3){
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('created quote disappears immediately and stays absent after reopening assistant',async({w,doc,notices})=>{
+  const baseApi=w.api;let confirmed=0;
+  const action={id:'created-quote-action',tool:'create_quotes',summary:'Создать · Тестовая смета: Косметический ремонт комнаты',
+    arguments:{title:'Косметический ремонт комнаты',items:[{name:'Покраска стен',quantity:1,unit:'м²',unit_price:10000}]}};
+  w.api=async(path,options={})=>{
+   if(path==='/assistant')return {...await baseApi(path,options),actions:[action],recent_actions:[]};
+   if(path==='/assistant/confirm'){confirmed++;return {undoable:false,result:{quote:{id:'test-quote-id'}}};}
+   return baseApi(path,options);
+  };
+  await w.SmetraAssistant();await tick();
+  assert.ok(doc.querySelector('#assistant-actions [data-confirm]'),'the AI proposal still needs explicit approval');
+  doc.querySelector('#assistant-actions [data-confirm]').click();await tick();await tick();
+  assert.equal(confirmed,1,'quote was persisted through the confirmation endpoint');
+  assert.equal(doc.querySelector('#assistant-actions .assistant-proposal'),null,'the saved quote card must be removed');
+  assert.ok(notices.some(value=>value.includes('Смета сохранена')));
+  w.api=async(path,options={})=>{
+   if(path==='/assistant')return {...await baseApi(path,options),actions:[],recent_actions:[
+    {id:action.id,summary:action.summary,quote_id:'test-quote-id'}
+   ]};
+   return baseApi(path,options);
+  };
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelector('#assistant-actions .assistant-saved'),null,'reopening cannot restore the old creation banner');
+  assert.doesNotMatch(doc.querySelector('#assistant-actions').textContent,/Черновик создан|Клиенту ещё не отправлено/);
+ });
  await test('microphone works with exhausted AI quota and produces an editable draft',async({w,doc,recognition,microphonePermissionRequests})=>{
   const button=doc.querySelector('#assistant-send'),voice=doc.querySelector('#assistant-voice'),input=doc.querySelector('#assistant-input');
   assert.equal(button.type,'submit');assert.equal(button.disabled,true,'empty message cannot send');

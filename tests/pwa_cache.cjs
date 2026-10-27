@@ -1,5 +1,17 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 (async()=>{
+ // Keep the installable web app compatible with modern Chromium and iOS.
+ const appHtml=fs.readFileSync('apps/web/app.html','utf8');
+ assert.match(appHtml,/<meta\s+name="mobile-web-app-capable"\s+content="yes">/);
+ assert.match(appHtml,/<meta\s+name="apple-mobile-web-app-capable"\s+content="yes">/);
+ assert.match(appHtml,/<link\s+rel="manifest"\s+href="\/manifest\.webmanifest">/);
+ // Our page never intentionally imports extension bundles or off-site JS.
+ const pageScripts=[...appHtml.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match=>match[1]);
+ assert.ok(pageScripts.length>0&&pageScripts.every(source=>source.startsWith('/')&&!source.startsWith('//')),'All app scripts must use first-party URLs');
+ const vercel=JSON.parse(fs.readFileSync('vercel.json','utf8'));
+ const csp=vercel.headers.flatMap(block=>block.headers).find(header=>header.key==='Content-Security-Policy')?.value||'';
+ assert.match(csp,/(?:^|;\s*)script-src 'self'(?:;|$)/,'CSP must not allow third-party scripts');
+ assert.match(csp,/(?:^|;\s*)connect-src 'self'(?:;|$)/,'CSP must not allow third-party network requests');
  const listeners={},stored=new Map(),deleted=[],network=[];
  const cache={addAll:async requests=>{for(const request of requests)stored.set(new URL(request.url,'https://example.test').pathname,{offline:request.url.endsWith('/offline.html')})},match:async key=>stored.get(key)};
  const context={Request:class{constructor(url,options){this.url=url;this.options=options}},Response:{error:()=>({error:true})},URL,caches:{open:async()=>cache,keys:async()=>['other-app','smetra-public-offline-v1','smetra-public-offline-v2'],delete:async name=>deleted.push(name)},self:{location:{origin:'https://example.test'},skipWaiting:async()=>{},clients:{claim:async()=>{}},addEventListener:(name,callback)=>listeners[name]=callback},fetch:async request=>{network.push(request);if(request.offline)throw Error('Offline');return {online:true}}};
