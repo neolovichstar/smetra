@@ -32,6 +32,13 @@ class EncryptedBackupWorkflowTests(unittest.TestCase):
         self.assertIn('trap cleanup EXIT', content)
         self.assertIn("set -euo pipefail", content)
 
+    def test_windows_setup_has_utf8_bom_for_powershell_51(self):
+        # Windows PowerShell 5.1 treats UTF-8 without a BOM as the legacy
+        # system code page, breaking Cyrillic quoted strings in the script.
+        script = (ROOT / "scripts" / "setup_backup_windows.ps1").read_bytes()
+        self.assertTrue(script.startswith(bytes.fromhex("EFBBBF")))
+        self.assertIn("SMETRA_BACKUP_ENABLED", script.decode("utf-8-sig"))
+
     def test_backup_uses_reviewed_persistence_tool(self):
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("python -m backend.manage backup --schema smetra", content)
