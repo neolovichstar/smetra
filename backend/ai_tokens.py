@@ -9,10 +9,12 @@ Usage comes from the provider's reported token counts. When a provider does not
 report usage, the request and answer size are used as a conservative estimate.
 The client never sends a token count.
 """
+import calendar
 import contextvars
 import datetime as dt
 import hashlib
 import json
+import uuid
 
 from backend.business import DomainError, identity, stamp
 
@@ -106,6 +108,75 @@ def month_key(user_id, month=None):
     return hashlib.sha256(f"assistant:tokens:{month or period()}:{user_id}".encode()).hexdigest()
 
 
+def _anniversary_window(activation, moment):
+    """UTC calendar anniversaries, including month-end clamping (Jan 31 -> Feb 28 -> Mar 31)."""
+    first = dt.datetime.fromtimestamp(int(activation), dt.timezone.utc)
+    current = dt.datetime.fromtimestamp(int(moment), dt.timezone.utc)
+    if first > current:
+        return int(first.timestamp()), int(first.timestamp())
+
+    def moved(months):
+        number = first.year * 12 + first.month - 1 + months
+        year, index = divmod(number, 12)
+        return first.replace(year=year, month=index + 1,
+                             day=min(first.day, calendar.monthrange(year, index + 1)[1]))
+
+    months = max(0, (current.year - first.year) * 12 + current.month - first.month)
+    begin = moved(months)
+    if begin > current:
+        months -= 1
+        begin = moved(months)
+    return int(begin.timestamp()), int(moved(months + 1).timestamp())
+
+
+def _paid_activation(service, tier, moment):
+    """Original activation of the uninterrupted paid tier in this workspace.
+
+    Renewal before expiry continues the original anniversary. A lapse, plan
+    change, or refunded first purchase begins a new anniversary. No card, user-
+    supplied timestamp or client-side plan value may supply this date.
+    """
+    if tier == "starter":
+        return None
+    con, user_id = service.con, service.user["id"]
+    wid = getattr(service, "wid", None)
+    owner_id = user_id
+    if wid:
+        workspace = con.execute("SELECT owner_id FROM workspaces WHERE id=?", (wid,)).fetchone()
+        if not workspace:
+            return None
+        owner_id = workspace["owner_id"]
+    else:
+        wid = str(uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + user_id))
+    personal = str(uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + owner_id))
+    from backend.plan_catalog import PURCHASES
+    grants = con.execute(
+        "SELECT p.plan,p.activated_at,b.duration_days FROM payments p "
+        "JOIN billing_intents b ON b.payment_id=p.id "
+        "WHERE p.user_id=? AND (b.workspace_id=? OR (b.workspace_id IS NULL AND ?=?)) "
+        "AND p.status='succeeded' AND p.activated_at IS NOT NULL "
+        "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') "
+        "ORDER BY p.activated_at,p.created_at,p.id",
+        (owner_id, wid, wid, personal),
+    ).fetchall()
+    active_until = 0
+    chain_tier, chain_activation = "starter", None
+    for grant in grants:
+        product = PURCHASES.get(grant["plan"])
+        if not product:
+            continue
+        next_tier, _, days = product
+        activated = int(grant["activated_at"])
+        continued = next_tier == chain_tier and activated <= active_until
+        if not continued:
+            chain_activation = activated
+        active_until = (max(active_until, activated) if continued else activated) + int(grant["duration_days"] or days) * 86400
+        chain_tier = next_tier
+    if active_until <= moment or chain_tier != tier:
+        return None
+    return chain_activation
+
+
 def tier_of(service):
     from backend.entitlements import workspace_plan_row, evaluate_workspace_plan
     if getattr(service, "wid", None):
@@ -185,14 +256,26 @@ def balance(service):
     con, user_id = service.con, service.user["id"]
     absorb_legacy_credits(con, user_id)
     tier = tier_of(service)
-    month = period()
+    moment = stamp()
+    activation = _paid_activation(service, tier, moment)
+    if activation is not None:
+        begin, end = _anniversary_window(activation, moment)
+        # Key binds the entitlement to its workspace and first successful
+        # activation; a renewal within the chain does not mint tokens early.
+        month = f"paid:{getattr(service, 'wid', '')}:{activation}:{begin}"
+        resets_at = end
+    else:
+        month = period()
+        utc_now = dt.datetime.fromtimestamp(moment, dt.timezone.utc)
+        next_month = (utc_now.replace(day=28) + dt.timedelta(days=4)).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0,
+        )
+        resets_at = int(next_month.timestamp())
     from backend.revenue import referral_bonus
     allowance = MONTHLY_TOKENS.get(tier, MONTHLY_TOKENS["starter"]) + referral_bonus(con, user_id, month) * REQUEST_TOKENS
     row = con.execute("SELECT count FROM rate_limits WHERE key=?", (month_key(user_id, month),)).fetchone()
     used = int(row["count"]) if row else 0
     wallet = wallet_balance(con, user_id)
-    now = dt.datetime.now(dt.timezone.utc)
-    next_month = (now.replace(day=28) + dt.timedelta(days=4)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     monthly_left = max(0, allowance - used)
     return {
         "unit": "tokens",
@@ -206,7 +289,7 @@ def balance(service):
         "limit": allowance + wallet,
         "used": min(used, allowance),
         "remaining": monthly_left + wallet,
-        "resets_at": int(next_month.timestamp()),
+        "resets_at": resets_at,
         "key": month_key(user_id, month),
     }
 
@@ -216,7 +299,7 @@ def require_tokens(service):
     if current["remaining"] < MIN_START_TOKENS:
         raise DomainError(
             429,
-            "Токены ассистента закончились. Они обновятся в начале месяца; больше токенов — в тарифе Про.",
+            "Токены ассистента закончились. Дата следующего обновления указана в профиле; больше токенов — в тарифе Про.",
         )
     return current
 
