@@ -979,7 +979,8 @@ def _support_route(handler, method, path, query, con, user):
     image_match = re.fullmatch(r"/api/support/images/([0-9a-f]{32})", path)
     if image_match and method == "GET":
         from backend.support_features import respond_image
-        return respond_image(handler, con, image_match.group(1), user)
+        respond_image(handler, con, image_match.group(1), user)
+        return True
     if path == "/api/support" and method == "POST":
         data = handler.body()
         images = _support_images(data, handler, user)
@@ -1191,7 +1192,8 @@ def _admin_route(handler, method, path, query, con):
     admin_image = re.fullmatch(r"/api/admin/communication/images/([0-9a-f]{32})", path)
     if admin_image and method == "GET":
         from backend.support_features import respond_image
-        return respond_image(handler, con, admin_image.group(1), admin, admin=True)
+        respond_image(handler, con, admin_image.group(1), admin, admin=True)
+        return True
     if path == "/api/admin/communication/overview" and method == "GET":
         return handler.send_json(200, _admin_overview(con))
     if path == "/api/admin/communication/threads" and method == "GET":
