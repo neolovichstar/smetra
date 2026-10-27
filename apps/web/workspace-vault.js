@@ -70,7 +70,7 @@
     const editable = state.canWrite || file.vault_scope === 'personal';
     const id = esc(file.id);
     const controls = '<div class="vault-item-actions">' +
-      '<button type="button" class="vault-action-primary" data-action="open" data-file-open="' + id + '" data-id="' + id + '" aria-label="Открыть">Открыть</button>' +
+      (image ? '' : '<button type="button" class="vault-action-primary" data-action="open" data-file-open="' + id + '" data-id="' + id + '" aria-label="Открыть">Открыть</button>') +
       '<button type="button" class="vault-action-primary" data-action="ask" data-id="' + id + '">Спросить ИИ</button>' +
       (editable ? '<details class="vault-action-more"><summary aria-label="Другие действия с файлом" title="Другие действия"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary><div class="vault-action-dropdown">' +
         '<button type="button" data-file-manage="' + id + '" data-action="manage" data-id="' + id + '">Данные файла</button>' +
@@ -178,7 +178,7 @@
       '<div class="vault-tools"><div class="vault-usage-grid">' +
       '<div class="vault-space"><div class="vault-space-caption"><span>Личное хранилище</span><strong id="vault-usage"></strong></div><progress id="vault-meter" max="100" value="0" aria-label="Использовано личного хранилища"></progress></div>' +
       '<div class="vault-space" id="vault-team-space"><div class="vault-space-caption"><span>Пространство команды</span><strong id="vault-team-usage"></strong></div><progress id="vault-team-meter" max="100" value="0" aria-label="Использовано пространства команды"></progress></div>' +
-      '</div><label for="vault-upload" class="btn primary vault-upload"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v16M4 12h16"/></svg><span>Загрузить файлы</span><input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label></div>' +
+      '</div><label for="vault-upload" class="btn primary vault-upload"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v16M4 12h16"/></svg><span>Загрузить файлы</span><input id="vault-upload" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden></label></div>' +
       '<div class="vault-bar"><div role="tablist" class="vault-tabs" aria-label="Тип файлов"><button type="button" data-filter="images" role="tab">Изображения</button><button type="button" data-filter="files" role="tab">Файлы</button><button type="button" data-filter="archive" role="tab">Архив</button></div><label class="vault-search-field"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10.8" cy="10.8" r="6.7"/><path d="m16 16 4.3 4.3"/></svg><input id="vault-search" type="search" aria-label="Поиск файлов" placeholder="Найти файл"></label></div>' +
       '<p id="vault-progress" class="vault-progress" hidden role="status"></p><div id="vault-items" aria-live="polite" aria-relevant="additions text"></div>' +
       '<footer class="vault-footer"><span id="vault-total"></span><button class="btn small" id="vault-more" type="button">Показать ещё</button></footer>' +
