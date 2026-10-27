@@ -16,7 +16,7 @@ foreach ($program in @('age-keygen', 'gh')) {
         throw "Не найдена программа $program. Установите её с официального сайта и повторите запуск."
     }
 }
-& gh auth status *> $null
+& gh auth status --hostname github.com
 if ($LASTEXITCODE -ne 0) {
     Write-Host 'Необходимо войти в GitHub. Откроется авторизация через браузер.'
     & gh auth login --hostname github.com --web
@@ -31,7 +31,7 @@ if (-not (Test-Path -LiteralPath $keyDir)) {
 
 if (-not (Test-Path -LiteralPath $keyPath)) {
     Write-Host 'Генерирую приватный ключ на этом компьютере. Он не покинет компьютер.'
-    & age-keygen -o $keyPath 2> $null
+    & age-keygen -o $keyPath
     if ($LASTEXITCODE -ne 0) { throw 'Не получилось сгенерировать ключ.' }
 } else {
     Write-Host 'Уже существующий приватный ключ сохранён. Перезапись запрещена.'
