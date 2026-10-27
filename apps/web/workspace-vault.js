@@ -79,7 +79,7 @@
         '</div></details>' : '') + '</div>';
     if (image) return '<article class="vault-image-tile"><button type="button" class="vault-image-preview" data-action="open" data-id="' + id + '" aria-label="Просмотреть ' + esc(file.name) + '"><img data-thumb="' + id + '" alt="' + esc(file.name) + '" loading="lazy" decoding="async"><span class="vault-image-fallback" aria-hidden="true">Нет предпросмотра</span></button>' +
       '<div class="vault-image-info"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + '</small></div>' + controls + '</article>';
-    return '<article class="vault-file-tile">' + fileSymbol(file) +
+    return '<article class="vault-file-tile file-center-row">' + fileSymbol(file) +
       '<div class="vault-file-details"><strong title="' + esc(file.name) + '">' + esc(file.name) + '</strong><small>' + human(file.size) + ' · ' + when(file.created_at) + '</small></div>' + controls + '</article>';
   }
   function paint(mine) {
