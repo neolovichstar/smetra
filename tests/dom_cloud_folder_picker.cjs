@@ -1,0 +1,58 @@
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
+(async()=>{
+  const dom=new JSDOM('<!doctype html><main id="mount"></main>',{url:'https://smetra.online/app#premium',runScripts:'outside-only'});
+  const w=dom.window,doc=w.document;
+  w.escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  w.view=html=>{doc.querySelector('#mount').innerHTML=html};
+  w.header=()=>'<h1>Материалы и облака</h1>';
+  w.notify=message=>{w.lastNotice=message};
+  w.tab='premium';w.render=async()=>w.SmetraPremiumTools.render();
+  w.SmetraDialog={confirm:async()=>true};
+  const calls=[];
+  const connections=[{id:'y-1',provider:'yandex_disk',status:'active',account_label:'Мой Яндекс'}];
+  w.api=async(path,options)=>{
+    calls.push({path,options});
+    if(path==='/premium/features')return {cloud_drives:true,product_monitor:true,visual_estimates:true};
+    if(path==='/quotes')return {quotes:[]};
+    if(path==='/premium/product-sources')return {sources:[]};
+    if(path==='/premium/cloud/connections')return {connections};
+    if(path==='/premium/cloud/folders')return {folders:[]};
+    if(path==='/premium/cloud/jobs')return {jobs:[]};
+    if(path.startsWith('/premium/cloud/browse-folders?')){
+      const url=new URL(path,'https://smetra.online');
+      if(url.searchParams.get('parent')==='/')return {parent:'/',folders:[{id:'/Проекты',name:'Проекты'}],next_cursor:''};
+      if(url.searchParams.get('parent')==='/Проекты')return {parent:'/Проекты',folders:[{id:'/Проекты/Сметы',name:'Сметы'}],next_cursor:''};
+      return {parent:url.searchParams.get('parent'),folders:[],next_cursor:''};
+    }
+    if(path==='/premium/cloud/connections'&&options?.method==='DELETE')return {ok:true};
+    if(path==='/premium/cloud/folders'&&options?.method==='POST')return {folder_id:'bound'};
+    throw Error('Unexpected request: '+path);
+  };
+  w.eval(fs.readFileSync('apps/web/premium-tools.js','utf8'));
+  await w.SmetraPremiumTools.render();
+  await new Promise(r=>setTimeout(r,25));
+  const cards=[...doc.querySelectorAll('.premium-connect')];
+  assert.equal(cards.length,2,'Only two provider cards, no duplicate list');
+  assert.match(cards[0].textContent,/Отключить/);
+  assert.equal(cards[0].dataset.premiumDisconnect,'y-1');
+  assert.match(cards[1].textContent,/Подключить/);
+  assert.equal(doc.querySelector('.premium-connection-list'),null);
+  assert.equal(doc.querySelectorAll('[data-premium-disconnect]').length,1);
+  assert.match(doc.querySelector('#premium-folder-entries').textContent,/Проекты/);
+  doc.querySelector('.premium-folder-enter').click();
+  await new Promise(r=>setTimeout(r,25));
+  assert.match(doc.querySelector('#premium-folder-entries').textContent,/Сметы/);
+  assert.equal(doc.querySelector('#premium-folder-id').value,'');
+  doc.querySelector('.premium-folder-entry').click();
+  assert.equal(doc.querySelector('#premium-folder-id').value,'/Проекты/Сметы');
+  assert.match(doc.querySelector('#premium-folder-choice').textContent,/Выбрано: Сметы/);
+  doc.querySelector('#premium-folder-back').click();
+  await new Promise(r=>setTimeout(r,25));
+  assert.equal(doc.querySelector('#premium-folder-id').value,'','Navigating invalidates previous selection');
+  assert.ok(calls.some(x=>x.path.includes('browse-folders?connection_id=y-1')));
+  assert.equal(doc.documentElement.querySelectorAll('input[name="folder_id"]').length,1);
+  dom.window.close();
+  console.log('PASS: cloud cards change action, duplicate removed, browse nested folders, explicit selection/back');
+})().catch(error=>{console.error(error);process.exit(1)});

@@ -228,6 +228,66 @@ def _yandex_api(con, connection, path, params=None, method="GET", payload=None):
     return _http(url, method, token=token, payload=payload, limit=2_000_000, auth_scheme="OAuth")
 
 
+def _browse_folders(con, connection, parent, cursor):
+    """List direct child folders only; never scan all files or expose cloud tokens."""
+    if connection["status"] != "active":
+        raise business.DomainError(409, "Переподключите облако, чтобы просмотреть папки")
+    if connection["provider"] == "google_drive":
+        folder = str(parent or "root")
+        if not 1 <= len(folder) <= 200 or not all(
+            ch.isascii() and (ch.isalnum() or ch in "_-") for ch in folder
+        ):
+            raise business.DomainError(400, "Некорректный идентификатор папки")
+        page = str(cursor or "")
+        if len(page) > 2000 or any(ord(ch) < 33 or ord(ch) > 126 for ch in page):
+            raise business.DomainError(400, "Некорректная страница папок")
+        params = {
+            "q": "'" + folder + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+            "pageSize": 100,
+            "fields": "nextPageToken,files(id,name,mimeType,trashed)",
+            "orderBy": "name",
+        }
+        if page:
+            params["pageToken"] = page
+        result = _google_api(con, connection, "/files", params)
+        folders = [
+            {"id": str(item["id"]), "name": str(item.get("name") or "Папка")[:250]}
+            for item in result.get("files", [])[:100]
+            if isinstance(item, dict)
+            and item.get("mimeType") == "application/vnd.google-apps.folder"
+            and not item.get("trashed")
+            and isinstance(item.get("id"), str)
+        ]
+        next_page = result.get("nextPageToken") or ""
+    else:
+        folder = str(parent or "/")
+        if not folder.startswith("/") or ".." in folder.split("/") or len(folder) > 1024:
+            raise business.DomainError(400, "Некорректный путь Яндекс.Диска")
+        page = str(cursor or "0")
+        if not page.isascii() or not page.isdecimal() or len(page) > 6 or int(page) > 10000:
+            raise business.DomainError(400, "Некорректная страница папок")
+        offset = int(page)
+        result = _yandex_api(con, connection, "/resources", {
+            "path": folder, "limit": 100, "offset": offset,
+            "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.total",
+        })
+        embedded = result.get("_embedded") or {}
+        entries = embedded.get("items") or []
+        folders = []
+        for item in entries:
+            if not isinstance(item, dict) or item.get("type") != "dir":
+                continue
+            raw_path = item.get("path")
+            if not isinstance(raw_path, str):
+                continue
+            normalized = raw_path[5:] if raw_path.startswith("disk:") else raw_path
+            if normalized.startswith("/") and ".." not in normalized.split("/") and len(normalized) <= 1024:
+                folders.append({"id": normalized, "name": str(item.get("name") or "Папка")[:250]})
+        total = int(embedded.get("total") or 0)
+        next_page = str(offset + len(entries)) if len(entries) and offset + len(entries) < total and offset + len(entries) <= 10000 else ""
+    return {"folders": folders, "parent": folder, "next_cursor": next_page}
+
+
 def _folder_metadata(con, connection, folder_id):
     if connection["provider"] == "google_drive":
         meta = _google_api(con, connection, "/files/" + urllib.parse.quote(folder_id, safe=""),
@@ -853,6 +913,15 @@ def route(service, method, parts, query, data):
             (service.wid,),
         ).fetchall()
         return 200, {"connections": [dict(row) for row in rows]}
+    if parts == ["browse-folders"] and method == "GET":
+        _manager(service)
+        ident = str((query.get("connection_id") or [""])[0])[:100]
+        connection = _connection(service, ident)
+        parent = (query.get("parent") or [""])[0]
+        cursor = (query.get("cursor") or [""])[0]
+        if not isinstance(parent, str) or not isinstance(cursor, str):
+            raise business.DomainError(400, "Некорректные параметры папки")
+        return 200, _browse_folders(service.con, connection, parent, cursor)
     if parts == ["connections"] and method == "DELETE":
         _manager(service)
         connection_id = str(data.get("connection_id", ""))[:100]

@@ -365,7 +365,12 @@ public class MainActivity extends Activity {
             if(list!=null)for(int i=0;i<list.length();i++){
                 JSONObject provider=list.optJSONObject(i);
                 if(provider==null||!provider.optBoolean("enabled"))continue;
-                addButton(methods,"Продолжить с "+provider.optString("name"),provider.optString("id").equals("yandex"),v->startIdentity(provider.optString("id"),registrationIntent));
+                String providerId=provider.optString("id");
+                Button loginButton=addButton(methods,"Продолжить с "+provider.optString("name"),false,v->startIdentity(providerId,registrationIntent));
+                if("google".equals(providerId)){
+                    loginButton.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_google_g,0,0,0);
+                    loginButton.setCompoundDrawablePadding((int)(8*getResources().getDisplayMetrics().density));
+                }
                 enabled++;
             }
             addButton(methods,"Войти по почте",enabled==0,v->emailLogin(false));
