@@ -20,6 +20,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Syntax check for critical browser modules
+        run: |
+          node --check apps/web/admin.js
+          node --check apps/web/support-chat.js
+          node --check apps/web/communication-center.js
+          node --check apps/web/workspace-vault.js
       - run: python -m compileall -q backend
       - run: pip install -r requirements-dev.txt
       - run: pip install pip-audit==2.10.1
