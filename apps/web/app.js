@@ -302,7 +302,7 @@ function showAuth(){
   window.SmetraFieldFlows?.stop?.();
   window.SmetraCommunication?.reset();
   window.SmetraQuoteEditor?.leave();
-  authRevision++;renderRevision++;clearApiCache();closeNavigation();
+  authRevision++;renderRevision++;document.dispatchEvent(new CustomEvent('smetra:auth-reset'));clearApiCache();closeNavigation();
   $('#content')?.replaceChildren();
   document.body.classList.add('auth-mode');
   $('.skip-link')?.setAttribute('href','#auth-title');
@@ -562,27 +562,72 @@ function showNewQuote(){
 }
 async function quoteAction(e){const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action;try{if(action==='send'&&window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;if(action==='copy'){await navigator.clipboard.writeText(b.dataset.url);notify('Ссылка скопирована');return;}if(action==='remove'){if(!confirm('Удалить предложение?'))return;await api('/quotes/'+b.dataset.id,{method:'DELETE'});user.quote_count--;}else{const status={send:'sent',decline:'declined',complete:'completed'}[action];const result=await api('/quotes/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status})});if(action==='send'){try{await navigator.clipboard.writeText(result.quote.public_url);notify('Отправлено. Ссылка скопирована')}catch{notify('Отправлено. Ссылка: '+result.quote.public_url)}}}await render()}catch(err){notify(err.message)}}
 if($('#auth')){
+  let passwordLogin=false,passwordLoading=false,passwordRequest=0;
   const syncEmailActions=()=>{
-    if(new URLSearchParams(location.search).has('reset')){$('#forgot').classList.add('hidden');$('#name').required=false;return;}
-    const providerOnly=registering&&window.SmetraEmailSignupAvailable===false;
-    const divider=$('.auth-provider-divider span');if(divider)divider.textContent=providerOnly?'Продолжить через сервис':'или используйте российский сервис';
-    $('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);
-    $('#email-disclosure').classList.toggle('hidden',providerOnly);
-    $('#name').required=registering&&!providerOnly;
-    $('#auth').dataset.mode=registering?'register':'login';
-    $('#legal-consent-field').classList.toggle('hidden',!registering);
-    $('#legal-consent').required=registering;
-    $('#auth-submit').disabled=registering&&!$('#legal-consent').checked;
-    document.querySelectorAll('#provider-buttons button').forEach(button=>{button.disabled=registering&&!$('#legal-consent').checked;});
+    const resetMode=new URLSearchParams(location.search).has('reset');
+    const codeAvailable=window.SmetraEmailCodeAvailable===true&&!resetMode;
+    const providerOnly=registering&&window.SmetraEmailSignupAvailable===false&&!codeAvailable;
+    const useCode=codeAvailable&&(registering||!passwordLogin);
+    const usePassword=resetMode||(!useCode&&!providerOnly);
+    const auth=$('#auth'),disclosure=$('#email-disclosure'),codeFlow=$('#email-code-flow');
+    const method=useCode?'code':usePassword?'password':'provider';
+    if(auth.dataset.emailMethod!==method)auth.dataset.emailMethod=method;
+    if(auth.dataset.mode!==(registering?'register':'login'))auth.dataset.mode=registering?'register':'login';
+    disclosure.classList.toggle('hidden',!usePassword);disclosure.open=usePassword;disclosure.inert=!usePassword;
+    codeFlow.classList.toggle('hidden',!useCode);codeFlow.inert=!useCode;
+    $('#email').disabled=!usePassword||resetMode;$('#email').required=usePassword&&!resetMode;
+    $('#password').disabled=!usePassword;$('#password').required=usePassword;
+    $('#name').disabled=!usePassword||!registering;$('#name').required=usePassword&&registering&&!resetMode;
+    $('#forgot').classList.toggle('hidden',resetMode||registering||window.SmetraEmailDeliveryAvailable!==true);
+    const consentField=$('#legal-consent-field'),consent=$('#legal-consent');
+    const target=useCode?$('#email-code-start'):usePassword?$('#auth-form'):auth.querySelector('.auth-flow-inner');
+    const before=useCode?$('#email-code-start-button'):usePassword?$('#auth-form-error'):auth.querySelector('.auth-provider-block');
+    if(consentField.parentElement!==target||consentField.nextElementSibling!==before)target.insertBefore(consentField,before);
+    consentField.classList.toggle('hidden',!registering||resetMode);consent.required=registering&&!resetMode;consent.disabled=!registering||resetMode;
+    $('#auth-submit').disabled=passwordLoading||(registering&&!consent.checked)||!usePassword;
+    document.querySelectorAll('#provider-buttons button').forEach(button=>{button.disabled=registering&&!consent.checked;});
+    const methodSwitch=$('#auth-method-switch');
+    methodSwitch.classList.toggle('hidden',!codeAvailable||registering||resetMode);
+    methodSwitch.textContent=useCode?'Войти с паролем':'Получить код на почту';
+    const divider=$('.auth-provider-divider span');if(divider)divider.textContent=providerOnly?'Продолжить через сервис':'или используйте Яндекс ID';
     if(providerOnly)$('#auth-copy').textContent='Создайте аккаунт через доступный сервис ниже. Один профиль для сайта и приложения.';
+    else if(!resetMode)$('#auth-copy').textContent=registering?'Сметы, клиенты и объекты в одном месте. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';
+    document.dispatchEvent(new CustomEvent('smetra:auth-method'));
   };
+  const copyEmail=()=>{const active=$('#auth').dataset.emailMethod==='code'?$('#email-code-address'):$('#email');if(active.value.trim()){$('#email').value=active.value;$('#email-code-address').value=active.value;}};
+  $('#auth-method-switch').onclick=()=>{
+    copyEmail();authRevision++;passwordRequest++;passwordLoading=false;passwordLogin=!passwordLogin;
+    $('#auth-form-error').textContent='';$('#email-code-error').textContent='';syncEmailActions();
+    $($('#auth').dataset.emailMethod==='code'?'#email-code-address':'#email').focus();
+  };
+  document.addEventListener('smetra:auth-reset',()=>{passwordRequest++;passwordLoading=false;syncEmailActions()});
   $('#legal-consent').addEventListener('change',syncEmailActions);
   document.addEventListener('smetra:email-capability',syncEmailActions);syncEmailActions();
-  const setAuthMode=(mode)=>{registering=mode==='register';$('#auth').dataset.mode=registering?'register':'login';$('#legal-consent').checked=false;$('#legal-consent').required=registering;$('#legal-consent-field').classList.toggle('hidden',!registering);$('#auth-submit').disabled=registering;$('#auth-title').textContent=registering?'Ваша работа начинается здесь.':'С возвращением.';$('#auth-copy').textContent=registering?'Создайте пространство для смет, клиентов и заказов. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';$('#auth-submit').innerHTML=registering?'Создать пространство <span aria-hidden="true">↗</span>':'Войти в пространство <span aria-hidden="true">↗</span>';$('#name-field').classList.toggle('hidden',!registering);$('#name').required=registering;$('#forgot').classList.toggle('hidden',registering||window.SmetraEmailDeliveryAvailable!==true);$('#password').value='';$('#password').autocomplete=registering?'new-password':'current-password';$('#auth-login-tab').setAttribute('aria-selected',String(!registering));$('#auth-register-tab').setAttribute('aria-selected',String(registering));$('#auth-login-tab').tabIndex=registering?-1:0;$('#auth-register-tab').tabIndex=registering?0:-1;$('#auth-form-error').textContent='';$('#email-disclosure').open=true};
+  const setAuthMode=mode=>{
+    copyEmail();authRevision++;passwordRequest++;passwordLoading=false;passwordLogin=false;registering=mode==='register';
+    $('#auth').dataset.mode=registering?'register':'login';$('#legal-consent').checked=false;
+    $('#auth-title').textContent=registering?'Создайте аккаунт.':'С возвращением.';
+    $('#auth-submit').innerHTML=registering?'Создать пространство <span aria-hidden="true">↗</span>':'Войти в пространство <span aria-hidden="true">↗</span>';
+    $('#name-field').classList.toggle('hidden',!registering);
+    $('#password').value='';$('#password').autocomplete=registering?'new-password':'current-password';
+    $('#auth-login-tab').setAttribute('aria-selected',String(!registering));$('#auth-register-tab').setAttribute('aria-selected',String(registering));
+    $('#auth-login-tab').tabIndex=registering?-1:0;$('#auth-register-tab').tabIndex=registering?0:-1;
+    $('#auth-form-error').textContent='';$('#auth-status').textContent='';
+  };
   $('#auth-login-tab').onclick=()=>{setAuthMode('login');syncEmailActions()};
   $('#auth-register-tab').onclick=()=>{setAuthMode('register');syncEmailActions()};
   $('.auth-tabs').onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const mode=event.key==='Home'?'login':event.key==='End'?'register':registering?'login':'register';setAuthMode(mode);syncEmailActions();$(mode==='login'?'#auth-login-tab':'#auth-register-tab').focus()};
-  $('#auth-form').onsubmit=async(e)=>{e.preventDefault();const button=$('#auth-submit');if(button.disabled||(registering&&window.SmetraEmailSignupAvailable===false))return;if(registering&&!$('#legal-consent').checked){$('#auth-form-error').textContent='Примите условия и предупреждение перед регистрацией.';return}const attempt=++authRevision;button.disabled=true;$('#auth-form-error').textContent='';try{const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim(),...(registering?{legal_acceptance:$('#legal-consent').checked,legal_version:REGISTRATION_CONSENT_VERSION}:{})})});if(attempt!==authRevision)return;await window.SmetraCompleteAuth(result.user)}catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
+  $('#auth-form').onsubmit=async e=>{
+    e.preventDefault();const button=$('#auth-submit');
+    if(button.disabled||$('#auth').dataset.emailMethod!=='password'||(registering&&window.SmetraEmailSignupAvailable===false))return;
+    if(registering&&!$('#legal-consent').checked){$('#auth-form-error').textContent='Примите условия и предупреждение перед регистрацией.';return}
+    const attempt=++authRevision,request=++passwordRequest;passwordLoading=true;button.disabled=true;$('#auth-form-error').textContent='';
+    try{
+      const result=await api('/auth/'+(registering?'register':'login'),{method:'POST',body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value,name:$('#name').value.trim(),...(registering?{legal_acceptance:$('#legal-consent').checked,legal_version:REGISTRATION_CONSENT_VERSION}:{})})});
+      if(attempt!==authRevision)return;await window.SmetraCompleteAuth(result.user);
+    }catch(err){if(attempt===authRevision)$('#auth-form-error').textContent=err.message}
+    finally{if(request===passwordRequest){passwordLoading=false;syncEmailActions()}}
+  };
   $('#forgot').onclick=async event=>{const button=event.currentTarget;if(button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;const email=$('#email').value.trim();if(!email){$('#auth-form-error').textContent='Сначала укажите почту';$('#email').focus();return}button.disabled=true;try{await api('/auth/reset/request',{method:'POST',body:JSON.stringify({email})});$('#auth-status').textContent='Если адрес зарегистрирован, мы отправили письмо для сброса пароля.'}catch(err){$('#auth-form-error').textContent=err.message}finally{button.disabled=false}};
   $('#content').addEventListener('click',async(e)=>{const button=e.target.closest('[data-resend]');if(!button||button.disabled||window.SmetraEmailDeliveryAvailable!==true)return;button.disabled=true;try{await api('/auth/verify/resend',{method:'POST'});notify('Письмо отправлено')}catch(err){notify(err.message)}});
    document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{const next=b.dataset.tab;if(tab===next){closeNavigation();return;}closeNavigation();tab=next;if(location.hash.slice(1)!==next)location.hash=next;return renderNavigation();});

@@ -687,15 +687,18 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
     raise DomainError(502, "Поток ответа прервался. Попробуйте ещё раз.")
 
 
-def execute_read(service, name, args):
-    """Read tools see exactly what the user may see: no costs without the finance permission."""
-    result = read_tool(service, name, args)
-    visible = getattr(service, "finance_visible", None)
-    if callable(visible) and not visible():
+def visible_result(service, result):
+    """Apply the same financial visibility to model tool results and API responses."""
+    if not service.finance_visible():
         from backend.business import without_finance
 
         return without_finance(result)
     return result
+
+
+def execute_read(service, name, args):
+    """Read tools see exactly what the user may see: no costs without the finance permission."""
+    return visible_result(service, read_tool(service, name, args))
 
 
 def read_tool(service, name, args):
@@ -778,6 +781,10 @@ def read_tool(service, name, args):
     entity = args.get("entity")
     if entity not in ENTITIES:
         raise DomainError(400, "Неизвестный раздел")
+    # Expenses use ordinary amount/category keys, so key redaction alone cannot
+    # protect them. Enforce the API's section permission before looking up a row.
+    if entity == "expenses" and not service.finance_visible():
+        raise DomainError(403, "Для просмотра расходов нужен доступ к финансам")
     if name == "get_record":
         record = service.get(TABLE.get(entity, entity), string(args.get("id", ""), "ID", 80, True))
         if entity == "quotes":
@@ -817,6 +824,12 @@ def prepare(service, name, args):
     if name not in allowed:
         raise DomainError(400, "Неизвестное действие")
     service.write_access()
+    if not service.finance_visible():
+        if name == "create_expenses":
+            raise DomainError(403, "Для работы с расходами нужен доступ к финансам")
+        # Match the ordinary API before building previews or undo snapshots.
+        # Stored quote-item costs are retained privately for deterministic edits.
+        args = {key: value for key, value in args.items() if key not in ("cost_price", "internal_cost")}
     if name in ("rename_file", "move_file", "create_document"):
         from backend.assistant_resources import prepare_resource
 
@@ -943,14 +956,14 @@ def prepare(service, name, args):
             "INSERT INTO assistant_actions(id,workspace_id,user_id,tool,arguments,summary,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
             action_values,
         )
-    return {
+    return visible_result(service, {
         "id": action_id,
         "tool": name,
         "summary": summary,
         "arguments": {key: value for key, value in args.items() if not key.startswith("_")},
         "preview": args.get("_preview"),
         "status": "pending",
-    }
+    })
 
 
 def confirm(service, action_id):
@@ -980,16 +993,23 @@ def _confirm(service, action_id):
         ).fetchone()
         if not row:
             raise DomainError(404, "Действие не найдено")
+        args = json.loads(row["arguments"])
+        name = row["tool"]
+        if not service.finance_visible() and (
+            name == "create_expenses" or any(key in args for key in ("cost_price", "internal_cost"))
+        ):
+            # Grants can be revoked after preparation, including before a retry.
+            # Never replay a previously stored expense result or silently apply
+            # only the public half of a financial proposal.
+            raise DomainError(403, "Доступ к финансам изменился. Обновите предложение ассистента")
         if row["status"] == "applied":
-            return json.loads(row["result"])
+            return visible_result(service, json.loads(row["result"]))
         if row["status"] != "pending" or row["expires_at"] < stamp():
             raise DomainError(
                 409, "Предложение устарело. Попросите ассистента обновить его."
             )
-        args = json.loads(row["arguments"])
         undo_fields = args.pop("_undo_fields", None)
         args.pop("_preview", None)
-        name = row["tool"]
         if name == "create_quotes" and not str(args.get("client") or "").strip():
             # Existing pending proposals were created before missing-client
             # normalization. Keep those actions confirmable after upgrading.
@@ -1088,7 +1108,8 @@ def _confirm(service, action_id):
             (packed(result), action_id),
         )
         service.emit("ai", action_id, "Применено: " + row["summary"])
-        return result
+        # Persist the private undo state, but never return it to the model/client.
+        return visible_result(service, result)
 
 
 def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None, on_design=None):

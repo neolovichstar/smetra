@@ -42,11 +42,21 @@ def finance_event(value):
     return isinstance(value, dict) and (value.get("action") in FINANCE_EVENTS or value.get("message") in FINANCE_EVENTS)
 
 
+def finance_detail(value):
+    """Protect diff values and whole expense actions, which use generic amount keys."""
+    return isinstance(value, dict) and (
+        isinstance(value.get("field"), str) and value["field"] in FINANCE_KEYS
+        or value.get("tool") == "create_expenses"
+    )
+
+
 def without_finance(value):
     if isinstance(value, dict):
+        if finance_detail(value):
+            return {}
         return {k: without_finance(v) for k, v in value.items() if k not in FINANCE_KEYS}
     if isinstance(value, list):
-        return [without_finance(v) for v in value if not finance_event(v)]
+        return [without_finance(v) for v in value if not finance_event(v) and not finance_detail(v)]
     return value
 
 
@@ -2485,9 +2495,9 @@ class Service:
             elif kind != "changelog":
                 self.write_access()
             if kind == "assistant":
-                from backend.assistant import route
-
-                return route(self, method, rest, data)
+                # Keep model/SSE work outside the ordinary write transaction,
+                # while retaining the common response permission boundary.
+                return self.route(method, kind, rest, query, data)
             if kind == "ai" and method == "POST":
                 try:
                     from backend.ai import draft

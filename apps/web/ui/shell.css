@@ -219,11 +219,11 @@ body.auth-mode .auth-site-header{display:block;position:absolute;inset:0 0 auto;
 .auth-flow-top{display:none}
 .auth-flow h1{font-size:var(--fs-32);letter-spacing:var(--tracking-display)}
 .auth-intro{margin-top:-6px;color:var(--text-2)}
-.auth-tabs{display:grid!important;grid-template-columns:1fr 1fr;width:100%}
+.auth-tabs{display:grid;grid-template-columns:1fr 1fr;width:100%}
 .auth-tabs button{justify-content:center;min-height:34px}
 .email-disclosure>summary{display:none}
 .email-disclosure form,.email-code-start,.email-code-confirm{display:flex;flex-direction:column;gap:var(--s-3)}
-.email-disclosure input,.email-code-flow input{min-height:var(--control-lg);font-size:var(--fs-15)}
+#auth .email-disclosure input:not([type=checkbox]),#auth .email-code-flow input:not([type=checkbox]){min-height:var(--control-lg);font-size:var(--fs-15)}
 .auth-label-row{display:flex;justify-content:space-between;align-items:center}
 .auth-label-row button{color:var(--accent-text);font-size:var(--fs-13)}
 .auth-flow .btn.primary.full-width{min-height:var(--control-lg);font-size:var(--fs-15)}
@@ -231,11 +231,11 @@ body.auth-mode .auth-site-header{display:block;position:absolute;inset:0 0 auto;
 .auth-status:empty,.auth-provider-pending:empty{display:none}
 .email-code-step-head{display:flex;align-items:flex-start;gap:12px}
 .email-code-back{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line-strong);border-radius:var(--r-2);color:var(--text-2)}
-.email-code-destination{color:var(--text-2);font-size:var(--fs-14)}
-.email-code-cells{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
-.email-code-cells input{height:52px;padding:0;text-align:center;font-size:var(--fs-20);font-weight:600;font-variant-numeric:tabular-nums}
-.email-code-meta{display:flex;justify-content:space-between;align-items:center;color:var(--text-3);font-size:var(--fs-13)}
-.email-code-meta button{color:var(--accent-text)}
+.email-code-destination{overflow-wrap:anywhere;color:var(--text-2);font-size:var(--fs-14)}
+.email-code-cells{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+#auth .email-code-cells input{width:100%;min-width:0;height:52px;padding:0;text-align:center;font-size:var(--fs-20);font-weight:600;font-variant-numeric:tabular-nums}
+.email-code-meta{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;align-items:center;color:var(--text-3);font-size:var(--fs-13)}
+.email-code-meta button{min-height:44px;color:var(--accent-text)}
 .email-code-meta button:disabled{color:var(--text-disabled)}
 .auth-provider-block{display:flex;flex-direction:column;gap:var(--s-3)}
 .auth-provider-divider{display:flex;align-items:center;gap:12px;color:var(--text-3);font-size:var(--fs-12)}
@@ -337,3 +337,21 @@ dialog.workspace-dialog .form-actions{bottom:0;margin-bottom:0}
 /* «Back» is navigation, not an action: quiet text button, same everywhere. */
 #content .topline-actions [data-work=navigate]{--btn-bg:transparent;--btn-line:transparent;--btn-hover:var(--surface-2);color:var(--text-2);padding-inline:8px}
 #content .topline-actions [data-work=navigate]:hover{color:var(--text)}
+
+/* A single active email method, with phone-sized controls and normal page scrolling. */
+.auth-flow,.auth-flow-inner{min-width:0}
+.auth-method-switch{align-self:center;min-height:44px;padding:8px 12px;color:var(--text-2);font-size:var(--fs-14);text-decoration:underline;text-underline-offset:4px}
+.auth-method-switch:hover{color:var(--text)}
+.auth-flow .auth-tabs button{min-height:44px}
+.auth-flow input{scroll-margin-block:24px}
+.auth-site-return{min-height:44px;align-items:center}
+@media(max-width:640px){
+  .auth-flow{padding:84px 20px max(28px,env(safe-area-inset-bottom))}
+  .auth-flow h1{font-size:28px}
+  .auth-flow-inner{gap:16px}
+  #auth .email-disclosure input:not([type=checkbox]),#auth .email-code-flow input:not([type=checkbox]){font-size:16px;min-height:48px}
+  .email-code-cells{gap:6px}
+  #auth .email-code-cells input{font-size:22px}
+  .email-code-back{width:44px;height:44px;flex:none}
+  .auth-site-return{display:inline-flex}
+}
