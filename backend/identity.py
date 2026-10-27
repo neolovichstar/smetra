@@ -34,8 +34,12 @@ def config(provider):
     if provider == "yandex":
         return os.getenv("YANDEX_CLIENT_ID"), os.getenv("YANDEX_CLIENT_SECRET")
     if provider == "google":
-        return (os.getenv("GOOGLE_AUTH_CLIENT_ID") or os.getenv("GOOGLE_DRIVE_CLIENT_ID"),
-                os.getenv("GOOGLE_AUTH_CLIENT_SECRET") or os.getenv("GOOGLE_DRIVE_CLIENT_SECRET"))
+        auth_client = os.getenv("GOOGLE_AUTH_CLIENT_ID")
+        auth_secret = os.getenv("GOOGLE_AUTH_CLIENT_SECRET")
+        if auth_client or auth_secret:
+            # Never combine an incomplete auth pair with the Drive client.
+            return auth_client, auth_secret
+        return os.getenv("GOOGLE_DRIVE_CLIENT_ID"), os.getenv("GOOGLE_DRIVE_CLIENT_SECRET")
     if provider in ("vk", "mail", "ok"):
         return os.getenv("VK_CLIENT_ID"), ""
     raise DomainError(404, "Способ входа не найден")

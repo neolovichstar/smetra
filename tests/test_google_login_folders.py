@@ -17,6 +17,9 @@ class GoogleLoginTests(unittest.TestCase):
             self.assertNotIn("private-secret", str(providers))
         with patch.dict(os.environ, {"GOOGLE_AUTH_CLIENT_ID": "", "GOOGLE_AUTH_CLIENT_SECRET": "", "GOOGLE_DRIVE_CLIENT_ID": "drive-id", "GOOGLE_DRIVE_CLIENT_SECRET": "drive-secret"}):
             self.assertEqual(identity.config("google"), ("drive-id", "drive-secret"))
+        with patch.dict(os.environ, {"GOOGLE_AUTH_CLIENT_ID": "incomplete-auth-id", "GOOGLE_AUTH_CLIENT_SECRET": "", "GOOGLE_DRIVE_CLIENT_ID": "drive-id", "GOOGLE_DRIVE_CLIENT_SECRET": "drive-secret"}):
+            self.assertFalse(next(p for p in identity.providers() if p["id"] == "google")["enabled"])
+
 
     def test_google_authorization_uses_only_basic_login_permissions(self):
         # This uses the exact production route, not the Drive restricted-scope callback.
