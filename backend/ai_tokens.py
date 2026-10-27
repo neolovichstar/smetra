@@ -272,7 +272,7 @@ def balance(service):
         )
         resets_at = int(next_month.timestamp())
     from backend.revenue import referral_bonus
-    allowance = MONTHLY_TOKENS.get(tier, MONTHLY_TOKENS["starter"]) + referral_bonus(con, user_id, month) * REQUEST_TOKENS
+    allowance = MONTHLY_TOKENS.get(tier, MONTHLY_TOKENS["starter"]) + referral_bonus(con, user_id, period()) * REQUEST_TOKENS
     row = con.execute("SELECT count FROM rate_limits WHERE key=?", (month_key(user_id, month),)).fetchone()
     used = int(row["count"]) if row else 0
     wallet = wallet_balance(con, user_id)
