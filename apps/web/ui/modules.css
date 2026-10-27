@@ -137,13 +137,35 @@
 .premium-list-heading>span{flex:none;color:var(--text-3);font-size:var(--fs-12)}
 .premium-empty-state{padding:4px 0;color:var(--text-3);font-size:var(--fs-14);line-height:1.6}
 .premium-connect-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.premium-connect{display:grid;grid-template-columns:40px minmax(0,1fr) 18px;align-items:center;gap:12px;min-width:0;min-height:88px;padding:16px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);color:var(--text);text-align:left;transition:background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
-.premium-connect:hover{background:var(--surface-3);border-color:var(--text-3)}
-.premium-connect:disabled{opacity:.5}
-.premium-connect.is-connected{border-color:rgba(255,255,255,.16);background:#141416}
-.premium-connect-action{padding:7px 10px;border-radius:9px;border:1px solid var(--line-strong);font-size:12px;color:var(--text-2);white-space:nowrap;text-align:center}
-.premium-connect.is-connected .premium-connect-action{color:var(--text);border-color:rgba(255,255,255,.21)}
-.premium-connect.is-connected:hover{border-color:var(--text-2)}
+.premium-connect{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0;min-height:76px;padding:8px 12px 8px 8px;border:1px solid var(--line);border-radius:14px;background:var(--surface-1);color:var(--text);transition:background-color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.premium-connect.is-selected{background:#1b1b1e;border-color:rgba(255,255,255,.32);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.premium-connect-select{display:flex;align-items:center;gap:12px;min-width:0;min-height:58px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--text);text-align:left;cursor:pointer}
+.premium-connect-select:hover{background:rgba(255,255,255,.045)}
+.premium-connect-select:focus-visible,.premium-connect-action:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.premium-connect-action{min-height:36px;min-width:85px;padding:6px 10px;border:1px solid var(--line-strong);border-radius:9px;background:var(--surface-2);font-size:12px;font-weight:500;color:var(--text-2);white-space:nowrap;text-align:center;cursor:pointer;transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
+.premium-connect-action:hover{background:var(--surface-3);border-color:rgba(255,255,255,.3);color:var(--text)}
+.premium-connect.is-connected .premium-connect-action{color:var(--text)}
+.premium-cloud-folders{display:flex;flex-direction:column;gap:14px;min-width:0;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface-1)}
+.premium-cloud-folders-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-width:0}
+.premium-cloud-folders-heading h3{font-size:var(--fs-16);font-weight:600}
+.premium-cloud-folders-heading>span{font-size:var(--fs-12);color:var(--text-3);text-align:right}
+.premium-cloud-folders .premium-form{gap:12px}
+.premium-folder-options{border-top:1px solid var(--line);padding-top:10px}
+.premium-folder-options>summary{display:flex;align-items:center;min-height:34px;color:var(--text-2);font-size:var(--fs-13);cursor:pointer;list-style:none}
+.premium-folder-options>summary::-webkit-details-marker{display:none}
+.premium-folder-options>summary::after{content:'';width:7px;height:7px;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:rotate(45deg);margin:0 3px 4px auto}
+.premium-folder-options[open]>summary::after{transform:rotate(225deg);margin-bottom:0}
+.premium-folder-options-content{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:10px 0}
+.premium-cloud-folders .premium-form-submit{flex-wrap:wrap}
+.premium-cloud-folders .premium-form-submit .btn{font-weight:550}
+@media(max-width:640px){
+ .premium-connect-row{grid-template-columns:minmax(0,1fr)}
+ .premium-connect{min-height:70px;padding:6px 10px 6px 6px;gap:4px}
+ .premium-connect-select{min-height:56px;padding:6px 8px}
+ .premium-connect-action{min-width:80px}
+ .premium-cloud-folders{padding:12px}
+ .premium-cloud-folders .premium-form-submit{flex-direction:column;align-items:stretch}
+}
 .premium-folder-browser{display:flex;flex-direction:column;gap:8px;min-width:0;padding:10px;background:var(--surface-1);border:1px solid var(--line);border-radius:12px}
 .premium-folder-browser-head{display:flex;align-items:center;gap:12px;min-width:0}
 .premium-folder-browser-head>span{min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);font-size:12px;white-space:nowrap}
@@ -167,13 +189,6 @@
 .premium-connect-copy small{color:var(--text-2);font-size:var(--fs-12)}
 .premium-connect-arrow{color:var(--text-3)}
 .premium-provider-symbol,.premium-job-kind{display:grid;place-items:center;width:40px;height:40px;flex:none;border-radius:var(--r-2);background:var(--surface-3);font-size:var(--fs-14);font-weight:600;color:var(--text-2)}
-.premium-folder-setup{display:block;min-width:0;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.premium-folder-setup>summary{display:flex;align-items:center;gap:12px;min-height:32px;list-style:none;font-size:var(--fs-14);font-weight:500;cursor:pointer}
-.premium-folder-setup>summary::-webkit-details-marker{display:none}
-.premium-folder-setup>summary::after{content:'';width:7px;height:7px;flex:none;margin:0 4px 4px auto;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:rotate(45deg)}
-.premium-folder-setup[open]>summary::after{margin-bottom:0;transform:rotate(225deg)}
-.premium-folder-setup>summary small{color:var(--text-3);font-size:var(--fs-12);font-weight:400}
-.premium-folder-setup>.premium-form{margin-top:16px}
 .premium-form-grid>.premium-checkbox{grid-column:1/-1;min-width:0}
 .premium-checkbox>span,.premium-confirm-check>span{display:flex;flex-direction:column;gap:4px;min-width:0}
 .premium-checkbox small{color:var(--text-3);font-size:var(--fs-12)}
@@ -239,7 +254,6 @@
  .premium-section-heading{flex-direction:column}
  .premium-section-heading>.btn{align-self:stretch}
  .premium-form-submit,.premium-preview-actions{flex-direction:column;align-items:stretch}
- .premium-folder-setup>summary{flex-wrap:wrap}
 }
 @media(max-width:700px){
  .premium-tools-page{gap:16px}

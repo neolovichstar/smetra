@@ -36,7 +36,9 @@ class AuthMotionTests(unittest.TestCase):
  def test_oauth_start_cover_and_back_navigation(self):
   source=(ROOT/'apps/web/black.js').read_text()
   self.assertIn("smetra-app-transitioning",source)
-  self.assertIn('Перенаправляем в Яндекс ID',source)
+  self.assertIn("smetra-app-transitioning",source)
+  self.assertIn("link.dataset.provider==='google'?'Google':'Яндекс ID'",source)
+  self.assertIn("'Переходим к '",source)
   self.assertIn("window.addEventListener('pageshow'",(ROOT/'apps/web/app.js').read_text())
 
 if __name__=="__main__":
