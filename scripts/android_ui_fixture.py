@@ -288,7 +288,19 @@ def main():
         from backend import assistant
 
         assistant.query_model_stream = stream_fixture
-        assistant.query_model = lambda messages: {"content": "Фоновая задача завершена."}
+
+        def non_stream_fixture(messages):
+            # The durable worker has no SSE subscriber during background
+            # execution and therefore uses query_model, not query_model_stream.
+            # Reuse the same deterministic tool fixture in both paths, while
+            # returning a final answer after any tool response.
+            if structure_qa or resource_qa:
+                if messages and messages[-1].get('role') == 'tool':
+                    return {'content': 'Изменения подготовлены. Проверьте предложение.'}
+                return stream_fixture(messages, lambda _delta: None)
+            return {'content': 'Фоновая задача завершена.'}
+
+        assistant.query_model = non_stream_fixture
         from backend import receipt_ocr
 
         def receipt_fixture(*_):
@@ -404,3 +416,4 @@ def seed_promo(app, call):
 
 if __name__ == "__main__":
     main()
+

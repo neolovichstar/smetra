@@ -2434,7 +2434,7 @@ class Service:
                     from backend.postgres import Connection
                 except ModuleNotFoundError:
                     from postgres import Connection
-                runtime = Connection(runtime=True)
+                runtime = Connection(runtime=True, workload=getattr(self.con, "workload", "request"))
                 try:
                     runtime.scope(self.h.session_token_hash, self.wid)
                 except Exception:

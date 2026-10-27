@@ -221,12 +221,25 @@ class PublicProfilesTests(unittest.TestCase):
         image.save(output, "PNG")
         self.assertEqual(self.upload(first, output.getvalue())[0], 200)
         self.assertFalse(self.call("/me", token=second)[1]["user"]["avatar_url"])
-        self.assertEqual(
-            self.call(
-                "/profile/avatar", "POST", {"content_base64": "a" * 1_450_000}, first
-            )[0],
-            413,
-        )
+        # Отправляем только заголовки с заведомо превышенным Content-Length:
+        # сервер обязан ответить 413 до чтения тела. Передача большого тела
+        # через urllib может дать BrokenPipe при корректном раннем отказе.
+        import http.client
+        from urllib.parse import urlsplit
+
+        target = urlsplit(self.base)
+        connection = http.client.HTTPConnection(target.hostname, target.port, timeout=5)
+        try:
+            connection.putrequest("POST", "/api/profile/avatar")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Authorization", "Bearer " + first)
+            connection.putheader("Content-Length", "1450100")
+            connection.endheaders()
+            response = connection.getresponse()
+            self.assertEqual(response.status, 413)
+            response.read()
+        finally:
+            connection.close()
 
     def test_find_message_and_send_only_published_owned_quote(self):
         sender, _ = self.person("sender")

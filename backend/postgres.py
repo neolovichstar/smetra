@@ -17,9 +17,10 @@ from functools import lru_cache
 import psycopg
 
 try:
-    from psycopg_pool import ConnectionPool
+    from psycopg_pool import ConnectionPool, PoolTimeout
 except ImportError:  # The direct-connection fallback keeps local/minimal tools usable.
     ConnectionPool = None
+    PoolTimeout = None
 
 TABLES = frozenset(["email_login_challenges","estimate_shares","estimate_share_responses"]) | frozenset(
     "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits legal_acceptances".split()
@@ -59,19 +60,19 @@ _POOL_LOCK = threading.Lock()
 _POOLS = {}
 
 
-def _connection_pool(database_url, local_test):
+def _connection_pool(database_url, local_test, workload="request"):
     """Return a small process-local pool; Vercel warm instances can reuse TLS sessions."""
     if ConnectionPool is None:
         return None
-    key = hashlib.sha256((database_url + ("|local" if local_test else "|tls")).encode()).hexdigest()
+    key = hashlib.sha256((database_url + ("|local" if local_test else "|tls") + "|" + workload).encode()).hexdigest()
     with _POOL_LOCK:
         pool = _POOLS.get(key)
         if pool is None:
             try:
-                max_size = int(os.getenv("SMETRA_DB_POOL_MAX", "2"))
+                max_size = int(os.getenv("SMETRA_ASSISTANT_DB_POOL_MAX" if workload == "assistant" else "SMETRA_DB_POOL_MAX", "2"))
             except ValueError:
                 max_size = 2
-            max_size = max(1, min(4, max_size))
+            max_size = max(1, min(2 if workload == "assistant" else 4, max_size))
             pool = ConnectionPool(
                 conninfo=database_url,
                 min_size=0,
@@ -90,6 +91,12 @@ def _connection_pool(database_url, local_test):
             )
             _POOLS[key] = pool
         return pool
+
+
+def temporarily_unavailable(error):
+    return isinstance(error, psycopg.OperationalError) or (
+        PoolTimeout is not None and isinstance(error, PoolTimeout)
+    )
 
 
 class Row(dict):
@@ -167,7 +174,10 @@ def _translate(sql, schema, parameters, tables):
 class Connection:
     is_postgres = True
 
-    def __init__(self, runtime=False):
+    def __init__(self, runtime=False, workload="request"):
+        if workload not in ("request", "assistant"):
+            raise ValueError("Invalid database workload")
+        self.workload = workload
         self.schema = schema_name()
         self.runtime = runtime
         self.scoped = False
@@ -200,7 +210,7 @@ class Connection:
             ))
         loopback = urllib.parse.urlsplit(database_url).hostname in ("localhost", "127.0.0.1", "::1")
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
-        self.pool = _connection_pool(database_url, local_test)
+        self.pool = _connection_pool(database_url, local_test, workload)
         if self.pool is not None:
             self.raw = self.pool.getconn(timeout=5)
         else:

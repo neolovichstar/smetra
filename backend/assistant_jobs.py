@@ -275,7 +275,7 @@ def process_job(handler, con, origin, job, on_event=None):
         if getattr(con, 'is_postgres', False):
             from backend.postgres import Connection
 
-            runtime = Connection(runtime=True)
+            runtime = Connection(runtime=True, workload=getattr(con, "workload", "request"))
             service.con = service.runtime_connection = runtime
             runtime.scope(job['session_hash'], job['workspace_id'])
             runtime.set_transaction_lock_scopes(

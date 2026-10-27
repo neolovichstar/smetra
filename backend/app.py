@@ -75,13 +75,13 @@ def yookassa_mode(user=None):
 
 
 @contextmanager
-def db():
+def db(workload="request"):
     if os.getenv("DATABASE_URL"):
         try:
             from backend.postgres import Connection
         except ModuleNotFoundError:
             from postgres import Connection
-        con = Connection()
+        con = Connection(workload=workload)
         try:
             with con:
                 yield con
@@ -307,7 +307,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        if status == 429:
+        if status == 429 or (status == 503 and payload.get("code") == "database_unavailable"):
             self.send_header("Retry-After", str(getattr(self, "retry_after", 60)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -576,7 +576,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 presentation = json.loads((ROOT / "backend" / "mobile_presentation.json").read_text(encoding="utf-8"))
                 self.send_json(200, presentation)
             elif path.startswith("/api/"):
-                with db() as con:
+                # Slow model calls use their own bounded pools. They must not
+                # occupy every connection needed by sign-in, cancellation and reads.
+                assistant_work = (
+                    method == "POST" and path in (
+                        "/api/assistant", "/api/assistant/chat",
+                        "/api/assistant/stream", "/api/ai/draft",
+                    )
+                ) or path == "/api/cron/assistant"
+                with db(workload="assistant") if assistant_work else db() as con:
                     self._request_db = con
                     try:
                         self.api(method, path, query, con)
@@ -607,6 +615,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ),
                 flush=True,
             )
+            if os.getenv("DATABASE_URL"):
+                from backend.postgres import temporarily_unavailable
+
+                if temporarily_unavailable(err):
+                    self.retry_after = 5
+                    return self.send_json(503, {
+                        "error": "Сервис временно занят. Повторите запрос через несколько секунд.",
+                        "code": "database_unavailable",
+                        "retryAfter": 5,
+                        "request_id": self.request_id,
+                    })
             self.send_json(
                 500,
                 {
