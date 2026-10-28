@@ -40,7 +40,7 @@
     }
     if (!active()) return;
     const draftsList = drafts(quotes);
-    const canSync = connections.some(c => c.status === 'active');
+    const canSync = folders.some(f => f.status === 'active');
     const sourceHtml = sources.length ? sources.map(s => '<article class="premium-source"><div class="premium-source-main"><span class="premium-source-host">' + esc(s.hostname) + '</span><h3>' + esc(s.product_title || s.url) + '</h3><p>' + esc(s.brand || 'Бренд не определён') + (s.sku ? ' · Артикул ' + esc(s.sku) : '') + '</p><div class="premium-source-meta"><span>' + esc(stock(s.availability)) + '</span><span>Проверено: ' + esc(when(s.last_checked_at)) + '</span><span>' + esc(state(s.source_status)) + '</span></div>' + (s.last_error ? '<p class="premium-error">' + esc(s.last_error) + '</p>' : '') + '</div><div class="premium-source-actions"><strong>' + esc(money(s.price_kopecks,s.currency)) + '</strong><button class="btn small" type="button" data-premium-history="' + esc(s.id) + '">История цен</button>' + (s.monitored ? '<button class="btn small" type="button" data-premium-disable-source="' + esc(s.id) + '">Остановить</button>' : '') + '</div><div class="premium-history" data-premium-history-view="' + esc(s.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Проверенные товары появятся здесь. Добавьте первую ссылку выше.</p>';
     // Selection and OAuth/disconnection must be separate controls.
     if (!['yandex_disk','google_drive'].includes(selectedCloudProvider)) {
@@ -64,21 +64,22 @@
     }).join('');
     const folderHtml = cloud => {
       const scoped=folders.filter(f=>f.provider===cloud);
-      return scoped.length ? scoped.map(f=>'<article class="premium-folder"><div><strong>'+esc(f.folder_name||f.folder_id)+'</strong><span>'+esc(f.account_label||provider(f.provider))+'</span><small>'+(f.quote_id?'Привязана к черновику сметы':'Не привязана к смете')+(f.last_synced_at?' · '+esc(when(f.last_synced_at)):'')+'</small>'+(f.last_error?'<small class="premium-error">'+esc(f.last_error)+'</small>':'')+'</div><div class="premium-folder-actions"><span class="premium-state">'+esc(state(f.status))+'</span><button class="btn small" data-premium-resync="'+esc(f.id)+'">Синхронизировать</button><button class="btn small" data-premium-disable-folder="'+esc(f.id)+'">Отключить</button></div></article>').join('') : '<p class="premium-empty-state">У этого диска пока нет папок на синхронизации.</p>';
+      return scoped.length ? scoped.map(f=>'<article class="premium-folder"><div><strong>'+esc(f.folder_name||f.folder_id)+'</strong><span>'+esc(f.account_label||provider(f.provider))+'</span><small>'+(f.quote_id?'Привязана к черновику сметы':'Не привязана к смете')+(f.last_synced_at?' · '+esc(when(f.last_synced_at)):'')+'</small>'+(f.last_error?'<small class="premium-error">'+esc(f.last_error)+'</small>':'')+'</div><div class="premium-folder-actions"><span class="premium-state">'+esc(state(f.status))+'</span><button class="btn small" data-premium-resync="'+esc(f.id)+'">Синхронизировать</button><button class="btn small" data-premium-disable-folder="'+esc(f.id)+'">Отключить</button></div></article>').join('') : '<p class="premium-empty-state">Пока ничего не синхронизируется. Выберите папку выше и нажмите «Начать синхронизацию».</p>';
     };
     const jobsHtml = jobs.length ? jobs.map(j => '<article class="premium-job" data-premium-job-card="' + esc(j.id) + '"><span class="premium-job-kind">' + (j.mime === 'application/pdf' ? 'PDF' : 'DOC') + '</span><div class="premium-job-copy"><strong>' + esc(j.name) + '</strong><span>' + esc(provider(j.provider)) + (j.quote_id ? ' · Смета привязана' : ' · Без сметы') + '</span><small>' + esc(state(j.status)) + (j.updated_at ? ' · ' + esc(when(j.updated_at)) : '') + '</small>' + (j.error ? '<small class="premium-error">' + esc(j.error) + '</small>' : '') + '</div><button class="btn small" type="button" data-premium-review="' + esc(j.id) + '">Проверить</button><div class="premium-job-review" data-premium-job-review="' + esc(j.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Документов для проверки пока нет. Они появятся после синхронизации папок.</p>';
 
     view(header('Материалы и облака','') +
       '<section class="premium-tools-page"><div class="premium-intro"><div class="premium-intro-copy"><h2>Цены и документы под контролем</h2><p>Следите за ценами поставщиков и собирайте документы из облака. Изменения попадут в смету только после вашей проверки.</p></div><div class="premium-intro-metrics" aria-label="Обзор материалов"><div class="premium-intro-metric"><strong>' + sources.length + '</strong><span>источников цен</span></div><div class="premium-intro-metric"><strong>' + jobs.filter(j => j.status === 'needs_review').length + '</strong><span>документов к проверке</span></div></div></div>' +
       '<section class="premium-section"><div class="premium-section-heading"><div><span class="premium-kicker">01 / ПОСТАВЩИКИ</span><h2>Проверить и отслеживать товар</h2><p>Добавьте ссылку на товар и при необходимости свяжите её с позицией черновика.</p></div></div><form id="premium-product-form" class="premium-form"><div class="premium-form-grid"><div class="field"><label for="premium-product-url">Ссылка на товар</label><input id="premium-product-url" name="url" type="url" maxlength="2048" placeholder="https://…" required></div><div class="field"><label for="premium-product-quote">Черновик сметы</label><select id="premium-product-quote" name="quote_id">' + quoteOptions(quotes) + '</select></div><div class="field"><label for="premium-product-item">Позиция сметы</label><select id="premium-product-item" name="quote_item_id" disabled><option value="">Сначала выберите смету</option></select></div><div class="premium-form-submit"><button class="btn primary" type="submit" id="premium-product-preview-button">Проверить ссылку</button><span>Проверка не меняет стоимость сметы.</span></div></div></form><div id="premium-product-preview" class="premium-preview" hidden></div><div class="premium-list-block"><div class="premium-list-heading"><h3>Мониторинг цен</h3><span>' + sources.length + ' источников</span></div><div class="premium-source-list">' + sourceHtml + '</div></div></section>' +
-      '<section class="premium-section"><div class="premium-section-heading"><div><span class="premium-kicker">02 / СИНХРОНИЗАЦИЯ</span><h2>Облачные документы</h2><p>Выберите облако, затем папку для синхронизации. Подключение и отключение — отдельными кнопками.</p></div><button class="btn" id="premium-sync-all" type="button" '+(canSync?'':'disabled')+'>Синхронизировать сейчас</button></div>'
+      '<section class="premium-section"><div class="premium-section-heading"><div><span class="premium-kicker">02 / СИНХРОНИЗАЦИЯ</span><h2>Облачные документы</h2><p>Подключите диск, выберите папку и укажите, какие документы синхронизировать. Ваши файлы не меняются.</p></div></div>'
+      +'<div class="premium-cloud-select-heading"><span class="premium-cloud-step">ШАГ 1 · ВЫБОР ДИСКА</span><span>Нажмите на карточку нужного сервиса</span></div>'
       +'<div class="premium-connect-row" role="group" aria-label="Выбрать облачный диск">'+cloudCards+'</div>'
-      +'<section class="premium-cloud-folders" id="premium-cloud-folders" aria-label="Папки выбранного диска"><div class="premium-cloud-folders-heading"><h3>Папки</h3><span id="premium-cloud-name">'+esc(provider(selectedCloudProvider))+'</span></div>'
+      +'<section class="premium-cloud-folders" id="premium-cloud-folders" aria-label="Папки выбранного диска"><div class="premium-cloud-folders-heading"><div><span class="premium-cloud-step">ШАГ 2 · ВЫБОР ПАПКИ</span><h3>Папки и файлы</h3><p>Выберите папку или откройте вложенную. Файлы показаны для просмотра — они не выбираются по отдельности.</p></div><span id="premium-cloud-name">'+esc(provider(selectedCloudProvider))+'</span></div>'
       +'<form id="premium-folder-form" class="premium-form"><input id="premium-folder-connection" name="connection_id" type="hidden" value="'+esc(selectedConnection?.id||'')+'"><input id="premium-folder-id" name="folder_id" type="hidden" required>'
-      +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="btn small" id="premium-folder-back" type="button" disabled>← Назад</button><span id="premium-folder-location">Мой диск</span><button class="btn small" id="premium-folder-select-current" type="button" disabled>Выбрать эту папку</button></div><div id="premium-folder-entries" class="premium-folder-entries" role="list" aria-label="Папки">Загружаем папки…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button><small id="premium-folder-choice" class="premium-folder-choice">Папка не выбрана</small></div>'
-      +'<details class="premium-folder-options"><summary>Настройки синхронизации</summary><div class="premium-folder-options-content"><div class="field"><label for="premium-folder-quote">Черновик сметы для импорта</label><select id="premium-folder-quote" name="quote_id">'+quoteOptions(quotes)+'</select></div><label class="premium-checkbox"><input type="checkbox" name="recursive" checked><span><strong>Включить вложенные папки</strong><small>Синхронизация ограничена по глубине и числу файлов.</small></span></label></div></details>'
-      +'<div class="premium-form-submit"><button class="btn primary" type="submit" id="premium-folder-submit" '+(selectedConnection?'':'disabled')+'>Синхронизировать выбранную папку</button><span>Изменения в смете потребуют подтверждения.</span></div><p class="form-error" role="alert"></p></form></section>'
-      +'<div class="premium-list-block"><div class="premium-list-heading"><h3>На синхронизации</h3><span id="premium-cloud-folder-count">'+folders.filter(f=>f.provider===selectedCloudProvider).length+' папок</span></div><div class="premium-folder-list">'+folderHtml(selectedCloudProvider)+'</div></div></section>'+
+      +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="premium-folder-back" id="premium-folder-back" type="button" disabled aria-label="На уровень выше">←</button><span id="premium-folder-location" title="Текущий каталог">Мой диск</span><button class="btn small premium-folder-pick-current" id="premium-folder-select-current" type="button" disabled>Выбрать «Мой диск»</button></div><div id="premium-folder-entries" class="premium-folder-entries" role="list" aria-label="Содержимое папки">Загружаем содержимое…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button></div>'
+      +'<details class="premium-folder-options"><summary>Дополнительно: смета и вложенные папки</summary><div class="premium-folder-options-content"><div class="field"><label for="premium-folder-quote">Черновик сметы для импорта</label><select id="premium-folder-quote" name="quote_id">'+quoteOptions(quotes)+'</select></div><label class="premium-checkbox"><input type="checkbox" name="recursive" checked><span><strong>Включить вложенные папки</strong><small>Синхронизация ограничена по глубине и числу файлов.</small></span></label></div></details>'
+      +'<div class="premium-folder-confirm"><div class="premium-folder-selected"><span class="premium-folder-selected-icon" aria-hidden="true">✓</span><span id="premium-folder-choice" role="status" aria-live="polite">Сначала выберите папку выше</span></div><button class="btn premium-folder-start" type="submit" id="premium-folder-submit" disabled>Начать синхронизацию</button></div><p class="premium-folder-disclaimer">Импорт позиций в смету потребует отдельного подтверждения.</p><p class="form-error" role="alert"></p></form></section>'
+      +'<div class="premium-list-block"><div class="premium-list-heading"><h3>Синхронизируемые папки</h3><div class="premium-synced-actions"><span id="premium-cloud-folder-count">'+folders.filter(f=>f.provider===selectedCloudProvider).length+' папок</span><button class="btn small" id="premium-sync-all" type="button" '+(canSync?'':'disabled')+'>Обновить все</button></div></div><div class="premium-folder-list">'+folderHtml(selectedCloudProvider)+'</div></div></section>'+
       '<section class="premium-section"><div class="premium-section-heading"><div><span class="premium-kicker">03 / ПРОВЕРКА</span><h2>Импорт документов</h2><p>Данные попадут в черновик только после проверки и отдельного подтверждения.</p></div><button type="button" class="btn" id="premium-refresh-jobs">Обновить очередь</button></div><div class="premium-job-list">' + jobsHtml + '</div></section></section>');
 
     if (new URLSearchParams(location.search).get('cloud') === 'connected') {
@@ -134,32 +135,50 @@
     const folderBack=document.querySelector('#premium-folder-back');
     const folderNext=document.querySelector('#premium-folder-next');
     let folderPath=[],folderCursor='',folderRequest=0;
+    const folderSubmit=document.querySelector('#premium-folder-submit');
+    const pickCurrent=document.querySelector('#premium-folder-select-current');
+    function clearFolderSelection(){
+      folderId.value='';
+      folderChoice.textContent='Сначала выберите папку выше';
+      folderChoice.closest('.premium-folder-selected')?.classList.remove('has-selection');
+      folderSubmit.disabled=true;
+    }
+    function setFolderSelection(id,name){
+      folderId.value=String(id);
+      folderChoice.textContent=provider(selectedCloudProvider)+' / '+(folderPath.length ? folderPath.map(x=>x.name).join(' / ')+(name?' / ':'') : '')+name;
+      folderChoice.closest('.premium-folder-selected')?.classList.add('has-selection');
+      folderSubmit.disabled=false;
+    }
     async function browseFolder(next=false){
       const seq=++folderRequest;
       const conn=connections.find(c=>c.id===folderConnection.value&&c.status==='active');
-      folderId.value='';
-      folderChoice.textContent='Папка не выбрана';
-      if(!next){folderEntries.replaceChildren();folderCursor=''}
+      const pageToken=next?folderCursor:'';
+      if(!next){clearFolderSelection();folderEntries.replaceChildren();folderCursor=''}
       folderNext.classList.add('hidden');
       folderBack.disabled=folderPath.length===0;
-      const pickCurrent=document.querySelector('#premium-folder-select-current');
-      if(pickCurrent)pickCurrent.disabled=!connections.some(c=>c.id===folderConnection.value&&c.status==='active');
-      folderLocation.textContent=folderPath.length?folderPath.map(f=>f.name).join(' / '):'Мой диск';
-      if(!conn){folderEntries.textContent='Подключите облако, чтобы увидеть папки.';return}
+      pickCurrent.disabled=!conn;
+      folderLocation.textContent=folderPath.length?'Мой диск / '+folderPath.map(f=>f.name).join(' / '):'Мой диск';
+      pickCurrent.textContent=folderPath.length?'Выбрать текущую':'Выбрать «Мой диск»';
+      if(!conn){folderEntries.textContent='Этот диск пока не подключён. Нажмите «Подключить» в карточке выше.';return}
       const params=new URLSearchParams({connection_id:conn.id,parent:folderPath.length?folderPath[folderPath.length-1].id:(conn.provider==='google_drive'?'root':'/')});
-      if(next&&folderCursor)params.set('cursor',folderCursor);
-      const message=document.createElement('div');message.className='premium-folder-message';message.textContent='Загружаем папки…';folderEntries.append(message);
+      if(next&&pageToken)params.set('cursor',pageToken);
+      const message=document.createElement('div');message.className='premium-folder-message';message.textContent='Загружаем содержимое…';folderEntries.append(message);
       try{
         const payload=await api('/premium/cloud/browse-folders?'+params.toString());
         if(seq!==folderRequest||!active())return;
         message.remove();
         const rows=Array.isArray(payload.folders)?payload.folders:[];
-        if(!rows.length&&!next){folderEntries.textContent='В этой папке нет вложенных каталогов.'}
+        const files=Array.isArray(payload.files)?payload.files:[];
+        if(!rows.length&&!files.length&&!next){
+          const empty=document.createElement('div');empty.className='premium-folder-empty';
+          empty.textContent='Здесь пока нет папок или файлов. Вы можете выбрать текущую папку для будущей синхронизации.';
+          folderEntries.append(empty);
+        }
         for(const entry of rows){
           // Two accessible actions per row: choose for sync or open subfolders.
           // Avoid nested buttons and click-only spans, which break keyboard use.
           const item=document.createElement('div');item.className='premium-folder-entry';item.setAttribute('role','listitem');
-          const name=document.createElement('button');name.type='button';name.className='premium-folder-select';name.textContent='📁  '+String(entry.name||'Папка');name.setAttribute('aria-pressed','false');name.setAttribute('aria-label','Выбрать папку '+String(entry.name||'Папка'));
+          const name=document.createElement('button');name.type='button';name.className='premium-folder-select';name.textContent='▱  '+String(entry.name||'Папка');name.setAttribute('aria-pressed','false');name.setAttribute('aria-label','Выбрать папку '+String(entry.name||'Папка'));
           const move=document.createElement('button');move.type='button';move.className='premium-folder-enter';move.textContent='Открыть ›';move.setAttribute('aria-label','Открыть вложенные папки: '+String(entry.name||'Папка'));
           item.append(name,move);
           name.addEventListener('click',()=>{
@@ -167,18 +186,26 @@
             folderEntries.querySelectorAll('.premium-folder-entry').forEach(x=>x.classList.remove('is-selected'));
             name.setAttribute('aria-pressed','true');
             item.classList.add('is-selected');
-            folderId.value=String(entry.id);
-            folderChoice.textContent='Выбрано: '+String(entry.name||'Папка');
+            setFolderSelection(entry.id,String(entry.name||'Папка'));
           });
           move.addEventListener('click',()=>{folderPath.push({id:entry.id,name:entry.name});void browseFolder()});
           folderEntries.append(item);
+        }
+        for(const entry of files){
+          if(!entry||typeof entry.name!=='string')continue;
+          const item=document.createElement('div');item.className='premium-cloud-file';item.setAttribute('role','listitem');
+          const kind=document.createElement('span');kind.className='premium-cloud-file-kind';kind.setAttribute('aria-hidden','true');
+          const extension=entry.name.split('.').pop().toUpperCase();
+          kind.textContent=['PDF','XLSX','DOCX','CSV','TXT','PNG','JPG'].includes(extension)?extension:'FILE';
+          const name=document.createElement('span');name.className='premium-cloud-file-name';name.textContent=entry.name;
+          item.append(kind,name);folderEntries.append(item);
         }
         folderCursor=String(payload.next_cursor||'');
         folderNext.classList.toggle('hidden',!folderCursor);
       }catch(error){
         if(seq!==folderRequest||!active())return;
         message.remove();
-        const note=document.createElement('div');note.className='premium-folder-message';note.textContent='Не удалось получить папки: '+error.message;folderEntries.append(note);
+        const note=document.createElement('div');note.className='premium-folder-message';note.textContent='Не удалось загрузить содержимое: '+error.message;folderEntries.append(note);
       }
     }
     function selectCloud(id){
@@ -194,7 +221,7 @@
       document.querySelector('#premium-cloud-name').textContent=provider(id);
       document.querySelector('.premium-folder-list').innerHTML=folderHtml(id);
       document.querySelector('#premium-cloud-folder-count').textContent=folders.filter(f=>f.provider===id).length+' папок';
-      document.querySelector('#premium-folder-submit').disabled=!connection;
+      clearFolderSelection();
       document.querySelector('#premium-folder-form .form-error').textContent='';
       folderPath=[];
       void browseFolder();
@@ -211,8 +238,7 @@
     document.querySelector('#premium-folder-select-current')?.addEventListener('click',()=>{
       const connection=connections.find(c=>c.id===folderConnection.value&&c.status==='active');
       if(!connection)return;
-      folderId.value=folderPath.length?folderPath[folderPath.length-1].id:(connection.provider==='google_drive'?'root':'/');
-      folderChoice.textContent='Выбрано: '+(folderPath.length?folderPath[folderPath.length-1].name:'Мой диск');
+      setFolderSelection(folderPath.length?folderPath[folderPath.length-1].id:(connection.provider==='google_drive'?'root':'/'),folderPath.length?'':'Мой диск');
       folderEntries.querySelectorAll('.premium-folder-select').forEach(x=>x.setAttribute('aria-pressed','false'));
       folderEntries.querySelectorAll('.premium-folder-entry').forEach(x=>x.classList.remove('is-selected'));
     });

@@ -82,14 +82,18 @@ class CloudFolderBrowseTests(unittest.TestCase):
         connection = {"provider": "google_drive", "status": "active"}
         response = {"files": [
             {"id": "folder_2", "name": "Сметы", "mimeType": "application/vnd.google-apps.folder"},
+            {"id": "receipt_1", "name": "Счёт.pdf", "mimeType": "application/pdf"},
             {"id": "file_1", "name": "Документ", "mimeType": "text/plain"},
             {"id": "folder_3", "name": "Удалено", "mimeType": "application/vnd.google-apps.folder", "trashed": True},
         ], "nextPageToken": "next-token"}
         with patch("backend.cloud_drives._google_api", return_value=response) as get:
             result = cloud_drives._browse_folders(con, connection, "root", "")
         self.assertEqual(result["folders"], [{"id": "folder_2", "name": "Сметы"}])
+        self.assertEqual(result["files"], [{"name": "Счёт.pdf", "mime_type": "application/pdf"},
+                                            {"name": "Документ", "mime_type": "text/plain"}])
         self.assertEqual(result["next_cursor"], "next-token")
-        self.assertIn("mimeType = 'application/vnd.google-apps.folder'", get.call_args.args[3]["q"])
+        self.assertIn("'root' in parents", get.call_args.args[3]["q"])
+        self.assertNotIn("mimeType = 'application/vnd.google-apps.folder'", get.call_args.args[3]["q"])
         for parent in ("'", "bad id", "https://evil.com", "../../../etc"):
             with self.assertRaises(business.DomainError):
                 cloud_drives._browse_folders(con, connection, parent, "")
@@ -100,12 +104,13 @@ class CloudFolderBrowseTests(unittest.TestCase):
         response = {"_embedded": {"total": 3, "items": [
             {"path": "disk:/Сметы", "name": "Сметы", "type": "dir"},
             {"path": "/Документы", "name": "Документы", "type": "dir"},
-            {"path": "/файл.pdf", "name": "файл.pdf", "type": "file"},
+            {"path": "/файл.pdf", "name": "файл.pdf", "type": "file", "mime_type": "application/pdf"},
         ]}}
         with patch("backend.cloud_drives._yandex_api", return_value=response) as get:
             result = cloud_drives._browse_folders(con, connection, "/", "")
         self.assertEqual(result["folders"], [{"id": "/Сметы", "name": "Сметы"}, {"id": "/Документы", "name": "Документы"}])
         self.assertEqual(result["next_cursor"], "")
+        self.assertEqual(result["files"], [{"name": "файл.pdf", "mime_type": "application/pdf"}])
         self.assertEqual(get.call_args.args[3]["path"], "/")
         for parent in ("../secret", "/../secret", "relative"):
             with self.assertRaises(business.DomainError):

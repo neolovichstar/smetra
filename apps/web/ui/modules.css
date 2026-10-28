@@ -771,3 +771,65 @@ html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-sel
 .public-settings .public-toggle input{accent-color:#a1a1a8}
 
 @media(max-width:540px){.premium-folder-browser-head{flex-wrap:wrap}.premium-folder-browser-head>span{flex:1}.premium-folder-browser-head>#premium-folder-select-current{width:100%;margin:0}}
+
+/* Cloud library: a clear, three-step flow without stacked action panels. */
+.premium-connect-row{gap:12px}
+.premium-connect{min-width:0;grid-template-columns:minmax(0,1fr) auto;min-height:72px;padding:7px 12px 7px 7px;background:#151517}
+.premium-connect.is-selected{background:#1c1c1e;border-color:rgba(255,255,255,.29);box-shadow:inset 0 0 0 1px rgba(255,255,255,.045)}
+.premium-connect-select{min-width:0;min-height:56px}
+.premium-connect-action{min-height:34px;border-radius:9px;background:#19191b}
+.premium-cloud-folders{padding:18px;gap:14px;background:#131314}
+.premium-cloud-folders-heading{align-items:flex-start}
+.premium-cloud-folders-heading>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.premium-cloud-folders-heading h3{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.premium-cloud-folders-heading p{color:var(--text-3);font-size:12px;line-height:1.55;max-width:65ch}
+.premium-cloud-step{font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--text-3)}
+.premium-cloud-folders-heading>span{padding:5px 9px;border-radius:8px;background:#202022;border:1px solid var(--line);font-size:11px;white-space:nowrap}
+.premium-folder-browser{padding:0;gap:0;overflow:hidden;background:#0e0e0f;border:1px solid var(--line);border-radius:12px}
+.premium-folder-browser-head{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;min-height:60px;padding:12px;border-bottom:1px solid var(--line)}
+.premium-folder-back{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--line);border-radius:9px;background:#1a1a1c;color:var(--text);cursor:pointer}
+.premium-folder-back:disabled{opacity:.4;cursor:default}
+.premium-folder-back:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.premium-folder-browser-head>span{font-size:12px;color:var(--text-2)}
+.premium-folder-browser-head>#premium-folder-select-current{margin:0;max-width:190px;min-height:32px;padding:7px 10px;border-radius:8px;background:#242426;color:#eee;border:1px solid rgba(255,255,255,.15);font-size:12px}
+.premium-folder-browser-head>#premium-folder-select-current:hover:not(:disabled){background:#2d2d30}
+.premium-folder-entries{gap:2px;padding:8px;min-height:92px;max-height:270px}
+.premium-folder-entry{gap:6px;padding:3px 6px;min-height:44px;border-radius:8px;background:transparent}
+.premium-folder-entry:hover,.premium-folder-entry.is-selected{background:#212124;border-color:rgba(255,255,255,.08)}
+.premium-folder-select{min-height:38px;padding:8px 7px;font-size:13px}
+.premium-folder-enter{min-height:30px;padding:5px 10px;border:1px solid rgba(255,255,255,.09);background:#202023}
+.premium-folder-enter:hover{background:#303034}
+.premium-folder-empty{padding:16px;max-width:56ch;margin:auto 0;color:var(--text-3);font-size:13px;line-height:1.65}
+.premium-cloud-file{display:flex;align-items:center;gap:11px;min-height:41px;padding:7px 13px;color:var(--text-2);font-size:13px}
+.premium-cloud-file+.premium-cloud-file{border-top:1px solid rgba(255,255,255,.04)}
+.premium-cloud-file-kind{display:grid;place-items:center;flex:none;min-width:38px;min-height:25px;padding:3px 4px;border:1px solid var(--line);border-radius:6px;font-size:10px;font-weight:600;color:#aaa}
+.premium-cloud-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.premium-folder-message{padding:15px;font-size:13px}
+#premium-folder-next{margin:5px 14px 12px}
+.premium-folder-options{border-top:0;padding-top:0}
+.premium-folder-options>summary{color:var(--text-3);font-size:12px}
+.premium-folder-options>summary:hover{color:var(--text)}
+.premium-folder-confirm{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#19191b}
+.premium-folder-selected{display:flex;align-items:center;gap:10px;min-width:0;color:var(--text-3);font-size:13px}
+.premium-folder-selected.has-selection{color:var(--text)}
+.premium-folder-selected-icon{display:grid;place-items:center;width:25px;height:25px;flex:none;border-radius:50%;background:#252528;color:#777;font-size:13px}
+.premium-folder-selected.has-selection .premium-folder-selected-icon{background:#343439;color:#f2f2f2}
+#premium-folder-choice{overflow-wrap:anywhere}
+.premium-folder-start{flex:none;min-height:39px;background:#303033!important;color:#f0f0f0!important;border:1px solid #444448!important;border-radius:9px;font-size:13px;font-weight:550}
+.premium-folder-start:hover:not(:disabled){background:#404043!important}
+.premium-folder-start:disabled{background:#222224!important;color:#777!important;border-color:#303033!important;box-shadow:none;cursor:not-allowed}
+.premium-folder-disclaimer{font-size:12px;color:var(--text-3);line-height:1.5}
+.premium-synced-actions{display:flex;align-items:center;gap:12px}
+.premium-synced-actions>span{font-size:12px;color:var(--text-3)}
+.premium-synced-actions .btn{min-height:34px;font-size:12px}
+@media(max-width:640px){
+  .premium-connect{grid-template-columns:minmax(0,1fr) auto;padding:7px 10px 7px 7px;gap:6px;min-height:72px}
+  .premium-cloud-folders{padding:13px}
+  .premium-cloud-folders-heading{flex-wrap:wrap}
+  .premium-folder-browser-head{grid-template-columns:32px minmax(0,1fr);gap:8px}
+  .premium-folder-browser-head>#premium-folder-select-current{grid-column:1/-1;max-width:none;width:100%}
+  .premium-folder-confirm{flex-direction:column;align-items:stretch;gap:12px}
+  .premium-folder-start{width:100%}
+  .premium-synced-actions{gap:8px}
+}
+\n.premium-cloud-select-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:-8px}\n.premium-cloud-select-heading>span:last-child{font-size:12px;color:var(--text-3)}\n@media(max-width:640px){.premium-cloud-select-heading{flex-wrap:wrap;gap:5px}}\n

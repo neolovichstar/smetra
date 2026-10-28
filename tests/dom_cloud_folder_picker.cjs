@@ -29,8 +29,8 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
     if(path==='/premium/cloud/jobs')return {jobs:[]};
     if(path.startsWith('/premium/cloud/browse-folders?')){
       const url=new URL(path,'https://smetra.online');
-      if(url.searchParams.get('parent')==='/')return {parent:'/',folders:[{id:'/Проекты',name:'Проекты'}],next_cursor:''};
-      if(url.searchParams.get('parent')==='/Проекты')return {parent:'/Проекты',folders:[{id:'/Проекты/Сметы',name:'Сметы'}],next_cursor:''};
+      if(url.searchParams.get('parent')==='/')return {parent:'/',folders:[{id:'/Проекты',name:'Проекты'}],files:[{name:'Смета.xlsx',mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}],next_cursor:''};
+      if(url.searchParams.get('parent')==='/Проекты')return {parent:'/Проекты',folders:[{id:'/Проекты/Сметы',name:'Сметы'}],files:[{name:'Счёт.pdf',mime_type:'application/pdf'}],next_cursor:''};
       return {parent:url.searchParams.get('parent'),folders:[],next_cursor:''};
     }
     if(path==='/premium/cloud/folders'&&options?.method==='POST')return {folder_id:'bound'};
@@ -50,12 +50,15 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.equal(doc.querySelectorAll('[data-premium-disconnect]').length,1);
   assert.equal(cards[0].querySelector('.premium-connect-select').getAttribute('aria-pressed'),'true');
   assert.ok(cards[0].classList.contains('is-selected'));
-  assert.equal(doc.querySelector('.premium-cloud-folders-heading h3').textContent,'Папки');
+  assert.equal(doc.querySelector('.premium-cloud-folders-heading h3').textContent,'Папки и файлы');
   assert.match(doc.querySelector('#premium-folder-entries').textContent,/Проекты/);
+  assert.match(doc.querySelector('#premium-folder-entries').textContent,/Смета.xlsx/);
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,true,'Selection is required before synchronization');
   // Root selection works even when there are no subfolders to click.
   doc.querySelector('#premium-folder-select-current').click();
   assert.equal(doc.querySelector('#premium-folder-id').value,'/');
   assert.match(doc.querySelector('#premium-folder-choice').textContent,/Мой диск/);
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,false,'Explicit root selection enables synchronization');
   doc.querySelector('#premium-folder-back').disabled; // no navigation on root selection
   // Switch providers clears the previous selected folder.
   const beforeSelect=calls.length;
@@ -66,12 +69,12 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.ok(cards[1].classList.contains('is-selected'),'Google is visually selected');
   assert.equal(doc.querySelector('#premium-cloud-name').textContent,'Google Drive');
   assert.equal(doc.querySelector('#premium-folder-submit').disabled,true,'Cannot sync a disconnected cloud');
-  assert.match(doc.querySelector('#premium-folder-entries').textContent,/Подключите облако/);
+  assert.match(doc.querySelector('#premium-folder-entries').textContent,/не подключён/);
   assert.equal(calls.length,beforeSelect,'Selecting a card never initiates OAuth or disconnect');
   cards[0].click(); // Whole card outside small action selects.
   await new Promise(r=>setTimeout(r,25));
   assert.ok(cards[0].classList.contains('is-selected'));
-  assert.equal(doc.querySelector('#premium-folder-submit').disabled,false);
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,true,'Switching providers must clear earlier selection');
   assert.match(doc.querySelector('#premium-folder-entries').textContent,/Проекты/);
   doc.querySelector('.premium-folder-enter').click();
   await new Promise(r=>setTimeout(r,25));
@@ -81,10 +84,12 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.equal(doc.querySelector('.premium-folder-select').getAttribute('aria-pressed'),'true');
   assert.equal(doc.querySelector('.premium-folder-enter').tagName,'BUTTON','Open works with keyboard');
   assert.equal(doc.querySelector('#premium-folder-id').value,'/Проекты/Сметы');
-  assert.match(doc.querySelector('#premium-folder-choice').textContent,/Выбрано: Сметы/);
+  assert.match(doc.querySelector('#premium-folder-choice').textContent,/Сметы/);
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,false);
   doc.querySelector('#premium-folder-back').click();
   await new Promise(r=>setTimeout(r,25));
   assert.equal(doc.querySelector('#premium-folder-id').value,'','Navigating invalidates previous selection');
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,true);
   assert.ok(calls.some(x=>x.path.includes('browse-folders?connection_id=y-1')));
   assert.equal(doc.documentElement.querySelectorAll('input[name="folder_id"]').length,1);
   const deleteBefore=calls.filter(x=>x.options?.method==='DELETE').length;
@@ -95,6 +100,17 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.equal(doc.querySelectorAll('[data-premium-disconnect]').length,0);
   assert.match(doc.querySelector('[data-premium-connect="yandex_disk"]').textContent,/Подключить/);
   assert.equal(doc.querySelector('[data-premium-select="yandex_disk"]').getAttribute('aria-pressed'),'true');
+  // Connected Google Drive with an empty root must still be understandable.
+  connections.push({id:'g-1',provider:'google_drive',status:'active',account_label:'Google User'});
+  await w.SmetraPremiumTools.render();
+  doc.querySelector('[data-premium-select="google_drive"]').click();
+  await new Promise(r=>setTimeout(r,25));
+  assert.match(doc.querySelector('#premium-folder-entries').textContent,/нет папок или файлов/);
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,true);
+  doc.querySelector('#premium-folder-select-current').click();
+  assert.equal(doc.querySelector('#premium-folder-id').value,'root');
+  assert.match(doc.querySelector('#premium-folder-choice').textContent,/Google Drive \/ Мой диск/);
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,false);
   dom.window.close();
   console.log('PASS: independent select/actions, visible folders, active highlight, nested picker and back');
 })().catch(error=>{console.error(error);process.exit(1)});

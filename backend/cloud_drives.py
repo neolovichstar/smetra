@@ -229,7 +229,7 @@ def _yandex_api(con, connection, path, params=None, method="GET", payload=None):
 
 
 def _browse_folders(con, connection, parent, cursor):
-    """List direct child folders only; never scan all files or expose cloud tokens."""
+    """List immediate folders and file names only; never fetch file contents or cloud tokens."""
     if connection["status"] != "active":
         raise business.DomainError(409, "Переподключите облако, чтобы просмотреть папки")
     if connection["provider"] == "google_drive":
@@ -242,7 +242,7 @@ def _browse_folders(con, connection, parent, cursor):
         if len(page) > 2000 or any(ord(ch) < 33 or ord(ch) > 126 for ch in page):
             raise business.DomainError(400, "Некорректная страница папок")
         params = {
-            "q": "'" + folder + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+            "q": "'" + folder + "' in parents and trashed = false",
             "pageSize": 100,
             "fields": "nextPageToken,files(id,name,mimeType,trashed)",
             "orderBy": "name",
@@ -258,6 +258,14 @@ def _browse_folders(con, connection, parent, cursor):
             and not item.get("trashed")
             and isinstance(item.get("id"), str)
         ]
+        files = [
+            {"name": str(item.get("name") or "Файл")[:250],
+             "mime_type": str(item.get("mimeType") or "application/octet-stream")[:120]}
+            for item in result.get("files", [])[:100]
+            if isinstance(item, dict)
+            and item.get("mimeType") != "application/vnd.google-apps.folder"
+            and not item.get("trashed")
+        ]
         next_page = result.get("nextPageToken") or ""
     else:
         folder = str(parent or "/")
@@ -269,7 +277,7 @@ def _browse_folders(con, connection, parent, cursor):
         offset = int(page)
         result = _yandex_api(con, connection, "/resources", {
             "path": folder, "limit": 100, "offset": offset,
-            "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.total",
+            "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.items.mime_type,_embedded.total",
         })
         embedded = result.get("_embedded") or {}
         entries = embedded.get("items") or []
@@ -283,9 +291,15 @@ def _browse_folders(con, connection, parent, cursor):
             normalized = raw_path[5:] if raw_path.startswith("disk:") else raw_path
             if normalized.startswith("/") and ".." not in normalized.split("/") and len(normalized) <= 1024:
                 folders.append({"id": normalized, "name": str(item.get("name") or "Папка")[:250]})
+        files = [
+            {"name": str(item.get("name") or "Файл")[:250],
+             "mime_type": str(item.get("mime_type") or "application/octet-stream")[:120]}
+            for item in entries[:100]
+            if isinstance(item, dict) and item.get("type") == "file"
+        ]
         total = int(embedded.get("total") or 0)
         next_page = str(offset + len(entries)) if len(entries) and offset + len(entries) < total and offset + len(entries) <= 10000 else ""
-    return {"folders": folders, "parent": folder, "next_cursor": next_page}
+    return {"folders": folders, "files": files, "parent": folder, "next_cursor": next_page}
 
 
 def _folder_metadata(con, connection, folder_id):
