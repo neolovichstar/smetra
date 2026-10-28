@@ -38,7 +38,7 @@ assert(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Use an isolat
  await open(first.id);await p.getByText('Поток начат. Ответ сохранён.',{exact:true}).first().waitFor();
  const before=(await api('/assistant')).quota.used;
  const replay=await cx.request.post(base+'/api/assistant/stream',{headers:{Origin:base},data:{job_id:saved.id}});
- assert(replay.ok());assert((await replay.text()).includes('event: done'));assert.equal((await api('/assistant')).quota.used,before);
+ assert(replay.ok());const replayBody=await replay.text();assert(replayBody.includes('event: done'),replayBody.slice(0,1000));assert.equal((await api('/assistant')).quota.used,before);
  checks.push('live SSE continues after leaving the page; one saved answer and one token charge');
  const second=(await api('/assistant/conversations',{title:'Явная остановка'})).conversation;
  await open(second.id);const cancelled=await submit('UI cancel durable question');

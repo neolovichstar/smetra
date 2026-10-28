@@ -9,8 +9,9 @@ log = logging.getLogger(__name__)
 
 
 class DurableChatStream:
-    def __init__(self, service, job_id):
+    def __init__(self, service, job_id, completed_result=None):
         self.service, self.job_id = service, job_id
+        self.completed_result = completed_result
 
     def write(self, handler):
         service = self.service
@@ -48,6 +49,11 @@ class DurableChatStream:
         except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
             connected = False
         send("ready", {"job_id": self.job_id})
+        if self.completed_result is not None:
+            # Replaying an owned saved answer is read-only. Do not acquire the
+            # queue write lock or race a second worker just to return its result.
+            send("done", {**self.completed_result, "job_id": self.job_id})
+            return
         try:
             job = assistant_jobs.claim(con, self.job_id)
             if job:

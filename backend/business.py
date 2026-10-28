@@ -2463,7 +2463,7 @@ class Service:
     def private(self, method, path, query):
         parts = path.removeprefix("/api/").strip("/").split("/")
         kind, rest = parts[0], parts[1:]
-        data = self.h.body() if method in ("POST", "PATCH") else {}
+        data = self.h.body() if method in ("POST", "PATCH", "DELETE") else {}
         if kind == "push-devices":
             from backend.push import handle as handle_push_devices
 

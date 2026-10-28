@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     sys.path.insert(0, str(ROOT))
+    from scripts.fixture_network import restrict_to_loopback
+    restrict_to_loopback()
     if (
         os.getenv("DATABASE_URL")
         or os.getenv("RUNTIME_DATABASE_URL")

@@ -40,6 +40,9 @@ class TrackingConnection:
 
     def execute(self, sql, params=()):
         self.calls.append((sql, params))
+        if sql.startswith("SELECT w.plan"):
+            return FakeCursor({"plan": "pro_plus_month", "subscription_status": "active",
+                               "entitlement_until": cloud_drives._now() + 3600, "role": "owner"})
         if sql.startswith("SELECT j.*"):
             return FakeCursor(self.row_data)
         if sql.startswith("SELECT b.status AS binding_status"):

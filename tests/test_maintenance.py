@@ -17,7 +17,10 @@ class MaintenanceTests(SecurityHardeningTests):
         # A referral must be registered after the click, with the actual
         # signup timestamp. The generic business fixture simulates legacy
         # accounts to preserve earlier ten-quote test scenarios.
-        return BusinessFlows.account(self, name, legacy=False)
+        token, user_id = BusinessFlows.account(self, name, legacy=False)
+        with self.mod.db() as con:
+            con.execute("UPDATE users SET created_at=? WHERE id=?", (self.mod.now(), user_id))
+        return token, user_id
 
     def test_cron_requires_strong_secret_before_opening_database(self):
         with patch.dict(os.environ, {"CRON_SECRET": "a" * 48}):
