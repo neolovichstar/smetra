@@ -24,10 +24,11 @@ class FieldUIRegressionTests(unittest.TestCase):
         self.assertIn("SmetraFieldFlows?.stop?.()",js)
     def test_ui_uses_server_money_and_consent(self):
         js=(WEB/"field-flows.js").read_text(encoding="utf-8")
-        for route in ("/voice/draft","/design-projects/draft","/scan/preview","/scan/import",
-                      "/shares","/shared-inbox/"):
+        for route in ("/scan/preview","/scan/import","/shared-inbox/"):
             self.assertIn(route,js)
-        self.assertIn("SmetraEstimateSafety.ensureConsent()",js)
+        for removed in ("/voice/draft","/design-projects/draft","data-share-form","data-pdf-form","data-audio-submit"):
+            self.assertNotIn(removed,js)
+        self.assertIn("AR-сканирование доступно",js)
         self.assertIn("review_confirmed:true",js)
         self.assertIn("selected_total_kopecks",js)
         self.assertIn("required",js)
