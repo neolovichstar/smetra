@@ -195,7 +195,11 @@ def route(h, con, method, path, query, origin):
             if safe_query:
                 target += "?" + urllib.parse.urlencode(safe_query, doseq=True)
             return redirect(h, target)
-        if provider == "yandex" and host in ("smetra.online", "smetra.vercel.app"):
+        if provider == "google":
+            # Google Cloud has exactly one approved callback host. Never let
+            # a stale PUBLIC_ORIGIN/VERCEL_URL produce redirect_uri_mismatch.
+            origin = "https://smetra.online"
+        elif provider == "yandex" and host in ("smetra.online", "smetra.vercel.app"):
             origin = "https://" + host
     client, _ = config(provider)
     if not client or (provider == "google" and not config(provider)[1]):
