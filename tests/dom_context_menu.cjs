@@ -67,6 +67,12 @@ d.querySelector('[data-thread-rename]').onclick=()=>renamed++;
   await w.SmetraContextMenu.describe(d.querySelector('.premium-folder-entry')).items[1].run();
   await w.SmetraContextMenu.describe(d.querySelector('.assistant-conversation-row')).items[1].run();
   assert.deepEqual([opened,folderOpened,renamed],[1,1,1]);
+  const editor=d.querySelector('#assistant-input');
+  editor.setSelectionRange(0,4);
+  w.navigator.clipboard.writeText=async()=>{throw new Error('permission denied')};
+  await w.SmetraContextMenu.describe(editor).items[0].run();
+  assert.equal(editor.value,'текст','Denied clipboard permission must not erase selected text');
+  w.navigator.clipboard.writeText=async()=>{};
   await w.SmetraContextMenu.describe(d.querySelector('.quote-row')).items[1].run();
   assert.deepEqual(JSON.parse(JSON.stringify(receivedContext)),[{entity:'quotes',id:'q17',label:'Ремонт кухни',workspace_id:'workspace-1'}],
     'Selected quote id and current workspace are forwarded to assistant context');
