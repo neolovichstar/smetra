@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import math
 import os
 import secrets
 import socket
@@ -655,12 +656,18 @@ def _model_extract(mime, name, raw):
         item["unit_price_kopecks"] = price if type(price) is int and 0 <= price <= 100_000_000_000 else None
         item["total_kopecks"] = total if type(total) is int and 0 <= total <= 100_000_000_000 else None
         clean_items.append(item)
+    try:
+        confidence = float(value.get("confidence") or 0)
+    except (TypeError, ValueError, OverflowError):
+        confidence = 0.0
+    if not math.isfinite(confidence):
+        confidence = 0.0
     value.update({
         "document_type": str(value.get("document_type") or "unknown")[:60],
         "merchant": str(value.get("merchant") or "")[:200],
         "date": str(value.get("date") or "")[:10],
         "currency": str(value.get("currency") or "RUB")[:3],
-        "confidence": max(0.0, min(1.0, float(value.get("confidence", 0) or 0))),
+        "confidence": max(0.0, min(1.0, confidence)),
         "notes": str(value.get("notes") or "")[:1000],
         "items": clean_items,
         "needs_confirmation": True,
@@ -753,11 +760,18 @@ def _yandex_files(con, connection, folder_path, recursive):
                 mime = _mime_for(name, item.get("mime_type") or "application/octet-stream")
                 modified = str(item.get("modified") or "")
                 size = int(item.get("size") or 0)
-                fp = str(item.get("resource_id") or hashlib.sha256((path+modified+str(size)).encode()).hexdigest())
+                # Yandex resource_id identifies the object, not its content. Its
+                # value stays the same when a user edits an existing document.
+                legacy_fp = str(item.get("resource_id") or hashlib.sha256(
+                    (path + modified + str(size)).encode()).hexdigest())
+                fp = hashlib.sha256(
+                    (legacy_fp + "\0" + modified + "\0" + str(size)).encode()
+                ).hexdigest()
                 result.append({
                     "provider_file_id": path, "parent_folder_id": parent, "name": name, "mime": mime,
                     "provider_mime": str(item.get("mime_type") or "application/octet-stream"),
                     "size": size, "modified_at": modified, "fingerprint": fp,
+                    "legacy_fingerprint": legacy_fp,
                     "web_view_url": str(item.get("file") or "")[:2048],
                 })
                 if len(result) >= 1500:
@@ -782,8 +796,15 @@ def _sync_binding(con, binding):
         if not item["provider_file_id"]:
             continue
         fp = item["fingerprint"] or hashlib.sha256((item["name"] + item["modified_at"]).encode()).hexdigest()
-        old = con.execute("SELECT id,source_fingerprint,processing_status FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
+        old = con.execute("SELECT id,source_fingerprint,processing_status,modified_at,size FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
                           (connection["id"], item["provider_file_id"])).fetchone()
+        # Preserve fingerprints for legacy Yandex records with identical
+        # metadata: deploying this fix must not reprocess every old document.
+        if (old and connection["provider"] == "yandex_disk"
+                and old["source_fingerprint"] == item.get("legacy_fingerprint")
+                and old["modified_at"] == item["modified_at"]
+                and int(old["size"]) == int(item["size"])):
+            fp = old["source_fingerprint"]
         changed = not old or old["source_fingerprint"] != fp
         status = "queued" if changed and item["mime"] in SUPPORTED_FILES and 0 < item["size"] <= MAX_FILE_BYTES else (
             "ignored" if item["mime"] not in SUPPORTED_FILES or item["size"] > MAX_FILE_BYTES else "processed")
@@ -807,18 +828,37 @@ def _sync_binding(con, binding):
 
 def _document_job(con, job):
     row = con.execute(
-        "SELECT j.*,f.provider_file_id,f.name,f.mime,f.provider_mime,f.size,f.connection_id,f.workspace_id,b.quote_id,b.project_id,c.provider,c.access_token_enc,c.refresh_token_enc,c.token_expires_at,c.status AS connection_status FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id JOIN cloud_connections c ON c.id=f.connection_id WHERE j.id=?",
+        "SELECT j.*,f.provider_file_id,f.name,f.mime,f.provider_mime,f.size,f.connection_id,f.workspace_id,"
+        "f.source_fingerprint AS current_fingerprint,f.trashed,b.id AS binding_id,b.quote_id,b.project_id,b.status AS binding_status,"
+        "c.provider,c.access_token_enc,c.refresh_token_enc,c.token_expires_at,c.status AS connection_status "
+        "FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id AND f.workspace_id=j.workspace_id "
+        "JOIN cloud_folder_bindings b ON b.id=f.binding_id AND b.workspace_id=j.workspace_id "
+        "JOIN cloud_connections c ON c.id=f.connection_id AND c.workspace_id=j.workspace_id WHERE j.id=?",
         (job["id"],),
     ).fetchone()
     if not row:
         return "failed"
     now = _now()
+    if (row["binding_status"] != "active" or row["trashed"]
+            or row["source_fingerprint"] != row["current_fingerprint"]):
+        # A removed folder or replaced file version must not be downloaded
+        # or sent to an AI provider by a pending background job.
+        with business.transaction(con, lock_scopes=(f"document-job:{job['id']}",)):
+            updated = con.execute(
+                "UPDATE document_processing_jobs SET status='failed',progress='Задание отменено',"
+                "error='Папка отключена или файл изменён',lease_token='',lease_until=0,updated_at=? "
+                "WHERE id=? AND lease_token=? AND status='running'",
+                (now, job["id"], job["lease_token"]),
+            )
+            return "skipped" if updated.rowcount == 1 else "stale"
     try:
         if row["connection_status"] != "active":
             raise business.DomainError(409, "Облачное подключение требует повторной авторизации")
-        connection = {key: row[key] for key in ("id", "workspace_id", "provider", "access_token_enc", "refresh_token_enc", "token_expires_at", "status")}
-        # The connector's user ID is required for a provider refresh update.
-        conn_row = con.execute("SELECT * FROM cloud_connections WHERE id=?", (row["connection_id"],)).fetchone()
+        # Refresh operates on the full connection row, scoped to this workspace.
+        conn_row = con.execute("SELECT * FROM cloud_connections WHERE id=? AND workspace_id=?",
+                               (row["connection_id"], row["workspace_id"])).fetchone()
+        if not conn_row or conn_row["status"] != "active":
+            raise business.DomainError(409, "Облачное подключение требует повторной авторизации")
         connection = dict(conn_row)
         file_row = {key: row[key] for key in ("provider_file_id", "name", "mime", "provider_mime", "size")}
         raw = _download(con, connection, file_row)
@@ -828,6 +868,22 @@ def _document_job(con, job):
         proposal["quote_id"] = row["quote_id"]
         proposal["project_id"] = row["project_id"]
         with business.transaction(con, lock_scopes=(f"workspace:{row['workspace_id']}", f"document-job:{job['id']}")):
+            current = con.execute(
+                "SELECT b.status AS binding_status,f.trashed,f.source_fingerprint AS current_fingerprint "
+                "FROM cloud_files f JOIN cloud_folder_bindings b ON b.id=f.binding_id "
+                "AND b.workspace_id=f.workspace_id "
+                "WHERE f.id=? AND f.workspace_id=?",
+                (row["cloud_file_id"], row["workspace_id"]),
+            ).fetchone()
+            if (not current or current["binding_status"] != "active" or current["trashed"]
+                    or current["current_fingerprint"] != row["source_fingerprint"]):
+                updated = con.execute(
+                    "UPDATE document_processing_jobs SET status='failed',progress='Задание отменено',"
+                    "error='Папка отключена или файл изменён',lease_token='',lease_until=0,updated_at=? "
+                    "WHERE id=? AND lease_token=? AND status='running'",
+                    (now, job["id"], job["lease_token"]),
+                )
+                return "skipped" if updated.rowcount == 1 else "stale"
             updated = con.execute(
                 "UPDATE document_processing_jobs SET status='needs_review',progress='Ожидает проверки',extraction=?,proposal=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=? AND status='running'",
                 (business.packed(proposal), business.packed(proposal), now, job["id"], job["lease_token"]),
@@ -878,7 +934,7 @@ def _process_jobs(con, limit=3):
     result = {"processed": 0, "review": 0, "failed": 0, "stale_ignored": 0}
     for job in jobs:
         state = _document_job(con, job)
-        if state == "stale":
+        if state in ("stale", "skipped"):
             result["stale_ignored"] += 1
         elif state == "needs_review":
             result["review"] += 1

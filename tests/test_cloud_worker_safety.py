@@ -16,7 +16,9 @@ def job_row():
         "project_id": None, "provider": "google_drive",
         "access_token_enc": "encrypted", "refresh_token_enc": "encrypted",
         "token_expires_at": 99999999, "status": "running",
-        "connection_status": "active",
+        "connection_status": "active", "binding_status": "active",
+        "trashed": 0, "source_fingerprint": "fingerprint-a",
+        "current_fingerprint": "fingerprint-a",
     }
 
 
@@ -30,14 +32,19 @@ class FakeCursor:
 
 
 class TrackingConnection:
-    def __init__(self, update_rowcount):
+    def __init__(self, update_rowcount, row_data=None, recheck_data=None):
         self.calls = []
         self.update_rowcount = update_rowcount
+        self.row_data = row_data or job_row()
+        self.recheck_data = recheck_data
 
     def execute(self, sql, params=()):
         self.calls.append((sql, params))
         if sql.startswith("SELECT j.*"):
-            return FakeCursor(job_row())
+            return FakeCursor(self.row_data)
+        if sql.startswith("SELECT b.status AS binding_status"):
+            data = self.recheck_data if self.recheck_data is not None else self.row_data
+            return FakeCursor(data)
         if sql.startswith("SELECT * FROM cloud_connections"):
             return FakeCursor({
                 "id": "conn-1", "workspace_id": "space-a",
@@ -159,6 +166,51 @@ class DocumentLeaseTests(unittest.TestCase):
         self.assertFalse(any("UPDATE cloud_files" in sql for sql, _ in calls))
         self.assertFalse(any("INSERT INTO notifications" in sql for sql, _ in calls))
         enqueue.assert_not_called()
+
+    def test_disabled_binding_is_never_downloaded_or_sent_to_model(self):
+        record = dict(job_row(), binding_status="disabled")
+        con = TrackingConnection(1, row_data=record)
+        job = {"id": "job-1", "lease_token": "current-lease", "attempts": 1}
+        with (
+            patch("backend.business.transaction", return_value=nullcontext()),
+            patch("backend.cloud_drives._download") as download,
+            patch("backend.cloud_drives._model_extract") as extract,
+            patch("backend.push.enqueue") as enqueue,
+        ):
+            result = cloud_drives._document_job(con, job)
+        self.assertEqual(result, "skipped")
+        download.assert_not_called()
+        extract.assert_not_called()
+        enqueue.assert_not_called()
+        self.assertTrue(any("Задание отменено" in sql for sql, _ in con.calls))
+
+    def test_changed_file_version_is_not_processed_by_old_job(self):
+        record = dict(job_row(), current_fingerprint="new-version")
+        con = TrackingConnection(1, row_data=record)
+        job = {"id": "job-1", "lease_token": "current-lease", "attempts": 1}
+        with (
+            patch("backend.business.transaction", return_value=nullcontext()),
+            patch("backend.cloud_drives._download") as download,
+            patch("backend.cloud_drives._model_extract") as extract,
+        ):
+            self.assertEqual(cloud_drives._document_job(con, job), "skipped")
+        download.assert_not_called()
+        extract.assert_not_called()
+
+    def test_folder_disabled_during_ai_processing_cancels_result(self):
+        con = TrackingConnection(1, recheck_data=dict(job_row(), binding_status="disabled"))
+        job = {"id": "job-1", "lease_token": "current-lease", "attempts": 1}
+        with (
+            patch("backend.business.transaction", return_value=nullcontext()),
+            patch("backend.cloud_drives._download", return_value=b"%PDF") as download,
+            patch("backend.cloud_drives._model_extract", return_value={"needs_confirmation": True, "items": []}),
+            patch("backend.push.enqueue") as enqueue,
+        ):
+            result = cloud_drives._document_job(con, job)
+        self.assertEqual(result, "skipped")
+        download.assert_called_once()
+        enqueue.assert_not_called()
+        self.assertFalse(any("INSERT INTO notifications" in sql for sql, _ in con.calls))
 
     def test_valid_lease_can_publish_one_review(self):
         state, calls, enqueue = self.exercise_job(rowcount=1)
