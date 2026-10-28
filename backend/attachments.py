@@ -47,7 +47,7 @@ def download(row, con=None):
     # Always attachment, never browser-executable user content.
     suffix = {
         "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/mp4": ".m4a",
-        "audio/ogg": ".ogg", "audio/webm": ".webm", "audio/flac": ".flac",
+        "audio/ogg": ".ogg", "audio/webm": ".webm", "audio/flac": ".flac", "audio/aac": ".aac",
         "image/png": ".png",
         "image/jpeg": ".jpg",
         "application/pdf": ".pdf",
@@ -81,6 +81,22 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == "transcript":
+        if method != "GET":
+            raise DomainError(405, "Просмотр расшифровки требует GET")
+        from backend.audio_transcription import MIMES as AUDIO_MIMES
+        row = service.get("files", parts[0])
+        if row["mime"] not in AUDIO_MIMES:
+            raise DomainError(422, "Файл не является аудио")
+        if row["index_status"] != "ready" or row["index_method"] != "transcription" or row["index_hash"] != row["sha256"]:
+            raise DomainError(409, "Расшифровка пока не готова")
+        part = service.con.execute(
+            "SELECT text FROM file_text_chunks WHERE workspace_id=? AND file_id=? AND source_sha256=? AND page=1",
+            (service.wid, row["id"], row["sha256"]),
+        ).fetchone()
+        if not part:
+            raise DomainError(409, "Расшифровка пока не готова")
+        return 200, {"text": part["text"][:16000], "truncated": len(part["text"]) > 16000}
     if len(parts) == 2 and parts[1] == "transcribe":
         if method != "POST":
             raise DomainError(405, "Распознавание требует POST")
