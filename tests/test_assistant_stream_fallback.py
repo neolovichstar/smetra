@@ -103,6 +103,7 @@ class StreamFallbackTests(unittest.TestCase):
                 self.assertRaises(DomainError) as raised:
             query_model_stream([{"role": "user", "content": "Привет"}], lambda _: None)
         self.assertEqual(len(calls), 1)
+        self.assertEqual(raised.exception.status, 409)
         self.assertIn("прервался", str(raised.exception))
 
 
