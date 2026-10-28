@@ -41,6 +41,23 @@ class GoogleLoginTests(unittest.TestCase):
         finally:
             IdentityAssistantTests.tearDownClass()
 
+    def test_google_start_from_legacy_alias_redirects_to_canonical_host(self):
+        from tests.test_identity_assistant import IdentityAssistantTests
+        handler = IdentityAssistantTests()
+        IdentityAssistantTests.setUpClass()
+        try:
+            with patch.dict(os.environ, {"GOOGLE_AUTH_CLIENT_ID": "google-id", "GOOGLE_AUTH_CLIENT_SECRET": "secret"}):
+                for host in ("smetra.vercel.app", "www.smetra.online"):
+                    status, headers, _ = handler.get_redirect("/api/auth/oauth/google/start?intent=login", host=host)
+                    self.assertEqual(status, 303)
+                    self.assertEqual(
+                        headers["Location"],
+                        "https://smetra.online/api/auth/oauth/google/start?intent=login",
+                    )
+                    self.assertNotIn("Set-Cookie", headers)
+        finally:
+            IdentityAssistantTests.tearDownClass()
+
     def test_google_subject_is_verified_server_side_and_avatar_is_not_trusted(self):
         with patch.dict(os.environ, {"GOOGLE_AUTH_CLIENT_ID": "google-id", "GOOGLE_AUTH_CLIENT_SECRET": "private-secret"}):
             with patch("backend.identity.remote", side_effect=[
