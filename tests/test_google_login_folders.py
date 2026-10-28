@@ -55,7 +55,7 @@ class GoogleLoginTests(unittest.TestCase):
             params = parse_qs(url.query)
             self.assertEqual(url.hostname, "accounts.google.com")
             self.assertEqual(params["scope"], ["openid email profile"])
-            self.assertEqual(params["redirect_uri"], [handler.mod.ORIGIN + "/api/auth/oauth/google/callback"])
+            self.assertEqual(params["redirect_uri"], ["https://smetra.online/api/auth/oauth/google/callback"])
             self.assertEqual(params["code_challenge_method"], ["S256"])
             self.assertNotIn("client_secret", params)
             self.assertNotIn("drive.readonly", url.query)
