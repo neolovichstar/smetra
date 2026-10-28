@@ -63,6 +63,27 @@ class AssistantJobTests(unittest.TestCase):
         self.assertEqual(self.call('/assistant/jobs','POST',{'text':'Другой запрос'},owner,key='one')[0],409)
         self.call('/assistant/jobs/'+results[0]['id'],'DELETE',token=owner)
 
+    def test_idempotent_reconnects_do_not_consume_new_request_quota(self):
+        owner, _ = self.account('job-replay-throttle')
+        first = self.enqueue(owner, key='reconnect')
+        # A dropped connection may cause many retries with the same key.
+        # These must return the owned job without consuming 12 new requests.
+        for _ in range(15):
+            status, result = self.call(
+                '/assistant/jobs', 'POST', {'text': 'Проверь данные'}, owner, key='reconnect',
+            )
+            self.assertEqual(status, 200, result)
+            self.assertEqual(result['job']['id'], first['id'])
+        # The replay cannot be used to smuggle a different request.
+        status, _ = self.call(
+            '/assistant/jobs', 'POST', {'text': 'Другие данные'}, owner, key='reconnect',
+        )
+        self.assertEqual(status, 409)
+        # A genuinely new task still respects the normal request budget.
+        self.assertEqual(self.call(
+            '/assistant/jobs', 'POST', {'text': 'Новый вопрос'}, owner, key='new-task',
+        )[0], 202)
+
     def test_completion_survives_screen_exit_and_is_not_run_twice(self):
         owner, _ = self.account('job-complete')
         thread = self.call('/assistant/conversations','POST',{'title':'Проверка'},owner)[1]['conversation']
