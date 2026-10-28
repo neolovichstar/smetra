@@ -6,6 +6,7 @@ import zlib
 import subprocess
 from pathlib import Path
 from backend.office_documents import DOCX, XLSX, CSV
+from backend.audio_transcription import AUDIO, MIMES, validate_audio
 
 try:
     from backend.business import DomainError, identity, integer, stamp, string
@@ -60,6 +61,7 @@ def download(row, con=None):
         DOCX: ".docx",
         XLSX: ".xlsx",
         CSV: ".csv",
+        **{mime: ext for ext, (mime, fmt) in AUDIO.items()},
     }[row["mime"]]
     if row["mime"] == "text/plain" and Path(row["name"]).suffix.lower() == ".md":
         suffix = ".md"
@@ -86,6 +88,26 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == "transcribe":
+        if method != "POST":
+            raise DomainError(405, "Распознавание требует POST")
+        from backend.audio_transcription import transcribe
+        return transcribe(service, parts[0])
+    if len(parts) == 2 and parts[1] == "transcript":
+        if method != "GET":
+            raise DomainError(405, "Расшифровка доступна через GET")
+        row = service.get("files", parts[0])
+        if row["mime"] not in MIMES:
+            raise DomainError(422, "Выбранный файл не является аудио")
+        if row["index_status"] != "ready" or row["index_method"] != "transcription" or row["index_hash"] != row["sha256"]:
+            raise DomainError(409, "Расшифровка пока не готова")
+        part = service.con.execute(
+            "SELECT text FROM file_text_chunks WHERE workspace_id=? AND file_id=? AND source_sha256=? AND page=1",
+            (service.wid, row["id"], row["sha256"]),
+        ).fetchone()
+        if not part:
+            raise DomainError(409, "Расшифровка пока не готова")
+        return 200, {"text": part["text"][:16000], "truncated": len(part["text"]) > 16000}
     if len(parts) == 2 and parts[1] == "thumbnail" and method == "GET":
         row = service.get("files", parts[0])
         if row["mime"] not in ("image/png", "image/jpeg"):
@@ -303,10 +325,9 @@ def _route(service, method, parts, query, data):
             service.get(table, references[key])
     name = string(data.get("name", ""), "Имя файла", 180, True)
     extension = Path(name).suffix.lower()
-    if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
-        raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT, MD, DOCX, XLSX и CSV")
-    if assistant_upload and extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
-        raise DomainError(400, "Разрешены фотографии PNG/JPEG и документы PDF, TXT, MD, DOCX, XLSX, CSV")
+    docs = (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv")
+    if extension not in docs and not (assistant_upload and extension in AUDIO):
+        raise DomainError(400, "Поддерживаются изображения, документы и аудио в чате ассистента")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
@@ -314,7 +335,9 @@ def _route(service, method, parts, query, data):
     maximum = maximum_upload()
     if not 1 <= len(raw) <= maximum:
         raise DomainError(413, f"Максимальный размер файла — {maximum // 1_000_000} МБ")
-    if extension in (".png", ".jpg", ".jpeg"):
+    if extension in AUDIO:
+        mime, _format = validate_audio(name, raw)
+    elif extension in (".png", ".jpg", ".jpeg"):
         try:
             from PIL import Image
 
