@@ -75,7 +75,7 @@
       +'<div class="premium-connect-row" role="group" aria-label="Выбрать облачный диск">'+cloudCards+'</div>'
       +'<section class="premium-cloud-folders" id="premium-cloud-folders" aria-label="Папки выбранного диска"><div class="premium-cloud-folders-heading"><h3>Папки</h3><span id="premium-cloud-name">'+esc(provider(selectedCloudProvider))+'</span></div>'
       +'<form id="premium-folder-form" class="premium-form"><input id="premium-folder-connection" name="connection_id" type="hidden" value="'+esc(selectedConnection?.id||'')+'"><input id="premium-folder-id" name="folder_id" type="hidden" required>'
-      +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="btn small" id="premium-folder-back" type="button" disabled>← Назад</button><span id="premium-folder-location">Мой диск</span></div><div id="premium-folder-entries" class="premium-folder-entries" role="listbox" aria-label="Папки">Загружаем папки…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button><small id="premium-folder-choice" class="premium-folder-choice">Папка не выбрана</small></div>'
+      +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="btn small" id="premium-folder-back" type="button" disabled>← Назад</button><span id="premium-folder-location">Мой диск</span></div><div id="premium-folder-entries" class="premium-folder-entries" role="list" aria-label="Папки">Загружаем папки…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button><small id="premium-folder-choice" class="premium-folder-choice">Папка не выбрана</small></div>'
       +'<details class="premium-folder-options"><summary>Настройки синхронизации</summary><div class="premium-folder-options-content"><div class="field"><label for="premium-folder-quote">Черновик сметы для импорта</label><select id="premium-folder-quote" name="quote_id">'+quoteOptions(quotes)+'</select></div><label class="premium-checkbox"><input type="checkbox" name="recursive" checked><span><strong>Включить вложенные папки</strong><small>Синхронизация ограничена по глубине и числу файлов.</small></span></label></div></details>'
       +'<div class="premium-form-submit"><button class="btn primary" type="submit" id="premium-folder-submit" '+(selectedConnection?'':'disabled')+'>Синхронизировать выбранную папку</button><span>Изменения в смете потребуют подтверждения.</span></div><p class="form-error" role="alert"></p></form></section>'
       +'<div class="premium-list-block"><div class="premium-list-heading"><h3>На синхронизации</h3><span id="premium-cloud-folder-count">'+folders.filter(f=>f.provider===selectedCloudProvider).length+' папок</span></div><div class="premium-folder-list">'+folderHtml(selectedCloudProvider)+'</div></div></section>'+
@@ -154,17 +154,21 @@
         const rows=Array.isArray(payload.folders)?payload.folders:[];
         if(!rows.length&&!next){folderEntries.textContent='В этой папке нет вложенных каталогов.'}
         for(const entry of rows){
-          const item=document.createElement('button');item.type='button';item.className='premium-folder-entry';item.setAttribute('role','option');item.setAttribute('aria-selected','false');
-          const name=document.createElement('span');name.textContent='📁  '+String(entry.name||'Папка');
-          const move=document.createElement('span');move.className='premium-folder-enter';move.textContent='Открыть ›';
+          // Two accessible actions per row: choose for sync or open subfolders.
+          // Avoid nested buttons and click-only spans, which break keyboard use.
+          const item=document.createElement('div');item.className='premium-folder-entry';item.setAttribute('role','listitem');
+          const name=document.createElement('button');name.type='button';name.className='premium-folder-select';name.textContent='📁  '+String(entry.name||'Папка');name.setAttribute('aria-pressed','false');name.setAttribute('aria-label','Выбрать папку '+String(entry.name||'Папка'));
+          const move=document.createElement('button');move.type='button';move.className='premium-folder-enter';move.textContent='Открыть ›';move.setAttribute('aria-label','Открыть вложенные папки: '+String(entry.name||'Папка'));
           item.append(name,move);
-          item.addEventListener('click',()=>{
-            folderEntries.querySelectorAll('[role="option"]').forEach(x=>x.setAttribute('aria-selected','false'));
-            item.setAttribute('aria-selected','true');
+          name.addEventListener('click',()=>{
+            folderEntries.querySelectorAll('.premium-folder-select').forEach(x=>x.setAttribute('aria-pressed','false'));
+            folderEntries.querySelectorAll('.premium-folder-entry').forEach(x=>x.classList.remove('is-selected'));
+            name.setAttribute('aria-pressed','true');
+            item.classList.add('is-selected');
             folderId.value=String(entry.id);
             folderChoice.textContent='Выбрано: '+String(entry.name||'Папка');
           });
-          move.addEventListener('click',event=>{event.stopPropagation();folderPath.push({id:entry.id,name:entry.name});void browseFolder()});
+          move.addEventListener('click',()=>{folderPath.push({id:entry.id,name:entry.name});void browseFolder()});
           folderEntries.append(item);
         }
         folderCursor=String(payload.next_cursor||'');
