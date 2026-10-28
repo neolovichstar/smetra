@@ -46,6 +46,8 @@ def download(row, con=None):
         content = path.read_bytes()
     # Always attachment, never browser-executable user content.
     suffix = {
+        "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/mp4": ".m4a",
+        "audio/ogg": ".ogg", "audio/webm": ".webm", "audio/flac": ".flac", "audio/aac": ".aac",
         "image/png": ".png",
         "image/jpeg": ".jpg",
         "application/pdf": ".pdf",
@@ -79,6 +81,27 @@ def route(service, method, parts, query, data):
 
 
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == "transcript":
+        if method != "GET":
+            raise DomainError(405, "Просмотр расшифровки требует GET")
+        from backend.audio_transcription import MIMES as AUDIO_MIMES
+        row = service.get("files", parts[0])
+        if row["mime"] not in AUDIO_MIMES:
+            raise DomainError(422, "Файл не является аудио")
+        if row["index_status"] != "ready" or row["index_method"] != "transcription" or row["index_hash"] != row["sha256"]:
+            raise DomainError(409, "Расшифровка пока не готова")
+        part = service.con.execute(
+            "SELECT text FROM file_text_chunks WHERE workspace_id=? AND file_id=? AND source_sha256=? AND page=1",
+            (service.wid, row["id"], row["sha256"]),
+        ).fetchone()
+        if not part:
+            raise DomainError(409, "Расшифровка пока не готова")
+        return 200, {"text": part["text"][:16000], "truncated": len(part["text"]) > 16000}
+    if len(parts) == 2 and parts[1] == "transcribe":
+        if method != "POST":
+            raise DomainError(405, "Распознавание требует POST")
+        from backend.audio_transcription import transcribe
+        return transcribe(service, parts[0])
     if len(parts) == 2 and parts[1] == "preview":
         from backend.file_preview import route as preview_route
 
@@ -242,10 +265,12 @@ def _route(service, method, parts, query, data):
             service.get(table, references[key])
     name = string(data.get("name", ""), "Имя файла", 180, True)
     extension = Path(name).suffix.lower()
-    if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
-        raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT, MD, DOCX, XLSX и CSV")
-    if assistant_upload and extension not in (".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
-        raise DomainError(400, "Ассистент читает PDF, TXT, MD, DOCX, XLSX и CSV")
+    from backend.audio_transcription import AUDIO, validate_audio
+    allowed = (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv", *AUDIO)
+    if extension not in allowed:
+        raise DomainError(400, "Неподдерживаемый формат вложения")
+    if assistant_upload and extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv", *AUDIO):
+        raise DomainError(400, "Неподдерживаемый формат вложения ассистента")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
@@ -253,7 +278,9 @@ def _route(service, method, parts, query, data):
     maximum = maximum_upload()
     if not 1 <= len(raw) <= maximum:
         raise DomainError(413, f"Максимальный размер файла — {maximum // 1_000_000} МБ")
-    if extension in (".png", ".jpg", ".jpeg"):
+    if extension in AUDIO:
+        mime, _format = validate_audio(name, raw)
+    elif extension in (".png", ".jpg", ".jpeg"):
         try:
             from PIL import Image
 

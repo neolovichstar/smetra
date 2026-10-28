@@ -100,8 +100,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv" hidden><span></span>';
-  attachmentBar.querySelector('span').textContent='PDF, DOCX, XLSX, CSV, TXT, MD · до '+maxUploadLabel;
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ, фото или аудио" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv,.png,.jpg,.jpeg,.mp3,.wav,.m4a,.ogg,.webm,.flac,.aac" hidden><span></span>';
+  attachmentBar.querySelector('span').textContent='Документ, фото или аудио · до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
   const backgroundButton=document.createElement('button');backgroundButton.type='button';backgroundButton.id='assistant-background';backgroundButton.textContent='В фоне';backgroundButton.hidden=true;backgroundButton.disabled=true;
@@ -297,7 +297,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const uploadAttachment=async file=>{
     if(!file||attachButton.disabled)return;
     const extension=file.name.toLowerCase().split('.').pop();
-    if(!['pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите PDF, DOCX, XLSX, CSV, TXT или MD до '+maxUploadLabel;return}
+    const audio=['mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension);
+    if(!['pdf','txt','md','docx','xlsx','csv','png','jpg','jpeg','mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension)||file.size<1||file.size>maxUpload||(audio&&file.size>3000000)){status.textContent='Выберите документ, изображение или аудио до '+(audio?'3 МБ':maxUploadLabel);return}
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -312,13 +313,36 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
       context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();refreshFile();refreshJobs();
-      status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
+      if(audio){
+        status.textContent='Распознаю речь из аудиофайла…';
+        try{
+          await api('/files/'+encodeURIComponent(attached.id)+'/transcribe',{method:'POST',body:'{}'});
+          status.textContent='Аудио распознано. Можно спросить ассистента о записи.';
+        }catch(error){status.textContent='Аудио сохранено. '+error.message+' · Можно повторить распознавание.'}
+        refreshFile();
+      }else status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';
+      input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
     finally{attachButton.disabled=false;fileInput.value=''}
   };
   fileInput.onchange=()=>uploadAttachment(fileInput.files[0]);
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
-  composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();uploadAttachment(event.dataTransfer.files[0])}});
+  composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();if(event.dataTransfer.files.length>1)status.textContent='Прикрепляется первый файл. Для следующего выберите его отдельно.';uploadAttachment(event.dataTransfer.files[0])}});
+  // Images and audio pasted with Ctrl+V pass the standard server-side signature checks.
+  composer.addEventListener('paste',event=>{
+    const files=[...(event.clipboardData?.files||[])];
+    if(!files.length)return;
+    const candidate=files.find(file=>file.type.startsWith('image/')||file.type.startsWith('audio/'));
+    if(!candidate)return;
+    event.preventDefault();
+    const extension=({
+      'image/png':'png','image/jpeg':'jpg','audio/mpeg':'mp3','audio/wav':'wav',
+      'audio/mp4':'m4a','audio/ogg':'ogg','audio/webm':'webm','audio/flac':'flac','audio/aac':'aac'
+    })[candidate.type];
+    if(!extension){status.textContent='Формат вставленного файла не поддерживается';return}
+    const file=new File([candidate],candidate.name&&candidate.name.toLowerCase().endsWith('.'+extension)?candidate.name:'clipboard-'+Date.now()+'.'+extension,{type:candidate.type});
+    uploadAttachment(file);
+  });
   let quota=data.quota,working=false,threadBusy=false,requestController=null;
   const setThreadBusy=blocked=>{
     document.querySelectorAll('.assistant-workbar button,.assistant-history-list button,.assistant-history-rename-form input,.assistant-history-rename-form button').forEach(button=>button.disabled=blocked);
@@ -491,12 +515,34 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const result=await api('/files/'+encodeURIComponent(id)+'/metadata');
       if(!fileStatus.isConnected||sequence!==filePollSeq||context?.id!==id)return;
       const info=result.processing,active=['queued','running','retry'].includes(info.state);
-      fileBlocking=active||['failed','deferred','cancelled','needs_ocr'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
+      const isAudio=result.file.mime.startsWith('audio/');
+      fileBlocking=isAudio?info.state!=='ready':active||['failed','deferred','cancelled','needs_ocr'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
       const labels={queued:'Документ в очереди',running:'Подготавливаю текст…',retry:'Повторю подготовку позже',ready:'Текст готов',needs_ocr:'В PDF есть страницы без текста. Для них нужен OCR.',failed:info.error||'Не удалось подготовить документ',cancelled:'Подготовка отменена',deferred:'Подготовьте документ перед вопросом',legacy:'Документ ещё не подготовлен'};
-      const label=document.createElement('span');label.textContent=(labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
+      const label=document.createElement('span');label.textContent=(isAudio&&info.state!=='ready'?'Аудио ожидает распознавания':isAudio?'Расшифровка готова':labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
       if(['ready','needs_ocr'].includes(info.state)&&info.missing_text_pages?.length){const gaps=document.createElement('span');gaps.textContent='Без текста: стр. '+info.missing_text_pages.slice(0,6).join(', ')+(info.missing_text_pages.length>6?'…':'');fileStatus.append(gaps)}
       if(info.ocr_supported){const budget=document.createElement('span');budget.textContent=`OCR: ${info.ocr_quota.used} из ${info.ocr_quota.limit} в месяц · первые ${info.ocr_page_limit} страницы`;fileStatus.append(budget)}
-      if(info.supported&&(active&&info.can_cancel||['failed','cancelled','deferred','legacy','needs_ocr'].includes(info.state))){
+      if(isAudio&&info.state==='ready'){
+         const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent='Показать расшифровку';button.setAttribute('aria-expanded','false');
+         button.onclick=async()=>{
+           let transcript=fileStatus.querySelector('.assistant-transcript');
+           if(transcript){transcript.hidden=!transcript.hidden;button.textContent=transcript.hidden?'Показать расшифровку':'Скрыть расшифровку';button.setAttribute('aria-expanded',String(!transcript.hidden));return}
+           button.disabled=true;
+           try{
+             const data=await api('/files/'+encodeURIComponent(id)+'/transcript');
+             if(!fileStatus.isConnected||context?.id!==id)return;
+             transcript=document.createElement('pre');transcript.className='assistant-transcript';transcript.textContent=data.text+(data.truncated?'\\n\\n[Показаны первые 16 000 символов]':'');
+             fileStatus.append(transcript);button.textContent='Скрыть расшифровку';button.setAttribute('aria-expanded','true');
+           }catch(error){status.textContent=error.message}
+           finally{button.disabled=false}
+         };
+         fileStatus.append(button);
+       }
+       if(isAudio&&info.state!=='ready'){
+        const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent='Распознать аудио';
+        button.onclick=async()=>{button.disabled=true;status.textContent='Распознаю аудиофайл…';try{await api('/files/'+encodeURIComponent(id)+'/transcribe',{method:'POST',body:'{}'});status.textContent='Аудио распознано';refreshFile()}catch(error){button.disabled=false;status.textContent=error.message}};
+        fileStatus.append(button);
+      }
+      if(!isAudio&&info.supported&&(active&&info.can_cancel||['failed','cancelled','deferred','legacy','needs_ocr'].includes(info.state))){
         const ocr=info.ocr_supported;const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent=active?'Отменить подготовку':ocr?'Распознать скан':info.state==='failed'?'Повторить':'Подготовить документ';button.disabled=!!info.cancel_requested||!active&&ocr&&info.ocr_quota.used>=info.ocr_quota.limit;
         button.onclick=async()=>{button.disabled=true;try{await api('/files/'+encodeURIComponent(id)+'/'+(ocr?'ocr':'processing'),{method:active?'DELETE':'POST',...(active?{}:{headers:{'Idempotency-Key':crypto.randomUUID()}})});refreshFile();refreshJobs()}catch(error){button.disabled=false;notify(error.message)}};fileStatus.append(button);
       }
