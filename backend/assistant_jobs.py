@@ -173,6 +173,16 @@ def route(service, method, parts, data):
     file_processing.ensure_ready(service, context)
     request_hash = hashlib.sha256(packed([prompt, context, thread_id] + ([attachments] if attachments else [])).encode()).hexdigest()
     stored_context = {'context': context, 'attachments': attachments} if attachments else context
+    # Already-committed identical requests are read-only replays. In
+    # particular, reconnecting clients must not consume the rate-limit budget.
+    existing = service.con.execute(
+        'SELECT * FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND request_key=?',
+        (*args, key),
+    ).fetchone()
+    if existing:
+        if existing['request_hash'] != request_hash:
+            raise DomainError(409, 'Этот ключ уже используется для другой задачи')
+        return 200, {'job': public(existing), 'quota': assistant.public_quota(service)}
     service.h.throttle('assistant:' + service.user['id'], 12, 60)
     with transaction(
         service.con,
