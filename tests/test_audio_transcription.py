@@ -16,7 +16,7 @@ def short_wav():
         writer.setnchannels(1)
         writer.setsampwidth(2)
         writer.setframerate(8000)
-        writer.writeframes(b"\\x00\\x00" * 800)
+        writer.writeframes(bytes(2) * 800)
     return stream.getvalue()
 
 
@@ -30,7 +30,7 @@ class AudioValidationTests(unittest.TestCase):
         for name, payload in (
             ("recording.wav", b"RIFF" + b"x" * 60),
             ("recording.aac", b"<html>not audio</html>"),
-            ("recording.mp3", b"MZ" + b"\\x00" * 100),
+            ("recording.mp3", b"MZ" + bytes(100)),
             ("recording.wav", b""),
             ("recording.exe", short_wav()),
         ):
