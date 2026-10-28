@@ -968,7 +968,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
 
                     result = remember(service, args, prompt)
                     remembered = remembered or bool(result.get("saved"))
-                elif name in ("list_records", "get_record", "overview", "read_file", "read_markdown", "list_files", "search_knowledge", "search_file_content", "list_construction_objects", "get_construction_object", "calculate_construction", "get_file_metadata", "get_document", "list_documents"):
+                elif name in ("analyze_design_image", "list_records", "get_record", "overview", "read_file", "read_markdown", "list_files", "search_knowledge", "search_file_content", "list_construction_objects", "get_construction_object", "calculate_construction", "get_file_metadata", "get_document", "list_documents"):
                     result = execute_read(service, name, args)
                 else:
                     action = prepare(service, name, args)
