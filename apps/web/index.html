@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0a0b">
 <meta name="mailru-domain" content="UQnzfKGMGVOWLYk5" />
-<title>Сметра — сметы, согласование и оплата в одном месте</title>
-<meta name="description" content="Сметы с позициями и итогами, согласование с клиентом по ссылке, этапы работ и поступления. ИИ-ассистент собирает черновик по описанию или фото. 10 смет бесплатно.">
+<title>сметра. — сметный сервис для ремонта и строительства</title>
+<meta name="description" content="сметра. — веб-сервис и Android-приложение для строительных смет, проектов, согласования, работы с клиентами и оплаты. ИИ помогает готовить сметы; подключение Google Drive для импорта документов выполняется только с разрешения пользователя.">
 <link rel="icon" href="/favicon.ico">
 <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/ui/tokens.css?v=20261026-r21">
 <link rel="stylesheet" href="/ui/base.css?v=20261026-r21">
 <link rel="stylesheet" href="/ui/components.css?v=20261026-r21">
 <link rel="stylesheet" href="/ui/site.css?v=20261026-r21">
-<script src="/ui/plans.js?v=20261026-r21" defer></script>
+<script src="/ui/plans.js?v=20261028-quota3" defer></script>
 <script src="/landing.js?v=20261026-r21" defer></script>
 <script type="module" src="/room3d.js?v=20261026-r21"></script>
 </head>
@@ -39,14 +39,14 @@
 <main id="landing" class="landing">
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
-      <p class="hero-kicker reveal">Для мастеров, бригад и строительных компаний</p>
+      <p class="hero-kicker reveal">сметра. — сервис для мастеров, бригад и строительных компаний</p>
       <h1 id="hero-title" class="reveal">Смета, которую клиент понимает и&nbsp;подтверждает.</h1>
       <p class="hero-lead reveal">Соберите позиции и итог, отправьте клиенту ссылку, ведите этапы и поступления. ИИ-ассистент подготовит черновик по описанию или фото — суммы считает Сметра.</p>
       <div class="hero-actions reveal">
         <a class="btn large primary" href="/app?register=1">Создать смету бесплатно</a>
         <a class="btn large ghost" href="#how">Как это работает</a>
       </div>
-      <p class="hero-note reveal">10 смет бесплатно · без банковской карты · сайт и Android-приложение</p>
+      <p class="hero-note reveal">3 сметы при регистрации · без банковской карты · сайт и Android-приложение</p>
     </div>
 
     <div class="hero-visual hero-room reveal" data-room3d>
@@ -241,17 +241,18 @@
     <div class="faq-list reveal">
       <details><summary>Нужно ли клиенту регистрироваться?</summary><p>Нет. Клиент открывает смету по ссылке, видит позиции, условия и итог, может согласовать, попросить изменения или задать вопрос.</p></details>
       <details><summary>Кто считает итоговую сумму — ИИ?</summary><p>Нет. Ассистент предлагает позиции и параметры, а количество, стоимость, скидки, налоги и итог рассчитывает сервер Сметры. Изменения в смете сохраняются только после вашего подтверждения.</p></details>
-      <details><summary>Что будет после 10 бесплатных смет?</summary><p>Созданные сметы останутся у вас. Для новых смет понадобится тариф PRO Solo или выше.</p></details>
+      <details><summary>Что будет после 3 бесплатные сметы при регистрации?</summary><p>Созданные сметы остаются доступны для редактирования. Для новых смет после стартового лимита понадобится PRO Solo или выше. Ранее зарегистрированные пользователи сохраняют прежний лимит.</p></details>
       <details><summary>Как оплачивается тариф?</summary><p>Разовым платежом на сайте через ЮKassa — на 31 или 366 дней. Автоматического продления и списаний нет. Данные карты Сметра не получает.</p></details>
       <details><summary>Можно ли работать с телефона?</summary><p>Да. Сайт адаптирован под телефон, а Android-приложение использует тот же аккаунт: сметы, клиенты и доступ к тарифу общие.</p></details>
       <details><summary>Можно ли перенести свои расценки и выгрузить данные?</summary><p>Расценки импортируются из таблицы Excel или CSV. Все данные пространства можно скачать одним ZIP-архивом в настройках.</p></details>
+      <details><summary>Зачем «сметре.» доступ к Google Drive?</summary><p>Только по вашему разрешению: чтобы показать папки и после вашего выбора найти в них рабочие документы — прайс-листы, счета и сметы. Доступ к Google Диску предоставляется отдельно от входа через Google. Сервис запрашивает чтение, не редактирует и не удаляет ваши файлы. Для распознавания документов может применяться сторонний ИИ-провайдер; подробности указаны в <a href="/privacy#google-drive">политике конфиденциальности</a>.</p></details>
     </div>
   </section>
 
   <section class="section cta" aria-labelledby="cta-title">
     <div class="cta-inner reveal">
       <h2 id="cta-title">Первая смета — сегодня</h2>
-      <p>Регистрация занимает минуту. 10 смет бесплатно, без банковской карты.</p>
+      <p>Регистрация занимает минуту. 3 сметы бесплатно, редактирование без ограничений и без банковской карты.</p>
       <div class="hero-actions"><a class="btn large primary" href="/app?register=1">Создать смету бесплатно</a><a class="btn large ghost" href="/app">У меня есть аккаунт</a></div>
     </div>
   </section>

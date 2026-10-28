@@ -1,154 +1,333 @@
-/* Cabinet context menu. Right click shows actions that fit the target: text
-   editing in fields, copying a selection or a message, links, and quick
-   workspace commands. Shift + right click still opens the browser menu, and
-   touch devices keep their native long-press behaviour. */
+/* Target-aware desktop right-click menus for the Smetra cabinet.
+   All mutations reuse the source UI's existing authorization / confirmation handlers. */
 (() => {
-  const icon = name => window.SmetraIcons ? window.SmetraIcons.svg(name, 16) : '';
+  const icon = name => window.SmetraIcons?.svg(name,16) || '';
   const fine = () => window.matchMedia?.('(pointer:fine)')?.matches !== false;
-  let menu = null, returnFocus = null;
-
-  const editable = el => el?.closest?.('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),textarea,[contenteditable=""],[contenteditable="true"]');
-  const fieldSelection = field => field && typeof field.selectionStart === 'number' ? field.value.slice(field.selectionStart, field.selectionEnd) : '';
-  const pageSelection = () => String(window.getSelection?.() || '').trim();
-  const toast = text => { if (typeof notify === 'function') notify(text); };
-  const copy = async text => {
-    try { await navigator.clipboard.writeText(text); toast('Скопировано'); }
-    catch { toast('Не удалось скопировать — используйте Ctrl+C'); }
+  let menu=null,focusBefore=null,closeTimer=null,openTimer=null,serial=0;
+  const toast = message => { if(typeof notify==='function')notify(message); };
+  const copy = async value => {
+    try { await navigator.clipboard.writeText(String(value));toast('Скопировано');return true; }
+    catch { toast('Не удалось скопировать. Используйте Ctrl+C.');return false; }
   };
-  const insert = (field, text) => {
-    if (typeof field.setRangeText === 'function') {
-      field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end');
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-    } else document.execCommand?.('insertText', false, text);
-  };
+  const action = (label,iconName,run,key) => ({label,icon:iconName,run,key});
+  const textOf = el => String(el?.textContent || '').trim().replace(/\s+/g,' ').slice(0,160);
+  const clickable = (root,selector) => root?.querySelector(selector);
+  const trigger = button => { if(button && !button.disabled && button.isConnected) button.click(); };
   const go = section => {
-    if (typeof tab === 'undefined' || typeof render !== 'function') return Promise.resolve();
-    tab = section;
-    if (location.hash.slice(1) !== section) history.pushState({}, '', location.pathname + location.search + '#' + section);
-    return Promise.resolve(render());
+    const button=document.querySelector('#sidebar [data-tab="'+section+'"],.app-nav [data-tab="'+section+'"],[data-tab="'+section+'"]');
+    if(button){button.click();return;}
+    if(typeof tab!=='undefined' && typeof render==='function'){
+      tab=section;history.pushState({},'',location.pathname+location.search+'#'+section);return render();
+    }
   };
-  const askAssistant = async text => {
+  const askAbout = async (entity,id,label) => {
+    if(!['quotes','clients','projects','documents','files'].includes(entity)||!id)return;
+    if(typeof window.SmetraLoadFeature==='function')await window.SmetraLoadFeature('assistant');
+    const workspaceId=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
+    if(typeof window.SmetraAssistantContext!=='function')throw Error('Контекст ассистента недоступен');
+    window.SmetraAssistantContext({entity,id,label,workspace_id:workspaceId});
     await go('assistant');
-    for (let i = 0; i < 50; i++) {
-      const input = document.querySelector('#assistant-input');
-      if (input && !input.disabled) {
-        input.value = (input.value ? input.value + '\n\n' : '') + text;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.focus();
-        return;
+  };
+  const askText = async value => {
+    await go('assistant');
+    let field=document.querySelector('#assistant-input');
+    for(let i=0;!field&&i<25;i++){
+      await new Promise(resolve=>setTimeout(resolve,80));
+      field=document.querySelector('#assistant-input');
+    }
+    if(!field)throw Error('Не удалось открыть поле ассистента');
+    field.value=(field.value?field.value+'\n\n':'')+value;
+    field.dispatchEvent(new Event('input',{bubbles:true}));field.focus();
+  };
+  const editable = el => el?.closest?.('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),textarea,[contenteditable=""],[contenteditable="true"]');
+  const editableSelection = field => field && typeof field.selectionStart==='number'
+    ? String(field.value).slice(field.selectionStart,field.selectionEnd) : pageSelection(field);
+  const pageSelection = target => {
+    const selection=window.getSelection?.();
+    if(!selection || selection.isCollapsed)return '';
+    const range=selection.rangeCount ? selection.getRangeAt(0) : null;
+    const node=range?.commonAncestorContainer;
+    if(!node || !(node===target||node.contains?.(target)||target.contains?.(node)))return '';
+    return String(selection).trim().slice(0,3000);
+  };
+  const nativePaste = async field => {
+    try {
+      const value=await navigator.clipboard.readText();
+      field.focus();
+      if(typeof field.setRangeText==='function'){
+        field.setRangeText(value,field.selectionStart,field.selectionEnd,'end');
+        field.dispatchEvent(new Event('input',{bubbles:true}));
+      }else document.execCommand?.('insertText',false,value);
+    }catch{toast('Используйте Ctrl+V для вставки');}
+  };
+  const recordTarget = target => {
+    // Only the object under the pointer; do not inspect arbitrary neighbouring records.
+    const match=target.closest?.('[data-work="quote"][data-id],[data-work="ask-document"][data-id],[data-work="entity"][data-kind][data-id]');
+    if(match){
+      const entity=match.dataset.work==='quote'?'quotes':match.dataset.work==='ask-document'?'documents':match.dataset.kind;
+      if(['quotes','clients','projects','documents','tasks','leads','catalog'].includes(entity))return {entity,id:match.dataset.id,button:match};
+    }
+    const row=target.closest?.('.quote-row,.quotes-document-row,.record-line,.kanban-card,.catalog-row,.task-group,.today-action,.agenda-day');
+    if(!row)return null;
+    const button=row.querySelector('[data-work="quote"][data-id],[data-work="ask-document"][data-id],[data-work="entity"][data-kind][data-id]');
+    if(!button)return null;
+    const entity=button.dataset.work==='quote'?'quotes':button.dataset.work==='ask-document'?'documents':button.dataset.kind;
+    return ['quotes','clients','projects','documents','tasks','leads','catalog'].includes(entity)
+      ? {entity,id:button.dataset.id,button} : null;
+  };
+  const itemName = (target,button) => {
+    const source=button?.querySelector('strong')||target.closest?.('.record-line,.quote-row,.kanban-card')?.querySelector('strong')||button;
+    return textOf(source)||'Запись';
+  };
+  const build = target => {
+    const field=editable(target);
+    if(field){
+      const selected=editableSelection(field);
+      const list=[];
+      if(selected){
+        if(!field.readOnly&&!field.disabled)list.push(action('Вырезать','x',async()=>{
+          // Clipboard permission can be denied; never delete the text until copy succeeded.
+          if(!await copy(selected))return;
+          field.focus();
+          if(typeof field.setRangeText==='function')field.setRangeText('');
+          else document.execCommand?.('delete',false);
+          field.dispatchEvent(new Event('input',{bubbles:true}));
+        },'Ctrl+X'));
+        list.push(action('Копировать','copy',()=>copy(selected),'Ctrl+C'));
+        list.push(action('Спросить ИИ о выделенном','sparkle',()=>askText(selected)));
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      if(!field.disabled&&!field.readOnly){
+        list.push(action('Вставить','file-text',()=>nativePaste(field),'Ctrl+V'));
+        list.push(action('Выделить всё','check',()=>{
+          field.focus();
+          if(field.select)field.select();
+          else if(field.isContentEditable){
+            const range=document.createRange();range.selectNodeContents(field);
+            const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+          }
+        },'Ctrl+A'));
+      }
+      return {heading:'Редактирование',items:list};
     }
+    const selected=pageSelection(target);
+    if(selected)return {heading:'Выделенный текст',items:[
+      action('Копировать выделенное','copy',()=>copy(selected),'Ctrl+C'),
+      action('Спросить ассистента','sparkle',()=>askText(selected))
+    ]};
+
+    const file=target.closest?.('.vault-file-tile,.vault-image-tile');
+    if(file){
+      const filename=textOf(file.querySelector('.vault-file-details strong,.vault-image-info strong'))||'Файл';
+      const list=[];
+      const add=(selector,label,symbol)=>{const button=clickable(file,selector);if(button&&!button.disabled)list.push(action(label,symbol,()=>trigger(button)));};
+      add('[data-action="open"]','Открыть','image');
+      add('[data-action="ask"]','Спросить ИИ о файле','sparkle');
+      add('[data-action="manage"]','Сведения о файле','info');
+      const archive=clickable(file,'[data-action="archive"]');
+      if(archive)list.push(action(document.querySelector('#vault-root [data-filter="archive"][aria-selected="true"]')?'Восстановить':'В архив','folder',()=>trigger(archive)));
+      add('[data-action="delete"]','Удалить…','trash');
+      list.push(action('Скопировать название','copy',()=>copy(filename)));
+      return {heading:filename,items:list};
+    }
+    const fileCenter=target.closest?.('.file-center-row');
+    if(fileCenter && fileCenter.querySelector('[data-file-open]')){
+      const filename=textOf(fileCenter.querySelector('.file-description strong'))||'Файл';
+      const list=[];
+      for(const [selector,label,symbol] of [
+        ['[data-file-open]','Открыть','file-text'],
+        ['[data-file-edit]','Редактировать','pencil'],
+        ['[data-file-ask]','Спросить ИИ о файле','sparkle'],
+        ['[data-file-manage]','Сведения о файле','info']
+      ]){
+        const button=fileCenter.querySelector(selector);
+        if(button)list.push(action(label,symbol,()=>trigger(button)));
+      }
+      list.push(action('Скопировать название','copy',()=>copy(filename)));
+      return {heading:filename,items:list};
+    }
+    const estimateLine=target.closest?.('.estimate-table tbody tr');
+    if(estimateLine){
+      const name=textOf(estimateLine.querySelector('td:first-child strong'))||textOf(estimateLine.querySelector('td:first-child'))||'Позиция';
+      return {heading:'Позиция сметы · '+name,items:[
+        action('Копировать позицию','copy',()=>copy(textOf(estimateLine))),
+        action('Спросить ИИ о позиции','sparkle',()=>askText('Проверь эту позицию сметы: '+textOf(estimateLine)))
+      ]};
+    }
+    const syncedFolder=target.closest?.('.premium-folder');
+    if(syncedFolder){
+      const label=textOf(syncedFolder.querySelector('strong'))||'Папка';
+      const remove=syncedFolder.querySelector('[data-premium-disable-folder]');
+      const list=[action('Скопировать название','copy',()=>copy(label))];
+      if(remove)list.push(action('Убрать из синхронизации…','trash',()=>trigger(remove)));
+      return {heading:label,items:list};
+    }
+    const cloudFolder=target.closest?.('.premium-folder-entry');
+    if(cloudFolder){
+      const name=textOf(cloudFolder.querySelector('.premium-folder-select'))||'Папка';
+      return {heading:name,items:[
+        action('Выбрать для синхронизации','check',()=>trigger(cloudFolder.querySelector('.premium-folder-select'))),
+        action('Открыть вложенные папки','folder',()=>trigger(cloudFolder.querySelector('.premium-folder-enter'))),
+        action('Скопировать название','copy',()=>copy(name.replace(/^▱\s*/,'')))
+      ]};
+    }
+    const cloudFile=target.closest?.('.premium-cloud-file');
+    if(cloudFile){
+      const filename=textOf(cloudFile.querySelector('.premium-cloud-file-name'))||'Файл';
+      return {heading:filename,items:[action('Скопировать название','copy',()=>copy(filename))]};
+    }
+    const cloudCard=target.closest?.('[data-cloud-card]');
+    if(cloudCard){
+      const name=textOf(cloudCard.querySelector('.premium-connect-copy strong'))||'Облако';
+      const choice=cloudCard.querySelector('[data-premium-select]');
+      const link=cloudCard.querySelector('[data-premium-connect],[data-premium-disconnect]');
+      const list=[action('Показать папки','folder',()=>trigger(choice))];
+      if(link)list.push(action(link.dataset.premiumDisconnect?'Отключить…':'Подключить','link',()=>trigger(link)));
+      return {heading:name,items:list};
+    }
+    const conversation=target.closest?.('.assistant-conversation-row');
+    if(conversation){
+      const label=textOf(conversation.querySelector('.assistant-conversation-title'))||'Диалог';
+      const isGeneral=!conversation.dataset.threadId;
+      const list=[action('Открыть диалог','chat',()=>trigger(conversation.querySelector('[data-conversation]')))];
+      if(!isGeneral){
+        list.push(action('Переименовать','pencil',()=>trigger(conversation.querySelector('[data-thread-rename]'))));
+        list.push(action(conversation.dataset.pinned==='1'?'Открепить':'Закрепить','pin',()=>trigger(conversation.querySelector('[data-thread-pin]'))));
+      }
+      const del=conversation.querySelector('[data-thread-delete]');
+      if(del)list.push(action('Удалить диалог…','trash',()=>trigger(del)));
+      return {heading:label,items:list};
+    }
+    const message=target.closest?.('.assistant-message,.tg-msg');
+    if(message){
+      const txt=textOf(message.querySelector('.assistant-markdown,.tg-text')||message);
+      const content=String((message.querySelector('.assistant-markdown,.tg-text')||message).innerText||txt).trim();
+      const list=[];
+      if(content){list.push(action('Копировать сообщение','copy',()=>copy(content)));
+        list.push(action('Ответить с помощью ИИ','sparkle',()=>askText(content.slice(0,3000))));}
+      return {heading:'Сообщение',items:list};
+    }
+    const documentRow=target.closest?.('.document-row');
+    if(documentRow){
+      const label=textOf(documentRow.querySelector('strong'))||'Документ';
+      const ask=documentRow.querySelector('[data-work="ask-document"]');
+      const pdf=documentRow.querySelector('[data-work="download-document"]');
+      const list=[];
+      if(pdf)list.push(action('Скачать PDF','download',()=>trigger(pdf)));
+      if(ask)list.push(action('Спросить ИИ о документе','sparkle',()=>trigger(ask)));
+      list.push(action('Скопировать название','copy',()=>copy(label)));
+      return {heading:'Документ · '+label,items:list};
+    }
+    const entity=recordTarget(target);
+    if(entity){
+      const name=itemName(target,entity.button);
+      const titles={quotes:'Смета',clients:'Клиент',projects:'Проект',documents:'Документ',tasks:'Задача',leads:'Лид',catalog:'Расценка'};
+      const list=[action('Открыть','arrow-up-right',()=>trigger(entity.button))];
+      if(['quotes','clients','projects'].includes(entity.entity))
+        list.push(action('Спросить ИИ об этом','sparkle',()=>askAbout(entity.entity,entity.id,name)));
+      const row=entity.button.closest('.record-line');
+      if(entity.entity==='tasks'){
+        const toggle=row?.querySelector('[data-work="task-toggle"]');
+        if(toggle)list.push(action(toggle.getAttribute('aria-checked')==='true'?'Вернуть в работу':'Отметить выполненной','check',()=>trigger(toggle)));
+      }
+      if(entity.entity==='catalog'){
+        const favorite=row?.querySelector('[data-work="catalog-favorite"]');
+        if(favorite)list.push(action(favorite.getAttribute('aria-pressed')==='true'?'Убрать из избранного':'В избранное','pin',()=>trigger(favorite)));
+      }
+      list.push(action('Скопировать название','copy',()=>copy(name)));
+      return {heading:(titles[entity.entity]||'Запись')+' · '+name,items:list};
+    }
+    const link=target.closest?.('a[href]');
+    if(link){
+      const href=link.href;
+      if(!/^https?:/.test(href))return null;
+      return {heading:'Ссылка',items:[
+        action('Открыть в новой вкладке','arrow-up-right',()=>window.open(href,'_blank','noopener,noreferrer')),
+        action('Скопировать адрес','link',()=>copy(href))
+      ]};
+    }
+    const nav=target.closest?.('[data-tab]');
+    if(nav && nav.dataset.tab){
+      const label=textOf(nav)||nav.dataset.tab;
+      return {heading:label,items:[action('Открыть раздел','arrow-up-right',()=>trigger(nav))]};
+    }
+    const newQuote=target.closest?.('#records,.workspace-home,.workspace-main,#content')?.querySelector('[data-work="quote-new"]');
+    if(typeof tab!=='undefined' && tab==='quotes' && newQuote)return {heading:'Сметы',items:[
+      action('Создать смету','plus',()=>trigger(newQuote)),
+      action('Поиск','search',()=>trigger(document.querySelector('#command-open')),'Ctrl+K')
+    ]};
+    // No generic commands over every element: right-click on blank areas
+    // should not invent a relationship with an unrelated object.
+    return {heading:'Рабочее пространство',items:[
+      action('Поиск по Сметре','search',()=>trigger(document.querySelector('#command-open')),'Ctrl+K')
+    ]};
   };
 
-  const items = target => {
-    const list = [];
-    const field = editable(target);
-    const link = target.closest?.('a[href]');
-    const message = target.closest?.('.assistant-message,.tg-msg');
-    const selected = field ? fieldSelection(field) : pageSelection();
-    if (field && !field.readOnly && !field.disabled && field.tagName !== 'DIV') {
-      list.push({ label: 'Вырезать', icon: 'x', key: 'Ctrl+X', disabled: !selected, run: async () => { await copy(selected); insert(field, ''); } });
-      list.push({ label: 'Копировать', icon: 'copy', key: 'Ctrl+C', disabled: !selected, run: () => copy(selected) });
-      list.push({ label: 'Вставить', icon: 'file-text', key: 'Ctrl+V', run: async () => {
-        try { const text = await navigator.clipboard.readText(); field.focus(); insert(field, text); }
-        catch { toast('Браузер не дал доступ к буферу — используйте Ctrl+V'); }
-      } });
-      list.push({ label: 'Выделить всё', icon: 'check', key: 'Ctrl+A', run: () => { field.focus(); field.select?.(); } });
-      list.push('sep');
-    } else if (selected) {
-      list.push({ label: 'Копировать', icon: 'copy', key: 'Ctrl+C', run: () => copy(selected) });
-      list.push({ label: 'Спросить ассистента', icon: 'sparkle', run: () => askAssistant(selected) });
-      list.push('sep');
-    }
-    if (link) {
-      const href = link.href;
-      list.push({ label: 'Открыть в новой вкладке', icon: 'arrow-up-right', run: () => window.open(href, '_blank', 'noopener') });
-      if (/^https?:/.test(href)) list.push({ label: 'Копировать ссылку', icon: 'link', run: () => copy(href) });
-      list.push('sep');
-    }
-    if (message && !selected) {
-      const text = (message.querySelector('.assistant-markdown,.tg-text') || message).innerText.trim();
-      if (text) { list.push({ label: 'Копировать сообщение', icon: 'copy', run: () => copy(text) }); list.push('sep'); }
-    }
-    list.push({ label: 'Назад', icon: 'arrow-left', run: () => history.back() });
-    list.push({ label: 'Обновить раздел', icon: 'refresh', run: () => (typeof render === 'function' ? render() : location.reload()) });
-    list.push('sep');
-    list.push({ label: 'Поиск по Сметре', icon: 'search', key: 'Ctrl+K', run: () => document.querySelector('#command-open')?.click() });
-    if (typeof tab === 'undefined' || tab !== 'assistant') list.push({ label: 'Открыть ассистента', icon: 'sparkle', run: () => go('assistant') });
-    list.push({ label: document.documentElement.dataset.theme === 'light' ? 'Тёмная тема' : 'Светлая тема', icon: document.documentElement.dataset.theme === 'light' ? 'moon' : 'sun', run: () => document.querySelector('#theme')?.click() });
-    // Trim separators at the edges and doubled separators.
-    return list.filter((item, i, all) => item !== 'sep' || (i > 0 && i < all.length - 1 && all[i - 1] !== 'sep'));
+  const close = (restore=true) => {
+    if(!menu)return;
+    const node=menu;menu=null;serial++;
+    clearTimeout(openTimer);clearTimeout(closeTimer);
+    document.removeEventListener('pointerdown',outside,true);
+    window.removeEventListener('blur',blurClose);
+    window.removeEventListener('resize',blurClose);
+    document.removeEventListener('scroll',blurClose,true);
+    if(node.matches?.(':popover-open'))try{node.hidePopover();}catch{}
+    node.remove();
+    if(restore&&focusBefore?.isConnected)focusBefore.focus?.({preventScroll:true});
   };
-
-  const close = (restore = true) => {
-    if (!menu) return;
-    const node = menu; menu = null;
-    node.classList.add('is-closing');
-    setTimeout(() => node.remove(), 120);
-    document.removeEventListener('pointerdown', outside, true);
-    window.removeEventListener('blur', blurClose);
-    window.removeEventListener('resize', blurClose);
-    document.removeEventListener('scroll', blurClose, true);
-    if (restore && returnFocus?.isConnected) returnFocus.focus?.({ preventScroll: true });
-  };
-  const outside = event => { if (menu && !menu.contains(event.target)) close(false); };
-  const blurClose = () => close(false);
-
-  const open = (event, entries) => {
+  const outside=event=>{if(menu && !menu.contains(event.target))close(false)};
+  const blurClose=()=>close(false);
+  const open=(event,group)=>{
     close(false);
-    returnFocus = document.activeElement;
-    menu = document.createElement('div');
-    menu.className = 'sm-context';
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'Действия');
-    for (const entry of entries) {
-      if (entry === 'sep') { const line = document.createElement('div'); line.className = 'sm-context-sep'; line.setAttribute('role', 'separator'); menu.append(line); continue; }
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'sm-context-item';
-      button.setAttribute('role', 'menuitem');
-      button.tabIndex = -1;
-      button.disabled = Boolean(entry.disabled);
-      button.innerHTML = icon(entry.icon) + '<span></span>' + (entry.key ? '<kbd></kbd>' : '');
-      button.querySelector('span').textContent = entry.label;
-      if (entry.key) button.querySelector('kbd').textContent = entry.key;
-      button.addEventListener('click', () => { close(false); Promise.resolve(entry.run()).catch(() => {}); });
+    if(!group?.items?.length)return;
+    focusBefore=document.activeElement;
+    menu=document.createElement('div');menu.className='sm-context';menu.setAttribute('role','menu');
+    menu.setAttribute('aria-label',group.heading||'Действия');
+    const heading=document.createElement('div');heading.className='sm-context-heading';heading.textContent=group.heading||'Действия';
+    menu.append(heading);
+    for(const entry of group.items.slice(0,6)){
+      const button=document.createElement('button');button.type='button';button.className='sm-context-item';button.setAttribute('role','menuitem');button.tabIndex=-1;
+      const symbol=document.createElement('span');symbol.className='sm-context-symbol';symbol.innerHTML=icon(entry.icon);
+      const name=document.createElement('span');name.textContent=entry.label;button.append(symbol,name);
+      if(entry.key){const kbd=document.createElement('kbd');kbd.textContent=entry.key;button.append(kbd);}
+      button.addEventListener('click',()=>{close(false);try{Promise.resolve(entry.run()).catch(error=>toast(error?.message||'Не удалось выполнить действие'))}catch(error){toast(error?.message||'Не удалось выполнить действие')}});
       menu.append(button);
     }
     document.body.append(menu);
-    // The top layer keeps the menu above open modal dialogs.
-    if (typeof menu.showPopover === 'function') { menu.setAttribute('popover', 'manual'); try { menu.showPopover(); } catch {} }
-    const rect = menu.getBoundingClientRect(), margin = 8;
-    const left = Math.min(event.clientX, innerWidth - rect.width - margin);
-    const top = event.clientY + rect.height > innerHeight - margin ? Math.max(margin, event.clientY - rect.height) : event.clientY;
-    menu.style.left = Math.max(margin, left) + 'px';
-    menu.style.top = top + 'px';
-    menu.querySelector('.sm-context-item:not(:disabled)')?.focus({ preventScroll: true });
-    menu.addEventListener('keydown', key => {
-      const buttons = [...menu.querySelectorAll('.sm-context-item:not(:disabled)')];
-      const index = buttons.indexOf(document.activeElement);
-      if (key.key === 'Escape') { key.preventDefault(); close(); }
-      else if (key.key === 'ArrowDown' || key.key === 'ArrowUp') { key.preventDefault(); const step = key.key === 'ArrowDown' ? 1 : -1; buttons[(index + step + buttons.length) % buttons.length]?.focus(); }
-      else if (key.key === 'Home' || key.key === 'End') { key.preventDefault(); buttons[key.key === 'Home' ? 0 : buttons.length - 1]?.focus(); }
-      else if (key.key === 'Tab') { key.preventDefault(); close(); }
+    if(typeof menu.showPopover==='function'){
+      menu.setAttribute('popover','manual');
+      try{menu.showPopover()}catch{}
+    }
+    const rect=menu.getBoundingClientRect(),margin=8;
+    menu.style.left=Math.max(margin,Math.min(event.clientX,innerWidth-rect.width-margin))+'px';
+    menu.style.top=Math.max(margin,Math.min(event.clientY,innerHeight-rect.height-margin))+'px';
+    menu.querySelector('.sm-context-item')?.focus({preventScroll:true});
+    menu.addEventListener('keydown',event=>{
+      const buttons=[...menu.querySelectorAll('.sm-context-item')],i=buttons.indexOf(document.activeElement);
+      if(event.key==='Escape'){event.preventDefault();close();}
+      else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+        event.preventDefault();buttons[(i+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();
+      }else if(event.key==='Home'||event.key==='End'){
+        event.preventDefault();buttons[event.key==='Home'?0:buttons.length-1]?.focus();
+      }else if(event.key==='Tab'){close(false);}
     });
-    setTimeout(() => {
-      document.addEventListener('pointerdown', outside, true);
-      window.addEventListener('blur', blurClose);
-      window.addEventListener('resize', blurClose);
-      document.addEventListener('scroll', blurClose, true);
-    });
+    const token=serial;
+    openTimer=setTimeout(()=>{
+      if(!menu||serial!==token)return;
+      document.addEventListener('pointerdown',outside,true);
+      window.addEventListener('blur',blurClose);
+      window.addEventListener('resize',blurClose);
+      document.addEventListener('scroll',blurClose,true);
+    },0);
   };
-
-  document.addEventListener('contextmenu', event => {
-    if (event.shiftKey || !fine() || event.defaultPrevented) return;
-    const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-    if (!target || target.closest('.sm-context,[data-native-context]')) return;
-    // Only inside the cabinet; the sign-in screen keeps the browser menu.
-    if (!target.closest('#shell,.app-nav,#communication-center,dialog[open]')) return;
+  document.addEventListener('contextmenu',event=>{
+    if(event.shiftKey||!fine()||event.defaultPrevented)return;
+    const target=event.target instanceof Element?event.target:event.target?.parentElement;
+    if(!target||target.closest('.sm-context,[data-native-context],input[type=password],input[type=hidden]'))return;
+    if(!target.closest('#shell,.app-nav,#communication-center,dialog[open]'))return;
+    const group=build(target);
+    if(!group?.items?.length)return;
     event.preventDefault();
-    open(event, items(target));
+    open(event,group);
   });
-  window.SmetraContextMenu = { close };
+  window.SmetraContextMenu=Object.freeze({close,describe:build});
 })();

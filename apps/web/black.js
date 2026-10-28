@@ -16,10 +16,8 @@
   document.body.classList.add('smetra-app-transitioning');
   document.body.dataset.appState='authorizing';
   const label=document.querySelector('#app-startup-label');
-  if(label)label.textContent='Перенаправляем в Яндекс ID…';
+  if(label)label.textContent='Переходим к '+(link.dataset.provider==='google'?'Google':'Яндекс ID')+'…';
  });
- const providerLink=host.querySelector('a[data-provider="yandex"]');
- if(providerLink)host.replaceChildren(providerLink);
  const params=new URLSearchParams(location.search);document.body.classList.toggle('auth-password-reset',params.has('reset'));if(params.has('auth_error')){document.querySelector('#auth-status').textContent=errors[params.get('auth_error')]||'Не удалось войти';history.replaceState({},'',location.pathname+location.hash)}
  const note=document.querySelector('#provider-note');
  try{
@@ -28,16 +26,16 @@
   window.SmetraEmailCodeAvailable=data.email_code_available===true;
   window.SmetraEmailSignupAvailable=data.email_signup_available!==false;
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
-  const enabled=data.providers.filter(provider=>provider.enabled&&provider.id==='yandex');
+  const enabled=data.providers.filter(provider=>provider.enabled&&['yandex','google'].includes(provider.id));
   const enabledIds=new Set(enabled.map(provider=>provider.id));
   // OAuth links are present in initial HTML; this API only filters unconfigured routes.
   host.querySelectorAll('[data-provider]').forEach(button=>{
    button.classList.toggle('hidden',!enabledIds.has(button.dataset.provider));
   });
-  host.classList.add('single');
+  host.classList.toggle('single',enabled.length===1);
   if(!enabled.length){
    host.closest('.auth-provider-block')?.classList.add('hidden');
-   document.querySelector('#auth-status').textContent='Яндекс ID временно недоступен. Обратитесь в поддержку.';
+   document.querySelector('#auth-status').textContent='Вход через сервисы временно недоступен. Обратитесь в поддержку.';
   }else{
    note.textContent='Один профиль для сайта и приложения.';
   } }catch{
@@ -46,7 +44,7 @@
   document.dispatchEvent(new CustomEvent('smetra:email-capability'));
   // Keep pre-rendered OAuth links available during capability API outages.
   host.closest('.auth-provider-block')?.classList.remove('hidden');
-  note.textContent='Не удалось проверить доступность Яндекс ID. Если вход не откроется, попробуйте позднее.';
+  note.textContent='Не удалось проверить подключение сервисов. Если вход не откроется, попробуйте позднее.';
  }
 })();
 const proposalLabels={title:'Название',name:'Название',client:'Клиент',client_id:'Клиент',description:'Описание',amount:'Стоимость',amount_kopecks:'Сумма',price:'Цена',cost_price:'Себестоимость',currency:'Валюта',quantity:'Количество',unit_price:'Цена',items:'Работы',due_date:'Срок',status:'Статус',email:'Почта',phone:'Телефон',terms:'Условия',project_id:'Заказ',note:'Примечание'};

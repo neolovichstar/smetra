@@ -17,18 +17,18 @@
   <link rel="stylesheet" href="/ui/tokens.css?v=20261026-r21">
   <link rel="stylesheet" href="/ui/base.css?v=20261026-r21">
   <link rel="stylesheet" href="/ui/components.css?v=20261026-r21">
-  <link rel="stylesheet" href="/ui/shell.css?v=20261027-auth3">
+  <link rel="stylesheet" href="/ui/shell.css?v=20261028-google1">
   <link rel="stylesheet" href="/ui/workspace.css?v=20261027-audit1">
   <link rel="stylesheet" href="/ui/editor.css?v=20261026-r21">
-  <link rel="stylesheet" href="/ui/assistant.css?v=20261026-r21">
-  <link rel="stylesheet" href="/ui/modules.css?v=20261027-profiles1">
+  <link rel="stylesheet" href="/ui/assistant.css?v=20261028-target1">
+  <link rel="stylesheet" href="/ui/modules.css?v=20261028-autosync1">
   <link rel="stylesheet" href="/ui/tools.css?v=20261027-audit1">
   <script src="/ui/native.js?v=20261026-r21"></script>
   <script src="/ui/icons.js?v=20261026-r21"></script>
   <script src="/ui/dialog.js?v=20261026-r21"></script>
   <script src="/ui/chat-kit.js?v=20261026-r21"></script>
-  <script src="/ui/context-menu.js?v=20261026-r21" defer></script>
-  <script src="/ui/plans.js?v=20261026-r21"></script>
+  <script src="/ui/context-menu.js?v=20261028-target1" defer></script>
+  <script src="/ui/plans.js?v=20261028-quota3"></script>
   <script src="/ui/bubbles.js?v=20261026-r21" defer></script>
 </head>
 <body class="workspace-page smetra-app-booting" data-app-state="boot">
@@ -140,8 +140,9 @@
         </div>
         <div class="auth-provider-block">
           <div class="auth-provider-divider" aria-hidden="true"><span>Быстрый и безопасный вход</span></div>
-          <div id="provider-buttons" class="provider-buttons single" aria-label="Вход через Яндекс ID">
-            <a class="btn primary yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+          <div id="provider-buttons" class="provider-buttons" aria-label="Вход через сервисы">
+            <a class="btn auth-provider-button yandex-id-button" data-provider="yandex" href="/api/auth/oauth/yandex/start"><span class="yandex-id-symbol" aria-hidden="true">Я</span><span>Продолжить с Яндекс ID</span></a>
+            <a class="btn auth-provider-button google-id-button hidden" data-provider="google" href="/api/auth/oauth/google/start" aria-label="Продолжить с Google"><svg class="google-id-symbol" viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.28 5.48-4.8 7.18l7.73 6C44.38 38.03 46.98 31.88 46.98 24.55z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.51 2.56 10.78z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.8l-7.73-6c-2.15 1.45-4.91 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Продолжить с Google</span></a>
           </div>
           <p id="provider-note" class="auth-provider-pending">Один аккаунт для сайта и приложения.</p>
         </div>
@@ -180,14 +181,14 @@
     </nav>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261027-durable1" defer></script>
+  <script src="/features.js?v=20261028-quota3" defer></script>
   <script src="/select-menu.js?v=20261026-r21" defer></script>
   <script src="/public-profile-ui.js?v=20261027-profiles1" defer></script>
-  <script src="/app.js?v=20261027-audit1" defer></script>
+  <script src="/app.js?v=20261028-quota3" defer></script>
   <script src="/workspace.js?v=20261027-release2" defer></script>
   <script src="/workspace-vault.js?v=20261027-audit1" defer></script>
   <script src="/field-flows.js?v=20261026-r21" defer></script>
-  <script src="/black.js?v=20261027-auth3" defer></script>
+  <script src="/black.js?v=20261028-google1" defer></script>
   <script src="/auth-email.js?v=20261027-auth3" defer></script>
   <script src="/file-preview.js?v=20261026-r21" defer></script>
   <script src="/file-editor.js?v=20261026-r21" defer></script>

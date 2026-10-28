@@ -501,7 +501,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       chip.append(icon,name,remove);previewTray.append(chip);
     }
     previewTray.hidden=!previewTray.children.length;
-    attachmentInfo.textContent=hasFiles?pendingPhotos.length+' фото выбрано · до 3, общим размером до 1,5 МБ':'Файлы и фото';
+    attachmentInfo.textContent=hasFiles?pendingPhotos.length+' фото выбрано · до 3, общим размером до 1,5 МБ':'Файлы и фото · можно вставить скриншот через Ctrl+V';
     if(typeof renderQuota==='function')renderQuota(quota);
     syncSendButton();
   };
@@ -597,6 +597,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }finally{attachingCount--;if(active())renderQuota(quota)}
   };
   fileInput.onchange=async()=>{const files=[...fileInput.files];for(const file of files){await uploadAttachment(file)}fileInput.value=''};
+  // Win+Shift+S / clipboard screenshots and copied files use the same validated
+  // upload pipeline as the paperclip. Text-only Ctrl+V stays an ordinary paste.
+  input.addEventListener('paste',event=>{
+    if(!active()||working||threadBusy||attachingCount||attachButton.disabled)return;
+    if(!window.SmetraClipboardAttachments)return;
+    void window.SmetraClipboardAttachments.paste(event,uploadAttachment).catch(error=>{
+      if(active())status.textContent=error.message||'Не удалось прикрепить файл из буфера';
+    });
+  });
 
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
   composer.addEventListener('drop',async event=>{if(event.dataTransfer.files.length){event.preventDefault();for(const file of [...event.dataTransfer.files])await uploadAttachment(file)}});

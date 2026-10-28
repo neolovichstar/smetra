@@ -11,7 +11,7 @@ import secrets
 import time
 import uuid
 
-from backend.plan_catalog import public_catalog, PURCHASES
+from backend.plan_catalog import public_catalog, PURCHASES, STARTER_NEW_QUOTES
 
 SOURCES = frozenset('project_limit quote_limit ai_limit pdf_export file_analysis documents settings pricing_page activation referral other'.split())
 CLIENT_EVENTS = frozenset(('paywall_viewed', 'upgrade_clicked'))
@@ -90,7 +90,7 @@ def pricing(con, user):
         'annual_saving_kopecks': prices['month']*12-prices['year'],
         'purchase_bonus': dict(PURCHASE_BONUS_MESSAGES),
         'launch_offer': {'label': os.getenv('LAUNCH_OFFER_LABEL', '')[:100], 'until': launch_until} if launch_until > now() and os.getenv('LAUNCH_OFFER_LABEL') else None,
-        'limits': {'free_quotes': 10, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000,
+        'limits': {'free_quotes': STARTER_NEW_QUOTES, 'free_ai': 3, 'pro_ai': 100, 'pro_quotes': 10000,
                    # The assistant is metered in tokens; the request counts above are kept for old clients.
                    'ai_tokens': dict(ai_tokens.MONTHLY_TOKENS), 'request_tokens': ai_tokens.REQUEST_TOKENS}}
 

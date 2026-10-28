@@ -1,0 +1,33 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const {JSDOM} = require(process.env.SMETRA_JSDOM_MODULE || 'jsdom');
+
+(async () => {
+  const dom = new JSDOM('', {url: 'https://smetra.online/app', runScripts:'outside-only'});
+  const w = dom.window;
+  w.eval(fs.readFileSync('apps/web/assistant-clipboard.js','utf8'));
+  const clipboard = w.SmetraClipboardAttachments;
+  assert.ok(clipboard, 'Clipboard handler registered');
+  const image = new w.File([Uint8Array.from([137,80,78,71])], 'image.png', {type:'image/png'});
+  const pdf = new w.File(['PDF'], 'Счёт.pdf', {type:'application/pdf'});
+  const docx = new w.File(['docx'], 'Договор.docx', {type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  const ignored = new w.File(['exe'], 'unknown.exe', {type:'application/octet-stream'});
+  assert.equal(clipboard.extract({files:[image,pdf,docx,ignored]}).length,3);
+  assert.match(clipboard.extract({files:[image]})[0].name, /^Скриншот-.*\.png$/);
+  assert.equal(clipboard.extract({files:[ignored]}).length,0);
+  assert.equal(clipboard.extract({items:[{kind:'file',getAsFile:()=>pdf}]}).length,1);
+  let prevented = false, received=[];
+  const promise = clipboard.paste({clipboardData:{files:[image,docx]}, preventDefault:()=>{prevented=true}},async file=>{received.push(file.name)});
+  assert.ok(prevented, 'Must prevent browser from pasting file content');
+  assert.equal(await promise,true);
+  assert.equal(received.length,2,'Screenshot and copied document are uploaded');
+  prevented = false;
+  received=[];
+  assert.equal(await clipboard.paste({clipboardData:{files:[],items:[{kind:'string',type:'text/plain'}]},preventDefault:()=>{prevented=true}},async file=>received.push(file)),false);
+  assert.equal(prevented,false,'Plain-text Ctrl+V must not be intercepted');
+  assert.deepEqual(received,[]);
+  assert.match(fs.readFileSync('apps/web/assistant-chat.js','utf8'),/input\.addEventListener\('paste'/);
+  assert.match(fs.readFileSync('apps/web/features.js','utf8'),/\/assistant-clipboard\.js/);
+  dom.window.close();
+  console.log('PASS: Ctrl+V screenshots, PDF/DOCX, item fallback, text unchanged and composer binding');
+})().catch(err => { console.error(err);process.exit(1); });

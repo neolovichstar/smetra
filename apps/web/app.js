@@ -616,9 +616,9 @@ if($('#auth')){
     const methodSwitch=$('#auth-method-switch');
     methodSwitch.classList.toggle('hidden',!codeAvailable||registering||resetMode);
     methodSwitch.textContent=useCode?'Войти с паролем':'Получить код на почту';
-    const divider=$('.auth-provider-divider span');if(divider)divider.textContent=providerOnly?'Продолжить через сервис':'или используйте Яндекс ID';
+    const divider=$('.auth-provider-divider span');if(divider)divider.textContent=providerOnly?'Продолжить через сервис':'или используйте сервис';
     if(providerOnly)$('#auth-copy').textContent='Создайте аккаунт через доступный сервис ниже. Один профиль для сайта и приложения.';
-    else if(!resetMode)$('#auth-copy').textContent=registering?'Сметы, клиенты и объекты в одном месте. Первые 10 смет бесплатно.':'Продолжите работу с того места, где остановились.';
+    else if(!resetMode)$('#auth-copy').textContent=registering?'Сметы, клиенты и объекты в одном месте. Первые 3 сметы бесплатно, редактирование без ограничений.':'Продолжите работу с того места, где остановились.';
     document.dispatchEvent(new CustomEvent('smetra:auth-method'));
   };
   const copyEmail=()=>{const active=$('#auth').dataset.emailMethod==='code'?$('#email-code-address'):$('#email');if(active.value.trim()){$('#email').value=active.value;$('#email-code-address').value=active.value;}};

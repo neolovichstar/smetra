@@ -1,9 +1,22 @@
 """The four public products; prices and limits are owned by the server."""
 from copy import deepcopy
 
+# Signups before this rollout retain the previously advertised 10 drafts.
+# The limit is lifetime, NOT monthly, and editing an existing quote is free.
+STARTER_LEGACY_CUTOFF = 1793192400  # 2026-10-28 13:00:00 UTC
+STARTER_NEW_QUOTES = 3
+STARTER_LEGACY_QUOTES = 10
+
+
+def starter_quote_limit(owner):
+    """Server-side, immutable-at-signup free quote allowance for the owner."""
+    return (STARTER_LEGACY_QUOTES if int(owner["created_at"] or 0) < STARTER_LEGACY_CUTOFF
+            else STARTER_NEW_QUOTES)
+
+
 CATALOG = {
     "starter": {"name": "Старт", "monthly_kopecks": 0, "yearly_kopecks": None,
-                "seats": 1, "storage_bytes": 0, "free_quotes": 10, "priority": "standard"},
+                "seats": 1, "storage_bytes": 0, "free_quotes": STARTER_NEW_QUOTES, "priority": "standard"},
     "pro_solo": {"name": "PRO Solo", "monthly_kopecks": 79000, "yearly_kopecks": 790000,
                  "seats": 1, "storage_bytes": 500_000_000, "free_quotes": None, "priority": "turbo"},
     "pro_plus": {"name": "PRO Плюс / Снабженец", "monthly_kopecks": 149000, "yearly_kopecks": 1490000,

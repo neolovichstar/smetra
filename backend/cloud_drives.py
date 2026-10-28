@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import math
 import os
 import secrets
 import socket
@@ -28,6 +29,10 @@ SUPPORTED_FILES = {
 GOOGLE_API = "https://www.googleapis.com/drive/v3"
 YANDEX_API = "https://cloud-api.yandex.net/v1/disk"
 MAX_FILE_BYTES = 5_000_000
+MAX_SCAN_FILES = 1500
+MAX_SCAN_FOLDERS = 60
+MAX_SCAN_REQUESTS = 24
+MAX_SCAN_SECONDS = 30
 PROVIDERS = {"google_drive", "yandex_disk"}
 
 
@@ -97,6 +102,22 @@ def _decrypt(value):
         raise business.DomainError(503, "Не удалось открыть OAuth-токен. Переподключите облако.") from None
 
 
+class _SameOriginApiRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not forward provider API credentials or OAuth secrets to other origins."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        before = urllib.parse.urlsplit(req.full_url)
+        after = urllib.parse.urlsplit(newurl)
+        if (
+            before.scheme != "https" or after.scheme != "https"
+            or not before.hostname or before.hostname.lower() != (after.hostname or "").lower()
+            or (before.port or 443) != (after.port or 443)
+            or after.username or after.password
+        ):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _http(url, method="GET", token=None, payload=None, form=None, basic=None, limit=1_000_000, timeout=12, auth_scheme="Bearer"):
     headers = {"Accept": "application/json", "User-Agent": "SmetraCloudSync/1.0"}
     if token:
@@ -112,7 +133,9 @@ def _http(url, method="GET", token=None, payload=None, form=None, basic=None, li
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # urllib's default redirect handler can copy Authorization onto a
+        # cross-origin 302. Provider API requests must stay on their HTTPS origin.
+        with urllib.request.build_opener(_SameOriginApiRedirect()).open(request, timeout=timeout) as response:
             raw = response.read(limit + 1)
             if len(raw) > limit:
                 raise business.DomainError(413, "Ответ облачного сервиса слишком большой")
@@ -226,6 +249,80 @@ def _yandex_api(con, connection, path, params=None, method="GET", payload=None):
     if params:
         url += "?" + urllib.parse.urlencode(params, doseq=True)
     return _http(url, method, token=token, payload=payload, limit=2_000_000, auth_scheme="OAuth")
+
+
+def _browse_folders(con, connection, parent, cursor):
+    """List immediate folders and file names only; never fetch file contents or cloud tokens."""
+    if connection["status"] != "active":
+        raise business.DomainError(409, "Переподключите облако, чтобы просмотреть папки")
+    if connection["provider"] == "google_drive":
+        folder = str(parent or "root")
+        if not 1 <= len(folder) <= 200 or not all(
+            ch.isascii() and (ch.isalnum() or ch in "_-") for ch in folder
+        ):
+            raise business.DomainError(400, "Некорректный идентификатор папки")
+        page = str(cursor or "")
+        if len(page) > 2000 or any(ord(ch) < 33 or ord(ch) > 126 for ch in page):
+            raise business.DomainError(400, "Некорректная страница папок")
+        params = {
+            "q": "'" + folder + "' in parents and trashed = false",
+            "pageSize": 100,
+            "fields": "nextPageToken,files(id,name,mimeType,trashed)",
+            "orderBy": "name",
+        }
+        if page:
+            params["pageToken"] = page
+        result = _google_api(con, connection, "/files", params)
+        folders = [
+            {"id": str(item["id"]), "name": str(item.get("name") or "Папка")[:250]}
+            for item in result.get("files", [])[:100]
+            if isinstance(item, dict)
+            and item.get("mimeType") == "application/vnd.google-apps.folder"
+            and not item.get("trashed")
+            and isinstance(item.get("id"), str)
+        ]
+        files = [
+            {"name": str(item.get("name") or "Файл")[:250],
+             "mime_type": str(item.get("mimeType") or "application/octet-stream")[:120]}
+            for item in result.get("files", [])[:100]
+            if isinstance(item, dict)
+            and item.get("mimeType") != "application/vnd.google-apps.folder"
+            and not item.get("trashed")
+        ]
+        next_page = result.get("nextPageToken") or ""
+    else:
+        folder = str(parent or "/")
+        if not folder.startswith("/") or ".." in folder.split("/") or len(folder) > 1024:
+            raise business.DomainError(400, "Некорректный путь Яндекс.Диска")
+        page = str(cursor or "0")
+        if not page.isascii() or not page.isdecimal() or len(page) > 6 or int(page) > 10000:
+            raise business.DomainError(400, "Некорректная страница папок")
+        offset = int(page)
+        result = _yandex_api(con, connection, "/resources", {
+            "path": folder, "limit": 100, "offset": offset,
+            "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.items.mime_type,_embedded.total",
+        })
+        embedded = result.get("_embedded") or {}
+        entries = embedded.get("items") or []
+        folders = []
+        for item in entries:
+            if not isinstance(item, dict) or item.get("type") != "dir":
+                continue
+            raw_path = item.get("path")
+            if not isinstance(raw_path, str):
+                continue
+            normalized = raw_path[5:] if raw_path.startswith("disk:") else raw_path
+            if normalized.startswith("/") and ".." not in normalized.split("/") and len(normalized) <= 1024:
+                folders.append({"id": normalized, "name": str(item.get("name") or "Папка")[:250]})
+        files = [
+            {"name": str(item.get("name") or "Файл")[:250],
+             "mime_type": str(item.get("mime_type") or "application/octet-stream")[:120]}
+            for item in entries[:100]
+            if isinstance(item, dict) and item.get("type") == "file"
+        ]
+        total = int(embedded.get("total") or 0)
+        next_page = str(offset + len(entries)) if len(entries) and offset + len(entries) < total and offset + len(entries) <= 10000 else ""
+    return {"folders": folders, "files": files, "parent": folder, "next_cursor": next_page}
 
 
 def _folder_metadata(con, connection, folder_id):
@@ -370,7 +467,17 @@ class _SafeDownloadRedirect(urllib.request.HTTPRedirectHandler):
         self.count += 1
         if self.count > 4 or not _safe_cloud_href(newurl):
             return None
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected and urllib.parse.urlsplit(req.full_url).hostname != urllib.parse.urlsplit(newurl).hostname:
+            # urllib.request copies headers by default. Never send an OAuth token
+            # or a browser/session credential to a signed download host.
+            sensitive = {"authorization", "proxy-authorization", "cookie"}
+            # Request normalizes header spelling (e.g. Proxy-authorization),
+            # whereas remove_header is case-sensitive. Match the actual keys.
+            for header in set(redirected.headers) | set(redirected.unredirected_hdrs):
+                if header.lower() in sensitive:
+                    redirected.remove_header(header)
+        return redirected
 
 
 def _safe_download_open(request, timeout=15):
@@ -553,12 +660,18 @@ def _model_extract(mime, name, raw):
         item["unit_price_kopecks"] = price if type(price) is int and 0 <= price <= 100_000_000_000 else None
         item["total_kopecks"] = total if type(total) is int and 0 <= total <= 100_000_000_000 else None
         clean_items.append(item)
+    try:
+        confidence = float(value.get("confidence") or 0)
+    except (TypeError, ValueError, OverflowError):
+        confidence = 0.0
+    if not math.isfinite(confidence):
+        confidence = 0.0
     value.update({
         "document_type": str(value.get("document_type") or "unknown")[:60],
         "merchant": str(value.get("merchant") or "")[:200],
         "date": str(value.get("date") or "")[:10],
         "currency": str(value.get("currency") or "RUB")[:3],
-        "confidence": max(0.0, min(1.0, float(value.get("confidence", 0) or 0))),
+        "confidence": max(0.0, min(1.0, confidence)),
         "notes": str(value.get("notes") or "")[:1000],
         "items": clean_items,
         "needs_confirmation": True,
@@ -577,13 +690,20 @@ def _enqueue_job(con, workspace_id, cloud_file_id, fingerprint):
 
 def _google_files(con, connection, folder_id, recursive):
     result, pending, visited = [], [folder_id], set()
-    while pending and len(visited) < 60 and len(result) < 1500:
+    started, requests = time.monotonic(), 0
+    while pending:
+        if len(visited) >= MAX_SCAN_FOLDERS:
+            raise business.DomainError(422, "Облачная папка слишком большая: выберите более узкую подпапку")
         parent = pending.pop(0)
         if parent in visited:
             continue
         visited.add(parent)
         page = None
-        for _ in range(10):
+        page_tokens = set()
+        while True:
+            if requests >= MAX_SCAN_REQUESTS or time.monotonic() - started > MAX_SCAN_SECONDS:
+                raise business.DomainError(503, "Превышен лимит времени обхода Google Drive. Выберите подпапку")
+            requests += 1
             params = {
                 "q": "'" + parent.replace("'", "") + "' in parents and trashed = false",
                 "pageSize": 1000,
@@ -616,26 +736,38 @@ def _google_files(con, connection, folder_id, recursive):
                         (str(item.get("modifiedTime")) + ":" + str(item.get("size"))).encode()).hexdigest()),
                     "web_view_url": str(item.get("webViewLink") or "")[:2048],
                 })
-                if len(result) >= 1500:
-                    break
-            page = data.get("nextPageToken")
-            if not page or len(result) >= 1500:
+                if len(result) > MAX_SCAN_FILES:
+                    raise business.DomainError(422, "В облачной папке более 1500 файлов. Выберите подпапку")
+            next_page = data.get("nextPageToken")
+            if not next_page:
                 break
+            if next_page == page or next_page in page_tokens:
+                raise business.DomainError(502, "Google Drive вернул повторяющуюся страницу")
+            page_tokens.add(next_page)
+            page = next_page
+        if len(result) == MAX_SCAN_FILES and pending:
+            raise business.DomainError(422, "В облачной папке слишком много файлов. Выберите подпапку")
     return result
 
 
 def _yandex_files(con, connection, folder_path, recursive):
     result, pending, visited = [], [folder_path], set()
-    while pending and len(visited) < 60 and len(result) < 1500:
+    started, requests = time.monotonic(), 0
+    while pending:
+        if len(visited) >= MAX_SCAN_FOLDERS:
+            raise business.DomainError(422, "Облачная папка слишком большая: выберите более узкую подпапку")
         parent = pending.pop(0)
         if parent in visited:
             continue
         visited.add(parent)
         offset = 0
-        for _ in range(20):
+        while True:
+            if requests >= MAX_SCAN_REQUESTS or time.monotonic() - started > MAX_SCAN_SECONDS:
+                raise business.DomainError(503, "Превышен лимит времени обхода Яндекс.Диска. Выберите подпапку")
+            requests += 1
             data = _yandex_api(con, connection, "/resources", {
                 "path": parent, "limit": 100, "offset": offset,
-                "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.items.mime_type,_embedded.items.size,_embedded.items.modified,_embedded.items.resource_id,_embedded.items.file,_embedded.items.preview,_embedded.total",
+                "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.items.mime_type,_embedded.items.size,_embedded.items.modified,_embedded.items.resource_id,_embedded.total",
             })
             embedded = data.get("_embedded") or {}
             items = embedded.get("items") or []
@@ -651,18 +783,33 @@ def _yandex_files(con, connection, folder_path, recursive):
                 mime = _mime_for(name, item.get("mime_type") or "application/octet-stream")
                 modified = str(item.get("modified") or "")
                 size = int(item.get("size") or 0)
-                fp = str(item.get("resource_id") or hashlib.sha256((path+modified+str(size)).encode()).hexdigest())
+                # Yandex resource_id identifies the object, not its content. Its
+                # value stays the same when a user edits an existing document.
+                legacy_fp = str(item.get("resource_id") or hashlib.sha256(
+                    (path + modified + str(size)).encode()).hexdigest())
+                fp = hashlib.sha256(
+                    (legacy_fp + "\0" + modified + "\0" + str(size)).encode()
+                ).hexdigest()
                 result.append({
                     "provider_file_id": path, "parent_folder_id": parent, "name": name, "mime": mime,
                     "provider_mime": str(item.get("mime_type") or "application/octet-stream"),
                     "size": size, "modified_at": modified, "fingerprint": fp,
-                    "web_view_url": str(item.get("file") or "")[:2048],
+                    "legacy_fingerprint": legacy_fp,
+                    # Yandex file is a transient signed download URL.
+                    # Never persist it or expose it to workspace users.
+                    "web_view_url": "",
                 })
-                if len(result) >= 1500:
-                    break
-            offset += len(items)
-            if not items or offset >= int(embedded.get("total") or 0) or len(result) >= 1500:
+                if len(result) > MAX_SCAN_FILES:
+                    raise business.DomainError(422, "В облачной папке более 1500 файлов. Выберите подпапку")
+            if not items:
+                if offset < int(embedded.get("total") or 0):
+                    raise business.DomainError(502, "Яндекс.Диск вернул неполный список файлов")
                 break
+            offset += len(items)
+            if offset >= int(embedded.get("total") or 0):
+                break
+        if len(result) == MAX_SCAN_FILES and pending:
+            raise business.DomainError(422, "В облачной папке слишком много файлов. Выберите подпапку")
     return result
 
 
@@ -680,8 +827,15 @@ def _sync_binding(con, binding):
         if not item["provider_file_id"]:
             continue
         fp = item["fingerprint"] or hashlib.sha256((item["name"] + item["modified_at"]).encode()).hexdigest()
-        old = con.execute("SELECT id,source_fingerprint,processing_status FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
+        old = con.execute("SELECT id,source_fingerprint,processing_status,modified_at,size FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
                           (connection["id"], item["provider_file_id"])).fetchone()
+        # Preserve fingerprints for legacy Yandex records with identical
+        # metadata: deploying this fix must not reprocess every old document.
+        if (old and connection["provider"] == "yandex_disk"
+                and old["source_fingerprint"] == item.get("legacy_fingerprint")
+                and old["modified_at"] == item["modified_at"]
+                and int(old["size"]) == int(item["size"])):
+            fp = old["source_fingerprint"]
         changed = not old or old["source_fingerprint"] != fp
         status = "queued" if changed and item["mime"] in SUPPORTED_FILES and 0 < item["size"] <= MAX_FILE_BYTES else (
             "ignored" if item["mime"] not in SUPPORTED_FILES or item["size"] > MAX_FILE_BYTES else "processed")
@@ -705,18 +859,37 @@ def _sync_binding(con, binding):
 
 def _document_job(con, job):
     row = con.execute(
-        "SELECT j.*,f.provider_file_id,f.name,f.mime,f.provider_mime,f.size,f.connection_id,f.workspace_id,b.quote_id,b.project_id,c.provider,c.access_token_enc,c.refresh_token_enc,c.token_expires_at,c.status AS connection_status FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id JOIN cloud_connections c ON c.id=f.connection_id WHERE j.id=?",
+        "SELECT j.*,f.provider_file_id,f.name,f.mime,f.provider_mime,f.size,f.connection_id,f.workspace_id,"
+        "f.source_fingerprint AS current_fingerprint,f.trashed,b.id AS binding_id,b.quote_id,b.project_id,b.status AS binding_status,"
+        "c.provider,c.access_token_enc,c.refresh_token_enc,c.token_expires_at,c.status AS connection_status "
+        "FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id AND f.workspace_id=j.workspace_id "
+        "JOIN cloud_folder_bindings b ON b.id=f.binding_id AND b.workspace_id=j.workspace_id "
+        "JOIN cloud_connections c ON c.id=f.connection_id AND c.workspace_id=j.workspace_id WHERE j.id=?",
         (job["id"],),
     ).fetchone()
     if not row:
         return "failed"
     now = _now()
+    if (row["binding_status"] != "active" or row["trashed"]
+            or row["source_fingerprint"] != row["current_fingerprint"]):
+        # A removed folder or replaced file version must not be downloaded
+        # or sent to an AI provider by a pending background job.
+        with business.transaction(con, lock_scopes=(f"document-job:{job['id']}",)):
+            updated = con.execute(
+                "UPDATE document_processing_jobs SET status='failed',progress='Задание отменено',"
+                "error='Папка отключена или файл изменён',lease_token='',lease_until=0,updated_at=? "
+                "WHERE id=? AND lease_token=? AND status='running'",
+                (now, job["id"], job["lease_token"]),
+            )
+            return "skipped" if updated.rowcount == 1 else "stale"
     try:
         if row["connection_status"] != "active":
             raise business.DomainError(409, "Облачное подключение требует повторной авторизации")
-        connection = {key: row[key] for key in ("id", "workspace_id", "provider", "access_token_enc", "refresh_token_enc", "token_expires_at", "status")}
-        # The connector's user ID is required for a provider refresh update.
-        conn_row = con.execute("SELECT * FROM cloud_connections WHERE id=?", (row["connection_id"],)).fetchone()
+        # Refresh operates on the full connection row, scoped to this workspace.
+        conn_row = con.execute("SELECT * FROM cloud_connections WHERE id=? AND workspace_id=?",
+                               (row["connection_id"], row["workspace_id"])).fetchone()
+        if not conn_row or conn_row["status"] != "active":
+            raise business.DomainError(409, "Облачное подключение требует повторной авторизации")
         connection = dict(conn_row)
         file_row = {key: row[key] for key in ("provider_file_id", "name", "mime", "provider_mime", "size")}
         raw = _download(con, connection, file_row)
@@ -726,10 +899,30 @@ def _document_job(con, job):
         proposal["quote_id"] = row["quote_id"]
         proposal["project_id"] = row["project_id"]
         with business.transaction(con, lock_scopes=(f"workspace:{row['workspace_id']}", f"document-job:{job['id']}")):
-            con.execute(
-                "UPDATE document_processing_jobs SET status='needs_review',progress='Ожидает проверки',extraction=?,proposal=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=?",
+            current = con.execute(
+                "SELECT b.status AS binding_status,f.trashed,f.source_fingerprint AS current_fingerprint "
+                "FROM cloud_files f JOIN cloud_folder_bindings b ON b.id=f.binding_id "
+                "AND b.workspace_id=f.workspace_id "
+                "WHERE f.id=? AND f.workspace_id=?",
+                (row["cloud_file_id"], row["workspace_id"]),
+            ).fetchone()
+            if (not current or current["binding_status"] != "active" or current["trashed"]
+                    or current["current_fingerprint"] != row["source_fingerprint"]):
+                updated = con.execute(
+                    "UPDATE document_processing_jobs SET status='failed',progress='Задание отменено',"
+                    "error='Папка отключена или файл изменён',lease_token='',lease_until=0,updated_at=? "
+                    "WHERE id=? AND lease_token=? AND status='running'",
+                    (now, job["id"], job["lease_token"]),
+                )
+                return "skipped" if updated.rowcount == 1 else "stale"
+            updated = con.execute(
+                "UPDATE document_processing_jobs SET status='needs_review',progress='Ожидает проверки',extraction=?,proposal=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=? AND status='running'",
                 (business.packed(proposal), business.packed(proposal), now, job["id"], job["lease_token"]),
             )
+            if updated.rowcount != 1:
+                # The lease was reclaimed (or the job was already reviewed):
+                # never overwrite the winning worker's state or notify twice.
+                return "stale"
             con.execute("UPDATE cloud_files SET processing_status='needs_review',last_error='',updated_at=? WHERE id=?",
                         (now, row["cloud_file_id"]))
             notification_id = _id()
@@ -746,9 +939,12 @@ def _document_job(con, job):
         retry = int(job.get("attempts") or 0) < 3 and getattr(error, "status", 502) in (429, 502, 503, 504)
         status = "retry" if retry else "failed"
         with business.transaction(con, lock_scopes=(f"document-job:{job['id']}",)):
-            con.execute("UPDATE document_processing_jobs SET status=?,progress=?,error=?,next_attempt_at=?,lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=?",
+            updated = con.execute("UPDATE document_processing_jobs SET status=?,progress=?,error=?,next_attempt_at=?,lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=? AND status='running'",
                         (status, "Повторю позже" if retry else "Ошибка обработки", str(getattr(error, "message", "Ошибка обработки документа"))[:500],
                          now + min(21600, 60 * (3 ** int(job.get("attempts") or 0))), now, job["id"], job["lease_token"]))
+            if updated.rowcount != 1:
+                # A second worker already finished this document. Its result wins.
+                return "stale"
             con.execute("UPDATE cloud_files SET processing_status=?,last_error=?,updated_at=? WHERE id=?",
                         ("queued" if retry else "failed", str(getattr(error, "message", "Ошибка обработки документа"))[:500], now, row["cloud_file_id"]))
         return status
@@ -766,10 +962,12 @@ def _process_jobs(con, limit=3):
             con.execute("UPDATE document_processing_jobs SET status='running',progress='Читаю документ',attempts=attempts+1,lease_token=?,lease_until=?,updated_at=? WHERE id=?",
                         (lease, _now() + 180, _now(), row["id"]))
             jobs.append({**dict(row), "lease_token": lease})
-    result = {"processed": 0, "review": 0, "failed": 0}
+    result = {"processed": 0, "review": 0, "failed": 0, "stale_ignored": 0}
     for job in jobs:
         state = _document_job(con, job)
-        if state == "needs_review":
+        if state in ("stale", "skipped"):
+            result["stale_ignored"] += 1
+        elif state == "needs_review":
             result["review"] += 1
         elif state in ("failed", "retry"):
             result["failed"] += 1
@@ -783,6 +981,11 @@ def run_cloud_batch(con, limit=4):
     bindings = []
     now = _now()
     with business.transaction(con, lock_scopes=("cloud-folder-sync",)):
+        con.execute(
+            "UPDATE cloud_files SET web_view_url='' "
+            "WHERE web_view_url<>'' AND connection_id IN "
+            "(SELECT id FROM cloud_connections WHERE provider='yandex_disk')"
+        )
         sql = "SELECT * FROM cloud_folder_bindings WHERE status='active' AND (sync_requested=1 OR next_sync_at<=?) ORDER BY next_sync_at,id LIMIT ?"
         if getattr(con, "is_postgres", False):
             sql += " FOR UPDATE SKIP LOCKED"
@@ -853,6 +1056,15 @@ def route(service, method, parts, query, data):
             (service.wid,),
         ).fetchall()
         return 200, {"connections": [dict(row) for row in rows]}
+    if parts == ["browse-folders"] and method == "GET":
+        _manager(service)
+        ident = str((query.get("connection_id") or [""])[0])[:100]
+        connection = _connection(service, ident)
+        parent = (query.get("parent") or [""])[0]
+        cursor = (query.get("cursor") or [""])[0]
+        if not isinstance(parent, str) or not isinstance(cursor, str):
+            raise business.DomainError(400, "Некорректные параметры папки")
+        return 200, _browse_folders(service.con, connection, parent, cursor)
     if parts == ["connections"] and method == "DELETE":
         _manager(service)
         connection_id = str(data.get("connection_id", ""))[:100]
@@ -904,7 +1116,8 @@ def route(service, method, parts, query, data):
     if parts == ["jobs"] and method == "GET":
         rows = service.con.execute(
             "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.error,j.attempts,j.created_at,j.updated_at,"
-            "f.name,f.web_view_url,f.mime,f.size,b.quote_id,b.project_id,b.folder_name,"
+            "f.name,CASE WHEN c.provider='yandex_disk' THEN '' ELSE f.web_view_url END AS web_view_url,"
+            "f.mime,f.size,b.quote_id,b.project_id,b.folder_name,"
             "c.provider,c.account_label FROM document_processing_jobs j "
             "JOIN cloud_files f ON f.id=j.cloud_file_id "
             "JOIN cloud_folder_bindings b ON b.id=f.binding_id "
@@ -915,7 +1128,13 @@ def route(service, method, parts, query, data):
         return 200, {"jobs": [dict(row) for row in rows]}
     if len(parts) == 2 and parts[0] == "jobs" and method == "GET":
         row = service.con.execute(
-            "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.extraction,j.proposal,j.error,j.attempts,j.created_at,j.updated_at,f.name,f.web_view_url,b.quote_id,b.project_id FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id WHERE j.id=? AND j.workspace_id=?",
+            "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.extraction,j.proposal,j.error,j.attempts,j.created_at,j.updated_at,"
+            "f.name,CASE WHEN c.provider='yandex_disk' THEN '' ELSE f.web_view_url END AS web_view_url,"
+            "b.quote_id,b.project_id FROM document_processing_jobs j "
+            "JOIN cloud_files f ON f.id=j.cloud_file_id "
+            "JOIN cloud_folder_bindings b ON b.id=f.binding_id "
+            "JOIN cloud_connections c ON c.id=f.connection_id "
+            "WHERE j.id=? AND j.workspace_id=?",
             (parts[1], service.wid),
         ).fetchone()
         if not row:

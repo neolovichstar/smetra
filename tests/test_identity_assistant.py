@@ -267,7 +267,7 @@ class IdentityAssistantTests(unittest.TestCase):
             status, data = self.call("/auth/providers")
             self.assertEqual(status, 200)
             self.assertEqual(
-                [p["id"] for p in data["providers"]], ["yandex", "vk", "mail", "ok"]
+                [p["id"] for p in data["providers"]], ["yandex", "google", "vk", "mail", "ok"]
             )
             self.assertNotIn("never-expose", json.dumps(data))
 

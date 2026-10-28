@@ -33,6 +33,13 @@ def challenge(value):
 def config(provider):
     if provider == "yandex":
         return os.getenv("YANDEX_CLIENT_ID"), os.getenv("YANDEX_CLIENT_SECRET")
+    if provider == "google":
+        auth_client = os.getenv("GOOGLE_AUTH_CLIENT_ID")
+        auth_secret = os.getenv("GOOGLE_AUTH_CLIENT_SECRET")
+        if auth_client or auth_secret:
+            # Never combine an incomplete auth pair with the Drive client.
+            return auth_client, auth_secret
+        return os.getenv("GOOGLE_DRIVE_CLIENT_ID"), os.getenv("GOOGLE_DRIVE_CLIENT_SECRET")
     if provider in ("vk", "mail", "ok"):
         return os.getenv("VK_CLIENT_ID"), ""
     raise DomainError(404, "Способ входа не найден")
@@ -40,8 +47,8 @@ def config(provider):
 
 def providers():
     return [
-        {"id": key, "name": name, "enabled": bool(config(key)[0])}
-        for key, name in (("yandex", "Яндекс ID"), ("vk", "VK ID"), ("mail", "Mail ID"), ("ok", "Одноклассники"))
+        {"id": key, "name": name, "enabled": bool(config(key)[0]) and (key != "google" or bool(config(key)[1]))}
+        for key, name in (("yandex", "Яндекс ID"), ("google", "Google"), ("vk", "VK ID"), ("mail", "Mail ID"), ("ok", "Одноклассники"))
     ]
 
 
@@ -94,6 +101,26 @@ def profile(provider, code, state, verifier, callback, device):
             user.get("default_email", ""),
             avatar_id,
         )
+    if provider == "google":
+        if not secret:
+            raise ValueError("Google login secret missing")
+        params["client_secret"] = secret
+        tokens = remote("https://oauth2.googleapis.com/token", params)
+        access = tokens.get("access_token")
+        if not isinstance(access, str) or not access:
+            raise ValueError("Google did not issue access token")
+        user = remote(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": "Bearer " + access},
+        )
+        subject = str(user.get("sub") or "")
+        if not re.fullmatch(r"[0-9]{5,32}", subject):
+            raise ValueError("Invalid Google account subject")
+        email = user.get("email")
+        if user.get("email_verified") is not True or not isinstance(email, str) or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            raise ValueError("Google email not verified")
+        name = user.get("name")
+        return subject, name if isinstance(name, str) and name.strip() else "Пользователь", email
     if not device:
         raise ValueError('missing VK device binding')
     params.pop('code')
@@ -155,18 +182,23 @@ def route(h, con, method, path, query, origin):
     provider, action = parts[3:]
     # Keep the state cookie, authorization redirect and token exchange on
     # the same verified host. PUBLIC_ORIGIN may point at a legacy Vercel alias.
-    if provider == "yandex":
+    if provider in ("yandex", "google"):
         host = h.headers.get("Host", "").strip().lower()
-        if host == "www.smetra.online" and action == "start":
+        # Google login always uses one registered, canonical callback.
+        if (host in ("www.smetra.online", "smetra.vercel.app") and action == "start" and provider == "google") or (
+            host == "www.smetra.online" and action == "start" and provider == "yandex"
+        ):
+            # OAuth state cookie must be issued on the same host as Google's
+            # registered callback, even when entered through a Vercel alias.
             safe_query = {key: value for key, value in query.items() if key != "path"}
-            target = "https://smetra.online/api/auth/oauth/yandex/start"
+            target = f"https://smetra.online/api/auth/oauth/{provider}/start"
             if safe_query:
                 target += "?" + urllib.parse.urlencode(safe_query, doseq=True)
             return redirect(h, target)
-        if host in ("smetra.online", "smetra.vercel.app"):
+        if provider == "yandex" and host in ("smetra.online", "smetra.vercel.app"):
             origin = "https://" + host
     client, _ = config(provider)
-    if not client:
+    if not client or (provider == "google" and not config(provider)[1]):
         return redirect(h, origin + "/app?auth_error=unavailable")
     callback = origin + "/api/auth/oauth/" + provider + "/callback"
     if action == "start":
@@ -220,6 +252,9 @@ def route(h, con, method, path, query, origin):
                 # Re-ask for consent so an account linked before the avatar
                 # scope existed can grant access to its profile photo.
                 params["force_confirm"] = "yes"
+        elif provider == "google":
+            url = "https://accounts.google.com/o/oauth2/v2/auth"
+            params["scope"] = "openid email profile"
         else:
             url = "https://id.vk.com/authorize"
             params.update(scope="vkid.personal_info email", code_challenge_method='s256', provider={"mail": "mail_ru", "ok": "ok_ru"}.get(provider, "vkid"))

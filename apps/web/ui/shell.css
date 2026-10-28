@@ -241,6 +241,13 @@ body.auth-mode .auth-site-header{display:block;position:absolute;inset:0 0 auto;
 .auth-provider-divider{display:flex;align-items:center;gap:12px;color:var(--text-3);font-size:var(--fs-12)}
 .auth-provider-divider::before,.auth-provider-divider::after{content:'';flex:1;height:1px;background:var(--line)}
 .provider-buttons{display:flex;flex-direction:column;gap:8px}
+/* OAuth is secondary to the account form: quiet graphite instead of white. */
+#auth .provider-buttons{gap:10px}
+#auth .auth-provider-button{--btn-bg:#111113;--btn-hover:#1d1d20;--btn-line:rgba(255,255,255,.13);--btn-fg:#e8e8e9;min-height:48px;width:100%;justify-content:center;gap:12px;border-radius:12px;font-size:14px;font-weight:550;box-shadow:none}
+#auth .auth-provider-button:hover{--btn-line:rgba(255,255,255,.23)}
+#auth .auth-provider-button:focus-visible{outline:2px solid #eee;outline-offset:2px}
+#auth .auth-provider-button>span:not(.yandex-id-symbol){min-width:0;flex:none}
+#auth .google-id-symbol{width:22px;height:22px;flex:none}
 .yandex-id-button{min-height:var(--control-lg)!important;font-size:var(--fs-15)}
 .yandex-id-symbol{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fc3f1d;color:#fff;font-weight:700;font-size:13px}
 .auth-legal a{color:var(--text-2);text-decoration:underline;text-decoration-color:var(--line-strong)}

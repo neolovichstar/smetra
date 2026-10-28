@@ -464,6 +464,12 @@ class FlowTests(unittest.TestCase):
                 "legal_version": "2026-10-19-registration-v1",
             },
         )
+        # The staged rollout preserves ten for users created before the
+        # cutover. Mark this particular fixture as a post-cutover signup.
+        from backend.plan_catalog import STARTER_LEGACY_CUTOFF
+        with self.mod.db() as con:
+            con.execute("UPDATE users SET created_at=? WHERE id=?",
+                        (STARTER_LEGACY_CUTOFF + 1, first["user"]["id"]))
         payload = {
             "title": "Монтаж",
             "client": "Компания",
@@ -471,7 +477,8 @@ class FlowTests(unittest.TestCase):
             "amount": 120000,
         }
         created = []
-        for _ in range(10):
+        # New Starter accounts get three *lifetime* free creations.
+        for _ in range(3):
             status, result = self.request(
                 "/api/quotes", "POST", payload, first["token"]
             )
