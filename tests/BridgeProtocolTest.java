@@ -15,6 +15,13 @@ public final class BridgeProtocolTest {
         check(code("{\"v\":2,\"id\":\"r1\",\"op\":\"app.hello\"}").equals("unsupported_version"), "Unknown protocol version is rejected");
         check(code("{\"v\":1,\"id\":\"r 1\",\"op\":\"app.hello\"}").equals("bad_request"), "Ids are restricted to a safe alphabet");
         check(code("{\"v\":1,\"id\":\"r1\",\"op\":\"sql.run\"}").equals("unknown_operation"), "Operations outside the allowlist are rejected");
+        for (String operation : new String[]{"device.haptic", "device.copyText", "device.shareText",
+                "device.biometric.status", "vision.image.scan"}) {
+            String requestJson = new JSONObject().put("v", 1).put("id", "native")
+                .put("op", operation).put("args", new JSONObject()).toString();
+            check(BridgeProtocol.parse(requestJson).op.equals(operation), "Native operation must be explicitly allowlisted: " + operation);
+        }
+
         check(code("{\"v\":1,\"id\":\"r1\",\"op\":\"file.save\",\"args\":[1]}").equals("bad_request"), "Args must be an object");
         check(BridgeProtocol.idOf("{\"id\":\"abc\"}").equals("abc") && BridgeProtocol.idOf("{\"id\":\"<x>\"}").isEmpty() && BridgeProtocol.idOf("nope").isEmpty(), "Request id recovery is safe");
 

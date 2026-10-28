@@ -89,6 +89,15 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
                 ok(reply, r.id, null); return;
             }
             case "speech.recognize": speech(r, reply); return;
+            case "device.haptic": NativeDevice.haptic(activity, r.args); ok(reply, r.id, null); return;
+            case "device.copyText": NativeDevice.copyText(activity, r.args); ok(reply, r.id, null); return;
+            case "device.shareText": NativeDevice.shareText(activity, r.args); ok(reply, r.id, null); return;
+            case "device.biometric.status": reply.postMessage(BridgeProtocol.ok(r.id, NativeDevice.biometricStatus(activity))); return;
+            case "vision.image.scan": NativeVision.scan(activity, r.args, (value, code, text) -> {
+                if (closed) return;
+                if (value != null) reply.postMessage(BridgeProtocol.ok(r.id, value));
+                else reply.postMessage(BridgeProtocol.error(r.id, code, text));
+            }); return;
             case "ads.rewarded.show":
                 ShellAds.show(activity, (value, code, text) -> {
                     if (value != null) reply.postMessage(BridgeProtocol.ok(r.id, value));
@@ -119,7 +128,14 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
                 .put("share", true)
                 .put("push", PushManager.isConfigured())
                 .put("ads", true)
-                .put("ar", ShellSupport.arStatus(activity).optString("status"));
+                .put("ar", ShellSupport.arStatus(activity).optString("status"))
+                .put("barcodeImage", true)
+                .put("textImageLatin", true)
+                .put("biometric", NativeDevice.biometricStatus(activity).optBoolean("available"))
+                .put("haptics", true)
+                .put("clipboardWrite", true)
+                .put("shareText", true)
+                .put("nativeFoundation", 2);
             return new JSONObject()
                 .put("protocol", BridgeProtocol.VERSION)
                 .put("platform", "android")

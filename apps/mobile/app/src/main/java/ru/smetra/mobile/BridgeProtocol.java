@@ -27,7 +27,9 @@ final class BridgeProtocol {
         "ads.rewarded.show",
         "push.status", "push.enable", "push.disable",
         "file.save", "file.share", "file.open",
-        "ar.status", "ar.measure"
+        "ar.status", "ar.measure",
+        "device.haptic", "device.copyText", "device.shareText", "device.biometric.status",
+        "vision.image.scan"
     )));
     private static final Pattern ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
