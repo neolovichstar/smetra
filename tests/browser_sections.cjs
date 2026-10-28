@@ -92,8 +92,27 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   if(await evaluate("user.role==='admin'")){
     await evaluate("tab='admin';render()");await until("document.querySelector('[data-admin-section=revenue]')");
     await evaluate("document.querySelector('[data-admin-section=revenue]').click()");await until("document.querySelector('.admin-revenue-metrics')");
-    for(const width of [320,390,1440]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});await wait(200);assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Revenue overflow '+width)}
-    fs.writeFileSync('data/qa/section-revenue-1440.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
+    assert.equal(await evaluate("document.querySelectorAll('.admin-revenue-group').length"),3,'Revenue metrics are grouped by meaning');
+    assert.equal(await evaluate("document.querySelectorAll('.admin-revenue-metrics > div').length"),18,'All revenue KPIs are retained');
+    assert.equal(await evaluate("document.querySelectorAll('.admin-funnel-section').length"),2,'Funnel has explicit work and payment stages');
+    assert.equal(await evaluate("document.querySelectorAll('.admin-funnel-section .admin-growth-funnel > div').length"),11,'All funnel events remain visible');
+    for(const width of [320,360,390,768,1440]){
+      await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});await wait(200);
+      assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Revenue overflow '+width);
+      const layout=await evaluate(`(()=>{
+        const cards=[...document.querySelectorAll('.admin-revenue-metrics > div,.admin-growth-funnel > div')];
+        const groups=[...document.querySelectorAll('.admin-revenue-metrics,.admin-growth-funnel')];
+        const bounded=cards.every(card=>{
+          const box=card.getBoundingClientRect(),title=card.querySelector('span').getBoundingClientRect(),value=card.querySelector('strong').getBoundingClientRect();
+          return box.width>=0 && title.bottom+3<=value.top && value.bottom<=box.bottom+1 && title.left>=box.left-1 && value.right<=box.right+1;
+        });
+        return {bounded,columns:groups.map(group=>getComputedStyle(group).gridTemplateColumns.split(' ').length),tables:[...document.querySelectorAll('.admin-analytics .admin-table-scroll')].every(box=>box.scrollWidth>=box.clientWidth)};
+      })()`);
+      assert.equal(layout.bounded,true,'Revenue card labels and values overlap at '+width+': '+JSON.stringify(layout));
+      assert.equal(layout.columns.every(n=>n>=1&&n<=3),true,'Revenue grid has excessive columns at '+width+': '+JSON.stringify(layout));
+      assert.equal(layout.tables,true,'Revenue tables should scroll internally at '+width);
+      if([390,1440].includes(width))fs.writeFileSync('data/qa/section-revenue-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
+    }
   }
   assert.deepEqual(errors,[]);assert.deepEqual(assetFailures,[]);console.log('PASS: '+routes.length+' routes at 320/360/375/390/412/430/768/1440px; initial scripts deferred; contact directory, task groups, calendar, support topics; no overflow, missing assets or browser errors');ws.close();
 })().catch(error=>{console.error(error);process.exit(1)});

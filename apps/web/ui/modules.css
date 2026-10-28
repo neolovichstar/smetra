@@ -570,6 +570,51 @@ body.comms-scroll-locked{overflow:hidden}
 .admin-filter{display:inline-flex;gap:4px}
 .admin-switch{display:inline-flex;align-items:center;gap:8px}
 
+/* Administration: readable revenue analytics instead of implicit auto-fit cells.
+   Scoped to this page so customer modules and the user-management layout stay untouched. */
+.admin-analytics{min-width:0;max-width:100%;font-variant-numeric:tabular-nums}
+.admin-analytics .admin-section-head{align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:24px}
+.admin-analytics .admin-section-head>div{min-width:0;flex:1 1 260px}
+.admin-analytics .admin-section-head time{flex:none;color:var(--text-3);font-size:var(--fs-12);white-space:nowrap}
+.admin-analytics .admin-revenue-group+.admin-revenue-group{margin-top:22px}
+.admin-analytics .admin-revenue-group>h3,
+.admin-analytics>h3{margin:24px 0 12px;font-size:var(--fs-15);font-weight:600;line-height:1.45;letter-spacing:-.01em;color:var(--text)}
+.admin-analytics .admin-revenue-group:first-of-type>h3{margin-top:0}
+.admin-analytics .admin-revenue-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0;border:0;border-radius:0;background:transparent;overflow:visible}
+.admin-analytics .admin-revenue-metrics>div{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;min-width:0;min-height:92px;gap:12px;padding:15px 17px;border:1px solid var(--line);border-radius:11px;background:var(--surface-2)}
+.admin-analytics .admin-revenue-metrics span{min-width:0;color:var(--text-3);font-size:var(--fs-12);line-height:1.4;overflow-wrap:break-word}
+.admin-analytics .admin-revenue-metrics strong{display:block;max-width:100%;font-size:clamp(19px,1.7vw,25px);font-weight:650;line-height:1.2;letter-spacing:-.025em;color:var(--text);overflow-wrap:anywhere}
+.admin-analytics .admin-footnote{margin:12px 0 16px;max-width:100ch;color:var(--text-3);font-size:var(--fs-12);line-height:1.65}
+.admin-analytics .admin-funnel-section{margin-top:15px}
+.admin-analytics .admin-funnel-section>h4{margin-bottom:9px;color:var(--text-2);font-size:var(--fs-12);font-weight:600}
+.admin-analytics .admin-growth-funnel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0}
+.admin-analytics .admin-growth-funnel>div{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;min-width:0;min-height:76px;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.admin-analytics .admin-growth-funnel span{color:var(--text-3);font-size:var(--fs-12);line-height:1.45;overflow-wrap:break-word}
+.admin-analytics .admin-growth-funnel strong{font-size:var(--fs-20);font-weight:600;line-height:1.15;color:var(--text)}
+.admin-analytics .admin-table-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;border:1px solid var(--line);border-radius:11px;background:var(--surface-1);-webkit-overflow-scrolling:touch}
+.admin-analytics .admin-table{width:100%;min-width:590px;border-collapse:collapse}
+.admin-analytics .admin-table th,.admin-analytics .admin-table td{padding:12px 15px;text-align:left;white-space:nowrap;font-size:var(--fs-12);line-height:1.45}
+.admin-analytics .admin-table th{font-weight:550;color:var(--text-3);background:var(--surface-2)}
+.admin-analytics .admin-table td{color:var(--text-2);border-top:1px solid var(--line)}
+.admin-analytics .admin-table td:first-child{color:var(--text);font-weight:500}
+.admin-analytics .admin-table tbody tr:hover{background:var(--surface-2)}
+.admin-analytics .admin-table td.admin-table-empty{text-align:center;padding:24px 16px;color:var(--text-3);font-weight:400;white-space:normal}
+.admin-analytics .admin-table-scroll:has(th:nth-child(8)) .admin-table{min-width:930px}
+@media(max-width:900px){
+  .admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin-analytics .admin-revenue-metrics>div{min-height:88px}
+}
+@media(max-width:480px){
+  .admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{gap:8px}
+  .admin-analytics .admin-revenue-metrics>div,.admin-analytics .admin-growth-funnel>div{padding:12px;min-height:85px}
+  .admin-analytics .admin-revenue-metrics strong{font-size:20px}
+  .admin-analytics .admin-growth-funnel strong{font-size:18px}
+  .admin-analytics .admin-section-head{align-items:flex-start}
+}
+@media(max-width:340px){
+  .admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{grid-template-columns:minmax(0,1fr)}
+}
+
 /* ───────── File preview and editor ───────── */
 .file-preview-dialog{width:min(1100px,calc(100vw - 24px));height:min(860px,calc(100dvh - 32px));display:none;flex-direction:column;overflow:hidden}
 .file-preview-dialog[open]{display:flex}

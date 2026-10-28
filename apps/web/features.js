@@ -10,7 +10,7 @@
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r21']},
     construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261026-r21']},
     calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261026-r21']},
-    admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261026-r21']},
+    admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261028-revenue1']},
     growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261028-quota3','/growth.js?v=20261028-quota3']},
     quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js?v=20261026-r21']},
     estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261026-r21']},
