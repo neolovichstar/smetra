@@ -6,8 +6,8 @@
   let menu=null,focusBefore=null,closeTimer=null,openTimer=null,serial=0;
   const toast = message => { if(typeof notify==='function')notify(message); };
   const copy = async value => {
-    try { await navigator.clipboard.writeText(String(value));toast('Скопировано'); }
-    catch { toast('Не удалось скопировать. Используйте Ctrl+C.'); }
+    try { await navigator.clipboard.writeText(String(value));toast('Скопировано');return true; }
+    catch { toast('Не удалось скопировать. Используйте Ctrl+C.');return false; }
   };
   const action = (label,iconName,run,key) => ({label,icon:iconName,run,key});
   const textOf = el => String(el?.textContent || '').trim().replace(/\s+/g,' ').slice(0,160);
@@ -85,7 +85,14 @@
       const selected=editableSelection(field);
       const list=[];
       if(selected){
-        if(!field.readOnly&&!field.disabled)list.push(action('Вырезать','x',()=>{field.focus();if(typeof field.setRangeText==='function')field.setRangeText('');else document.execCommand?.('delete',false);field.dispatchEvent(new Event('input',{bubbles:true}));return copy(selected);},'Ctrl+X'));
+        if(!field.readOnly&&!field.disabled)list.push(action('Вырезать','x',async()=>{
+          // Clipboard permission can be denied; never delete the text until copy succeeded.
+          if(!await copy(selected))return;
+          field.focus();
+          if(typeof field.setRangeText==='function')field.setRangeText('');
+          else document.execCommand?.('delete',false);
+          field.dispatchEvent(new Event('input',{bubbles:true}));
+        },'Ctrl+X'));
         list.push(action('Копировать','copy',()=>copy(selected),'Ctrl+C'));
         list.push(action('Спросить ИИ о выделенном','sparkle',()=>askText(selected)));
       }
