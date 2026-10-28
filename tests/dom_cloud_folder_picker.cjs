@@ -52,7 +52,12 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.ok(cards[0].classList.contains('is-selected'));
   assert.equal(doc.querySelector('.premium-cloud-folders-heading h3').textContent,'Папки');
   assert.match(doc.querySelector('#premium-folder-entries').textContent,/Проекты/);
-
+  // Root selection works even when there are no subfolders to click.
+  doc.querySelector('#premium-folder-select-current').click();
+  assert.equal(doc.querySelector('#premium-folder-id').value,'/');
+  assert.match(doc.querySelector('#premium-folder-choice').textContent,/Мой диск/);
+  doc.querySelector('#premium-folder-back').disabled; // no navigation on root selection
+  // Switch providers clears the previous selected folder.
   const beforeSelect=calls.length;
   cards[1].querySelector('.premium-connect-select').click();
   await new Promise(r=>setTimeout(r,25));
