@@ -29,6 +29,10 @@ SUPPORTED_FILES = {
 GOOGLE_API = "https://www.googleapis.com/drive/v3"
 YANDEX_API = "https://cloud-api.yandex.net/v1/disk"
 MAX_FILE_BYTES = 5_000_000
+MAX_SCAN_FILES = 1500
+MAX_SCAN_FOLDERS = 60
+MAX_SCAN_REQUESTS = 24
+MAX_SCAN_SECONDS = 30
 PROVIDERS = {"google_drive", "yandex_disk"}
 
 
@@ -686,13 +690,20 @@ def _enqueue_job(con, workspace_id, cloud_file_id, fingerprint):
 
 def _google_files(con, connection, folder_id, recursive):
     result, pending, visited = [], [folder_id], set()
-    while pending and len(visited) < 60 and len(result) < 1500:
+    started, requests = time.monotonic(), 0
+    while pending:
+        if len(visited) >= MAX_SCAN_FOLDERS:
+            raise business.DomainError(422, "Облачная папка слишком большая: выберите более узкую подпапку")
         parent = pending.pop(0)
         if parent in visited:
             continue
         visited.add(parent)
         page = None
-        for _ in range(10):
+        page_tokens = set()
+        while True:
+            if requests >= MAX_SCAN_REQUESTS or time.monotonic() - started > MAX_SCAN_SECONDS:
+                raise business.DomainError(503, "Превышен лимит времени обхода Google Drive. Выберите подпапку")
+            requests += 1
             params = {
                 "q": "'" + parent.replace("'", "") + "' in parents and trashed = false",
                 "pageSize": 1000,
@@ -725,26 +736,38 @@ def _google_files(con, connection, folder_id, recursive):
                         (str(item.get("modifiedTime")) + ":" + str(item.get("size"))).encode()).hexdigest()),
                     "web_view_url": str(item.get("webViewLink") or "")[:2048],
                 })
-                if len(result) >= 1500:
-                    break
-            page = data.get("nextPageToken")
-            if not page or len(result) >= 1500:
+                if len(result) > MAX_SCAN_FILES:
+                    raise business.DomainError(422, "В облачной папке более 1500 файлов. Выберите подпапку")
+            next_page = data.get("nextPageToken")
+            if not next_page:
                 break
+            if next_page == page or next_page in page_tokens:
+                raise business.DomainError(502, "Google Drive вернул повторяющуюся страницу")
+            page_tokens.add(next_page)
+            page = next_page
+        if len(result) == MAX_SCAN_FILES and pending:
+            raise business.DomainError(422, "В облачной папке слишком много файлов. Выберите подпапку")
     return result
 
 
 def _yandex_files(con, connection, folder_path, recursive):
     result, pending, visited = [], [folder_path], set()
-    while pending and len(visited) < 60 and len(result) < 1500:
+    started, requests = time.monotonic(), 0
+    while pending:
+        if len(visited) >= MAX_SCAN_FOLDERS:
+            raise business.DomainError(422, "Облачная папка слишком большая: выберите более узкую подпапку")
         parent = pending.pop(0)
         if parent in visited:
             continue
         visited.add(parent)
         offset = 0
-        for _ in range(20):
+        while True:
+            if requests >= MAX_SCAN_REQUESTS or time.monotonic() - started > MAX_SCAN_SECONDS:
+                raise business.DomainError(503, "Превышен лимит времени обхода Яндекс.Диска. Выберите подпапку")
+            requests += 1
             data = _yandex_api(con, connection, "/resources", {
                 "path": parent, "limit": 100, "offset": offset,
-                "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.items.mime_type,_embedded.items.size,_embedded.items.modified,_embedded.items.resource_id,_embedded.items.file,_embedded.items.preview,_embedded.total",
+                "fields": "_embedded.items.name,_embedded.items.path,_embedded.items.type,_embedded.items.mime_type,_embedded.items.size,_embedded.items.modified,_embedded.items.resource_id,_embedded.total",
             })
             embedded = data.get("_embedded") or {}
             items = embedded.get("items") or []
@@ -772,13 +795,21 @@ def _yandex_files(con, connection, folder_path, recursive):
                     "provider_mime": str(item.get("mime_type") or "application/octet-stream"),
                     "size": size, "modified_at": modified, "fingerprint": fp,
                     "legacy_fingerprint": legacy_fp,
-                    "web_view_url": str(item.get("file") or "")[:2048],
+                    # Yandex file is a transient signed download URL.
+                    # Never persist it or expose it to workspace users.
+                    "web_view_url": "",
                 })
-                if len(result) >= 1500:
-                    break
-            offset += len(items)
-            if not items or offset >= int(embedded.get("total") or 0) or len(result) >= 1500:
+                if len(result) > MAX_SCAN_FILES:
+                    raise business.DomainError(422, "В облачной папке более 1500 файлов. Выберите подпапку")
+            if not items:
+                if offset < int(embedded.get("total") or 0):
+                    raise business.DomainError(502, "Яндекс.Диск вернул неполный список файлов")
                 break
+            offset += len(items)
+            if offset >= int(embedded.get("total") or 0):
+                break
+        if len(result) == MAX_SCAN_FILES and pending:
+            raise business.DomainError(422, "В облачной папке слишком много файлов. Выберите подпапку")
     return result
 
 
@@ -950,6 +981,11 @@ def run_cloud_batch(con, limit=4):
     bindings = []
     now = _now()
     with business.transaction(con, lock_scopes=("cloud-folder-sync",)):
+        con.execute(
+            "UPDATE cloud_files SET web_view_url='' "
+            "WHERE web_view_url<>'' AND connection_id IN "
+            "(SELECT id FROM cloud_connections WHERE provider='yandex_disk')"
+        )
         sql = "SELECT * FROM cloud_folder_bindings WHERE status='active' AND (sync_requested=1 OR next_sync_at<=?) ORDER BY next_sync_at,id LIMIT ?"
         if getattr(con, "is_postgres", False):
             sql += " FOR UPDATE SKIP LOCKED"
@@ -1080,7 +1116,8 @@ def route(service, method, parts, query, data):
     if parts == ["jobs"] and method == "GET":
         rows = service.con.execute(
             "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.error,j.attempts,j.created_at,j.updated_at,"
-            "f.name,f.web_view_url,f.mime,f.size,b.quote_id,b.project_id,b.folder_name,"
+            "f.name,CASE WHEN c.provider='yandex_disk' THEN '' ELSE f.web_view_url END AS web_view_url,"
+            "f.mime,f.size,b.quote_id,b.project_id,b.folder_name,"
             "c.provider,c.account_label FROM document_processing_jobs j "
             "JOIN cloud_files f ON f.id=j.cloud_file_id "
             "JOIN cloud_folder_bindings b ON b.id=f.binding_id "
@@ -1091,7 +1128,13 @@ def route(service, method, parts, query, data):
         return 200, {"jobs": [dict(row) for row in rows]}
     if len(parts) == 2 and parts[0] == "jobs" and method == "GET":
         row = service.con.execute(
-            "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.extraction,j.proposal,j.error,j.attempts,j.created_at,j.updated_at,f.name,f.web_view_url,b.quote_id,b.project_id FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id WHERE j.id=? AND j.workspace_id=?",
+            "SELECT j.id,j.cloud_file_id,j.status,j.progress,j.extraction,j.proposal,j.error,j.attempts,j.created_at,j.updated_at,"
+            "f.name,CASE WHEN c.provider='yandex_disk' THEN '' ELSE f.web_view_url END AS web_view_url,"
+            "b.quote_id,b.project_id FROM document_processing_jobs j "
+            "JOIN cloud_files f ON f.id=j.cloud_file_id "
+            "JOIN cloud_folder_bindings b ON b.id=f.binding_id "
+            "JOIN cloud_connections c ON c.id=f.connection_id "
+            "WHERE j.id=? AND j.workspace_id=?",
             (parts[1], service.wid),
         ).fetchone()
         if not row:
