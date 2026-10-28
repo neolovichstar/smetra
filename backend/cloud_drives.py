@@ -97,6 +97,22 @@ def _decrypt(value):
         raise business.DomainError(503, "Не удалось открыть OAuth-токен. Переподключите облако.") from None
 
 
+class _SameOriginApiRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not forward provider API credentials or OAuth secrets to other origins."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        before = urllib.parse.urlsplit(req.full_url)
+        after = urllib.parse.urlsplit(newurl)
+        if (
+            before.scheme != "https" or after.scheme != "https"
+            or not before.hostname or before.hostname.lower() != (after.hostname or "").lower()
+            or (before.port or 443) != (after.port or 443)
+            or after.username or after.password
+        ):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _http(url, method="GET", token=None, payload=None, form=None, basic=None, limit=1_000_000, timeout=12, auth_scheme="Bearer"):
     headers = {"Accept": "application/json", "User-Agent": "SmetraCloudSync/1.0"}
     if token:
@@ -112,7 +128,9 @@ def _http(url, method="GET", token=None, payload=None, form=None, basic=None, li
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # urllib's default redirect handler can copy Authorization onto a
+        # cross-origin 302. Provider API requests must stay on their HTTPS origin.
+        with urllib.request.build_opener(_SameOriginApiRedirect()).open(request, timeout=timeout) as response:
             raw = response.read(limit + 1)
             if len(raw) > limit:
                 raise business.DomainError(413, "Ответ облачного сервиса слишком большой")
@@ -444,7 +462,17 @@ class _SafeDownloadRedirect(urllib.request.HTTPRedirectHandler):
         self.count += 1
         if self.count > 4 or not _safe_cloud_href(newurl):
             return None
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected and urllib.parse.urlsplit(req.full_url).hostname != urllib.parse.urlsplit(newurl).hostname:
+            # urllib.request copies headers by default. Never send an OAuth token
+            # or a browser/session credential to a signed download host.
+            sensitive = {"authorization", "proxy-authorization", "cookie"}
+            # Request normalizes header spelling (e.g. Proxy-authorization),
+            # whereas remove_header is case-sensitive. Match the actual keys.
+            for header in set(redirected.headers) | set(redirected.unredirected_hdrs):
+                if header.lower() in sensitive:
+                    redirected.remove_header(header)
+        return redirected
 
 
 def _safe_download_open(request, timeout=15):
@@ -800,10 +828,14 @@ def _document_job(con, job):
         proposal["quote_id"] = row["quote_id"]
         proposal["project_id"] = row["project_id"]
         with business.transaction(con, lock_scopes=(f"workspace:{row['workspace_id']}", f"document-job:{job['id']}")):
-            con.execute(
-                "UPDATE document_processing_jobs SET status='needs_review',progress='Ожидает проверки',extraction=?,proposal=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=?",
+            updated = con.execute(
+                "UPDATE document_processing_jobs SET status='needs_review',progress='Ожидает проверки',extraction=?,proposal=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=? AND status='running'",
                 (business.packed(proposal), business.packed(proposal), now, job["id"], job["lease_token"]),
             )
+            if updated.rowcount != 1:
+                # The lease was reclaimed (or the job was already reviewed):
+                # never overwrite the winning worker's state or notify twice.
+                return "stale"
             con.execute("UPDATE cloud_files SET processing_status='needs_review',last_error='',updated_at=? WHERE id=?",
                         (now, row["cloud_file_id"]))
             notification_id = _id()
@@ -820,9 +852,12 @@ def _document_job(con, job):
         retry = int(job.get("attempts") or 0) < 3 and getattr(error, "status", 502) in (429, 502, 503, 504)
         status = "retry" if retry else "failed"
         with business.transaction(con, lock_scopes=(f"document-job:{job['id']}",)):
-            con.execute("UPDATE document_processing_jobs SET status=?,progress=?,error=?,next_attempt_at=?,lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=?",
+            updated = con.execute("UPDATE document_processing_jobs SET status=?,progress=?,error=?,next_attempt_at=?,lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=? AND status='running'",
                         (status, "Повторю позже" if retry else "Ошибка обработки", str(getattr(error, "message", "Ошибка обработки документа"))[:500],
                          now + min(21600, 60 * (3 ** int(job.get("attempts") or 0))), now, job["id"], job["lease_token"]))
+            if updated.rowcount != 1:
+                # A second worker already finished this document. Its result wins.
+                return "stale"
             con.execute("UPDATE cloud_files SET processing_status=?,last_error=?,updated_at=? WHERE id=?",
                         ("queued" if retry else "failed", str(getattr(error, "message", "Ошибка обработки документа"))[:500], now, row["cloud_file_id"]))
         return status
@@ -840,10 +875,12 @@ def _process_jobs(con, limit=3):
             con.execute("UPDATE document_processing_jobs SET status='running',progress='Читаю документ',attempts=attempts+1,lease_token=?,lease_until=?,updated_at=? WHERE id=?",
                         (lease, _now() + 180, _now(), row["id"]))
             jobs.append({**dict(row), "lease_token": lease})
-    result = {"processed": 0, "review": 0, "failed": 0}
+    result = {"processed": 0, "review": 0, "failed": 0, "stale_ignored": 0}
     for job in jobs:
         state = _document_job(con, job)
-        if state == "needs_review":
+        if state == "stale":
+            result["stale_ignored"] += 1
+        elif state == "needs_review":
             result["review"] += 1
         elif state in ("failed", "retry"):
             result["failed"] += 1
