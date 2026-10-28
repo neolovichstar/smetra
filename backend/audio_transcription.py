@@ -10,7 +10,6 @@ import urllib.error
 import urllib.request
 
 from backend.business import DomainError
-from backend.attachments import download
 
 AUDIO = {
     ".mp3": ("audio/mpeg", "mp3"),
@@ -76,6 +75,7 @@ def transcribe(service, file_id):
     if lease is None:
         raise DomainError(409, "Аудио уже распознаётся")
     try:
+        from backend.attachments import download
         raw = download(row, service.con).data
         mime, fmt = validate_audio(row["name"], raw)
         request = urllib.request.Request(
