@@ -19,6 +19,7 @@ AUDIO = {
     ".ogg": ("audio/ogg", "ogg"),
     ".webm": ("audio/webm", "webm"),
     ".flac": ("audio/flac", "flac"),
+    ".aac": ("audio/aac", "aac"),
 }
 MIMES = frozenset(mime for mime, _ in AUDIO.values())
 MAX_AUDIO_BYTES = 3_000_000
@@ -28,7 +29,7 @@ def validate_audio(name, raw):
     from pathlib import Path
     extension = Path(name).suffix.lower()
     if extension not in AUDIO or not 0 < len(raw) <= MAX_AUDIO_BYTES:
-        raise DomainError(400, "Аудио: MP3, WAV, M4A, OGG, WEBM или FLAC до 3 МБ")
+        raise DomainError(400, "Аудио: MP3, WAV, M4A, OGG, WEBM, FLAC или AAC до 3 МБ")
     signatures = {
         ".mp3": raw[:3] == b"ID3" or len(raw) >= 2 and raw[0] == 0xFF and raw[1] & 0xE0 == 0xE0,
         ".wav": raw[:4] == b"RIFF" and raw[8:12] == b"WAVE",
@@ -36,6 +37,7 @@ def validate_audio(name, raw):
         ".ogg": raw[:4] == b"OggS",
         ".webm": raw[:4] == b"\x1a\x45\xdf\xa3",
         ".flac": raw[:4] == b"fLaC",
+        ".aac": len(raw) >= 7 and raw[0] == 0xFF and raw[1] & 0xF6 == 0xF0,
     }
     if not signatures[extension]:
         raise DomainError(400, "Аудиофайл повреждён или расширение не совпадает с форматом")
@@ -81,6 +83,7 @@ def transcribe(service, file_id):
             json.dumps({
                 "model": os.getenv("OPENROUTER_TRANSCRIPTION_MODEL", "openai/whisper-large-v3-turbo"),
                 "input_audio": {"data": base64.b64encode(raw).decode("ascii"), "format": fmt},
+                "provider": {"data_collection": "deny"},
             }).encode("utf-8"),
             {
                 "Authorization": "Bearer " + key,
