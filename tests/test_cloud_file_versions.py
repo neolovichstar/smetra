@@ -93,7 +93,8 @@ class YandexContentVersionTests(unittest.TestCase):
             with patch("backend.cloud_drives._yandex_files",return_value=[changed]):
                 self.assertEqual(cloud_drives._sync_binding(con,binding),1)
             self.assertEqual(con.execute("SELECT COUNT(*) FROM document_processing_jobs").fetchone()[0],1)
-        finally:con.close()
+        finally:
+            con.close()
 
 
 class CloudDownloadTests(unittest.TestCase):
