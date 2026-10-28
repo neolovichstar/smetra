@@ -85,6 +85,11 @@ public final class ShellActivity extends Activity {
         } else {
             web.loadUrl(ShellSession.ORIGIN + initialPath(getIntent()));
         }
+        // Android may recreate a killed activity when the OAuth Custom Tab
+        // returns. onNewIntent is NOT called in that case.
+        Uri launchLink = getIntent() == null ? null : getIntent().getData();
+        if (launchLink != null && "smetra".equals(launchLink.getScheme())
+                && "auth".equals(launchLink.getHost())) handleDeepLink(launchLink);
         ShellUpdates.check(this, bridge);
         watchNetwork();
     }
@@ -350,9 +355,24 @@ public final class ShellActivity extends Activity {
             showCover(null);
             new Thread(() -> {
                 String error = ShellAuth.exchange(ticket, verifier);
+                if (error == null) {
+                    // A successful ticket exchange is not enough: verify the
+                    // WebView session before leaving the registration screen.
+                    try {
+                        if (!ShellSession.call("GET", "/api/me", null, true).ok())
+                            error = "Сессия не сохранилась. Повторите вход.";
+                    } catch (Exception ignored) {
+                        error = "Не удалось проверить сессию. Проверьте соединение.";
+                    }
+                }
+                final String resultError = error;
                 runOnUiThread(() -> {
-                    if (error == null) web.loadUrl(ShellSession.ORIGIN + "/app");
-                    else { hideCover(); bridge.event("auth.error", ShellBridge.message(error)); }
+                    if (resultError == null) {
+                        web.loadUrl(ShellSession.ORIGIN + "/app#dashboard");
+                    } else {
+                        hideCover();
+                        bridge.event("auth.error", ShellBridge.message(resultError));
+                    }
                 });
             }, "smetra-auth").start();
             return;
