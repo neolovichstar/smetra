@@ -316,3 +316,13 @@
  .vault-tools{gap:16px}
  .vault-file-tile .vault-item-actions{margin-top:8px;padding-top:12px}
 }
+
+/* Release notes use a fixed, neutral SVG icon library, never emoji. */
+.changelog-title{display:inline-flex;align-items:flex-start;gap:10px;min-width:0}
+.changelog-title>span{min-width:0;flex:1;overflow-wrap:anywhere}
+.changelog-svg-icon{display:inline-block;width:19px;height:19px;flex:0 0 19px;vertical-align:middle;color:#c9c9c9}
+.changelog-title>.changelog-svg-icon{margin-top:4px}
+.changelog-body h2,.changelog-body h3,.changelog-preview h2,.changelog-preview h3{display:flex;align-items:baseline;gap:10px}
+.changelog-body h2>.changelog-svg-icon,.changelog-body h3>.changelog-svg-icon,.changelog-preview h2>.changelog-svg-icon,.changelog-preview h3>.changelog-svg-icon{vertical-align:-3px}
+.changelog-body li>.changelog-svg-icon,.changelog-preview li>.changelog-svg-icon{width:15px;height:15px;margin-right:8px;color:#b7b7b7}
+@media(max-width:640px){.changelog-title{gap:8px}.changelog-title>.changelog-svg-icon{width:17px;height:17px;flex-basis:17px}}
