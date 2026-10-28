@@ -913,7 +913,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const result=await api('/files/'+encodeURIComponent(id)+'/metadata');
       if(!fileStatus.isConnected||sequence!==filePollSeq||context?.id!==id)return;
       const info=result.processing,active=['queued','running','retry'].includes(info.state),isAudio=/^audio\//.test(result.file.mime);
-      fileBlocking=active||['failed','deferred','cancelled','needs_ocr'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
+      fileBlocking=(isAudio&&!(info.state==='ready'&&info.method==='transcription'))||active||['failed','deferred','cancelled','needs_ocr'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
       const labels={queued:'Документ в очереди',running:'Подготавливаю текст…',retry:'Повторю подготовку позже',ready:isAudio?'Аудио распознано':'Текст готов',needs_ocr:'В PDF есть страницы без текста. Для них нужен OCR.',failed:info.error||'Не удалось подготовить документ',cancelled:'Подготовка отменена',deferred:'Подготовьте документ перед вопросом',legacy:isAudio?'Аудио ещё не распознано':'Документ ещё не подготовлен'};
       const label=document.createElement('span');label.textContent=(labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages&&!isAudio?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
       if(isAudio&&info.state==='ready'&&info.method==='transcription'){
