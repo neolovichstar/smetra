@@ -221,12 +221,17 @@ class PublicProfilesTests(unittest.TestCase):
         image.save(output, "PNG")
         self.assertEqual(self.upload(first, output.getvalue())[0], 200)
         self.assertFalse(self.call("/me", token=second)[1]["user"]["avatar_url"])
-        self.assertEqual(
-            self.call(
-                "/profile/avatar", "POST", {"content_base64": "a" * 1_450_000}, first
-            )[0],
-            413,
-        )
+        # Oversized HTTP/1.0 uploads may reset a streaming client before
+        # it finishes sending bytes. Verify the authoritative header guard
+        # directly so CI cannot mistake an early 413 rejection for a network bug.
+        from email.message import Message
+        handler = self.mod.Handler.__new__(self.mod.Handler)
+        handler.command = "POST"
+        handler.headers = Message()
+        handler.headers["Content-Length"] = str(1_450_000 + len('{"content_base64": ""}'))
+        with self.assertRaises(self.mod.ApiError) as caught:
+            handler.validate_body_length("/api/profile/avatar")
+        self.assertEqual(caught.exception.status, 413)
 
     def test_find_message_and_send_only_published_owned_quote(self):
         sender, _ = self.person("sender")
