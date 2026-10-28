@@ -195,7 +195,11 @@ def route(h, con, method, path, query, origin):
             if safe_query:
                 target += "?" + urllib.parse.urlencode(safe_query, doseq=True)
             return redirect(h, target)
-        if provider == "yandex" and host in ("smetra.online", "smetra.vercel.app"):
+        if provider == "google" and host == "smetra.online":
+            # Pin the real production callback even if PUBLIC_ORIGIN is stale.
+            # Local development must retain its own origin for OAuth tests.
+            origin = "https://smetra.online"
+        elif provider == "yandex" and host in ("smetra.online", "smetra.vercel.app"):
             origin = "https://" + host
     client, _ = config(provider)
     if not client or (provider == "google" and not config(provider)[1]):
@@ -207,7 +211,7 @@ def route(h, con, method, path, query, origin):
         if intent not in ("login", "register"):
             return redirect(h, origin + "/app?auth_error=expired")
         legal_accepted = (
-            intent == "register"
+            intent in ("register", "login")
             and query.get("legal_acceptance", [""])[0] == "1"
             and query.get("legal_version", [""])[0] == REGISTRATION_CONSENT_VERSION
         )
@@ -324,8 +328,7 @@ def route(h, con, method, path, query, origin):
             user_id = account["id"]
         else:
             if (
-                row["registration_intent"] != 1
-                or row["legal_acceptance"] != 1
+                row["legal_acceptance"] != 1
                 or row["legal_version"] != REGISTRATION_CONSENT_VERSION
             ):
                 return redirect(h, origin + "/app?auth_error=registration_consent_required")

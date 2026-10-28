@@ -312,6 +312,12 @@ def _list_conversations(con, user_id, kinds, include_user=False):
         (user_id, user_id, user_id, user_id, user_id, *kinds, *access_args),
     ).fetchall()
     views = [_conversation_view(row, include_user=include_user) for row in rows]
+    # The sender alone may offer an email invitation from a quote discussion.
+    # The /shares endpoint performs its own independent workspace/role checks.
+    for row, view in zip(rows, views):
+        view["can_share_quote"] = bool(
+            row["kind"] == "estimate" and row["quote_id"] and row["created_by"] == user_id
+        )
     peer_ids = sorted({row["partner_id"] for row in rows if row["partner_id"]})
     if peer_ids:
         placeholders = ",".join("?" for _ in peer_ids)

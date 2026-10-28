@@ -253,6 +253,37 @@
   }
 
   let notes=[],canPublish=false,openedNote='';
+
+  const releasePaths=Object.freeze({
+    check:'m5 12 4 4L19 6',bug:'M8 3L6 1M16 3l2-2M4 10H2M22 10h-2M6 12h12M4 17H2M22 17h-2',
+    shield:'M12 2l8 3v7c0 6-8 10-8 10S4 18 4 12V5zM9 12l2 2 4-4',
+    audio:'M2 10v4M6 6v12M10 3v18M14 7v10M18 5v14M22 10v4',
+    ruler:'M3 17L17 3l4 4L7 21zM14 6l2 2M11 9l2 2M8 12l2 2',
+    file:'M6 2h9l5 5v14H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM14 2v6h6M8 12h8M8 16h8',
+    users:'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20v-2a6 6 0 0 1 12 0v2',
+    sparkle:'M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z'
+  });
+  const releaseType=item=>/^(патч|patch|fix)(?:\b|[\s.:#-])/i.test(item.title||'')||/^v?\d+\.\d+\.\d+/.test(item.version||'')?'patch':'major';
+  const releaseIconKind=text=>{
+    if(/ауди|голос|микрофон|реч/i.test(text))return 'audio';
+    if(/геометр|размер|обмер|планиров|чертёж/i.test(text))return 'ruler';
+    if(/авториз|вход|токен|безопас|доступ/i.test(text))return 'shield';
+    if(/клиент|чат|почт|переписк/i.test(text))return 'users';
+    if(/pdf|смет|файл|документ/i.test(text))return 'file';
+    if(/исправ|патч|баг|ошибк/i.test(text))return 'bug';
+    return 'sparkle';
+  };
+  const releaseSvg=kind=>'<svg class="changelog-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(releasePaths[kind]||releasePaths.check)+'"/></svg>';
+  const decorateReleaseBody=root=>{
+    if(!root)return;
+    for(const node of root.querySelectorAll('h2,h3,li')){
+      const kind=node.tagName==='LI'?'check':releaseIconKind(node.textContent||'');
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      for(const [key,val] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.7','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',class:'changelog-svg-icon'}))svg.setAttribute(key,val);
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',releasePaths[kind]);svg.append(path);node.prepend(svg);
+    }
+  };
+
   const activeNews = mine => epoch===mine && tab==='changelog' && document.querySelector('#changelog-root');
   async function noteMarkup(body) {
     await window.SmetraLoadFeature('markdown');
@@ -265,10 +296,10 @@
       '<article class="changelog-entry'+(openedNote===item.id?' is-open':'')+'" data-id="'+esc(item.id)+'">' +
       '<button type="button" class="changelog-open" data-note="'+esc(item.id)+'" aria-controls="changelog-content-'+esc(item.id)+'" aria-expanded="'+(openedNote===item.id)+'">' +
       '<span class="changelog-date">'+when(item.published_at)+'</span><span class="changelog-copy">' +
-      '<span class="changelog-title">'+esc(item.title)+'</span>' +
+      '<span class="changelog-title">'+releaseSvg(releaseType(item)==='patch'?'bug':releaseIconKind(item.title))+'<span>'+esc(item.title)+'</span></span>' +
       (openedNote===item.id?'':'<span class="changelog-excerpt">'+esc(teaser(item.body))+'</span>') +
       (item.published&&!item.has_viewed?'<span class="changelog-new-indicator">Не прочитано</span>':'') +
-      '</span><span class="changelog-meta">'+(item.version?'<span class="changelog-version">'+esc(item.version)+'</span>':index===0&&item.published?'<span class="changelog-version">Последнее</span>':'') +
+      '</span><span class="changelog-meta"><span class="changelog-version">'+(releaseType(item)==='patch'?'Патч':'Обновление')+'</span>'+(item.version?'<span class="changelog-version">'+esc(item.version)+'</span>':index===0&&item.published?'<span class="changelog-version">Последнее</span>':'') +
       '<svg class="changelog-chevron" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.65"><path d="m7 5 5 5-5 5"/></svg></span></button>' +
       (openedNote===item.id?'<div class="changelog-body assistant-markdown" id="changelog-content-'+esc(item.id)+'"></div>':'') +
       '<div class="changelog-footer"><span class="changelog-views">'+Number(item.view_count||0).toLocaleString('ru-RU')+' просмотров</span>' +
@@ -284,7 +315,7 @@
         const body=await noteMarkup(entry.body);
         if (activeNews(mine)) {
           const container=document.getElementById('changelog-content-'+entry.id);
-          if(container) container.innerHTML=body;
+          if(container){container.innerHTML=body;decorateReleaseBody(container);}
         }
       }
     }
@@ -319,6 +350,7 @@
         await window.SmetraLoadFeature('markdown');
         if(!dialog.isConnected || !previewActive)return;
         pane.innerHTML=window.SmetraMarkdown.render(textarea.value||'*Напишите текст обновления, чтобы увидеть предпросмотр.*');
+        decorateReleaseBody(pane);
       }catch(error){if(dialog.isConnected)pane.textContent='Не удалось загрузить предпросмотр: '+error.message;}
     };
     toggle.onclick=()=>{

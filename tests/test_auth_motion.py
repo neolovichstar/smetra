@@ -37,8 +37,10 @@ class AuthMotionTests(unittest.TestCase):
   source=(ROOT/'apps/web/black.js').read_text()
   self.assertIn("smetra-app-transitioning",source)
   self.assertIn("smetra-app-transitioning",source)
-  self.assertIn("link.dataset.provider==='google'?'Google':'Яндекс ID'",source)
-  self.assertIn("'Переходим к '",source)
+  self.assertIn("args.provider==='google'?'Google':'Яндекс ID'",source)
+  self.assertIn("'Открываем защищённый вход '",source)
+  self.assertIn("window.SmetraShell.call('auth.start'",source)
+  self.assertIn("event.preventDefault()",source)
   self.assertIn("window.addEventListener('pageshow'",(ROOT/'apps/web/app.js').read_text())
 
 if __name__=="__main__":

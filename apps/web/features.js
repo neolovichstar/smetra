@@ -5,7 +5,7 @@
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js?v=20261026-r21','/chat-markdown.js?v=20261026-r21']},
     quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261026-r21','/quote-visual-core.js?v=20261026-r21']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-clipboard.js?v=20261028-paste1','/assistant-chat.js?v=20261028-paste1','/ai-workspace.js?v=20261026-r21']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-clipboard.js?v=20261028-audio1','/assistant-chat.js?v=20261028-audio1','/ai-workspace.js?v=20261026-r21']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261026-r21']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r21']},
     construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261026-r21']},

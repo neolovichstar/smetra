@@ -8,6 +8,7 @@ import sys
 
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 from backend.office_documents import READABLE, VIEWABLE
+from backend.audio_transcription import MIMES as AUDIO_MIMES
 
 ACTIVE = ("queued", "running", "retry")
 
@@ -41,7 +42,7 @@ def state(service, row):
         "max_bytes": 5_000_000,
         "pages": row["index_pages"],
         "truncated": bool(row["index_truncated"]),
-        "supported": row["mime"] in READABLE,
+        "supported": row["mime"] in READABLE or row["mime"] in AUDIO_MIMES,
         "method": row['index_method'],
         "missing_text_pages": missing,
         "ocr_supported": row['mime'] == 'application/pdf' and (status == 'needs_ocr' or row['index_method'] == 'ocr'),
@@ -121,6 +122,11 @@ def ensure_ready(service, context):
         return
     row = service.get("files", context["id"])
     if row["mime"] in ("image/png", "image/jpeg"):
+        return
+    if row["mime"] in AUDIO_MIMES:
+        if not (row["index_status"] == "ready" and row["index_method"] == "transcription"
+                and row["index_hash"] == row["sha256"]):
+            raise DomainError(409, "Сначала распознайте прикреплённое аудио — сообщение не потрачено")
         return
     if row["index_hash"] == row["sha256"] and row["index_status"] in ACTIVE:
         raise DomainError(

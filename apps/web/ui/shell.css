@@ -360,3 +360,9 @@ dialog.workspace-dialog .form-actions{bottom:0;margin-bottom:0}
   .email-code-back{width:44px;height:44px;flex:none}
   .auth-site-return{display:inline-flex}
 }
+
+/* First OAuth sign-in can create an account; consent must remain explicit. */
+#oauth-first-signin-label{display:flex;align-items:flex-start;gap:10px;margin:0 0 16px;padding:0;color:var(--muted,#bcbcbc);font-size:12px;line-height:1.55}
+#oauth-first-signin-label[hidden]{display:none!important}
+#oauth-first-signin-label input{flex:none;margin:3px 0 0;accent-color:#d9d9d9}
+#oauth-first-signin-label a{color:inherit;text-decoration:underline;text-underline-offset:3px}

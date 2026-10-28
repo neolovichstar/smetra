@@ -35,7 +35,7 @@ final class ShellAuth {
     static void start(Activity activity, Uri webStart) throws Exception {
         java.util.List<String> segments = webStart.getPathSegments();
         String provider = segments.size() == 5 ? segments.get(3) : "";
-        if (!provider.matches("[a-z]{2,20}")) throw new IllegalArgumentException("provider");
+        if (!"google".equals(provider) && !"yandex".equals(provider)) throw new IllegalArgumentException("provider");
         String intent = "register".equals(webStart.getQueryParameter("intent")) ? "register" : "login";
         byte[] bytes = new byte[48];
         new SecureRandom().nextBytes(bytes);
@@ -47,7 +47,7 @@ final class ShellAuth {
             .appendQueryParameter("app_challenge", challenge)
             .appendQueryParameter("intent", intent);
         String legal = webStart.getQueryParameter("legal_version");
-        if ("register".equals(intent) && "1".equals(webStart.getQueryParameter("legal_acceptance")) && legal != null && legal.matches("[A-Za-z0-9._-]{1,60}"))
+        if ("1".equals(webStart.getQueryParameter("legal_acceptance")) && legal != null && legal.matches("[A-Za-z0-9._-]{1,60}"))
             url.appendQueryParameter("legal_acceptance", "1").appendQueryParameter("legal_version", legal);
         CustomTabsIntent tab = new CustomTabsIntent.Builder()
             .setDefaultColorSchemeParams(new CustomTabColorSchemeParams.Builder().setToolbarColor(0xFF0B0B0C).build())

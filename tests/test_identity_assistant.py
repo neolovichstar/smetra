@@ -358,6 +358,48 @@ class IdentityAssistantTests(unittest.TestCase):
                 [("2026-10-19-registration-v1", "registration")],
             )
 
+    def test_first_oauth_login_creates_account_only_after_explicit_consent(self):
+        with (
+            patch.dict(os.environ, YANDEX_CLIENT_ID="test-id"),
+            patch("backend.identity.profile", return_value=(
+                "auto-new-subject", "Новый клиент", "auto-oauth@test.invalid",
+            )),
+        ):
+            def callback(start):
+                status, headers, _ = self.get_redirect(start, host="smetra.online")
+                self.assertEqual(status, 303)
+                state = parse_qs(urlsplit(headers["Location"]).query)["state"][0]
+                cookie = headers["Set-Cookie"].split(";")[0]
+                return self.get_redirect(
+                    "/api/auth/oauth/yandex/callback?code=test&state=" + state,
+                    cookie, host="smetra.online",
+                )
+
+            status, without, _ = callback("/api/auth/oauth/yandex/start?intent=login")
+            self.assertEqual(status, 303)
+            self.assertIn("auth_error=registration_consent_required", without["Location"])
+            with self.mod.db() as con:
+                self.assertIsNone(con.execute(
+                    "SELECT id FROM users WHERE email='auto-oauth@test.invalid'",
+                ).fetchone())
+
+            status, accepted, _ = callback(
+                "/api/auth/oauth/yandex/start?intent=login&legal_acceptance=1"
+                "&legal_version=2026-10-19-registration-v1",
+            )
+            self.assertEqual(status, 303)
+            self.assertTrue(accepted["Location"].endswith("/app"))
+            self.assertIn("session=", accepted["Set-Cookie"])
+            with self.mod.db() as con:
+                self.assertIsNotNone(con.execute(
+                    "SELECT id FROM users WHERE email='auto-oauth@test.invalid'",
+                ).fetchone())
+
+            # The same provider identity signs into the same account on every device.
+            status, again, _ = callback("/api/auth/oauth/yandex/start?intent=login")
+            self.assertEqual(status, 303)
+            self.assertIn("session=", again["Set-Cookie"])
+
     def test_oauth_browser_binding_and_native_pkce_one_use(self):
         verifier = "a" * 64
         with (
