@@ -77,7 +77,7 @@ def transcribe(service, file_id):
     try:
         from backend.attachments import download
         raw = download(row, service.con).data
-        mime, fmt = validate_audio(row["name"], raw)
+        _mime, fmt = validate_audio(row["name"], raw)
         request = urllib.request.Request(
             "https://openrouter.ai/api/v1/audio/transcriptions",
             json.dumps({
