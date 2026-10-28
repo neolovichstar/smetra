@@ -153,6 +153,12 @@ class CommunicationApiTests(unittest.TestCase):
             self.assertIn("Ремонт кухни",saved["body"])
             self.assertIn(public_token,saved["body"])
             self.assertEqual(json.loads(saved["metadata"])["quote_id"],quote_id)
+            sender = next(x for x in community._list_conversations(con, self.alice_id, ("estimate",))
+                          if x["id"] == chat_id)
+            recipient = next(x for x in community._list_conversations(con, self.bob_id, ("estimate",))
+                             if x["id"] == chat_id)
+            self.assertTrue(sender["can_share_quote"])
+            self.assertFalse(recipient["can_share_quote"])
 
 
     def test_existing_invalid_support_reply_is_masked_in_messages_and_list(self):
