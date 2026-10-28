@@ -1,13 +1,24 @@
 .whats-new-page{width:min(760px,100%);margin:0 auto;padding:clamp(24px,4vw,56px) 16px 72px;color:var(--text,#f3f3f3)}
-.whats-new-header{margin-bottom:36px}.whats-new-header h1{margin:12px 0;font-size:clamp(32px,4vw,46px);font-weight:550;letter-spacing:-.055em}
+.whats-new-header{margin-bottom:36px}
+.whats-new-header h1{margin:12px 0;font-size:clamp(32px,4vw,46px);font-weight:550;letter-spacing:-.055em}
 .whats-new-header p{line-height:1.6;max-width:60ch;color:var(--muted,#aaa)}
 .whats-new-dot{color:#bdbdbd}
 .whats-new-post{border-top:1px solid rgba(128,128,128,.24);padding:28px 0 36px}
-.whats-new-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;letter-spacing:.015em;color:var(--muted,#aaa)}
-.whats-new-status{border:1px solid rgba(128,128,128,.35);border-radius:99px;padding:3px 10px;color:inherit}
+.whats-new-post-title{display:flex;align-items:flex-start;gap:15px}
+.whats-new-icon{width:22px;height:22px;flex:0 0 22px;display:block;margin-top:20px;color:#ddd}
+.whats-new-post-heading{min-width:0;flex:1}
+.whats-new-meta{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12px;letter-spacing:.015em;color:var(--muted,#aaa)}
+.whats-new-status,.whats-new-development{border:1px solid rgba(128,128,128,.35);border-radius:99px;padding:3px 10px;color:inherit}
+.whats-new-development{border-style:dashed}
 .whats-new-post h2{font-size:clamp(21px,2.8vw,27px);line-height:1.3;letter-spacing:-.03em;font-weight:550;margin:16px 0 10px}
-.whats-new-post p{line-height:1.7;color:var(--muted,#b4b4b4);margin:0 0 18px}
-.whats-new-post ul{padding-left:19px;margin:0;display:grid;gap:12px;line-height:1.6}
+.whats-new-post>p{line-height:1.7;color:var(--muted,#b4b4b4);margin:10px 0 18px 37px}
+.whats-new-changes{list-style:none;padding:0 0 0 37px;margin:0;display:grid;gap:12px;line-height:1.6}
+.whats-new-changes li{display:flex;gap:12px;align-items:flex-start}
+.whats-new-change-icon{width:18px;height:18px;flex:0 0 18px;margin-top:3px;color:#b6b6b6}
+.whats-new-patch{padding:22px 0 24px}
+.whats-new-patch .whats-new-icon{margin-top:11px;width:18px;height:18px;flex-basis:18px}
+.whats-new-patch h2{font-size:19px;margin:10px 0}
+.whats-new-patch .whats-new-changes{gap:7px}
 #whats-new-nav[data-unread="true"]{position:relative}
 #whats-new-nav[data-unread="true"]::after{content:"";position:absolute;right:14px;top:50%;width:6px;height:6px;border-radius:50%;background:#efefef;transform:translateY(-50%)}
-@media(max-width:800px){.whats-new-page{padding:24px 4px 60px}.whats-new-post{padding:22px 0 28px}}
+@media(max-width:800px){.whats-new-page{padding:24px 4px 60px}.whats-new-post{padding:22px 0 28px}.whats-new-post>p{margin-left:0}.whats-new-changes{padding-left:0}}
