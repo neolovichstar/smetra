@@ -75,7 +75,7 @@
       +'<div class="premium-connect-row" role="group" aria-label="Выбрать облачный диск">'+cloudCards+'</div>'
       +'<section class="premium-cloud-folders" id="premium-cloud-folders" aria-label="Папки выбранного диска"><div class="premium-cloud-folders-heading"><h3>Папки</h3><span id="premium-cloud-name">'+esc(provider(selectedCloudProvider))+'</span></div>'
       +'<form id="premium-folder-form" class="premium-form"><input id="premium-folder-connection" name="connection_id" type="hidden" value="'+esc(selectedConnection?.id||'')+'"><input id="premium-folder-id" name="folder_id" type="hidden" required>'
-      +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="btn small" id="premium-folder-back" type="button" disabled>← Назад</button><span id="premium-folder-location">Мой диск</span></div><div id="premium-folder-entries" class="premium-folder-entries" role="list" aria-label="Папки">Загружаем папки…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button><small id="premium-folder-choice" class="premium-folder-choice">Папка не выбрана</small></div>'
+      +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="btn small" id="premium-folder-back" type="button" disabled>← Назад</button><span id="premium-folder-location">Мой диск</span><button class="btn small" id="premium-folder-select-current" type="button" disabled>Выбрать эту папку</button></div><div id="premium-folder-entries" class="premium-folder-entries" role="list" aria-label="Папки">Загружаем папки…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button><small id="premium-folder-choice" class="premium-folder-choice">Папка не выбрана</small></div>'
       +'<details class="premium-folder-options"><summary>Настройки синхронизации</summary><div class="premium-folder-options-content"><div class="field"><label for="premium-folder-quote">Черновик сметы для импорта</label><select id="premium-folder-quote" name="quote_id">'+quoteOptions(quotes)+'</select></div><label class="premium-checkbox"><input type="checkbox" name="recursive" checked><span><strong>Включить вложенные папки</strong><small>Синхронизация ограничена по глубине и числу файлов.</small></span></label></div></details>'
       +'<div class="premium-form-submit"><button class="btn primary" type="submit" id="premium-folder-submit" '+(selectedConnection?'':'disabled')+'>Синхронизировать выбранную папку</button><span>Изменения в смете потребуют подтверждения.</span></div><p class="form-error" role="alert"></p></form></section>'
       +'<div class="premium-list-block"><div class="premium-list-heading"><h3>На синхронизации</h3><span id="premium-cloud-folder-count">'+folders.filter(f=>f.provider===selectedCloudProvider).length+' папок</span></div><div class="premium-folder-list">'+folderHtml(selectedCloudProvider)+'</div></div></section>'+
@@ -142,6 +142,8 @@
       if(!next){folderEntries.replaceChildren();folderCursor=''}
       folderNext.classList.add('hidden');
       folderBack.disabled=folderPath.length===0;
+      const pickCurrent=document.querySelector('#premium-folder-select-current');
+      if(pickCurrent)pickCurrent.disabled=!connections.some(c=>c.id===folderConnection.value&&c.status==='active');
       folderLocation.textContent=folderPath.length?folderPath.map(f=>f.name).join(' / '):'Мой диск';
       if(!conn){folderEntries.textContent='Подключите облако, чтобы увидеть папки.';return}
       const params=new URLSearchParams({connection_id:conn.id,parent:folderPath.length?folderPath[folderPath.length-1].id:(conn.provider==='google_drive'?'root':'/')});
@@ -205,6 +207,14 @@
       if(event.target.closest('[data-premium-select],[data-premium-connect],[data-premium-disconnect]'))return;
       const card=event.target.closest('[data-cloud-card]');
       if(card)selectCloud(card.dataset.cloudCard);
+    });
+    document.querySelector('#premium-folder-select-current')?.addEventListener('click',()=>{
+      const connection=connections.find(c=>c.id===folderConnection.value&&c.status==='active');
+      if(!connection)return;
+      folderId.value=folderPath.length?folderPath[folderPath.length-1].id:(connection.provider==='google_drive'?'root':'/');
+      folderChoice.textContent='Выбрано: '+(folderPath.length?folderPath[folderPath.length-1].name:'Мой диск');
+      folderEntries.querySelectorAll('.premium-folder-select').forEach(x=>x.setAttribute('aria-pressed','false'));
+      folderEntries.querySelectorAll('.premium-folder-entry').forEach(x=>x.classList.remove('is-selected'));
     });
     folderBack?.addEventListener('click',()=>{folderPath.pop();void browseFolder()});
     folderNext?.addEventListener('click',()=>{if(folderCursor)void browseFolder(true)});
