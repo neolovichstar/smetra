@@ -17,7 +17,7 @@ class StarterPlanLimits(unittest.TestCase):
         self.assertEqual(plan_catalog.starter_quote_limit({"created_at": plan_catalog.STARTER_LEGACY_CUTOFF}), 3)
         self.assertEqual(plan_catalog.starter_quote_limit({"created_at": plan_catalog.STARTER_LEGACY_CUTOFF + 1}), 3)
         cutoff = dt.datetime.fromtimestamp(plan_catalog.STARTER_LEGACY_CUTOFF, dt.timezone.utc)
-        self.assertEqual(cutoff.isoformat(), "2026-10-28T12:28:00+00:00")
+        self.assertEqual(cutoff.isoformat(), "2026-10-28T13:00:00+00:00")
 
     def test_public_website_describes_three_new_quotes_not_monthly(self):
         for name in ("apps/web/index.html", "apps/web/ui/plans.js", "apps/web/terms.html"):

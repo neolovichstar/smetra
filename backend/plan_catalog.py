@@ -3,7 +3,7 @@ from copy import deepcopy
 
 # Signups before this rollout retain the previously advertised 10 drafts.
 # The limit is lifetime, NOT monthly, and editing an existing quote is free.
-STARTER_LEGACY_CUTOFF = 1793190480  # 2026-10-28 12:28:00 UTC
+STARTER_LEGACY_CUTOFF = 1793192400  # 2026-10-28 13:00:00 UTC
 STARTER_NEW_QUOTES = 3
 STARTER_LEGACY_QUOTES = 10
 
