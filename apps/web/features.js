@@ -5,7 +5,7 @@
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js?v=20261026-r21','/chat-markdown.js?v=20261026-r21']},
     quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261026-r21','/quote-visual-core.js?v=20261026-r21']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-chat.js?v=20261027-durable1','/ai-workspace.js?v=20261026-r21']},
+    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-clipboard.js?v=20261028-paste1','/assistant-chat.js?v=20261028-paste1','/ai-workspace.js?v=20261026-r21']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261026-r21']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r21']},
     construction:{ready:()=>!!window.SmetraConstruction,deps:['quoteVisuals'],files:['/construction.js?v=20261026-r21']},
@@ -16,7 +16,7 @@
     estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261026-r21']},
     quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js?v=20261026-r21']},
     objectChats:{ready:()=>!!window.SmetraObjectChats,files:['/object-chats.js?v=20261026-r21']},
-    premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js?v=20261028-cloud1']},
+    premiumTools:{ready:()=>!!window.SmetraPremiumTools,files:['/premium-tools.js?v=20261028-autosync1']},
   };
   const load=source=>{
     if(pending.has(source))return pending.get(source);

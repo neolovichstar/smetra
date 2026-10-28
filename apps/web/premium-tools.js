@@ -40,7 +40,7 @@
     }
     if (!active()) return;
     const draftsList = drafts(quotes);
-    const canSync = folders.some(f => f.status === 'active');
+    const activeCloudFolders = cloud => folders.filter(f => f.provider === cloud && f.status === 'active');
     const sourceHtml = sources.length ? sources.map(s => '<article class="premium-source"><div class="premium-source-main"><span class="premium-source-host">' + esc(s.hostname) + '</span><h3>' + esc(s.product_title || s.url) + '</h3><p>' + esc(s.brand || 'Бренд не определён') + (s.sku ? ' · Артикул ' + esc(s.sku) : '') + '</p><div class="premium-source-meta"><span>' + esc(stock(s.availability)) + '</span><span>Проверено: ' + esc(when(s.last_checked_at)) + '</span><span>' + esc(state(s.source_status)) + '</span></div>' + (s.last_error ? '<p class="premium-error">' + esc(s.last_error) + '</p>' : '') + '</div><div class="premium-source-actions"><strong>' + esc(money(s.price_kopecks,s.currency)) + '</strong><button class="btn small" type="button" data-premium-history="' + esc(s.id) + '">История цен</button>' + (s.monitored ? '<button class="btn small" type="button" data-premium-disable-source="' + esc(s.id) + '">Остановить</button>' : '') + '</div><div class="premium-history" data-premium-history-view="' + esc(s.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Проверенные товары появятся здесь. Добавьте первую ссылку выше.</p>';
     // Selection and OAuth/disconnection must be separate controls.
     if (!['yandex_disk','google_drive'].includes(selectedCloudProvider)) {
@@ -63,8 +63,8 @@
         +(connected?'Отключить':'Подключить')+'</button></div>';
     }).join('');
     const folderHtml = cloud => {
-      const scoped=folders.filter(f=>f.provider===cloud);
-      return scoped.length ? scoped.map(f=>'<article class="premium-folder"><div><strong>'+esc(f.folder_name||f.folder_id)+'</strong><span>'+esc(f.account_label||provider(f.provider))+'</span><small>'+(f.quote_id?'Привязана к черновику сметы':'Не привязана к смете')+(f.last_synced_at?' · '+esc(when(f.last_synced_at)):'')+'</small>'+(f.last_error?'<small class="premium-error">'+esc(f.last_error)+'</small>':'')+'</div><div class="premium-folder-actions"><span class="premium-state">'+esc(state(f.status))+'</span><button class="btn small" data-premium-resync="'+esc(f.id)+'">Синхронизировать</button><button class="btn small" data-premium-disable-folder="'+esc(f.id)+'">Отключить</button></div></article>').join('') : '<p class="premium-empty-state">Пока ничего не синхронизируется. Выберите папку выше и нажмите «Начать синхронизацию».</p>';
+      const scoped=activeCloudFolders(cloud);
+      return scoped.length ? scoped.map(f=>'<article class="premium-folder"><div><strong>'+esc(f.folder_name||f.folder_id)+'</strong><small>'+esc(f.account_label||provider(f.provider))+(f.quote_id?' · Привязана к смете':'')+'</small>'+(f.last_error?'<small class="premium-error">'+esc(f.last_error)+'</small>':'<small>'+(f.sync_requested?'Ожидает фоновой проверки':f.last_synced_at?'Обновлено: '+esc(when(f.last_synced_at)):'Автоматическое обновление запланировано')+'</small>')+'</div><div class="premium-folder-actions"><span class="premium-state">'+(f.last_error?'Ошибка':'Авто')+'</span><button class="btn small" type="button" data-premium-disable-folder="'+esc(f.id)+'" aria-label="Убрать папку '+esc(f.folder_name||f.folder_id)+' из синхронизации">Убрать</button></div></article>').join('') : '<p class="premium-empty-state">Здесь пока нет добавленных папок. Выберите каталог выше — дальнейшее обновление произойдёт автоматически.</p>';
     };
     const jobsHtml = jobs.length ? jobs.map(j => '<article class="premium-job" data-premium-job-card="' + esc(j.id) + '"><span class="premium-job-kind">' + (j.mime === 'application/pdf' ? 'PDF' : 'DOC') + '</span><div class="premium-job-copy"><strong>' + esc(j.name) + '</strong><span>' + esc(provider(j.provider)) + (j.quote_id ? ' · Смета привязана' : ' · Без сметы') + '</span><small>' + esc(state(j.status)) + (j.updated_at ? ' · ' + esc(when(j.updated_at)) : '') + '</small>' + (j.error ? '<small class="premium-error">' + esc(j.error) + '</small>' : '') + '</div><button class="btn small" type="button" data-premium-review="' + esc(j.id) + '">Проверить</button><div class="premium-job-review" data-premium-job-review="' + esc(j.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Документов для проверки пока нет. Они появятся после синхронизации папок.</p>';
 
@@ -78,8 +78,8 @@
       +'<form id="premium-folder-form" class="premium-form"><input id="premium-folder-connection" name="connection_id" type="hidden" value="'+esc(selectedConnection?.id||'')+'"><input id="premium-folder-id" name="folder_id" type="hidden" required>'
       +'<div id="premium-folder-browser" class="premium-folder-browser" aria-label="Выбор папки облака"><div class="premium-folder-browser-head"><button class="premium-folder-back" id="premium-folder-back" type="button" disabled aria-label="На уровень выше">←</button><span id="premium-folder-location" title="Текущий каталог">Мой диск</span><button class="btn small premium-folder-pick-current" id="premium-folder-select-current" type="button" disabled>Выбрать «Мой диск»</button></div><div id="premium-folder-entries" class="premium-folder-entries" role="list" aria-label="Содержимое папки">Загружаем содержимое…</div><button class="btn small hidden" id="premium-folder-next" type="button">Показать ещё</button></div>'
       +'<details class="premium-folder-options"><summary>Дополнительно: смета и вложенные папки</summary><div class="premium-folder-options-content"><div class="field"><label for="premium-folder-quote">Черновик сметы для импорта</label><select id="premium-folder-quote" name="quote_id">'+quoteOptions(quotes)+'</select></div><label class="premium-checkbox"><input type="checkbox" name="recursive" checked><span><strong>Включить вложенные папки</strong><small>Синхронизация ограничена по глубине и числу файлов.</small></span></label></div></details>'
-      +'<div class="premium-folder-confirm"><div class="premium-folder-selected"><span class="premium-folder-selected-icon" aria-hidden="true">✓</span><span id="premium-folder-choice" role="status" aria-live="polite">Сначала выберите папку выше</span></div><button class="btn premium-folder-start" type="submit" id="premium-folder-submit" disabled>Начать синхронизацию</button></div><p class="premium-folder-disclaimer">Импорт позиций в смету потребует отдельного подтверждения.</p><p class="form-error" role="alert"></p></form></section>'
-      +'<div class="premium-list-block"><div class="premium-list-heading"><h3>Синхронизируемые папки</h3><div class="premium-synced-actions"><span id="premium-cloud-folder-count">'+folders.filter(f=>f.provider===selectedCloudProvider).length+' папок</span><button class="btn small" id="premium-sync-all" type="button" '+(canSync?'':'disabled')+'>Обновить все</button></div></div><div class="premium-folder-list">'+folderHtml(selectedCloudProvider)+'</div></div></section>'+
+      +'<div class="premium-folder-confirm"><div class="premium-folder-selected"><span class="premium-folder-selected-icon" aria-hidden="true">✓</span><span id="premium-folder-choice" role="status" aria-live="polite">Сначала выберите папку выше</span></div><button class="btn premium-folder-start" type="submit" id="premium-folder-submit" disabled>Добавить папку</button></div><p class="premium-folder-disclaimer">Импорт позиций в смету потребует отдельного подтверждения.</p><p class="form-error" role="alert"></p></form></section>'
+      +'<div class="premium-list-block premium-cloud-sync-list"><div class="premium-list-heading"><h3>Добавленные папки</h3><div class="premium-synced-actions"><span>Обновляются автоматически</span><span id="premium-cloud-folder-count">'+activeCloudFolders(selectedCloudProvider).length+' папок</span></div></div><div class="premium-folder-list" aria-label="Синхронизируемые папки">'+folderHtml(selectedCloudProvider)+'</div></div></section>'+
       '<section class="premium-section"><div class="premium-section-heading"><div><span class="premium-kicker">03 / ПРОВЕРКА</span><h2>Импорт документов</h2><p>Данные попадут в черновик только после проверки и отдельного подтверждения.</p></div><button type="button" class="btn" id="premium-refresh-jobs">Обновить очередь</button></div><div class="premium-job-list">' + jobsHtml + '</div></section></section>');
 
     if (new URLSearchParams(location.search).get('cloud') === 'connected') {
@@ -122,9 +122,6 @@
     document.querySelectorAll('[data-premium-connect]').forEach(b=>b.addEventListener('click',async()=>{
       b.disabled=true;try{const r=await api('/premium/cloud/oauth/'+encodeURIComponent(b.dataset.premiumConnect));if(r.authorize_url)location.assign(r.authorize_url);else throw Error('Сервис не вернул ссылку авторизации.')}catch(error){notify(error.message);b.disabled=false}
     }));
-    document.querySelector('#premium-sync-all')?.addEventListener('click',async ev=>{
-      ev.currentTarget.disabled=true;try{const r=await api('/premium/cloud/sync',{method:'POST',body:JSON.stringify({})});notify('Запрошена синхронизация папок: '+(r.queued||0));await render(active)}catch(error){notify(error.message);ev.currentTarget.disabled=false}
-    });
     // Browse direct children only; lazy pagination, no all-files scan.
     const folderForm=document.querySelector('#premium-folder-form');
     const folderConnection=document.querySelector('#premium-folder-connection');
@@ -220,7 +217,7 @@
       folderConnection.value=connection?.id||'';
       document.querySelector('#premium-cloud-name').textContent=provider(id);
       document.querySelector('.premium-folder-list').innerHTML=folderHtml(id);
-      document.querySelector('#premium-cloud-folder-count').textContent=folders.filter(f=>f.provider===id).length+' папок';
+      document.querySelector('#premium-cloud-folder-count').textContent=activeCloudFolders(id).length+' папок';
       clearFolderSelection();
       document.querySelector('#premium-folder-form .form-error').textContent='';
       folderPath=[];
@@ -247,8 +244,18 @@
     if(folderConnection?.value)void browseFolder();
     document.querySelector('#premium-folder-form')?.addEventListener('submit',async ev=>{
       ev.preventDefault();const form=ev.currentTarget,button=form.querySelector('[type=submit]'),error=form.querySelector('[role=alert]');error.textContent='';if(!folderConnection.value){error.textContent='Сначала подключите выбранный диск.';return}if(!folderId.value){error.textContent='Выберите папку из списка перед добавлением.';return}button.disabled=true;
-      try{const d=Object.fromEntries(new FormData(form));await api('/premium/cloud/folders',{method:'POST',body:JSON.stringify({connection_id:d.connection_id,folder_id:String(d.folder_id||'').trim(),quote_id:d.quote_id||null,recursive:form.elements.recursive.checked})});notify('Папка добавлена; синхронизация запрошена.');await render(active)}
-      catch(err){error.textContent=err.message;button.disabled=false}
+      try{
+        const d=Object.fromEntries(new FormData(form));
+        await api('/premium/cloud/folders',{method:'POST',body:JSON.stringify({connection_id:d.connection_id,folder_id:String(d.folder_id||'').trim(),quote_id:d.quote_id||null,recursive:form.elements.recursive.checked})});
+        // Update only the folder list, never rebuild or scroll the whole page.
+        const latest=await api('/premium/cloud/folders');
+        if(!active()||!folderForm.isConnected)return;
+        folders=latest.folders||[];
+        document.querySelector('.premium-folder-list').innerHTML=folderHtml(selectedCloudProvider);
+        document.querySelector('#premium-cloud-folder-count').textContent=activeCloudFolders(selectedCloudProvider).length+' папок';
+        clearFolderSelection();
+        notify('Папка добавлена. Обновление выполняется автоматически по расписанию.');
+      }catch(err){error.textContent=err.message;button.disabled=false}
     });
     document.querySelector('#premium-refresh-jobs')?.addEventListener('click',()=>render(active));
     document.querySelector('.premium-tools-page')?.addEventListener('click',async ev=>{
@@ -261,9 +268,7 @@
         try{await api('/premium/product-sources/'+encodeURIComponent(b.dataset.premiumDisableSource),{method:'DELETE',body:JSON.stringify({})});notify('Мониторинг остановлен.');await render(active)}catch(error){notify(error.message);b.disabled=false}
       } else if(b.dataset.premiumDisableFolder){
         if(!(await window.SmetraDialog.confirm({title:'Отключить эту папку?',confirmLabel:'Отключить',danger:true})))return;b.disabled=true;
-        try{await api('/premium/cloud/folders/'+encodeURIComponent(b.dataset.premiumDisableFolder),{method:'DELETE',body:JSON.stringify({})});notify('Синхронизация папки остановлена.');await render(active)}catch(error){notify(error.message);b.disabled=false}
-      } else if(b.dataset.premiumResync){
-        b.disabled=true;try{const r=await api('/premium/cloud/sync',{method:'POST',body:JSON.stringify({})});notify('Запрошена синхронизация: '+(r.queued||0)+' папок.');await render(active)}catch(error){notify(error.message);b.disabled=false}
+        try{await api('/premium/cloud/folders/'+encodeURIComponent(b.dataset.premiumDisableFolder),{method:'DELETE',body:JSON.stringify({})});notify('Папка убрана из автоматической синхронизации.');const latest=await api('/premium/cloud/folders');if(!active())return;folders=latest.folders||[];document.querySelector('.premium-folder-list').innerHTML=folderHtml(selectedCloudProvider);document.querySelector('#premium-cloud-folder-count').textContent=activeCloudFolders(selectedCloudProvider).length+' папок'}catch(error){notify(error.message);b.disabled=false}
       } else if(b.dataset.premiumHistory){
         const id=b.dataset.premiumHistory,target=document.querySelector('[data-premium-history-view="'+CSS.escape(id)+'"]');if(!target)return;
         if(!target.hidden){target.hidden=true;target.replaceChildren();return}target.hidden=false;target.textContent='Загружаем историю…';

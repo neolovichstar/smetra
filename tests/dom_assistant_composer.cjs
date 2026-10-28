@@ -32,13 +32,31 @@ async function setup(enabled=true,voice=false,remaining=3){
   if(path==='/assistant/jobs')return {enabled,jobs:[]};
   throw Error('Unexpected path: '+path);
  };
- for(const file of ['ui/icons.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-chat.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));await w.SmetraAssistant();await tick();
+ for(const file of ['ui/icons.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js','assistant-clipboard.js','assistant-chat.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));await w.SmetraAssistant();await tick();
  return {w,doc:w.document,requests,uploads,notices,recognition:()=>activeRecognition,microphoneTrackStopped:()=>microphoneTrackStopped,microphonePermissionRequests:()=>microphonePermissionRequests,close:()=>dom.window.close()};
 }
 (async()=>{
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('Ctrl+V attaches screenshot to the assistant without sending or replacing the draft',async({w,doc})=>{
+   w.URL.createObjectURL=()=> 'blob:clipboard-test';w.URL.revokeObjectURL=()=>{};
+   const input=type(w,doc,'Проверь это фото');
+   const picture=new w.File([new Uint8Array(128)],'image.png',{type:'image/png'});
+   const ev=new w.Event('paste',{bubbles:true,cancelable:true});
+   Object.defineProperty(ev,'clipboardData',{value:{files:[picture]}});
+   input.dispatchEvent(ev);
+   await tick();await tick();
+   assert.equal(ev.defaultPrevented,true);
+   assert.equal(input.value,'Проверь это фото');
+   assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,1);
+   assert.match(doc.querySelector('.assistant-attachment-name').textContent,/Скриншот/);
+   assert.equal(doc.querySelector('#assistant-send').disabled,false);
+   const textPaste=new w.Event('paste',{bubbles:true,cancelable:true});
+   Object.defineProperty(textPaste,'clipboardData',{value:{files:[]}});
+   input.dispatchEvent(textPaste);
+   assert.equal(textPaste.defaultPrevented,false,'ordinary Ctrl+V remains native');
+ });
  await test('microphone works with exhausted AI quota and produces an editable draft',async({w,doc,recognition,microphonePermissionRequests})=>{
   const button=doc.querySelector('#assistant-send'),voice=doc.querySelector('#assistant-voice'),input=doc.querySelector('#assistant-input');
   assert.equal(button.type,'submit');assert.equal(button.disabled,true,'empty message cannot send');

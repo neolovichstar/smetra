@@ -833,3 +833,30 @@ html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-sel
   .premium-synced-actions{gap:8px}
 }
 \n.premium-cloud-select-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:-8px}\n.premium-cloud-select-heading>span:last-child{font-size:12px;color:var(--text-3)}\n@media(max-width:640px){.premium-cloud-select-heading{flex-wrap:wrap;gap:5px}}\n
+
+/* Cloud pickers scroll inside their own surfaces, never grow the page per folder. */
+.premium-cloud-folders{gap:10px;padding:12px}
+.premium-cloud-folders-heading p{font-size:11px;line-height:1.4}
+.premium-folder-browser-head{min-height:48px;padding:7px 10px}
+.premium-folder-entries{height:176px;max-height:176px;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:5px}
+.premium-folder-entry{min-height:35px;padding:2px 5px}
+.premium-folder-select{min-height:31px;padding:5px}
+.premium-cloud-file{min-height:34px;padding:5px 9px}
+.premium-folder-confirm{padding:9px 11px;gap:8px}
+.premium-folder-options>summary{min-height:28px}
+.premium-cloud-sync-list{gap:7px}
+.premium-cloud-sync-list>.premium-list-heading{min-height:36px}
+.premium-cloud-sync-list .premium-folder-list{max-height:192px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;min-width:0}
+.premium-cloud-sync-list .premium-folder{padding:9px 0;gap:10px}
+.premium-cloud-sync-list .premium-folder-actions{gap:6px;flex-wrap:nowrap}
+.premium-cloud-sync-list .premium-folder-actions .btn{min-height:30px;padding:5px 10px}
+.premium-cloud-sync-list .premium-folder>div:first-child{gap:3px}
+.premium-cloud-sync-list .premium-folder small{font-size:11px}
+@media(max-width:640px){
+  .premium-cloud-folders{padding:10px;gap:9px}
+  .premium-folder-entries{height:154px;max-height:154px}
+  .premium-cloud-sync-list .premium-folder-list{max-height:165px}
+  .premium-cloud-sync-list .premium-folder{grid-template-columns:minmax(0,1fr) auto}
+  .premium-cloud-sync-list .premium-folder-actions{justify-content:flex-end}
+  .premium-synced-actions{flex-wrap:wrap;justify-content:flex-end}
+}

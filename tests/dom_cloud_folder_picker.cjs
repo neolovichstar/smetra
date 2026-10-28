@@ -12,6 +12,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   w.SmetraDialog={confirm:async()=>true};
   const calls=[];
   const connections=[{id:'y-1',provider:'yandex_disk',status:'active',account_label:'Мой Яндекс'}];
+  const folders=[];
   w.api=async(path,options)=>{
     calls.push({path,options});
     if(path==='/premium/features')return {cloud_drives:true,product_monitor:true,visual_estimates:true};
@@ -25,7 +26,15 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
       return {ok:true};
     }
     if(path==='/premium/cloud/connections')return {connections};
-    if(path==='/premium/cloud/folders')return {folders:[]};
+    if(path==='/premium/cloud/folders'&&options?.method==='POST'){
+      const request=JSON.parse(options.body);
+      const connection=connections.find(c=>c.id===request.connection_id);
+      folders.push({id:'bound-'+folders.length,provider:connection.provider,connection_id:connection.id,
+        folder_id:request.folder_id,folder_name:'Мой диск',account_label:connection.account_label,
+        status:'active',sync_requested:true});
+      return {folder_id:folders[folders.length-1].id,sync_requested:true};
+    }
+    if(path==='/premium/cloud/folders')return {folders};
     if(path==='/premium/cloud/jobs')return {jobs:[]};
     if(path.startsWith('/premium/cloud/browse-folders?')){
       const url=new URL(path,'https://smetra.online');
@@ -33,7 +42,6 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
       if(url.searchParams.get('parent')==='/Проекты')return {parent:'/Проекты',folders:[{id:'/Проекты/Сметы',name:'Сметы'}],files:[{name:'Счёт.pdf',mime_type:'application/pdf'}],next_cursor:''};
       return {parent:url.searchParams.get('parent'),folders:[],next_cursor:''};
     }
-    if(path==='/premium/cloud/folders'&&options?.method==='POST')return {folder_id:'bound'};
     throw Error('Unexpected request: '+path);
   };
   w.eval(fs.readFileSync('apps/web/premium-tools.js','utf8'));
@@ -60,6 +68,26 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.match(doc.querySelector('#premium-folder-choice').textContent,/Мой диск/);
   assert.equal(doc.querySelector('#premium-folder-submit').disabled,false,'Explicit root selection enables synchronization');
   doc.querySelector('#premium-folder-back').disabled; // no navigation on root selection
+  assert.equal(doc.querySelector('#premium-folder-submit').textContent,'Добавить папку');
+  assert.equal(doc.querySelectorAll('[data-premium-resync]').length,0,'No manual sync buttons');
+  assert.equal(doc.querySelector('#premium-sync-all'),null,'No global manual sync button');
+  const pageBefore=doc.querySelector('.premium-tools-page');
+  const pickerBefore=doc.querySelector('#premium-folder-entries');
+  pageBefore.scrollTop=115;
+  doc.querySelector('#premium-folder-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+  await new Promise(r=>setTimeout(r,35));
+  assert.equal(folders.length,1,'Folder added for automatic background syncing');
+  assert.equal(folders[0].sync_requested,true);
+  assert.equal(doc.querySelector('.premium-tools-page'),pageBefore,'Adding folder does not rebuild page');
+  assert.equal(doc.querySelector('#premium-folder-entries'),pickerBefore,'Folder browser is not recreated');
+  assert.equal(pageBefore.scrollTop,115,'Adding a folder keeps page scroll position');
+  assert.match(doc.querySelector('.premium-folder-list').textContent,/Мой диск/);
+  assert.equal(doc.querySelector('#premium-cloud-folder-count').textContent,'1 папок');
+  assert.equal(doc.querySelector('#premium-folder-submit').disabled,true,'Prevent repeated submit');
+  assert.equal(calls.filter(x=>x.path==='/premium/cloud/sync').length,0,'No manual sync endpoint');
+  const styles=fs.readFileSync('apps/web/ui/modules.css','utf8');
+  assert.match(styles,/\.premium-cloud-sync-list \.premium-folder-list\{max-height:\d+px;overflow-y:auto/);
+  assert.match(styles,/\.premium-folder-entries\{height:\d+px;max-height:\d+px/);
   // Switch providers clears the previous selected folder.
   const beforeSelect=calls.length;
   cards[1].querySelector('.premium-connect-select').click();
