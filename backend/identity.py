@@ -195,9 +195,9 @@ def route(h, con, method, path, query, origin):
             if safe_query:
                 target += "?" + urllib.parse.urlencode(safe_query, doseq=True)
             return redirect(h, target)
-        if provider == "google":
-            # Google Cloud has exactly one approved callback host. Never let
-            # a stale PUBLIC_ORIGIN/VERCEL_URL produce redirect_uri_mismatch.
+        if provider == "google" and host == "smetra.online":
+            # Pin the real production callback even if PUBLIC_ORIGIN is stale.
+            # Local development must retain its own origin for OAuth tests.
             origin = "https://smetra.online"
         elif provider == "yandex" and host in ("smetra.online", "smetra.vercel.app"):
             origin = "https://" + host
