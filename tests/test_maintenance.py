@@ -11,8 +11,13 @@ from tests.test_security_hardening import SecurityHardeningTests
 
 class MaintenanceTests(SecurityHardeningTests):
     """Reuse the running local HTTP server and reset fixture DB per test."""
-    account = BusinessFlows.account
     call = BusinessFlows.call
+
+    def account(self, name):
+        # A referral must be registered after the click, with the actual
+        # signup timestamp. The generic business fixture simulates legacy
+        # accounts to preserve earlier ten-quote test scenarios.
+        return BusinessFlows.account(self, name, legacy=False)
 
     def test_cron_requires_strong_secret_before_opening_database(self):
         with patch.dict(os.environ, {"CRON_SECRET": "a" * 48}):
