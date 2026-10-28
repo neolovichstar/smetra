@@ -263,7 +263,7 @@
     users:'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20v-2a6 6 0 0 1 12 0v2',
     sparkle:'M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z'
   });
-  const releaseType=item=>/^(патч|patch|fix)(?:\\b|[\\s.:#-])/i.test(item.title||'')||/^v?\\d+\\.\\d+\\.\\d+/.test(item.version||'')?'patch':'major';
+  const releaseType=item=>/^(патч|patch|fix)(?:\b|[\s.:#-])/i.test(item.title||'')||/^v?\d+\.\d+\.\d+/.test(item.version||'')?'patch':'major';
   const releaseIconKind=text=>{
     if(/ауди|голос|микрофон|реч/i.test(text))return 'audio';
     if(/геометр|размер|обмер|планиров|чертёж/i.test(text))return 'ruler';
