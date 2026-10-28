@@ -207,7 +207,7 @@ def route(h, con, method, path, query, origin):
         if intent not in ("login", "register"):
             return redirect(h, origin + "/app?auth_error=expired")
         legal_accepted = (
-            intent == "register"
+            intent in ("register", "login")
             and query.get("legal_acceptance", [""])[0] == "1"
             and query.get("legal_version", [""])[0] == REGISTRATION_CONSENT_VERSION
         )
@@ -324,8 +324,7 @@ def route(h, con, method, path, query, origin):
             user_id = account["id"]
         else:
             if (
-                row["registration_intent"] != 1
-                or row["legal_acceptance"] != 1
+                row["legal_acceptance"] != 1
                 or row["legal_version"] != REGISTRATION_CONSENT_VERSION
             ):
                 return redirect(h, origin + "/app?auth_error=registration_consent_required")
