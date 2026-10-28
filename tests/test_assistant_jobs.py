@@ -63,6 +63,33 @@ class AssistantJobTests(unittest.TestCase):
         self.assertEqual(self.call('/assistant/jobs','POST',{'text':'Другой запрос'},owner,key='one')[0],409)
         self.call('/assistant/jobs/'+results[0]['id'],'DELETE',token=owner)
 
+    def test_idempotent_reconnects_do_not_consume_new_request_quota(self):
+        owner, _ = self.account('job-replay-throttle')
+        first = self.enqueue(owner, key='reconnect')
+        # A dropped connection may cause many retries with the same key.
+        # These must return the owned job without consuming 12 new requests.
+        for _ in range(15):
+            status, result = self.call(
+                '/assistant/jobs', 'POST', {'text': 'Проверь данные'}, owner, key='reconnect',
+            )
+            self.assertEqual(status, 200, result)
+            self.assertEqual(result['job']['id'], first['id'])
+        # The replay cannot be used to smuggle a different request.
+        status, _ = self.call(
+            '/assistant/jobs', 'POST', {'text': 'Другие данные'}, owner, key='reconnect',
+        )
+        self.assertEqual(status, 409)
+        # A genuinely new task still respects the normal request budget.
+        new_status, new_result = self.call(
+            '/assistant/jobs', 'POST', {'text': 'Новый вопрос'}, owner, key='new-task',
+        )
+        self.assertEqual(new_status, 202, new_result)
+        # Do not leave queued fixtures behind to interfere with later tests.
+        for job_id in (first['id'], new_result['job']['id']):
+            self.assertEqual(
+                self.call('/assistant/jobs/' + job_id, 'DELETE', token=owner)[0], 200,
+            )
+
     def test_completion_survives_screen_exit_and_is_not_run_twice(self):
         owner, _ = self.account('job-complete')
         thread = self.call('/assistant/conversations','POST',{'title':'Проверка'},owner)[1]['conversation']
@@ -149,6 +176,26 @@ class AssistantJobTests(unittest.TestCase):
                 self.due(job)
         self.run_job().assert_not_called()
         self.assertEqual(self.call('/assistant',token=owner)[1]['quota']['used'],0)
+
+    def test_partial_stream_failure_is_terminal_not_retried(self):
+        owner, _ = self.account('job-partial-stream')
+        job = self.enqueue(owner, key='partial-stream')
+        self.run_job(side_effect=DomainError(409, 'Поток ответа прервался'))
+        result = self.call('/assistant/jobs/' + job['id'], token=owner)[1]['job']
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['attempts'], 1)
+        # A later scheduler tick must not regenerate previously emitted text.
+        # Terminal jobs are not claimable even when their lease is stale.
+        # Other unrelated queued jobs must not affect this assertion.
+        self.due(job)
+        from backend.assistant_jobs import claim
+        with self.mod.db() as con:
+            self.assertIsNone(claim(con, job['id']))
+        self.assertEqual(
+            self.call('/assistant/jobs/' + job['id'], token=owner)[1]['job']['status'],
+            'failed',
+        )
+        self.assertEqual(self.call('/assistant', token=owner)[1]['messages'], [])
 
     def test_revoked_session_is_not_an_authentication_bypass(self):
         owner, user_id = self.account('job-revoke')
