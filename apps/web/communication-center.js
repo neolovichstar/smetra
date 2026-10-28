@@ -124,8 +124,9 @@ function renderMessages(){
  shell?.classList.add('is-chat-open');head.hidden=false;compose.hidden=false;
  const subtitle=c.kind==='estimate'?'Обсуждение сметы':c.kind==='object'?'Команда рабочего пространства':c.kind==='community'?'Открытый профессиональный канал':state.tab==='support'?'Обращение пользователя'+(c.user_email?' · '+c.user_email:''):(c.partner_public_id?'ID '+c.partner_public_id:'Личная переписка');
  const avatar=c.partner_avatar_url&&window.SmetraUserAvatar?window.SmetraUserAvatar({name:title,avatar_url:c.partner_avatar_url}):c.kind==='object'?icon('users'):c.kind==='community'?'#':(K?K.initials(title):esc(title.slice(0,1)));
- head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+(c.kind==='direct'&&c.partner_profile_url&&/^\/u\/[A-Za-z0-9_-]+$/.test(c.partner_profile_url)?'<a class="comms-profile-link" href="'+esc(c.partner_profile_url)+'" target="_blank" rel="noopener">'+esc(title)+'</a>':esc(title))+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(adminQueue()?queueControls(c):c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
+ head.innerHTML=back+'<span class="comms-avatar tg-avatar tg-tint-'+(K?K.tint(title):0)+'">'+avatar+'</span><div class="comms-head-copy tg-head-copy"><strong class="comms-name">'+(c.kind==='direct'&&c.partner_profile_url&&/^\/u\/[A-Za-z0-9_-]+$/.test(c.partner_profile_url)?'<a class="comms-profile-link" href="'+esc(c.partner_profile_url)+'" target="_blank" rel="noopener">'+esc(title)+'</a>':esc(title))+'</strong><small class="comms-sub">'+esc(subtitle)+'</small></div>'+(c.kind==='estimate'&&c.can_share_quote?'<button class="comms-btn" type="button" data-quote-email aria-label="Передать смету по электронной почте">'+icon('mail')+'<span>Почта</span></button>':'')+(adminQueue()?queueControls(c):c.status==='closed'?'<span class="tg-badge is-muted">закрыт</span>':c.needs_human?'<span class="tg-badge is-waiting">нужен сотрудник</span>':'');
  head.querySelector('[data-chat-back]').onclick=()=>{state.current=null;state.messages=[];renderList();renderMessages()};
+ head.querySelector('[data-quote-email]')?.addEventListener('click',()=>openQuoteEmail(c));
  if(adminQueue())bindQueueControls(head,c);
  compose.querySelector('.comms-banner')?.remove();
  box.disabled=c.status==='closed';box.placeholder=box.disabled?'Переписка закрыта':'Сообщение…';send.disabled=box.disabled||state.busy||!box.value.trim();
@@ -202,6 +203,33 @@ async function createQuoteChat(){
  const quote_id=$('#comms-quote-id')?.value.trim(),public_id=$('#comms-quote-client')?.value.trim();
  if(!quote_id||!public_id)return;
  try{const d=await api('/profile/quote-chats',{method:'POST',body:JSON.stringify({quote_id,public_id})});await refresh(true);await select(d.chat.id);notify('Чат привязан к смете')}catch(error){notify(error.message)}
+}
+async function openQuoteEmail(chat){
+ if(!chat?.can_share_quote||!chat.quote_id)return;
+ const dialog=document.createElement('dialog');
+ dialog.className='experience-dialog workspace-dialog';
+ dialog.setAttribute('aria-label','Передать смету через почту');
+ dialog.innerHTML='<div class="dialog-heading"><h2>Пригласить по почте</h2><p>Отправьте опубликованную смету из этого чата. Зарегистрированный получатель увидит её в разделе «Полученные сметы».</p></div>'+
+  '<form><label class="field"><span>Адрес клиента</span><input type="email" name="email" maxlength="254" autocomplete="email" required placeholder="client@example.ru"></label>'+
+  '<p role="alert" class="form-error"></p><div class="form-actions"><button type="submit" class="btn primary">Отправить</button><button type="button" class="btn" data-cancel>Отмена</button></div></form>';
+ const close=()=>{if(dialog.open)dialog.close();dialog.remove()};
+ document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ dialog.querySelector('[data-cancel]').onclick=close;
+ const form=dialog.querySelector('form');
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  if(!form.reportValidity())return;
+  const button=form.querySelector('[type=submit]'),error=form.querySelector('[role=alert]');
+  if(button.disabled)return;button.disabled=true;error.textContent='';
+  try{
+   const result=await api('/shares',{method:'POST',body:JSON.stringify({quote_id:chat.quote_id,email:form.elements.email.value.trim()})});
+   close();
+   notify(result.already_shared?'Сметра уже доступна этому получателю':'Приглашение создано в Сметре');
+  }catch(e){error.textContent=e.message||'Не удалось передать смету'}
+  finally{if(button.isConnected)button.disabled=false}
+ };
+ dialog.showModal();
+ form.elements.email.focus();
 }
 async function createObjectChat(){
  const workspace=$('#comms-workspace')?.value;if(!workspace){notify('Нет активного пространства TEAM');return}
