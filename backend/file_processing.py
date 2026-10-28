@@ -128,11 +128,6 @@ def ensure_ready(service, context):
                 and row["index_hash"] == row["sha256"]):
             raise DomainError(409, "Сначала распознайте прикреплённое аудио — сообщение не потрачено")
         return
-    # A scanned drawing may have no selectable text. Vision can inspect only
-    # its first two pages, with an explicit partial-coverage warning.
-    if (row["mime"] == "application/pdf" and row["size"] <= 2_000_000
-            and row["index_status"] == "needs_ocr"):
-        return
     if row["index_hash"] == row["sha256"] and row["index_status"] in ACTIVE:
         raise DomainError(
             409, "Документ ещё готовится. Дождитесь завершения — сообщение не потрачено"
