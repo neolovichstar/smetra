@@ -171,6 +171,18 @@ class AssistantJobTests(unittest.TestCase):
         self.run_job().assert_not_called()
         self.assertEqual(self.call('/assistant',token=owner)[1]['quota']['used'],0)
 
+    def test_partial_stream_failure_is_terminal_not_retried(self):
+        owner, _ = self.account('job-partial-stream')
+        job = self.enqueue(owner, key='partial-stream')
+        self.run_job(side_effect=DomainError(409, 'Поток ответа прервался'))
+        result = self.call('/assistant/jobs/' + job['id'], token=owner)[1]['job']
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['attempts'], 1)
+        # A later scheduler tick must not regenerate previously emitted text.
+        self.due(job)
+        self.run_job().assert_not_called()
+        self.assertEqual(self.call('/assistant', token=owner)[1]['messages'], [])
+
     def test_revoked_session_is_not_an_authentication_bypass(self):
         owner, user_id = self.account('job-revoke')
         job = self.enqueue(owner)
