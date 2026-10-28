@@ -80,9 +80,15 @@ class AssistantJobTests(unittest.TestCase):
         )
         self.assertEqual(status, 409)
         # A genuinely new task still respects the normal request budget.
-        self.assertEqual(self.call(
+        new_status, new_result = self.call(
             '/assistant/jobs', 'POST', {'text': 'Новый вопрос'}, owner, key='new-task',
-        )[0], 202)
+        )
+        self.assertEqual(new_status, 202, new_result)
+        # Do not leave queued fixtures behind to interfere with later tests.
+        for job_id in (first['id'], new_result['job']['id']):
+            self.assertEqual(
+                self.call('/assistant/jobs/' + job_id, 'DELETE', token=owner)[0], 200,
+            )
 
     def test_completion_survives_screen_exit_and_is_not_run_twice(self):
         owner, _ = self.account('job-complete')
@@ -179,8 +185,16 @@ class AssistantJobTests(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['attempts'], 1)
         # A later scheduler tick must not regenerate previously emitted text.
+        # Terminal jobs are not claimable even when their lease is stale.
+        # Other unrelated queued jobs must not affect this assertion.
         self.due(job)
-        self.run_job().assert_not_called()
+        from backend.assistant_jobs import claim
+        with self.mod.db() as con:
+            self.assertIsNone(claim(con, job['id']))
+        self.assertEqual(
+            self.call('/assistant/jobs/' + job['id'], token=owner)[1]['job']['status'],
+            'failed',
+        )
         self.assertEqual(self.call('/assistant', token=owner)[1]['messages'], [])
 
     def test_revoked_session_is_not_an_authentication_bypass(self):
