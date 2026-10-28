@@ -546,3 +546,13 @@
  .assistant-decision-heading strong{max-width:100%}
  .assistant-decision-buttons{justify-content:flex-end}
 }
+
+/* Context menu styling applies to the authenticated cabinet only. */
+/* Focused right-click actions: compact, quiet and linked to the clicked object. */
+.sm-context{width:max-content;min-width:210px;max-width:min(320px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow-y:auto;overscroll-behavior:contain;padding:5px;border-radius:12px;background:var(--surface-2)}
+.sm-context-heading{max-width:100%;padding:8px 11px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-11);font-weight:600;color:var(--text-3);border-bottom:1px solid var(--line);margin-bottom:4px}
+.sm-context-item{min-height:36px;padding:0 9px;gap:9px}
+.sm-context-item .sm-context-symbol{flex:none;display:grid;place-items:center;width:18px;color:var(--text-2)}
+.sm-context-item .sm-context-symbol svg{width:16px;height:16px}
+.sm-context-item > span:nth-child(2){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (prefers-reduced-motion:reduce){.sm-context{animation:none}}
