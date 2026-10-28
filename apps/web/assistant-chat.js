@@ -197,7 +197,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   conversationObserver.observe(messages,{childList:true,subtree:true});
   syncAssistantConversationState();
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" class="assistant-action-button" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">'+assistantIcon('paperclip',18)+'</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv" multiple hidden><span></span>';
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" class="assistant-action-button" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">'+assistantIcon('paperclip',18)+'</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv,.mp3,.wav,.m4a,.ogg,.webm,.flac,.aac" multiple hidden><span></span>';
   attachmentBar.querySelector('span').textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   let backgroundEnabled=null;
@@ -575,7 +575,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       status.textContent='Фото готовы к отправке вместе с сообщением.';
       input.focus();return;
     }
-    if(!['pdf','txt','md','docx','xlsx','csv'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите фото PNG/JPG до 2 МБ или документ до '+maxUploadLabel;return}
+    const isAudio=['mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension);
+    if(!['pdf','txt','md','docx','xlsx','csv','mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите фото, документ или аудио до '+maxUploadLabel;return}
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -591,7 +592,21 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:attached.entity,context_id:attached.id})});
       context=attached;saveDraft();sessionStorage.removeItem(retrySlot);
       sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));renderContext();renderPhoto();refreshFile();refreshJobs();
-      status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';input.focus();
+      if(isAudio){
+        status.textContent='Распознаю аудио, чтобы ИИ понимал содержимое…';
+        try{
+          const transcribed=await api('/files/'+encodeURIComponent(attached.id)+'/transcribe',{method:'POST'});
+          if(!active())return;
+          status.textContent=transcribed.cached?'Расшифровка готова.':'Аудио распознано. Проверьте цифры, размеры и материалы.';
+          refreshFile();
+        }catch(error){
+          if(active()){
+            status.textContent='Аудио сохранено. Распознавание не завершено: '+error.message;
+            refreshFile();
+          }
+        }
+      }else status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';
+      input.focus();
     }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
     finally{fileInput.value=''}
     }finally{attachingCount--;if(active())renderQuota(quota)}
@@ -897,13 +912,39 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     try{
       const result=await api('/files/'+encodeURIComponent(id)+'/metadata');
       if(!fileStatus.isConnected||sequence!==filePollSeq||context?.id!==id)return;
-      const info=result.processing,active=['queued','running','retry'].includes(info.state);
+      const info=result.processing,active=['queued','running','retry'].includes(info.state),isAudio=/^audio\//.test(result.file.mime);
       fileBlocking=active||['failed','deferred','cancelled','needs_ocr'].includes(info.state)||result.file.size>2000000&&info.state!=='ready';
-      const labels={queued:'Документ в очереди',running:'Подготавливаю текст…',retry:'Повторю подготовку позже',ready:'Текст готов',needs_ocr:'В PDF есть страницы без текста. Для них нужен OCR.',failed:info.error||'Не удалось подготовить документ',cancelled:'Подготовка отменена',deferred:'Подготовьте документ перед вопросом',legacy:'Документ ещё не подготовлен'};
-      const label=document.createElement('span');label.textContent=(labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
+      const labels={queued:'Документ в очереди',running:'Подготавливаю текст…',retry:'Повторю подготовку позже',ready:isAudio?'Аудио распознано':'Текст готов',needs_ocr:'В PDF есть страницы без текста. Для них нужен OCR.',failed:info.error||'Не удалось подготовить документ',cancelled:'Подготовка отменена',deferred:'Подготовьте документ перед вопросом',legacy:isAudio?'Аудио ещё не распознано':'Документ ещё не подготовлен'};
+      const label=document.createElement('span');label.textContent=(labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages&&!isAudio?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
+      if(isAudio&&info.state==='ready'&&info.method==='transcription'){
+        const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent='Показать расшифровку';button.setAttribute('aria-expanded','false');
+        button.onclick=async()=>{
+          const existing=fileStatus.querySelector('.assistant-transcript');
+          if(existing){existing.hidden=!existing.hidden;button.textContent=existing.hidden?'Показать расшифровку':'Скрыть расшифровку';button.setAttribute('aria-expanded',String(!existing.hidden));return}
+          button.disabled=true;
+          try{
+            const transcript=await api('/files/'+encodeURIComponent(id)+'/transcript');
+            if(!fileStatus.isConnected||context?.id!==id)return;
+            const preview=document.createElement('pre');preview.className='assistant-transcript';
+            preview.textContent=transcript.text+(transcript.truncated?'\n\n[Показаны первые 16 000 символов]':'');
+            fileStatus.append(preview);button.textContent='Скрыть расшифровку';button.setAttribute('aria-expanded','true');
+          }catch(error){status.textContent=error.message}
+          finally{button.disabled=false}
+        };
+        fileStatus.append(button);
+      }
       if(['ready','needs_ocr'].includes(info.state)&&info.missing_text_pages?.length){const gaps=document.createElement('span');gaps.textContent='Без текста: стр. '+info.missing_text_pages.slice(0,6).join(', ')+(info.missing_text_pages.length>6?'…':'');fileStatus.append(gaps)}
       if(info.ocr_supported){const budget=document.createElement('span');budget.textContent=`OCR: ${info.ocr_quota.used} из ${info.ocr_quota.limit} в месяц · первые ${info.ocr_page_limit} страницы`;fileStatus.append(budget)}
-      if(info.supported&&(active&&info.can_cancel||['failed','cancelled','deferred','legacy','needs_ocr'].includes(info.state))){
+      if(isAudio&&info.state!=='ready'&&!active){
+        const retry=document.createElement('button');retry.type='button';retry.className='btn small';retry.textContent='Распознать аудио';
+        retry.onclick=async()=>{
+          retry.disabled=true;
+          try{await api('/files/'+encodeURIComponent(id)+'/transcribe',{method:'POST'});if(context?.id===id)refreshFile()}
+          catch(error){status.textContent=error.message;retry.disabled=false}
+        };
+        fileStatus.append(retry);
+      }
+      if(!isAudio&&info.supported&&(active&&info.can_cancel||['failed','cancelled','deferred','legacy','needs_ocr'].includes(info.state))){
         const ocr=info.ocr_supported;const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent=active?'Отменить подготовку':ocr?'Распознать скан':info.state==='failed'?'Повторить':'Подготовить документ';button.disabled=!!info.cancel_requested||!active&&ocr&&info.ocr_quota.used>=info.ocr_quota.limit;
         button.onclick=async()=>{button.disabled=true;try{await api('/files/'+encodeURIComponent(id)+'/'+(ocr?'ocr':'processing'),{method:active?'DELETE':'POST',...(active?{}:{headers:{'Idempotency-Key':crypto.randomUUID()}})});refreshFile();refreshJobs()}catch(error){button.disabled=false;notify(error.message)}};fileStatus.append(button);
       }
