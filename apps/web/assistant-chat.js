@@ -100,7 +100,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const composer=document.querySelector('.assistant-composer');
   const content=document.querySelector('.assistant-content');
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
-  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ, фото или аудио" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv,.png,.jpg,.jpeg,.mp3,.wav,.m4a,.ogg,.webm,.flac" hidden><span></span>';
+  attachmentBar.innerHTML='<button type="button" id="assistant-attach" aria-label="Прикрепить документ, фото или аудио" title="Прикрепить файл">Прикрепить файл</button><input type="file" id="assistant-attach-input" accept=".pdf,.txt,.md,.docx,.xlsx,.csv,.png,.jpg,.jpeg,.mp3,.wav,.m4a,.ogg,.webm,.flac,.aac" hidden><span></span>';
   attachmentBar.querySelector('span').textContent='Документ, фото или аудио · до '+maxUploadLabel;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   const jobBar=document.createElement('div');jobBar.className='assistant-jobbar';
@@ -297,8 +297,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const uploadAttachment=async file=>{
     if(!file||attachButton.disabled)return;
     const extension=file.name.toLowerCase().split('.').pop();
-    const audio=['mp3','wav','m4a','ogg','webm','flac'].includes(extension);
-    if(!['pdf','txt','md','docx','xlsx','csv','png','jpg','jpeg','mp3','wav','m4a','ogg','webm','flac'].includes(extension)||file.size<1||file.size>maxUpload||(audio&&file.size>3000000)){status.textContent='Выберите документ, изображение или аудио до '+(audio?'3 МБ':maxUploadLabel);return}
+    const audio=['mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension);
+    if(!['pdf','txt','md','docx','xlsx','csv','png','jpg','jpeg','mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension)||file.size<1||file.size>maxUpload||(audio&&file.size>3000000)){status.textContent='Выберите документ, изображение или аудио до '+(audio?'3 МБ':maxUploadLabel);return}
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -327,7 +327,22 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   fileInput.onchange=()=>uploadAttachment(fileInput.files[0]);
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
-  composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();uploadAttachment(event.dataTransfer.files[0])}});
+  composer.addEventListener('drop',event=>{if(event.dataTransfer.files.length){event.preventDefault();if(event.dataTransfer.files.length>1)status.textContent='Прикрепляется первый файл. Для следующего выберите его отдельно.';uploadAttachment(event.dataTransfer.files[0])}});
+  // Images and audio pasted with Ctrl+V pass the standard server-side signature checks.
+  composer.addEventListener('paste',event=>{
+    const files=[...(event.clipboardData?.files||[])];
+    if(!files.length)return;
+    const candidate=files.find(file=>file.type.startsWith('image/')||file.type.startsWith('audio/'));
+    if(!candidate)return;
+    event.preventDefault();
+    const extension=({
+      'image/png':'png','image/jpeg':'jpg','audio/mpeg':'mp3','audio/wav':'wav',
+      'audio/mp4':'m4a','audio/ogg':'ogg','audio/webm':'webm','audio/flac':'flac','audio/aac':'aac'
+    })[candidate.type];
+    if(!extension){status.textContent='Формат вставленного файла не поддерживается';return}
+    const file=new File([candidate],candidate.name&&candidate.name.toLowerCase().endsWith('.'+extension)?candidate.name:'clipboard-'+Date.now()+'.'+extension,{type:candidate.type});
+    uploadAttachment(file);
+  });
   let quota=data.quota,working=false,threadBusy=false,requestController=null;
   const setThreadBusy=blocked=>{
     document.querySelectorAll('.assistant-workbar button,.assistant-history-list button,.assistant-history-rename-form input,.assistant-history-rename-form button').forEach(button=>button.disabled=blocked);
@@ -506,7 +521,23 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const label=document.createElement('span');label.textContent=(isAudio&&info.state!=='ready'?'Аудио ожидает распознавания':isAudio?'Расшифровка готова':labels[info.state]||labels.legacy)+(info.state==='ready'?(info.pages?' · '+info.pages+' стр.':'')+(info.truncated?' · подготовлена часть текста':'')+(info.method==='ocr'?' · OCR: проверьте суммы по оригиналу':''):'');fileStatus.append(label);
       if(['ready','needs_ocr'].includes(info.state)&&info.missing_text_pages?.length){const gaps=document.createElement('span');gaps.textContent='Без текста: стр. '+info.missing_text_pages.slice(0,6).join(', ')+(info.missing_text_pages.length>6?'…':'');fileStatus.append(gaps)}
       if(info.ocr_supported){const budget=document.createElement('span');budget.textContent=`OCR: ${info.ocr_quota.used} из ${info.ocr_quota.limit} в месяц · первые ${info.ocr_page_limit} страницы`;fileStatus.append(budget)}
-      if(isAudio&&info.state!=='ready'){
+      if(isAudio&&info.state==='ready'){
+         const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent='Показать расшифровку';button.setAttribute('aria-expanded','false');
+         button.onclick=async()=>{
+           let transcript=fileStatus.querySelector('.assistant-transcript');
+           if(transcript){transcript.hidden=!transcript.hidden;button.textContent=transcript.hidden?'Показать расшифровку':'Скрыть расшифровку';button.setAttribute('aria-expanded',String(!transcript.hidden));return}
+           button.disabled=true;
+           try{
+             const data=await api('/files/'+encodeURIComponent(id)+'/transcript');
+             if(!fileStatus.isConnected||context?.id!==id)return;
+             transcript=document.createElement('pre');transcript.className='assistant-transcript';transcript.textContent=data.text+(data.truncated?'\\n\\n[Показаны первые 16 000 символов]':'');
+             fileStatus.append(transcript);button.textContent='Скрыть расшифровку';button.setAttribute('aria-expanded','true');
+           }catch(error){status.textContent=error.message}
+           finally{button.disabled=false}
+         };
+         fileStatus.append(button);
+       }
+       if(isAudio&&info.state!=='ready'){
         const button=document.createElement('button');button.type='button';button.className='btn small';button.textContent='Распознать аудио';
         button.onclick=async()=>{button.disabled=true;status.textContent='Распознаю аудиофайл…';try{await api('/files/'+encodeURIComponent(id)+'/transcribe',{method:'POST',body:'{}'});status.textContent='Аудио распознано';refreshFile()}catch(error){button.disabled=false;status.textContent=error.message}};
         fileStatus.append(button);
