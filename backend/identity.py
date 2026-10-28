@@ -185,7 +185,11 @@ def route(h, con, method, path, query, origin):
     if provider in ("yandex", "google"):
         host = h.headers.get("Host", "").strip().lower()
         # Google login always uses one registered, canonical callback.
-        if host == "www.smetra.online" and action == "start":
+        if (host in ("www.smetra.online", "smetra.vercel.app") and action == "start" and provider == "google") or (
+            host == "www.smetra.online" and action == "start" and provider == "yandex"
+        ):
+            # OAuth state cookie must be issued on the same host as Google's
+            # registered callback, even when entered through a Vercel alias.
             safe_query = {key: value for key, value in query.items() if key != "path"}
             target = f"https://smetra.online/api/auth/oauth/{provider}/start"
             if safe_query:
