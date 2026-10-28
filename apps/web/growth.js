@@ -22,7 +22,7 @@
  }
  function onboarding(host){
   if(!host||user.quote_count>0||host.querySelector('.activation-intro'))return;
-  host.insertAdjacentHTML('afterbegin',`<section class="activation-intro"><span class="overline">Начните с результата</span><h2>Что хотите сделать?</h2><div class="row wrap"><button class="btn primary" data-activation="estimate">Создать смету</button><button class="btn" data-activation="order">Рассчитать заказ</button><button class="btn" data-activation="proposal">Подготовить предложение</button></div><p class="note">10 смет бесплатно. Готовую смету можно отправить клиенту ссылкой или PDF.</p></section>`);
+  host.insertAdjacentHTML('afterbegin',`<section class="activation-intro"><span class="overline">Начните с результата</span><h2>Что хотите сделать?</h2><div class="row wrap"><button class="btn primary" data-activation="estimate">Создать смету</button><button class="btn" data-activation="order">Рассчитать заказ</button><button class="btn" data-activation="proposal">Подготовить предложение</button></div><p class="note">3 сметы при регистрации; менять и вести их можно сколько угодно. Готовую смету можно отправить клиенту ссылкой или PDF.</p></section>`);
   host.querySelectorAll('[data-activation]').forEach(button=>button.onclick=()=>start(button.dataset.activation));
  }
  async function paywall(source='other'){

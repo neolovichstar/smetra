@@ -744,7 +744,7 @@ class BusinessFlows(unittest.TestCase):
             with response:
                 return response.code, json.load(response)
 
-    def account(self, name):
+    def account(self, name, *, legacy=True):
         code, result = self.call(
             "/auth/register",
             "POST",
@@ -757,6 +757,15 @@ class BusinessFlows(unittest.TestCase):
             },
         )
         self.assertEqual(code, 200, result)
+        # Tests predating the tariff change expect 10 free creations.
+        # Model those existing customers explicitly instead of weakening
+        # production's 3-quote limit for new registrations.
+        from backend.plan_catalog import STARTER_LEGACY_CUTOFF
+        with self.mod.db() as con:
+            con.execute(
+                "UPDATE users SET created_at=? WHERE id=?",
+                (STARTER_LEGACY_CUTOFF - 86400 if legacy else STARTER_LEGACY_CUTOFF + 1, result["user"]["id"]),
+            )
         # Most domain/assistant tests act as an existing user who has already
         # accepted the first-use AI terms. Tests for the gate remove this row.
         consent_code, consent = self.call(
@@ -769,13 +778,13 @@ class BusinessFlows(unittest.TestCase):
         return result["token"], result["user"]["id"]
 
     def test_usage_summary_reports_what_is_left(self):
-        token, _ = self.account("usage-owner")
+        token, _ = self.account("usage-owner", legacy=False)
         other, _ = self.account("usage-other")
         self.assertEqual(self.call("/quotes", "POST", {"title": "Ванная", "client": "Клиент", "amount": 10000}, token)[0], 201)
         status, usage = self.call("/usage", token=token)
         self.assertEqual(status, 200, usage)
         self.assertEqual(usage["plan"]["tier"], "starter")
-        self.assertEqual((usage["quotes"]["used"], usage["quotes"]["limit"], usage["quotes"]["remaining"], usage["quotes"]["remaining_pct"]), (1, 10, 9, 90))
+        self.assertEqual((usage["quotes"]["used"], usage["quotes"]["limit"], usage["quotes"]["remaining"], usage["quotes"]["remaining_pct"]), (1, 3, 2, 66))
         self.assertEqual(usage["tokens"]["remaining"], usage["tokens"]["limit"] - usage["tokens"]["used"])
         self.assertEqual(usage["storage"]["used"], 0)
         self.assertEqual(usage["storage"]["remaining_pct"], 100)
@@ -784,6 +793,54 @@ class BusinessFlows(unittest.TestCase):
         # Another account sees only its own usage.
         self.assertEqual(self.call("/usage", token=other)[1]["records"]["quotes"], 0)
         self.assertEqual(self.call("/usage", "POST", {}, token)[0], 404)
+
+    def test_new_starter_three_lifetime_quotes_edit_and_idempotent_replay(self):
+        from backend.plan_catalog import STARTER_NEW_QUOTES
+        token, user_id = self.account("fresh-3-quotes", legacy=False)
+        self.assertEqual(STARTER_NEW_QUOTES, 3)
+        estimates = []
+        for number in range(3):
+            code, response = self.call(
+                "/quotes", "POST",
+                {"title": f"Работы {number}", "client": "Клиент", "amount": 10000},
+                token, key=f"starter-three-{number}",
+            )
+            self.assertEqual(code, 201, response)
+            estimates.append(response["quote"])
+        used = self.call("/usage", token=token)[1]["quotes"]
+        self.assertEqual((used["used"], used["limit"], used["remaining"]), (3, 3, 0))
+        status, denied = self.call("/quotes", "POST",
+                                   {"title": "Четвёртая", "client": "Клиент", "amount": 10000},
+                                   token)
+        self.assertEqual(status, 402, denied)
+        self.assertIn("редактировать", denied.get("error", "").lower())
+        first = estimates[0]
+        code, edited = self.call("/quotes/" + first["id"], "PATCH",
+                                 {"revision": first["revision"], "terms": "Изменённые условия"}, token)
+        self.assertEqual(code, 200, edited)
+        self.assertEqual(edited["quote"]["terms"], "Изменённые условия")
+        code, replayed = self.call("/quotes", "POST",
+                                   {"title": "Работы 0", "client": "Клиент", "amount": 10000},
+                                   token, key="starter-three-0")
+        self.assertEqual(code, 200, replayed)
+        self.assertTrue(replayed["replayed"])
+        self.assertEqual(self.call("/quotes/" + first["id"] + "/copy", "POST", {}, token)[0], 402)
+        with self.mod.db() as con:
+            count = con.execute(
+                "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'", (user_id,)
+            ).fetchone()[0]
+        self.assertEqual(count, 3)
+
+    def test_existing_starter_keeps_ten_creations(self):
+        token, _ = self.account("legacy-starter-ten", legacy=True)
+        for i in range(10):
+            code, detail = self.call("/quotes", "POST",
+                                     {"title": f"Смета {i}", "client": "Клиент", "amount": 10000}, token)
+            self.assertEqual(code, 201, detail)
+        used = self.call("/usage", token=token)[1]["quotes"]
+        self.assertEqual((used["used"], used["limit"], used["remaining"]), (10, 10, 0))
+        self.assertEqual(self.call("/quotes", "POST",
+                                   {"title": "Лишняя", "client": "Клиент", "amount": 10000}, token)[0], 402)
 
     def test_order_money_today_and_isolation(self):
         token, _ = self.account("finance-owner")

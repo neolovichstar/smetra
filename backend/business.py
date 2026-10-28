@@ -1012,7 +1012,7 @@ class Service:
             raise DomainError(400, "В одной смете может быть до 200 расценок")
         catalog_ids = list(dict.fromkeys(string(value, "Расценка", 80, True) for value in catalog_ids))
         owner = self.con.execute(
-            "SELECT u.id,u.entitlement_until FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
+            "SELECT u.id,u.entitlement_until,u.created_at FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
             (self.wid,),
         ).fetchone()
         count = self.con.execute(
@@ -1021,8 +1021,15 @@ class Service:
         ).fetchone()[0]
         from backend.entitlements import workspace_feature_access
         paid_workspace = workspace_feature_access(self.con, self.wid, "clean_export", stamp())["allowed"]
-        if not paid_workspace and (owner["entitlement_until"] or 0) <= stamp() and count >= 10:
-            raise DomainError(402, "Достигнут лимит смет текущего тарифа")
+        from backend.plan_catalog import starter_quote_limit
+        if (not paid_workspace and (owner["entitlement_until"] or 0) <= stamp()
+                and count >= starter_quote_limit(owner)):
+            raise DomainError(
+                402,
+                "Бесплатный лимит новых смет исчерпан. "
+                "Существующие сметы можно редактировать без ограничений; "
+                "для новой сметы нужен PRO",
+            )
         values, items = self.quote_data(data)
         ai_generated = 0
         ai_draft_usage_id = data.get("ai_draft_usage_id")

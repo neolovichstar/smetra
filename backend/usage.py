@@ -23,21 +23,21 @@ def summary(service):
     from backend.attachments import workspace_storage_limit
     from backend.entitlements import workspace_feature_access
     from backend.business import stamp
-    from backend.plan_catalog import workspace_summary
+    from backend.plan_catalog import workspace_summary, starter_quote_limit
 
     con, wid, now = service.con, service.wid, stamp()
     plan = workspace_summary(con, wid, now)
     tokens = ai_tokens.balance(service)
 
     owner = con.execute(
-        "SELECT u.id,u.entitlement_until FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?", (wid,)
+        "SELECT u.id,u.entitlement_until,u.created_at FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?", (wid,)
     ).fetchone()
     created = con.execute(
         "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'", (owner["id"],)
     ).fetchone()[0]
     # Same rule as quote creation: a paid workspace or a personal PRO lifts the limit.
     paid = workspace_feature_access(con, wid, "clean_export", now)["allowed"] or (owner["entitlement_until"] or 0) > now
-    free_quotes = plan.get("free_quotes")
+    free_quotes = starter_quote_limit(owner) if plan["tier"] == "starter" else plan.get("free_quotes")
 
     storage_used = con.execute("SELECT coalesce(sum(size),0) FROM files WHERE workspace_id=?", (wid,)).fetchone()[0]
     seats_used = con.execute("SELECT count(*) FROM workspace_members WHERE workspace_id=?", (wid,)).fetchone()[0]
