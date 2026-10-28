@@ -59,14 +59,14 @@ async function api(path, options = {}) {
           try{result=await response.json()}catch{throw Error('Не удалось прочитать ответ сервера. Повторите попытку.')}
         }
       }
-      if(!response.ok){const message=typeof result.error==='string'?result.error:result.error?.message;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
+      if(!response.ok){const detail=result&&typeof result==='object'?result.error:null;const message=typeof detail==='string'?detail:detail&&typeof detail==='object'?detail.message:null;const error=Error(message||'Не удалось выполнить действие. Повторите попытку.');error.status=response.status;if(response.status===402&&owner&&user===owner&&!path.startsWith('/billing')){const source=path.startsWith('/quotes')?'quote_limit':path.startsWith('/projects')?'project_limit':path.startsWith('/assistant')?'ai_limit':path.startsWith('/files')?'file_analysis':'other';Promise.resolve(window.SmetraLoadFeature?.('growth')).then(()=>{if(user===owner)window.SmetraGrowth?.paywall(source)}).catch(()=>{});}throw error}
       if(cacheable&&cacheEpoch===apiCacheEpoch&&user===owner){
         if(apiResponseCache.size>=100){const oldest=apiResponseCache.keys().next().value;if(oldest!==undefined)apiResponseCache.delete(oldest)}
         apiResponseCache.set(key,{value:cloneApiValue(result),expiresAt:Date.now()+API_CACHE_TTL});
       }
       return result;
     }catch(error){
-      if(error.name==='AbortError')throw Error('Сервер отвечает слишком долго. Повторите попытку.');
+      if(error.name==='AbortError'){if(options.signal?.aborted)throw error;throw Error('Сервер отвечает слишком долго. Повторите попытку.');}
       if(error instanceof TypeError)throw Error('Нет связи с сервером. Проверьте интернет и повторите попытку.');
       throw error;
     }finally{if(timer!==null)clearTimeout(timer)}
