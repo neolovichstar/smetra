@@ -83,8 +83,8 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
                 String provider = r.args.optString("provider", "yandex");
                 String intent = "register".equals(r.args.optString("intent")) ? "register" : "login";
                 Uri.Builder start = Uri.parse(ShellSession.ORIGIN + "/api/auth/oauth/" + provider + "/start").buildUpon().appendQueryParameter("intent", intent);
-                if ("register".equals(intent)) start.appendQueryParameter("legal_acceptance", r.args.optBoolean("legal_acceptance") ? "1" : "0")
-                    .appendQueryParameter("legal_version", r.args.optString("legal_version", ""));
+                if (r.args.optBoolean("legal_acceptance"))
+                    start.appendQueryParameter("legal_acceptance", "1").appendQueryParameter("legal_version", r.args.optString("legal_version", ""));
                 ShellAuth.start(activity, start.build());
                 ok(reply, r.id, null); return;
             }
