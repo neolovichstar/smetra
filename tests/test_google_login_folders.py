@@ -21,6 +21,27 @@ class GoogleLoginTests(unittest.TestCase):
             self.assertFalse(next(p for p in identity.providers() if p["id"] == "google")["enabled"])
 
 
+    def test_google_callback_is_canonical_when_public_origin_is_legacy_alias(self):
+        from tests.test_identity_assistant import IdentityAssistantTests
+        handler = IdentityAssistantTests()
+        IdentityAssistantTests.setUpClass()
+        try:
+            with patch.dict(os.environ, {
+                "GOOGLE_AUTH_CLIENT_ID": "google-id",
+                "GOOGLE_AUTH_CLIENT_SECRET": "test-secret",
+                "PUBLIC_ORIGIN": "https://smetra.vercel.app",
+            }):
+                status, headers, _ = handler.get_redirect(
+                    "/api/auth/oauth/google/start?intent=login", host="smetra.online",
+                )
+            self.assertEqual(status, 303)
+            self.assertEqual(
+                parse_qs(urlsplit(headers["Location"]).query)["redirect_uri"],
+                ["https://smetra.online/api/auth/oauth/google/callback"],
+            )
+        finally:
+            IdentityAssistantTests.tearDownClass()
+
     def test_google_authorization_uses_only_basic_login_permissions(self):
         # This uses the exact production route, not the Drive restricted-scope callback.
         from tests.test_identity_assistant import IdentityAssistantTests
