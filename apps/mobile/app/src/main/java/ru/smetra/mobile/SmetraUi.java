@@ -56,7 +56,7 @@ final class SmetraUi {
         release.playTogether(android.animation.ObjectAnimator.ofFloat(view,"scaleX",1f),android.animation.ObjectAnimator.ofFloat(view,"scaleY",1f));release.setDuration(motion()?220:0);release.setInterpolator(EASE);
         states.addState(new int[]{android.R.attr.state_pressed},press);states.addState(new int[]{},release);view.setStateListAnimator(states);
     }
-    Button button(String title,boolean primary,Runnable action){
+    // Native black/gray button styling is intentional; AppCompat changes its tint.\n    @android.annotation.SuppressLint("AppCompatCustomView")\n    Button button(String title,boolean primary,Runnable action){
         Button view=new Button(activity){@Override public void setEnabled(boolean enabled){super.setEnabled(enabled);if("assistant-send".equals(getTag()))animate().alpha(enabled?1:.45f).setDuration(motion()?160:0).start();}};view.setText(title);view.setAllCaps(false);view.setTextSize(13);view.setTypeface(medium);
         view.setTextColor(primary?BG:INK);view.setMinHeight(dp(48));view.setMinimumHeight(dp(48));view.setPadding(dp(14),dp(12),dp(14),dp(12));
         view.setStateListAnimator(null);ripple(view,primary?BLUE:BG,10,primary?0xffdddddd:LINE);tap(view,action);
