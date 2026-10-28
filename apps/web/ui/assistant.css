@@ -556,3 +556,7 @@
 .sm-context-item .sm-context-symbol svg{width:16px;height:16px}
 .sm-context-item > span:nth-child(2){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (prefers-reduced-motion:reduce){.sm-context{animation:none}}
+
+/* Transcript previews stay bounded inside the assistant composer and do not shift the toolbar. */
+.assistant-file-status .assistant-transcript{display:block;flex:1 0 100%;width:100%;min-width:0;max-height:220px;overflow:auto;margin:6px 0;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px;line-height:1.55;background:rgba(130,130,130,.08);border:1px solid rgba(130,130,130,.18);border-radius:12px;color:var(--text,#eee)}
+.assistant-file-status .assistant-transcript[hidden]{display:none}
