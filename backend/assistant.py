@@ -763,7 +763,12 @@ def query_model_stream(messages, on_delta, model=None, paid_model=False, on_sour
         except _StreamBroken as broken:
             logging.getLogger(__name__).warning(
                 "Assistant stream failed: attempt=%s model=%s reason=%s", number + 1, payload["model"], broken)
-            if broken.emitted or number == len(attempts) - 1:
+            if broken.emitted:
+                # A durable job must not restart after text was already sent to
+                # its subscriber: replays create duplicated visible fragments.
+                # The job remains failed, with no saved messages or proposals.
+                raise DomainError(409, "Поток ответа прервался. Отправьте запрос заново.") from None
+            if number == len(attempts) - 1:
                 raise DomainError(502, "Поток ответа прервался. Попробуйте ещё раз.") from None
     raise DomainError(502, "Поток ответа прервался. Попробуйте ещё раз.")
 
