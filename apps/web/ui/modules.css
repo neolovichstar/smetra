@@ -598,7 +598,7 @@ body.comms-scroll-locked{overflow:hidden}
 .admin-analytics .admin-table td{color:var(--text-2);border-top:1px solid var(--line)}
 .admin-analytics .admin-table td:first-child{color:var(--text);font-weight:500}
 .admin-analytics .admin-table tbody tr:hover{background:var(--surface-2)}
-.admin-analytics .admin-table-empty{text-align:center!important;padding:24px 16px!important;color:var(--text-3)!important;font-weight:400!important;white-space:normal!important}
+.admin-analytics .admin-table td.admin-table-empty{text-align:center;padding:24px 16px;color:var(--text-3);font-weight:400;white-space:normal}
 .admin-analytics .admin-table-scroll:has(th:nth-child(8)) .admin-table{min-width:930px}
 @media(max-width:900px){
   .admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{grid-template-columns:repeat(2,minmax(0,1fr))}
