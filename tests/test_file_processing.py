@@ -103,6 +103,20 @@ class FileProcessingTests(unittest.TestCase):
                 con.execute("SELECT count(*) FROM assistant_messages").fetchone()[0], 0
             )
 
+    def test_metadata_refreshes_a_file_read_before_worker_completion(self):
+        from backend.file_processing import state
+
+        owner, _ = self.account("file-metadata-commit-race")
+        file = self.upload(owner)
+        service = self.service(owner)
+        old = service.get("files", file["id"])
+        self.assertEqual(old["index_status"], "queued")
+        self.work()
+        result = state(service, old)
+        self.assertEqual(result["state"], "ready")
+        self.assertFalse(result["can_cancel"])
+        self.assertEqual(result["pages"], 1)
+
     def test_pending_context_rejects_chat_without_reserving_message(self):
         owner, _ = self.account("file-not-ready")
         file = self.upload(owner)

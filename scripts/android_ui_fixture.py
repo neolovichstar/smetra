@@ -22,6 +22,8 @@ sys.path.insert(0, str(ROOT))
 
 
 def main():
+    from scripts.fixture_network import restrict_to_loopback
+    restrict_to_loopback()
     port = int(os.getenv('SMETRA_FIXTURE_PORT', '8084'))
     # The emulator reaches the host as 10.0.2.2, so the Android screenshot run overrides the origin.
     origin = os.getenv('SMETRA_FIXTURE_ORIGIN', f'http://localhost:{port}')
@@ -29,7 +31,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="android-ui-", dir=ROOT / "data") as folder:
         # Fixtures must never inherit a production DB, cache, payment or mail service.
         for key in tuple(os.environ):
-            if key == 'DATABASE_URL' or key.startswith(('REDIS_', 'KV_', 'UPSTASH_', 'YOOKASSA_', 'SMTP_', 'YANDEX_', 'VK_')):
+            if key in ('DATABASE_URL', 'RUNTIME_DATABASE_URL', 'VERCEL') or key.startswith(('REDIS_', 'KV_', 'UPSTASH_', 'YOOKASSA_', 'SMTP_', 'YANDEX_', 'VK_', 'GOOGLE_', 'CLOUD_')):
                 os.environ.pop(key, None)
         os.environ.update(
             DB_PATH=str(Path(folder) / "test.sqlite3"),
@@ -289,6 +291,11 @@ def main():
 
         assistant.query_model_stream = stream_fixture
         assistant.query_model = lambda messages: {"content": "Фоновая задача завершена."}
+        from backend import community
+        community._support_completion = lambda payload, timeout: {
+            "reply": "Тестовое обращение передано сотруднику поддержки.",
+            "escalate": True, "reason": "isolated_ui_fixture",
+        }
         from backend import receipt_ocr
 
         def receipt_fixture(*_):

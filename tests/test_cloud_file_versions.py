@@ -24,6 +24,9 @@ def db():
     CREATE TABLE document_processing_jobs(
       id TEXT PRIMARY KEY,workspace_id TEXT,cloud_file_id TEXT,
       source_fingerprint TEXT,status TEXT,next_attempt_at INTEGER,
+      progress TEXT DEFAULT 'В очереди',error TEXT DEFAULT '',attempts INTEGER DEFAULT 0,
+      lease_token TEXT DEFAULT '',lease_until INTEGER DEFAULT 0,
+      extraction TEXT DEFAULT '{}',proposal TEXT DEFAULT '{}',
       created_at INTEGER,updated_at INTEGER,
       UNIQUE(cloud_file_id,source_fingerprint));
     CREATE TABLE cloud_folder_bindings(
@@ -51,6 +54,11 @@ def entry(date, size=200, resource_id="stable-object-id"):
 
 
 class YandexContentVersionTests(unittest.TestCase):
+    def setUp(self):
+        access = patch("backend.cloud_drives._worker_access")
+        access.start()
+        self.addCleanup(access.stop)
+
     def test_same_resource_id_new_modified_or_size_changes_fingerprint(self):
         first=entry("2026-10-28T08:00:00+00:00")
         updated=entry("2026-10-28T09:00:00+00:00")

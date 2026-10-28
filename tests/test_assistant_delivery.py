@@ -49,7 +49,8 @@ class AssistantDeliveryTests(unittest.TestCase):
             completed = self.call("/assistant/jobs/" + job["id"], token=token)[1]["job"]
             self.assertEqual(completed["status"], "completed")
             used = self.call("/assistant", token=token)[1]["quota"]["used"]
-            code, replay = self.call("/assistant/stream", "POST", {"job_id": job["id"]}, token, raw=True)
+            with patch("backend.assistant_jobs.claim", side_effect=AssertionError("completed replay acquired queue")):
+                code, replay = self.call("/assistant/stream", "POST", {"job_id": job["id"]}, token, raw=True)
             self.assertEqual(code, 200)
             self.assertIn(b"event: done", replay)
             self.assertEqual(model.call_count, 1)

@@ -486,7 +486,7 @@
 .smetra-quote-preview-content{gap:16px}
 .smetra-quote-preview-title{align-items:flex-start;gap:14px;flex-wrap:wrap}
 .smetra-quote-preview-title h3{font-size:var(--fs-16);line-height:1.4;letter-spacing:-.015em}
-.smetra-quote-preview-state{font-size:var(--fs-12);padding:4px 8px;border:1px solid var(--line);border-radius:999px}
+.smetra-quote-preview-state{max-width:100%;white-space:normal;overflow-wrap:anywhere;font-size:var(--fs-12);padding:4px 8px;border:1px solid var(--line);border-radius:999px}
 .smetra-quote-preview-controls{padding-bottom:3px}
 .smetra-quote-preview-tune{border-radius:10px;border-color:var(--line);background:transparent;padding:0 13px;min-height:34px}
 .smetra-quote-preview-tune[aria-expanded="true"]{background:var(--surface-3);color:var(--text)}
@@ -517,7 +517,7 @@
 .smetra-document-line-caption>span,.smetra-document-line-caption>strong{min-width:0}
 .smetra-document-summary strong{font-size:clamp(20px,2.4vw,28px)}
 @media(max-width:480px){
- .smetra-quote-preview-content{padding:14px 13px 22px}
+ .smetra-quote-preview-content{padding:14px 14px 22px}
  .smetra-document{padding:14px;gap:12px 8px;font-size:12px}
  .smetra-document-line{grid-template-columns:minmax(0,1fr) auto;align-items:center}
  .smetra-document-line>strong{grid-column:2}

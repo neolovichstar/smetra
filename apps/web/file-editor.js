@@ -8,7 +8,7 @@ window.SmetraFileEditor = (() => {
     const active=()=>mine===generation&&owner===user&&section===tab&&workspaceId===sessionStorage.getItem('workspace_id')&&revision===renderRevision;
     if(window.SmetraLoadFeature)await window.SmetraLoadFeature('markdown');
     if(!active())return;
-    let content='';let places=[];
+    let content='';let places=[];let creation=null,writing=false;
     try {
       if(file){const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;const response=await fetch('/api/files/'+encodeURIComponent(file.id),{credentials:'same-origin',headers});if(!response.ok)throw Error('Не удалось открыть документ');content=await response.text()}
       else {const [projects,objects]=await Promise.all([api('/projects'),api('/construction/objects')]);places=[...projects.items.map(item=>['project_id',item.id,'Заказ · '+item.name]),...objects.items.map(item=>['construction_id',item.id,'Объект · '+item.name])]}
@@ -44,11 +44,55 @@ window.SmetraFileEditor = (() => {
         }catch(error){if(editorActive()&&request===historyRevision)list.textContent=error.message}
       };
       document.querySelector('#file-editor-history-refresh').onclick=loadHistory;
-      restore.onclick=async()=>{if(!selected||restore.disabled||!editorActive())return;if(input.value!==content&&!(await window.SmetraDialog.confirm({title:'Восстановить выбранную версию?',message:'Несохранённые изменения будут потеряны.',confirmLabel:'Восстановить',danger:true})))return;const version=selected;restore.disabled=true;try{const result=await api('/files/'+encodeURIComponent(file.id)+'/versions/'+encodeURIComponent(version.id)+'/restore',{method:'POST',body:JSON.stringify({sha256:file.sha256})});if(!editorActive())return;file.sha256=result.file.sha256;content=version.text;input.value=content;paint();notify('Версия восстановлена');await loadHistory()}catch(error){if(editorActive())notify(error.message)}finally{restore.disabled=false}};
+      restore.onclick=async()=>{
+        if(!selected||restore.disabled||writing||!editorActive())return;
+        const version=selected,save=form.querySelector('button.btn.primary');writing=true;restore.disabled=true;save.disabled=true;
+        try{
+          if(input.value!==content&&!(await window.SmetraDialog.confirm({title:'Восстановить выбранную версию?',message:'Несохранённые изменения будут потеряны.',confirmLabel:'Восстановить',danger:true})))return;
+          if(!editorActive())return;
+          const draft=input.value;
+          const result=await api('/files/'+encodeURIComponent(file.id)+'/versions/'+encodeURIComponent(version.id)+'/restore',{method:'POST',body:JSON.stringify({sha256:file.sha256})});
+          if(!editorActive())return;
+          file.sha256=result.file.sha256;content=version.text;
+          if(input.value===draft){input.value=content;paint();notify('Версия восстановлена')}
+          else form.querySelector('#file-editor-status').textContent='Версия восстановлена. Новые правки ещё не сохранены.';
+          await loadHistory();
+        }catch(error){if(editorActive())notify(error.message)}finally{writing=false;restore.disabled=false;save.disabled=false}
+      };
       loadHistory();
     }
     document.querySelector('#file-editor-back').onclick=()=>{location.hash='files';tab='files';window.render()};
-    form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button[type="submit"],button.btn.primary');if(button.disabled||!editorActive())return;button.disabled=true;const status=document.querySelector('#file-editor-status');status.textContent='Сохраняем…';try{const text=input.value;if(!text.trim())throw Error('Добавьте текст документа');const body={content:encode(text)};let path='/files',method='POST';if(file){body.sha256=file.sha256;path+='/'+encodeURIComponent(file.id);method='PATCH'}else{const target=form.elements.target.value.split(':');body[target[0]]=target[1];body.name=form.elements.name.value.trim().replace(/\.md$/i,'')+'.md'}await api(path,{method,body:JSON.stringify(body)});if(!editorActive())return;notify('Документ сохранён');location.hash='files';tab='files';window.render()}catch(error){if(editorActive())status.textContent=error.message}finally{button.disabled=false}};
+    form.onsubmit=async event=>{
+      event.preventDefault();const button=form.querySelector('button[type="submit"],button.btn.primary');
+      if(button.disabled||writing||!editorActive())return;
+      writing=true;button.disabled=true;const status=form.querySelector('#file-editor-status');status.textContent='Сохраняем…';
+      try{
+        let text=input.value;if(!text.trim())throw Error('Добавьте текст документа');
+        let body={content:encode(text)},path='/files',method='POST',headers={};
+        if(file){body.sha256=file.sha256;path+='/'+encodeURIComponent(file.id);method='PATCH'}
+        else{
+          const target=form.elements.target.value.split(':');body[target[0]]=target[1];body.name=form.elements.name.value.trim().replace(/\.md$/i,'')+'.md';
+          // A lost creation response must replay the same operation. Resolve that
+          // creation before saving any newer text into the resulting document.
+          if(!creation)creation={key:crypto.randomUUID(),body,text};
+          ({body,text}=creation);headers={'Idempotency-Key':creation.key};
+          form.elements.name.readOnly=true;form.elements.target.disabled=true;
+        }
+        const result=await api(path,{method,headers,body:JSON.stringify(body)});
+        if(!editorActive())return;
+        if(input.value!==text){
+          file={...(file||{}),...result.file};content=text;creation=null;
+          form.elements.name.readOnly=true;if(form.elements.target)form.elements.target.disabled=true;
+          form.previousElementSibling.querySelector('h1').textContent='Редактировать заметку';
+          status.textContent='Документ сохранён. Новые правки ещё не сохранены.';
+          return;
+        }
+        notify('Документ сохранён');location.hash='files';tab='files';window.render();
+      }catch(error){
+        if(error.status&&error.status<500){creation=null;if(!file){form.elements.name.readOnly=false;form.elements.target.disabled=false}}
+        if(editorActive())status.textContent=error.message;
+      }finally{writing=false;button.disabled=false}
+    };
   }
   return {open};
 })();

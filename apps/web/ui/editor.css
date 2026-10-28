@@ -111,9 +111,9 @@
   .editor-layout{grid-template-columns:minmax(0,1fr)}
   /* Only the total bar stays in reach; the draft check flows with the page. */
   .editor-aside{position:static;order:2}
-  .editor-summary{position:fixed;left:var(--sidebar-w);right:0;bottom:var(--tabbar-space,0px);z-index:40;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:var(--s-3);margin:0;padding:10px var(--s-4);border-width:1px 0 0;border-radius:0;background:color-mix(in srgb,var(--surface-1) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 -8px 24px rgba(0,0,0,.18)}
+  .editor-summary{position:fixed;left:var(--sidebar-w);right:0;bottom:var(--tabbar-space,0px);z-index:40;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:var(--s-3);margin:0;padding:6px var(--s-4);border-width:1px 0 0;border-radius:0;background:color-mix(in srgb,var(--surface-1) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 -8px 24px rgba(0,0,0,.18)}
   body.sidebar-compact .editor-summary{left:var(--sidebar-rail)}
-  .quote-editor-form{padding-bottom:88px}
+  .quote-editor-form{padding-bottom:calc(88px + var(--tabbar-space,0px));scroll-padding-bottom:calc(88px + var(--tabbar-space,0px))}
   .editor-summary .editor-section-title,.editor-summary>.muted,.editor-device{display:none}
   .editor-total{flex:1;min-width:0;font-size:clamp(18px,5.4vw,var(--fs-24));white-space:nowrap;overflow-wrap:normal}
   .editor-summary .btn.primary{flex:none;margin:0;width:auto}

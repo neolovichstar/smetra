@@ -13,12 +13,6 @@ ACTIVE = ("queued", "running", "retry")
 
 
 def state(service, row):
-    status = row["index_status"] if row["index_hash"] == row["sha256"] else "legacy"
-    indexed = {item['page'] for item in service.con.execute(
-        'SELECT page FROM file_text_chunks WHERE file_id=? AND workspace_id=? AND source_sha256=?',
-        (row['id'], service.wid, row['sha256']),
-    ).fetchall()} if row['mime'] == 'application/pdf' else set()
-    missing = [page for page in range(1, row['index_pages'] + 1) if page not in indexed] if row['mime'] == 'application/pdf' else []
     job = (
         service.con.execute(
             "SELECT id,status,cancel_requested FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind IN ('file_index','file_ocr') AND file_id=? AND source_sha256=? ORDER BY CASE WHEN status IN ('queued','running','retry') THEN 0 WHEN status='completed' THEN 1 ELSE 2 END,created_at DESC,id DESC LIMIT 1",
@@ -27,6 +21,17 @@ def state(service, row):
         if service.user
         else None
     )
+    if job and job["status"] == "completed" and row["index_status"] in ACTIVE:
+        # The worker may commit between the caller's file lookup and the job
+        # lookup above. Return its committed metadata rather than a mixed state
+        # such as "running" with an already completed/cannot-cancel job.
+        row = service.get("files", row["id"])
+    status = row["index_status"] if row["index_hash"] == row["sha256"] else "legacy"
+    indexed = {item['page'] for item in service.con.execute(
+        'SELECT page FROM file_text_chunks WHERE file_id=? AND workspace_id=? AND source_sha256=?',
+        (row['id'], service.wid, row['sha256']),
+    ).fetchall()} if row['mime'] == 'application/pdf' else set()
+    missing = [page for page in range(1, row['index_pages'] + 1) if page not in indexed] if row['mime'] == 'application/pdf' else []
     info = {
         "state": status,
         "error": row["index_error"] if status == "failed" else "",
@@ -154,6 +159,10 @@ def isolated_extract(raw, mime):
     }
     environment["PYTHONPATH"] = os.pathsep.join(sys.path)
     environment["PYTHONUTF8"] = "1"
+    # Optional numpy installations make openpyxl load BLAS. Its default thread
+    # pool can exhaust the parser's bounded address space before reading a cell.
+    # Document parsing is sequential; keep native math libraries within that budget.
+    environment.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
     result = subprocess.run(
         [sys.executable, "-m", "backend.file_extractor", mime],
         input=raw,

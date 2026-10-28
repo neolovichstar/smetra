@@ -1599,12 +1599,13 @@ def route(service, method, parts, data):
 
         job_id = string(data["job_id"], "Задача", 80, True)
         row = service.con.execute(
-            "SELECT id FROM assistant_jobs WHERE id=? AND workspace_id=? AND user_id=? AND kind='chat'",
+            "SELECT id,status,result FROM assistant_jobs WHERE id=? AND workspace_id=? AND user_id=? AND kind='chat'",
             (job_id, service.wid, service.user["id"]),
         ).fetchone()
         if not row:
             raise DomainError(404, "Задача не найдена")
-        return 200, DurableChatStream(service, job_id)
+        completed = json.loads(row["result"]) if row["status"] == "completed" else None
+        return 200, DurableChatStream(service, job_id, completed_result=completed)
     if parts == ["ad-reward"]:
         from backend.rewarded_ads import route as rewarded_route
         return rewarded_route(service, method, data)

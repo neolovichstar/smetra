@@ -78,6 +78,24 @@ def _manager(service):
         raise business.DomainError(403, "Подключать общие облачные папки может владелец, администратор или менеджер команды")
 
 
+def _worker_access(con, connection):
+    """A saved OAuth token cannot outlive its owner's team access or tariff."""
+    from backend.entitlements import evaluate_workspace_plan
+    row = con.execute(
+        "SELECT w.plan,w.subscription_status,w.entitlement_until,m.role "
+        "FROM cloud_connections c JOIN workspaces w ON w.id=c.workspace_id "
+        "JOIN users u ON u.id=c.user_id JOIN workspace_members m "
+        "ON m.workspace_id=c.workspace_id AND m.user_id=c.user_id "
+        "WHERE c.id=? AND c.workspace_id=? AND c.status='active' "
+        "AND u.deleted_at IS NULL AND u.blocked=0",
+        (connection["id"], connection["workspace_id"]),
+    ).fetchone()
+    if not row or row["role"] not in ("owner", "admin", "manager"):
+        raise business.DomainError(403, "Владелец облачного подключения больше не имеет доступа к синхронизации")
+    if not evaluate_workspace_plan(row, "cloud_drives", _now())["allowed"]:
+        raise business.DomainError(402, "Синхронизация приостановлена: требуется действующий тариф «PRO Плюс» или «TEAM»")
+
+
 def _fernet():
     key = (os.getenv("CLOUD_TOKEN_ENCRYPTION_KEY") or "").strip()
     if not key:
@@ -196,11 +214,15 @@ def _connection(service, connection_id):
 def _save_access(con, connection, access_token, refresh_token=None, expires_in=3600):
     refresh = refresh_token if refresh_token is not None else connection.get("refresh_token_enc", "")
     expires = _now() + max(60, min(int(expires_in or 3600), 365 * 86400))
-    con.execute(
-        "UPDATE cloud_connections SET access_token_enc=?,refresh_token_enc=?,token_expires_at=?,status='active',last_error='',updated_at=? WHERE id=? AND workspace_id=?",
-        (_encrypt(access_token), refresh, expires, _now(), connection["id"], connection["workspace_id"]),
-    )
-    connection["access_token_enc"] = _encrypt(access_token)
+    encrypted = _encrypt(access_token)
+    saved = con.execute(
+        "UPDATE cloud_connections SET access_token_enc=?,refresh_token_enc=?,token_expires_at=?,last_error='',updated_at=? "
+        "WHERE id=? AND workspace_id=? AND status='active' RETURNING id",
+        (encrypted, refresh, expires, _now(), connection["id"], connection["workspace_id"]),
+    ).fetchone()
+    if not saved:
+        raise business.DomainError(409, "Облако отключено во время обновления доступа")
+    connection["access_token_enc"] = encrypted
     connection["refresh_token_enc"] = refresh
     connection["token_expires_at"] = expires
     return access_token
@@ -216,16 +238,19 @@ def _access_token(con, connection):
         # unless an explicit expiry from the provider was stored.
         if connection["provider"] == "yandex_disk" and int(connection.get("token_expires_at") or 0) > _now():
             return _decrypt(connection["access_token_enc"])
-        con.execute("UPDATE cloud_connections SET status='reauth_required',last_error=?,updated_at=? WHERE id=?",
+        con.execute("UPDATE cloud_connections SET status='reauth_required',last_error=?,updated_at=? WHERE id=? AND status='active'",
                     ("Требуется повторная авторизация", _now(), connection["id"]))
         raise business.DomainError(409, "Срок доступа к облаку истёк. Переподключите аккаунт.")
     client_id, secret, _redirect = _credentials(connection["provider"])
     form = {"grant_type": "refresh_token", "refresh_token": refresh, "client_id": client_id, "client_secret": secret}
     try:
         response = _http(_token_url(connection["provider"]), "POST", form=form, limit=100_000)
-    except business.DomainError:
-        con.execute("UPDATE cloud_connections SET status='reauth_required',last_error=?,updated_at=? WHERE id=?",
-                    ("Не удалось обновить OAuth-токен", _now(), connection["id"]))
+    except business.DomainError as error:
+        # Provider outages are retryable. They must not permanently disconnect
+        # a valid refresh token, or overwrite a concurrent manual disconnection.
+        con.execute("UPDATE cloud_connections SET status=?,last_error=?,updated_at=? WHERE id=? AND status='active'",
+                    ("reauth_required" if error.status == 409 else "active",
+                     "Не удалось обновить OAuth-токен", _now(), connection["id"]))
         raise
     new_token = response.get("access_token")
     if not isinstance(new_token, str) or not new_token:
@@ -683,9 +708,17 @@ def _enqueue_job(con, workspace_id, cloud_file_id, fingerprint):
     now = _now()
     job_id = _id()
     con.execute(
-        "INSERT INTO document_processing_jobs(id,workspace_id,cloud_file_id,source_fingerprint,status,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,'queued',?,?,?) ON CONFLICT(cloud_file_id,source_fingerprint) DO NOTHING",
+        "INSERT INTO document_processing_jobs(id,workspace_id,cloud_file_id,source_fingerprint,status,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,'queued',?,?,?) "
+        "ON CONFLICT(cloud_file_id,source_fingerprint) DO UPDATE SET status='queued',progress='В очереди',"
+        "error='',extraction='{}',proposal='{}',attempts=0,lease_token='',lease_until=0,"
+        "next_attempt_at=excluded.next_attempt_at,updated_at=excluded.updated_at "
+        "WHERE document_processing_jobs.status='cancelled'",
         (job_id, workspace_id, cloud_file_id, fingerprint, now, now, now),
     )
+    return con.execute(
+        "SELECT status FROM document_processing_jobs WHERE cloud_file_id=? AND source_fingerprint=?",
+        (cloud_file_id, fingerprint),
+    ).fetchone()["status"]
 
 
 def _google_files(con, connection, folder_id, recursive):
@@ -818,6 +851,7 @@ def _sync_binding(con, binding):
                                   (binding["connection_id"], binding["workspace_id"])).fetchone() or {})
     if not connection or connection.get("status") != "active":
         raise business.DomainError(409, "Облачный аккаунт отключён или требует повторной авторизации")
+    _worker_access(con, connection)
     if connection["provider"] == "google_drive":
         files = _google_files(con, connection, binding["folder_id"], bool(binding["recursive"]))
     else:
@@ -827,7 +861,7 @@ def _sync_binding(con, binding):
         if not item["provider_file_id"]:
             continue
         fp = item["fingerprint"] or hashlib.sha256((item["name"] + item["modified_at"]).encode()).hexdigest()
-        old = con.execute("SELECT id,source_fingerprint,processing_status,modified_at,size FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
+        old = con.execute("SELECT id,source_fingerprint,processing_status,modified_at,size,trashed FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
                           (connection["id"], item["provider_file_id"])).fetchone()
         # Preserve fingerprints for legacy Yandex records with identical
         # metadata: deploying this fix must not reprocess every old document.
@@ -836,12 +870,12 @@ def _sync_binding(con, binding):
                 and old["modified_at"] == item["modified_at"]
                 and int(old["size"]) == int(item["size"])):
             fp = old["source_fingerprint"]
-        changed = not old or old["source_fingerprint"] != fp
+        changed = not old or old["source_fingerprint"] != fp or bool(old["trashed"])
         status = "queued" if changed and item["mime"] in SUPPORTED_FILES and 0 < item["size"] <= MAX_FILE_BYTES else (
             "ignored" if item["mime"] not in SUPPORTED_FILES or item["size"] > MAX_FILE_BYTES else "processed")
         file_id = old["id"] if old else _id()
         con.execute(
-            "INSERT INTO cloud_files(id,workspace_id,binding_id,connection_id,provider_file_id,parent_folder_id,name,mime,provider_mime,size,modified_at,source_fingerprint,web_view_url,trashed,processing_status,last_error,first_seen_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,'',?,?) ON CONFLICT(connection_id,provider_file_id) DO UPDATE SET binding_id=excluded.binding_id,parent_folder_id=excluded.parent_folder_id,name=excluded.name,mime=excluded.mime,provider_mime=excluded.provider_mime,size=excluded.size,modified_at=excluded.modified_at,source_fingerprint=excluded.source_fingerprint,web_view_url=excluded.web_view_url,trashed=0,processing_status=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint THEN excluded.processing_status ELSE cloud_files.processing_status END,last_error=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint THEN '' ELSE cloud_files.last_error END,updated_at=excluded.updated_at",
+            "INSERT INTO cloud_files(id,workspace_id,binding_id,connection_id,provider_file_id,parent_folder_id,name,mime,provider_mime,size,modified_at,source_fingerprint,web_view_url,trashed,processing_status,last_error,first_seen_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,'',?,?) ON CONFLICT(connection_id,provider_file_id) DO UPDATE SET binding_id=excluded.binding_id,parent_folder_id=excluded.parent_folder_id,name=excluded.name,mime=excluded.mime,provider_mime=excluded.provider_mime,size=excluded.size,modified_at=excluded.modified_at,source_fingerprint=excluded.source_fingerprint,web_view_url=excluded.web_view_url,trashed=0,processing_status=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint OR cloud_files.trashed=1 THEN excluded.processing_status ELSE cloud_files.processing_status END,last_error=CASE WHEN cloud_files.source_fingerprint<>excluded.source_fingerprint OR cloud_files.trashed=1 THEN '' ELSE cloud_files.last_error END,updated_at=excluded.updated_at",
             (file_id, binding["workspace_id"], binding["id"], connection["id"], item["provider_file_id"],
              item["parent_folder_id"], item["name"], item["mime"], item.get("provider_mime", item["mime"]),
              max(0, item["size"]), item["modified_at"], fp, item["web_view_url"], status, now, now),
@@ -849,7 +883,28 @@ def _sync_binding(con, binding):
         saved = con.execute("SELECT id,source_fingerprint,processing_status FROM cloud_files WHERE connection_id=? AND provider_file_id=?",
                             (connection["id"], item["provider_file_id"])).fetchone()
         if saved and saved["processing_status"] == "queued":
-            _enqueue_job(con, binding["workspace_id"], saved["id"], saved["source_fingerprint"])
+            job_status = _enqueue_job(con, binding["workspace_id"], saved["id"], saved["source_fingerprint"])
+            # A restored file with already imported bytes must not be imported twice.
+            if job_status in ("completed", "needs_review", "failed"):
+                con.execute("UPDATE cloud_files SET processing_status=? WHERE id=?",
+                            ("processed" if job_status == "completed" else job_status, saved["id"]))
+    # Only reconcile deletions after a complete scan. Provider errors and bounded
+    # scan failures leave the last known contents intact and cannot erase a folder.
+    seen = sorted({item["provider_file_id"] for item in files if item["provider_file_id"]})
+    absent = " AND provider_file_id NOT IN (" + ",".join("?" for _ in seen) + ")" if seen else ""
+    con.execute(
+        "UPDATE cloud_files SET trashed=1,processing_status='ignored',last_error='Файл удалён из папки',updated_at=? "
+        "WHERE workspace_id=? AND binding_id=? AND trashed=0" + absent,
+        (now, binding["workspace_id"], binding["id"], *seen),
+    )
+    con.execute(
+        "UPDATE document_processing_jobs SET status='cancelled',progress='Обработка отменена',"
+        "error='Файл изменён или удалён из папки',lease_token='',lease_until=0,updated_at=? "
+        "WHERE workspace_id=? AND status IN ('queued','running','retry','needs_review') "
+        "AND cloud_file_id IN (SELECT id FROM cloud_files WHERE workspace_id=? AND binding_id=? "
+        "AND (trashed=1 OR source_fingerprint<>document_processing_jobs.source_fingerprint))",
+        (now, binding["workspace_id"], binding["workspace_id"], binding["id"]),
+    )
     con.execute("UPDATE cloud_folder_bindings SET last_synced_at=?,next_sync_at=?,sync_requested=0,last_error='',updated_at=? WHERE id=?",
                 (now, now + 86400, now, binding["id"]))
     con.execute("UPDATE cloud_connections SET last_synced_at=?,last_error='',updated_at=? WHERE id=?",
@@ -891,6 +946,7 @@ def _document_job(con, job):
         if not conn_row or conn_row["status"] != "active":
             raise business.DomainError(409, "Облачное подключение требует повторной авторизации")
         connection = dict(conn_row)
+        _worker_access(con, connection)
         file_row = {key: row[key] for key in ("provider_file_id", "name", "mime", "provider_mime", "size")}
         raw = _download(con, connection, file_row)
         proposal = _model_extract(row["mime"], row["name"], raw)
@@ -900,13 +956,14 @@ def _document_job(con, job):
         proposal["project_id"] = row["project_id"]
         with business.transaction(con, lock_scopes=(f"workspace:{row['workspace_id']}", f"document-job:{job['id']}")):
             current = con.execute(
-                "SELECT b.status AS binding_status,f.trashed,f.source_fingerprint AS current_fingerprint "
+                "SELECT b.status AS binding_status,c.status AS connection_status,f.trashed,f.source_fingerprint AS current_fingerprint "
                 "FROM cloud_files f JOIN cloud_folder_bindings b ON b.id=f.binding_id "
                 "AND b.workspace_id=f.workspace_id "
+                "JOIN cloud_connections c ON c.id=f.connection_id AND c.workspace_id=f.workspace_id "
                 "WHERE f.id=? AND f.workspace_id=?",
                 (row["cloud_file_id"], row["workspace_id"]),
             ).fetchone()
-            if (not current or current["binding_status"] != "active" or current["trashed"]
+            if (not current or current["binding_status"] != "active" or current["connection_status"] != "active" or current["trashed"]
                     or current["current_fingerprint"] != row["source_fingerprint"]):
                 updated = con.execute(
                     "UPDATE document_processing_jobs SET status='failed',progress='Задание отменено',"
@@ -915,6 +972,7 @@ def _document_job(con, job):
                     (now, job["id"], job["lease_token"]),
                 )
                 return "skipped" if updated.rowcount == 1 else "stale"
+            _worker_access(con, connection)
             updated = con.execute(
                 "UPDATE document_processing_jobs SET status='needs_review',progress='Ожидает проверки',extraction=?,proposal=?,error='',lease_token='',lease_until=0,updated_at=? WHERE id=? AND lease_token=? AND status='running'",
                 (business.packed(proposal), business.packed(proposal), now, job["id"], job["lease_token"]),
@@ -952,17 +1010,31 @@ def _document_job(con, job):
 
 def _process_jobs(con, limit=3):
     jobs = []
+    exhausted = 0
     with business.transaction(con, lock_scopes=("cloud-document-queue",)):
         sql = ("SELECT * FROM document_processing_jobs WHERE (status IN ('queued','retry') AND next_attempt_at<=?) "
                "OR (status='running' AND lease_until<=?) ORDER BY created_at,id LIMIT ?")
         if getattr(con, "is_postgres", False):
             sql += " FOR UPDATE SKIP LOCKED"
         for row in con.execute(sql, (_now(), _now(), max(1, min(int(limit), 10)))).fetchall():
+            if int(row["attempts"]) >= 3:
+                con.execute(
+                    "UPDATE document_processing_jobs SET status='failed',progress='Ошибка обработки',"
+                    "error='Не удалось завершить обработку вовремя',lease_token='',lease_until=0,updated_at=? WHERE id=?",
+                    (_now(), row["id"]),
+                )
+                con.execute(
+                    "UPDATE cloud_files SET processing_status='failed',last_error='Не удалось завершить обработку вовремя',updated_at=? "
+                    "WHERE id=? AND source_fingerprint=? AND trashed=0",
+                    (_now(), row["cloud_file_id"], row["source_fingerprint"]),
+                )
+                exhausted += 1
+                continue
             lease = _id()
             con.execute("UPDATE document_processing_jobs SET status='running',progress='Читаю документ',attempts=attempts+1,lease_token=?,lease_until=?,updated_at=? WHERE id=?",
                         (lease, _now() + 180, _now(), row["id"]))
-            jobs.append({**dict(row), "lease_token": lease})
-    result = {"processed": 0, "review": 0, "failed": 0, "stale_ignored": 0}
+            jobs.append({**dict(row), "lease_token": lease, "attempts": int(row["attempts"]) + 1})
+    result = {"processed": 0, "review": 0, "failed": exhausted, "stale_ignored": 0}
     for job in jobs:
         state = _document_job(con, job)
         if state in ("stale", "skipped"):
@@ -1049,7 +1121,10 @@ def route(service, method, parts, query, data):
         if query.get("error"):
             raise business.DomainError(400, "Авторизация в облаке отклонена пользователем")
         return _oauth_callback(service, query)
-    _premium_access(service)
+    # Disconnecting a provider must remain possible after a subscription ends.
+    disconnect = method == "DELETE" and (parts == ["connections"] or len(parts) == 2 and parts[0] == "folders")
+    if not disconnect:
+        _premium_access(service)
     if parts == ["connections"] and method == "GET":
         rows = service.con.execute(
             "SELECT id,provider,provider_account_id,account_label,scopes,status,last_synced_at,last_error,created_at,updated_at FROM cloud_connections WHERE workspace_id=? ORDER BY created_at DESC",
@@ -1143,14 +1218,35 @@ def route(service, method, parts, query, data):
         result["extraction"] = json.loads(result["extraction"] or "{}")
         result["proposal"] = json.loads(result["proposal"] or "{}")
         return 200, {"job": result}
-    if len(parts) == 2 and parts[0] == "jobs" and parts[1] and method == "POST":
+    if method == "POST" and parts[0] == "jobs" and (len(parts) == 2 or len(parts) == 3 and parts[2] == "retry"):
         job_id = parts[1]
         row = service.con.execute(
-            "SELECT j.*,b.quote_id,f.name FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id JOIN cloud_folder_bindings b ON b.id=f.binding_id WHERE j.id=? AND j.workspace_id=?",
+            "SELECT j.*,b.quote_id,b.project_id,b.status AS binding_status,f.name,f.trashed,"
+            "f.source_fingerprint AS current_fingerprint,c.status AS connection_status "
+            "FROM document_processing_jobs j JOIN cloud_files f ON f.id=j.cloud_file_id AND f.workspace_id=j.workspace_id "
+            "JOIN cloud_folder_bindings b ON b.id=f.binding_id AND b.workspace_id=j.workspace_id "
+            "JOIN cloud_connections c ON c.id=f.connection_id AND c.workspace_id=j.workspace_id "
+            "WHERE j.id=? AND j.workspace_id=?",
             (job_id, service.wid),
         ).fetchone()
         if not row:
             raise business.DomainError(404, "Задание не найдено")
+        if (row["binding_status"] != "active" or row["connection_status"] != "active" or row["trashed"]
+                or row["source_fingerprint"] != row["current_fingerprint"]):
+            raise business.DomainError(409, "Документ изменился или синхронизация отключена. Обновите очередь импорта")
+        if len(parts) == 3:
+            _manager(service)
+            updated = service.con.execute(
+                "UPDATE document_processing_jobs SET status='queued',progress='В очереди',error='',"
+                "attempts=0,lease_token='',lease_until=0,next_attempt_at=?,updated_at=? "
+                "WHERE id=? AND workspace_id=? AND status IN ('failed','cancelled') RETURNING id",
+                (_now(), _now(), job_id, service.wid),
+            ).fetchone()
+            if not updated:
+                raise business.DomainError(409, "Повторить можно только остановленную обработку документа")
+            service.con.execute("UPDATE cloud_files SET processing_status='queued',last_error='',updated_at=? WHERE id=?",
+                                (_now(), row["cloud_file_id"]))
+            return 202, {"job_id": job_id, "status": "queued"}
         proposal = json.loads(row["proposal"] or "{}")
         quote_id = row["quote_id"]
         if row["status"] != "needs_review" or not proposal.get("needs_confirmation"):

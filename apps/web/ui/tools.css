@@ -33,8 +33,8 @@
 #smetra-calculators .smcalc-error{font-size:12px;line-height:1.6;border:1px solid var(--danger);color:var(--danger);border-radius:var(--r-2);padding:12px;margin:0 0 20px}
 #smetra-calculators [hidden]{display:none!important}
 #smetra-calculators .smcalc-copy{width:100%;min-height:44px;font-size:12px;font-weight:500;justify-content:center}
-@media(max-width:780px){#smetra-calculators{padding:16px 0 48px}#smetra-calculators .smcalc-layout{grid-template-columns:minmax(0,1fr);gap:12px}#smetra-calculators .smcalc-result{position:static}#smetra-calculators .smcalc-card{padding:20px}}
-@media(max-width:390px){#smetra-calculators .smcalc-fields{grid-template-columns:minmax(0,1fr)}#smetra-calculators .smcalc-tab{padding:8px 12px}}
+@media(max-width:780px){#smetra-calculators{padding:16px 0 48px}#smetra-calculators .smcalc-layout{grid-template-columns:minmax(0,1fr);gap:12px}#smetra-calculators .smcalc-result{position:static}#smetra-calculators .smcalc-card{padding:16px}#smetra-calculators .smcalc-header{margin-bottom:16px}#smetra-calculators .smcalc-title{padding-bottom:12px;margin-bottom:14px}#smetra-calculators .smcalc-fields{gap:14px 12px}#smetra-calculators .smcalc-field{gap:6px}#smetra-calculators .smcalc-field>span{min-height:calc(2 * 1.45em)}#smetra-calculators .smcalc-field input{padding:10px;min-height:44px}}
+@media(max-width:390px){#smetra-calculators .smcalc-tab{padding:8px 12px}}
 @media(prefers-reduced-motion:reduce){#smetra-calculators .smcalc-tab,#smetra-calculators .smcalc-field input{transition:none}}
 
 #smetra-calculators .smcalc-transfer{margin-top:24px;padding:16px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
@@ -119,11 +119,11 @@
   #content .stat strong,#content .dashboard-metric strong,.business-stats .stat strong{font-size:clamp(14px,4.3vw,17px)}
   .stat small,.dashboard-metric-hint,.dashboard-date{display:none}
   .dashboard-metric-label svg{display:none}
-  /* Dashboard capture: shortcuts in one swipeable row. */
+  /* Keep every dashboard action visible without horizontal scrolling. */
   .capture-heading{margin-bottom:var(--s-2)}
-  .capture-shortcuts{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:calc(var(--s-4) * -1);padding-inline:var(--s-4)}
-  .capture-shortcuts::-webkit-scrollbar{display:none}
-  .capture-shortcuts .btn{flex:none}
+  .capture-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .capture-shortcuts .btn{min-width:0;justify-content:flex-start;white-space:normal}
+  .capture-shortcuts .btn:last-child{grid-column:1/-1}
   /* Lists and empty states: one line of explanation is enough. */
   .record-line{padding-block:8px}
   .record-title strong{font-size:var(--fs-14)}
@@ -149,12 +149,12 @@
 
 
 /* Vault & changelog: black/gray workspace surfaces, no decorative cards. */
-.vault-root{width:min(1320px,100%);margin:0 auto;padding:clamp(20px,3vw,44px) clamp(12px,2vw,32px) 90px;color:var(--text,#f4f4f4);min-height:70vh}
-.vault-head{padding-bottom:30px;border-bottom:1px solid rgba(145,145,145,.18)}
-.vault-head h1{font-size:clamp(30px,4.2vw,46px);font-weight:620;letter-spacing:-.048em;line-height:1.15;margin:8px 0 12px}
+.vault-root{width:min(1320px,100%);margin:0 auto;padding:0 0 48px;color:var(--text,#f4f4f4);min-height:70vh}
+.vault-head{padding-bottom:20px;border-bottom:1px solid rgba(145,145,145,.18)}
+.vault-head h1{font-size:var(--fs-28);font-weight:620;letter-spacing:-.048em;line-height:1.15;margin:6px 0 8px}
 .vault-head p{color:#9b9b9b;font-size:14px;max-width:720px;line-height:1.55;margin:0}
 .vault-eyebrow{font-size:10px;font-weight:700;letter-spacing:.16em;color:#777}
-.vault-tools{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:30px 0 25px}
+.vault-tools{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 0}
 .vault-space{display:grid;grid-template-columns:auto auto;gap:8px 24px;align-items:center;min-width:min(340px,100%)}
 .vault-space span{font-size:13px;color:#999}
 .vault-space strong{font-size:13px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
@@ -223,8 +223,8 @@
 .changelog-form-actions{display:flex;justify-content:flex-end;gap:12px}
 .changelog-form-actions button:not(.btn){background:none;border:0;color:#aaa;cursor:pointer}
 @media(max-width:680px){
- .vault-root{padding:18px 14px 70px}
- .vault-tools{align-items:flex-start;flex-direction:column;gap:20px}
+ .vault-root{padding:0 0 32px}
+ .vault-tools{align-items:stretch;flex-direction:column;gap:14px}
  .vault-space{width:100%}
  .vault-bar{align-items:stretch;flex-direction:column;gap:11px}
  .vault-tabs{gap:24px}

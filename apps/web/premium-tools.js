@@ -4,23 +4,27 @@
   const money = (value, code) => value == null ? 'Цена не определена' : new Intl.NumberFormat('ru-RU',{style:'currency',currency:code||'RUB',maximumFractionDigits:2}).format(Number(value)/100);
   const when = value => value ? new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium',timeStyle:'short'}).format(new Date(Number(value)*1000)) : 'Не проверялось';
   const provider = value => value === 'yandex_disk' ? 'Яндекс.Диск' : value === 'google_drive' ? 'Google Drive' : 'Облако';
-  const state = value => ({queued:'В очереди',running:'Обработка',retry:'Повторная попытка',needs_review:'Нужна проверка',completed:'Готово',failed:'Ошибка',active:'Активно',disabled:'Отключено',reauth_required:'Нужна авторизация',paused:'На паузе'})[value] || value || '—';
+  const state = value => ({queued:'В очереди',running:'Обработка',retry:'Повторная попытка',needs_review:'Нужна проверка',completed:'Готово',failed:'Ошибка',cancelled:'Отменено',active:'Активно',disabled:'Отключено',reauth_required:'Нужна авторизация',paused:'На паузе'})[value] || value || '—';
   const stock = value => ({in_stock:'В наличии',out_of_stock:'Нет в наличии',preorder:'Предзаказ',backorder:'Под заказ',unknown:'Не определено'})[value] || 'Не определено';
   const arr = value => Array.isArray(value) ? value : [];
   const drafts = value => arr(value).filter(q => q.status === 'draft' && !Number(q.published_version || 0));
   let selectedCloudProvider = null;
+  let renderGeneration = 0;
   const quoteOptions = value => '<option value="">Не привязывать к смете</option>' + drafts(value).map(q => '<option value="' + esc(q.id) + '">' + esc(q.title || 'Черновик') + ' · ' + esc(q.client || 'Без клиента') + '</option>').join('');
 
   async function render(active) {
     active = active || (() => true);
+    const generation = ++renderGeneration;
+    const valid = () => generation === renderGeneration && active();
     let features;
     try { features = await api('/premium/features'); }
     catch (error) {
-      if (active()) view(header('Материалы и облака','') + '<section class="premium-empty"><h2>Раздел временно недоступен</h2><p>' + esc(error.message) + '</p><button class="btn" id="premium-retry">Повторить</button></section>');
+      if (!valid()) return;
+      view(header('Материалы и облака','') + '<section class="premium-empty"><h2>Раздел временно недоступен</h2><p>' + esc(error.message) + '</p><button class="btn" id="premium-retry">Повторить</button></section>');
       document.querySelector('#premium-retry')?.addEventListener('click', () => render(active));
       return;
     }
-    if (!active()) return;
+    if (!valid()) return;
     if (!(features.cloud_drives && features.product_monitor && features.visual_estimates)) {
       view(header('Материалы и облака','') +
         '<section class="premium-lock"><span class="premium-kicker">РАСШИРЕННЫЕ ИНСТРУМЕНТЫ</span><h2>Материалы под контролем.</h2><p>Подключайте Яндекс.Диск и Google Drive, связывайте товарные источники со сметой и отслеживайте изменения цен. Импорт документов всегда требует вашей проверки.</p><div class="premium-lock-grid"><article><span class="premium-number">01</span><h3>Материалы</h3><p>Ссылки, характеристики и поставщики рядом с позициями сметы.</p></article><article><span class="premium-number">02</span><h3>История цен</h3><p>Наблюдения и уведомления. Сметная цена не меняется сама.</p></article><article><span class="premium-number">03</span><h3>Облачные документы</h3><p>Синхронизация папок и импорт после ручного подтверждения.</p></article></div><p class="premium-lock-note">Инструменты предусмотрены для тарифов «PRO Плюс» и «TEAM».</p><button class="btn primary" id="premium-go-billing" type="button">Посмотреть тариф</button></section>');
@@ -33,12 +37,12 @@
       const r = await Promise.all([api('/quotes'),api('/premium/product-sources'),api('/premium/cloud/connections'),api('/premium/cloud/folders'),api('/premium/cloud/jobs')]);
       quotes = r[0].quotes || r[0].items || []; sources = r[1].sources || []; connections = r[2].connections || []; folders = r[3].folders || []; jobs = r[4].jobs || [];
     } catch (error) {
-      if (!active()) return;
+      if (!valid()) return;
       view(header('Материалы и облака','') + '<section class="premium-empty"><h2>Не удалось загрузить раздел</h2><p>' + esc(error.message) + '</p><button class="btn" id="premium-retry">Повторить</button></section>');
       document.querySelector('#premium-retry')?.addEventListener('click', () => render(active));
       return;
     }
-    if (!active()) return;
+    if (!valid()) return;
     const draftsList = drafts(quotes);
     const activeCloudFolders = cloud => folders.filter(f => f.provider === cloud && f.status === 'active');
     const sourceHtml = sources.length ? sources.map(s => '<article class="premium-source"><div class="premium-source-main"><span class="premium-source-host">' + esc(s.hostname) + '</span><h3>' + esc(s.product_title || s.url) + '</h3><p>' + esc(s.brand || 'Бренд не определён') + (s.sku ? ' · Артикул ' + esc(s.sku) : '') + '</p><div class="premium-source-meta"><span>' + esc(stock(s.availability)) + '</span><span>Проверено: ' + esc(when(s.last_checked_at)) + '</span><span>' + esc(state(s.source_status)) + '</span></div>' + (s.last_error ? '<p class="premium-error">' + esc(s.last_error) + '</p>' : '') + '</div><div class="premium-source-actions"><strong>' + esc(money(s.price_kopecks,s.currency)) + '</strong><button class="btn small" type="button" data-premium-history="' + esc(s.id) + '">История цен</button>' + (s.monitored ? '<button class="btn small" type="button" data-premium-disable-source="' + esc(s.id) + '">Остановить</button>' : '') + '</div><div class="premium-history" data-premium-history-view="' + esc(s.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Проверенные товары появятся здесь. Добавьте первую ссылку выше.</p>';
@@ -66,7 +70,7 @@
       const scoped=activeCloudFolders(cloud);
       return scoped.length ? scoped.map(f=>'<article class="premium-folder"><div><strong>'+esc(f.folder_name||f.folder_id)+'</strong><small>'+esc(f.account_label||provider(f.provider))+(f.quote_id?' · Привязана к смете':'')+'</small>'+(f.last_error?'<small class="premium-error">'+esc(f.last_error)+'</small>':'<small>'+(f.sync_requested?'Ожидает фоновой проверки':f.last_synced_at?'Обновлено: '+esc(when(f.last_synced_at)):'Автоматическое обновление запланировано')+'</small>')+'</div><div class="premium-folder-actions"><span class="premium-state">'+(f.last_error?'Ошибка':'Авто')+'</span><button class="btn small" type="button" data-premium-disable-folder="'+esc(f.id)+'" aria-label="Убрать папку '+esc(f.folder_name||f.folder_id)+' из синхронизации">Убрать</button></div></article>').join('') : '<p class="premium-empty-state">Здесь пока нет добавленных папок. Выберите каталог выше — дальнейшее обновление произойдёт автоматически.</p>';
     };
-    const jobsHtml = jobs.length ? jobs.map(j => '<article class="premium-job" data-premium-job-card="' + esc(j.id) + '"><span class="premium-job-kind">' + (j.mime === 'application/pdf' ? 'PDF' : 'DOC') + '</span><div class="premium-job-copy"><strong>' + esc(j.name) + '</strong><span>' + esc(provider(j.provider)) + (j.quote_id ? ' · Смета привязана' : ' · Без сметы') + '</span><small>' + esc(state(j.status)) + (j.updated_at ? ' · ' + esc(when(j.updated_at)) : '') + '</small>' + (j.error ? '<small class="premium-error">' + esc(j.error) + '</small>' : '') + '</div><button class="btn small" type="button" data-premium-review="' + esc(j.id) + '">Проверить</button><div class="premium-job-review" data-premium-job-review="' + esc(j.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Документов для проверки пока нет. Они появятся после синхронизации папок.</p>';
+    const jobsHtml = jobs.length ? jobs.map(j => '<article class="premium-job" data-premium-job-card="' + esc(j.id) + '"><span class="premium-job-kind">' + (j.mime === 'application/pdf' ? 'PDF' : 'DOC') + '</span><div class="premium-job-copy"><strong>' + esc(j.name) + '</strong><span>' + esc(provider(j.provider)) + (j.quote_id ? ' · Смета привязана' : ' · Без сметы') + '</span><small>' + esc(state(j.status)) + (j.updated_at ? ' · ' + esc(when(j.updated_at)) : '') + '</small>' + (j.error ? '<small class="premium-error">' + esc(j.error) + '</small>' : '') + '</div>'+(j.status==='failed'?'<button class="btn small" type="button" data-premium-retry="'+esc(j.id)+'">Повторить</button>':'<button class="btn small" type="button" data-premium-review="'+esc(j.id)+'">Проверить</button>')+'<div class="premium-job-review" data-premium-job-review="' + esc(j.id) + '" hidden></div></article>').join('') : '<p class="premium-empty-state">Документов для проверки пока нет. Они появятся после синхронизации папок.</p>';
 
     view(header('Материалы и облака','') +
       '<section class="premium-tools-page"><div class="premium-intro"><div class="premium-intro-copy"><h2>Цены и документы под контролем</h2><p>Следите за ценами поставщиков и собирайте документы из облака. Изменения попадут в смету только после вашей проверки.</p></div><div class="premium-intro-metrics" aria-label="Обзор материалов"><div class="premium-intro-metric"><strong>' + sources.length + '</strong><span>источников цен</span></div><div class="premium-intro-metric"><strong>' + jobs.filter(j => j.status === 'needs_review').length + '</strong><span>документов к проверке</span></div></div></div>' +
@@ -85,42 +89,46 @@
     if (new URLSearchParams(location.search).get('cloud') === 'connected') {
       history.replaceState(null,'','/app#premium'); notify('Облако подключено. Обновляем список…'); await render(active); return;
     }
-    let quote = null, product = null;
+    let quote = null, product = null, quoteRequest = 0;
     const quoteSelect = document.querySelector('#premium-product-quote');
     const itemSelect = document.querySelector('#premium-product-item');
     const preview = document.querySelector('#premium-product-preview');
     async function loadQuote(id) {
+      const request = ++quoteRequest;
       quote=null; itemSelect.disabled=true; itemSelect.innerHTML='<option value="">Загружаем позиции…</option>';
+      if (product) paintProduct();
       if (!id) { itemSelect.innerHTML='<option value="">Выберите черновик сметы</option>'; if (product) paintProduct(); return; }
       try {
-        const r=await api('/quotes/'+encodeURIComponent(id)); if(!active())return;
+        const r=await api('/quotes/'+encodeURIComponent(id)); if(!valid()||request!==quoteRequest||quoteSelect.value!==id||!itemSelect.isConnected)return;
         if(!r.quote || r.quote.status!=='draft' || Number(r.quote.published_version||0)>0) { itemSelect.innerHTML='<option value="">Доступны только черновики</option>'; return; }
         quote=r.quote; const items=arr(quote.items);
         itemSelect.innerHTML=items.map(i=>'<option value="'+esc(i.line_id||'')+'">'+esc(i.name||'Без названия')+' · '+esc(i.quantity||'1')+' '+esc(i.unit||'шт.')+'</option>').join('');
         if(!items.length)itemSelect.innerHTML='<option value="">Добавьте позицию в смету</option>';
         itemSelect.disabled=!items.length; if(product)paintProduct();
-      } catch (error) { itemSelect.innerHTML='<option value="">Не удалось загрузить позиции</option>'; notify(error.message); }
+      } catch (error) { if(!valid()||request!==quoteRequest||!itemSelect.isConnected)return;itemSelect.innerHTML='<option value="">Не удалось загрузить позиции</option>'; notify(error.message); }
     }
     function paintProduct() {
       const ready=Boolean(quote && quote.status==='draft' && itemSelect.value);
       preview.hidden=false;
       preview.innerHTML='<div class="premium-preview-top"><span class="premium-kicker">РЕЗУЛЬТАТ ПРОВЕРКИ</span><span class="premium-state">'+esc(stock(product.availability))+'</span></div><div class="premium-preview-body"><div><h3>'+esc(product.product_title||'Карточка товара')+'</h3><p>'+esc(product.brand||'Бренд не определён')+(product.sku?' · Артикул '+esc(product.sku):'')+'</p><a href="'+esc(product.url)+'" target="_blank" rel="noopener noreferrer">'+esc(product.hostname||product.url)+' ↗</a></div><strong>'+esc(money(product.price_kopecks,product.currency))+'</strong></div><p class="premium-preview-note">Наблюдение: '+esc(when(product.observed_at))+'. Цена сметы не изменена.</p><div class="premium-preview-actions"><button class="btn primary" id="premium-save-source" type="button" '+(ready?'':'disabled')+'>Привязать к позиции и следить за ценой</button><span>'+(ready?'Цена магазина будет сохранена отдельно.':'Выберите черновик сметы и позицию.')+'</span></div>';
       preview.querySelector('#premium-save-source')?.addEventListener('click',async ev=>{
-        if(!quote || !itemSelect.value || !product)return; ev.currentTarget.disabled=true;
-        try { await api('/premium/product-sources',{method:'POST',body:JSON.stringify({quote_id:quote.id,quote_item_id:itemSelect.value,revision:quote.revision,url:product.url})}); notify('Источник цены сохранён. Сметная стоимость не менялась.'); await render(active); }
-        catch(error){notify(error.message);ev.currentTarget.disabled=false}
+        const button=ev.currentTarget;
+        if(button.disabled||!valid()||!quote||!itemSelect.value||!product)return;button.disabled=true;
+        try { await api('/premium/product-sources',{method:'POST',body:JSON.stringify({quote_id:quote.id,quote_item_id:itemSelect.value,revision:quote.revision,url:product.url})}); if(!valid())return;notify('Источник цены сохранён. Сметная стоимость не менялась.'); await render(active); }
+        catch(error){if(valid())notify(error.message)}
+        finally{if(button.isConnected)button.disabled=false}
       });
     }
     quoteSelect?.addEventListener('change',()=>loadQuote(quoteSelect.value));
     itemSelect?.addEventListener('change',()=>{if(product)paintProduct()});
     if(quoteSelect?.value)await loadQuote(quoteSelect.value);
     document.querySelector('#premium-product-form')?.addEventListener('submit',async ev=>{
-      ev.preventDefault();const button=document.querySelector('#premium-product-preview-button');button.disabled=true;button.textContent='Проверяем…';
-      try { const r=await api('/premium/products/preview',{method:'POST',body:JSON.stringify({url:document.querySelector('#premium-product-url').value.trim()})}); if(!active())return;product=r.product;paintProduct(); }
-      catch(error){notify(error.message)} finally {if(button.isConnected){button.disabled=false;button.textContent='Проверить ссылку'}}
+      ev.preventDefault();const button=ev.currentTarget.querySelector('#premium-product-preview-button');if(button.disabled||!valid())return;button.disabled=true;button.textContent='Проверяем…';
+      try { const r=await api('/premium/products/preview',{method:'POST',body:JSON.stringify({url:document.querySelector('#premium-product-url').value.trim()})}); if(!valid())return;product=r.product;paintProduct(); }
+      catch(error){if(valid())notify(error.message)} finally {if(button.isConnected){button.disabled=false;button.textContent='Проверить ссылку'}}
     });
     document.querySelectorAll('[data-premium-connect]').forEach(b=>b.addEventListener('click',async()=>{
-      b.disabled=true;try{const r=await api('/premium/cloud/oauth/'+encodeURIComponent(b.dataset.premiumConnect));if(r.authorize_url)location.assign(r.authorize_url);else throw Error('Сервис не вернул ссылку авторизации.')}catch(error){notify(error.message);b.disabled=false}
+      if(b.disabled||!valid())return;b.disabled=true;try{const r=await api('/premium/cloud/oauth/'+encodeURIComponent(b.dataset.premiumConnect));if(!valid())return;if(r.authorize_url)location.assign(r.authorize_url);else throw Error('Сервис не вернул ссылку авторизации.')}catch(error){if(valid())notify(error.message);b.disabled=false}
     }));
     // Browse direct children only; lazy pagination, no all-files scan.
     const folderForm=document.querySelector('#premium-folder-form');
@@ -131,20 +139,22 @@
     const folderChoice=document.querySelector('#premium-folder-choice');
     const folderBack=document.querySelector('#premium-folder-back');
     const folderNext=document.querySelector('#premium-folder-next');
-    let folderPath=[],folderCursor='',folderRequest=0;
+    let folderPath=[],folderCursor='',folderRequest=0,folderSelection=0,folderSaving=false;
     const folderSubmit=document.querySelector('#premium-folder-submit');
     const pickCurrent=document.querySelector('#premium-folder-select-current');
     function clearFolderSelection(){
+      folderSelection++;
       folderId.value='';
       folderChoice.textContent='Сначала выберите папку выше';
       folderChoice.closest('.premium-folder-selected')?.classList.remove('has-selection');
       folderSubmit.disabled=true;
     }
     function setFolderSelection(id,name){
+      folderSelection++;
       folderId.value=String(id);
       folderChoice.textContent=provider(selectedCloudProvider)+' / '+(folderPath.length ? folderPath.map(x=>x.name).join(' / ')+(name?' / ':'') : '')+name;
       folderChoice.closest('.premium-folder-selected')?.classList.add('has-selection');
-      folderSubmit.disabled=false;
+      folderSubmit.disabled=folderSaving;
     }
     async function browseFolder(next=false){
       const seq=++folderRequest;
@@ -162,7 +172,7 @@
       const message=document.createElement('div');message.className='premium-folder-message';message.textContent='Загружаем содержимое…';folderEntries.append(message);
       try{
         const payload=await api('/premium/cloud/browse-folders?'+params.toString());
-        if(seq!==folderRequest||!active())return;
+        if(seq!==folderRequest||!valid())return;
         message.remove();
         const rows=Array.isArray(payload.folders)?payload.folders:[];
         const files=Array.isArray(payload.files)?payload.files:[];
@@ -200,7 +210,7 @@
         folderCursor=String(payload.next_cursor||'');
         folderNext.classList.toggle('hidden',!folderCursor);
       }catch(error){
-        if(seq!==folderRequest||!active())return;
+        if(seq!==folderRequest||!valid())return;
         message.remove();
         const note=document.createElement('div');note.className='premium-folder-message';note.textContent='Не удалось загрузить содержимое: '+error.message;folderEntries.append(note);
       }
@@ -243,48 +253,60 @@
     folderNext?.addEventListener('click',()=>{if(folderCursor)void browseFolder(true)});
     if(folderConnection?.value)void browseFolder();
     document.querySelector('#premium-folder-form')?.addEventListener('submit',async ev=>{
-      ev.preventDefault();const form=ev.currentTarget,button=form.querySelector('[type=submit]'),error=form.querySelector('[role=alert]');error.textContent='';if(!folderConnection.value){error.textContent='Сначала подключите выбранный диск.';return}if(!folderId.value){error.textContent='Выберите папку из списка перед добавлением.';return}button.disabled=true;
+      ev.preventDefault();if(folderSaving||!valid())return;const form=ev.currentTarget,button=form.querySelector('[type=submit]'),error=form.querySelector('[role=alert]');error.textContent='';if(!folderConnection.value){error.textContent='Сначала подключите выбранный диск.';return}if(!folderId.value){error.textContent='Выберите папку из списка перед добавлением.';return}folderSaving=true;button.disabled=true;const selection=folderSelection;
       try{
         const d=Object.fromEntries(new FormData(form));
         await api('/premium/cloud/folders',{method:'POST',body:JSON.stringify({connection_id:d.connection_id,folder_id:String(d.folder_id||'').trim(),quote_id:d.quote_id||null,recursive:form.elements.recursive.checked})});
         // Update only the folder list, never rebuild or scroll the whole page.
         const latest=await api('/premium/cloud/folders');
-        if(!active()||!folderForm.isConnected)return;
+        if(!valid()||!folderForm.isConnected)return;
         folders=latest.folders||[];
         document.querySelector('.premium-folder-list').innerHTML=folderHtml(selectedCloudProvider);
         document.querySelector('#premium-cloud-folder-count').textContent=activeCloudFolders(selectedCloudProvider).length+' папок';
-        clearFolderSelection();
+        if(selection===folderSelection)clearFolderSelection();
         notify('Папка добавлена. Обновление выполняется автоматически по расписанию.');
-      }catch(err){error.textContent=err.message;button.disabled=false}
+      }catch(err){if(valid()&&form.isConnected)error.textContent=err.message}
+      finally{folderSaving=false;if(valid()&&form.isConnected)button.disabled=!folderId.value}
     });
     document.querySelector('#premium-refresh-jobs')?.addEventListener('click',()=>render(active));
+    async function change(button,question,path,options,done){
+      if(button.disabled||!valid())return;
+      button.disabled=true;
+      try{
+        if(!(await window.SmetraDialog.confirm(question))||!valid()||!button.isConnected)return;
+        const result=await api(path,options);
+        if(valid())await done(result);
+      }catch(error){if(valid())notify(error.message)}
+      finally{if(button.isConnected)button.disabled=false}
+    }
     document.querySelector('.premium-tools-page')?.addEventListener('click',async ev=>{
       const b=ev.target.closest('button');if(!b)return;
       if(b.dataset.premiumDisconnect){
-        if(!(await window.SmetraDialog.confirm({title:'Отключить облако?',message:'Синхронизации с ним тоже остановятся.',confirmLabel:'Отключить',danger:true})))return;b.disabled=true;
-        try{await api('/premium/cloud/connections',{method:'DELETE',body:JSON.stringify({connection_id:b.dataset.premiumDisconnect})});notify('Облако отключено.');await render(active)}catch(error){notify(error.message);b.disabled=false}
+        await change(b,{title:'Отключить облако?',message:'Синхронизации с ним тоже остановятся.',confirmLabel:'Отключить',danger:true},'/premium/cloud/connections',{method:'DELETE',body:JSON.stringify({connection_id:b.dataset.premiumDisconnect})},async()=>{notify('Облако отключено.');await render(active)});
       } else if(b.dataset.premiumDisableSource){
-        if(!(await window.SmetraDialog.confirm({title:'Остановить мониторинг цены?',confirmLabel:'Остановить',danger:true})))return;b.disabled=true;
-        try{await api('/premium/product-sources/'+encodeURIComponent(b.dataset.premiumDisableSource),{method:'DELETE',body:JSON.stringify({})});notify('Мониторинг остановлен.');await render(active)}catch(error){notify(error.message);b.disabled=false}
+        await change(b,{title:'Остановить мониторинг цены?',confirmLabel:'Остановить',danger:true},'/premium/product-sources/'+encodeURIComponent(b.dataset.premiumDisableSource),{method:'DELETE',body:JSON.stringify({})},async()=>{notify('Мониторинг остановлен.');await render(active)});
       } else if(b.dataset.premiumDisableFolder){
-        if(!(await window.SmetraDialog.confirm({title:'Отключить эту папку?',confirmLabel:'Отключить',danger:true})))return;b.disabled=true;
-        try{await api('/premium/cloud/folders/'+encodeURIComponent(b.dataset.premiumDisableFolder),{method:'DELETE',body:JSON.stringify({})});notify('Папка убрана из автоматической синхронизации.');const latest=await api('/premium/cloud/folders');if(!active())return;folders=latest.folders||[];document.querySelector('.premium-folder-list').innerHTML=folderHtml(selectedCloudProvider);document.querySelector('#premium-cloud-folder-count').textContent=activeCloudFolders(selectedCloudProvider).length+' папок'}catch(error){notify(error.message);b.disabled=false}
+        await change(b,{title:'Отключить эту папку?',confirmLabel:'Отключить',danger:true},'/premium/cloud/folders/'+encodeURIComponent(b.dataset.premiumDisableFolder),{method:'DELETE',body:JSON.stringify({})},async()=>{notify('Папка убрана из автоматической синхронизации.');const latest=await api('/premium/cloud/folders');if(!valid())return;folders=latest.folders||[];document.querySelector('.premium-folder-list').innerHTML=folderHtml(selectedCloudProvider);document.querySelector('#premium-cloud-folder-count').textContent=activeCloudFolders(selectedCloudProvider).length+' папок'});
       } else if(b.dataset.premiumHistory){
         const id=b.dataset.premiumHistory,target=document.querySelector('[data-premium-history-view="'+CSS.escape(id)+'"]');if(!target)return;
         if(!target.hidden){target.hidden=true;target.replaceChildren();return}target.hidden=false;target.textContent='Загружаем историю…';
-        try{const r=await api('/premium/price-history/'+encodeURIComponent(id));target.innerHTML=r.history?.length?'<h4>История наблюдений</h4><div class="premium-history-list">'+r.history.map(x=>'<div><span>'+esc(when(x.observed_at))+'<small>'+esc(stock(x.availability))+'</small></span><strong>'+esc(money(x.price_kopecks,x.currency))+'</strong></div>').join('')+'</div>':'<p>Пока есть только первое наблюдение. Следующая проверка запланирована автоматически.</p>'}catch(error){target.textContent=error.message}
+        try{const r=await api('/premium/price-history/'+encodeURIComponent(id));if(!valid()||!target.isConnected||target.hidden)return;target.innerHTML=r.history?.length?'<h4>История наблюдений</h4><div class="premium-history-list">'+r.history.map(x=>'<div><span>'+esc(when(x.observed_at))+'<small>'+esc(stock(x.availability))+'</small></span><strong>'+esc(money(x.price_kopecks,x.currency))+'</strong></div>').join('')+'</div>':'<p>Пока есть только первое наблюдение. Следующая проверка запланирована автоматически.</p>'}catch(error){if(valid()&&target.isConnected&&!target.hidden)target.textContent=error.message}
+      } else if(b.dataset.premiumRetry){
+        if(b.disabled||!valid())return;b.disabled=true;
+        try{await api('/premium/cloud/jobs/'+encodeURIComponent(b.dataset.premiumRetry)+'/retry',{method:'POST',body:'{}'});if(!valid())return;notify('Документ снова поставлен в очередь.');await render(active)}
+        catch(error){if(valid())notify(error.message)}finally{if(b.isConnected)b.disabled=false}
       } else if(b.dataset.premiumReview){
         const id=b.dataset.premiumReview,target=document.querySelector('[data-premium-job-review="'+CSS.escape(id)+'"]');if(!target)return;
         if(!target.hidden){target.hidden=true;target.replaceChildren();return}target.hidden=false;target.textContent='Загружаем распознанные данные…';
         try{
           const r=await api('/premium/cloud/jobs/'+encodeURIComponent(id)),j=r.job,p=j.proposal||{},items=arr(p.items);
-          target.innerHTML='<div class="premium-review-heading"><div><span class="premium-kicker">ПРЕДЛОЖЕНИЕ К ИМПОРТУ</span><h3>'+esc(p.merchant||j.name)+'</h3><p>'+esc(p.date||'Дата не распознана')+' · '+esc(p.document_type||'Тип не определён')+'</p></div><strong>'+esc(money(p.total_kopecks,p.currency))+'</strong></div><p>'+esc(p.notes||'Проверьте строки и суммы ниже.')+'</p><div class="premium-review-lines">'+(items.length?items.map((i,n)=>'<div><span>'+(n+1)+'. '+esc(i.name)+'<small>'+esc(i.quantity||'1')+' '+esc(i.unit||'шт.')+(i.sku?' · '+esc(i.sku):'')+'</small></span><strong>'+esc(money(i.unit_price_kopecks,p.currency))+'</strong></div>').join(''):'<p>Товарные строки для импорта не найдены.</p>')+'</div>'+(j.quote_id?'<label class="premium-confirm-check"><input type="checkbox" data-premium-confirm-check="'+esc(id)+'"><span>Я проверил позиции и цены и подтверждаю добавление в связанный черновик сметы.</span></label><button class="btn primary" type="button" data-premium-confirm-import="'+esc(id)+'" disabled>Подтвердить импорт в смету</button>':'<p class="premium-error">Папка не связана со сметой. Привяжите папку к черновику и выполните синхронизацию ещё раз.</p>')+'<p class="premium-review-note">Распознавание может ошибаться. Проверьте состав, количество и цену вручную.</p>';
-        }catch(error){target.textContent=error.message}
+          if(!valid()||!target.isConnected||target.hidden)return;
+          target.innerHTML='<div class="premium-review-heading"><div><span class="premium-kicker">ПРЕДЛОЖЕНИЕ К ИМПОРТУ</span><h3>'+esc(p.merchant||j.name)+'</h3><p>'+esc(p.date||'Дата не распознана')+' · '+esc(p.document_type||'Тип не определён')+'</p></div><strong>'+esc(money(p.total_kopecks,p.currency))+'</strong></div><p>'+esc(p.notes||'Проверьте строки и суммы ниже.')+'</p><div class="premium-review-lines">'+(items.length?items.map((i,n)=>'<div><span>'+(n+1)+'. '+esc(i.name)+'<small>'+esc(i.quantity||'1')+' '+esc(i.unit||'шт.')+(i.sku?' · '+esc(i.sku):'')+'</small></span><strong>'+esc(money(i.unit_price_kopecks,p.currency))+'</strong></div>').join(''):'<p>Товарные строки для импорта не найдены.</p>')+'</div>'+(j.quote_id&&j.status==='needs_review'&&p.needs_confirmation&&items.length?'<label class="premium-confirm-check"><input type="checkbox" data-premium-confirm-check="'+esc(id)+'"><span>Я проверил позиции и цены и подтверждаю добавление в связанный черновик сметы.</span></label><button class="btn primary" type="button" data-premium-confirm-import="'+esc(id)+'" disabled>Подтвердить импорт в смету</button>':'<p class="premium-review-note">'+esc(j.status==='needs_review'?(j.quote_id?'В документе нет товарных строк для импорта.':'Папка не связана со сметой. Привяжите её к черновику.'):'Состояние обработки: '+state(j.status)+'.')+'</p>')+'<p class="premium-review-note">Распознавание может ошибаться. Проверьте состав, количество и цену вручную.</p>';
+        }catch(error){if(valid()&&target.isConnected&&!target.hidden)target.textContent=error.message}
       } else if(b.dataset.premiumConfirmImport){
         const id=b.dataset.premiumConfirmImport,card=document.querySelector('[data-premium-job-card="'+CSS.escape(id)+'"]'),check=card?.querySelector('[data-premium-confirm-check]');
         if(!check?.checked){notify('Сначала подтвердите, что проверили позиции.');return}
-        if(!(await window.SmetraDialog.confirm({title:'Добавить позиции в черновик?',message:'Распознанные позиции попадут в черновик сметы. Проверьте их перед отправкой клиенту.',confirmLabel:'Добавить'})))return;b.disabled=true;
-        try{const r=await api('/premium/cloud/jobs/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({})});notify('Добавлено позиций: '+(r.imported_items||0)+'. Проверьте итоговую сумму.');await render(active)}catch(error){notify(error.message);b.disabled=false}
+        await change(b,{title:'Добавить позиции в черновик?',message:'Распознанные позиции попадут в черновик сметы. Проверьте их перед отправкой клиенту.',confirmLabel:'Добавить'},'/premium/cloud/jobs/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({})},async r=>{notify('Добавлено позиций: '+(r.imported_items||0)+'. Проверьте итоговую сумму.');await render(active)});
       }
     });
     document.querySelector('.premium-job-list')?.addEventListener('change',ev=>{
