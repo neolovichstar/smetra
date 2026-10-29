@@ -736,6 +736,34 @@ class Service:
         if callable(setter) and self.user and self.wid:
             setter((f"workspace:{self.wid}", f"user:{self.user['id']}"))
 
+    def revalidate_write_access(self):
+        """Refresh authority inside the transaction that will apply an AI action."""
+        # Identity is authenticated through the account connection, as in
+        # handle(). The runtime role deliberately cannot read session secrets
+        # or all user columns. Domain membership stays on the scoped connection.
+        account_con = self.global_con if getattr(self.con, "runtime", False) else self.con
+        current = account_con.execute(
+            "SELECT * FROM users WHERE id=? AND deleted_at IS NULL AND blocked=0",
+            (self.user["id"],),
+        ).fetchone()
+        if not current:
+            raise DomainError(403, "Аккаунт недоступен")
+        session_hash = getattr(self.h, "session_token_hash", None)
+        if session_hash and not account_con.execute(
+            "SELECT 1 FROM sessions WHERE token_hash=? AND user_id=? AND expires_at>?",
+            (session_hash, current["id"], stamp()),
+        ).fetchone():
+            raise DomainError(401, "Сессия истекла")
+        member = self.con.execute(
+            "SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?",
+            (self.wid, current["id"]),
+        ).fetchone()
+        if not member:
+            raise DomainError(403, "Доступ к рабочему пространству отозван")
+        self.user, self.role = current, member["role"]
+        self._finance_grant = None
+        self.write_access()
+
     def get(self, table, record_id):
         if not isinstance(record_id, str) or not 1 <= len(record_id) <= 100:
             raise DomainError(400, "Некорректный идентификатор записи")

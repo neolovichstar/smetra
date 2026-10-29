@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -467,64 +468,78 @@ def _support_user_context(con, user):
     }
 
 
-def send_quote_to_user(con, workspace_id, quote_id, owner_id, recipient_id, quote_title, public_url, published_version):
-    """Create/update the quote-bound chat and post the published client link."""
-    moment = now()
-    quote = con.execute(
-        "SELECT id,title,public_token,published_version,workspace_id,user_id,status "
-        "FROM quotes WHERE id=? AND workspace_id=?",
-        (quote_id, workspace_id),
-    ).fetchone()
-    if not quote or int(quote["published_version"] or 0) < 1:
-        raise ApiError(409, "Смета ещё не опубликована. Обновите предложение и подтвердите отправку снова.")
-    if quote["status"] in ("accepted", "completed"):
-        raise ApiError(409, "Согласованную или завершённую смету нельзя отправлять как новое предложение.")
-    recipient = con.execute(
-        "SELECT id,name FROM users WHERE id=? AND id<>? AND deleted_at IS NULL AND blocked=0",
-        (recipient_id, owner_id),
-    ).fetchone()
-    if not recipient:
-        raise ApiError(404, "Получатель не найден или его аккаунт недоступен.")
-    normalized_title = _text(quote["title"] or quote_title, 150, required=True)
-    url = _text(public_url, 1000, required=True)
-    direct_key = "estimate:" + quote_id + ":" + recipient_id
-    existing = con.execute(
-        "SELECT id FROM chat_conversations WHERE direct_key=?", (direct_key,)
-    ).fetchone()
-    conversation_id = _new_conversation(
-        con, "estimate", "Смета: " + normalized_title, owner_id,
-        workspace_id=workspace_id, quote_id=quote_id, direct_key=direct_key,
-    )
-    _add_member(con, conversation_id, owner_id, "owner")
-    _add_member(con, conversation_id, recipient_id, "client")
-    version = int(quote["published_version"] or published_version or 1)
-    _add_message(
-        con, conversation_id, owner_id, "user",
-        "Смета «" + normalized_title + "» — версия " + str(version) + ". "
-        "Откройте документ по ссылке: " + url,
-        {
-            "event": "estimate_shared_in_chat",
-            "quote_id": quote_id,
-            "quote_version": version,
-            "public_url": url,
-            "recipient_id": recipient_id,
-            "sent_by": owner_id,
-            "sent_at": moment,
-        },
-    )
-    con.execute(
-        "UPDATE chat_conversations SET subject=?,updated_at=? WHERE id=?",
-        ("Смета: " + normalized_title, moment, conversation_id),
-    )
-    return {
-        "conversation_id": conversation_id,
-        "quote_id": quote_id,
-        "quote_version": version,
-        "recipient_id": recipient_id,
-        "recipient_name": recipient["name"],
-        "public_url": url,
-        "reused_conversation": bool(existing),
-    }
+def send_quote_to_user(con, workspace_id, quote_id, owner_id, recipient_id, *, version=None, origin=None, handler=None):
+    """Send one reviewed publication once per recipient, under workspace locks."""
+    from backend.business import transaction
+    from backend.public_profiles import contact_quote, require_contact
+    from backend.estimate_sharing import _load_snapshot
+
+    with transaction(con, lock_scopes=(f"workspace:{workspace_id}", f"user:{owner_id}", f"user:{recipient_id}")):
+        sender = handler.auth(con) if handler else con.execute(
+            "SELECT id,email_verified_at FROM users WHERE id=? AND deleted_at IS NULL AND blocked=0",
+            (owner_id,),
+        ).fetchone()
+        if not sender or sender["id"] != owner_id or not sender["email_verified_at"]:
+            raise ApiError(403, "Подтвердите почту перед отправкой сметы")
+        quote = contact_quote(con, owner_id, quote_id)
+        if not quote or quote["workspace_id"] != workspace_id:
+            raise ApiError(404, "Смета не найдена")
+        if not quote["published_version"] or quote["approval_state"] not in ("sent", "viewed", "changes_requested"):
+            raise ApiError(409, "Сначала опубликуйте смету для согласования")
+        if quote["expires_at"] and quote["expires_at"] <= now():
+            raise ApiError(410, "Срок согласования сметы истёк")
+        if version is not None and (type(version) is not int or version != quote["published_version"]):
+            raise ApiError(409, "Версия сметы изменилась. Выберите её заново")
+        _, snapshot = _load_snapshot(con, {
+            "quote_id": quote_id, "workspace_id": workspace_id,
+            "quote_version": quote["published_version"],
+        })
+        recipient = con.execute(
+            "SELECT id,name FROM users WHERE id=? AND id<>? AND deleted_at IS NULL AND blocked=0",
+            (recipient_id, owner_id),
+        ).fetchone()
+        if not recipient:
+            raise ApiError(404, "Пользователь не найден")
+        require_contact(con, recipient_id, "quote")
+        title = _text(snapshot["title"], 150, required=True)
+        url = (origin or ORIGIN).rstrip("/") + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
+        direct_key = "estimate:" + quote_id + ":" + recipient_id
+        existing = con.execute(
+            "SELECT id FROM chat_conversations WHERE direct_key=?", (direct_key,)
+        ).fetchone()
+        conversation_id = _new_conversation(
+            con, "estimate", "Смета: " + title, owner_id,
+            workspace_id=workspace_id, quote_id=quote_id, direct_key=direct_key,
+        )
+        _add_member(con, conversation_id, owner_id, "owner")
+        _add_member(con, conversation_id, recipient_id, "client")
+        version = quote["published_version"]
+        moment = now()
+        metadata = {
+            "event": "estimate_shared_in_chat", "quote_id": quote_id,
+            "quote_version": version, "public_url": url,
+            "recipient_id": recipient_id, "sent_by": owner_id, "sent_at": moment,
+        }
+        # The existing primary key provides a durable cross-instance fence.
+        # Reusing a conversation must not suppress delivery of a NEW version.
+        message_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"smetra:estimate:{quote_id}:{recipient_id}:{version}"))
+        sent = con.execute(
+            "INSERT INTO chat_messages(id,conversation_id,sender_id,sender_type,body,metadata,created_at) "
+            "VALUES(?,?,?,'user',?,?,?) ON CONFLICT(id) DO NOTHING",
+            (message_id, conversation_id, owner_id,
+             "Смета «" + title + "» — версия " + str(version) + ". Откройте документ по ссылке: " + url,
+             json.dumps(metadata, ensure_ascii=False, separators=(",", ":")), moment),
+        ).rowcount == 1
+        if sent:
+            con.execute(
+                "UPDATE chat_conversations SET subject=?,updated_at=? WHERE id=?",
+                ("Смета: " + title, moment, conversation_id),
+            )
+        return {
+            "conversation_id": conversation_id, "quote_id": quote_id, "quote_version": version,
+            "recipient_id": recipient_id, "recipient_name": recipient["name"], "public_url": url,
+            "title": title, "reused_conversation": bool(existing), "replayed": not sent,
+        }
 
 
 def _plan_lines():
@@ -818,60 +833,22 @@ def _public_id_route(handler, method, path, query, con, user):
         if user["email_verified_at"] is None:
             raise ApiError(403, "Подтвердите почту перед отправкой сметы")
         from backend.public_profiles import contact_quote
-        from backend.business import transaction
-
         quote = contact_quote(con, user["id"], quote_id)
         if not quote:
             raise ApiError(404, "Смета не найдена")
-        # Member removal/demotion and quote publication acquire these same locks.
-        # Recheck inside the transaction so an in-flight share cannot outlive access.
-        with transaction(con, lock_scopes=(f"workspace:{quote['workspace_id']}", f"user:{user['id']}")):
-            current = _auth(handler, con)
-            if current["email_verified_at"] is None:
-                raise ApiError(403, "Подтвердите почту перед отправкой сметы")
-            quote = contact_quote(con, user["id"], quote_id)
-            if not quote:
-                raise ApiError(404, "Смета не найдена")
-            if not quote["published_version"] or quote["approval_state"] not in ("sent", "viewed", "changes_requested"):
-                raise ApiError(409, "Сначала опубликуйте смету для согласования")
-            if quote["expires_at"] and quote["expires_at"] <= now():
-                raise ApiError(410, "Срок согласования сметы истёк")
-            if "version" in data and (type(data["version"]) is not int or data["version"] != quote["published_version"]):
-                raise ApiError(409, "Версия сметы изменилась. Выберите её заново")
-            from backend.estimate_sharing import _load_snapshot
-            _load_snapshot(con, {"quote_id": quote["id"], "workspace_id": quote["workspace_id"],
-                                 "quote_version": quote["published_version"]})
-            target = con.execute(
-                "SELECT id,name FROM users WHERE upper(replace(id,'-',''))=? "
-                "AND id<>? AND deleted_at IS NULL AND blocked=0",
-                (target_public_id, user["id"]),
-            ).fetchone()
-            if not target:
-                raise ApiError(404, "Пользователь не найден")
-            from backend.public_profiles import require_contact
-            require_contact(con, target["id"], "quote")
-            estimate_key = "estimate:" + quote_id + ":" + target["id"]
-            existing = con.execute(
-                "SELECT id FROM chat_conversations WHERE direct_key=?", (estimate_key,)
-            ).fetchone()
-            conversation_id = _new_conversation(
-                con, "estimate", "Смета: " + _text(quote["title"], 150),
-                user["id"], quote_id=quote_id, direct_key=estimate_key
-            )
-            _add_member(con, conversation_id, user["id"], "owner")
-            _add_member(con, conversation_id, target["id"], "client")
-            if not existing:
-                public_url = ORIGIN + "/app?quote=" + urllib.parse.quote(str(quote["public_token"]), safe="")
-                _add_message(
-                    con, conversation_id, user["id"], "user",
-                    "Создано обсуждение сметы «" + _text(quote["title"], 150) +
-                    "». Клиентскую версию можно открыть по ссылке: " + public_url,
-                    {"event": "estimate_chat_created", "quote_id": quote_id},
-                )
+        from backend.public_profiles import id_from_public
+        target_id = id_from_public("SM-" + target_public_id)
+        if "version" in data and type(data["version"]) is not int:
+            raise ApiError(409, "Версия сметы изменилась. Выберите её заново")
+        delivery = send_quote_to_user(
+            con, quote["workspace_id"], quote_id, user["id"], target_id,
+            version=data.get("version") if "version" in data else None, handler=handler,
+        )
         return handler.send_json(200, {"chat": {
-            "id": conversation_id, "kind": "estimate", "subject": "Смета: " + quote["title"],
-            "quote_id": quote_id, "partner_name": target["name"],
-            "partner_public_id": make_public_id(target["id"]),
+            "id": delivery["conversation_id"], "kind": "estimate", "subject": "Смета: " + delivery["title"],
+            "quote_id": quote_id, "quote_version": delivery["quote_version"], "replayed": delivery["replayed"],
+            "partner_name": delivery["recipient_name"],
+            "partner_public_id": make_public_id(delivery["recipient_id"]),
         }})
     if path == "/api/profile/object-chats" and method == "GET":
         rows = con.execute(

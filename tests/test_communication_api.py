@@ -133,13 +133,19 @@ class CommunicationApiTests(unittest.TestCase):
                 (quote_id,self.alice_id,"Ремонт кухни","Борис","Отделка стен",1250000,
                  "sent",public_token,app.now(),app.now(),workspace_id,1,"sent"),
             )
+            con.execute(
+                "INSERT INTO quote_versions VALUES(?,?,?,?,?,?)",
+                (quote_id, 1, json.dumps({"title": "Ремонт кухни", "client": "Борис", "description": "Отделка стен",
+                                         "currency": "RUB", "amount_kopecks": 1250000, "version": 1, "items": []}),
+                 self.alice_id, "Reviewed", app.now()),
+            )
             delivery = community.send_quote_to_user(
                 con, workspace_id, quote_id, self.alice_id, self.bob_id,
-                "Ремонт кухни", self.base + "/?quote=" + public_token, 1,
+                version=1, origin=self.base,
             )
             self.assertEqual(delivery["recipient_id"], self.bob_id)
             self.assertEqual(delivery["quote_version"], 1)
-            self.assertEqual(delivery["public_url"], self.base + "/?quote=" + public_token)
+            self.assertEqual(delivery["public_url"], self.base + "/app?quote=" + public_token)
             chat_id = delivery["conversation_id"]
             members = con.execute(
                 "SELECT user_id FROM chat_members WHERE conversation_id=? ORDER BY user_id",

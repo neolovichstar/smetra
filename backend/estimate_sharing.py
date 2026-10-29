@@ -74,6 +74,7 @@ def _existing_selection(snapshot):
 
 def sender_route(service,method,parts,data):
     if method=="POST" and parts==[]:
+        service.revalidate_write_access()
         service.h.throttle("share-send:"+service.user["id"],5,3600)
         if service.role not in ("owner","admin","manager"):
             raise DomainError(403,"Недостаточно прав для отправки смет")
@@ -89,6 +90,12 @@ def sender_route(service,method,parts,data):
         if row["expires_at"] and row["expires_at"] <= stamp():
             raise DomainError(410,"Срок согласования истёк")
         owner, snapshot=_load_snapshot(service.con,dict(quote_id=row["id"],workspace_id=service.wid,quote_version=row["published_version"]))
+        service.con.execute(
+            "UPDATE estimate_shares SET status='revoked',revoked_at=? "
+            "WHERE workspace_id=? AND quote_id=? AND quote_version=? "
+            "AND recipient_email=? AND status='active' AND expires_at<=?",
+            (stamp(),service.wid,row["id"],row["published_version"],to,stamp()),
+        )
         old=service.con.execute(
             "SELECT id FROM estimate_shares WHERE workspace_id=? AND quote_id=? "
             "AND quote_version=? AND recipient_email=? AND status='active'",
@@ -100,7 +107,10 @@ def sender_route(service,method,parts,data):
         token=secrets.token_urlsafe(32)
         token_hash=hashlib.sha256(token.encode()).hexdigest()
         expires=stamp()+14*86400
-        recipient=service.con.execute(
+        # Account lookup crosses workspaces by an explicitly supplied address.
+        # Keep it on the identity connection; runtime RLS must not be widened to
+        # reveal other users or their verification state.
+        recipient=service.global_con.execute(
             "SELECT id FROM users WHERE email=? AND deleted_at IS NULL AND blocked=0 "
             "AND email_verified_at IS NOT NULL",(to,),
         ).fetchone()
@@ -157,6 +167,7 @@ def sender_route(service,method,parts,data):
                                       "status","created_at","expires_at")
         },"response":dict(response) if response else None}
     if method=="DELETE" and len(parts)==1:
+        service.revalidate_write_access()
         service.h.throttle("share-revoke:"+service.user["id"],30,3600)
         if service.role not in ("owner","admin","manager"):
             raise DomainError(403,"Недостаточно прав")
@@ -195,13 +206,21 @@ def recipient_route(handler,con,method,path):
     if parts==[""] and method=="GET":
         rows=con.execute(
             "SELECT s.id,s.quote_id,s.quote_version,s.status,s.created_at,"
-            "s.expires_at,q.title,q.currency FROM estimate_shares s "
-            "JOIN quotes q ON q.id=s.quote_id WHERE s.recipient_email=? "
+            "s.expires_at,v.snapshot FROM estimate_shares s "
+            "JOIN quotes q ON q.id=s.quote_id AND q.workspace_id=s.workspace_id "
+            "JOIN quote_versions v ON v.quote_id=q.id AND v.version=s.quote_version "
+            "WHERE s.recipient_email=? "
             "AND s.status='active' AND s.expires_at>? "
             "AND q.published_version=s.quote_version ORDER BY s.created_at DESC LIMIT 60",
             (user["email"].lower(),stamp()),
         ).fetchall()
-        return 200,{"inbox":[dict(r) for r in rows]}
+        inbox = []
+        for row in rows:
+            item = dict(row)
+            snapshot = json.loads(item.pop("snapshot"))
+            item.update(title=snapshot["title"], currency=snapshot["currency"])
+            inbox.append(item)
+        return 200,{"inbox":inbox}
     if not parts or parts==[""]:
         raise DomainError(404,"Сметра не найдена")
     share=_recipient_record(handler,con,user,parts[0])
@@ -219,26 +238,38 @@ def recipient_route(handler,con,method,path):
     if len(parts)!=2 or parts[1] not in ("selection","approve") or method!="POST":
         raise DomainError(404,"Действие не найдено")
     data=handler.body()
-    expected=data.get("revision")
-    if type(expected) is not int or expected!=(saved["revision"] if saved else 0):
-        raise DomainError(409,"Смета изменена в другом устройстве. Обновите страницу")
-    if saved and saved["status"]!="draft":
-        raise DomainError(409,"Ответ уже отправлен")
-    if parts[1]=="selection":
-        selected_total,selection=_selection(snapshot,data.get("included_optional"))
-        status="draft"
-    else:
-        selected_total=total
-        # Equal totals are not equal scopes: clients can swap identically
-        # priced optional lines. Only the exact published set may be approved
-        # without a new contractor-reviewed version.
-        unchanged = selection == _existing_selection(snapshot)
-        status="approved" if data.get("action")=="approve" and unchanged and total==snapshot["amount_kopecks"] else "changes_requested"
-        if data.get("action") not in ("approve","request_changes"):
-            raise DomainError(400,"Выберите действие по согласованию")
-    now=stamp()
     from backend.business import transaction
-    with transaction(con,lock_scopes=(f"workspace:{share['workspace_id']}",)):
+    with transaction(con,lock_scopes=(f"workspace:{share['workspace_id']}", f"user:{user['id']}")):
+        # Authentication, invitation, published version and response may all
+        # change while this request waits for the workspace lock.
+        user=handler.auth(con)
+        share=_recipient_record(handler,con,user,parts[0])
+        quote,snapshot=_load_snapshot(con,share)
+        if (quote["approval_state"] not in ("sent","viewed","changes_requested")
+                or (quote["expires_at"] and quote["expires_at"] <= stamp())):
+            raise DomainError(409,"Смета уже согласована, отозвана или обновлена")
+        saved=con.execute("SELECT * FROM estimate_share_responses WHERE share_id=?",
+                          (share["id"],)).fetchone()
+        selection=json.loads(saved["selected_optional"]) if saved else _existing_selection(snapshot)
+        total,selection=_selection(snapshot,selection)
+        expected=data.get("revision")
+        if type(expected) is not int or expected!=(saved["revision"] if saved else 0):
+            raise DomainError(409,"Смета изменена в другом устройстве. Обновите страницу")
+        if saved and saved["status"]!="draft":
+            raise DomainError(409,"Ответ уже отправлен")
+        if parts[1]=="selection":
+            selected_total,selection=_selection(snapshot,data.get("included_optional"))
+            status="draft"
+        else:
+            selected_total=total
+            # Equal totals are not equal scopes: clients can swap identically
+            # priced optional lines. Only the exact published set may be approved
+            # without a new contractor-reviewed version.
+            unchanged = selection == _existing_selection(snapshot)
+            status="approved" if data.get("action")=="approve" and unchanged and total==snapshot["amount_kopecks"] else "changes_requested"
+            if data.get("action") not in ("approve","request_changes"):
+                raise DomainError(400,"Выберите действие по согласованию")
+        now=stamp()
         # Cross-instance optimistic revision guard on the recipient's only
         # writable response; PostgreSQL RLS remains enforced for runtime.
         if saved:
