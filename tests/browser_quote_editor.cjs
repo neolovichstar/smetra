@@ -14,7 +14,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  const fill=(selector,value)=>evaluate(`{const input=document.querySelector(${JSON.stringify(selector)});input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}`);
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
- await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-submit')&&typeof api==='function'");
+ await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-submit')&&typeof api==='function'&&typeof window.SmetraEmailCodeAvailable==='boolean'");
  const emailSignupShown=await evaluate("(()=>{const el=document.querySelector('#email-disclosure');return !!el&&!el.classList.contains('hidden')&&getComputedStyle(el).display!=='none'&&el.getClientRects().length>0})()");
  if(emailSignupShown){
   await fill('#name','Проверка редактора');
