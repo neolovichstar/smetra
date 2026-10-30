@@ -267,4 +267,4 @@ jobs:
               con.execute("CREATE ROLE smetra_ci_runtime LOGIN PASSWORD 'fixture-only' IN ROLE smetra_runtime")
           PY
       - name: Verify pool saturation, atomic fallback limits, SSE durability and RLS
-        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls tests.test_backend_security_delivery.PostgresChatPrivacyTests tests.test_public_profiles_postgres tests.test_assistant_delivery_postgres -v
+        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls tests.test_backend_security_delivery.PostgresChatPrivacyTests tests.test_public_profiles_postgres tests.test_assistant_delivery_postgres tests.test_assistant_action_postgres -v

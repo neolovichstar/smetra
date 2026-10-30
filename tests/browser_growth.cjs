@@ -15,7 +15,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  const shot=async name=>{fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/'+name+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'))};
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
- await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-form')?.onsubmit");
+ await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-form')?.onsubmit&&typeof window.SmetraEmailCodeAvailable==='boolean'");
  const emailSignupShown=await evaluate("(()=>{const el=document.querySelector('#email-disclosure');return !!el&&!el.classList.contains('hidden')&&getComputedStyle(el).display!=='none'&&el.getClientRects().length>0})()");
  if(emailSignupShown){
   await fill('#name','Growth QA');

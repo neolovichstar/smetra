@@ -1024,6 +1024,31 @@ def prepare(service, name, args):
             + str(args.get("title") or args.get("name") or entity)[:120]
         )
     args["_conversation_id"] = getattr(service, "assistant_conversation_id", None)
+    # Repeated model turns can describe the same action with defaults or private
+    # fields in a different shape. Reuse only an identical, still-pending action
+    # for this user, workspace, conversation and source revision.
+    canonical = json.dumps(args, sort_keys=True, ensure_ascii=False, allow_nan=False)
+    candidates = [
+        (values[0], values[4], values[5])
+        for values in getattr(service, "assistant_deferred_actions", [])
+        if values[3] == name
+    ]
+    candidates.extend(
+        (row["id"], row["arguments"], row["summary"])
+        for row in service.con.execute(
+            "SELECT id,arguments,summary FROM assistant_actions "
+            "WHERE workspace_id=? AND user_id=? AND tool=? AND status='pending' "
+            "AND expires_at>? ORDER BY created_at DESC,id LIMIT 50",
+            (service.wid, service.user["id"], name, stamp()),
+        )
+    )
+    for existing_id, stored, existing_summary in candidates:
+        if json.dumps(json.loads(stored), sort_keys=True, ensure_ascii=False, allow_nan=False) == canonical:
+            return visible_result(service, {
+                "id": existing_id, "tool": name, "summary": existing_summary,
+                "arguments": {key: value for key, value in args.items() if not key.startswith("_")},
+                "preview": args.get("_preview"), "status": "pending",
+            })
     action_id = identity()
     action_values = (
             action_id,
@@ -1072,6 +1097,7 @@ def confirm(service, action_id):
 def _confirm(service, action_id):
     service.write_access()
     with transaction(service.con):
+        service.revalidate_write_access()
         row = service.con.execute(
             "SELECT * FROM assistant_actions WHERE id=? AND workspace_id=? AND user_id=?" +
             (" FOR UPDATE" if getattr(service.con, "is_postgres", False) else ""),
@@ -1446,7 +1472,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                     else:
                         action = prepare(service, name, args)
                         proposal_fingerprints[fingerprint] = action
-                        actions.append(action)
+                        if not any(item["id"] == action["id"] for item in actions):
+                            actions.append(action)
                     result = {"requires_confirmation": True, "proposal": action}
             except (DomainError, ValueError, KeyError, TypeError, RecursionError) as error:
                 result = {"error": error.message if isinstance(error, DomainError) else "Некорректные параметры инструмента"}
