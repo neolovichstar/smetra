@@ -43,7 +43,7 @@ const f=JSON.parse(fs.readFileSync(process.env.SMETRA_PROFILE_FIXTURE||'data/pro
  await q.locator('#comms-messages').getByText('Здравствуйте, хочу обсудить ремонт',{exact:true}).last().waitFor();checks.push('message intent survives guest login and text is delivered');
  await p.goto(base+f.profiles[1].url);await p.getByRole('link',{name:'Отправить смету',exact:true}).click();await p.getByRole('dialog').waitFor();
  assert(!(await p.locator('#profile-quote-select').textContent()).includes('черновик'));
- await p.getByRole('button',{name:'Отправить смету',exact:true}).click();await p.getByRole('dialog').waitFor({state:'detached'});await p.locator('#comms-messages').getByText('Создано обсуждение сметы',{exact:false}).first().waitFor();
+ await p.getByRole('button',{name:'Отправить смету',exact:true}).click();await p.getByRole('dialog').waitFor({state:'detached'});await p.locator('#comms-messages').getByText('Смета «'+f.quote.title+'» — версия',{exact:false}).first().waitFor();
  const chats=(await (await anon.request.get(base+'/api/profile/chats')).json()).chats;assert(chats.some(c=>c.quote_id===f.quote.id));checks.push('published quote chooser excludes drafts and delivers recipient chat');
  await p.goto(base+'/app#premium');await p.locator('.premium-connect img').first().waitFor();
  assert.equal(await p.locator('.premium-connect img').count(),2);await p.waitForFunction(()=>[...document.querySelectorAll('.premium-connect img')].every(i=>i.complete&&i.naturalWidth>0));

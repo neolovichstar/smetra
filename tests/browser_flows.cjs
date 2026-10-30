@@ -27,7 +27,7 @@ const assert = require('node:assert/strict');
   // When mailbox verification is not configured, the production UI correctly
   // hides password signup. Seed ONLY this isolated localhost QA browser session
   // through the loopback legacy endpoint; never relax the actual auth UI.
-  const emailSignupShown=await evaluate("!document.querySelector('#email-disclosure').classList.contains('hidden')");
+  await until("typeof window.SmetraEmailCodeAvailable==='boolean'");const emailSignupShown=await evaluate("!document.querySelector('#email-disclosure').classList.contains('hidden')");
   if(emailSignupShown){
     await fill('#name','Проверка продукта');await fill('#email','browser-'+Date.now()+'@test.invalid');
     await fill('#password','long secure password');await click('#legal-consent');await click('#auth-submit');
