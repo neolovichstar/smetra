@@ -8,6 +8,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 
@@ -334,7 +335,7 @@ def store_avatar(con, user, raw):
                 # Forward import paths only; the decoder gets no app credentials.
                 "PYTHONPATH": os.pathsep.join(str(Path(p).resolve()) for p in sys.path),
             },
-            cwd="/tmp",
+            cwd=tempfile.gettempdir(),
             check=False,
         )
     except (subprocess.TimeoutExpired, OSError):

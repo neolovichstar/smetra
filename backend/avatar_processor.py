@@ -6,11 +6,15 @@ import warnings
 
 
 def main():
-    import resource
-
-    resource.setrlimit(resource.RLIMIT_AS, (384 * 1024 * 1024,) * 2)
-    resource.setrlimit(resource.RLIMIT_CPU, (4, 4))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    try:
+        import resource
+    except ImportError:
+        # Windows development hosts have no rlimits; the parent's timeout still applies.
+        resource = None
+    if resource:
+        resource.setrlimit(resource.RLIMIT_AS, (384 * 1024 * 1024,) * 2)
+        resource.setrlimit(resource.RLIMIT_CPU, (4, 4))
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     from PIL import Image, ImageOps
 
     Image.MAX_IMAGE_PIXELS = 16_000_000
