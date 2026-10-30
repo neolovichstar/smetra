@@ -4,6 +4,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -556,6 +557,44 @@ class FlowTests(unittest.TestCase):
         finally:
             self.mod.mail = old_mail
             os.environ.pop("SMTP_HOST", None)
+
+    def test_failed_verification_mail_leaves_no_signup_in_analytics(self):
+        def broken_mail(address, subject, body):
+            raise OSError("smtp down")
+
+        def scalar(sql):
+            con = sqlite3.connect(os.environ["DB_PATH"])
+            try:
+                return con.execute(sql).fetchone()
+            finally:
+                con.close()
+
+        def signups():
+            return (scalar("SELECT count(*) FROM events WHERE name='signup_completed'")[0],
+                    scalar("SELECT count(*) FROM growth_events WHERE name='signup_completed'")[0])
+
+        before = signups()
+        old_mail = self.mod.mail
+        # This attempt must not use up the per-IP signup limit of the other flow tests.
+        limit_key = "register:127.0.0.1"
+        old_limit = self.mod.RATE.get(limit_key)
+        self.mod.mail = broken_mail
+        os.environ["SMTP_HOST"] = "test.smtp.invalid"
+        try:
+            status, body = self.request("/api/auth/register", "POST", {
+                "email": "mail-down@sample.test", "password": "long password secure", "name": "Проверка",
+                "legal_acceptance": True, "legal_version": "2026-10-19-registration-v1",
+            })
+        finally:
+            self.mod.mail = old_mail
+            os.environ.pop("SMTP_HOST", None)
+            if old_limit is None:
+                self.mod.RATE.pop(limit_key, None)
+            else:
+                self.mod.RATE[limit_key] = old_limit
+        self.assertEqual(status, 503, body)
+        self.assertEqual(signups(), before, "a rolled back signup must not be counted")
+        self.assertIsNone(scalar("SELECT id FROM users WHERE email='mail-down@sample.test'"))
 
 
 if __name__ == "__main__":
