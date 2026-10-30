@@ -200,6 +200,19 @@ table td small{display:block;margin-top:2px;color:var(--text-3);font-size:var(--
 .estimate-table td:nth-child(n+2),.estimate-table th:nth-child(n+2){text-align:right;white-space:nowrap}
 .estimate-table td:first-child{min-width:220px}
 .estimate-table tr.excluded td{color:var(--text-3);text-decoration:line-through;text-decoration-color:var(--line-strong)}
+/* Phone: estimate rows become cards in the cabinet and on the client page — name, then quantity × price and the line total. */
+@media (max-width:600px){
+  .estimate-table,.estimate-table tbody{display:block;width:100%}
+  .estimate-table thead{display:none}
+  .estimate-table tr{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;column-gap:8px;row-gap:4px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .estimate-table tr:last-child{border-bottom:0}
+  .estimate-table td,.estimate-table td:nth-child(n+2){display:block;min-width:0;padding:0;border:0;text-align:left;white-space:normal}
+  .estimate-table td:first-child{grid-column:1/-1;min-width:0}
+  .estimate-table td:nth-child(2),.estimate-table td:nth-child(3){color:var(--text-2);font-size:var(--fs-14);white-space:nowrap}
+  .estimate-table td:nth-child(3)::before{content:'× '}
+  .estimate-table td:nth-child(4){text-align:right;font-weight:600;white-space:nowrap}
+  .table-wrap:has(> .estimate-table){overflow:visible}
+}
 .quote-summary{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-4);margin-top:var(--s-4);padding-top:var(--s-4);border-top:1px solid var(--line)}
 .quote-summary span{color:var(--text-2)}
 .quote-summary strong{font-size:var(--fs-24);font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}

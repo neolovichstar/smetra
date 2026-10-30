@@ -1141,8 +1141,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "VALUES(?,?,?,?,?)",
                     (uid(), user_id, REGISTRATION_CONSENT_VERSION, now(), "registration"),
                 )
-                event(con, user_id, "signup_completed")
-                revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
             except sqlite3.IntegrityError:
                 raise ApiError(409, "Такая почта уже зарегистрирована")
             if os.getenv("SMTP_HOST"):
@@ -1156,6 +1154,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     con.execute("DELETE FROM users WHERE id=?", (user_id,))
                     raise ApiError(503, "Не удалось отправить письмо. Попробуйте позже")
+            # Count the signup only once the account survives the mail step.
+            event(con, user_id, "signup_completed")
+            revenue.record(con,user_id,'signup_completed',key='signup:'+user_id)
             return self.login_response(con, user_id)
         if path == "/api/auth/login" and method == "POST":
             self.throttle("login:" + self.client_address[0], 10, 300)

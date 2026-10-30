@@ -232,8 +232,8 @@ class EmailOTPTests(unittest.TestCase):
     def test_frontend_has_paste_and_accessible_digits(self):
         from pathlib import Path
         web=Path(__file__).resolve().parents[1]/"apps/web"
-        html=(web/"app.html").read_text()
-        js=(web/"auth-email.js").read_text()
+        html=(web/"app.html").read_text(encoding="utf-8")
+        js=(web/"auth-email.js").read_text(encoding="utf-8")
         self.assertEqual(html.count('inputmode="numeric"'),6)
         self.assertIn("clipboardData",js)
         self.assertIn('autocomplete="one-time-code"',html)

@@ -427,6 +427,7 @@
 .hub-head{margin-bottom:var(--s-5)}
 .hub-head h1{font-size:var(--fs-28);font-weight:600;letter-spacing:var(--tracking-tight)}
 .hub-head p{margin-top:6px;color:var(--text-2);font-size:var(--fs-14)}
+.hub-head:has(>.btn){display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s-3)}
 .hub-card{display:flex;flex-direction:column;padding:var(--s-5);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1)}
 .hub-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);padding:var(--s-4) 0;border-top:1px solid var(--line)}
 .hub-row:first-child{padding-top:0;border-top:0}
@@ -464,19 +465,6 @@
 }
 /* Money stays on one line on phones instead of dropping the currency sign. */
 .business-stats .stat strong{font-size:clamp(17px,4.8vw,var(--fs-24));overflow-wrap:normal;white-space:nowrap}
-/* Phone: estimate rows become cards — name, then quantity × price and the line total. */
-@media (max-width:600px){
-  #content .estimate-table,#content .estimate-table tbody{display:block;width:100%}
-  #content .estimate-table thead{display:none}
-  #content .estimate-table tr{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;column-gap:8px;row-gap:4px;padding:12px 14px;border-bottom:1px solid var(--line)}
-  #content .estimate-table tr:last-child{border-bottom:0}
-  #content .estimate-table td{display:block;min-width:0;padding:0;border:0;text-align:left;white-space:normal}
-  #content .estimate-table td:first-child{grid-column:1/-1;min-width:0}
-  #content .estimate-table td:nth-child(2),#content .estimate-table td:nth-child(3){color:var(--text-2);font-size:var(--fs-14);white-space:nowrap}
-  #content .estimate-table td:nth-child(3)::before{content:'× '}
-  #content .estimate-table td:nth-child(4){text-align:right;font-weight:600;white-space:nowrap}
-  #content .table-wrap:has(> .estimate-table){overflow:visible}
-}
 /* Phone: quote actions — the main action spans the row, the rest share an even grid. */
 @media (max-width:600px){
   #quote-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}

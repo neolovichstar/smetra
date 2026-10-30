@@ -23,6 +23,12 @@
   const day = unix => (unix ? new Date(unix * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
   const dayTime = unix => (unix ? new Date(unix * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
   const isoDay = value => new Date(value + "T00:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" });
+  // Russian plural: 1 товар, 2 товара, 5 товаров.
+  const plural = (n, one, few, many) => {
+    const tens = Math.abs(n) % 100, units = tens % 10;
+    return tens > 10 && tens < 20 ? many : units === 1 ? one : units > 1 && units < 5 ? few : many;
+  };
+  const initials = text => String(text || "").split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("") || "·";
 
   /* ---------- icons (24 grid, 1.6 stroke) ---------- */
   const ICONS = {
@@ -204,15 +210,46 @@
   };
   const seg = (name, value, options) => `<div class="pc-seg" role="group" aria-label="${esc(name)}">${options.map(([v, label]) => `<button type="button" data-value="${v}" aria-pressed="${String(v) === String(value)}">${esc(label)}</button>`).join("")}</div>`;
   const note = (kind, iconName, html) => `<div class="pc-note is-${kind}">${ico(iconName)}<div>${html}</div></div>`;
-  const kpi = (label, value, hint = "", muted = false) => `<div class="pc-kpi${muted ? " is-muted" : ""}"><dt>${esc(label)}</dt><dd>${value}</dd>${hint ? `<small>${hint}</small>` : ""}</div>`;
-  const codeBlock = (title, code, lang = "") => `<div class="p-code"><div class="p-code-head"><span>${esc(title)}</span><button class="p-copy" type="button" data-copy>${icon("copy")}Копировать</button></div><pre${lang ? ` data-lang="${lang}"` : ""}><code>${esc(code)}</code></pre></div>`;
-  const bindCommon = root => {
-    $$("[data-copy]", root).forEach(button => button.addEventListener("click", async () => {
-      const text = button.dataset.copyText || button.closest(".p-code")?.querySelector("code")?.textContent || "";
-      if (await copyText(text)) { button.classList.add("is-done"); setTimeout(() => button.classList.remove("is-done"), 1400); }
-    }));
-    $$("[data-retry]", root).forEach(button => button.addEventListener("click", () => render(true)));
+  // A small daily sparkline under a KPI; drawn only from the server timeline.
+  const spark = (timeline, key) => {
+    const values = (timeline || []).map(row => Number(row[key]) || 0);
+    if (values.length < 2 || !values.some(Boolean)) return "";
+    const max = Math.max(...values), w = 120, h = 28;
+    const points = values.map((v, i) => `${(i / (values.length - 1) * w).toFixed(1)},${(h - 2 - v / max * (h - 4)).toFixed(1)}`).join(" ");
+    return `<svg class="pc-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline data-series-stroke="${key}" points="${points}"/></svg>`;
   };
+  const kpi = (label, value, hint = "", muted = false, extra = "") => `<div class="pc-kpi${muted ? " is-muted" : ""}"><dt>${esc(label)}</dt><dd>${value}</dd>${hint ? `<small>${hint}</small>` : ""}${extra}</div>`;
+  const codeBlock = (title, code, lang = "") => `<div class="p-code"><div class="p-code-head"><span>${esc(title)}</span><button class="p-copy" type="button" data-copy>${icon("copy")}Копировать</button></div><pre${lang ? ` data-lang="${lang}"` : ""}><code>${esc(code)}</code></pre></div>`;
+  // Pages redraw parts of themselves and call this again; each control is bound once.
+  const bindCommon = root => {
+    $$("[data-copy]:not([data-bound])", root).forEach(button => {
+      button.dataset.bound = "";
+      button.addEventListener("click", async () => {
+        const text = button.dataset.copyText || button.closest(".p-code")?.querySelector("code")?.textContent || "";
+        if (await copyText(text)) { button.classList.add("is-done"); setTimeout(() => button.classList.remove("is-done"), 1400); }
+      });
+    });
+    $$("[data-retry]:not([data-bound])", root).forEach(button => {
+      button.dataset.bound = "";
+      button.addEventListener("click", () => render(true));
+    });
+    $$("[data-series-stroke]", root).forEach(line => { line.style.stroke = SERIES[line.dataset.seriesStroke]?.color || "currentColor"; });
+  };
+  // Styled confirmation instead of the browser's native dialog.
+  const confirmDialog = (title, text, action, danger = true) => new Promise(resolve => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "pc-dialog pc-confirm";
+    dialog.setAttribute("aria-labelledby", "confirm-title");
+    dialog.innerHTML = `<form method="dialog"><h2 id="confirm-title">${esc(title)}</h2><p class="pc-text">${esc(text)}</p>
+      <div class="pc-dialog-actions"><button class="p-btn" type="button" data-cancel>Отмена</button><button class="p-btn ${danger ? "is-danger" : "is-primary"}" type="submit" value="ok">${esc(action)}</button></div></form>`;
+    document.body.append(dialog);
+    let answer = false;
+    $("[data-cancel]", dialog).addEventListener("click", () => dialog.close());
+    $("form", dialog).addEventListener("submit", () => { answer = true; });
+    dialog.addEventListener("close", () => { dialog.remove(); resolve(answer); });
+    dialog.showModal();
+    $("[data-cancel]", dialog).focus();
+  });
 
   const PAGES = {};
   const render = async (fresh = false) => {
@@ -244,8 +281,10 @@
   };
   const chart = (host, timeline, keys) => {
     let shown = new Set(keys.slice(0, 3));
+    let drawnWidth = 0;
     const draw = () => {
       const width = host.clientWidth || 600, height = width < 520 ? 200 : 240;
+      drawnWidth = width;
       const pad = { l: 36, r: 8, t: 8, b: 24 };
       const w = width - pad.l - pad.r, h = height - pad.t - pad.b;
       const active = keys.filter(key => shown.has(key));
@@ -255,6 +294,8 @@
       const y = v => pad.t + h - v / niceMax * h;
       const ticks = [0, 1, 2, 3, 4].map(i => niceMax / 4 * i);
       const every = Math.ceil(timeline.length / (width < 520 ? 4 : 7));
+      // The last date is always labelled; a regular label too close to it is dropped.
+      const labelled = i => i === timeline.length - 1 || (i % every === 0 && timeline.length - 1 - i >= every * 0.6);
       const empty = timeline.every(row => keys.every(key => !row[key]));
       const legend = `<div class="pc-legend">${keys.map(key => `<button type="button" data-series="${key}" aria-pressed="${shown.has(key)}"><i style-c="${key}"></i>${esc(SERIES[key].label)}</button>`).join("")}</div>`;
       if (empty) {
@@ -262,13 +303,15 @@
         return;
       }
       host.innerHTML = `${legend}<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="График по дням: ${esc(active.map(k => SERIES[k].label).join(", "))}">
+        <defs>${active.map(key => `<linearGradient id="pc-fill-${host.id}-${key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${SERIES[key].color}" stop-opacity=".22"/><stop offset="1" stop-color="${SERIES[key].color}" stop-opacity="0"/></linearGradient>`).join("")}</defs>
         <g class="grid">${ticks.map(t => `<line x1="${pad.l}" x2="${width - pad.r}" y1="${y(t)}" y2="${y(t)}"/>`).join("")}</g>
         <g class="axis">${ticks.map(t => `<text x="${pad.l - 8}" y="${y(t) + 4}" text-anchor="end">${num(Math.round(t))}</text>`).join("")}
-        ${timeline.map((row, i) => (i % every === 0 || i === timeline.length - 1) ? `<text x="${x(i)}" y="${height - 4}" text-anchor="${i === 0 ? "start" : i === timeline.length - 1 ? "end" : "middle"}">${esc(isoDay(row.date))}</text>` : "").join("")}</g>
+        ${timeline.map((row, i) => labelled(i) ? `<text x="${x(i)}" y="${height - 4}" text-anchor="${i === 0 ? "start" : i === timeline.length - 1 ? "end" : "middle"}">${esc(isoDay(row.date))}</text>` : "").join("")}</g>
         ${active.map(key => {
           const points = timeline.map((row, i) => `${x(i).toFixed(1)},${y(row[key] || 0).toFixed(1)}`);
-          return `<path class="area" fill="${SERIES[key].color}" d="M${x(0)},${y(0)} L${points.join(" L")} L${x(timeline.length - 1)},${y(0)} Z"/><path class="series" stroke="${SERIES[key].color}" d="M${points.join(" L")}"/>`;
+          return `<path class="area" fill="url(#pc-fill-${host.id}-${key})" d="M${x(0)},${y(0)} L${points.join(" L")} L${x(timeline.length - 1)},${y(0)} Z"/><path class="series" stroke="${SERIES[key].color}" d="M${points.join(" L")}"/>`;
         }).join("")}
+        ${active.map(key => { const last = timeline.length - 1; return `<circle class="dot" cx="${x(last)}" cy="${y(timeline[last][key] || 0)}" r="3" fill="${SERIES[key].color}"/>`; }).join("")}
         <line class="cursor" x1="0" x2="0" y1="${pad.t}" y2="${pad.t + h}" visibility="hidden"/>
       </svg><div class="pc-tip" hidden></div>
       <table class="visually-hidden"><caption>Данные графика</caption><thead><tr><th>Дата</th>${active.map(k => `<th>${esc(SERIES[k].label)}</th>`).join("")}</tr></thead><tbody>${timeline.map(row => `<tr><td>${esc(row.date)}</td>${active.map(k => `<td>${row[k] || 0}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
@@ -296,7 +339,11 @@
       svg.addEventListener("pointerleave", () => { tip.hidden = true; cursor.setAttribute("visibility", "hidden"); });
     };
     draw();
-    const resize = new ResizeObserver(() => draw());
+    // Redraw only when the width changes; stop once the page has been replaced.
+    const resize = new ResizeObserver(() => {
+      if (!host.isConnected) { resize.disconnect(); return; }
+      if (host.clientWidth && host.clientWidth !== drawnWidth) draw();
+    });
     resize.observe(host);
   };
 
@@ -315,9 +362,9 @@
     host.innerHTML = pageHead("Обзор", `Данные за ${period} дн. Время — UTC. Переходы, регистрации и оплаты фиксирует сервер «Сметры».`, seg("Период", period, [[7, "7 дн."], [30, "30 дн."], [90, "90 дн."]])) + `
       <section class="pc-block" aria-labelledby="kpi-funnel"><h2 class="visually-hidden" id="kpi-funnel">Привлечение</h2>
         <dl class="pc-kpis">
-          ${kpi("Переходы в «Сметру»", num(report.visits))}
-          ${kpi("Регистрации", num(report.registrations), "конверсия " + pct(report.registrations, report.visits))}
-          ${kpi("Подтверждённые платежи", num(paid.payments))}
+          ${kpi("Переходы в «Сметру»", num(report.visits), "по дням за период", false, spark(report.timeline, "visits"))}
+          ${kpi("Регистрации", num(report.registrations), "конверсия " + pct(report.registrations, report.visits), false, spark(report.timeline, "registrations"))}
+          ${kpi("Оплаты подписок", num(paid.payments), "подтверждённые платежи", false, spark(report.timeline, "payments"))}
           ${kpi("Платящие аккаунты", num(paid.paying_accounts), "из регистраций " + pct(paid.paying_accounts, report.registrations))}
         </dl>
       </section>
@@ -605,23 +652,23 @@
         </div>
         ${selected.length ? `<div class="pc-bulk" role="region" aria-label="Действия с выбранными"><strong>Выбрано: ${selected.length}</strong>
           <button class="p-btn is-small" type="button" data-bulk="off">Снять с продажи</button><button class="p-btn is-small" type="button" data-bulk="on">Вернуть в продажу</button><button class="p-btn is-small is-quiet" type="button" data-bulk="clear">Сбросить</button></div>` : ""}
-        ${state.items.length ? `<div class="pc-table-wrap"><table class="pc-table"><thead><tr>
+        ${state.items.length ? `<div class="pc-table-wrap"><table class="pc-table pc-catalog-table"><thead><tr>
           <th class="check"><input class="pc-check" type="checkbox" id="cat-all" aria-label="Выбрать все на странице" ${list.length && selected.length === list.length ? "checked" : ""}></th>
-          <th>Название</th><th>SKU</th><th class="r">Цена</th><th>Доступность</th><th>Обновлён</th><th>Ссылка</th><th>Публикация</th><th></th></tr></thead><tbody>
+          <th>Название</th><th>SKU</th><th class="r">Цена</th><th class="pc-col-updated">Обновлён</th><th class="pc-col-link">Ссылка</th><th>Публикация</th><th><span class="visually-hidden">Действия</span></th></tr></thead><tbody>
           ${list.map(item => {
+            // The publication pill already says when an item is out of stock.
             const [kind, text] = publication(item, verified);
             let path = item.url; try { path = new URL(item.url).pathname; } catch { /* keep */ }
-            return `<tr class="${state.selected.has(item.sku) ? "is-selected" : ""}">
+            return `<tr class="${state.selected.has(item.sku) ? "is-selected" : ""}${item.available ? "" : " is-off"}">
               <td class="check"><input class="pc-check" type="checkbox" data-sku="${esc(item.sku)}" aria-label="Выбрать ${esc(item.name)}" ${state.selected.has(item.sku) ? "checked" : ""}></td>
               <td class="primary clip" title="${esc(item.name)}">${esc(item.name)}</td>
               <td class="mono" data-label="SKU">${esc(item.sku)}</td>
               <td class="r" data-label="Цена">${rub(item.price_kopecks)}</td>
-              <td data-label="Доступность">${item.available ? "В наличии" : '<span class="muted">Нет в наличии</span>'}</td>
-              <td class="muted" data-label="Обновлён">${day(item.updated_at)}</td>
-              <td class="clip" data-label="Ссылка"><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(path)}</a></td>
+              <td class="muted pc-col-updated" data-label="Обновлён">${day(item.updated_at)}</td>
+              <td class="clip pc-col-link" data-label="Ссылка"><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" title="${esc(item.url)}">${esc(path)}</a></td>
               <td data-label="Публикация"><span class="p-pill ${kind}">${esc(text)}</span></td>
-              <td class="r"><button class="p-btn is-small is-quiet" type="button" data-edit="${esc(item.sku)}">Изменить</button></td></tr>`;
-          }).join("") || `<tr><td colspan="9" class="muted">На этой странице ничего не найдено.</td></tr>`}
+              <td class="r pc-col-action"><button class="p-btn is-small is-quiet" type="button" data-edit="${esc(item.sku)}" aria-label="Изменить ${esc(item.name)}">Изменить</button></td></tr>`;
+          }).join("") || `<tr><td colspan="8" class="muted">На этой странице ничего не найдено.</td></tr>`}
           </tbody></table></div>
           <div class="pc-pager"><span>Страница ${state.page + 1} · показано ${list.length} из ${state.items.length}. Поиск — по загруженной странице.</span><div>
             <button class="p-btn is-small" type="button" id="cat-prev" ${state.page ? "" : "disabled"}>Назад</button><button class="p-btn is-small" type="button" id="cat-next" ${state.next ? "" : "disabled"}>Дальше</button></div></div>`
@@ -926,7 +973,7 @@
     if (proof.last_checked_at && proof.last_checked_at !== proof.verified_at) events.push({ at: proof.last_checked_at, icon: "domain", kind: "domain", text: `Проверка домена: ${(DOMAIN_STATUS[proof.status] || [, proof.status])[1].toLowerCase()}` });
     const updates = new Map();
     products.items.forEach(item => updates.set(item.updated_at, (updates.get(item.updated_at) || 0) + 1));
-    updates.forEach((count, at) => events.push({ at, icon: "catalog", kind: "catalog", text: `Обновление каталога: ${num(count)} ${count === 1 ? "товар" : "товаров"}` }));
+    updates.forEach((count, at) => events.push({ at, icon: "catalog", kind: "catalog", text: `Обновление каталога: ${num(count)} ${plural(count, "товар", "товара", "товаров")}` }));
     commissions.items.forEach(row => events.push({ at: row.created_at, icon: "receipt", kind: "money", text: `${row.status === "reversed" ? "Начисление аннулировано" : "Начисление"} ${rub(row.commission_kopecks)}`, meta: row.receipt_id.slice(0, 8) }));
     events.sort((a, b) => b.at - a.at);
     let filter = "all";
@@ -997,11 +1044,15 @@
     }));
     $$("[data-remove]", host).forEach(button => button.addEventListener("click", async () => {
       const self = button.textContent.startsWith("Выйти");
-      if (!confirm(self ? "Выйти из команды партнёра? Доступ к кабинету пропадёт." : "Удалить участника из команды? Его сессии будут закрыты.")) return;
+      const sure = await confirmDialog(self ? "Выйти из команды?" : "Удалить участника?",
+        self ? "Доступ к кабинету партнёра пропадёт. Вернуться можно только по новому приглашению." : "Участник потеряет доступ к кабинету, его сессии будут закрыты.",
+        self ? "Выйти из команды" : "Удалить");
+      if (!sure) return;
       try { const result = await post(`/team/members/${button.dataset.remove}/remove`); toast("Готово", "ok"); if (result.self) { signOut(); return; } render(); }
       catch (error) { toast(error.message, "error"); }
     }));
     $$("[data-revoke]", host).forEach(button => button.addEventListener("click", async () => {
+      if (!await confirmDialog("Отозвать приглашение?", "Ссылка из приглашения перестанет работать. Сотрудника можно пригласить снова.", "Отозвать")) return;
       try { await post(`/team/invites/${button.dataset.revoke}/revoke`); toast("Приглашение отозвано", "ok"); render(); }
       catch (error) { toast(error.message, "error"); }
     }));
@@ -1024,7 +1075,7 @@
           <dt>Комиссия</dt><dd>${bps(me.commission_bps)} с подтверждённых подписок</dd><dt>Срок начислений</dt><dd>${num(me.term_days)} дн. с первой оплаты</dd>
           <dt>Валюта</dt><dd>${esc(me.currency)}</dd><dt>Выплаты</dt><dd>${me.payouts_enabled ? "Включены" : "Отключены (пилот)"}</dd></dl></section>
         <section class="pc-panel pc-panel-pad" aria-labelledby="s-api"><h2 class="p-label" id="s-api">API</h2><dl class="pc-kv">
-          <dt>Базовый адрес</dt><dd class="mono">https://console.smetra.online/api/partners/v1</dd><dt>Схема</dt><dd><a class="pc-link" href="/partner-openapi.json" target="_blank" rel="noopener">OpenAPI 3.1</a></dd>
+          <dt>Базовый адрес</dt><dd class="mono">${esc("https://console.smetra.online/api/partners/v1").replace(/\/(?=[a-z])/g, "/<wbr>")}</dd><dt>Схема</dt><dd><a class="pc-link" href="/partner-openapi.json" target="_blank" rel="noopener">OpenAPI 3.1</a></dd>
           <dt>Документация</dt><dd><a class="pc-link" href="/docs" target="_blank" rel="noopener">console.smetra.online/docs</a></dd></dl></section>
         <section class="pc-panel pc-panel-pad" aria-labelledby="s-sec"><h2 class="p-label" id="s-sec">Безопасность доступа</h2><dl class="pc-kv">
           <dt>Сессия консоли</dt><dd>до ${new Date(session.expiresAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</dd>
@@ -1044,7 +1095,7 @@
     access = { role: me.role, permissions: new Set(me.permissions), user: me.user, partners: me.partners || [] };
     const who = $("#top-user");
     who.hidden = !me.user;
-    who.textContent = me.user ? `${me.user.name || me.user.email} · ${me.role_label}` : "";
+    who.innerHTML = me.user ? `<span class="pc-avatar" aria-hidden="true">${esc(initials(me.user.name || me.user.email))}</span><span class="pc-top-user-text"><b>${esc(me.user.name || me.user.email)}</b><small>${esc(me.role_label)}</small></span>` : "";
     who.title = me.user ? me.user.email : "";
   };
   const showApp = async () => {
@@ -1055,9 +1106,15 @@
     drawNav();
     profile().then(me => { $("#partner-name").textContent = me.name; $("#partner-meta").textContent = me.domain; }).catch(() => {});
   };
+  // Account sign in leaves the console and drops the hash; remember the page to come back to.
+  const RETURN = "smetra.partner.return";
+  const rememberRoute = () => { try { /^#\/[a-z]+$/.test(location.hash) ? sessionStorage.setItem(RETURN, location.hash) : sessionStorage.removeItem(RETURN); } catch { /* optional */ } };
+  const takeRoute = () => { try { const hash = sessionStorage.getItem(RETURN); sessionStorage.removeItem(RETURN); return /^#\/[a-z]+$/.test(hash || "") ? hash : ""; } catch { return ""; } };
   const startSession = async result => {
     session = { token: result.session_token, expiresAt: Date.now() + (Number(result.expires_in) || 3600) * 1000 - 15000 };
     saveSession(session);
+    const back = takeRoute();
+    if (back && back !== location.hash) history.replaceState(null, "", location.pathname + location.search + back);
     await showApp();
     render();
   };
@@ -1149,6 +1206,7 @@
   // Account sign in: smetra.online sends back a one-time code in the fragment.
   const main = location.protocol + "//" + location.host.replace(/^console\./, "");
   $("#sso-start").href = main + "/api/partners/sso/start";
+  $("#sso-start").addEventListener("click", rememberRoute);
   const exchange = async (code, partnerId) => {
     const choose = $("#sso-choose");
     const error = $("#key-error");

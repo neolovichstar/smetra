@@ -93,7 +93,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-of7PUyfcMVmdNfOcKx35nsyJGJA9pZ1WrNQEmlL+m8A='; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-JyPHgo+VUAUg5P8fnLqf0vrHgzHmyydusajeFV2dwZM='; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
         },
         {
           "key": "Permissions-Policy",
