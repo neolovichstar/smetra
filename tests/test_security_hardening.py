@@ -240,7 +240,7 @@ class SecurityHardeningTests(unittest.TestCase):
             connection.close()
 
     def test_cookie_security_defaults(self):
-        request = Handler.__new__(Handler)
+        request = self.mod.Handler.__new__(self.mod.Handler)
         with patch.object(self.mod, "COOKIE_SECURE", True):
             cookie = request.cookie("safe-token", 3600)
         self.assertIn("HttpOnly", cookie)
