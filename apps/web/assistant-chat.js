@@ -198,7 +198,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   syncAssistantConversationState();
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
   attachmentBar.innerHTML='<button type="button" id="assistant-attach" class="assistant-action-button" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">'+assistantIcon('paperclip',18)+'</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv,.mp3,.wav,.m4a,.ogg,.webm,.flac,.aac" multiple hidden><span></span>';
-  attachmentBar.querySelector('span').textContent='Фото PNG/JPG до 2 МБ · PDF, DOCX, XLSX, CSV, TXT, MD до '+maxUploadLabel;
+  attachmentBar.querySelector('span').hidden=true;
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   let backgroundEnabled=null;
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
@@ -501,7 +501,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       chip.append(icon,name,remove);previewTray.append(chip);
     }
     previewTray.hidden=!previewTray.children.length;
-    attachmentInfo.textContent=hasFiles?pendingPhotos.length+' фото выбрано · до 3, общим размером до 1,5 МБ':'Файлы и фото · можно вставить скриншот через Ctrl+V';
+    attachmentInfo.textContent=hasFiles?pendingPhotos.length+' фото выбрано · до 3, общим размером до 1,5 МБ':'';
+    attachmentInfo.hidden=!hasFiles;
     if(typeof renderQuota==='function')renderQuota(quota);
     syncSendButton();
   };
