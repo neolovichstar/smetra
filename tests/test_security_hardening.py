@@ -201,3 +201,50 @@ class SecurityHardeningTests(unittest.TestCase):
         ):
             request.dispatch("GET")
         self.assertEqual(request.client_address[0], "198.51.100.7")
+
+    def test_baseline_security_headers_apply_to_errors(self):
+        status, headers, result = self.request("GET", "/api/me")
+        self.assertEqual(status, 401, result)
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
+        self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(headers.get("Referrer-Policy"), "no-referrer")
+        self.assertNotIn("Access-Control-Allow-Origin", headers)
+        self.assertNotIn("Server", headers)
+
+    def test_response_header_injection_fails_closed(self):
+        request = Handler.__new__(Handler)
+        request._headers_buffer = []
+        with self.assertRaises(ValueError):
+            request.send_header(
+                "Content-Disposition",
+                'attachment; filename="estimate\\r\\nSet-Cookie: injected=1"',
+            )
+        with self.assertRaises(ValueError):
+            request.send_header("X-Test\\r\\nInjected", "value")
+        self.assertEqual(request._headers_buffer, [])
+
+    def test_local_sensitive_html_is_not_cached(self):
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", self.server.server_address[1], timeout=5
+        )
+        try:
+            connection.request("GET", "/app")
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.getheader("Cache-Control"), "no-store")
+            self.assertEqual(response.getheader("X-Frame-Options"), "DENY")
+            self.assertIsNone(response.getheader("Server"))
+            response.read()
+        finally:
+            connection.close()
+
+    def test_cookie_security_defaults(self):
+        request = Handler.__new__(Handler)
+        with patch.object(self.mod, "COOKIE_SECURE", True):
+            cookie = request.cookie("safe-token", 3600)
+        self.assertIn("HttpOnly", cookie)
+        self.assertIn("SameSite=Lax", cookie)
+        self.assertIn("; Secure", cookie)
+        self.assertIn("; Path=/", cookie)
+        self.assertNotIn("Domain=", cookie)
