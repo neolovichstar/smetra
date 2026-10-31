@@ -39,6 +39,13 @@ async function setup(enabled=true,voice=false,remaining=3){
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('idle attachment hint is hidden but file uploads remain available',async({doc})=>{
+   const hint=doc.querySelector('.assistant-attachment-bar > span');
+   assert.ok(hint);
+   assert.equal(hint.textContent,'');
+   assert.equal(hint.hidden,true);
+   assert.ok(doc.querySelector('#assistant-attach'));
+ });
  await test('Ctrl+V attaches screenshot to the assistant without sending or replacing the draft',async({w,doc})=>{
    w.URL.createObjectURL=()=> 'blob:clipboard-test';w.URL.revokeObjectURL=()=>{};
    const input=type(w,doc,'Проверь это фото');
@@ -50,6 +57,7 @@ async function setup(enabled=true,voice=false,remaining=3){
    assert.equal(ev.defaultPrevented,true);
    assert.equal(input.value,'Проверь это фото');
    assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,1);
+   assert.equal(doc.querySelector('.assistant-attachment-bar > span').hidden,false);
    assert.match(doc.querySelector('.assistant-attachment-name').textContent,/Скриншот/);
    assert.equal(doc.querySelector('#assistant-send').disabled,false);
    const textPaste=new w.Event('paste',{bubbles:true,cancelable:true});
