@@ -276,6 +276,20 @@ class ApiError(Exception):
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "Smetra/1.0"
 
+    def send_header(self, keyword, value):
+        # BaseHTTPRequestHandler does not reject CR/LF in header values.
+        # Guard every response (including downloads, redirects and plugins)
+        # against header splitting, and avoid exposing the Python server banner.
+        name = str(keyword)
+        value = str(value)
+        if not re.fullmatch(r"[A-Za-z0-9-]+", name) or any(
+            ord(char) < 32 or ord(char) == 127 for char in value
+        ):
+            raise ValueError("Invalid HTTP response header")
+        if name.lower() == "server":
+            return
+        return super().send_header(name, value)
+
     def setup(self):
         super().setup()
         self.connection.settimeout(20)
@@ -726,6 +740,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", typ + "; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        if typ == "text/html":
+            self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
