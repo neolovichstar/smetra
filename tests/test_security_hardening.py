@@ -218,10 +218,10 @@ class SecurityHardeningTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             request.send_header(
                 "Content-Disposition",
-                'attachment; filename="estimate\\r\\nSet-Cookie: injected=1"',
+                'attachment; filename="estimate\r\nSet-Cookie: injected=1"',
             )
         with self.assertRaises(ValueError):
-            request.send_header("X-Test\\r\\nInjected", "value")
+            request.send_header("X-Test\r\nInjected", "value")
         self.assertEqual(request._headers_buffer, [])
 
     def test_local_sensitive_html_is_not_cached(self):
