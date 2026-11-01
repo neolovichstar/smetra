@@ -53,7 +53,8 @@ class AssistantJobTests(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(lambda _: self.enqueue(owner), range(2)))
         self.assertEqual(results[0]['id'], results[1]['id'])
-        self.assertEqual(self.call('/assistant', token=owner)[1]['quota']['used'], 1)
+        # Tokens are charged for finished answers only; a queued job costs nothing yet.
+        self.assertEqual(self.call('/assistant', token=owner)[1]['quota']['used'], 0)
         self.assertNotIn('session_hash', str(results))
         self.assertNotIn('quota_key', str(results))
         self.assertEqual(self.call('/assistant/jobs/'+results[0]['id'], token=stranger)[0], 404)
@@ -73,7 +74,7 @@ class AssistantJobTests(unittest.TestCase):
         history = self.call('/assistant/conversations/'+thread['id'],token=owner)[1]['messages']
         self.assertEqual(len(history),2)
         self.run_job().assert_not_called()
-        self.assertEqual(self.call('/assistant',token=owner)[1]['quota']['used'],1)
+        self.assertGreater(self.call('/assistant',token=owner)[1]['quota']['used'],0)
 
     def test_queued_cancel_refunds_once_and_provider_never_runs(self):
         owner, _ = self.account('job-cancel')
@@ -143,7 +144,7 @@ class AssistantJobTests(unittest.TestCase):
             self.assertEqual(result['attempts'],attempt)
             self.assertEqual(result['status'],'retry' if attempt<3 else 'failed')
             if attempt<3:
-                self.assertEqual(self.call('/assistant',token=owner)[1]['quota']['used'],1)
+                self.assertEqual(self.call('/assistant',token=owner)[1]['quota']['used'],0)
                 self.run_job().assert_not_called()
                 self.due(job)
         self.run_job().assert_not_called()

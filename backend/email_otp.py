@@ -197,6 +197,14 @@ def start(handler, con, app):
     })
 
 
+def _commit(con):
+    raw = getattr(con, "raw", None)
+    if raw is not None:
+        raw.commit()
+    elif getattr(con, "in_transaction", False):
+        con.commit()
+
+
 def confirm(handler, con, app):
     if not configured():
         raise app.ApiError(503, "Вход по почте временно недоступен")
@@ -206,6 +214,8 @@ def confirm(handler, con, app):
     if not re.fullmatch(r"[0-9a-f-]{36}\Z", identifier) or not _CODE_RE.fullmatch(code):
         raise app.ApiError(400, "Проверьте шестизначный код")
     handler.throttle("email-confirm-ip:" + handler.client_address[0], 40, 900)
+    # Durable per-code limit (separate store): survives the request rollback below.
+    handler.throttle("email-confirm-code:" + identifier, MAX_ATTEMPTS, TTL_SECONDS)
     row = con.execute("SELECT * FROM email_login_challenges WHERE id=?", (identifier,)).fetchone()
     if not row or row["consumed_at"] is not None or row["expires_at"] <= app.now() or row["attempts"] >= MAX_ATTEMPTS:
         raise app.ApiError(400, "Код истёк или уже использован")
@@ -218,6 +228,8 @@ def confirm(handler, con, app):
     if attempts.rowcount != 1:
         raise app.ApiError(400, "Код истёк или уже использован")
     if not hmac.compare_digest(_digest(identifier,code), row["code_hash"]):
+        # The request transaction rolls back on errors; keep the failed attempt.
+        _commit(con)
         raise app.ApiError(400, "Неверный код. Проверьте цифры")
     consumed = con.execute(
         "UPDATE email_login_challenges SET consumed_at=? WHERE id=? "

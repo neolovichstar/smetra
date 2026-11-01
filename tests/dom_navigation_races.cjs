@@ -11,10 +11,11 @@ function setup(){
  w.HTMLDialogElement.prototype.close=function(){this.open=false;w.setTimeout(()=>this.dispatchEvent(new w.Event('close')),0)};
  const source=fs.readFileSync('apps/web/app.js','utf8');w.load(source.slice(0,source.indexOf("if($('#auth')){")));
  w.eval("user={id:'qa-user',name:'QA',role:'user',email_verified:true};tab='files'");
- w.api=async path=>path==='/workspace'?{workspace:{id:'qa-workspace',name:'QA',role:'owner',currency:'RUB',settings:{}},workspaces:[]}:{items:[]};
+ const bucket={count:0,bytes:0},storage={used_bytes:0,limit_bytes:1073741824,max_upload_bytes:10485760,images:bucket,files:bucket,archived:bucket};
+ w.api=async path=>path==='/workspace'?{workspace:{id:'qa-workspace',name:'QA',role:'owner',currency:'RUB',settings:{}},workspaces:[]}:path==='/files/storage'?{storage}:{items:[]};
  w.load(fs.readFileSync('apps/web/workspace.js','utf8'));
  w.load(fs.readFileSync('apps/web/growth.js','utf8'));
- for(const file of ['vendor/markdown-it-15.0.2.min.js','chat-markdown.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
+ for(const file of ['ui/icons.js','ui/dialog.js','ui/chat-kit.js','support-chat.js','vendor/markdown-it-15.0.2.min.js','chat-markdown.js'])w.load(fs.readFileSync('apps/web/'+file,'utf8'));
  return {dom,w,doc:w.document,close:()=>dom.window.close()};
 }
 (async()=>{
@@ -34,10 +35,11 @@ function setup(){
  });
  await test('file search keeps newest query when older reply arrives last',async({w,doc})=>{
   await w.Workspace.render('files');const requests=[];w.api=path=>{const task=deferred();requests.push({path,...task});return task.promise};
-  const search=doc.querySelector('#file-center-search');search.value='old';search.oninput();await sleep(230);search.value='new';search.oninput();await sleep(230);
-  const row=name=>({id:name,name:name+'.txt',mime:'text/plain',size:1,created_at:1});
+  const search=doc.querySelector('#storage-search');search.value='old';search.oninput();await sleep(230);search.value='new';search.oninput();await sleep(230);
+  assert.deepEqual(requests.map(item=>item.path),['/files?kind=images&q=old','/files?kind=images&q=new']);
+  const row=name=>({id:name,name:name+'.png',mime:'image/png',size:1,created_at:1});
   requests[1].resolve({items:[row('new')]});await sleep(0);requests[0].resolve({items:[row('old')]});await sleep(0);
-  assert.ok(doc.querySelector('#file-center-list').textContent.includes('new.txt'));assert.ok(!doc.querySelector('#file-center-list').textContent.includes('old.txt'));
+  assert.ok(doc.querySelector('#storage-view').textContent.includes('new.png'));assert.ok(!doc.querySelector('#storage-view').textContent.includes('old.png'));
  });
  await test('catalog filters keep newest query when older reply arrives last',async({w,doc})=>{
   await w.Workspace.render('catalog');const requests=[];w.api=path=>{const task=deferred();requests.push({path,...task});return task.promise};
@@ -66,12 +68,13 @@ function setup(){
   assert.equal(doc.querySelector('#content').textContent,'Support');
  });
  await test('workspace reply cannot replace assistant navigation',async({w,doc})=>{
-  const request=deferred(),original=w.api;w.api=path=>path==='/files'?request.promise:original(path);
-  const pending=w.Workspace.render('files');await sleep(0);w.eval("tab='assistant'");doc.querySelector('#content').textContent='Assistant';request.resolve({items:[]});await pending;
+  const request=deferred(),original=w.api;w.api=path=>path==='/files/storage'?request.promise:original(path);
+  const pending=w.Workspace.render('files');await sleep(0);w.eval("tab='assistant'");doc.querySelector('#content').textContent='Assistant';request.resolve(await original('/files/storage'));await pending;
   assert.equal(doc.querySelector('#content').textContent,'Assistant');
  });
  await test('support does not fetch unrelated workspace data',async({w})=>{
-  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};w.eval("tab='support'");await w.render();assert.deepEqual(requests,[]);
+  // Support reads only the user's own support threads, never workspace records.
+  const requests=[];w.api=async path=>{requests.push(path);return {items:[]}};w.eval("tab='support'");await w.render();assert.deepEqual(requests,['/support/threads']);
  });
  await test('quote editor initialization cannot replace a page opened later',async({w,doc})=>{
   await w.Workspace.render('files');const request=deferred();w.api=()=>request.promise;

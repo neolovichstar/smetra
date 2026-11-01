@@ -1,0 +1,418 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Smetra Partner API",
+    "version": "1.0.0-beta",
+    "description": "Accounting-only pilot: no payouts, no customer PII, no order settlement."
+  },
+  "servers": [
+    {
+      "url": "https://console.smetra.online"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Partner"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "PartnerKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Partner smp_live_... (server-to-server only)"
+      },
+      "PartnerSession": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "PartnerSession smp_session_... (one-hour browser session)"
+      }
+    }
+  },
+  "paths": {
+    "/api/partners/v1/console/session": {
+      "post": {
+        "summary": "Issue a one-hour console session",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "api_key"
+                ],
+                "properties": {
+                  "api_key": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Temporary session token"
+          },
+          "401": {
+            "description": "Invalid API key"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/profile": {
+      "get": {
+        "summary": "Partner profile and verification status",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Partner identity; no customer PII"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/summary": {
+      "get": {
+        "summary": "High-level paid conversions and commissions",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accounting-only totals"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/analytics": {
+      "get": {
+        "summary": "Server-verified funnel and separately self-reported merchant activity",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                7,
+                30,
+                90
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily UTC series, commission and purchase metrics"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/products": {
+      "get": {
+        "summary": "Partner-owned catalog",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated catalog"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/commissions": {
+      "get": {
+        "summary": "Accounting-only, PII-free partner commission receipts",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "held, cleared_unpaid, reversed; payouts always disabled"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/catalog": {
+      "post": {
+        "summary": "Upsert catalog items by SKU",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "products"
+                ],
+                "properties": {
+                  "products": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "sku",
+                        "name",
+                        "price_kopecks",
+                        "url"
+                      ],
+                      "properties": {
+                        "sku": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "price_kopecks": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "available": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Number of accepted items"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/domain": {
+      "get": {
+        "summary": "Domain ownership status",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Challenge or verified status"
+          }
+        }
+      },
+      "post": {
+        "summary": "Issue DNS TXT or HTML meta-tag challenge",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "dns",
+                      "meta"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Domain challenge"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/domain/verify": {
+      "post": {
+        "summary": "Validate the domain challenge without following redirects",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result"
+          },
+          "503": {
+            "description": "External DNS or HTTPS check unavailable"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/events": {
+      "post": {
+        "summary": "Idempotent partner-reported events; NEVER proof of payment",
+        "security": [
+          {
+            "PartnerKey": []
+          },
+          {
+            "PartnerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event_key",
+                  "event_type"
+                ],
+                "properties": {
+                  "event_key": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "widget_impression",
+                      "widget_click",
+                      "material_order_reported"
+                    ]
+                  },
+                  "amount_kopecks": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted as untrusted merchant telemetry"
+          }
+        }
+      }
+    },
+    "/api/partners/v1/console/logout": {
+      "post": {
+        "summary": "Revoke browser session",
+        "security": [
+          {
+            "PartnerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revoked"
+          }
+        }
+      }
+    }
+  }
+}

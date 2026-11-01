@@ -216,6 +216,10 @@ def route(h, con, method, path, query, origin):
         if provider == "yandex":
             url = "https://oauth.yandex.ru/authorize"
             params["scope"] = "login:info login:email login:avatar"
+            if linked:
+                # Re-ask for consent so an account linked before the avatar
+                # scope existed can grant access to its profile photo.
+                params["force_confirm"] = "yes"
         else:
             url = "https://id.vk.com/authorize"
             params.update(scope="vkid.personal_info email", code_challenge_method='s256', provider={"mail": "mail_ru", "ok": "ok_ru"}.get(provider, "vkid"))
@@ -350,4 +354,4 @@ def route(h, con, method, path, query, origin):
             "INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)",
             (identity(), user_id, digest(token), stamp() + 30 * 86400),
         )
-    return redirect(h, origin + "/app", h.cookie(token, 30 * 86400))
+    return redirect(h, origin + "/app" + ("#settings" if row["link_user_id"] else ""), h.cookie(token, 30 * 86400))

@@ -31,5 +31,8 @@ class ProductionUIRegressionTests(unittest.TestCase):
         self.assertEqual(len(icon),size+offset)
         self.assertTrue(icon[offset:].startswith(bytes((137,80,78,71,13,10,26,10))))
         manifest=json.loads((WEB/"manifest.webmanifest").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["icons"][0]["src"],"/favicon.png")
+        icons={icon["purpose"]+":"+icon["sizes"]:icon["src"] for icon in manifest["icons"]}
+        self.assertEqual(set(icons),{"any:192x192","any:512x512","maskable:512x512"})
+        for src in icons.values():
+            self.assertTrue((WEB/src.lstrip("/")).is_file(),src)
         self.assertTrue((WEB/"favicon.png").is_file())

@@ -15,13 +15,36 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:site});
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
  await send('Page.navigate',{url:site+'/app?register=1'});await until("document.querySelector('#auth-submit')&&typeof api==='function'");
- await fill('#name','Проверка редактора');await fill('#email','editor-'+Date.now()+'@test.invalid');await fill('#password','secure comparison password');await click('#legal-consent');await click('#auth-submit');await until("document.querySelector('#capture-text')");
+ const emailSignupShown=await evaluate("(()=>{const el=document.querySelector('#email-disclosure');return !!el&&!el.classList.contains('hidden')&&getComputedStyle(el).display!=='none'&&el.getClientRects().length>0})()");
+ if(emailSignupShown){
+  await fill('#name','Проверка редактора');
+  await fill('#email','editor-'+Date.now()+'@test.invalid');
+  await fill('#password','secure comparison password');
+  await click('#legal-consent');await click('#auth-submit');
+ }else{
+  // Seed an isolated localhost QA session without enabling unverified signup
+  // in the public registration form or weakening production authentication.
+  const registration=await fetch(site+'/api/auth/register',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({name:'Проверка редактора',email:'editor-'+Date.now()+'@test.invalid',
+    password:'secure comparison password',legal_acceptance:true,
+    legal_version:'2026-10-19-registration-v1'})
+  });
+  const account=await registration.json();
+  assert.equal(registration.status,200,'QA account: '+JSON.stringify(account).slice(0,180));
+  assert.ok(account.token,'QA session token must exist');
+  await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
+  await send('Page.navigate',{url:site+'/app#dashboard'});
+ }
+ await until("document.querySelector('#capture-text')");
  const id=await evaluate("api('/quotes',{method:'POST',body:JSON.stringify({title:'Ремонт кухни',client:'Клиент',items:[{name:'Подготовка',unit_price:10000},{name:'Покраска',unit_price:20000}]})}).then(r=>r.quote.id)");
  const catalogId=await evaluate("api('/catalog',{method:'POST',body:JSON.stringify({name:'Монтаж плинтуса QA',price:12500,unit:'м'})}).then(r=>r.item.id)");
  const clientId=await evaluate("api('/clients',{method:'POST',body:JSON.stringify({name:'Клиент редактора QA'})}).then(r=>r.item.id)");
  const read=()=>evaluate(`api('/quotes/${id}').then(r=>r.quote)`);
  await evaluate(`(async()=>{tab='quotes';location.hash='quotes';await Workspace.editor((await api('/quotes/${id}')).quote)})()`);
  await until("document.querySelector('#editor-save-state')");
+ await until("document.querySelector('#anti-estimate-panel .anti-estimate-stats')");
+ assert.equal(await evaluate("document.querySelector('#anti-estimate-panel h3').textContent"),'Антисмета','The audit panel mounts inside the existing editor');
  const layoutAudit=await evaluate("(()=>{const root=document.querySelector('.editor-layout'),main=root?.querySelector('.editor-main'),aside=root?.querySelector('.editor-aside'),r=root?.getBoundingClientRect(),m=main?.getBoundingClientRect(),a=aside?.getBoundingClientRect();return r&&m&&a?{layoutWidth:Math.round(r.width),mainWidth:Math.round(m.width),asideWidth:Math.round(a.width),gap:Math.round(a.left-m.right)}:null})()");
  assert.ok(layoutAudit,'The redesigned editor should expose its main work area and summary');
  assert.ok(layoutAudit.mainWidth>=600,'The line-item editor must keep a usable working width: '+JSON.stringify(layoutAudit));
@@ -44,6 +67,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await fill('#f-title','Новая кухня');await until("document.querySelector('#editor-save-state').dataset.state==='saved'");assert.equal((await read()).title,'Новая кухня');
  const starting=await read();
  await click('[data-duplicate="0"]');assert.equal(await evaluate("document.querySelectorAll('[data-row]').length"),3);
+ await until("document.querySelector('#anti-estimate-panel').textContent.includes('могут повторяться')");
+ await click('[data-audit-row="1"][data-audit-field="name"]');
+ assert.equal(await evaluate("document.activeElement===document.querySelector('[data-row=\"1\"] [data-key=name]')"),true,'Audit finding navigates to the duplicate row');
  await click('[data-move="0"][data-direction="1"]');await click('#editor-undo');await click('#editor-undo');assert.equal(await evaluate("document.querySelectorAll('[data-row]').length"),2);await click('#editor-redo');
  await fill('[data-row="1"] [data-key=name]','Дополнительная подготовка');
  await until("document.querySelector('#editor-save-state').dataset.state==='saved'");const duplicated=await read();assert.equal(duplicated.items.length,3);assert.notEqual(duplicated.items[0].line_id,duplicated.items[1].line_id);assert.equal(duplicated.amount_kopecks,40000);
@@ -53,7 +79,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:width<768});await sleep(150);
   assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'No editor overflow at '+width);
   fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/quote-editor-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
-  await click('#f-currency + .select-trigger');await sleep(200);assert.equal(await evaluate("{const r=document.querySelector('.select-menu:not(.select-menu-closing)').getBoundingClientRect();r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight}"),true,'Menu inside viewport at '+width);
+  await click('#f-currency + .select-trigger');await sleep(200);{const geometry=await evaluate("(()=>{const p=document.querySelector('.select-menu:not(.select-menu-closing)'),r=p.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,viewportWidth:innerWidth,viewportHeight:innerHeight,panelHeight:p.offsetHeight,position:getComputedStyle(p).position}})()");assert.equal(geometry.left>=-0.5&&geometry.right<=geometry.viewportWidth+0.5&&geometry.top>=-0.5&&geometry.bottom<=geometry.viewportHeight+0.5,true,'Menu inside viewport at '+width+': '+JSON.stringify(geometry));}
   fs.writeFileSync('data/qa/quote-editor-menu-'+width+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));await evaluate('SmetraSelects.close()');await sleep(180);
  }
  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});

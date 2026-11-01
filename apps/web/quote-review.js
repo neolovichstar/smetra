@@ -45,7 +45,7 @@ window.SmetraQuoteReview=(()=>{
   if(form)form.onsubmit=async event=>{
    event.preventDefault();const button=form.querySelector('button');if(button.disabled||!checked||checked.target!=='current'||!active())return;
    button.disabled=true;sourceInput.disabled=true;targetInput.disabled=true;const status=form.querySelector('#review-publish-status');status.textContent='Отправляем новую версию…';
-   try{if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;await api('/quotes/'+encodeURIComponent(quote.id)+'/publish',{method:'POST',body:JSON.stringify({revision:checked.revision,comment:form.querySelector('textarea').value})});if(!active())return;await window.Workspace.openQuote(quote.id);notify('Новая версия отправлена. Клиентская ссылка обновлена.')}
+   try{if(!window.SmetraEstimateSafety?.confirmReview)throw Error('Проверка сметы недоступна. Обновите страницу и повторите действие.');if(!(await window.SmetraEstimateSafety.confirmReview()))return;await api('/quotes/'+encodeURIComponent(quote.id)+'/publish',{method:'POST',body:JSON.stringify({revision:checked.revision,comment:form.querySelector('textarea').value,review_confirmed:true})});if(!active())return;await window.Workspace.openQuote(quote.id);notify('Новая версия отправлена. Клиентская ссылка обновлена.')}
    catch(error){if(active())status.textContent=error.message+' Проверьте сравнение повторно перед отправкой.';checked=null;}
    finally{if(active()){sourceInput.disabled=false;targetInput.disabled=false;if(!checked){await load();}}}
   };

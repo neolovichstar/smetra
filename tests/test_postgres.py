@@ -69,6 +69,41 @@ class PostgresQueryTests(unittest.TestCase):
         pool.putconn.assert_called_once_with(raw)
         raw.close.assert_not_called()
 
+    def test_copied_vercel_database_uri_is_normalized_without_losing_ssl(self):
+        from unittest.mock import Mock
+        from backend.postgres import Connection
+
+        pool = Mock()
+        pool.getconn.return_value = Mock()
+        raw = (
+            "DATABASE_URL=postgresql://smetra_app:example@db.example.invalid:6543/postgres"
+            "?pgbouncer=true&connection_limit=5&sslmode=require"
+        )
+        with (
+            patch.dict("os.environ", {"DATABASE_URL": raw}),
+            patch("backend.postgres._connection_pool", return_value=pool) as factory,
+        ):
+            connection = Connection()
+            connection.close()
+        dsn = factory.call_args.args[0]
+        self.assertTrue(dsn.startswith("postgresql://smetra_app:example@"))
+        self.assertIn("sslmode=require", dsn)
+        self.assertNotIn("DATABASE_URL=", dsn)
+        self.assertNotIn("pgbouncer=", dsn)
+        self.assertNotIn("connection_limit=", dsn)
+        pool.putconn.assert_called_once()
+
+    def test_malformed_database_uri_fails_before_any_connection_attempt(self):
+        from backend.postgres import Connection
+
+        with (
+            patch.dict("os.environ", {"DATABASE_URL": "https://example.invalid"}),
+            patch("backend.postgres._connection_pool") as factory,
+            self.assertRaisesRegex(RuntimeError, "Invalid PostgreSQL connection URI"),
+        ):
+            Connection()
+        factory.assert_not_called()
+
     def test_rows_support_mapping_and_index_access(self):
         row = Row(id="abc", total=12)
         self.assertEqual(row[0], row["id"])

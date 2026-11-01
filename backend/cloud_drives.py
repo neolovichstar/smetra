@@ -517,7 +517,7 @@ def _model_extract(mime, name, raw):
     body = json.dumps(payload, ensure_ascii=False).encode()
     req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", body, {
         "Authorization": "Bearer " + key, "Content-Type": "application/json",
-        "HTTP-Referer": os.getenv("PUBLIC_ORIGIN", "https://smetra.vercel.app"),
+        "HTTP-Referer": os.getenv("PUBLIC_ORIGIN", "https://smetra.online"),
         "X-OpenRouter-Title": "Smetra",
     }, method="POST")
     try:

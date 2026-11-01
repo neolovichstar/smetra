@@ -9,7 +9,8 @@ w.eval(fs.readFileSync('apps/web/communication-center.js','utf8'));
 (async()=>{
  await w.SmetraCommunication.open();
  assert.match(w.document.querySelector('#comms-list').textContent,/Заказчик/);
- assert.match(w.document.querySelector('link[data-comms-style]').getAttribute('href'),/^\/communication-center\.css(?:\?v=[a-z0-9-]+)?$/i);
+ // Styles come from the shared ui/modules.css; no legacy stylesheet is injected.
+ assert.equal(w.document.querySelector('link[data-comms-style]'),null);
  w.SmetraCommunication.reset();
  assert.doesNotMatch(w.document.querySelector('#comms-list').textContent,/Заказчик/);
  assert.equal(w.document.querySelector('#communication-center').getAttribute('aria-hidden'),'true');

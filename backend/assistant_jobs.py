@@ -42,7 +42,10 @@ def refund(con, row):
         (row['id'],),
     ).fetchone()
     if changed:
-        con.execute('UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0', (row['quota_key'],))
+        # Chat answers are charged in tokens only when finished, so there is
+        # nothing to give back. OCR jobs keep their own per-page allowance.
+        if row['kind'] != 'chat':
+            con.execute('UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0', (row['quota_key'],))
         grant_id = row['bonus_grant_id'] if 'bonus_grant_id' in row.keys() else None
         if grant_id:
             restored = con.execute(

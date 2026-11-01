@@ -130,9 +130,10 @@ class EmailOTPTests(unittest.TestCase):
                 self.assertEqual(self.call("/auth/email/confirm","POST",{
                     "challenge_id":challenge,"code":"888888",
                 })[0],400)
-            self.assertEqual(self.call("/auth/email/confirm","POST",{
+            # The correct code no longer works: per-code limit (429) or burnt attempts (400).
+            self.assertIn(self.call("/auth/email/confirm","POST",{
                 "challenge_id":challenge,"code":"123456",
-            })[0],400)
+            })[0],(400,429))
             with self.mod.db() as con:
                 self.assertEqual(con.execute("SELECT attempts FROM email_login_challenges WHERE id=?",
                                              (challenge,)).fetchone()[0],5)

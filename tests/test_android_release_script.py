@@ -28,7 +28,7 @@ class AndroidReleaseScriptTests(unittest.TestCase):
             "RUSTORE_CERT_SHA256",
             "apksigner verify --verbose --print-certs",
             "if ($expected -ne $fingerprint)",
-            "https://smetra.vercel.app",
+            "https://smetra.online",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, script)

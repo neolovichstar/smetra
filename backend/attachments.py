@@ -85,7 +85,49 @@ def route(service, method, parts, query, data):
     return _route(service, method, parts, query, data)
 
 
+def storage_summary(service):
+    """Workspace storage at a glance: what is used, by images and other files, and the plan limit."""
+    rows = service.con.execute(
+        "SELECT mime, archived_at, count(*) AS n, coalesce(sum(size),0) AS bytes FROM files "
+        "WHERE workspace_id=? GROUP BY mime, archived_at IS NULL",
+        (service.wid,),
+    ).fetchall()
+    summary = {"used_bytes": 0, "limit_bytes": workspace_storage_limit(service), "max_upload_bytes": maximum_upload(),
+               "images": {"count": 0, "bytes": 0}, "files": {"count": 0, "bytes": 0}, "archived": {"count": 0, "bytes": 0}}
+    for row in rows:
+        summary["used_bytes"] += row["bytes"]
+        bucket = "archived" if row["archived_at"] is not None else "images" if row["mime"].startswith("image/") else "files"
+        summary[bucket]["count"] += row["n"]
+        summary[bucket]["bytes"] += row["bytes"]
+    return summary
+
+
 def _route(service, method, parts, query, data):
+    if len(parts) == 2 and parts[1] == "thumb" and method == "GET":
+        # Gallery thumbnails: a small re-encoded JPEG, never the original bytes.
+        row = service.get("files", parts[0])
+        if not row["mime"].startswith("image/"):
+            raise DomainError(422, "Миниатюра есть только у изображений")
+        from PIL import Image
+
+        with Image.open(io.BytesIO(download(row, service.con).data)) as img:
+            img.thumbnail((360, 360))
+            output = io.BytesIO()
+            img.convert("RGB").save(output, format="JPEG", quality=78)
+        return 200, Download(output.getvalue(), "image/jpeg", "thumb-" + row["id"] + ".jpg")
+    if parts == ["storage"] and method == "GET":
+        return 200, {"storage": storage_summary(service)}
+    if len(parts) == 2 and parts[1] == "archive" and method == "POST":
+        row = service.get("files", parts[0])
+        archived = data.get("archived", True)
+        if not isinstance(archived, bool):
+            raise DomainError(400, "Укажите, архивировать файл или вернуть")
+        service.con.execute(
+            "UPDATE files SET archived_at=? WHERE id=? AND workspace_id=?",
+            (stamp() if archived else None, row["id"], service.wid),
+        )
+        service.emit("file", row["id"], "Файл перенесён в архив" if archived else "Файл возвращён из архива", row["name"])
+        return 200, {"file": {"id": row["id"], "archived": archived}}
     if len(parts) == 2 and parts[1] == "preview":
         from backend.file_preview import route as preview_route
 
@@ -211,12 +253,17 @@ def _route(service, method, parts, query, data):
                     ],
                 }
         phrase = string(query.get("q", [""])[0], "Поиск", 100)
+        archived = query.get("archived", ["0"])[0] == "1"
+        kind = query.get("kind", [""])[0]
+        if kind not in ("", "images", "files"):
+            raise DomainError(400, "Неизвестный раздел хранилища")
+        kind_filter = {"": "", "images": " AND mime LIKE 'image/%'", "files": " AND mime NOT LIKE 'image/%'"}[kind]
         return 200, {
             "items": [dict(row) for row in service.con.execute(
-                "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,client_id,construction_id "
-                "FROM files WHERE workspace_id=? AND instr(lower(name),lower(?))>0 "
-                "ORDER BY created_at DESC LIMIT 50 OFFSET ?",
-                (service.wid, phrase, service.page(query)),
+                "SELECT id,name,mime,size,sha256,public,created_at,quote_id,project_id,client_id,construction_id,archived_at,source "
+                "FROM files WHERE workspace_id=? AND instr(lower(name),lower(?))>0 AND (archived_at IS NOT NULL)=?"
+                + kind_filter + " ORDER BY created_at DESC LIMIT 50 OFFSET ?",
+                (service.wid, phrase, archived, service.page(query)),
             )],
         }
     if method == "DELETE" and parts:
@@ -237,7 +284,9 @@ def _route(service, method, parts, query, data):
         key: data.get(key) or None for key in ("quote_id", "project_id", "client_id", "construction_id")
     }
     assistant_upload = data.get("assistant_upload") is True
-    if sum(bool(v) for v in references.values()) != (0 if assistant_upload else 1):
+    # Uploaded straight to the workspace storage: no record link needed.
+    storage_upload = not assistant_upload and data.get("source") == "storage"
+    if sum(bool(v) for v in references.values()) != (0 if assistant_upload or storage_upload else 1):
         raise DomainError(400, "Привяжите файл к одной записи")
     for key, table in (
         ("quote_id", "quotes"),
@@ -251,8 +300,11 @@ def _route(service, method, parts, query, data):
     extension = Path(name).suffix.lower()
     if extension not in (".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
         raise DomainError(400, "Разрешены PNG, JPEG, PDF, TXT, MD, DOCX, XLSX и CSV")
-    if assistant_upload and extension not in (".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
+    chat_photo = assistant_upload and data.get("source") == "chat"
+    if assistant_upload and not chat_photo and extension not in (".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv"):
         raise DomainError(400, "Ассистент читает PDF, TXT, MD, DOCX, XLSX и CSV")
+    if chat_photo and extension not in (".png", ".jpg", ".jpeg"):
+        raise DomainError(400, "Из чата сохраняются только фотографии")
     try:
         raw = base64.b64decode(data.get("content", ""), validate=True)
     except (ValueError, TypeError):
@@ -354,6 +406,7 @@ def _route(service, method, parts, query, data):
         storage_name=storage,
         public=public,
         created_at=stamp(),
+        source="chat" if chat_photo else "assistant" if assistant_upload else "upload",
     )
     if getattr(service.con, "is_postgres", False):
         service.insert("files", values)

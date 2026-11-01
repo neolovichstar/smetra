@@ -82,6 +82,18 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertIn("home", result)
         self.assertEqual(headers["Cache-Control"], "no-store")
 
+    def test_mobile_compat_is_public_and_bounded(self):
+        with patch.object(self.mod, "db", side_effect=AssertionError("database opened")), patch.dict(
+            os.environ, {"ANDROID_MIN_VERSION_CODE": "40", "ANDROID_LATEST_VERSION_CODE": "bad", "ANDROID_UPDATE_MESSAGE": "x" * 500}
+        ):
+            status, _, result = self.request("GET", "/api/mobile/compat")
+        self.assertEqual(status, 200)
+        self.assertEqual(result["bridge_protocol"], 1)
+        self.assertEqual(result["min_version_code"], 40)
+        self.assertEqual(result["latest_version_code"], 41)
+        self.assertEqual(len(result["message"]), 300)
+        self.assertTrue(result["store_url"].startswith("https://www.rustore.ru/"))
+
     def test_browser_cookie_session_requires_same_origin_for_writes(self):
         body = json.dumps({
             "name": "Browser", "email": "browser-security@test.invalid",

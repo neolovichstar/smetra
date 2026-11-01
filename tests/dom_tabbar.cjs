@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
+const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+(async()=>{
+ const html=fs.readFileSync('apps/web/app.html','utf8');
+ const bar=html.match(/<nav id="mobile-tabbar"[\s\S]*?<\/nav>/)[0];
+ assert.deepEqual([...bar.matchAll(/data-tab="([a-z]+)"/g)].map(m=>m[1]),['dashboard','quotes','assistant','construction'],'Tab bar keeps the four primary sections');
+ assert.ok(/id="tabbar-more"[^>]*aria-controls="sidebar"/.test(bar),'«Ещё» opens the full section list');
+ assert.ok(html.indexOf('/ui/tabbar.js')>html.indexOf('/app.js'),'Tab bar script loads after the router');
+ const dom=new JSDOM(`<!doctype html><body><button id="nav-toggle"></button>${bar}<input id="field"></body>`,{runScripts:'outside-only',url:'https://smetra.online/app#clients'});
+ const w=dom.window,d=w.document;let toggled=0;
+ d.querySelector('#nav-toggle').addEventListener('click',()=>{toggled++;d.body.classList.toggle('nav-open')});
+ w.eval(fs.readFileSync('apps/web/ui/tabbar.js','utf8'));
+ const more=d.querySelector('#tabbar-more');
+ assert.equal(more.classList.contains('active'),true,'A section outside the bar highlights «Ещё»');
+ more.click();await tick();
+ assert.equal(toggled,1);assert.equal(more.getAttribute('aria-expanded'),'true');
+ more.click();await tick();
+ w.location.hash='#quotes';w.dispatchEvent(new w.HashChangeEvent('hashchange'));
+ const quotes=d.querySelector('[data-tab="quotes"]');quotes.classList.add('active');await tick();
+ assert.equal(more.classList.contains('active'),false,'A bar section clears «Ещё»');
+ assert.equal(quotes.getAttribute('aria-current'),'page','The active section is announced');
+ console.log('PASS: mobile tab bar sections, «Ещё» drawer toggle, active state and aria-current');
+})().catch(error=>{console.error(error);process.exit(1)});

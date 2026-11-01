@@ -285,7 +285,8 @@ class FileProcessingTests(unittest.TestCase):
             key="independent-chat",
         )
         self.assertEqual(code, 202, result)
-        self.assertEqual(self.call("/assistant", token=owner)[1]["quota"]["used"], 1)
+        # Tokens are charged when the queued answer finishes, not when it is accepted.
+        self.assertEqual(self.call("/assistant", token=owner)[1]["quota"]["used"], 0)
 
     def test_lost_worker_lease_cannot_save_text(self):
         from backend.assistant_jobs import claim

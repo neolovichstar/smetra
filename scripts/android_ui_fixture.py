@@ -23,7 +23,8 @@ sys.path.insert(0, str(ROOT))
 
 def main():
     port = int(os.getenv('SMETRA_FIXTURE_PORT', '8084'))
-    origin = f'http://localhost:{port}'
+    # The emulator reaches the host as 10.0.2.2, so the Android screenshot run overrides the origin.
+    origin = os.getenv('SMETRA_FIXTURE_ORIGIN', f'http://localhost:{port}')
     base_url = f'http://127.0.0.1:{port}'
     with tempfile.TemporaryDirectory(prefix="android-ui-", dir=ROOT / "data") as folder:
         # Fixtures must never inherit a production DB, cache, payment or mail service.
@@ -39,6 +40,8 @@ def main():
             ASSISTANT_WORKER_SECRET="isolated-fixture-worker-secret-0123456789",
         )
         os.environ.pop("SMTP_HOST", None)
+        if not origin.startswith('http://localhost:'):
+            os.environ['ALLOW_UNVERIFIED_SIGNUP'] = '1'
         spec = importlib.util.spec_from_file_location(
             "android_ui_app", ROOT / "backend/app.py"
         )
@@ -331,6 +334,8 @@ def main():
                                                                      quote_review['items'][1], {'name': 'Защита мебели', 'unit_price': 4000}])
             quote_review = call('/quotes/' + quote_review['id'] + '/publish', {'revision': quote_review['revision'], 'review_confirmed': True}, token)['quote']
             revise_review(quote_review, 'Срок 5 дней', quote_review['items'])
+        if os.getenv('SMETRA_PROMO_QA') == '1':
+            seed_promo(app, call)
         print("ANDROID_UI_FIXTURE_READY " + base_url, flush=True)
         try:
             threading.Event().wait()
@@ -339,6 +344,56 @@ def main():
         finally:
             server.shutdown()
             server.server_close()
+
+
+def seed_promo(app, call):
+    """Believable construction data for real RuStore screenshots (isolated database only)."""
+    # A separate account keeps the other fixtures' test records out of the pictures.
+    account = call('/auth/register', {'email': 'promo@test.invalid', 'password': 'promo screenshots only', 'name': 'Александр Петров',
+                                      'legal_acceptance': True, 'legal_version': '2026-10-19-registration-v1'})
+    token = account['token']
+    call('/me/legal-consent', {'accepted': True, 'version': '2026-10-19-ai-estimate-v1'}, token)
+    with app.db() as con:
+        con.execute("UPDATE users SET plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?",
+                    (int(time.time()) + 30 * 86400, int(time.time()), account['user']['id']))
+    client = call('/clients', {'name': 'Ирина Ковалёва', 'email': 'irina@example.org', 'phone': '+7 900 123-45-67'}, token)['item']
+    obj = call('/construction/objects', {'name': 'Квартира на Лесной, 54 м²'}, token)['object']['id']
+    rooms = [('Гостиная', '5.2', '3.8'), ('Спальня', '4.1', '3.4'), ('Кухня', '3.6', '3.2'), ('Санузел', '2.1', '1.7')]
+    for name, length, width in rooms:
+        zone = call('/construction/objects/' + obj + '/zones', {'name': name, 'length': length, 'width': width, 'height': '2.7'}, token)['zone']['id']
+        for title, formula, unit, price in [('Шпаклёвка стен', 'perimeter * height', 'м²', 45000), ('Покраска стен в 2 слоя', 'perimeter * height', 'м²', 38000),
+                                            ('Ламинат с подложкой', 'area', 'м²', 65000)]:
+            if name == 'Санузел' and title.startswith('Ламинат'):
+                title, price = 'Укладка плитки', 180000
+            call('/construction/objects/' + obj + '/quantities', {'zone_id': zone, 'kind': 'work', 'title': title, 'formula': formula, 'unit': unit, 'unit_price': price}, token)
+    items = [('Демонтаж старых покрытий', 'м²', '54', 25000), ('Выравнивание стен', 'м²', '142', 52000), ('Покраска стен в 2 слоя', 'м²', '142', 38000),
+             ('Укладка ламината', 'м²', '48', 65000), ('Укладка плитки в санузле', 'м²', '18', 180000), ('Электромонтаж, точка', 'шт', '36', 120000),
+             ('Натяжной потолок', 'м²', '54', 90000), ('Вывоз мусора', 'рейс', '3', 450000)]
+    quote = call('/quotes', {'title': 'Ремонт квартиры 54 м²', 'client': client['name'], 'client_id': client['id'],
+                             'description': 'Комплексный ремонт: черновые и чистовые работы, материалы по согласованию.',
+                             'terms': 'Срок 45 рабочих дней. Аванс 30%, оплата по этапам.',
+                             'items': [{'name': n, 'unit': u, 'quantity': q, 'unit_price': p} for n, u, q, p in items]}, token)['quote']
+    quote = call('/quotes/' + quote['id'] + '/publish', {'revision': quote['revision'], 'review_confirmed': True}, token)['quote']
+    call('/public/accept', {'token': quote['public_url'].split('quote=')[1], 'version': 1, 'name': client['name']})
+    project = call('/quotes/' + quote['id'] + '/project', {}, token)['project']
+    call('/receipts', {'project_id': project['id'], 'amount_kopecks': 18000000, 'method': 'bank_transfer'}, token)
+    for name, status in [('Демонтаж', 'completed'), ('Черновые работы', 'in_progress'), ('Чистовая отделка', 'planned')]:
+        call('/stages', {'project_id': project['id'], 'name': name, 'status': status}, token)
+    for name in ('Закупить шпаклёвку и грунт', 'Согласовать раскладку плитки', 'Вызвать электрика на прозвонку'):
+        call('/tasks', {'project_id': project['id'], 'name': name}, token)
+    call('/quotes', {'title': 'Ванная под ключ', 'client': 'Сергей Орлов', 'description': 'Плитка, сантехника, вентиляция.',
+                     'items': [{'name': 'Укладка плитки', 'unit': 'м²', 'quantity': '24', 'unit_price': 180000},
+                               {'name': 'Монтаж инсталляции', 'unit': 'шт', 'quantity': '1', 'unit_price': 850000}]}, token)
+    answer = ('Посчитал покраску гостиной 5,2 × 3,8 м при высоте 2,7 м:\n\n'
+              '- **Стены:** 48,6 м², за вычетом окна и двери ≈ 44 м²\n'
+              '- **Краска:** 2 слоя × 0,12 л/м² ≈ 10,6 л — 3 банки по 4,5 л\n'
+              '- **Работа:** 44 м² × 380 ₽ = **16 720 ₽**\n\n'
+              'Добавить эти строки в смету «Ремонт квартиры 54 м²»?')
+    with patch("backend.assistant.query_model", return_value={"content": answer}):
+        call('/assistant/chat', {'text': 'Сколько краски и работы на гостиную 5,2 на 3,8, потолки 2,7?'}, token)
+    session_file = os.getenv('SMETRA_FIXTURE_SESSION_FILE')
+    if session_file:
+        Path(session_file).write_text(token, encoding='utf-8')
 
 
 if __name__ == "__main__":

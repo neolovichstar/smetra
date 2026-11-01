@@ -10,7 +10,7 @@ function setup(){
  w.eval("user={id:'qa',quote_count:1};tab='quotes'");
  const quote={id:'q',revision:4,title:'Работы',client:'Клиент',currency:'RUB',items:[{line_id:'first',name:'Стены',quantity:'1',unit:'м²',unit_price:10000,cost_price:5000},{line_id:'second',name:'Пол',quantity:'2',unit:'м²',unit_price:20000,cost_price:6000}]};
  const writes=[];w.api=async(path,options)=>{if(options){const body=JSON.parse(options.body);writes.push({path,body,key:options.headers?.['Idempotency-Key']});return {quote:{...quote,...body,id:'q',revision:(body.revision||4)+1}}}if(path==='/workspace')return {workspace:{id:'w',name:'QA',currency:'RUB',role:'owner'},workspaces:[]};if(path==='/capabilities')return {};return {items:[]}};
- load('workspace.js');load('quote-editor-state.js');
+ load('workspace.js');load('quote-editor-state.js');load('estimate-audit.js');
  const fill=(selector,value)=>{const input=d.querySelector(selector);input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input};
  return {dom,w,d,quote,writes,fill,close:()=>dom.window.close()};
 }

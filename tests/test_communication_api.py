@@ -186,6 +186,28 @@ class CommunicationApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 201)
         self.assertEqual(reply["message"]["sender_type"], "admin")
+        self.assertEqual(escalated["stage"], "new")
+
+        status, queue = self.request("/api/admin/communication/threads?stage=waiting_user", token=self.admin_token)
+        self.assertEqual(status, 200)
+        answered = next(row for row in queue["threads"] if row["id"] == ticket_id)
+        self.assertTrue(answered["assigned_to_me"])
+        self.assertTrue(answered["assigned_admin_name"])
+
+        status, admins = self.request("/api/admin/communication/admins", token=self.admin_token)
+        self.assertEqual(status, 200)
+        self.assertTrue(any(row["me"] for row in admins["admins"]))
+        status, _ = self.request(f"/api/admin/communication/threads/{ticket_id}", "PATCH",
+                                 {"action": "transfer", "admin_id": "nobody"}, self.admin_token)
+        self.assertEqual(status, 400)
+        target = admins["admins"][0]["id"]
+        status, _ = self.request(f"/api/admin/communication/threads/{ticket_id}", "PATCH",
+                                 {"action": "transfer", "admin_id": target}, self.admin_token)
+        self.assertEqual(status, 200)
+        status, _ = self.request(f"/api/admin/communication/threads/{ticket_id}", "PATCH",
+                                 {"action": "close"}, self.admin_token)
+        status, queue = self.request("/api/admin/communication/threads?stage=resolved", token=self.admin_token)
+        self.assertEqual([row["id"] for row in queue["threads"]], [ticket_id])
 
 
 def identity_for(user_id):
