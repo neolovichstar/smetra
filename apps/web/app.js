@@ -132,7 +132,7 @@ document.documentElement.dataset.theme=document.body.classList.contains('dark')?
 syncThemeLabel();
 $('#theme')?.addEventListener('click',theme);
 function loadingView(section){
-  const names={fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',calculators:'Калькуляторы',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Файлы',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
+  const names={whatsnew:'Что нового',fieldwork:'Инструменты смет',inbox:'Полученные сметы',chats:'Чаты объектов',dashboard:'Сегодня',quotes:'Сметы',clients:'Клиенты',catalog:'Расценки',calculators:'Калькуляторы',premium:'Материалы',projects:'Заказы',tasks:'Задачи',leads:'Лиды',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История',files:'Хранилище',documents:'Документы',assistant:'Ассистент',admin:'Администрирование',profile:'Профиль',settings:'Настройки',billing:'Тариф и оплата',support:'Поддержка',construction:'Строительство'};
   const title=names[section]||'Рабочее пространство';
   return `<section class="page-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Загрузка раздела"><div class="page-loading-head"><span class="page-skeleton page-skeleton-kicker"></span><span class="page-skeleton page-skeleton-title"></span><span class="page-skeleton page-skeleton-copy"></span></div><div class="page-loading-metrics"><span class="page-skeleton"></span><span class="page-skeleton"></span><span class="page-skeleton"></span></div><section class="page-loading-card"><span class="page-skeleton page-skeleton-heading"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row"></span><span class="page-skeleton page-skeleton-row short"></span></section><span class="sr-only">Открываем раздел «${escapeHtml(title)}»</span></section>`;
 }
@@ -173,7 +173,8 @@ const sidebarIcons={
  support:'<circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.7 1.2c-.8 1.1-2.3 1.4-2.3 3M12 17h.01"/>',
  profile:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
  settings:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
- admin:'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/>'
+ admin:'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/>',
+ whatsnew:'<path d="m3 11 15-6v14L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>'
 };
 function enhanceSidebarNavigation(){
  const sidebar=$('#sidebar');if(!sidebar)return;
@@ -191,7 +192,8 @@ function enhanceSidebarNavigation(){
   // Remove any legacy auto-icon source before installing the canonical navigation SVG.
   button.removeAttribute('data-ui-icon');button.removeAttribute('data-ui-icon-only');button.style.removeProperty('--ui-icon');
   // Replace every legacy child in one operation. The nav item has one canonical SVG, never an appended second icon.
-  button.replaceChildren(icon,text);
+  const badge=button.querySelector('.sidebar-badge');
+  button.replaceChildren(icon,text,...(badge?[badge]:[]));
   button.dataset.navLabel=label;button.removeAttribute('title');
  };
  sidebar.querySelectorAll('.sidebar-group button[data-tab]').forEach(normalizeButton);
@@ -202,7 +204,7 @@ function enhanceSidebarNavigation(){
    const canonical=[...button.children].find(node=>node.matches('svg.sidebar-item-icon'));
    if(!canonical){normalizeButton(button);return}
    [...button.querySelectorAll('svg')].forEach(svg=>{if(svg!==canonical)svg.remove()});
-   [...button.children].filter(node=>!['sidebar-item-icon','sidebar-item-label','sidebar-accent'].some(name=>node.classList.contains(name))).forEach(node=>node.remove());
+   [...button.children].filter(node=>!['sidebar-item-icon','sidebar-item-label','sidebar-accent','sidebar-badge'].some(name=>node.classList.contains(name))).forEach(node=>node.remove());
    let kept=false;
    [...button.children].filter(node=>node.classList.contains('sidebar-item-icon')).forEach(svg=>{if(kept)svg.remove();else kept=true});
   });
@@ -274,6 +276,13 @@ function showAuth(){
   $('#nav-backdrop')?.classList.add('hidden');
   setAppState('guest');
 }
+async function refreshWhatsNewBadge(){
+  const button=document.querySelector('#sidebar [data-tab="whatsnew"]');if(!button)return;
+  let badge=button.querySelector('#whatsnew-badge');
+  if(!badge){badge=document.createElement('span');badge.id='whatsnew-badge';badge.className='sidebar-badge';badge.hidden=true;button.append(badge)}
+  try{const {unread}=await api('/changelog/unread');badge.textContent=unread>9?'9+':String(unread);badge.hidden=!unread;badge.setAttribute('aria-label',unread+' непрочитанных обновлений')}catch{badge.hidden=true}
+}
+window.SmetraRefreshWhatsNew=refreshWhatsNewBadge;
 async function showApp(){
   const attempt=authRevision;
   const owner=user;
@@ -294,6 +303,7 @@ async function showApp(){
   if(profileName)profileName.textContent=owner.name;
   if(avatar)avatar.innerHTML=userAvatarMarkup(owner);
   $('#admin-nav').classList.toggle('hidden',owner.role!=='admin');
+  refreshWhatsNewBadge();
   const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');
   if(ref){
     sessionStorage.setItem('smetra.referral',ref);
@@ -470,9 +480,10 @@ async function render() {
     if(active()&&content&&content.innerHTML===initialMarkup&&initialSection!==section)view(loadingView(section));
   },180);pendingPageLoadingTimer=loadingTimer;
   try {
-    const feature=({assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',calculators:'calculators',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
+    const feature=({whatsnew:'whatsNew',assistant:'assistant',profile:'profile',settings:'profile',construction:'construction',calculators:'calculators',admin:'admin',billing:'growth',premium:'premiumTools',chats:'objectChats'})[section];
     if(feature&&window.SmetraLoadFeature){await window.SmetraLoadFeature(feature);if(!active())return;}
     if(tab==='assistant' && window.SmetraAssistant){await window.SmetraAssistant(active);return;}
+    if(tab==='whatsnew' && window.SmetraWhatsNew){await window.SmetraWhatsNew.render(active);return;}
     if(tab==='profile'||tab==='settings'){await renderAccountHub(active);return;}
     if(tab==='construction' && window.SmetraConstruction){await window.SmetraConstruction();return;}
     if(tab==='calculators' && window.SmetraCalculators){window.SmetraCalculators.render();return;}
@@ -501,7 +512,7 @@ async function render() {
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
-const appSections=new Set(['fieldwork','inbox','chats','premium','dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
+const appSections=new Set(['whatsnew','fieldwork','inbox','chats','premium','dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','activity','billing','support','profile','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;

@@ -36,6 +36,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     for(const width of [320,360,375,390,412,430,768,1440]){
       await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});
       await evaluate('window.scrollTo({top:0,behavior:"instant"})');await wait(200);
+      // Measure settled layout: finite transitions (the composer's FLIP move, panel entrances) must finish first.
+      await evaluate('Promise.all(document.getAnimations().filter(a=>Number.isFinite(a.effect?.getComputedTiming().endTime)).map(a=>a.finished.catch(()=>{})))');
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,route+' overflows at '+width);
       if(route==='assistant'){
         const layout=await evaluate(`(()=>{const c=document.querySelector('.assistant-content'),p=document.querySelector('.assistant-composer'),s=document.querySelector('.assistant-studio'),m=document.querySelector('.main'),r=e=>{const x=e.getBoundingClientRect(),z=getComputedStyle(e);return {top:Math.round(x.top),bottom:Math.round(x.bottom),height:Math.round(x.height),minHeight:z.minHeight,heightCss:z.height,position:z.position,flex:z.flex,overflow:z.overflow}};return {viewport:innerHeight,content:r(c),composer:r(p),studio:r(s),main:r(m),scrollHeight:document.documentElement.scrollHeight}})()`);

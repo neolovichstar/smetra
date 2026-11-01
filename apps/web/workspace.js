@@ -1,7 +1,7 @@
 /* Workspace UI. All persistent business actions go through the authenticated API. */
 window.Workspace = (() => {
   const labels = {draft:'Черновик',sent:'Отправлена',viewed:'Просмотрена',changes_requested:'Нужны изменения',approved:'Согласована',rejected:'Отклонена',expired:'Истекла',planned:'Запланирован',in_progress:'В работе',waiting:'Ожидание',completed:'Завершён',cancelled:'Отменён',todo:'К выполнению',done:'Готово',person:'Физлицо',company:'Компания',low:'Низкий',normal:'Обычный',high:'Высокий',bank_transfer:'Перевод',cash:'Наличные',external:'Внешняя оплата',owner:'Владелец',admin:'Администратор',manager:'Менеджер',member:'Участник',viewer:'Наблюдатель'};
-  const names = {premium:'Материалы и облака',clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Файлы',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
+  const names = {premium:'Материалы и облака',clients:'Клиенты',catalog:'Расценки',projects:'Заказы',tasks:'Задачи',leads:'Лиды',documents:'Документы',files:'Хранилище',finance:'Финансы',calendar:'Календарь',team:'Команда',notifications:'Уведомления',activity:'История'};
   const e = escapeHtml;
   const moneyFormatters=new Map();
   const money = (n,c='RUB') => {if(!moneyFormatters.has(c))moneyFormatters.set(c,new Intl.NumberFormat('ru-RU',{style:'currency',currency:c,maximumFractionDigits:2}));return moneyFormatters.get(c).format((n||0)/100)};
@@ -190,9 +190,9 @@ window.Workspace = (() => {
           </details>
         </div>`;
     }else if(section==='files'){
-      fileCenterData=await api('/files');if(!active())return true;
-      html=mainTitle('Файлы','')+
-        `<section class="panel file-center"><div class="toolbar"><input id="file-center-search" type="search" aria-label="Поиск файлов" placeholder="Найти файл по названию"></div><div id="file-center-list"></div></section>`;
+      const [summary,first]=await Promise.all([api('/files/storage'),api(storagePath(storageTab,''))]);if(!active())return true;
+      fileCenterData={summary:summary.storage,items:first.items};
+      html=mainTitle('Хранилище','',(roleCanWrite()?`<button class="btn small" id="storage-note" type="button">Новая заметка</button><button class="btn small primary" id="storage-upload-button" type="button">${window.SmetraIcons?window.SmetraIcons.svg('plus',16):''}Загрузить</button>`:''))+storageShell(summary.storage);
     }else if(section==='documents'){
       const result=await api('/documents');if(!active())return true;
       html=mainTitle('Документы','',button('Создать документ','document','','primary'))+`<section class="panel document-register">${result.items.length?result.items.map(d=>`<div class="record-line document-row"><span class="file-type" aria-hidden="true">PDF</span><div><strong>${e(d.name)} № ${d.number}</strong><small>${date(d.created_at)} · ${e(d.template)}</small></div><div class="attachment-actions">${button('Спросить AI','ask-document',d.id).replace('data-work=',`data-label="${e(d.name)}" data-work=`)}${button('Скачать PDF','download-document',d.id)}</div></div>`).join(''):empty('Документы пока не созданы','Выберите смету, вид документа и оформление.')}</section>`;
@@ -207,19 +207,140 @@ window.Workspace = (() => {
       if(advancedSettings)advancedSettings.open=false;
     }
     bind(section);
-    if(section==='files')bindFileCenter(fileCenterData);
+    if(section==='files')bindStorage(fileCenterData);
     if(section==='team')await customFieldSettings();
     return true;
   }
-  function bindFileCenter(initial){
-    const list=document.querySelector('#file-center-list'),search=document.querySelector('#file-center-search');
-    let files=initial.items,timer,request=0;const mine=generation;
-    const paint=()=>{list.innerHTML=files.length?files.map(file=>`<div class="record-line file-center-row"><span class="file-type" aria-hidden="true">${e(file.name.split('.').pop().slice(0,4).toUpperCase())}</span><div class="file-description"><strong>${e(file.name)}</strong><small>${Math.ceil(file.size/1024)} КБ · ${date(file.created_at)}</small></div><div class="attachment-actions"><button class="btn small" data-file-open="${e(file.id)}">Открыть</button>${file.name.toLowerCase().endsWith('.md')?`<button class="btn small" data-file-edit="${e(file.id)}">Изменить</button>`:''}${roleCanWrite()?`<button class="btn small" data-file-manage="${e(file.id)}">Данные</button>`:''}${['text/plain','application/pdf','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(file.mime)?`<button class="btn small" data-file-ask="${e(file.id)}">Спросить AI</button>`:''}</div></div>`).join(''):empty('Файлы не найдены','Прикрепите файл к смете, клиенту или проекту.')};
+  // ───────── Storage: images gallery, file cards, archive ─────────
+  // The open section survives re-renders (a saved note returns to «Файлы»).
+  let storageTab='images';
+  const storagePath=(kind,q)=>'/files?'+(kind==='archive'?'archived=1':'kind='+kind)+(q?'&q='+encodeURIComponent(q):'');
+  // Decimal units, as plans and upload limits are stated (500 МБ = 500 000 000 bytes).
+  const bytes=n=>{if(!n)return '0 Б';const units=['Б','КБ','МБ','ГБ'];let i=0;while(n>=1000&&i<units.length-1){n/=1000;i++}return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:n<10&&i?1:0}).format(n)+' '+units[i]};
+  const extension=name=>(String(name).split('.').pop()||'').toUpperCase().slice(0,4);
+  const FILE_TONES={PDF:'#f2766c',DOCX:'#6ea8ff',XLSX:'#5ccf8f',CSV:'#5ccf8f',MD:'#c4c4cc',TXT:'#c4c4cc',PNG:'#b79cff',JPG:'#b79cff',JPEG:'#b79cff'};
+  // Document glyph with a folded corner and a coloured band carrying the extension.
+  const fileGlyph=name=>{const ext=extension(name)||'FILE',tone=FILE_TONES[ext]||'#a7a7b0';return `<svg class="storage-glyph" viewBox="0 0 48 60" width="48" height="60" aria-hidden="true"><path d="M8 2h22l14 14v38a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4Z" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/><path d="M30 2v10a4 4 0 0 0 4 4h10" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/><path d="M12 26h20M12 32h24M12 38h16" stroke="rgba(255,255,255,.14)" stroke-width="2" stroke-linecap="round"/><rect x="2" y="42" width="${Math.max(24,ext.length*8+12)}" height="13" rx="3" fill="${tone}"/><text x="${Math.max(24,ext.length*8+12)/2+2}" y="51.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="Onest,system-ui,sans-serif" fill="#0b0b0c">${e(ext)}</text></svg>`};
+  const ASKABLE=['text/plain','application/pdf','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','image/png','image/jpeg'];
+  function storageShell(summary){
+    const pct=summary.limit_bytes?Math.min(100,Math.round(summary.used_bytes/summary.limit_bytes*100)):0;
+    const tab=(key,label,count)=>`<button type="button" role="tab" data-storage-tab="${key}" aria-selected="${key===storageTab}">${label}<b>${count}</b></button>`;
+    return `<section class="storage" id="storage">
+      <div class="storage-meter${pct>=90?' is-full':''}">
+        <div class="storage-meter-head"><strong>${bytes(summary.used_bytes)}</strong><span>из ${bytes(summary.limit_bytes)} · свободно ${bytes(Math.max(0,summary.limit_bytes-summary.used_bytes))}</span></div>
+        <div class="usage-bar" role="progressbar" aria-label="Занято в хранилище" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span data-pct="${pct}"></span></div>
+        <div class="storage-meter-legend"><span>Изображения · ${bytes(summary.images.bytes)}</span><span>Файлы · ${bytes(summary.files.bytes)}</span><span>Архив · ${bytes(summary.archived.bytes)}</span></div>
+      </div>
+      <div class="storage-toolbar">
+        <div class="storage-tabs" role="tablist" aria-label="Разделы хранилища">${tab('images','Изображения',summary.images.count)}${tab('files','Файлы',summary.files.count)}${tab('archive','Архив',summary.archived.count)}</div>
+        <input id="storage-search" type="search" aria-label="Поиск в хранилище" placeholder="Найти по названию">
+      </div>
+      <div id="storage-view" class="storage-view" aria-live="polite"></div>
+      <div id="storage-actions" class="storage-actions" role="toolbar" aria-label="Действия с файлом" hidden></div>
+      <input type="file" id="storage-upload" hidden multiple accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv">
+    </section>`;
+  }
+  function bindStorage(initial){
+    const root=document.querySelector('#storage');if(!root)return;
+    const mine=generation,alive=()=>mine===generation&&root.isConnected;
+    const viewHost=root.querySelector('#storage-view'),bar=root.querySelector('#storage-actions'),search=root.querySelector('#storage-search');
+    root.querySelectorAll('.usage-bar span[data-pct]').forEach(span=>span.style.width=(initial.summary.used_bytes?Math.max(1,+span.dataset.pct):0)+'%');
+    let kind=storageTab,items=initial.items,selected=null,timer,request=0;
+    const thumbs=new Map(),urls=[];
+    const headers=()=>workspace?.id?{'X-Workspace-Id':workspace.id}:{};
+    const cleanup=()=>{for(const url of urls)URL.revokeObjectURL(url);urls.length=0;thumbs.clear()};
+    window.addEventListener('hashchange',cleanup,{once:true});
+    const observer='IntersectionObserver' in window?new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){observer.unobserve(entry.target);loadThumb(entry.target)}},{rootMargin:'200px'}):null;
+    async function loadThumb(img){
+      const id=img.dataset.thumb;if(thumbs.has(id)){img.src=thumbs.get(id);img.closest('.storage-photo')?.classList.add('is-ready');return}
+      try{const response=await fetch('/api/files/'+encodeURIComponent(id)+'/thumb',{credentials:'same-origin',headers:headers()});if(!response.ok)throw Error();const url=URL.createObjectURL(await response.blob());urls.push(url);thumbs.set(id,url);if(!alive())return;img.src=url;img.closest('.storage-photo')?.classList.add('is-ready')}catch{img.closest('.storage-photo')?.classList.add('is-broken')}
+    }
+    const meta=file=>`${extension(file.name)} · ${bytes(file.size)} · ${shortDate(file.created_at)}${file.source==='chat'?' · из чата':''}`;
+    const more=file=>`<button type="button" class="icon-button storage-more" data-select="${e(file.id)}" aria-label="Действия: ${e(file.name)}">${window.SmetraIcons?window.SmetraIcons.svg('more',18):'⋯'}</button>`;
+    const emptyState={images:['Здесь будут фотографии','Фото из чата с ассистентом и загруженные снимки появятся в галерее.'],files:['Файлов пока нет','Загрузите PDF, DOCX, XLSX, CSV, TXT или создайте заметку.'],archive:['Архив пуст','Отправьте сюда то, что не нужно каждый день: файлы останутся в хранилище.']};
+    function paint(){
+      selected=null;bar.hidden=true;
+      if(!items.length){viewHost.className='storage-view';viewHost.innerHTML=empty(...emptyState[kind]);return}
+      const photo=file=>`<figure class="storage-photo${thumbs.has(file.id)?' is-ready':''}"><button type="button" class="storage-photo-open" data-open="${e(file.id)}" aria-label="Открыть ${e(file.name)}"><img alt="" data-thumb="${e(file.id)}"${thumbs.has(file.id)?` src="${thumbs.get(file.id)}"`:''}></button><figcaption><span><strong>${e(file.name)}</strong><small>${e(meta(file))}</small></span>${more(file)}</figcaption></figure>`;
+      const card=file=>`<article class="storage-file"><button type="button" class="storage-file-open" data-open="${e(file.id)}">${file.mime?.startsWith('image/')&&kind==='archive'?fileGlyph('photo.'+extension(file.name)):fileGlyph(file.name)}<strong>${e(file.name)}</strong><small>${e(meta(file))}</small></button>${more(file)}</article>`;
+      viewHost.className='storage-view '+(kind==='images'?'storage-gallery':'storage-grid');
+      viewHost.innerHTML=items.map(kind==='images'?photo:card).join('');
+      viewHost.querySelectorAll('img[data-thumb]:not([src])').forEach(img=>observer?observer.observe(img):loadThumb(img));
+    }
+    async function load(){
+      const sequence=++request,q=search.value.trim();
+      try{const result=await api(storagePath(kind,q));if(sequence!==request||!alive())return;items=result.items;paint()}catch(error){if(alive())notify(error.message)}
+    }
+    async function refreshCounts(){
+      try{const {storage}=await api('/files/storage');if(!alive())return;
+        root.querySelectorAll('[data-storage-tab]').forEach(t=>{t.querySelector('b').textContent=storage[t.dataset.storageTab==='archive'?'archived':t.dataset.storageTab].count});
+        const pct=storage.limit_bytes?Math.min(100,Math.round(storage.used_bytes/storage.limit_bytes*100)):0;
+        root.querySelector('.storage-meter-head').innerHTML=`<strong>${bytes(storage.used_bytes)}</strong><span>из ${bytes(storage.limit_bytes)} · свободно ${bytes(Math.max(0,storage.limit_bytes-storage.used_bytes))}</span>`;
+        root.querySelector('.storage-meter-legend').innerHTML=`<span>Изображения · ${bytes(storage.images.bytes)}</span><span>Файлы · ${bytes(storage.files.bytes)}</span><span>Архив · ${bytes(storage.archived.bytes)}</span>`;
+        const span=root.querySelector('.usage-bar span');span.dataset.pct=pct;span.style.width=(storage.used_bytes?Math.max(1,pct):0)+'%';root.querySelector('.usage-bar').setAttribute('aria-valuenow',pct);
+        root.querySelector('.storage-meter').classList.toggle('is-full',pct>=90);
+      }catch{}
+    }
+    function select(id){
+      const file=items.find(item=>item.id===id);if(!file)return;
+      selected=file;viewHost.querySelectorAll('.is-selected').forEach(node=>node.classList.remove('is-selected'));
+      [...viewHost.querySelectorAll('[data-select]')].find(node=>node.dataset.select===id)?.closest('.storage-photo,.storage-file')?.classList.add('is-selected');
+      const action=(key,label,cls='')=>`<button type="button" class="btn small ${cls}" data-action="${key}">${label}</button>`;
+      const writable=roleCanWrite(),archived=kind==='archive';
+      bar.innerHTML=`<span class="storage-actions-name">${e(file.name)}</span><div class="storage-actions-buttons">${action('open','Открыть')}${ASKABLE.includes(file.mime)&&!archived?action('ask','Спросить ИИ'):''}${file.name.toLowerCase().endsWith('.md')&&writable&&!archived?action('edit','Изменить'):''}${writable&&!archived?action('manage','Данные'):''}${writable?action(archived?'restore':'archive',archived?'Вернуть':'В архив'):''}${writable?action('delete','Удалить','danger'):''}<button type="button" class="icon-button" data-action="close" aria-label="Закрыть">${window.SmetraIcons?window.SmetraIcons.svg('x',16):'×'}</button></div>`;
+      bar.hidden=false;
+    }
+    async function ask(file){
+      if(!file.mime.startsWith('image/')){askAbout('files',file.id,file.name);return}
+      // Photos go to the assistant as an attachment, so the model actually sees them.
+      try{
+        const response=await fetch('/api/files/'+encodeURIComponent(file.id),{credentials:'same-origin',headers:headers()});if(!response.ok)throw Error('Не удалось открыть фото');
+        const blob=await response.blob(),photo=new File([blob],file.name,{type:file.mime});
+        if(window.SmetraLoadFeature)await window.SmetraLoadFeature('assistant');
+        document.querySelector('[data-tab="assistant"]')?.click();
+        for(let i=0;i<50&&!window.SmetraAssistantAttachPhoto;i++)await new Promise(r=>setTimeout(r,100));
+        for(let i=0;i<50&&!document.querySelector('#assistant-attach');i++)await new Promise(r=>setTimeout(r,100));
+        await window.SmetraAssistantAttachPhoto?.(photo);
+      }catch(error){notify(error.message)}
+    }
+    async function act(action,file){
+      if(action==='close'){paint();return}
+      if(action==='open'){window.SmetraFilePreview?.open(file,workspace?.id);return}
+      if(action==='ask'){await ask(file);return}
+      if(action==='edit'){window.SmetraFileEditor?.open(file);return}
+      if(action==='manage'){manageFile(file.id).catch(error=>notify(error.message));return}
+      if(action==='archive'||action==='restore'){
+        try{await api('/files/'+encodeURIComponent(file.id)+'/archive',{method:'POST',body:JSON.stringify({archived:action==='archive'})});notify(action==='archive'?'Перенесено в архив':'Возвращено из архива');await load();await refreshCounts()}catch(error){notify(error.message)}
+        return;
+      }
+      if(action==='delete')confirmAction('Удалить файл?','«'+file.name+'» будет удалён без возможности восстановления.',async()=>{await api('/files/'+encodeURIComponent(file.id),{method:'DELETE'});notify('Файл удалён');await load();await refreshCounts()});
+    }
+    root.querySelector('.storage-tabs').onclick=event=>{const button=event.target.closest('[data-storage-tab]');if(!button||button.dataset.storageTab===kind)return;kind=storageTab=button.dataset.storageTab;root.querySelectorAll('[data-storage-tab]').forEach(t=>t.setAttribute('aria-selected',String(t===button)));viewHost.innerHTML='<div class="page-loading" aria-hidden="true"></div>';load()};
+    viewHost.onclick=event=>{
+      const target=event.target.closest('[data-select],[data-open]');if(!target)return;
+      if(target.dataset.select){select(target.dataset.select);return}
+      const file=items.find(item=>item.id===target.dataset.open);if(file)window.SmetraFilePreview?.open(file,workspace?.id);
+    };
+    bar.onclick=event=>{const button=event.target.closest('[data-action]');if(button&&selected)act(button.dataset.action,selected)};
+    search.oninput=()=>{clearTimeout(timer);timer=setTimeout(load,200)};
+    const upload=root.querySelector('#storage-upload');
+    document.querySelector('#storage-upload-button')?.addEventListener('click',()=>upload.click());
+    document.querySelector('#storage-note')?.addEventListener('click',()=>{storageTab='files';window.SmetraFileEditor?.open()});
+    upload.onchange=async()=>{
+      const files=[...upload.files];upload.value='';
+      for(const file of files){
+        try{
+          const raw=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<raw.length;i+=32768)binary+=String.fromCharCode(...raw.subarray(i,i+32768));
+          await api('/files',{method:'POST',body:JSON.stringify({source:'storage',name:file.name,content:btoa(binary)})});
+          notify('Загружено: '+file.name);
+        }catch(error){notify(file.name+': '+error.message)}
+      }
+      if(!alive())return;
+      const images=files.some(f=>/\.(png|jpe?g)$/i.test(f.name));
+      if(kind==='archive'||images!==(kind==='images')){kind=storageTab=images?'images':'files';root.querySelectorAll('[data-storage-tab]').forEach(t=>t.setAttribute('aria-selected',String(t.dataset.storageTab===kind)))}
+      await load();await refreshCounts();
+    };
     paint();
-    search.insertAdjacentHTML('afterend','<button class="btn small" id="file-new-note" type="button" title="Текстовая заметка в формате Markdown">Новая заметка</button>');
-    document.querySelector('#file-new-note').onclick=()=>window.SmetraFileEditor?.open();
-    search.oninput=()=>{clearTimeout(timer);const sequence=++request,value=search.value.trim();timer=setTimeout(async()=>{if(!search.isConnected||mine!==generation)return;try{const result=await api('/files?q='+encodeURIComponent(value));if(sequence!==request||!search.isConnected||mine!==generation)return;files=result.items;paint()}catch(error){if(sequence===request&&search.isConnected&&mine===generation)notify(error.message)}},200)};
-    list.onclick=event=>{const button=event.target.closest('[data-file-open],[data-file-ask],[data-file-edit],[data-file-manage]');if(!button)return;const id=button.dataset.fileOpen||button.dataset.fileAsk||button.dataset.fileEdit||button.dataset.fileManage,file=files.find(item=>item.id===id);if(!file)return;if(button.dataset.fileAsk)askAbout('files',file.id,file.name);else if(button.dataset.fileManage)manageFile(file.id).catch(error=>notify(error.message));else if(button.dataset.fileEdit)window.SmetraFileEditor?.open(file);else window.SmetraFilePreview?.open(file,workspace?.id)};
   }
   async function manageFile(id){
     const active=pageRequest();
@@ -782,5 +903,5 @@ window.Workspace = (() => {
   document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'&&user){ev.preventDefault();palette()}});
   document.querySelector('#command-open')?.addEventListener('click',()=>{if(user)palette()});
   async function palette(){const root=openModal('Быстрый переход','Найдите клиента, смету, заказ или документ.',`<input id="command-search" type="search" placeholder="Поиск или действие…" aria-label="Глобальный поиск"><div id="command-results" class="command-results">${button('Создать смету','quote-new')}${Object.keys(names).slice(0,8).map(k=>button(names[k],'navigate',k)).join('')}</div>`);let timer;root.querySelector('input').focus();root.querySelector('input').oninput=ev=>{clearTimeout(timer);const q=ev.target.value;timer=setTimeout(async()=>{try{const r=await api('/search?q='+encodeURIComponent(q));if(!root.isConnected||root.querySelector('input')?.value!==q)return;root.querySelector('#command-results').innerHTML=r.items.map(i=>`<button class="command-result" data-work="${e(i.kind==='quotes'?'quote':'navigate')}" data-id="${e(i.kind==='quotes'?i.id:i.kind)}"><span>${e(i.name)}</span><small>${e(names[i.kind]||'Смета')}</small></button>`).join('')||'<p class="muted">Ничего не найдено</p>'}catch(err){notify(err.message)}},180)};root.querySelector('#command-results').onclick=async ev=>{const b=ev.target.closest('[data-work]');if(b){closeModal();await action(b)}}}
-  return {render,editor,calculateLineTotal,majorToKopecks:amount,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,reset:()=>{workspace=null;current=null;workspaces=[];generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
+  return {render,editor,calculateLineTotal,majorToKopecks:amount,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,reset:()=>{workspace=null;current=null;workspaces=[];storageTab='images';generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
 })();

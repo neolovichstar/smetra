@@ -40,10 +40,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
    await until("![...document.querySelectorAll('#assistant-actions button')].some(b=>b.textContent==='Отменить изменение')");
  }
  const restored=await evaluate(`api('/files/${file.id}/metadata').then(r=>r.file)`);assert.equal(restored.name,'resources.md');assert.equal(restored.client_id,file.client_id);assert.equal(restored.sha256,file.sha256);
- await evaluate("document.querySelector('[data-tab=files]').click()");await until("document.querySelector('[data-file-manage]')");
- await evaluate(`document.querySelector('[data-file-manage="${file.id}"]').click()`);await until("document.querySelector('#workspace-dialog form')?.onsubmit");
+ await evaluate("document.querySelector('[data-tab=files]').click()");await until("document.querySelector('#storage [data-storage-tab=files]')");
+ await evaluate("document.querySelector('[data-storage-tab=files]').click()");await until(`document.querySelector('#storage-view [data-select="${file.id}"]')`);
+ await evaluate(`document.querySelector('#storage-view [data-select="${file.id}"]').click();document.querySelector('#storage-actions [data-action=manage]').click()`);await until("document.querySelector('#workspace-dialog form')?.onsubmit");
  await evaluate("document.querySelector('#workspace-dialog [name=name]').value='Ручное название.md';document.querySelector('#workspace-dialog form').requestSubmit()");
- await until("[...document.querySelectorAll('.file-center-row')].some(row=>row.textContent.includes('Ручное название.md'))");
+ await until("[...document.querySelectorAll('#storage-view .storage-file')].some(card=>card.textContent.includes('Ручное название.md'))");
  assert.equal((await evaluate(`api('/files/${file.id}/metadata').then(r=>r.file)`)).name,'Ручное название.md');
  assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);assert.deepEqual(errors,[]);
  await screenshot('resources-file-center');clearTimeout(watchdog);console.log('PASS: mobile PDF preview/create/persistent download/undo, file rename/move confirmation/undo and manual metadata form; no overflow or JS errors');ws.close();

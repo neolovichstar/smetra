@@ -11,7 +11,7 @@ window.SmetraFileEditor = (() => {
     let content='';let places=[];
     try {
       if(file){const headers={};const workspace=sessionStorage.getItem('workspace_id');if(workspace)headers['X-Workspace-Id']=workspace;const response=await fetch('/api/files/'+encodeURIComponent(file.id),{credentials:'same-origin',headers});if(!response.ok)throw Error('Не удалось открыть документ');content=await response.text()}
-      else {const [projects,objects]=await Promise.all([api('/projects'),api('/construction/objects')]);places=[...projects.items.map(item=>['project_id',item.id,'Заказ · '+item.name]),...objects.items.map(item=>['construction_id',item.id,'Объект · '+item.name])]}
+      else {const [projects,objects]=await Promise.all([api('/projects'),api('/construction/objects')]);places=[['source','storage','Хранилище · без привязки'],...projects.items.map(item=>['project_id',item.id,'Заказ · '+item.name]),...objects.items.map(item=>['construction_id',item.id,'Объект · '+item.name])]}
     }catch(error){if(active())notify(error.message);return}
     if(!active())return;
     view(`<div class="file-editor-top"><button type="button" id="file-editor-back">← Файлы</button><span>СМЕТРА / ДОКУМЕНТ</span></div><div class="topline"><div><h1>${file?'Редактировать заметку':'Новая заметка'}</h1></div></div>

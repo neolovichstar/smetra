@@ -39,6 +39,26 @@ BEGIN
   EXECUTE format('REVOKE ALL ON smetra.%I FROM PUBLIC, anon, authenticated, smetra_runtime',t);
  END LOOP;
 END $private$;
+-- The first update in the feed.
+INSERT INTO smetra.changelog_posts(id,title,body,tag,author_id,published_at,updated_at)
+VALUES('release-2026-11-01','Хранилище файлов и «Что нового»',
+'Всё, что вы прикрепляете, теперь собрано в одном месте.
+
+## Хранилище
+- **Изображения** — галерея всех фото, в том числе отправленных ассистенту в чате.
+- **Файлы** — PDF, DOCX, XLSX, CSV, TXT и заметки карточками с иконкой формата.
+- **Архив** — уберите редко нужное, файл останется в хранилище.
+- Шкала показывает, сколько места занято и сколько осталось по тарифу.
+- У каждого файла: открыть, **спросить ИИ**, перенести в архив или удалить.
+
+## Что нового
+Здесь будем рассказывать об обновлениях. Отмечайте реакцией, нравится ли изменение — мы читаем каждую.
+
+## А ещё
+- Интерфейс на телефоне стал компактнее, а нижняя панель — стеклянной.
+- Новая иконка приложения и экран загрузки с каплями — их можно лопать.',
+'Новое',NULL,extract(epoch FROM now())::bigint,extract(epoch FROM now())::bigint)
+ON CONFLICT(id) DO NOTHING;
 INSERT INTO smetra.schema_migrations(version,applied_at)
  VALUES(65,extract(epoch FROM now())::bigint) ON CONFLICT(version) DO NOTHING;
 COMMIT;

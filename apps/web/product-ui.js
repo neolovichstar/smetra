@@ -28,7 +28,7 @@
   const groups = [...(sidebar?.querySelectorAll('.sidebar-group') || [])];
   if (groups.length) {
     const primary = groups[0];
-    const order = ['dashboard','assistant','quotes','projects','clients'];
+    const order = ['dashboard','assistant','quotes','projects','clients','whatsnew'];
     order.forEach(tab => {
       const control = sidebar.querySelector(`[data-tab="${tab}"]`);
       if (control) primary.append(control);
