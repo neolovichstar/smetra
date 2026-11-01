@@ -265,6 +265,10 @@ def user_view(user, con):
         "quote_count": con.execute(
             "SELECT count(*) FROM quotes WHERE user_id=?", (user["id"],)
         ).fetchone()[0],
+        # First-steps checklist: which of the path-to-value events this person has reached.
+        "milestones": sorted({row[0] for row in con.execute(
+            "SELECT DISTINCT name FROM growth_events WHERE user_id=? "
+            "AND name IN ('estimate_created','estimate_shared','estimate_approved')", (user["id"],))}),
     }
 
 

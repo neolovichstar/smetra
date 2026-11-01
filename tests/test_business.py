@@ -336,6 +336,9 @@ class BusinessFlows(unittest.TestCase):
         from pypdf import PdfReader
         first = PdfReader(io.BytesIO(content)).pages[0].extract_text()
         self.assertIn('Покраска', first)
+        # The «Сделано в Сметре» footer links to the production domain with a campaign tag.
+        links = [a.get_object()['/A']['/URI'] for a in PdfReader(io.BytesIO(content)).pages[0].get('/Annots', [])]
+        self.assertTrue(any(str(uri).startswith('https://smetra.online/?utm_source=smetra&utm_medium=pdf_footer') for uri in links), links)
         self.assertIn('3 м²', first)
         self.assertNotIn('20 м²', first)
         self.assertEqual(self.call(f'/construction/objects/{obj}/facts', 'POST',

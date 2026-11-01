@@ -38,6 +38,9 @@ TITLES = {
 }
 
 
+BRANDING_URL = "https://smetra.online/?utm_source=smetra&utm_medium=pdf_footer&utm_campaign=document"
+
+
 def pdf(document):
     try:
         from reportlab.lib import colors
@@ -215,7 +218,10 @@ def pdf(document):
         canvas.setFont("Smetra", 8)
         canvas.setFillColor(colors.HexColor("#7b8797"))
         if not data.get('hide_branding'):
-            canvas.drawString(44, 28, "Сделано в Сметре · smetra.vercel.app")
+            label = "Сделано в Сметре · smetra.online"
+            canvas.drawString(44, 28, label)
+            # The footer is a link: people who receive the PDF can see where it was made.
+            canvas.linkURL(BRANDING_URL, (44, 24, 44 + canvas.stringWidth(label, "Smetra", 8), 36), relative=0)
         canvas.drawRightString(551, 28, str(pdfdoc.page))
         canvas.restoreState()
 

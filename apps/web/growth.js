@@ -25,6 +25,30 @@
   host.insertAdjacentHTML('afterbegin',`<section class="activation-intro"><span class="overline">Начните с результата</span><h2>Что хотите сделать?</h2><div class="row wrap"><button class="btn primary" data-activation="estimate">Создать смету</button><button class="btn" data-activation="order">Рассчитать заказ</button><button class="btn" data-activation="proposal">Подготовить предложение</button></div><p class="note">10 смет бесплатно. Готовую смету можно отправить клиенту ссылкой или PDF.</p></section>`);
   host.querySelectorAll('[data-activation]').forEach(button=>button.onclick=()=>start(button.dataset.activation));
  }
+ // After the first estimate: the path to value — send it, get it approved. Hidden once done or dismissed.
+ function firstSteps(host){
+  if(!host||!user||host.querySelector('.first-steps'))return;
+  const done=new Set(user.milestones||[]);
+  if(user.quote_count>0)done.add('estimate_created');
+  const key='smetra.firstSteps.hidden.'+user.id;
+  let hidden=false;try{hidden=localStorage.getItem(key)==='1'}catch{}
+  const steps=[['estimate_created','Создайте смету','Позиции, объёмы и итог — вручную, по описанию или из калькулятора.','Создать смету','new'],
+   ['estimate_shared','Отправьте клиенту ссылку','Клиент откроет смету без регистрации. Вы увидите, когда он её посмотрит.','Открыть сметы','quotes'],
+   ['estimate_approved','Получите согласование','Клиент нажмёт «Согласовать» на странице сметы — придёт уведомление, а из сметы можно сделать заказ.','','']];
+  const count=steps.filter(step=>done.has(step[0])).length;
+  if(hidden||count===steps.length||user.quote_count===0)return;
+  const next=steps.find(step=>!done.has(step[0]));
+  host.insertAdjacentHTML('afterbegin',`<section class="first-steps" aria-labelledby="first-steps-title"><header><div><span class="overline">Первые шаги · ${count} из ${steps.length}</span><h2 id="first-steps-title">${e(next[1])}</h2></div><button class="icon-button" type="button" data-first-steps-hide aria-label="Скрыть первые шаги">${window.SmetraIcons?window.SmetraIcons.svg('x',16):'×'}</button></header>
+   <div class="first-steps-bar" role="progressbar" aria-label="Пройдено шагов" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="${count}"><span data-steps="${count}"></span></div>
+   <ol>${steps.map(([name,title,note,action,target])=>`<li class="${done.has(name)?'is-done':name===next[0]?'is-next':''}"><span class="first-steps-mark" aria-hidden="true"></span><div><strong>${e(title)}</strong>${done.has(name)?'':`<p>${e(note)}</p>`}</div>${!done.has(name)&&action?`<button class="btn small${name===next[0]?' primary':''}" type="button" data-first-step="${target}">${e(action)}</button>`:''}</li>`).join('')}</ol></section>`);
+  const card=host.querySelector('.first-steps');
+  card.querySelector('.first-steps-bar span').style.width=Math.round(count/steps.length*100)+'%';
+  card.querySelector('[data-first-steps-hide]').onclick=()=>{try{localStorage.setItem(key,'1')}catch{}card.remove()};
+  card.querySelectorAll('[data-first-step]').forEach(button=>button.onclick=()=>{
+   if(button.dataset.firstStep==='new'){Workspace.editor();return}
+   location.hash=button.dataset.firstStep;
+  });
+ }
  async function paywall(source='other'){
   if(!user||user.plan==='pro')return;
   const key='smetra.paywall.'+user.id+'.'+source;
@@ -135,5 +159,5 @@
   track('paywall_viewed',source);
   if(pending&&new URLSearchParams(location.search).has('payment')){const pollKey='smetra.payment.poll.'+owner.id+'.'+pending.id,count=Number(sessionStorage.getItem(pollKey)||0);if(count<3){setTimeout(()=>{if(active()&&sessionRevision()===revision&&document.visibilityState==='visible'){sessionStorage.setItem(pollKey,String(count+1));sync()}},count===0?0:10000)}}
  }
- window.SmetraGrowth={billing,onboarding,start,paywall};
+ window.SmetraGrowth={billing,onboarding,firstSteps,start,paywall};
 })();

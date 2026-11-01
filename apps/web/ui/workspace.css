@@ -399,6 +399,25 @@
 .activation-intro{grid-area:onboard;display:flex;flex-direction:column;align-items:flex-start;gap:var(--s-3);padding:var(--s-5);border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:var(--r-3);background:var(--surface-1);animation:view-enter 400ms var(--ease)}
 .activation-intro .overline{color:var(--accent-text)}
 .activation-intro h2{font-size:var(--fs-20)}
+/* First steps after the first estimate: send → approval */
+.workspace-home:has(.first-steps){grid-template-areas:"intro intro" "onboard onboard" "capture capture" "metrics metrics" "recent attention"}
+.first-steps{grid-area:onboard;display:flex;flex-direction:column;gap:var(--s-3);padding:var(--s-5);border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:var(--r-3);background:var(--surface-1);animation:view-enter 400ms var(--ease)}
+.first-steps header{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s-3)}
+.first-steps .overline{color:var(--accent-text)}
+.first-steps h2{font-size:var(--fs-20);margin-top:4px}
+.first-steps-bar{height:4px;border-radius:var(--r-pill);background:var(--line);overflow:hidden}
+.first-steps-bar span{display:block;height:100%;border-radius:inherit;background:var(--accent);transition:width var(--t-slow) var(--ease)}
+.first-steps ol{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.first-steps li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:var(--s-3);padding:10px 0;border-top:1px solid var(--line)}
+.first-steps li:first-child{border-top:0}
+.first-steps li strong{font-weight:500}
+.first-steps li p{margin-top:2px;color:var(--text-3);font-size:var(--fs-13)}
+.first-steps-mark{width:20px;height:20px;border:1.5px solid var(--line-strong);border-radius:50%}
+.first-steps li.is-next .first-steps-mark{border-color:var(--accent)}
+.first-steps li.is-done strong{color:var(--text-3);text-decoration:line-through;text-decoration-color:var(--line-strong)}
+.first-steps li.is-done .first-steps-mark{border-color:var(--accent);background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2306101f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 5 5 9-10'/%3E%3C/svg%3E") center/12px no-repeat}
+@container (max-width:900px){.workspace-home:has(.first-steps){grid-template-areas:"intro" "onboard" "capture" "metrics" "attention" "recent"}}
+@media (max-width:640px){.first-steps li{grid-template-columns:22px minmax(0,1fr)}.first-steps li .btn{grid-column:2;justify-self:start}}
 @container (max-width:900px){.workspace-home:has(.activation-intro){grid-template-areas:"intro" "onboard" "capture" "metrics" "attention" "recent"}}
 
 /* ───────── Profile and settings hub ───────── */
