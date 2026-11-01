@@ -982,6 +982,27 @@ def _confirm(service, action_id):
         return result
 
 
+def keep_chat_photos(service, images):
+    """Photos sent to the assistant also land in the workspace storage, while it has room."""
+    if not images:
+        return
+    # The internal upload path: the chat request's idempotency key belongs to the message, not to each photo.
+    from backend.attachments import _route as files_route
+    moment = time.strftime("%d.%m.%Y %H-%M", time.localtime())
+    for index, image in enumerate(images, 1):
+        if image.get("stored") is True:
+            continue
+        extension = ".png" if image.get("mime") == "image/png" else ".jpg"
+        suffix = f" ({index})" if len(images) > 1 else ""
+        try:
+            files_route(service, "POST", [], {}, {"assistant_upload": True, "source": "chat",
+                                                   "name": f"Фото из чата {moment}{suffix}{extension}",
+                                                   "content": image.get("content", "")})
+        except DomainError:
+            # A full storage or an unusual image must never block the conversation itself.
+            pass
+
+
 def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None, on_design=None):
     from backend import ai_tokens
     ai_tokens.start_meter()
@@ -1375,6 +1396,7 @@ def route(service, method, parts, data):
     prompt = string(
         data.get("text", ""), "Сообщение", 3000, not bool(image_url)
     )
+    keep_chat_photos(service, images)
     if not prompt:
         prompt = "Опиши фотографию и помоги по ней с моей задачей. Не угадывай точные размеры и цены."
     context = verified_context(service, data.get("context"))

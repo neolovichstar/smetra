@@ -56,7 +56,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 64
+REQUIRED_CLOUD_SCHEMA_VERSION = 65
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -482,7 +482,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
+                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox", "changelog"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
@@ -908,6 +908,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/shared-inbox" or path.startswith("/api/shared-inbox/"):
             from backend.estimate_sharing import recipient_route
             return self.send_json(*recipient_route(self,con,method,path))
+        from backend import changelog
+        if changelog.handles(path):
+            return changelog.route(self, method, path, query, con)
         from backend.community import handles, route as communication_route
         if handles(path):
             result = communication_route(self, method, path, query, con)

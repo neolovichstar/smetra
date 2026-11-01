@@ -540,7 +540,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
     for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
     const extension=file.name.toLowerCase().split('.').pop();
-    return {name:file.name,mime:file.type||(extension==='png'?'image/png':'image/jpeg'),content:btoa(binary)};
+    return {name:file.name,mime:file.type||(extension==='png'?'image/png':'image/jpeg'),content:btoa(binary),...(file.smetraStored?{stored:true}:{})};
   };
   attachButton.onclick=()=>fileInput.click();
   const uploadAttachment=async file=>{
@@ -554,6 +554,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       }
       let optimized;
       try{optimized=await compressPhoto(file)}catch(error){status.textContent=error.message;fileInput.value='';return}
+      if(file.smetraStored)optimized.smetraStored=true;
       const currentBytes=pendingPhotos.reduce((sum,item)=>sum+item.file.size,0);
       if(pendingPhotos.length>=3||currentBytes+optimized.size>1_500_000){
         status.textContent='Максимум 3 изображения общим размером до 1,5 МБ после сжатия';fileInput.value='';return;
@@ -582,6 +583,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     finally{attachButton.disabled=false;fileInput.value=''}
   };
   fileInput.onchange=async()=>{const files=[...fileInput.files];for(const file of files){await uploadAttachment(file)}fileInput.value=''};
+  // Storage → «Спросить ИИ»: a photo already in the workspace storage joins the next message without being stored twice.
+  window.SmetraAssistantAttachPhoto=async file=>{file.smetraStored=true;await uploadAttachment(file)};
 
   composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault()});
   composer.addEventListener('drop',async event=>{if(event.dataTransfer.files.length){event.preventDefault();for(const file of [...event.dataTransfer.files])await uploadAttachment(file)}});

@@ -383,6 +383,7 @@ def migrate(con):
     con.executescript((Path(__file__).parent / "migrations" / "034_partner_platform.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "035_partner_verification_analytics.sql").read_text(encoding="utf-8"))
     con.executescript((Path(__file__).parent / "migrations" / "036_partner_members.sql").read_text(encoding="utf-8"))
+    con.executescript((Path(__file__).parent / "migrations" / "037_changelog.sql").read_text(encoding="utf-8"))
     if "user_id" not in {r["name"] for r in con.execute("PRAGMA table_info(partner_console_sessions)")}:
         con.execute("ALTER TABLE partner_console_sessions ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE")
     # Python casefold handles Cyrillic correctly; SQLite's lower() only handles ASCII.
@@ -443,7 +444,7 @@ def migrate(con):
         (Path(__file__).parent / "migrations" / "018_creation_requests.sql").read_text(encoding="utf-8")
     )
     for table, additions in {
-        "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'"},
+        "files": {"archived_at": "INTEGER", "source": "TEXT NOT NULL DEFAULT ''", "index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'"},
         "assistant_jobs": {"kind": "TEXT NOT NULL DEFAULT 'chat'", "file_id": "TEXT REFERENCES files(id) ON DELETE CASCADE", "source_sha256": "TEXT NOT NULL DEFAULT ''"},
         "ai_usage": {"draft_claimed_at": "INTEGER"},
     }.items():
