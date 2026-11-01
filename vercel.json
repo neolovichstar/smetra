@@ -50,6 +50,14 @@
     {
       "source": "/contacts",
       "destination": "/contacts.html"
+    },
+    {
+      "source": "/kalkulyator",
+      "destination": "/kalkulyator/index.html"
+    },
+    {
+      "source": "/kalkulyator/:slug",
+      "destination": "/kalkulyator/:slug.html"
     }
   ],
   "headers": [

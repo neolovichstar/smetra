@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://smetra.online/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://smetra.online/kalkulyator</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://smetra.online/kalkulyator/plitka</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://smetra.online/kalkulyator/laminat</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://smetra.online/kalkulyator/kraska</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://smetra.online/kalkulyator/shtukaturka</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://smetra.online/kalkulyator/beton</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://smetra.online/contacts</loc><priority>0.4</priority></url>
   <url><loc>https://smetra.online/terms</loc><priority>0.2</priority></url>
   <url><loc>https://smetra.online/privacy</loc><priority>0.2</priority></url>

@@ -304,6 +304,7 @@ async function showApp(){
   if(avatar)avatar.innerHTML=userAvatarMarkup(owner);
   $('#admin-nav').classList.toggle('hidden',owner.role!=='admin');
   refreshWhatsNewBadge();
+  window.SmetraAttribution?.flush(api);
   const ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('smetra.referral');
   if(ref){
     sessionStorage.setItem('smetra.referral',ref);

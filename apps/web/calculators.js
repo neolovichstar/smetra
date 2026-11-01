@@ -284,8 +284,22 @@
         if (document.contains(root)) notify('Не удалось скопировать. Проверьте разрешение браузера.');
       }
     });
-    activate(selected);
+    // Values carried over from a public calculator page (/kalkulyator/…) after sign-in.
+    let carried = null;
+    try { carried = JSON.parse(sessionStorage.getItem(HANDOFF) || 'null'); sessionStorage.removeItem(HANDOFF); } catch { carried = null; }
+    activate(carried && kinds[carried.kind] ? carried.kind : selected);
+    if (carried && kinds[carried.kind] && carried.values && typeof carried.values === 'object') {
+      for (const field of kinds[carried.kind].fields) {
+        // Not form.elements[name]: a field called "length" would hit the collection's length.
+        const input = form.querySelector('[name="' + field[0] + '"]'), value = carried.values[field[0]];
+        if (input && typeof value === 'string' && value.length <= 20) input.value = value;
+      }
+      update();
+    }
   }
 
-  window.SmetraCalculators = Object.freeze({calculate, estimateDraft, render, kinds: Object.keys(kinds)});
+  const HANDOFF = 'smetra.calculator';
+  // Field definitions for the public calculator pages, built from this single source.
+  const spec = kind => kinds[kind] ? JSON.parse(JSON.stringify(kinds[kind])) : null;
+  window.SmetraCalculators = Object.freeze({calculate, estimateDraft, render, spec, handoffKey: HANDOFF, kinds: Object.keys(kinds)});
 })();
