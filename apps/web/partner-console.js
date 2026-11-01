@@ -14,6 +14,7 @@
   /* ---------- formatting ---------- */
   const nf = new Intl.NumberFormat("ru-RU");
   const num = value => nf.format(Number(value) || 0);
+  const goods = n => `${num(n)} ${n % 10 === 1 && n % 100 !== 11 ? "товар" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "товара" : "товаров"}`;
   const rub = kopecks => {
     const value = (Number(kopecks) || 0) / 100;
     return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: value % 1 ? 2 : 0, maximumFractionDigits: 2 }).format(value);
@@ -515,13 +516,13 @@
     const verified = proof.status === "verified";
     const state = { cursors: [""], page: 0, items: [], next: null, selected: new Set(), query: "", filter: "all", tab: "table", limit: innerWidth < 640 ? 25 : 50 };
     host.innerHTML = pageHead("Каталог материалов", `Товары с ценой и ссылкой на ${esc(me.domain)}. Пользователи видят их только после подтверждения домена.`,
-      `<button class="p-btn is-primary is-small" type="button" id="open-import">${icon("upload")}Импорт JSON</button>`) +
+      `<button class="p-btn is-primary is-small" type="button" id="open-import">${icon("upload")}Загрузить каталог</button>`) +
       (verified ? "" : note("warn", "alert", `<strong>Домен не подтверждён.</strong> Товары можно загружать заранее, показываться они начнут после <a class="pc-link" href="#/domain">подтверждения домена</a>.`)) + `
       <div class="pc-tabs" role="tablist" aria-label="Способ загрузки" data-mt>
         <button type="button" role="tab" aria-selected="true" data-tab="table">Товары</button>
-        <button type="button" role="tab" aria-selected="false" data-tab="import">Импорт JSON</button>
-        <button type="button" role="tab" aria-selected="false" disabled title="Появится после поддержки на сервере">XML / YML<span class="p-pill is-plain">скоро</span></button>
-        <button type="button" role="tab" aria-selected="false" disabled title="Появится после поддержки на сервере">CSV<span class="p-pill is-plain">скоро</span></button>
+        <button type="button" role="tab" aria-selected="false" data-tab="yml">YML / XML</button>
+        <button type="button" role="tab" aria-selected="false" data-tab="csv">CSV / Excel</button>
+        <button type="button" role="tab" aria-selected="false" data-tab="import">JSON</button>
         <button type="button" role="tab" aria-selected="false" disabled title="Появится после поддержки на сервере">Автосинхронизация<span class="p-pill is-plain">скоро</span></button>
       </div>
       <div id="catalog-body"></div>`;
@@ -578,7 +579,7 @@
         try {
           const accepted = await sendProducts(list.map(productPayload), (i, n) => { progress.textContent = n > 1 ? `Отправка ${i} из ${n}…` : "Отправка…"; });
           progress.textContent = "";
-          toast(`Каталог обновлён: ${num(accepted)} товаров`, "ok");
+          toast(`Каталог обновлён: ${goods(accepted)}`, "ok");
           area.value = "";
           delete cache["products-first"];
           state.cursors = [""]; state.page = 0;
@@ -588,6 +589,88 @@
           errorsHost.innerHTML = `<ul class="pc-errors" role="alert"><li>${esc(error.message)}</li></ul>`;
         } finally { button.disabled = false; }
       });
+    };
+
+    // YML / CSV: parse in the browser, show what will be sent, then send through the same Partner API.
+    const HOURLY_LIMIT = 2000;
+    const drawFile = kind => {
+      const yml = kind === "yml", tool = window.SmetraPartnerImport;
+      body.innerHTML = `<div class="pc-cols pc-cols-wide">
+        <div class="pc-panel pc-panel-pad">
+          <label class="pc-drop" for="file-input" id="file-drop">${icon("upload")}<strong>${yml ? "Файл YML или XML" : "Файл CSV"}</strong>
+            <span>${yml ? "Та же выгрузка, что для Яндекс Маркета" : "Excel → «Сохранить как» → CSV"}. Перетащите сюда или нажмите, чтобы выбрать.</span>
+            <input id="file-input" type="file" class="visually-hidden" accept="${yml ? ".xml,.yml,application/xml,text/xml" : ".csv,text/csv"}"></label>
+          <div id="file-result" aria-live="polite"></div>
+        </div>
+        <div class="pc-panel pc-panel-pad"><h3 class="p-label">${yml ? "Что берётся из YML" : "Колонки таблицы"}</h3><ul class="pc-text">${yml
+          ? `<li><code>offer id</code> → SKU, <code>name</code> (или vendor + model) → название.</li>
+             <li><code>price</code> в рублях, <code>url</code> — ссылка на товар, <code>available="false"</code> снимает с продажи.</li>
+             <li>Категории можно выбрать: в «Сметре» полезны стройматериалы, инструмент и сантехника.</li>
+             <li>Кодировки UTF-8 и Windows-1251 определяются сами.</li>`
+          : `<li><b>Артикул</b> (sku), <b>Название</b> (name), <b>Цена</b> в рублях (price), <b>Ссылка</b> (url).</li>
+             <li>Необязательно: <b>Наличие</b> — «нет», «0» или «под заказ» снимают товар с продажи.</li>
+             <li>Разделитель «;», «,» или табуляция; кодировка UTF-8 или Windows-1251.</li>`}
+          <li>Ссылки — только HTTPS на <b>${esc(me.domain)}</b>.</li>
+          <li>Повторная загрузка того же артикула обновляет цену и наличие.</li>
+          <li>За час принимается до ${num(HOURLY_LIMIT)} товаров; остальное можно загрузить позже тем же файлом.</li></ul></div>
+      </div>`;
+      const input = $("#file-input", body), drop = $("#file-drop", body), result = $("#file-result", body);
+      let parsed = null, chosen = null;
+      const read = async file => {
+        if (!file) return;
+        if (file.size > 30_000_000) { toast("Файл больше 30 МБ. Выгрузите часть каталога.", "error"); return; }
+        result.innerHTML = `<p class="p-hint">Читаем ${esc(file.name)}…</p>`;
+        const text = tool.decode(await file.arrayBuffer());
+        const data = yml ? tool.parseYml(text) : tool.parseCsv(text);
+        if (data.error) { result.innerHTML = `<ul class="pc-errors" role="alert"><li>${esc(data.error)}</li></ul>`; return; }
+        const seen = new Set(), problems = [...data.problems], foreign = tool.foreignHosts(data.items, me.domain);
+        data.items = data.items.filter(item => {
+          const errors = validateProduct(item, me.domain, item.row);
+          if (!errors.length && seen.has(item.sku)) errors.push(`Товар ${item.row + 1} (${item.sku}): артикул повторяется`);
+          seen.add(item.sku);
+          problems.push(...errors);
+          return !errors.length;
+        });
+        parsed = { ...data, problems, foreign };
+        chosen = new Set((parsed.groups || []).map(g => g.id));
+        summary();
+      };
+      const selected = () => parsed.items.filter(item => !parsed.groups?.length || !item.category || chosen.has(item.category));
+      const summary = () => {
+        const list = selected(), foreign = parsed.foreign.slice(0, 3);
+        result.innerHTML = `<div class="pc-import-summary">
+            <dl class="pc-import-stats"><div><dt>В файле</dt><dd>${num(parsed.total)}</dd></div><div><dt>Готово к загрузке</dt><dd>${num(list.length)}</dd></div><div><dt>Пропущено</dt><dd>${num(parsed.problems.length)}</dd></div></dl>
+            ${foreign.length ? note("warn", "alert", `<strong>Часть ссылок ведёт не на ${esc(me.domain)}:</strong> ${foreign.map(([h, n]) => `${esc(h)} — ${num(n)}`).join(", ")}. Такие товары пропущены. ${foreign.some(([h]) => h === "www." + me.domain) ? `Если сайт открывается только с www, напишите на <a class="pc-link" href="mailto:sales@smetra.online">sales@smetra.online</a> — домен в договоре поменяют.` : ""}`) : ""}
+            ${parsed.groups?.length > 1 ? `<fieldset class="pc-import-groups"><legend>Категории <button type="button" class="pc-link" data-all>${chosen.size === parsed.groups.length ? "Снять все" : "Выбрать все"}</button></legend>${parsed.groups.map(g => `<label class="pc-switch"><input class="pc-check" type="checkbox" data-group="${esc(g.id)}" ${chosen.has(g.id) ? "checked" : ""}> ${esc(g.name)} <span class="muted">${num(g.count)}</span></label>`).join("")}</fieldset>` : ""}
+            ${list.length ? `<div class="pc-table-wrap"><table class="pc-table"><caption class="visually-hidden">Первые товары из файла</caption><thead><tr><th>Название</th><th>SKU</th><th class="r">Цена</th><th>Наличие</th></tr></thead><tbody>${list.slice(0, 6).map(item => `<tr><td class="primary clip" title="${esc(item.name)}">${esc(item.name)}</td><td class="mono" data-label="SKU">${esc(item.sku)}</td><td class="r" data-label="Цена">${rub(item.price_kopecks)}</td><td data-label="Наличие">${item.available ? "Есть" : '<span class="muted">Нет</span>'}</td></tr>`).join("")}</tbody></table></div>${list.length > 6 ? `<p class="p-hint">…и ещё ${num(list.length - 6)}</p>` : ""}` : ""}
+            ${parsed.problems.length ? `<details class="pc-import-problems"><summary>Почему пропущено ${num(parsed.problems.length)}</summary><ul class="pc-errors">${parsed.problems.slice(0, 40).map(e => `<li>${esc(e)}</li>`).join("")}${parsed.problems.length > 40 ? `<li>…и ещё ${num(parsed.problems.length - 40)}</li>` : ""}</ul></details>` : ""}
+            ${list.length > HOURLY_LIMIT ? note("info", "info", `Будет загружено ${num(HOURLY_LIMIT)} из ${num(list.length)}: это лимит на час. Остальное — тем же файлом позже; загруженные товары просто обновятся.`) : ""}
+            <div class="pc-toolbar"><button class="p-btn is-primary" type="button" id="file-send" ${list.length ? "" : "disabled"}>Загрузить ${goods(Math.min(list.length, HOURLY_LIMIT))}</button><span class="p-hint" id="file-progress" aria-live="polite"></span></div>
+          </div>`;
+        $$("[data-group]", result).forEach(box => box.addEventListener("change", () => { box.checked ? chosen.add(box.dataset.group) : chosen.delete(box.dataset.group); summary(); }));
+        $("[data-all]", result)?.addEventListener("click", () => { chosen = chosen.size === parsed.groups.length ? new Set() : new Set(parsed.groups.map(g => g.id)); summary(); });
+        $("#file-send", result)?.addEventListener("click", async event => {
+          const button = event.currentTarget, progress = $("#file-progress", result);
+          button.disabled = true;
+          const batch = list.slice(0, HOURLY_LIMIT).map(productPayload);
+          let sent = 0;
+          try {
+            sent = await sendProducts(batch, (i, n) => { progress.textContent = `Отправка ${i} из ${n}…`; });
+            toast(`Каталог обновлён: ${goods(sent)}`, "ok");
+            delete cache["products-first"];
+            state.cursors = [""]; state.page = 0;
+            switchTab("table");
+          } catch (error) {
+            progress.textContent = "";
+            result.insertAdjacentHTML("afterbegin", `<ul class="pc-errors" role="alert"><li>${esc(error.message)}. Уже отправленные товары сохранены; загрузите файл ещё раз позже.</li></ul>`);
+            button.disabled = false;
+          }
+        });
+      };
+      input.addEventListener("change", () => read(input.files?.[0]));
+      drop.addEventListener("dragover", event => { event.preventDefault(); drop.classList.add("is-over"); });
+      drop.addEventListener("dragleave", () => drop.classList.remove("is-over"));
+      drop.addEventListener("drop", event => { event.preventDefault(); drop.classList.remove("is-over"); read(event.dataTransfer.files?.[0]); });
     };
 
     const rows = () => {
@@ -625,7 +708,7 @@
           </tbody></table></div>
           <div class="pc-pager"><span>Страница ${state.page + 1} · показано ${list.length} из ${state.items.length}. Поиск — по загруженной странице.</span><div>
             <button class="p-btn is-small" type="button" id="cat-prev" ${state.page ? "" : "disabled"}>Назад</button><button class="p-btn is-small" type="button" id="cat-next" ${state.next ? "" : "disabled"}>Дальше</button></div></div>`
-        : `<div class="pc-panel">${`<div class="pc-state is-inline">${ico("catalog")}<h2>Каталог пуст</h2><p>Загрузите первые товары через импорт JSON или Partner API.</p><button class="p-btn is-primary" type="button" data-goto-import>Импорт JSON</button></div>`}</div>`}`;
+        : `<div class="pc-panel">${`<div class="pc-state is-inline">${ico("catalog")}<h2>Каталог пуст</h2><p>Загрузите выгрузку YML для Яндекс Маркета, таблицу CSV или JSON — либо подключите Partner API.</p><button class="p-btn is-primary" type="button" data-goto-import>Импорт JSON</button></div>`}</div>`}`;
       $("#cat-filter", body).value = state.filter;
       $("#cat-limit", body).value = String(state.limit);
       $("#cat-q", body)?.addEventListener("input", event => { state.query = event.target.value; const pos = event.target.selectionStart; drawTable(); const input = $("#cat-q", body); input.focus(); input.setSelectionRange(pos, pos); });
@@ -637,7 +720,7 @@
       $$("[data-edit]", body).forEach(button => button.addEventListener("click", () => edit(state.items.find(item => item.sku === button.dataset.edit))));
       $("#cat-prev", body)?.addEventListener("click", () => { state.page--; fetchPage(); });
       $("#cat-next", body)?.addEventListener("click", () => { state.cursors[state.page + 1] = state.next; state.page++; fetchPage(); });
-      $("[data-goto-import]", body)?.addEventListener("click", () => switchTab("import"));
+      $("[data-goto-import]", body)?.addEventListener("click", () => switchTab("yml"));
     };
     const fetchPage = async () => {
       body.innerHTML = `<div class="pc-panel pc-panel-pad">${'<div class="pc-skel pc-skel-line"></div>'.repeat(6)}</div>`;
@@ -695,10 +778,10 @@
     const switchTab = tab => {
       state.tab = tab;
       $$(".pc-tabs [data-tab]", host).forEach(button => button.setAttribute("aria-selected", String(button.dataset.tab === tab)));
-      tab === "import" ? drawImport() : fetchPage();
+      tab === "import" ? drawImport() : tab === "yml" || tab === "csv" ? drawFile(tab) : fetchPage();
     };
     $$(".pc-tabs [data-tab]", host).forEach(button => button.addEventListener("click", () => switchTab(button.dataset.tab)));
-    $("#open-import", host).addEventListener("click", () => switchTab("import"));
+    $("#open-import", host).addEventListener("click", () => switchTab("yml"));
     await fetchPage();
   };
 
@@ -918,26 +1001,33 @@
 
   /* ---------- 10. Activity ---------- */
   PAGES.activity = async (host, live) => {
-    const [proof, commissions, products] = await Promise.all([domain(), can("commissions") ? api("/commissions?limit=30") : { items: [] }, api("/products?limit=100")]);
+    // The server's audit trail for this partner plus commission records; nothing is inferred on the client.
+    const ICON = { account: "settings", team: "team", catalog: "catalog", domain: "domain", money: "receipt" };
+    const [log, commissions] = await Promise.all([api("/activity?limit=50"), can("commissions") ? api("/commissions?limit=50") : { items: [] }]);
     if (!live()) return;
-    // Real records the server already returns; no invented events.
-    const events = [];
-    if (proof.verified_at) events.push({ at: proof.verified_at, icon: "domain", kind: "domain", text: `Домен ${proof.domain} подтверждён` });
-    if (proof.last_checked_at && proof.last_checked_at !== proof.verified_at) events.push({ at: proof.last_checked_at, icon: "domain", kind: "domain", text: `Проверка домена: ${(DOMAIN_STATUS[proof.status] || [, proof.status])[1].toLowerCase()}` });
-    const updates = new Map();
-    products.items.forEach(item => updates.set(item.updated_at, (updates.get(item.updated_at) || 0) + 1));
-    updates.forEach((count, at) => events.push({ at, icon: "catalog", kind: "catalog", text: `Обновление каталога: ${num(count)} ${count === 1 ? "товар" : "товаров"}` }));
-    commissions.items.forEach(row => events.push({ at: row.created_at, icon: "receipt", kind: "money", text: `${row.status === "reversed" ? "Начисление аннулировано" : "Начисление"} ${rub(row.commission_kopecks)}`, meta: row.receipt_id.slice(0, 8) }));
-    events.sort((a, b) => b.at - a.at);
-    let filter = "all";
-    const filters = [["all", "Все"], ["domain", "Домен"], ["catalog", "Каталог"], ["money", "Начисления"]];
+    const fromLog = item => ({ at: item.created_at, kind: item.kind, icon: ICON[item.kind] || "activity", text: item.title + (item.detail ? " · " + item.detail : ""), meta: item.you ? "вы" : item.actor });
+    const fromCommission = row => ({ at: row.created_at, kind: "money", icon: "receipt", text: `${row.status === "reversed" ? "Начисление аннулировано" : "Начисление"} ${rub(row.commission_kopecks)}`, meta: "квитанция " + row.receipt_id.slice(0, 8) });
+    let events = [...log.items.map(fromLog), ...commissions.items.map(fromCommission)].sort((a, b) => b.at - a.at);
+    let cursor = log.next_cursor, filter = "all";
+    const filters = [["all", "Все"], ["domain", "Домен"], ["catalog", "Каталог"], ["money", "Начисления"], ...(can("team") ? [["team", "Команда и входы"]] : []), ["account", "Аккаунт"]];
+    const row = e => `<div class="pc-event"><time datetime="${new Date(e.at * 1000).toISOString()}">${dayTime(e.at)}</time>${ico(e.icon)}<span>${esc(e.text)}</span><small>${esc(e.meta || "")}</small></div>`;
     const draw = () => {
       const list = events.filter(e => filter === "all" || e.kind === filter);
-      $("#act-list", host).innerHTML = list.length ? `<div class="pc-panel pc-timeline">${list.slice(0, 100).map(e => `<div class="pc-event"><time datetime="${new Date(e.at * 1000).toISOString()}">${dayTime(e.at)}</time>${ico(e.icon)}<span>${esc(e.text)}</span><small>${esc(e.meta || "")}</small></div>`).join("")}</div>`
-        : `<div class="pc-panel"><div class="pc-state is-inline">${ico("activity")}<h2>Событий нет</h2><p>Здесь появятся проверки домена, загрузки каталога и начисления.</p></div></div>`;
+      $("#act-list", host).innerHTML = list.length
+        ? `<div class="pc-panel pc-timeline">${list.map(row).join("")}</div>${cursor ? `<div class="pc-more"><button type="button" class="p-btn" id="act-more">Показать ещё</button></div>` : ""}`
+        : `<div class="pc-panel"><div class="pc-state is-inline">${ico("activity")}<h2>Событий нет</h2><p>Здесь появятся входы в кабинет, проверки домена, загрузки каталога и начисления.</p></div></div>`;
+      $("#act-more", host)?.addEventListener("click", async event => {
+        const button = event.currentTarget; button.disabled = true;
+        try {
+          const page = await api("/activity?limit=50&cursor=" + encodeURIComponent(cursor));
+          if (!live()) return;
+          cursor = page.next_cursor;
+          events = [...events, ...page.items.map(fromLog)].sort((a, b) => b.at - a.at);
+          draw();
+        } catch (error) { button.disabled = false; toast(error.message); }
+      });
     };
-    host.innerHTML = pageHead("История операций", "Собрано из данных, которые сервер уже отдаёт: проверки домена, даты обновления каталога и начисления.", seg("Категория", "all", filters)) +
-      note("info", "info", "Полный журнал аудита (изменения настроек, операции с ключами, кто и когда входил) требует отдельного серверного метода. Он описан в docs/partner-console-contracts.md и будет подключён, когда появится на сервере.") +
+    host.innerHTML = pageHead("История операций", can("team") ? "Входы, приглашения, проверки домена, загрузки каталога и начисления. Записи ведёт сервер «Сметры»." : "Проверки домена, загрузки каталога и начисления. Записи ведёт сервер «Сметры».", seg("Категория", "all", filters)) +
       `<div class="pc-block" id="act-list"></div>`;
     $$(".pc-seg button", host).forEach(button => button.addEventListener("click", () => {
       filter = button.dataset.value;

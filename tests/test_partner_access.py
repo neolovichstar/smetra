@@ -83,6 +83,52 @@ class PartnerAccessTests(unittest.TestCase):
         self.assertIn("team", me["permissions"])
         self.assertEqual(self.console("GET", "/summary", session)[0], 200)
 
+    def test_activity_is_the_partners_own_audit_trail_and_hides_team_records_from_analysts(self):
+        owner_token, owner_id = self.account("log-owner")
+        analyst_token, analyst_id = self.account("log-analyst")
+        for user_id in (owner_id, analyst_id):
+            self.verified(user_id)
+        partner_id = self.partner("store-log", "store-log.ru")
+        other_id = self.partner("store-other-log", "other-log.ru")
+        with self.mod.db() as con:
+            access.admin_invite_owner(con, partner_id, "log-owner@test.invalid")
+            self.mod.audit(con, None, "partner.catalog_updated", other_id, "99")
+        owner = self.console("POST", "/session/sso", body={"code": self.sso_code(owner_token)})[2]["session_token"]
+        self.assertEqual(self.console("POST", "/team/invites", owner, {"email": "log-analyst@test.invalid", "role": "analyst"})[0], 201)
+        status, _, body = self.console("POST", "/catalog", owner, {"products": [{
+            "sku": "LOG-1", "name": "Плитка", "price_kopecks": 10000, "url": "https://store-log.ru/p/1", "available": True}]})
+        self.assertEqual(status, 200, body)
+        analyst = self.console("POST", "/session/sso", body={"code": self.sso_code(analyst_token)})[2]["session_token"]
+        self.assertEqual(self.console("POST", f"/team/members/{analyst_id}/role", owner, {"role": "catalog"})[0], 200)
+        self.assertEqual(self.console("POST", f"/team/members/{analyst_id}/role", owner, {"role": "analyst"})[0], 200)
+
+        status, _, log = self.console("GET", "/activity", owner)
+        self.assertEqual(status, 200, log)
+        titles = [item["title"] for item in log["items"]]
+        self.assertIn("Приглашён сотрудник", titles)
+        self.assertIn("Изменена роль участника", titles)
+        catalog = next(item for item in log["items"] if item["kind"] == "catalog")
+        self.assertEqual((catalog["detail"], catalog["you"]), ("1 товар", True))
+        self.assertNotIn(catalog["actor"], ("", "Ключ API", "Бывший участник"), "a member is named")
+        role_change = next(item for item in log["items"] if item["title"] == "Изменена роль участника")
+        self.assertEqual(role_change["detail"], "log-analyst@test.invalid")
+        sign_ins = [item for item in log["items"] if item["title"] == "Вход в кабинет"]
+        self.assertEqual(len(sign_ins), 2)
+        self.assertTrue(any(item["you"] for item in sign_ins))
+        self.assertNotIn("99", json.dumps(log), "another partner's records never appear")
+        self.assertNotIn(analyst_id, json.dumps(log), "raw user ids are not exposed")
+
+        status, _, seen = self.console("GET", "/activity", analyst)
+        self.assertEqual(status, 200)
+        self.assertEqual({item["kind"] for item in seen["items"]}, {"catalog"}, "analysts see no team or sign-in records")
+
+        first = self.console("GET", "/activity?limit=1", owner)[2]
+        self.assertEqual(len(first["items"]), 1)
+        second = self.console("GET", "/activity?limit=1&cursor=" + first["next_cursor"], owner)[2]
+        self.assertNotEqual(first["items"][0]["id"], second["items"][0]["id"])
+        self.assertEqual(self.console("GET", "/activity?cursor=bad", owner)[0], 400)
+        self.assertEqual(self.console("GET", "/activity?limit=0", owner)[0], 400)
+
     def test_roles_are_checked_on_the_server_and_removal_is_immediate(self):
         owner_token, owner_id = self.account("role-owner")
         analyst_token, analyst_id = self.account("role-analyst")

@@ -512,7 +512,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if console_host == "console.smetra.online":
                 site_assets = {
                     "/", "/app", "/docs", "/privacy", "/terms",
-                    "/partner-landing.js", "/partner-scene.js", "/partner-console.js", "/partner-docs-ui.js",
+                    "/partner-landing.js", "/partner-scene.js", "/partner-console.js", "/partner-import.js", "/partner-docs-ui.js",
                     "/partner-docs.md", "/partner-openapi.json", "/partner-sdk.js",
                     "/ui/partner-base.css", "/ui/partner-landing.css", "/ui/partner-console.css", "/ui/partner-docs.css",
                     "/vendor/three-0.170.0.module.min.js", "/vendor/qrcode-generator-1.4.4.js",
@@ -810,14 +810,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         raise ApiError(400, "Некорректный партнёр")
                     result = access.exchange_sso(con, data["code"], partner_id)
                     if "session_token" in result:
-                        audit(con, None, "partner.console_signed_in", result["partner"]["id"])
+                        audit(con, access.session_user(con, result["session_token"]), "partner.console_signed_in", result["partner"]["id"])
                     return self.send_json(201 if "session_token" in result else 200, result)
                 if path == "/api/partners/console/session" and method == "POST":
                     self.throttle("partner-login:" + self.client_address[0], 8, 900)
                     data = self.body()
                     if set(data) != {"api_key"} or not isinstance(data["api_key"], str):
                         raise ApiError(400, "Нужен ключ партнёра")
-                    return self.send_json(201, partner.new_console_session(con, "Partner " + data["api_key"]))
+                    session = partner.new_console_session(con, "Partner " + data["api_key"])
+                    audit(con, None, "partner.console_signed_in", partner.auth_partner(con, "Partner " + data["api_key"])["id"], "key")
+                    return self.send_json(201, session)
                 if path == "/api/partners/console/logout" and method == "POST":
                     partner.revoke_console_session(con, self.headers.get("Authorization"))
                     return self.send_json(200, {"ok": True})
@@ -851,6 +853,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         result = partner.ingest_products(con, org, self.body())
                         audit(con, member, "partner.catalog_updated", org["id"], str(result["accepted"]))
                         return self.send_json(200, result)
+                    if path == "/api/partners/console/activity" and method == "GET":
+                        access.require(role, "activity")
+                        self.throttle("partner-page:" + org["id"], 120, 3600)
+                        raw_limit = query.get("limit", ["50"])[0]
+                        if not isinstance(raw_limit, str) or not re.fullmatch(r"[1-9][0-9]?|100", raw_limit):
+                            raise ApiError(400, "Некорректный размер страницы")
+                        return self.send_json(200, access.activity(con, org, role, member, int(raw_limit), query.get("cursor", [""])[0]))
                     if path == "/api/partners/console/team" and method == "GET":
                         access.require(role, "team")
                         return self.send_json(200, access.team(con, org))

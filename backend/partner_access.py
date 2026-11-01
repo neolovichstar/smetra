@@ -36,6 +36,7 @@ PERMISSIONS = {
     "domain_write": frozenset({"owner", "admin", "catalog", "key"}),
     "events": frozenset({"owner", "admin", "catalog", "key"}),
     "team": frozenset({"owner", "admin"}),
+    "activity": EVERYONE,
 }
 SSO_TTL = 120
 INVITE_TTL = 14 * 86400
@@ -146,6 +147,12 @@ def exchange_sso(con, code, partner_id=None):
         (str(uuid.uuid4()), chosen["id"], row["user_id"], _sha(token), moment, moment + SESSION_TTL),
     )
     return {"session_token": token, "expires_in": SESSION_TTL, "partner": chosen}
+
+
+def session_user(con, token):
+    """Who opened a console session (None for sessions opened with an API key)."""
+    row = con.execute("SELECT user_id FROM partner_console_sessions WHERE session_hash=?", (_sha(token),)).fetchone()
+    return row["user_id"] if row else None
 
 
 def console_access(con, header):
@@ -276,6 +283,95 @@ def remove_member(con, account, actor_role, actor_id, user_id):
     con.execute("UPDATE partner_console_sessions SET revoked_at=? WHERE partner_id=? AND user_id=? AND revoked_at IS NULL",
                 (_now(), account["id"], user_id))
     return {"ok": True, "self": user_id == actor_id}
+
+
+# --- Activity log --------------------------------------------------------------
+
+# Audit actions shown in the console: (category, title). Team and sign-in records name people,
+# so only roles that manage the team see them.
+ACTIVITY = {
+    "partner.created": ("account", "Кабинет партнёра создан"),
+    "partner.state_changed": ("account", "Команда «Сметры» изменила состояние партнёра"),
+    "partner.key_rotated": ("account", "Ключ API выпущен заново"),
+    "partner.console_signed_in": ("team", "Вход в кабинет"),
+    "partner.owner_invited": ("team", "Приглашён владелец"),
+    "partner.member_invited": ("team", "Приглашён сотрудник"),
+    "partner.team_invite_revoke": ("team", "Приглашение отозвано"),
+    "partner.team_member_role": ("team", "Изменена роль участника"),
+    "partner.team_member_remove": ("team", "Участник удалён из команды"),
+    "partner.catalog_updated": ("catalog", "Загрузка каталога"),
+    "partner.domain_challenge_created": ("domain", "Получен код проверки домена"),
+    "partner.domain_check": ("domain", "Проверка домена"),
+    "partner.commissions_reconciled": ("money", "Сверка начислений"),
+}
+DOMAIN_RESULT = {"verified": "подтверждён", "pending": "запись не найдена", "expired": "подтверждение устарело"}
+METHOD_LABEL = {"dns": "DNS TXT-запись", "meta": "HTML meta-тег"}
+CURSOR_RE = re.compile(r"([0-9]{1,12}):([0-9A-Za-z-]{1,64})\Z")
+
+
+def activity(con, account, role, viewer_id=None, limit=50, cursor=""):
+    """Partner's own audit trail, newest first, with people named only inside this partner."""
+    actions = [action for action, (kind, _) in ACTIVITY.items() if kind != "team" or role in PERMISSIONS["team"]]
+    marks = ",".join("?" * len(actions))
+    params = [account["id"], *actions]
+    where = ""
+    if cursor:
+        match = CURSOR_RE.fullmatch(cursor)
+        if not match:
+            raise PartnerError(400, "Некорректная страница")
+        where = " AND (a.created_at<? OR (a.created_at=? AND a.id<?))"
+        params += [int(match[1]), int(match[1]), match[2]]
+    rows = con.execute(
+        f"SELECT a.id,a.actor_id,a.action,a.detail,a.created_at,u.name AS actor_name,u.role AS actor_role,"
+        f"m.user_id AS actor_member FROM audit a LEFT JOIN users u ON u.id=a.actor_id "
+        f"LEFT JOIN partner_members m ON m.partner_id=a.target AND m.user_id=a.actor_id "
+        f"WHERE a.target=? AND a.action IN ({marks}){where} ORDER BY a.created_at DESC, a.id DESC LIMIT ?",
+        (*params, limit + 1),
+    ).fetchall()
+    people = {}
+    if role in PERMISSIONS["team"]:
+        # Invitees and members of this partner only; nobody else's address is revealed.
+        for row in con.execute("SELECT id,email,accepted_by FROM partner_invites WHERE partner_id=?", (account["id"],)):
+            people[row["id"]] = row["email"]
+            if row["accepted_by"]:
+                people[row["accepted_by"]] = row["email"]
+        for row in con.execute("SELECT u.id,u.email FROM partner_members m JOIN users u ON u.id=m.user_id WHERE m.partner_id=?",
+                               (account["id"],)):
+            people[row["id"]] = row["email"]
+    items = []
+    for row in rows[:limit]:
+        kind, title = ACTIVITY[row["action"]]
+        detail = row["detail"] or ""
+        if row["action"] == "partner.catalog_updated":
+            count = int(detail) if detail.isdigit() else 0
+            word = ("товар" if count % 10 == 1 and count % 100 != 11 else
+                    "товара" if 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14 else "товаров")
+            detail = f"{count} {word}" if detail.isdigit() else ""
+        elif row["action"] == "partner.member_invited":
+            detail = "Роль: " + ROLE_LABELS.get(detail, "участник")
+        elif row["action"] in ("partner.team_invite_revoke", "partner.team_member_role", "partner.team_member_remove"):
+            detail = people.get(detail, "")
+        elif row["action"] == "partner.domain_check":
+            detail = DOMAIN_RESULT.get(detail, "")
+        elif row["action"] == "partner.domain_challenge_created":
+            detail = METHOD_LABEL.get(detail, "")
+        elif row["action"] == "partner.console_signed_in":
+            detail = "по ключу API" if detail == "key" else "аккаунтом «Сметры»"
+        else:
+            detail = ""
+        if row["actor_member"]:
+            actor = row["actor_name"] or "Участник"
+        elif row["actor_id"] and row["actor_role"] == "admin":
+            actor = "Команда «Сметры»"
+        elif row["actor_id"]:
+            actor = "Бывший участник"
+        else:
+            actor = "Ключ API" if kind in ("catalog", "domain") or detail == "по ключу API" else ""
+        items.append({"id": row["id"], "kind": kind, "title": title, "detail": detail, "actor": actor,
+                      "you": bool(viewer_id) and row["actor_id"] == viewer_id,
+                      "created_at": row["created_at"]})
+    more = len(rows) > limit
+    return {"items": items, "next_cursor": f"{rows[limit - 1]['created_at']}:{rows[limit - 1]['id']}" if more else None}
 
 
 # --- Administrator -------------------------------------------------------------
