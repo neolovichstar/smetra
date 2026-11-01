@@ -143,6 +143,7 @@ def head(title, description, url, ld):
 <link rel="stylesheet" href="/ui/components.css?v={VERSION}">
 <link rel="stylesheet" href="/ui/site.css?v={VERSION}">
 <link rel="stylesheet" href="/ui/calc-page.css?v={VERSION}">
+<script src="/error-report.js?v={VERSION}" defer></script>
 <script src="/attribution.js?v={VERSION}" defer></script>
 <script src="/calculators.js?v={VERSION}" defer></script>
 <script src="/calc-page.js?v={VERSION}" defer></script>

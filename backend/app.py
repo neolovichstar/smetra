@@ -482,7 +482,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox", "changelog"}:
+                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox", "changelog", "client-errors"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
@@ -1077,6 +1077,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             handler = email_otp.start if path.endswith("/start") else email_otp.confirm
             return handler(self, con, app_context)
+        if path == "/api/client-errors" and method == "POST":
+            # Browser errors from our own scripts go to the request log; nothing is stored.
+            self.throttle("client-errors:" + self.client_address[0], 30, 3600)
+            data = self.body()
+            if not isinstance(data, dict):
+                raise ApiError(400, "Некорректные данные")
+
+            def text(value, limit):
+                return re.sub(r"[\x00-\x1f\x7f]", " ", str(value or ""))[:limit]
+
+            def number(value):
+                return value if isinstance(value, int) and 0 <= value < 10_000_000 else 0
+
+            print(json.dumps({"time": now(), "event": "client_error", "request_id": self.request_id,
+                              "message": text(data.get("message"), 300), "source": text(data.get("source"), 120),
+                              "line": number(data.get("line")), "column": number(data.get("column")),
+                              "page": text(data.get("page"), 80)}, ensure_ascii=False), flush=True)
+            return self.send_json(200, {"ok": True})
         if path == "/api/auth/register" and method == "POST":
             # When passwordless registration is live, no client may bypass
             # mailbox verification through the legacy password endpoint.
