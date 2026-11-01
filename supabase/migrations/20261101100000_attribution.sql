@@ -23,7 +23,7 @@ REVOKE ALL ON smetra.user_attribution FROM PUBLIC, anon, authenticated, smetra_r
 INSERT INTO smetra.changelog_posts(id,title,body,tag,author_id,published_at,updated_at)
 VALUES('release-2026-11-02','Калькуляторы без регистрации и первые шаги',
 '## Калькуляторы на сайте
-Плитка, ламинат, краска, штукатурка и бетон теперь считаются прямо на сайте — [smetra.online/kalkulyator](https://smetra.online/kalkulyator). Отправьте ссылку клиенту или коллеге: регистрация не нужна.
+Плитка, ламинат, краска, обои, штукатурка, стяжка и бетон теперь считаются прямо на сайте — [smetra.online/kalkulyator](https://smetra.online/kalkulyator). Кнопка «Поделиться расчётом» даёт ссылку с вашими размерами — клиенту или коллеге регистрация не нужна.
 
 Кнопка **«Перенести в смету»** открывает тот же расчёт в кабинете — останется добавить работы и цены.
 
