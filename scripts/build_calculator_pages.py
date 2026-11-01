@@ -221,7 +221,7 @@ def page(item, spec, pages):
       </div>
       <p class="calc-formula" id="calc-formula"></p>
       <div class="calc-cta">
-        <a class="btn primary" id="calc-to-estimate" href="/app?register=1#calculators">Перенести в смету</a>
+        <div class="calc-cta-buttons"><a class="btn primary" id="calc-to-estimate" href="/app?register=1#calculators">Перенести в смету</a><button class="btn" type="button" id="calc-share">Поделиться расчётом</button></div>
         <p>Сметра соберёт смету с этой позицией: добавьте работы и цены, отправьте клиенту ссылку на согласование. 10 смет бесплатно.</p>
       </div>
     </aside>
