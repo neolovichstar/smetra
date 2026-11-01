@@ -637,6 +637,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/assets/pwa/icon-192.png": ("assets/pwa/icon-192.png", "image/png"),
             "/assets/pwa/icon-512.png": ("assets/pwa/icon-512.png", "image/png"),
             "/assets/pwa/icon-maskable-512.png": ("assets/pwa/icon-maskable-512.png", "image/png"),
+            "/assets/og/smetra-og.jpg": ("assets/og/smetra-og.jpg", "image/jpeg"),
             "/assets/pwa/apple-touch-icon.png": ("assets/pwa/apple-touch-icon.png", "image/png"),
         }
         # Every top-level script is public; the build validates them with node --check.

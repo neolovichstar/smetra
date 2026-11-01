@@ -34,6 +34,10 @@
   if (publicToken) {
     // Client documents read like paper: the shared light theme, independent of the landing.
     document.body.classList.add('public-quote-mode');
+    // A client's quote is private to them: keep it out of search results.
+    const robots = document.createElement('meta');
+    robots.name = 'robots'; robots.content = 'noindex, nofollow';
+    document.head.append(robots);
     root.dataset.theme = 'light';
     document.body.classList.remove('dark');
     const load = src => new Promise((resolve, reject) => {
