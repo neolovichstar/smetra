@@ -268,6 +268,19 @@ body.public-quote-mode #landing{display:none}
 .comment small{margin-left:8px;color:var(--text-3)}
 .comment p{margin-top:4px;color:var(--text-2)}
 .comment-failed small{color:var(--danger)}
+/* Phone: the client sees every line as a card — name, quantity × price and the line total. */
+@media (max-width:600px){
+  .public-quote .estimate-table,.public-quote .estimate-table tbody{display:block;width:100%}
+  .public-quote .estimate-table thead{display:none}
+  .public-quote .estimate-table tr{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;column-gap:8px;row-gap:4px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .public-quote .estimate-table tr:last-child{border-bottom:0}
+  .public-quote .estimate-table td{display:block;min-width:0;padding:0;border:0;text-align:left;white-space:normal}
+  .public-quote .estimate-table td:first-child{grid-column:1/-1;min-width:0}
+  .public-quote .estimate-table td:nth-child(2),.public-quote .estimate-table td:nth-child(3){color:var(--text-2);font-size:var(--fs-14);white-space:nowrap}
+  .public-quote .estimate-table td:nth-child(3)::before{content:'× '}
+  .public-quote .estimate-table td:nth-child(4){text-align:right;font-weight:600;white-space:nowrap}
+  .public-quote .table-wrap:has(> .estimate-table){overflow:visible}
+}
 .public-branding{display:flex;justify-content:space-between;align-items:center;gap:var(--s-3);margin-top:var(--s-7);padding-top:var(--s-4);border-top:1px solid var(--line);color:var(--text-3);font-size:var(--fs-13)}
 .intake-page-form{max-width:720px;padding:var(--s-6);border:1px solid var(--line);border-radius:var(--r-4);background:var(--surface-1)}
 .intake-page-form form{display:flex;flex-direction:column;gap:var(--s-4)}
