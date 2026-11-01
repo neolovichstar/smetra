@@ -16,7 +16,20 @@ const paint = {length:'5',height:'2.7',openings:'1.5',coats:'2',coverage:'10',wa
 const plaster = {length:'5',height:'2.7',openings:'1.5',thickness:'10',rate:'9',waste:'10',pack:'30'};
 const concrete = {length:'5',width:'3',thickness:'10',waste:'5'};
 
-assert.equal(kinds.length, 5);
+assert.equal(kinds.length, 7);
+// Wallpaper: whole strips per roll, rapport lengthens each strip; screed: area × thickness × rate.
+const wallpaper = {perimeter:'14',height:'2.7',openings:'2',rollWidth:'1.06',rollLength:'10.05',rapport:'0'};
+assert.equal(calculate('wallpaper',wallpaper).primary.value,4);
+assert.equal(calculate('wallpaper',wallpaper).secondary.value,12);
+assert.equal(calculate('wallpaper',{...wallpaper,rollWidth:'0.53',rapport:'64'}).primary.value,8);
+assert.throws(()=>calculate('wallpaper',{...wallpaper,rollLength:'2',height:'2.7'}),/короче одной полосы/);
+assert.throws(()=>calculate('wallpaper',{...wallpaper,openings:'14'}),/меньше периметра/);
+const screed = {length:'5',width:'4',thickness:'50',rate:'20',waste:'5',pack:'40'};
+approx(calculate('screed',screed).primary.value,2100);
+assert.equal(calculate('screed',screed).secondary.value,53);
+const wallpaperDraft=estimateDraft('wallpaper',wallpaper,'material');
+assert.deepEqual([wallpaperDraft.items[0].quantity,wallpaperDraft.items[0].unit],['4','рулон'],'wallpaper goes into the estimate as whole rolls');
+assert.equal(estimateDraft('screed',screed,'packages').items[0].unit,'мешок');
 approx(calculate('tile',tile).primary.value, 13.2);
 assert.equal(calculate('tile',tile).secondary.value, 10);
 approx(calculate('tile',{...tile,openings:'2'}).area, 10);
@@ -83,5 +96,5 @@ assert.throws(()=>estimateDraft('tile',tile,'invalid'),{name:'Error'});
 assert.throws(()=>estimateDraft('tile',{...tile,length:'10000',width:'10000',openings:'0'}),{name:'Error'});
 const underPrecision=estimateDraft('concrete',{length:'0.01',width:'0.01',thickness:'0.1',waste:'0'});
 assert.ok(Number(underPrecision.items[0].quantity)>0,'tiny quantities must not round down to zero');
-console.log('PASS: 5 free material calculators, unit conversion, pack rounding, invalid-input guards and safe estimate handoff');
+console.log('PASS: 7 free material calculators, unit conversion, pack rounding, invalid-input guards and safe estimate handoff');
 

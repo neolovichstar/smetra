@@ -50,6 +50,30 @@
         ['pack', 'Вес одного мешка', 'кг', '30', 0.1, 1000]
       ]
     },
+    wallpaper: {
+      name: 'Обои', description: 'Число полос и рулонов с учётом высоты стен и раппорта.',
+      note: 'Полосы считаются целыми: обрезки после последней полосы рулона не используются. Раппорт указан на этикетке рулона.',
+      fields: [
+        ['perimeter', 'Периметр комнаты', 'м', '14', 0.1, 10000],
+        ['height', 'Высота оклейки', 'м', '2.7', 0.1, 100],
+        ['openings', 'Ширина окон и дверей', 'м', '2', 0, 10000],
+        ['rollWidth', 'Ширина рулона', 'м', '1.06', 0.1, 10],
+        ['rollLength', 'Длина рулона', 'м', '10.05', 1, 100],
+        ['rapport', 'Раппорт рисунка', 'см', '0', 0, 300]
+      ]
+    },
+    screed: {
+      name: 'Стяжка', description: 'Сухая смесь для стяжки пола по толщине слоя и количество мешков.',
+      note: 'Норму расхода на 10 мм толщины берите с мешка. На неровном основании средняя толщина больше минимальной.',
+      fields: [
+        ['length', 'Длина помещения', 'м', '5', 0.01, 10000],
+        ['width', 'Ширина помещения', 'м', '4', 0.01, 10000],
+        ['thickness', 'Средняя толщина стяжки', 'мм', '50', 1, 300],
+        ['rate', 'Норма расхода на 10 мм', 'кг/м²', '20', 0.1, 100],
+        ['waste', 'Запас', '%', '5', 0, 100],
+        ['pack', 'Вес одного мешка', 'кг', '40', 1, 1000]
+      ]
+    },
     concrete: {
       name: 'Бетон', description: 'Объём заливки с выбранным запасом.',
       note: 'Калькулятор считает геометрический объём, а не состав смеси. Для заказа учитывайте реальную геометрию и потери.',
@@ -81,7 +105,7 @@
     if (!spec) throw new Error('Неизвестный калькулятор.');
     const v = {};
     for (const field of spec.fields) v[field[0]] = readNumber(raw[field[0]], field);
-    const factor = 1 + v.waste / 100;
+    const factor = 1 + (v.waste || 0) / 100;
     let area, primary, secondary, description;
     if (kind === 'tile' || kind === 'laminate') {
       area = v.length * v.width - (v.openings || 0);
@@ -98,6 +122,22 @@
     } else if (kind === 'plaster') {
       area = v.length * v.height - v.openings;
       if (area <= 0) throw new Error('Площадь проёмов должна быть меньше площади стены.');
+      primary = {label: 'Сухая смесь с запасом', value: area * (v.thickness / 10) * v.rate * factor, unit: 'кг'};
+      secondary = {label: 'Целых мешков', value: Math.ceil(primary.value / v.pack - 1e-10), unit: 'шт.'};
+      description = 'Площадь ' + format(area) + ' м² × ' + format(v.thickness / 10) + ' × ' + format(v.rate) + ' кг/м² × запас.';
+    } else if (kind === 'wallpaper') {
+      const wall = v.perimeter - v.openings;
+      if (wall <= 0) throw new Error('Ширина проёмов должна быть меньше периметра.');
+      const strip = v.height + v.rapport / 100;
+      const perRoll = Math.floor(v.rollLength / strip + 1e-9);
+      if (perRoll < 1) throw new Error('Рулон короче одной полосы: проверьте высоту и длину рулона.');
+      const strips = Math.ceil(wall / v.rollWidth - 1e-9);
+      area = wall * v.height;
+      primary = {label: 'Целых рулонов', value: Math.ceil(strips / perRoll - 1e-9), unit: 'шт.'};
+      secondary = {label: 'Полос по ' + format(strip) + ' м', value: strips, unit: 'шт.'};
+      description = format(strips) + ' полос по ' + format(v.rollWidth) + ' м; из рулона выходит ' + format(perRoll) + ' ' + (perRoll === 1 ? 'полоса' : perRoll < 5 ? 'полосы' : 'полос') + '.';
+    } else if (kind === 'screed') {
+      area = v.length * v.width;
       primary = {label: 'Сухая смесь с запасом', value: area * (v.thickness / 10) * v.rate * factor, unit: 'кг'};
       secondary = {label: 'Целых мешков', value: Math.ceil(primary.value / v.pack - 1e-10), unit: 'шт.'};
       description = 'Площадь ' + format(area) + ' м² × ' + format(v.thickness / 10) + ' × ' + format(v.rate) + ' кг/м² × запас.';
@@ -122,15 +162,16 @@
     const result=calculate(kind,raw);
     if (!['material','packages'].includes(mode)) throw new Error('Выберите способ учёта материала.');
     if (mode==='packages' && kind==='concrete') throw new Error('Бетон учитывается по объёму в м³.');
-    const packageUnits={tile:'упак.',laminate:'упак.',paint:'банка',plaster:'мешок'};
-    const byPackage=mode==='packages';
-    const quantity=byPackage?result.secondary.value:Math.ceil(result.primary.value*10000-1e-9)/10000;
+    const packageUnits={tile:'упак.',laminate:'упак.',paint:'банка',plaster:'мешок',screed:'мешок',wallpaper:'рулон'};
+    // Wallpaper is bought in whole rolls either way; its secondary figure is strips, not packages.
+    const byPackage=mode==='packages'||kind==='wallpaper';
+    const quantity=kind==='wallpaper'?result.primary.value:byPackage?result.secondary.value:Math.ceil(result.primary.value*10000-1e-9)/10000;
     if (!Number.isFinite(quantity)||quantity<=0||quantity>1000000) {
       throw new Error('Количество для сметы выходит за допустимые пределы. Измените размеры.');
     }
     const unit=byPackage?packageUnits[kind]:result.primary.unit;
     const name='Материал: '+kinds[kind].name;
-    const method=byPackage?'Целые упаковки по введённому объёму упаковки.':'Материал с учётом запаса.';
+    const method=kind==='wallpaper'?'Целые рулоны.':byPackage?'Целые упаковки по введённому объёму упаковки.':'Материал с учётом запаса.';
     const description=[result.description,method,result.note].join(' ');
     return {
       title:'Расчёт материалов · '+kinds[kind].name,
@@ -238,7 +279,7 @@
       $('#smcalc-description').textContent = kinds[kind].description;
       $('#smcalc-fields').innerHTML = fieldsHtml(kinds[kind]);
       $('#smcalc-unit-mode').value='material';
-      $('#smcalc-unit-mode').disabled=kind==='concrete';
+      $('#smcalc-unit-mode').disabled=kind==='concrete'||kind==='wallpaper';
       $('#smcalc-transfer').dataset.calcKind=kind;
       update();
     };
