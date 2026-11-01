@@ -115,7 +115,8 @@ class PartnerAccessTests(unittest.TestCase):
         sign_ins = [item for item in log["items"] if item["title"] == "Вход в кабинет"]
         self.assertEqual(len(sign_ins), 2)
         self.assertTrue(any(item["you"] for item in sign_ins))
-        self.assertNotIn("99", json.dumps(log), "another partner's records never appear")
+        self.assertEqual([item["detail"] for item in log["items"] if item["kind"] == "catalog"], ["1 товар"],
+                         "another partner's catalog upload (99) never appears")
         self.assertNotIn(analyst_id, json.dumps(log), "raw user ids are not exposed")
 
         status, _, seen = self.console("GET", "/activity", analyst)
