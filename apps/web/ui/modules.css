@@ -423,6 +423,10 @@ body.comms-scroll-locked{overflow:hidden}
 .admin-empty,.admin-loading,.admin-error{padding:var(--s-5) 0;color:var(--text-3)}
 .admin-error{color:var(--danger)}
 .admin-growth-funnel{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.admin-growth-funnel>div{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-3,12px);background:var(--surface-1)}
+.admin-growth-funnel span{color:var(--text-3);font-size:var(--fs-12)}
+.admin-growth-funnel strong{font-size:var(--fs-20);font-weight:600;font-variant-numeric:tabular-nums}
+#admin-section h3{margin:var(--s-6) 0 var(--s-3)}
 .admin-dialog{padding:var(--s-6)}
 .admin-dialog-top{display:flex;justify-content:space-between;gap:var(--s-3);margin-bottom:var(--s-4)}
 .admin-dialog-email{color:var(--text-3);font-size:var(--fs-13)}
