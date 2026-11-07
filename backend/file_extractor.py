@@ -5,6 +5,7 @@ import json
 import sys
 import base64
 import math
+import urllib.parse
 
 
 def render_scans(content):
@@ -64,6 +65,20 @@ def validate_pdf(content):
         "/RichMedia",
         "/XFA",
     }
+    forbidden_actions = {
+        '/JavaScript', '/Launch', '/SubmitForm', '/ImportData', '/GoToR',
+        '/GoToE', '/Rendition', '/Movie', '/Sound', '/RichMediaExecute',
+    }
+
+    def resolve(value):
+        references = set()
+        while isinstance(value, IndirectObject):
+            key = (value.idnum, value.generation)
+            if key in references or len(references) >= 50:
+                raise ValueError('cyclic action')
+            references.add(key)
+            value = value.get_object()
+        return value
 
     def inspect(value, depth=0):
         if depth > 50 or len(seen) > 20000:
@@ -77,6 +92,16 @@ def validate_pdf(content):
         if isinstance(value, DictionaryObject):
             if forbidden.intersection(value.keys()):
                 raise ValueError("active content")
+            # Action types are NameObject VALUES of /S, not dictionary keys.
+            # Parsed names also cover escaped names and compressed objects.
+            action = resolve(value.get('/S'))
+            if isinstance(action, str) and action in forbidden_actions:
+                raise ValueError('active PDF action')
+            if action == '/URI':
+                uri = resolve(value.get('/URI'))
+                if (not isinstance(uri, str) or any(ord(char) < 32 or ord(char) == 127 for char in uri)
+                        or urllib.parse.urlsplit(uri.strip()).scheme.lower() not in ('http', 'https', 'mailto')):
+                    raise ValueError('unsafe PDF link')
             for child in value.values():
                 inspect(child, depth + 1)
         elif isinstance(value, ArrayObject):
@@ -86,7 +111,7 @@ def validate_pdf(content):
     inspect(reader.trailer)
 
 
-def extract(content, mime):
+def extract(content, mime, *, max_pdf_pages=100):
     if not 0 < len(content) <= 5_000_000:
         raise ValueError("size")
     pages = []
@@ -102,10 +127,11 @@ def extract(content, mime):
         return [(1, normalized[:120_000])], len(text) > 160_000 or len(normalized) > 120_000
     if mime != "application/pdf":
         raise ValueError("mime")
+    validate_pdf(content)
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(content), strict=True)
-    if reader.is_encrypted or len(reader.pages) > 100:
+    if reader.is_encrypted or len(reader.pages) > max_pdf_pages:
         raise ValueError("pdf")
     truncated = len(reader.pages) > 12
     for number, page in enumerate(reader.pages[:12], 1):
@@ -151,7 +177,9 @@ def main():
         validate_pdf(content)
         sys.stdout.buffer.write(b'{"valid":true}')
         return
-    pages, truncated = extract(content, sys.argv[1])
+    capture = sys.argv[1].startswith('capture:')
+    mime = sys.argv[1].removeprefix('capture:')
+    pages, truncated = extract(content, mime, max_pdf_pages=12 if capture else 100)
     sys.stdout.buffer.write(
         json.dumps({"pages": pages, "truncated": truncated}, ensure_ascii=False).encode(
             "utf-8"

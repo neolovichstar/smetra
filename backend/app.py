@@ -380,6 +380,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         lengths = self.headers.get_all("Content-Length", [])
         if len(lengths) > 1 or self.headers.get("Transfer-Encoding"):
             raise ApiError(400, "Некорректная длина запроса")
+        if lengths and not re.fullmatch(r"[0-9]+", lengths[0].strip()):
+            raise ApiError(400, "Некорректная длина запроса")
         try:
             size = int(lengths[0]) if lengths else 0
         except ValueError:
@@ -508,6 +510,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path, query = self.route()
             if path.startswith("/api/"):
                 self._body_length = self.validate_body_length(path)
+                if method != 'POST' and path in {
+                    '/api/assistant/confirm', '/api/assistant/dismiss', '/api/assistant/undo',
+                    '/api/assistant/chat', '/api/assistant/stream',
+                }:
+                    raise ApiError(405, 'Используйте POST для этого действия')
+                if self._body_length:
+                    if method == 'GET':
+                        raise ApiError(400, 'GET-запрос не должен содержать тело')
+                    if self.headers.get('Content-Type', '').split(';', 1)[0].strip().lower() != 'application/json':
+                        raise ApiError(415, 'Отправьте данные в формате JSON')
                 root = path.split("/", 3)[2]
                 if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
                     raise ApiError(404, "Не найдено")
