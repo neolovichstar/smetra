@@ -66,6 +66,16 @@ class SecurityHardeningTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 404)
 
+    def test_invalid_request_shapes_do_not_allocate_database_connections(self):
+        with patch.object(self.mod, 'db', side_effect=AssertionError('database opened')):
+            for length in ('+0', '0_0', '-1', '0,0'):
+                with self.subTest(length=length):
+                    self.assertEqual(self.request('POST', '/api/auth/login', headers={'Content-Length': length})[0], 400)
+            self.assertEqual(self.request('GET', '/api/me', body=b'{}',
+                                         headers={'Content-Type': 'application/json'})[0], 400)
+            self.assertEqual(self.request('POST', '/api/auth/login', body=b'{}',
+                                         headers={'Content-Type': 'text/plain'})[0], 415)
+
     def test_public_provider_list_does_not_open_database(self):
         with patch.object(self.mod, "db", side_effect=AssertionError("database opened")):
             status, _, result = self.request("GET", "/api/auth/providers")

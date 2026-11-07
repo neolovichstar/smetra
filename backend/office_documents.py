@@ -15,6 +15,53 @@ READABLE = ("text/plain", "application/pdf", *VIEWABLE)
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
+def validate_fields(root, mime):
+    """Keep inert maths/page fields, reject DDE, macros and remote data loads."""
+    if mime == XLSX:
+        for node in root.iter():
+            if node.tag.rsplit('}', 1)[-1] not in ('f', 'definedName'):
+                continue
+            # Quoted Excel string literals are data, not executable tokens.
+            formula = re.sub(r'"(?:[^"]|"")*"', '""', node.text or '')
+            separator = formula.find('|')
+            dde = separator >= 0 and '!' in formula[separator + 1:]
+            if dde or re.search(
+                r'(?<![\w.])(?:(?:_xlfn|_xlws)\.)*'
+                r'(?:WEBSERVICE|RTD|CALL|REGISTER(?:\.ID)?|EXEC|EVALUATE|DDE)\s*\(',
+                formula, re.I,
+            ):
+                raise ValueError('active Excel formula')
+        return
+
+    def check(instruction):
+        if re.match(r'\s*(?:DDEAUTO|DDE|INCLUDETEXT|INCLUDEPICTURE|LINK|DATABASE)\b', instruction, re.I):
+            raise ValueError('active Word field')
+
+    fields = []
+    for node in root.iter():
+        if node.tag == W + 'fldSimple':
+            check(node.get(W + 'instr', ''))
+        elif node.tag == W + 'fldChar':
+            kind = node.get(W + 'fldCharType')
+            if kind == 'begin':
+                fields.append([])
+            elif kind in ('separate', 'end') and fields:
+                if fields[-1] is not None:
+                    check(''.join(fields[-1]))
+                if kind == 'end':
+                    fields.pop()
+                else:
+                    fields[-1] = None
+        elif node.tag == W + 'instrText':
+            instruction = node.text or ''
+            check(instruction)
+            if fields and fields[-1] is not None:
+                fields[-1].append(instruction)
+    for field in fields:
+        if field is not None:
+            check(''.join(field))
+
+
 def archive(content, mime):
     if mime not in MIMES or not 0 < len(content) <= 5_000_000:
         raise ValueError("office bounds")
@@ -31,7 +78,7 @@ def archive(content, mime):
                     entry.file_size > 5_000_000 or
                     entry.file_size > max(entry.compress_size, 1) * 200 or
                     any(part in lower for part in
-                        ("vbaproject", "vbadata", "activex/", "embeddings/", "externallinks/"))):
+                        ("vbaproject", "vbadata", "activex/", "embeddings/", "externallinks/", "macrosheets/"))):
                 raise ValueError("unsafe archive")
             raw = package.read(entry)
             if lower.endswith((".xml", ".rels")):
@@ -40,9 +87,10 @@ def archive(content, mime):
                 root = ET.fromstring(raw)
                 if sum(1 for _ in root.iter()) > 100_000:
                     raise ValueError("XML bounds")
+                validate_fields(root, mime)
                 if lower.endswith(".rels"):
                     for relation in root:
-                        if (relation.get("TargetMode", "").lower() == "external" and
+                        if (relation.get("TargetMode", "").strip().lower() == "external" and
                                 not relation.get("Type", "").endswith("/hyperlink")):
                             raise ValueError("external content")
                 result[name] = root
@@ -58,7 +106,7 @@ def archive(content, mime):
     if not any(node.get("PartName") == "/" + main and node.get("ContentType") == expected for node in types):
         raise ValueError("office type mismatch")
     for node in types:
-        if any(token in node.get("ContentType", "").lower() for token in ("macroenabled", "vba", "oleobject", "activex")):
+        if any(token in node.get("ContentType", "").lower() for token in ("macroenabled", "macrosheet", "vba", "oleobject", "activex")):
             raise ValueError("active office content")
     return result
 

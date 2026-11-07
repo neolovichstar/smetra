@@ -335,6 +335,9 @@ def _route(service, method, parts, query, data):
     maximum = maximum_upload()
     if not 1 <= len(raw) <= maximum:
         raise DomainError(413, f"Максимальный размер файла — {maximum // 1_000_000} МБ")
+    from backend.malware import scan_content
+
+    scan_content(raw)
     if extension in AUDIO:
         mime, _format = validate_audio(name, raw)
     elif extension in (".png", ".jpg", ".jpeg"):
