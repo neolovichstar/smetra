@@ -80,7 +80,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
       'Saved width is applied only when the panel is open');
     assert.match(assistantCss,/\.smetra-quote-preview\.is-closing\{/,'Exit transition is styled');
     assert.match(assistantCss,/prefers-reduced-motion:reduce/,'Reduced-motion users do not get forced animation');
-    assert.match(html,/tools\.css\?v=20261108-controls3/,'Number controls must ship with the final design-system CSS');
+    assert.match(html,/tools\.css\?v=20261108-compact1/,'Number controls must ship with the final design-system CSS');
     assert.doesNotMatch(html,/precision-controls\.css/,'No extra stylesheet layer');
     assert.match(css,/::-webkit-inner-spin-button/,'WebKit number spinner override');
     assert.match(css,/-moz-appearance:\s*textfield/,'Firefox number spinner override');

@@ -36,7 +36,7 @@ fs.mkdirSync(output, { recursive: true });
       return { viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, left: section.left, width: section.width, frames };
     });
     assert(result.documentWidth <= result.viewport + 1, label + ': no horizontal document overflow');
-    assert(result.frames.length > 0, label + ': avatar frames exist');
+    if(result.viewport>640||label.startsWith('profile '))assert(result.frames.length > 0, label + ': avatar frames exist');
     for (const frame of result.frames) {
       assert(frame.width > 0 && frame.width <= 96 && frame.height > 0 && frame.height <= 96, label + ': bounded ' + frame.frame);
       assert(frame.loaded && frame.contained, label + ': image stays inside ' + frame.frame);

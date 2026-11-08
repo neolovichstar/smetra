@@ -157,6 +157,14 @@ jobs:
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_account_layout.cjs
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_vault_controls.cjs
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_payments.cjs
+      - name: Compact mobile screens, disclosures and rotation
+        run: |
+          SMETRA_FIXTURE_PORT=8086 python scripts/android_ui_fixture.py > data/compact-fixture.log 2>&1 &
+          task_compact_pid=$!
+          trap 'kill "$task_compact_pid"' EXIT
+          for i in $(seq 1 30); do grep -Fq ANDROID_UI_FIXTURE_READY data/compact-fixture.log && break; sleep 1; done
+          grep -Fq ANDROID_UI_FIXTURE_READY data/compact-fixture.log || { cat data/compact-fixture.log; exit 1; }
+          SMETRA_COMPACT_ORIGIN=http://localhost:8086 SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_mobile_compact.cjs
       - name: Durable assistant streaming, navigation and cancellation
         run: |
           SMETRA_ACTION_QA=1 SMETRA_DURABLE_QA=1 SMETRA_FIXTURE_PORT=8085 python scripts/android_ui_fixture.py > data/durable-fixture.log 2>&1 &
@@ -180,6 +188,7 @@ jobs:
             data/qa/account-*.png
             data/qa/account-layout/
             data/qa/payments/
+            data/qa/mobile-compact/
             data/qa/support-*.png
             data/qa/procurement-*.png
             data/qa/growth-*.png

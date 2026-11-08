@@ -86,6 +86,36 @@
   // The collapse control is owned by app.js (state, persistence and icon).
   if (sidebar) new MutationObserver(syncNavigation).observe(sidebar,{attributes:true,attributeFilter:['class'],subtree:true});
   syncNavigation();
+  // Optional detail stays one tap away on a phone. Desktop shows the full view.
+  const compactPhone = window.matchMedia ? matchMedia('(max-width:640px)') : {matches:false};
+  const disclosureStates = new WeakMap();
+  const applyDisclosure = (details, state) => {
+    const summary = details.querySelector(':scope > summary');
+    const open = !compactPhone.matches || state.mobileOpen;
+    if (!open && details.contains(document.activeElement)) summary?.focus();
+    details.open = open;
+    if (summary) summary.tabIndex = compactPhone.matches ? 0 : -1;
+  };
+  const enhanceDisclosure = details => {
+    if (disclosureStates.has(details)) return;
+    const state = {mobileOpen: details.hasAttribute('data-mobile-expanded')};
+    disclosureStates.set(details, state);
+    applyDisclosure(details, state);
+    details.addEventListener('toggle', () => {
+      if (compactPhone.matches) state.mobileOpen = details.open;
+      else if (!details.open) details.open = true;
+      if (details.open) details.querySelectorAll('textarea[data-autogrow="true"]').forEach(input=>input.__smetraAutoSize?.());
+    });
+    details.querySelector(':scope > summary')?.addEventListener('click', event => {
+      if (!compactPhone.matches && !event.target.closest('a,button,input,select,textarea')) event.preventDefault();
+    });
+  };
+  compactPhone.addEventListener?.('change', () => {
+    document.querySelectorAll('details[data-mobile-disclosure]').forEach(details => {
+      const state = disclosureStates.get(details);
+      if (state) applyDisclosure(details, state);
+    });
+  });
   function decorate(root) {
     root.querySelectorAll('.construction-section > form').forEach(form => {
       if (form.dataset.compactEntry || form.querySelectorAll('label').length < 5) return;
@@ -98,6 +128,36 @@
       const summary = document.createElement('summary'); summary.textContent = titles[form.id] || 'Открыть форму';
       form.before(entry); entry.append(summary,form);
     });
+    // Keep the existing forms and event handlers while turning the nine object
+    // sections into an outline. Moving nodes also preserves unfinished input.
+    const sectionSelector = 'section.construction-section,.profile-bottom-grid > section.profile-card';
+    const sections = [...(root.matches?.(sectionSelector) ? [root] : []), ...root.querySelectorAll(sectionSelector)];
+    sections.forEach(section => {
+      const title = section.querySelector(':scope > .construction-section-title,:scope > .profile-section-title');
+      if (!title) return;
+      const details = document.createElement('details');
+      details.className = section.className + ' mobile-disclosure';
+      details.dataset.mobileDisclosure = '';
+      details.open = true;
+      const summary = document.createElement('summary');
+      summary.className = title.className;
+      summary.append(...title.childNodes);
+      const plan = section.querySelector('.profile-plan-name');
+      if (plan) {
+        const value = document.createElement('span');
+        value.className = 'profile-fold-value';
+        value.textContent = plan.textContent;
+        summary.querySelector('h2')?.after(value);
+      }
+      title.remove();
+      const body = document.createElement('div');
+      body.className = 'mobile-disclosure-body';
+      body.append(...section.childNodes);
+      details.append(summary, body);
+      section.replaceWith(details);
+    });
+    if (root.matches?.('details[data-mobile-disclosure]')) enhanceDisclosure(root);
+    root.querySelectorAll('details[data-mobile-disclosure]').forEach(enhanceDisclosure);
     const textareas = [...(root.matches?.('textarea') ? [root] : []), ...root.querySelectorAll('textarea')];
     textareas.forEach(input => {
       if (input.dataset.autogrow || input.id === 'assistant-input' ||

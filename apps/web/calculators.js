@@ -172,17 +172,17 @@
       '<strong><span id="smcalc-primary"></span> <small id="smcalc-primary-unit"></small></strong></div>' +
       '<div class="smcalc-metric smcalc-secondary"><span id="smcalc-secondary-label"></span>' +
       '<strong><span id="smcalc-secondary"></span> <small id="smcalc-secondary-unit"></small></strong></div></div>' +
-      '<p class="smcalc-formula" id="smcalc-formula"></p>' +
-      '<p class="smcalc-note" id="smcalc-note"></p>' +
+      '<details class="mobile-disclosure smcalc-explanation" data-mobile-disclosure open><summary>Как рассчитано</summary><div class="mobile-disclosure-body"><p class="smcalc-formula" id="smcalc-formula"></p>' +
+      '<p class="smcalc-note" id="smcalc-note"></p></div></details>' +
       '<div class="smcalc-transfer" id="smcalc-transfer">' +
-      '<span class="smcalc-transfer-label">ПОЗИЦИЯ ДЛЯ СМЕТЫ</span>' +
+      '<details class="mobile-disclosure smcalc-options" data-mobile-disclosure open><summary>Позиция для сметы</summary><div class="mobile-disclosure-body">' +
       '<label class="smcalc-transfer-method" for="smcalc-unit-mode">Как учитывать материал' +
       '<select id="smcalc-unit-mode" aria-label="Единица учёта материала">' +
       '<option value="material">По площади, весу или объёму</option>' +
       '<option value="packages">По целым упаковкам</option></select></label>' +
       '<div class="smcalc-transfer-preview" aria-live="polite"><span>В новую смету</span>' +
       '<strong id="smcalc-draft-name"></strong><span id="smcalc-draft-qty"></span></div>' +
-      '<p class="smcalc-transfer-note">Цена за единицу остаётся нулевой. Перед сохранением укажите цену и клиента в редакторе. Существующие сметы не изменятся.</p>' +
+      '<p class="smcalc-transfer-note">Цена за единицу остаётся нулевой. Перед сохранением укажите цену и клиента в редакторе. Существующие сметы не изменятся.</p></div></details>' +
       '<button type="button" class="btn primary smcalc-draft" id="smcalc-draft">Открыть в новой смете</button></div>' +
       '<button type="button" class="btn smcalc-copy" id="smcalc-copy">Скопировать расчёт</button>' +
       '</aside></div></section>');

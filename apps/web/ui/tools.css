@@ -100,6 +100,19 @@
 #smetra-calculators .smcalc-header{margin:0 0 16px}
 @media (max-width:800px){#smetra-calculators h1{font-size:var(--fs-24)}}
 
+/* Disclosure content uses native details semantics, including keyboard support. */
+.mobile-disclosure>summary{list-style:none;cursor:pointer;gap:10px}
+.mobile-disclosure>summary::-webkit-details-marker{display:none}
+.mobile-disclosure>summary h2{margin:0;font:inherit;font-weight:550}
+.mobile-disclosure-body{min-width:0}
+.profile-fold-value{display:none}
+.usage-history>summary{display:flex;font-size:17px;font-weight:550}
+.usage-storage>summary{display:flex;margin-bottom:12px;font-size:17px;font-weight:550}
+.usage-storage-total{margin-left:auto;color:var(--text-3);font-size:12px;font-variant-numeric:tabular-nums}
+.usage-history .profile-section-title{margin-top:12px}
+.smcalc-explanation>summary,.smcalc-options>summary{display:none}
+@media(min-width:641px){.profile-chart-details>summary{display:none}.mobile-disclosure>summary{cursor:default}}
+
 /* ───────── Phone density ─────────
    Loaded last. On a 360–430px screen the desktop scale reads as oversized:
    smaller type, tighter cards, two-up summary tiles, no repeated hints. */
@@ -145,7 +158,126 @@
   /* Empty states inside cards: no illustration, title and one line. */
   .panel .empty::before{display:none}
   .btn{font-size:var(--fs-14)}
+  /* Reduce the page, not the tap targets or form text. */
+  #shell .main{padding:12px 12px calc(var(--tabbar-space) + 16px)}
+  #content:is([data-section="assistant"],[data-section="support"],[data-section="profile"],[data-section="usage"],[data-section="settings"]){padding:0}
+  .topline{gap:8px;margin-bottom:12px}
+  .panel{padding:12px}
+  .section-top{gap:8px;margin-bottom:10px}
+  .workspace-home{gap:12px}
+  .capture-panel{padding:12px}
+  .capture-heading{gap:6px}
+  .capture-shortcuts{display:flex;flex-wrap:wrap}
+  .capture-shortcuts .btn{flex:1;justify-content:center;padding-inline:8px;min-height:44px}
+  .capture-shortcuts .btn:last-child{grid-column:auto}
+  .record-line{gap:8px;padding-block:8px}
+  .quotes-document-row{padding:8px 12px;min-height:64px}
+  .contact-group{gap:8px;padding-block:4px}
+  .contact-link{min-height:44px}
+  .empty{padding:16px 4px}
+  /* The account rail repeats the identity already shown in the profile/menu. */
+  .account-hub{min-height:0}
+  .account-hub .hub-rail{padding:6px 12px 0;gap:0}
+  .account-hub .hub-identity{display:none}
+  .account-hub #account-sections{padding-bottom:6px;gap:4px}
+  .account-hub #account-sections>.hub-tab{min-height:44px;padding-inline:12px}
+  .account-hub .hub-main{padding:12px 12px calc(var(--tabbar-space) + 16px)}
+  .profile-overview,.account-usage,.settings-content-page{padding:0}
+  .profile-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:0 0 12px;margin-bottom:12px}
+  .profile-hero-person{gap:10px;align-items:center}
+  .profile-hero-avatar{width:44px;height:44px;font-size:20px}
+  .profile-hero h1{margin:0;font-size:20px}
+  .profile-private-id,.profile-overline{display:none}
+  .profile-hero>.btn{margin:0;padding-inline:10px;min-height:44px}
+  .profile-section-title{gap:8px;margin-bottom:10px}
+  .profile-section-title p{margin-top:4px}
+  .profile-section-title>a{min-height:44px;white-space:normal}
+  .profile-stats{gap:8px;margin-bottom:16px}
+  .profile-stat{gap:6px;padding:10px;border-radius:10px;min-height:76px}
+  .profile-stat strong{font-size:23px}
+  .profile-stat-icon svg{width:16px;height:16px}
+  .profile-stat>span:last-child{line-height:1.35}
+  .profile-finance{margin:16px 0}
+  .profile-switch button{min-height:44px;padding:6px 10px}
+  .profile-money-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .profile-money-metric{grid-template-columns:minmax(0,1fr);gap:6px;padding:8px 0 12px;align-content:start}
+  .profile-money-metric strong{grid-column:1;grid-row:auto;font-size:clamp(16px,4.4vw,20px)}
+  .profile-money-metric small{font-size:12px;line-height:1.4}
+  .profile-bottom-grid,.usage-limits-grid{gap:10px;margin:12px 0}
+  .profile-card{padding:12px;border-radius:12px}
+  .profile-card>h2{margin-bottom:10px}
+  .profile-statuses{gap:10px;padding-top:0}
+  .profile-plan-name{font-size:22px;margin:8px 0}
+  .profile-plan-note{line-height:1.45}
+  .profile-recent{margin-top:10px}
+  .profile-recent-row{min-height:56px;gap:8px}
+  .profile-recent-row>span{gap:3px}
+  .profile-recent-row small,.profile-privacy-note,.profile-money-note{font-size:12px}
+  .profile-privacy-note{margin-top:12px}
+  .profile-chart{margin-top:8px;padding:12px}
+  .profile-chart-bars{margin-top:16px}
+  .profile-chart-track{height:88px}
+  .settings-page-heading{margin-bottom:12px}
+  .settings-page-heading h1{margin-bottom:6px}
+  .settings-top-tabs[role=tablist]{margin-bottom:12px}
+  #content .settings-top-tabs[role=tablist]>button[role=tab]{min-height:44px;padding:8px 10px}
+  .settings-content-panels .hub-head{margin-bottom:12px}
+  .hub-card{padding:12px}
+  .hub-row{gap:8px;padding:12px 0}
+  .account-usage .usage-plan{padding:10px 0;gap:8px;flex-wrap:nowrap}
+  .usage-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+  .usage-summary-grid>div{grid-template-columns:minmax(0,1fr);gap:6px;padding:12px;border-radius:12px;align-content:start}
+  .usage-summary-grid>div:first-child{grid-column:1/-1;grid-template-columns:minmax(0,1fr) auto}
+  .usage-summary-grid strong{grid-column:1;grid-row:auto;font-size:22px;white-space:normal}
+  .usage-summary-grid>div:first-child strong{grid-column:2;grid-row:1/3;align-self:center}
+  .usage-summary-grid small{font-size:12px;line-height:1.35}
+  .usage-meter{gap:6px;padding-top:12px}
+  .usage-records{gap:8px;padding-top:12px}
+  .usage-records dt{font-size:12px}
+  .usage-ledger-row{padding:12px 0;gap:8px}
+  .usage-history{margin-top:12px}
+  .mobile-disclosure>summary{display:flex;align-items:center;min-height:44px;font-size:14px;font-weight:500}
+  .profile-card.mobile-disclosure>summary{margin-bottom:0}
+  .profile-card.mobile-disclosure>summary>a{margin-left:auto}
+  .profile-card.mobile-disclosure>summary::after{margin-left:0}
+  .profile-fold-value{display:inline;color:var(--text-2);font-size:12px}
+  .mobile-disclosure>summary::after{content:'';width:7px;height:7px;margin-left:auto;flex:none;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:rotate(45deg) translateY(-2px)}
+  .mobile-disclosure[open]>summary::after{transform:rotate(225deg) translate(-2px,-2px)}
+  .mobile-disclosure[open]>.mobile-disclosure-body{padding-top:8px}
+  /* Calculations stay above the optional explanation and transfer settings. */
+  #smetra-calculators .smcalc-header{margin-bottom:12px}
+  #smetra-calculators .smcalc-tabs{padding-bottom:10px}
+  #smetra-calculators .smcalc-tab{min-height:44px}
+  #smetra-calculators .smcalc-card{padding:12px}
+  #smetra-calculators .smcalc-title{padding-bottom:10px;margin-bottom:12px}
+  #smetra-calculators .smcalc-title h2{font-size:16px}
+  #smetra-calculators .smcalc-title p{display:none}
+  #smetra-calculators .smcalc-fields{gap:10px}
+  #smetra-calculators .smcalc-field{gap:4px}
+  #smetra-calculators .smcalc-field input{min-height:44px;padding:8px 10px;font-size:16px}
+  #smetra-calculators #smcalc-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  #smetra-calculators .smcalc-metric{padding-bottom:10px;margin-bottom:0}
+  #smetra-calculators .smcalc-metric strong{font-size:24px}
+  #smetra-calculators .smcalc-formula,#smetra-calculators .smcalc-note{margin-bottom:8px}
+  #smetra-calculators .smcalc-transfer{margin-top:8px;padding-top:0;gap:8px}
+  #smetra-calculators .smcalc-options .mobile-disclosure-body{display:grid;gap:10px}
+  .catalog-plan-grid{margin-inline:-12px;padding-inline:12px;scroll-padding-inline:12px}
+  .catalog-plan{padding:12px;gap:6px}
+  .catalog-plan ul{gap:4px;margin-top:4px;padding-top:8px}
+  /* Compact object outline; every form and file remains in its own section. */
+  .construction-section{padding:8px 12px;margin-top:8px}
+  .construction-section>summary{margin-bottom:0}
+  .construction-section>summary h2{font-size:14px}
+  .construction-section .construction-entry{padding:4px 8px;margin-bottom:8px}
+  .construction-metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px}
+  .construction-metrics>div{padding:10px 8px;gap:4px}
+  .construction-metrics>div+div{border-top:0;border-left:1px solid var(--line)}
+  .construction-metrics strong{font-size:15px;overflow-wrap:anywhere}
+  .construction-intro{padding:12px;margin-bottom:12px;gap:8px}
+  .construction-inline{gap:8px}
+  .construction-object{padding:12px;gap:8px}
 }
+@media(min-width:360px) and (max-width:640px){.profile-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 
 /* Vault & changelog: black/gray workspace surfaces, no decorative cards. */
@@ -236,6 +368,16 @@
  .changelog-title{grid-column:1/-1;grid-row:2}
  .changelog-version{grid-column:2;grid-row:1}
  .changelog-body,.changelog-footer{margin-left:0}
+}
+@media(max-width:640px){
+ .vault-root{padding-bottom:0;min-height:0}
+ .vault-head{padding-bottom:12px}
+ .vault-eyebrow,.vault-head>p{display:none}
+ .vault-head h1{margin:0}
+ .vault-tools{gap:10px;padding:12px 0}
+ .vault-bar{gap:8px;padding:8px 0 12px}
+ .vault-tabs button{min-height:44px;padding-block:8px}
+ #vault-search{height:44px;font-size:16px}
 }
 @media(prefers-reduced-motion:reduce){.vault-image-preview img{transition:none}}
 
