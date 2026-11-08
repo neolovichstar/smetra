@@ -47,6 +47,36 @@ class AssistantJobTests(unittest.TestCase):
         with self.mod.db() as con:
             con.execute('UPDATE assistant_jobs SET next_attempt_at=0,lease_until=0 WHERE id=?', (job['id'],))
 
+    def test_first_message_creates_durable_named_conversation_without_empty_default(self):
+        owner, _ = self.account('job-auto-thread')
+        self.assertEqual(self.call('/assistant/conversations', token=owner)[1]['items'], [])
+        job = self.enqueue(owner, key='first-written-message')
+        thread_id = job['conversation_id']
+        self.assertTrue(thread_id)
+        items = self.call('/assistant/conversations', token=owner)[1]['items']
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], thread_id)
+        self.assertEqual(items[0]['title'], 'Новый диалог')
+        with patch('backend.chat_titles.generate_title', return_value='Проверка закупок'):
+            self.run_job()
+        saved = self.call('/assistant/conversations/'+thread_id, token=owner)[1]
+        self.assertEqual([m['role'] for m in saved['messages']], ['user', 'assistant'])
+        self.assertEqual(self.call('/assistant/conversations', token=owner)[1]['items'][0]['title'], 'Проверка закупок')
+        self.assertEqual(self.call('/assistant', token=owner)[1]['messages'], [])
+
+    def test_legacy_anonymous_history_is_archived_on_first_new_message(self):
+        owner, _ = self.account('job-legacy-archive')
+        with patch('backend.assistant.query_model', return_value={'content':'Старый ответ'}):
+            self.assertEqual(self.call('/assistant/chat', 'POST', {'text':'Старый вопрос'}, owner)[0], 200)
+        job = self.enqueue(owner, key='new-post-legacy')
+        items = self.call('/assistant/conversations', token=owner)[1]['items']
+        self.assertEqual({x['title'] for x in items}, {'История прежнего чата', 'Новый диалог'})
+        previous = next(x for x in items if x['title'] == 'История прежнего чата')
+        history = self.call('/assistant/conversations/'+previous['id'], token=owner)[1]['messages']
+        self.assertEqual([x['content'] for x in history], ['Старый вопрос', 'Старый ответ'])
+        self.assertNotEqual(job['conversation_id'], previous['id'])
+        self.assertEqual(self.call('/assistant', token=owner)[1]['messages'], [])
+
     def test_creation_replay_is_atomic_and_private(self):
         owner, _ = self.account('job-replay')
         stranger, _ = self.account('job-stranger')
