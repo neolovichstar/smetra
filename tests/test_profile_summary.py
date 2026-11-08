@@ -39,6 +39,16 @@ class ProfileSummaryTests(unittest.TestCase):
         self.assertEqual(self.call('/profile-summary')[0], 401)
         self.assertEqual(self.call('/profile-summary', 'POST', {}, owner)[0], 405)
 
+    def test_completed_estimates_have_their_own_status_in_the_profile(self):
+        token, _ = self.account('summary-completed')
+        code, result = self.call('/quotes', 'POST', {'title': 'Работы', 'client': 'Клиент', 'items': [{'name': 'Работа', 'quantity': '1', 'unit_price': 100}]}, token)
+        self.assertEqual(code, 201, result)
+        with self.mod.db() as con:
+            con.execute("UPDATE quotes SET status='completed',approval_state='approved' WHERE id=?", (result['quote']['id'],))
+        code, result = self.call('/profile-summary', token=token)
+        self.assertEqual(code, 200, result)
+        self.assertEqual(result['quote_states'], {'completed': 1})
+
     def test_finance_is_hidden_for_members_without_finance_permission(self):
         owner, _ = self.account('summary-finance-owner')
         viewer, viewer_id = self.account('summary-finance-viewer')
@@ -70,6 +80,36 @@ class ProfileSummaryTests(unittest.TestCase):
             self.assertEqual(code, 200)
             self.assertEqual(result['quotes']['used'], 0)
             self.assertGreater(result['tokens']['limit'], 0)
+
+    def test_quote_creation_and_limit_work_with_restricted_user_columns(self):
+        token, _ = self.account('runtime-quote-owner', legacy=False)
+        from backend.business import Service
+        original = Service.create_quote
+
+        class Restricted:
+            def __init__(self, con):
+                self.con = con
+
+            def __getattr__(self, name):
+                return getattr(self.con, name)
+
+            def execute(self, sql, params=()):
+                if 'users' in sql.lower() and 'created_at' in sql.lower():
+                    raise PermissionError('Runtime role cannot read registration metadata')
+                return self.con.execute(sql, params)
+
+        def guarded(service, data):
+            previous = service.con
+            service.con = Restricted(previous)
+            try:
+                return original(service, data)
+            finally:
+                service.con = previous
+
+        with patch.object(Service, 'create_quote', guarded):
+            for index in range(4):
+                code, result = self.call('/quotes', 'POST', {'title': 'Проверка '+str(index), 'client': 'Демо', 'items': [{'name': 'Работа', 'quantity': '1', 'unit_price': 100}]}, token)
+                self.assertEqual(code, 201 if index < 3 else 402, result)
 
     def test_usage_history_is_personal_and_bounded(self):
         owner, owner_id = self.account('usage-ledger-owner')

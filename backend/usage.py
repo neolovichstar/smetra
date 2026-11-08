@@ -29,16 +29,10 @@ def summary(service):
     plan = workspace_summary(con, wid, now)
     tokens = ai_tokens.balance(service)
 
-    # The runtime role deliberately cannot read users.created_at. Resolve the
-    # authorized workspace owner through the scoped connection, then use the
-    # account connection for the same signup quota metadata as quote creation.
-    owner_id = con.execute("SELECT owner_id FROM workspaces WHERE id=?", (wid,)).fetchone()[0]
-    account_con = service.global_con
-    owner = account_con.execute(
-        "SELECT id,entitlement_until,created_at FROM users WHERE id=?", (owner_id,)
-    ).fetchone()
-    created = account_con.execute(
-        "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'", (owner_id,)
+    from backend.plan_catalog import quota_owner
+    owner = quota_owner(service)
+    created = con.execute(
+        "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'", (owner["id"],)
     ).fetchone()[0]
     # Same rule as quote creation: a paid workspace or a personal PRO lifts the limit.
     paid = workspace_feature_access(con, wid, "clean_export", now)["allowed"] or (owner["entitlement_until"] or 0) > now

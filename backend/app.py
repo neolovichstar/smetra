@@ -1555,7 +1555,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "return_url": ORIGIN + "/app?payment=return",
                 },
                 "description": "Доступ Сметра Про на " + str(intent['duration_days']) + " дней",
-                "metadata": {"user_id": user["id"], "plan": plan},
+                "metadata": {"user_id": user["id"], "plan": plan, "customer_email": user["email"]},
             }
             # YooKassa keys belong to the shop, rather than a browser/account,
             # and must be at most 64 characters. Keep retries deterministic.
@@ -1823,7 +1823,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "capture": True,
             "confirmation": {"type": "redirect", "return_url": ORIGIN + "/app?payment=return#billing"},
             "description": f"Токены ассистента Сметры: {millions} млн",
-            "metadata": {"user_id": user["id"], "plan": plan},
+            "metadata": {"user_id": user["id"], "plan": plan, "customer_email": user["email"]},
         }
         provider_key = hashlib.sha256(("tokens:v1:" + user["id"] + ":" + key).encode()).hexdigest()
         result = self.provider_call("/payments", "POST", request, provider_key)

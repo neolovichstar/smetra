@@ -16,8 +16,9 @@ def summary(service):
         "(SELECT count(*) FROM assistant_conversations WHERE workspace_id=? AND user_id=?) AS conversations",
         (wid, wid, wid, wid, wid, wid, service.user['id']),
     ).fetchone())
-    states = {row['approval_state']: row['total'] for row in con.execute(
-        "SELECT approval_state,count(*) AS total FROM quotes WHERE workspace_id=? GROUP BY approval_state", (wid,)
+    states = {row['state']: row['total'] for row in con.execute(
+        "SELECT CASE WHEN status='completed' THEN 'completed' ELSE approval_state END AS state,"
+        "count(*) AS total FROM quotes WHERE workspace_id=? GROUP BY 1", (wid,)
     )}
     recent = [dict(row) for row in con.execute(
         "SELECT id,title,client,currency,amount_kopecks,approval_state,updated_at FROM quotes "

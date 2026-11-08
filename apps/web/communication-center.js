@@ -28,7 +28,7 @@ const ico = {
  back:'<path d="M19 12H5m6-6-6 6 6 6"/>',
  pencil:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'
 };
-const icon = n => !ico[n]&&window.SmetraIcons?window.SmetraIcons.svg(n,18):'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ico[n]||ico.chat)+'</svg>';
+const icon = n => window.SmetraIcons?window.SmetraIcons.svg(n,18):'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ico[n]||ico.chat)+'</svg>';
 async function api(path,options={}) {
  const epoch=sessionEpoch;
  const response=await fetch('/api'+path,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});

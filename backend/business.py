@@ -1046,10 +1046,8 @@ class Service:
         if not isinstance(catalog_ids, list) or len(catalog_ids) > 200:
             raise DomainError(400, "В одной смете может быть до 200 расценок")
         catalog_ids = list(dict.fromkeys(string(value, "Расценка", 80, True) for value in catalog_ids))
-        owner = self.con.execute(
-            "SELECT u.id,u.entitlement_until,u.created_at FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
-            (self.wid,),
-        ).fetchone()
+        from backend.plan_catalog import quota_owner
+        owner = quota_owner(self)
         count = self.con.execute(
             "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'",
             (owner["id"],),

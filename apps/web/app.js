@@ -150,33 +150,34 @@ function view(html) {
 }
 function syncSidebarAccess(){const mobile=matchMedia('(max-width:800px)').matches;const hidden=mobile?!document.body.classList.contains('nav-open'):false;const sidebar=$('#sidebar');if(sidebar){sidebar.inert=hidden;sidebar.setAttribute('aria-hidden',String(hidden))}}
 const sidebarIcons={
- fieldwork:'<path d="M9 18v-3M15 18v-3M12 3v11M8 8l4-5 4 5M4 21h16"/>',
- inbox:'<path d="M4 5h16v14H4zM4 15h5l2 3h2l2-3h5M8 9h8"/>',
- chats:'<path d="M21 11a8 8 0 0 1-8 8H5l-4 3 2-7a8 8 0 1 1 18-4Z"/><path d="M7 10h10M7 14h6"/>',
- dashboard:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/>',
- clients:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
- quotes:'<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/>',
- projects:'<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
- construction:'<path d="M3 21V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v16"/><path d="M3 8h5M3 12h3M3 16h5M16 3v5M12 3v3M8 3v5"/>',
- leads:'<path d="M4 4h16l-6 7v6l-4 3v-9z"/>',
- tasks:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m7 12 3 3 7-7"/>',
- calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
- assistant:'<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
- finance:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
- calculators:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 17h2M14 17h2"/>',
- catalog:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 4.5V22M8 7h8M8 11h8"/>',
- premium:'<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/>',
- files:'<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2-2z"/>',
- changelog:'<path d="M4 5h16M4 9h16M4 13h10M4 17h12"/><path d="M18 17v5M15.5 19.5h5"/>',
- documents:'<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/><path d="M3 7v14"/>',
- team:'<circle cx="9" cy="8" r="3.5"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M16 5.5a3.5 3.5 0 0 1 0 6.8M19 15a5 5 0 0 1 3 4.5V21"/>',
- notifications:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
- billing:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M7 15h4"/>',
- support:'<circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.7 1.2c-.8 1.1-2.3 1.4-2.3 3M12 17h.01"/>',
- profile:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
- settings:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
- admin:'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/>'
+ "fieldwork": "ruler",
+ "inbox": "inbox",
+ "chats": "messages-square",
+ "dashboard": "layout-dashboard",
+ "clients": "users-round",
+ "quotes": "file-spreadsheet",
+ "projects": "briefcase-business",
+ "construction": "ruler",
+ "leads": "funnel",
+ "tasks": "square-check-big",
+ "calendar": "calendar-days",
+ "assistant": "sparkles",
+ "finance": "chart-no-axes-combined",
+ "calculators": "calculator",
+ "catalog": "book-open",
+ "premium": "package",
+ "files": "folder-open",
+ "changelog": "newspaper",
+ "documents": "files",
+ "team": "users-round",
+ "notifications": "bell",
+ "billing": "credit-card",
+ "support": "headset",
+ "profile": "user-round",
+ "settings": "settings-2",
+ "admin": "shield-check"
 };
+Object.keys(sidebarIcons).forEach(name=>sidebarIcons[name]=window.SmetraIcons?.paths[sidebarIcons[name]]||'');
 // Product update notifications are derived from authenticated server-side views.
 const SmetraReleaseUnread=(()=>{
   let inFlight=null,sequence=0,lastRefresh=0;
@@ -217,7 +218,7 @@ function enhanceSidebarNavigation(){
  const makeSvg=(className,paths)=>{
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
   svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('width','18');svg.setAttribute('height','18');
-  svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.7');
+  svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','2');
   svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');
   svg.classList.add(className);svg.innerHTML=paths;return svg;
  };
