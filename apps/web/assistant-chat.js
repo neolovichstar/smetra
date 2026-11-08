@@ -1256,7 +1256,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
-        if(kind==='done'){completed=true;observedChatJobs.delete(currentJobId);jobLoadSeq++}
+        if(kind==='done'){completed=true;observedChatJobs.delete(currentJobId);rememberDismissedJob(currentJobId);jobList.replaceChildren();jobLoadSeq++}
         if(kind==='background')delegated=true;
         if(kind==='error'){terminalFailure=true;if(payload.cancelled){const error=new DOMException('Ответ остановлен','AbortError');throw error}}
         if(!active()||!messages.isConnected)return;
