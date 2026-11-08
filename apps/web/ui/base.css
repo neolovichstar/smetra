@@ -8,6 +8,11 @@ svg{flex-shrink:0}
 button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
 button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
 button:disabled{cursor:not-allowed}
+/* Keep native numeric validation and keyboard input, but never show browser
+   increment/decrement arrows (Chrome, Edge, Safari, Android WebView, Firefox). */
+input[type="number"]{-moz-appearance:textfield;appearance:textfield}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 a{color:var(--accent-text);text-decoration:none;text-underline-offset:3px}
 a:hover{text-decoration:underline}
 p{margin:0}
