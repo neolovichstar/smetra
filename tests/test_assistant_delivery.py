@@ -55,7 +55,7 @@ class AssistantDeliveryTests(unittest.TestCase):
             self.assertIn(b"event: done", replay)
             self.assertEqual(model.call_count, 1)
             self.assertEqual(self.call("/assistant", token=token)[1]["quota"]["used"], used)
-        self.assertEqual(len(self.call("/assistant", token=token)[1]["messages"]), 2)
+        self.assertEqual(len(self.call('/assistant/conversations/'+job['conversation_id'], token=token)[1]['messages']), 2)
 
     def test_disconnected_browser_does_not_cancel_saved_job(self):
         token, user_id = self.account("durable-disconnect")
@@ -79,7 +79,7 @@ class AssistantDeliveryTests(unittest.TestCase):
         row = self.call("/assistant/jobs/" + job["id"], token=token)[1]["job"]
         self.assertEqual(row["status"], "completed")
         self.assertEqual(row["result"]["answer"], "Проверил данные")
-        self.assertEqual(len(self.call("/assistant", token=token)[1]["messages"]), 2)
+        self.assertEqual(len(self.call('/assistant/conversations/'+job['conversation_id'], token=token)[1]['messages']), 2)
 
     def test_private_stream_cannot_drive_another_users_job(self):
         owner, _ = self.account("durable-owner")
