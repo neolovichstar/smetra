@@ -170,6 +170,7 @@ jobs:
             data/office-*.png
             data/assistant-studio-*.png
             data/qa/section-*.png
+            data/qa/ar-scan-*.png
             data/qa/procurement-*.png
             data/qa/growth-*.png
             data/qa/quote-review-*.png
