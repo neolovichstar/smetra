@@ -118,6 +118,32 @@ class PublicProfilePostgresTests(unittest.TestCase):
         self.assertTrue(bytes(row["content"]).startswith(b"RIFF"))
         self.assertIn(row["content_hash"], url)
 
+    def test_google_avatar_sync_is_atomic_and_respects_manual_changes(self):
+        from backend.public_profiles import _normalize_avatar, save_google_avatar, delete_avatar
+
+        output = io.BytesIO()
+        Image.new("RGB", (90, 90), "#669944").save(output, "PNG")
+        webp = _normalize_avatar(output.getvalue())
+        user = self.users[0]
+        self.assertTrue(save_google_avatar(self.admin, user["id"], webp))
+        row = self.admin.execute(
+            "SELECT source,content_hash FROM profile_avatars WHERE user_id=?", (user["id"],)
+        ).fetchone()
+        self.assertEqual(row["source"], "google")
+        self.assertEqual(len(row["content_hash"]), 64)
+        self.assertTrue(save_google_avatar(self.admin, user["id"], webp))
+        manual_url = store_avatar(
+            self.admin, user, base64.b64encode(output.getvalue()).decode()
+        )
+        self.assertTrue(manual_url)
+        self.assertFalse(save_google_avatar(self.admin, user["id"], webp))
+        delete_avatar(self.admin, user)
+        self.assertFalse(save_google_avatar(self.admin, user["id"], webp))
+        row = self.admin.execute(
+            "SELECT source,content_hash FROM profile_avatars WHERE user_id=?", (user["id"],)
+        ).fetchone()
+        self.assertEqual((row["source"], row["content_hash"]), ("manual", ""))
+
     def test_runtime_owns_only_its_profile_terms_and_avatar(self):
         for i, user in enumerate(self.users):
             self.admin.execute(
