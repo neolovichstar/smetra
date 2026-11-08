@@ -288,7 +288,8 @@ def weekly_summary(service):
     from backend.business import stamp
     now, week = stamp(), stamp() - 7 * 86400
     con, wid = service.con, service.wid
-    count = lambda sql, *args: con.execute(sql, (wid, *args)).fetchone()[0]
+    def count(sql, *args):
+        return con.execute(sql, (wid, *args)).fetchone()[0]
     summary = {
         "quotes_created": count("SELECT count(*) FROM quotes WHERE workspace_id=? AND created_at>=?", week),
         "quotes_awaiting_approval": count("SELECT count(*) FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed')"),
