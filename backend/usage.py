@@ -29,9 +29,8 @@ def summary(service):
     plan = workspace_summary(con, wid, now)
     tokens = ai_tokens.balance(service)
 
-    owner = con.execute(
-        "SELECT u.id,u.entitlement_until,u.created_at FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?", (wid,)
-    ).fetchone()
+    from backend.plan_catalog import quota_owner
+    owner = quota_owner(service)
     created = con.execute(
         "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'", (owner["id"],)
     ).fetchone()[0]
@@ -56,6 +55,7 @@ def summary(service):
         "quotes": meter(created, None if paid or free_quotes is None else free_quotes),
         "storage": meter(storage_used, workspace_storage_limit(service)),
         "seats": meter(seats_used, plan.get("seats")),
+        "history": history(con, service.user["id"], now),
         "records": {
             "quotes": count("quotes"),
             "clients": count("clients"),
@@ -63,3 +63,20 @@ def summary(service):
             "files": count("files"),
         },
     }
+
+
+def history(con, user_id, now):
+    """Bounded personal token audit, without prompts or other users' entries."""
+    cutoff = now - 30 * 86400
+    totals = dict(con.execute(
+        "SELECT coalesce(sum(CASE WHEN delta<0 THEN -delta ELSE 0 END),0) AS spent,"
+        "coalesce(sum(CASE WHEN delta>0 THEN delta ELSE 0 END),0) AS added,"
+        "count(CASE WHEN delta<0 THEN 1 END) AS debits "
+        "FROM ai_token_ledger WHERE user_id=? AND created_at>=? AND created_at<=?",
+        (user_id, cutoff, now),
+    ).fetchone())
+    entries = [dict(row) for row in con.execute(
+        "SELECT id,bucket,delta,reason,created_at FROM ai_token_ledger "
+        "WHERE user_id=? AND created_at<=? ORDER BY created_at DESC,id DESC LIMIT 20", (user_id, now)
+    )]
+    return {**totals, 'days': 30, 'entries': entries}

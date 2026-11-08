@@ -682,3 +682,12 @@
   .assistant-knowledge-dialog{height:calc(100dvh - 20px);max-height:calc(100dvh - 20px)}
   .knowledge-window-body.memory-overview{padding:12px 18px 22px}
 }
+
+/* A short greeting above the empty composer; its space stays stable while typing. */
+.assistant-greeting{margin:0 0 26px;text-align:center;opacity:1;transition:opacity .18s ease,transform .18s ease}
+.assistant-greeting h1{margin:0;color:var(--text);font-size:clamp(25px,3.2vw,36px);font-weight:500;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
+.assistant-greeting.is-quiet{opacity:0;visibility:hidden;pointer-events:none}
+.assistant-greeting.is-changing{opacity:0;transform:translateY(4px)}
+.assistant-greeting[hidden],.has-conversation .assistant-greeting{display:none}
+@media(max-width:800px){.assistant-greeting{margin-bottom:22px}.assistant-greeting h1{font-size:28px}}
+@media(prefers-reduced-motion:reduce){.assistant-greeting{transition:none;transform:none}}

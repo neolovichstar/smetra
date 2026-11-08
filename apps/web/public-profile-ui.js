@@ -68,7 +68,7 @@ async function publicPage(){
 async function mountSettings({host,user,api,active=()=>true}){
  if(!host)return;
  const alive=()=>active()&&host.isConnected;
- host.innerHTML='<p class="muted">Загружаем публичный профиль…</p>';
+ host.innerHTML='<p class="muted">Загружаю настройки приватности…</p>';
  let saved;
  try{saved=(await api('/profile/public')).profile;if(!alive())return}
  catch(error){if(alive()){host.innerHTML='<p class="public-status is-error">'+esc(error.message)+'</p><button type="button" class="btn" data-retry>Повторить</button>';$('[data-retry]',host).onclick=()=>mountSettings({host,user,api,active})}return}

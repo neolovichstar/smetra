@@ -277,6 +277,7 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
             } else if (code == ShellActivity.REQUEST_AR) {
                 String rooms = data == null ? null : data.getStringExtra(ArMeasureActivity.EXTRA_ROOMS);
                 if (result == Activity.RESULT_OK && rooms != null) settle(code, new JSONObject().put("rooms", new JSONArray(rooms)), null, null);
+                else if (data != null && data.hasExtra("error")) settle(code, null, "ar_unavailable", data.getStringExtra("error"));
                 else settle(code, null, "cancelled", "Замер отменён");
             }
         } catch (Exception error) {

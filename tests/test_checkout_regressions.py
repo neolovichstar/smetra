@@ -67,6 +67,18 @@ class CheckoutRegressions(unittest.TestCase):
         self.assertEqual(len(set(keys)), 2)
         self.assertTrue(all(len(key) <= 64 and key.isascii() for key in keys))
 
+    def test_checkout_sends_the_verified_account_email_to_the_provider(self):
+        token, user_id = self.account()
+        captured = []
+
+        def provider(handler, path, method, payload, key):
+            captured.append(payload)
+            return self.payment(payload, key)
+
+        with self.env(), patch.object(self.mod.Handler, 'provider_call', provider):
+            self.assertEqual(self.checkout(token, 'customer-email-check-0001')[0], 201)
+        self.assertEqual(captured[0]['metadata']['customer_email'], user_id+'@test.invalid')
+
     def test_concurrent_same_checkout_is_replayed_instead_of_conflict(self):
         token, user_id = self.account()
         barrier = threading.Barrier(2)

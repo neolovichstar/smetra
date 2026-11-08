@@ -327,7 +327,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
+        self.send_header("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(), xr-spatial-tracking=(self)")
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net https://www.google.com/s2/favicons; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
@@ -387,6 +387,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
         maximum = 1_450_000 if path == "/api/profile/avatar" else 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        if path == "/api/support" or re.fullmatch(r"/api/support/threads/[A-Za-z0-9_-]+/messages", path):
+            maximum = 1_000_000
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":
@@ -759,7 +761,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
+        self.send_header("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(), xr-spatial-tracking=(self)")
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
@@ -1553,7 +1555,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "return_url": ORIGIN + "/app?payment=return",
                 },
                 "description": "Доступ Сметра Про на " + str(intent['duration_days']) + " дней",
-                "metadata": {"user_id": user["id"], "plan": plan},
+                "metadata": {"user_id": user["id"], "plan": plan, "customer_email": user["email"]},
             }
             # YooKassa keys belong to the shop, rather than a browser/account,
             # and must be at most 64 characters. Keep retries deterministic.
@@ -1821,7 +1823,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "capture": True,
             "confirmation": {"type": "redirect", "return_url": ORIGIN + "/app?payment=return#billing"},
             "description": f"Токены ассистента Сметры: {millions} млн",
-            "metadata": {"user_id": user["id"], "plan": plan},
+            "metadata": {"user_id": user["id"], "plan": plan, "customer_email": user["email"]},
         }
         provider_key = hashlib.sha256(("tokens:v1:" + user["id"] + ":" + key).encode()).hexdigest()
         result = self.provider_call("/payments", "POST", request, provider_key)

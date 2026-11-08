@@ -18,15 +18,16 @@
   <link rel="stylesheet" href="/ui/base.css?v=20261108-spinner1">
   <link rel="stylesheet" href="/ui/components.css?v=20261030-quote1">
   <link rel="stylesheet" href="/ui/shell.css?v=20261108-hide-header-search1">
-  <link rel="stylesheet" href="/ui/workspace.css?v=20261108-tabs1">
+  <link rel="stylesheet" href="/ui/workspace.css?v=20261108-profile1">
   <link rel="stylesheet" href="/ui/editor.css?v=20261108-costs1">
-  <link rel="stylesheet" href="/ui/assistant.css?v=20261108-chat-history3">
-  <link rel="stylesheet" href="/ui/modules.css?v=20261108-suppliers1">
+  <link rel="stylesheet" href="/ui/assistant.css?v=20261108-profile1">
+  <link rel="stylesheet" href="/ui/modules.css?v=20261108-profile1">
   <link rel="stylesheet" href="/ui/tools.css?v=20261108-controls3">
+  <link rel="stylesheet" href="/ui/ar-scan.css?v=20261108-ar2">
   <script src="/ui/native.js?v=20261026-r21"></script>
-  <script src="/ui/icons.js?v=20261026-r21"></script>
+  <script src="/ui/icons.js?v=20261108-lucide1"></script>
   <script src="/ui/dialog.js?v=20261026-r21"></script>
-  <script src="/ui/chat-kit.js?v=20261026-r21"></script>
+  <script src="/ui/chat-kit.js?v=20261108-profile1"></script>
   <script src="/ui/context-menu.js?v=20261028-target1" defer></script>
   <script src="/ui/plans.js?v=20261028-quota3"></script>
   <script src="/ui/bubbles.js?v=20261026-r21" defer></script>
@@ -161,12 +162,13 @@
     <aside id="sidebar" class="sidebar" aria-label="Рабочие разделы">
       <div class="sidebar-scroll">
         <div class="sidebar-group"><span class="sidebar-heading">Работа с ИИ</span><button data-tab="assistant" class="active">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="inbox">Полученные сметы</button></div>
-        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Объекты и файлы</span><button data-tab="construction">Объекты и замеры</button><button data-tab="files">Хранилище</button><button data-tab="documents">Документы</button></div>
+        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="changelog">Что нового</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
       </div>
       <div class="sidebar-foot">
         <button id="sidebar-profile" class="sidebar-profile-trigger" data-tab="profile" type="button" aria-label="Открыть профиль">
           <span id="sidebar-avatar" class="sidebar-avatar" aria-hidden="true">С</span>
-          <span class="sidebar-profile-copy"><strong id="sidebar-profile-name">Аккаунт</strong><small>Настройки аккаунта</small></span>
+          <span class="sidebar-profile-copy"><strong id="sidebar-profile-name">Аккаунт</strong><small>Профиль и статистика</small></span>
         </button>
         <button id="logout" type="button" aria-label="Выйти из аккаунта" title="Выйти из аккаунта">
           <svg class="sidebar-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
@@ -175,18 +177,18 @@
     </aside>
     <main class="main" id="content" tabindex="-1"></main>
     <nav id="mobile-tabbar" class="mobile-tabbar" aria-label="Быстрые разделы">
-      <button type="button" data-tab="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><span>Профиль</span></button>
-      <button type="button" data-tab="quotes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/></svg><span>Сметы</span></button>
-      <button type="button" data-tab="assistant" class="tabbar-primary"><span class="tabbar-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg></span><span>Ассистент</span></button>
-      <button type="button" data-tab="billing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg><span>Тариф</span></button>
-      <button type="button" id="tabbar-more" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>Ещё</span></button>
+      <button type="button" data-tab="profile"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg><span>Профиль</span></button>
+      <button type="button" data-tab="quotes"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></svg><span>Сметы</span></button>
+      <button type="button" data-tab="assistant" class="tabbar-primary"><span class="tabbar-orb"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg></span><span>Ассистент</span></button>
+      <button type="button" data-tab="billing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><path d="M6 14h2"/></svg><span>Тариф</span></button>
+      <button type="button" id="tabbar-ar" data-tab="ar-scan"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg><span>AR Скан</span></button>
     </nav>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261108-bugs1" defer></script>
+  <script src="/features.js?v=20261108-profile1" defer></script>
   <script src="/select-menu.js?v=20261026-r21" defer></script>
-  <script src="/public-profile-ui.js?v=20261027-profiles1" defer></script>
-  <script src="/app.js?v=20261108-chat-history3" defer></script>
+  <script src="/public-profile-ui.js?v=20261108-profile1" defer></script>
+  <script src="/app.js?v=20261108-release2" defer></script>
   <script src="/workspace.js?v=20261108-costs1" defer></script>
   <script src="/workspace-vault.js?v=20261028-release-svg2" defer></script>
   <script src="/field-flows.js?v=20261028-geometry2" defer></script>
@@ -194,10 +196,10 @@
   <script src="/auth-email.js?v=20261027-auth3" defer></script>
   <script src="/file-preview.js?v=20261026-r21" defer></script>
   <script src="/file-editor.js?v=20261026-r21" defer></script>
-  <script src="/product-ui.js?v=20261026-r21" defer></script>
-<script src="/support-chat.js?v=20261108-bugs1" defer></script>
-<script src="/communication-center.js?v=20261028-quote-mail1" defer></script>
-<script src="/ui/tabbar.js?v=20261108-workbench1" defer></script>
-<script src="/ui/ux.js?v=20261026-r21" defer></script>
+  <script src="/product-ui.js?v=20261108-lucide1" defer></script>
+<script src="/support-chat.js?v=20261108-profile1" defer></script>
+<script src="/communication-center.js?v=20261108-lucide1" defer></script>
+<script src="/ui/tabbar.js?v=20261108-ar1" defer></script>
+<script src="/ui/ux.js?v=20261108-profile1" defer></script>
 </body>
 </html>

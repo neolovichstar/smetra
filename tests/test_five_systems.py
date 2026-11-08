@@ -83,6 +83,9 @@ class FiveSystemsTests(unittest.TestCase):
         self.assertEqual(code,201,out)
         self.assertEqual(out["zones"][0]["length_m"],"4")
         self.assertEqual(out["calculations"][0]["bags"],2)
+        manual=preview({"rooms":[dict(room,source="manual")]})[0]
+        self.assertEqual(manual["source"],"manual")
+        self.assertFalse(manual["verified"])
 
     def test_shares_are_email_bound_require_verified_login_and_no_price_mutation(self):
         owner,_=self.account("five-sender")

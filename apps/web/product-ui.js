@@ -33,14 +33,13 @@
       const control = sidebar.querySelector(`[data-tab="${tab}"]`);
       if (control) primary.append(control);
     });
-    const headings = ['','Работа','Библиотека','Аккаунт'];
     groups.forEach((group,index) => {
       const heading = group.querySelector('.sidebar-heading');
       if (!heading) return;
       if (index === 0) { heading.hidden = true; return; }
       const toggle = document.createElement('button');
       toggle.type = 'button'; toggle.className = 'sidebar-disclosure';
-      toggle.textContent = headings[index] || heading.textContent;
+      toggle.textContent = heading.textContent.trim();
       toggle.setAttribute('aria-expanded','false');
       const items = document.createElement('div');
       items.className = 'sidebar-group-items'; items.id = 'sidebar-group-'+index;
@@ -149,7 +148,7 @@
         return;
       }
       if (button.dataset.uiIcon) {
-        if (/^[a-z-]+$/.test(button.dataset.uiIcon)) button.style.setProperty('--ui-icon', `url('/assets/icons/${button.dataset.uiIcon}.svg')`);
+        if (/^[a-z-]+$/.test(button.dataset.uiIcon)) button.style.setProperty('--ui-icon', `url('/assets/icons/${button.dataset.uiIcon}.svg?v=20261108-lucide1')`);
         return;
       }
       const name = navigation[button.dataset.tab] || ({dashboard:'file-text',assistant:'sparkle'})[button.dataset.mode] ||
@@ -157,7 +156,7 @@
         captions.find(([pattern]) => pattern.test(button.textContent.trim()))?.[1];
       if (!name) return;
       button.dataset.uiIcon = name;
-      button.style.setProperty('--ui-icon', `url('/assets/icons/${name}.svg')`);
+      button.style.setProperty('--ui-icon', `url('/assets/icons/${name}.svg?v=20261108-lucide1')`);
       if (button.hasAttribute('aria-label') && /^[↗✎◇×]$/.test(button.textContent.trim())) {
         button.dataset.uiIconOnly = 'true';
       }

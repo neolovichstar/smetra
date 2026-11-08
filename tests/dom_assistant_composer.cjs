@@ -45,6 +45,11 @@ async function setup(enabled=true,voice=false,remaining=3){
    assert.equal(doc.querySelector('#assistant-messages').children.length,0,'Empty chat displays no onboarding panel');
    assert.equal(doc.querySelectorAll('.assistant-welcome,.assistant-suggestions,[data-prompt]').length,0);
  });
+ await test('the idle greeting fills the empty space and hides while writing or reading a conversation',async({w,doc})=>{
+  const greeting=doc.querySelector('.assistant-greeting');assert.equal(greeting.textContent,'Что нового?');assert.equal(greeting.hidden,false);
+  type(w,doc,'Моя задача');assert.equal(greeting.classList.contains('is-quiet'),true);type(w,doc,'');assert.equal(greeting.classList.contains('is-quiet'),false);
+  const message=doc.createElement('div');message.className='assistant-message user';doc.querySelector('#assistant-messages').append(message);await tick();assert.equal(greeting.hidden,true);
+ });
  await test('idle attachment hint is hidden but file uploads remain available',async({doc})=>{
    const hint=doc.querySelector('.assistant-attachment-bar > span');
    assert.ok(hint);

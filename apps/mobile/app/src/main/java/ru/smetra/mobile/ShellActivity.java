@@ -250,15 +250,21 @@ public final class ShellActivity extends Activity {
         }
 
         @Override public void onPermissionRequest(PermissionRequest request) {
-            // Only the app origin may use the microphone, and only after the user allows it.
+            // Camera/microphone belong only to the app origin and need Android permission.
             if (!BridgeProtocol.sameOrigin(request.getOrigin().toString(), ShellSession.ORIGIN)) { request.deny(); return; }
             List<String> granted = new ArrayList<>();
-            for (String resource : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) granted.add(resource);
+            for (String resource : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource) || PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) granted.add(resource);
             if (granted.isEmpty()) { request.deny(); return; }
             pendingMediaRequest = request;
-            withPermission(Manifest.permission.RECORD_AUDIO, PERMISSION_MICROPHONE,
-                () -> { request.grant(granted.toArray(new String[0])); pendingMediaRequest = null; },
-                () -> { request.deny(); pendingMediaRequest = null; });
+            Runnable allow = () -> { if (pendingMediaRequest != request) return; request.grant(granted.toArray(new String[0])); pendingMediaRequest = null; };
+            Runnable deny = () -> { if (pendingMediaRequest != request) return; request.deny(); pendingMediaRequest = null; };
+            Runnable audio = () -> {
+                if (pendingMediaRequest != request) return;
+                if (granted.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) withPermission(Manifest.permission.RECORD_AUDIO, PERMISSION_MICROPHONE, allow, deny);
+                else allow.run();
+            };
+            if (granted.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) withPermission(Manifest.permission.CAMERA, PERMISSION_CAMERA, audio, deny);
+            else audio.run();
         }
 
         @Override public void onPermissionRequestCanceled(PermissionRequest request) { pendingMediaRequest = null; }

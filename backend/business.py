@@ -1046,10 +1046,8 @@ class Service:
         if not isinstance(catalog_ids, list) or len(catalog_ids) > 200:
             raise DomainError(400, "В одной смете может быть до 200 расценок")
         catalog_ids = list(dict.fromkeys(string(value, "Расценка", 80, True) for value in catalog_ids))
-        owner = self.con.execute(
-            "SELECT u.id,u.entitlement_until,u.created_at FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?",
-            (self.wid,),
-        ).fetchone()
+        from backend.plan_catalog import quota_owner
+        owner = quota_owner(self)
         count = self.con.execute(
             "SELECT count(*) FROM events WHERE user_id=? AND name='quote_created'",
             (owner["id"],),
@@ -2599,6 +2597,11 @@ class Service:
         return (result[0], without_finance(result[1]), *result[2:])
 
     def routed(self, method, kind, parts, query, data):
+        if kind == "profile-summary":
+            if method != "GET" or parts:
+                raise DomainError(405, "Метод не поддерживается")
+            from backend.profile_summary import summary
+            return 200, summary(self)
         if kind == "dashboard" and method == "GET":
             _, context = self.workspace("GET", [], {})
             _, overview = self.overview(limit=4)
@@ -2852,6 +2855,7 @@ class Service:
 
 ROUTES = set(ENTITIES) | {
     "dashboard",
+    "profile-summary",
     "intake",
     "assistant",
     "workspace",

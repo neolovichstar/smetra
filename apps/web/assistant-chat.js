@@ -62,6 +62,23 @@ function assistantQuoteDraftPreview(host, args){
   wrapper.append(note);host.append(wrapper);
 }
 
+function mountAssistantGreeting({host,input,messages,active,isIdle}){
+  const phrases=['Что нового?','Что сегодня в планах?','С чего начнём?','Над чем поработаем?'];
+  const label=host.querySelector('h1');let index=0,disposed=false,fade;
+  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const update=()=>{if(disposed)return;host.hidden=Boolean(messages.querySelector('.assistant-message'));host.classList.toggle('is-quiet',Boolean(input.value.trim())||!isIdle());};
+  const rotate=()=>{
+    if(disposed||!active()){destroy();return;}
+    if(document.hidden||host.hidden||host.classList.contains('is-quiet'))return;
+    if(reduced){label.textContent=phrases[index=(index+1)%phrases.length];return;}
+    host.classList.add('is-changing');fade=setTimeout(()=>{if(!disposed&&active()){label.textContent=phrases[index=(index+1)%phrases.length];host.classList.remove('is-changing');}},180);
+  };
+  const timer=setInterval(rotate,10000);
+  function destroy(){disposed=true;clearInterval(timer);clearTimeout(fade);document.removeEventListener('smetra:auth-reset',destroy);}
+  document.addEventListener('smetra:auth-reset',destroy,{once:true});
+  update();return {update,destroy};
+}
+
 let assistantRenderRevision=0;
 let assistantVoiceCleanup=null;
 const assistantIcon=(name,size=18)=>window.SmetraIcons?window.SmetraIcons.svg(name,size):'';
@@ -88,6 +105,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Память ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
+        <div class="assistant-greeting" aria-live="off"><h1>Что нового?</h1></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
@@ -155,6 +173,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const actions=document.querySelector('#assistant-actions');
   const input=document.querySelector('#assistant-input');
   const composer=document.querySelector('.assistant-composer');
+  let idleGreeting=null;
   const content=document.querySelector('.assistant-content');
   // Existing estimate engine and the chat share one revision-safe quote source.
   const openQuoteEditor=async id=>{
@@ -174,6 +193,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     onOpenEditor:openQuoteEditor,
   });
   const syncAssistantConversationState=()=>{
+    idleGreeting?.update();
     if(!assistantStudioRoot||!messages?.isConnected)return;
     const next=Boolean(messages.querySelector('.assistant-message.user'));
     if(next===assistantStudioRoot.classList.contains('has-conversation'))return;
@@ -285,6 +305,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }
   };
   const syncSendButton=()=>{
+    idleGreeting?.update();
     const canSend=Boolean(input.value.trim()||pendingPhotos.length);
     // An empty balance does not disable sending: the click explains how to continue.
     send.disabled=!canSend||working||threadBusy||attachingCount>0||fileBlocking||!data.available||backgroundEnabled===false;
@@ -1190,6 +1211,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     // The sent request owns a context snapshot. It no longer belongs to the next draft.
     try{await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})})}catch{}
   };
+  idleGreeting=mountAssistantGreeting({host:composer.querySelector('.assistant-greeting'),input,messages,active,isIdle:()=>!pendingPhotos.length&&!attachingCount&&!working&&!threadBusy&&!voiceListening&&!voiceStarting});
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
   // «Новая смета» opens here: the editor waits on the right, the task goes in the chat.
   let estimateIntent=null;
@@ -1363,6 +1385,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   // A different route destroys this view. Release observers, preview listeners,
   // and object URLs instead of retaining whole conversations in memory.
   const disposeAssistantView=()=>{
+    idleGreeting?.destroy();
     conversationObserver.disconnect();
     clearTimeout(jobPollTimer);clearTimeout(filePollTimer);jobLoadSeq++;filePollSeq++;
     quotePreview?.destroy();

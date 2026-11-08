@@ -1,5 +1,6 @@
 /* Run with an isolated Smetra server and Chrome CDP. Exercises price editing in the real web UI. */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 (async () => {
   const site = 'http://localhost:' + (process.env.SMETRA_TEST_PORT || '8082');
   const debuggerUrl = 'http://127.0.0.1:' + (process.env.SMETRA_CDP_PORT || '9223') + '/json';
@@ -38,11 +39,11 @@ const assert = require('node:assert/strict');
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   await send('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:true});
   await send('Page.navigate', {url:site + '/app?register=1'});
-  await until("(document.querySelector('#auth')&&!document.querySelector('#auth').classList.contains('hidden'))||document.querySelector('[data-work=quote-new]')");
+  await until("(document.querySelector('#auth')&&!document.querySelector('#auth').classList.contains('hidden'))||(document.querySelector('#shell')&&!document.querySelector('#shell').classList.contains('hidden'))");
   if (await evaluate("!document.querySelector('#auth').classList.contains('hidden')")) {
     await evaluate("fetch('/api/auth/register',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Проверка расценок',email:'procurement-browser-'+Date.now()+'@test.invalid',password:'long secure password',legal_acceptance:true,legal_version:'2026-10-19-registration-v1'})}).then(r=>r.status)");await send('Page.navigate',{url:site+'/app#dashboard'});
   }
-  await until("document.querySelector('[data-work=quote-new]')");
+  await until("document.querySelector('#shell')&&!document.querySelector('#shell').classList.contains('hidden')");
   assert.deepEqual(await evaluate("Promise.all(['/construction.js','/ui/modules.css','/ai-workspace.js','/file-editor.js','/ui/components.css'].map(path=>fetch(path).then(response=>response.status)))"), [200,200,200,200,200]);
   const objectId = await evaluate(`(async()=>{
     const object=(await api('/construction/objects',{method:'POST',body:JSON.stringify({name:'План закупок / проверка'})})).object;

@@ -5,7 +5,6 @@
 window.SmetraSupport = (() => {
   const kit = () => window.SmetraChatKit;
   const icon = (name, size = 18) => window.SmetraIcons ? window.SmetraIcons.svg(name, size) : '';
-  const topics = ['Вход в аккаунт', 'Оплата и подписка', 'Работа со сметой', 'Ассистент и лимиты', 'Клиентская ссылка'];
   let revision = 0, pollTimer = null;
 
   const stop = () => { clearInterval(pollTimer); pollTimer = null; };
@@ -14,7 +13,7 @@ window.SmetraSupport = (() => {
     stop();
     const mine = ++revision, owner = user;
     const active = () => parentActive() && mine === revision && owner === user && tab === 'support';
-    const state = { threads: [], current: null, messages: [], sending: false, topic: '' };
+    const state = { threads: [], current: null, messages: [], sending: false };
     let threadRevision = 0;
 
     const railCollapsed = (() => { try { return localStorage.getItem('smetra.support.rail-collapsed') === 'true'; } catch { return false; } })();
@@ -35,8 +34,8 @@ window.SmetraSupport = (() => {
         <div class="tg-messages" id="support-messages" role="log" aria-live="polite"></div>
         <form id="support-form" class="tg-compose" autocomplete="off">
           <label class="visually-hidden" for="message">Сообщение в поддержку</label>
-          <textarea id="message" rows="1" minlength="2" maxlength="4000" placeholder="Сообщение…" required></textarea>
-          <button class="tg-send" type="submit" aria-label="Отправить сообщение" title="Отправить">${icon('send-plane', 20)}</button>
+          <div class="support-compose-surface"><div id="support-attachments" class="support-attachments" hidden></div><textarea id="message" rows="1" maxlength="4000" placeholder="Сообщение…" required></textarea>
+          <input type="file" id="support-image-input" accept="image/jpeg,image/png,image/webp" multiple hidden><button type="button" class="support-attach" id="support-attach" aria-label="Прикрепить изображения" title="Прикрепить изображения">${icon('plus',18)}</button><button class="tg-send" type="submit" aria-label="Отправить сообщение" title="Отправить">${icon('arrow-up',18)}</button></div>
         </form>
       </div>
     </section>`);
@@ -51,7 +50,42 @@ window.SmetraSupport = (() => {
     const status = root.querySelector('#support-status');
     const handoff = root.querySelector('#support-handoff');
     const grow = kit().composer(input, form);
-    const syncSend = () => { send.disabled = state.sending || input.disabled; };
+    const syncSend = () => { send.disabled = state.sending || input.disabled || preparing>0 || (!input.value.trim()&&!pendingImages.length); attach.disabled=state.sending||input.disabled||preparing>0; imageInput.disabled=attach.disabled; };
+    let pendingImages=[],preparing=0;
+    const imageInput=form.querySelector('#support-image-input'),attach=form.querySelector('#support-attach'),tray=form.querySelector('#support-attachments');
+    const renderImages=()=>{
+      tray.hidden=!pendingImages.length;
+      tray.innerHTML=pendingImages.map((image,index)=>`<div class="support-attachment"><img src="${kit().esc(image.data_url)}" alt="${kit().esc(image.name)}"><button type="button" data-support-remove="${index}" aria-label="Убрать изображение ${index+1}">${icon('x',14)}</button></div>`).join('');
+      tray.querySelectorAll('[data-support-remove]').forEach(button=>button.onclick=()=>{pendingImages.splice(Number(button.dataset.supportRemove),1);renderImages();syncSend();});
+      input.required=!pendingImages.length;
+    };
+    const clearImages=()=>{pendingImages=[];imageInput.value='';renderImages();};
+    const compressImage=async file=>{
+      if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10000000)throw Error('Выберите JPEG, PNG или WebP до 10 МБ.');
+      const url=URL.createObjectURL(file),image=new Image();
+      try{
+        await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Не удалось прочитать изображение.'));image.src=url;});
+        if(image.naturalWidth*image.naturalHeight>20000000)throw Error('Изображение слишком большое. Выберите снимок до 20 мегапикселей.');
+        const scale=Math.min(1,1600/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+        canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+        let blob;
+        for(const quality of [.82,.65,.45,.25]){blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));if(blob&&blob.size<=200000)break;}
+        if(!blob||blob.size>200000)throw Error('Не удалось сжать изображение. Выберите снимок меньшего размера.');
+        const data_url=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Не удалось прочитать файл.'));reader.readAsDataURL(blob);});
+        return {name:file.name.slice(0,100),data_url};
+      }finally{URL.revokeObjectURL(url);}
+    };
+    const addImages=async files=>{
+      if(state.sending||input.disabled||preparing||!active())return;
+      const selected=[...files];if(selected.length+pendingImages.length>3){notify('Можно прикрепить до трёх изображений.');return;}
+      const selection=threadRevision;preparing++;syncSend();
+      try{for(const file of selected){const image=await compressImage(file);if(!active()||selection!==threadRevision)return;pendingImages.push(image);renderImages();}}
+      catch(error){if(active()&&selection===threadRevision)notify(error.message);}
+      finally{preparing--;if(active())syncSend();}
+    };
+    attach.onclick=()=>imageInput.click();imageInput.onchange=()=>{void addImages(imageInput.files);imageInput.value='';};
+    input.addEventListener('paste',event=>{const images=[...(event.clipboardData?.files||[])].filter(file=>file.type.startsWith('image/'));if(images.length){event.preventDefault();void addImages(images);}});
+
     input.addEventListener('input', syncSend);
     if (typeof bindRailToggle === 'function') bindRailToggle(root.querySelector('#support-rail-toggle'), root, 'smetra.support.rail-collapsed');
 
@@ -59,12 +93,11 @@ window.SmetraSupport = (() => {
         <span class="tg-avatar tg-avatar-brand tg-avatar-lg" aria-hidden="true">${icon('headset', 28)}</span>
         <h2>Чем помочь?</h2>
         <p>Опишите, что не получается. Сначала ответит ИИ-помощник. Если нужна проверка сотрудника, он передаст обращение. Переписка сохранится здесь.</p>
-        <div class="support-topics tg-chips">${topics.map(topic => `<button type="button" data-support-topic="${kit().esc(topic)}" aria-pressed="false">${kit().esc(topic)}</button>`).join('')}</div>
       </div>`;
 
     const toMessages = rows => rows.map(m => ({
       id: m.id, body: m.body, created_at: Number(m.created_at || 0),
-      mine: m.sender_type === 'user',
+      mine: m.sender_type === 'user', attachments: m.metadata?.attachments||[],
       kind: m.sender_type === 'system' ? 'system' : m.sender_type,
       author: m.sender_type === 'admin' ? 'Сотрудник поддержки' : m.sender_type === 'assistant' ? 'ИИ поддержки' : 'Вы',
     }));
@@ -86,7 +119,7 @@ window.SmetraSupport = (() => {
 
     const paintMessages = (extra = '', follow = true) => {
       const scrollTop = log.scrollTop;
-      if (!state.current && !state.messages.length) { log.innerHTML = welcome() + extra; bindTopics(); return; }
+      if (!state.current && !state.messages.length) { log.innerHTML = welcome() + extra; return; }
       log.innerHTML = kit().thread(state.messages, { showAuthors: true }) + extra;
       log.scrollTop = follow ? log.scrollHeight : scrollTop;
     };
@@ -102,18 +135,6 @@ window.SmetraSupport = (() => {
           <span class="tg-row-bottom"><span class="tg-preview">${kit().esc(preview)}</span>${t.status === 'closed' ? '<span class="tg-badge is-muted">закрыто</span>' : t.needs_human ? '<span class="tg-badge is-waiting">сотрудник</span>' : ''}</span></span>
         </button>`;
       }).join('');
-    };
-
-    const bindTopics = () => {
-      const buttons = [...log.querySelectorAll('[data-support-topic]')];
-      buttons.forEach(button => button.onclick = () => {
-        const prefix = state.topic + ': ';
-        const text = state.topic && input.value.startsWith(prefix) ? input.value.slice(prefix.length) : input.value;
-        state.topic = button.dataset.supportTopic;
-        input.value = state.topic + ': ' + text;
-        buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-        input.focus(); grow(); syncSend();
-      });
     };
 
     const loadThreads = async () => {
@@ -136,6 +157,7 @@ window.SmetraSupport = (() => {
 
     const open = async id => {
       const targetRevision = ++threadRevision;
+      clearImages();
       state.current = state.threads.find(t => t.id === id) || null;
       state.messages = []; paintList(); paintHead();
       log.innerHTML = '<div class="tg-loading" role="status">Загружаем переписку…</div>';
@@ -145,7 +167,7 @@ window.SmetraSupport = (() => {
 
     const fresh = () => {
       threadRevision++;
-      state.current = null; state.messages = []; state.topic = '';
+      state.current = null; state.messages = []; clearImages();
       root.classList.add('is-composing');
       paintList(); paintHead(); paintMessages();
       input.focus({ preventScroll: true });
@@ -172,26 +194,27 @@ window.SmetraSupport = (() => {
     form.onsubmit = async event => {
       event.preventDefault();
       const message = input.value.trim();
-      if (!message || state.sending || send.disabled) return;
-      const draft = input.value, target = state.current, submittedRevision = threadRevision;
+      if ((!message&&!pendingImages.length) || state.sending || input.disabled || preparing) return;
+      const draft = input.value, images=pendingImages, target = state.current, submittedRevision = threadRevision;
+      pendingImages=[];renderImages();
       const currentTarget = () => active() && threadRevision === submittedRevision;
       let accepted = false;
       state.sending = true; send.disabled = true;
       input.value = ''; grow();
-      const optimistic = { id: 'pending', body: message, created_at: Date.now() / 1000, mine: true, kind: 'user', author: 'Вы', pending: true };
+      const optimistic = { id: 'pending', body: message, created_at: Date.now() / 1000, mine: true, kind: 'user', author: 'Вы', attachments: images, pending: true };
       const before = state.messages;
       state.messages = [...before, optimistic];
       root.classList.add('is-chat-open');
       paintMessages(state.current?.needs_human ? '' : kit().typing('Поддержка печатает'));
       try {
         if (target) {
-          await api('/support/threads/' + encodeURIComponent(target.id) + '/messages', { method: 'POST', body: JSON.stringify({ message }) });
+          await api('/support/threads/' + encodeURIComponent(target.id) + '/messages', { method: 'POST', body: JSON.stringify({ message, ...(images.length?{attachments:images}:{}) }) });
           accepted = true;
           if (!currentTarget()) return;
           await loadMessages(); await loadThreads();
         } else {
-          const subject = (state.topic || message.replace(/\s+/g, ' ').slice(0, 60)).trim();
-          const data = await api('/support', { method: 'POST', body: JSON.stringify({ message, subject }) });
+          const subject = (message.replace(/\s+/g, ' ').slice(0,60)||'Изображения к обращению').trim();
+          const data = await api('/support', { method: 'POST', body: JSON.stringify({ message, subject, ...(images.length?{attachments:images}:{}) }) });
           accepted = true;
           if (!currentTarget()) return;
           root.classList.remove('is-composing');
@@ -202,6 +225,7 @@ window.SmetraSupport = (() => {
         if (!currentTarget()) return;
         if (!accepted) {
           if (!input.value) { input.value = draft; grow(); }
+          pendingImages=[...images,...pendingImages].slice(0,3);renderImages();
           state.messages = before;
         } else optimistic.pending = false;
         paintMessages(); notify(error.message);

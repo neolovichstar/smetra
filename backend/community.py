@@ -707,7 +707,7 @@ def _support_completion(payload, timeout):
     return _parse_support_reply(call(retry))
 
 
-def _support_ai_reply(user, user_stats, history, message):
+def _support_ai_reply(user, user_stats, history, message, images=None):
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     human_requested = wants_human(message)
     if human_requested:
@@ -717,6 +717,9 @@ def _support_ai_reply(user, user_stats, history, message):
             "reply": "Передал обращение сотруднику поддержки. Ответ придёт в этот чат.",
             "escalate": True, "reason": "user_requested_human",
         }
+    if images and not os.getenv("SUPPORT_AI_VISION_MODEL", "").strip():
+        return {"reply": "Изображения получил. Передал обращение сотруднику, чтобы он проверил их и ответил здесь.",
+                "escalate": True, "reason": "support_image_review"}
     if not api_key:
         return {
             "reply": "ИИ-помощник сейчас недоступен. Обращение передано сотруднику поддержки. Ответ придёт в этот чат.",
@@ -730,9 +733,10 @@ def _support_ai_reply(user, user_stats, history, message):
         if row["sender_type"] == "admin":
             body = "Сотрудник поддержки ответил: " + body
         messages.append({"role": "user" if row["sender_type"] == "user" else "assistant", "content": body})
-    messages.append({"role": "user", "content": message})
+    content = [{"type": "text", "text": message}, *[{"type": "image_url", "image_url": {"url": image["data_url"]}} for image in images]] if images else message
+    messages.append({"role": "user", "content": content})
     payload = {
-        "model": os.getenv("SUPPORT_AI_MODEL") or os.getenv("OPENROUTER_MODEL") or "openrouter/free",
+        "model": (os.getenv("SUPPORT_AI_VISION_MODEL") if images else None) or os.getenv("SUPPORT_AI_MODEL") or os.getenv("OPENROUTER_MODEL") or "openrouter/free",
         "messages": messages,
         "temperature": 0.3,
         "max_tokens": 700,
@@ -976,7 +980,11 @@ def _support_route(handler, method, path, query, con, user):
     if path == "/api/support" and method == "POST":
         handler.throttle("support-create:" + user["id"], 5, 3600)
         data = handler.body()
-        message = _text(data.get("message"), 4000, required=True)
+        from backend.support_images import read as read_support_images
+        images = read_support_images(data)
+        message = _text(data.get("message") or ("Изображения к обращению" if images else ""), 4000, required=True)
+        if images:
+            handler.throttle("support-images:" + user["id"], 10, 3600)
         if not wants_human(message):
             handler.throttle("support-ai:" + user["id"], 30, 60)
         subject = _text(data.get("subject") or "Обращение в поддержку", 120)
@@ -986,8 +994,8 @@ def _support_route(handler, method, path, query, con, user):
             "INSERT INTO support(id,user_id,message,status,created_at) VALUES(?,?,?,'open',?)",
             (conversation_id, user["id"], message, now()),
         )
-        _add_message(con, conversation_id, user["id"], "user", message)
-        response = _support_ai_reply(user, _support_user_context(con, user), [], message)
+        _add_message(con, conversation_id, user["id"], "user", message, {"attachments": images} if images else None)
+        response = _support_ai_reply(user, _support_user_context(con, user), [], message, images) if images else _support_ai_reply(user, _support_user_context(con, user), [], message)
         if response["escalate"]:
             con.execute(
                 "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",
@@ -1048,17 +1056,21 @@ def _support_route(handler, method, path, query, con, user):
         if action == "messages" and method == "POST":
             handler.throttle("support-message:" + user["id"], 30, 60)
             data = handler.body()
-            message = _text(data.get("message"), 4000, required=True)
+            from backend.support_images import read as read_support_images
+            images = read_support_images(data)
+            message = _text(data.get("message") or ("Изображения к обращению" if images else ""), 4000, required=True)
+            if images:
+                handler.throttle("support-images:" + user["id"], 10, 3600)
             if conversation["status"] == "closed":
                 raise ApiError(409, "Обращение закрыто. Создайте новое обращение.")
             if not conversation["needs_human"] and not wants_human(message):
                 handler.throttle("support-ai:" + user["id"], 30, 60)
             history = _messages(con, conversation_id, limit=20)
-            _add_message(con, conversation_id, user["id"], "user", message)
+            _add_message(con, conversation_id, user["id"], "user", message, {"attachments": images} if images else None)
             if conversation["needs_human"]:
                 return handler.send_json(201, {"messages": [], "needs_human": True})
             user_stats = _support_user_context(con, user)
-            response = _support_ai_reply(user, user_stats, history, message)
+            response = _support_ai_reply(user, user_stats, history, message, images) if images else _support_ai_reply(user, user_stats, history, message)
             if response["escalate"]:
                 con.execute(
                     "UPDATE chat_conversations SET needs_human=1,human_reason=?,updated_at=? WHERE id=?",

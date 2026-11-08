@@ -25,10 +25,24 @@ const f=JSON.parse(fs.readFileSync(process.env.SMETRA_PROFILE_FIXTURE||'data/pro
  await p.locator('#hub-tab-account').evaluate(button=>button.click());
  await p.reload();await p.locator('#hub-avatar-controls [data-avatar-upload]').waitFor();
  assert.equal(await p.getByText('Подтянуть из Яндекса',{exact:true}).count(),0);
- await p.locator('#hub-tab-public').click();await p.locator('#public-profile-form').waitFor({state:'visible'});
+ await p.locator('#hub-tab-privacy').click();await p.locator('#public-profile-form').waitFor({state:'visible'});
  await p.screenshot({path:'data/qa/profiles-settings-desktop.png'});
  await p.setViewportSize({width:390,height:844});await p.screenshot({path:'data/qa/profiles-settings-mobile.png'});
  assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks.push('desktop and mobile settings fit');
+ for(const route of ['profile','usage']){
+  await p.goto(base+'/app#'+route);await p.locator(route==='profile'?'.profile-overview .profile-stats':'.account-usage .usage-history').waitFor();
+  assert.equal(await p.locator('[data-account-section]').count(),3);assert.equal(await p.locator('[data-hub-tab=public]').count(),0);
+  for(const width of [320,390,768,1440]){await p.setViewportSize({width,height:960});assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),route+' '+width);if(width===390||width===1440)await p.screenshot({path:'data/qa/account-'+route+'-'+width+'.png',fullPage:true});}
+ }
+ checks.push('profile statistics and detailed usage fit 320/390/768/1440px in the account rail');
+ await p.goto(base+'/app#support');await p.locator('.support-compose-surface').waitFor();
+ assert.equal(await p.locator('.support-topic').count(),0);
+ for(const width of [390,1440]){
+  await p.setViewportSize({width,height:960});
+  assert(await p.evaluate(()=>{const surface=document.querySelector('.support-compose-surface').getBoundingClientRect(),send=document.querySelector('#support-form button[type=submit]').getBoundingClientRect();return send.width<=36&&send.left>=surface.left&&send.right<=surface.right&&document.documentElement.scrollWidth<=innerWidth+1}));
+  await p.screenshot({path:'data/qa/support-compose-'+width+'.png',fullPage:true});
+ }
+ checks.push('support composer keeps its compact send button inside at mobile and desktop widths');
  const anon=await browser.newContext({viewport:{width:390,height:844}}),q=await anon.newPage();q.on('pageerror',e=>errors.push(e.message));
  await q.goto(base+f.profiles[0].url);await q.getByRole('heading',{name:f.profiles[0].display_name,exact:true}).waitFor();
  await q.screenshot({path:'data/qa/profile-mobile.png',fullPage:true});

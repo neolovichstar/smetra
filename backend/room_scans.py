@@ -17,6 +17,7 @@ def preview(data):
         if not isinstance(raw,dict):
             raise DomainError(400,"Некорректный замер помещения")
         name=string(raw.get("name",""),"Помещение",120,True)
+        source=choice(raw.get("source","ar"),("ar","arcore","webxr","manual"),"Источник обмера")
         unit=choice(raw.get("unit","м"),("мм","см","м"),"Единица")
         dimensions={
             k:length_in_metres(raw.get(k),unit)
@@ -37,7 +38,7 @@ def preview(data):
         needed_kg=net_walls*rate*(1+waste/100)
         bags=int((needed_kg/bag).to_integral_value(rounding=ROUND_CEILING))
         results.append({
-            "name":name,"source":"ar","verified":False,
+            "name":name,"source":"manual" if source=="manual" else "ar","verified":False,
             "length_m":str(dimensions["length"]),"width_m":str(dimensions["width"]),
             "height_m":str(dimensions["height"]),"floor_m2":str(floor),
             "perimeter_m":str(perimeter),"gross_walls_m2":str(walls),
@@ -71,7 +72,7 @@ def handle(service,obj,method,rest,data):
                 "name":r["name"],"kind":"room","dimension_unit":"м",
                 "length":r["length_m"],"width":r["width_m"],
                 "height":r["height_m"],"openings_m2":r["openings_m2"],
-                "notes":"Обмер AR. Требует проверки размеров вручную."
+                "notes":"Ручной обмер." if r["source"]=="manual" else "Обмер AR. Требует проверки размеров вручную."
             })
             zones.append(result["zone"])
         # Existing formulas are recalculated in one transaction; active quote

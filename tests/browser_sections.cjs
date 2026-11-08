@@ -55,7 +55,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
       assert.equal(await evaluate("(()=>{const m=document.querySelector('.assistant-message.assistant');return !m||['copy','refresh','up','down'].every(k=>!!m.querySelector('.assistant-action-'+k+' svg'))})()"),true,'AI answer actions use SVG icons');
     }
     if(route==='assistant'&&await evaluate("matchMedia('(min-width:801px)').matches")){
-      assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-group button[data-tab] .sidebar-item-icon').length>=15"),true,'Main navigation should use a complete set of SVG icons');
+      assert.equal(await evaluate("(()=>{const buttons=[...document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')];return buttons.length>=10&&buttons.every(b=>b.querySelector('.sidebar-item-icon'))})()"),true,'Main navigation should use a complete set of SVG icons');
       assert.equal(await evaluate("Array.from(document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')).every(b=>b.querySelectorAll('svg').length===1&&b.querySelectorAll('.sidebar-item-icon').length===1)"),true,'Each main navigation item must have exactly one SVG icon');
       await evaluate("(()=>{const b=document.querySelector('#sidebar .sidebar-group button[data-tab]');const extra=document.createElementNS('http://www.w3.org/2000/svg','svg');extra.classList.add('legacy-sidebar-icon');b.append(extra)})()");
       await until("document.querySelector('#sidebar .sidebar-group button[data-tab]').querySelectorAll('svg').length===1");

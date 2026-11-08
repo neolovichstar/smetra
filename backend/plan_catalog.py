@@ -14,6 +14,16 @@ def starter_quote_limit(owner):
             else STARTER_NEW_QUOTES)
 
 
+def quota_owner(service):
+    """Read signup-based quota metadata without broadening runtime user grants."""
+    owner_id = service.con.execute(
+        "SELECT owner_id FROM workspaces WHERE id=?", (service.wid,)
+    ).fetchone()[0]
+    return service.global_con.execute(
+        "SELECT id,entitlement_until,created_at FROM users WHERE id=?", (owner_id,)
+    ).fetchone()
+
+
 CATALOG = {
     "starter": {"name": "Старт", "monthly_kopecks": 0, "yearly_kopecks": None,
                 "seats": 1, "storage_bytes": 0, "free_quotes": STARTER_NEW_QUOTES, "priority": "standard"},
