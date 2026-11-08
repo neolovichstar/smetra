@@ -11,7 +11,7 @@
     construction:{ready:()=>!!window.SmetraConstruction&&!!window.SmetraProcurementPlan,deps:['quoteVisuals'],files:['/procurement-plan.js?v=20261108-plan1','/construction.js?v=20261108-plan1']},
     calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261108-ai1']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261028-revenue1']},
-    growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261028-quota3','/growth.js?v=20261028-quota3']},
+    growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261108-tabs1','/growth.js?v=20261028-quota3']},
     quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js?v=20261026-r21']},
     estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261026-r21']},
     quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js?v=20261026-r21']},
