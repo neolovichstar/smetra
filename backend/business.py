@@ -1262,7 +1262,7 @@ class Service:
             for item in items:
                 if not isinstance(item, dict):
                     raise DomainError(400, "Проверьте позиции сметы")
-                for key, limit in (("name", 200), ("category", 100), ("description", 2000)):
+                for key, limit in (("name", 200), ("category", 100), ("description", 3000)):
                     string(item.get(key, ""), "Позиция", limit)
             return 200, {"recommendations": recommend_quote_costs(items, description)}
         if not parts:
