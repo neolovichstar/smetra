@@ -15,7 +15,7 @@
     return Number.isSafeInteger(result)?result:null;
   };
   const textOrUnknown=value=>value===null||value===undefined||value===''?'Не указано':String(value);
-  function quoteComparison(item){
+  function quoteComparison(item, editable){
     const comparison=item.supplier_comparison,quotes=item.supplier_quotes||[];
     if(!comparison&&!quotes.length)return '';
     let bestHtml='<p class="procurement-warning">Полную стоимость рассчитать нельзя: проверьте остатки, доставку и сроки.</p>';
@@ -37,7 +37,7 @@
       ' · срок '+escape(offer.delivery_days==null?'не указан':offer.delivery_days+' дн.')+
       (offer.delivery_city?' · '+escape(offer.delivery_city):'')+
       (offer.expires_on?' · до '+escape(offer.expires_on):'')+
-      '</p></div><button class="btn small" type="button" data-procurement-quote-remove="'+escape(offer.id)+'">Удалить</button></div>').join('');
+      '</p></div>'+(editable?'<button class="btn small" type="button" data-procurement-quote-remove="'+escape(offer.id)+'">Удалить</button>':'')+'</div>').join('');
     return '<section class="procurement-comparison" aria-label="Сравнение поставщиков"><h4>Сравнение предложений поставщиков</h4>'+bestHtml+
       (comparison?.excluded?.length?'<p class="procurement-note">Не участвуют в рейтинге: '+comparison.excluded.map(v=>escape(v.supplier)+' — '+escape(v.reason)).join('; ')+'</p>':'')+
       (comparison?.quotes_truncated?'<p class="procurement-warning">Для сравнения взяты последние 20 предложений этой группы.</p>':'')+
@@ -58,7 +58,7 @@
           <p>Нужно ${escape(quantity(item.required_quantity))} ${escape(item.unit)} · получено ${escape(quantity(item.received_quantity))} · заказано ${escape(quantity(item.ordered_quantity))}</p>
           ${Number(item.surplus_quantity)>0?`<p class="procurement-warning">Сверх потребности: ${escape(quantity(item.surplus_quantity))} ${escape(item.unit)}</p>`:''}
           ${Number(item.shortage_quantity)>0?`<p class="procurement-warning">Записанный расход превышает полученное на ${escape(quantity(item.shortage_quantity))} ${escape(item.unit)}. Проверьте поступления.</p>`:''}
-          ${b?`<div class="procurement-price"><span>${escape(sourceLabel[b.reference_source])}${b.reference_date?' · '+escape(b.reference_date):''}: ${escape(money(b.reference_unit_price_kopecks))} / ${escape(item.unit)}</span><strong>Прогноз: ${escape(money(b.forecast_kopecks))}</strong></div>${b.unknown_purchase_prices?'<p class="procurement-warning">В записанных закупках есть неуказанные цены.</p>':''}`:''}${quoteComparison(item)}</article>`;
+          ${b?`<div class="procurement-price"><span>${escape(sourceLabel[b.reference_source])}${b.reference_date?' · '+escape(b.reference_date):''}: ${escape(money(b.reference_unit_price_kopecks))} / ${escape(item.unit)}</span><strong>Прогноз: ${escape(money(b.forecast_kopecks))}</strong></div>${b.unknown_purchase_prices?'<p class="procurement-warning">В записанных закупках есть неуказанные цены.</p>':''}`:''}${quoteComparison(item,result.supplier_quotes_editable)}</article>`;
       }).join(''):'<p class="construction-empty">'+(result.materials.length?'Все материалы уже получены или заказаны.':'Добавьте материалы в ведомость объекта, чтобы составить список закупок.')+'</p>'}</div>`;
   }
 
@@ -99,7 +99,7 @@
         const selector=quoteForm.elements.material_id,selected=selector.value;
         selector.innerHTML=needOptions.map(item=>'<option value="'+escape(item.material_ids[0])+'">'+escape(item.title)+' · '+escape(item.unit)+'</option>').join('');
         if(needOptions.some(item=>item.material_ids.includes(selected)))selector.value=selected;
-        quoteForm.hidden=!result.procurement_budget||!needOptions.length;
+        quoteForm.hidden=!result.supplier_quotes_editable||!needOptions.length;
         form.hidden=!result.procurement_budget;root.querySelector('[data-scenario-note]').hidden=!result.procurement_budget;
         exportButton.disabled=result.summary.to_buy_groups===0;
       }catch(error){if(live()&&mine===sequence){status.textContent=error.message;const retry=document.createElement('button');retry.type='button';retry.className='btn small';retry.textContent='Повторить';retry.onclick=load;status.append(' ',retry);}}
