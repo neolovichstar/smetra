@@ -4,7 +4,7 @@ import sqlite3
 import unittest
 from unittest.mock import patch
 
-from backend.business import DomainError
+from backend.business import DomainError, transaction
 from backend.smart_formulas import PREFIX, calculate, evaluate, list_rules, save_rule
 
 
@@ -86,7 +86,8 @@ class RuleStoreTests(unittest.TestCase):
         self.addCleanup(self.con.close)
 
     def test_save_update_list_and_apply_by_id(self):
-        a = save_rule(self.service, {"title": "Запас на плитку",
+        with transaction(self.con):
+            a = save_rule(self.service, {"title": "Запас на плитку",
                                      "expression": "area*(1+waste/100)", "unit": "м²",
                                      "defaults": {"waste": "10"}})
         self.assertTrue(a["saved"])
