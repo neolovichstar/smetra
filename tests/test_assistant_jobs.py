@@ -76,6 +76,8 @@ class AssistantJobTests(unittest.TestCase):
         self.assertEqual([x['content'] for x in history], ['Старый вопрос', 'Старый ответ'])
         self.assertNotEqual(job['conversation_id'], previous['id'])
         self.assertEqual(self.call('/assistant', token=owner)[1]['messages'], [])
+        # Do not leave a queued job for later worker tests to claim by age.
+        self.assertEqual(self.call('/assistant/jobs/'+job['id'], 'DELETE', token=owner)[0], 200)
 
     def test_creation_replay_is_atomic_and_private(self):
         owner, _ = self.account('job-replay')
