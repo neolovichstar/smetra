@@ -18,7 +18,7 @@ const rubFormatter=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB
 const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
-let user = null, quotes = [], tab = location.hash.slice(1) || (new URLSearchParams(location.search).get('cloud') === 'connected' ? 'premium' : 'dashboard'), registering = false, toastTimer, renderRevision=0, authRevision=0;
+let user = null, quotes = [], tab = location.hash.slice(1) || (new URLSearchParams(location.search).get('cloud') === 'connected' ? 'premium' : 'assistant'), registering = false, toastTimer, renderRevision=0, authRevision=0;
 try{sessionStorage.removeItem('mobile_token');if(new URLSearchParams(location.search).has('partner_sso'))sessionStorage.setItem('smetra.partnerSso','1');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 const apiResponseCache=new Map();
@@ -377,7 +377,7 @@ window.SmetraCompleteAuth=async profile=>{
   user=profile;clearApiCache();
   sessionStorage.removeItem('workspace_id');
   window.Workspace?.reset();
-  const hash=/^#[a-z-]+$/.test(location.hash)?location.hash:'#dashboard';
+  const hash=/^#[a-z-]+$/.test(location.hash)?location.hash:'#assistant';
   history.replaceState({},'', '/app'+hash);
   await showApp();
 };
@@ -565,7 +565,7 @@ async function render() {
       await window.SmetraSupport.render(active);
     } else if(tab==='admin'&&user.role==='admin') {
       await window.SmetraAdmin();
-    } else {tab='dashboard';history.replaceState({},'',location.pathname+location.search+'#dashboard');return render()}
+    } else {tab='assistant';history.replaceState({},'',location.pathname+location.search+'#assistant');return render()}
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
@@ -577,7 +577,7 @@ async function renderNavigation(){
   $('#content')?.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
 }
 window.addEventListener('hashchange',()=>{
-  const section=location.hash.slice(1)||'dashboard';
+  const section=location.hash.slice(1)||'assistant';
   if(!appSections.has(section)||section===tab)return;
   tab=section;closeNavigation();if(user)renderNavigation();
 });
