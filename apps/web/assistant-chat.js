@@ -1112,7 +1112,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   if(estimateIntent?.kind==='new-quote'&&Date.now()-Number(estimateIntent.at||0)<60000){
     if(context?.entity==='quotes'){context=null;sessionStorage.removeItem('smetra.assistant.context');renderContext()}
     input.placeholder='Опишите объект и работы — ассистент составит смету';
-    quotePreview?.startNew?.({onExample:text=>{input.value=text;resize();saveDraft();syncSendButton();input.focus()}});
+    quotePreview?.startNew?.();
     // The submit handler is attached below; send after this synchronous setup finishes.
     if(estimateIntent.text){input.value=estimateIntent.text;resize();saveDraft();syncSendButton();setTimeout(()=>{if(active()&&!send.disabled&&input.value===estimateIntent.text)document.querySelector('#assistant-form').requestSubmit()},0)}
     else input.focus();
