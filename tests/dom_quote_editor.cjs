@@ -20,6 +20,25 @@ function setup(){
   await w.Workspace.editor(quote);fill('#f-title','Новые работы');d.querySelector('[data-duplicate="0"]').click();assert.equal(d.querySelectorAll('[data-row]').length,3);d.querySelector('[data-move="0"][data-direction="1"]').click();
   const history=w.SmetraQuoteEditorState.History;assert.ok(history);d.querySelector('#editor-undo').click();assert.equal(d.querySelector('[data-row="0"] [data-key=name]').value,'Стены');d.querySelector('#editor-undo').click();assert.equal(d.querySelectorAll('[data-row]').length,2);d.querySelector('#editor-undo').click();assert.equal(d.querySelector('#f-title').value,'Работы');d.querySelector('#editor-redo').click();assert.equal(d.querySelector('#f-title').value,'Новые работы');
  });
+
+ await test('omitted cost recommendations are opt-in and excluded from totals',async({w,d,quote})=>{
+  const initial={...quote,recommendations:[{kind:'delivery',name:'Доставка материалов на объект',reason:'Проверить условия доставки',unit:'усл.'}]};
+  await w.Workspace.editor(initial);
+  assert.equal(d.querySelectorAll('.editor-recommendation').length,1);
+  const before=d.querySelector('#editor-total').textContent;
+  d.querySelector('.editor-recommendation-actions .btn').click();
+  assert.equal(d.querySelectorAll('[data-row]').length,3);
+  assert.equal(d.querySelector('[data-row="2"] [data-key=name]').value,'Доставка материалов на объект');
+  assert.equal(d.querySelector('[data-row="2"] [data-key=optional]').checked,true);
+  assert.equal(d.querySelector('[data-row="2"] [data-key=included]').checked,false);
+  assert.equal(d.querySelector('#editor-total').textContent,before);
+ });
+ await test('recommendations may be dismissed without editing financial data',async({w,d,quote})=>{
+  await w.Workspace.editor({...quote,recommendations:[{kind:'waste',name:'Вывоз мусора',reason:'Проверить',unit:'усл.'}]});
+  d.querySelector('.editor-recommendation-dismiss').click();
+  assert.equal(d.querySelector('#editor-recommendations').hidden,true);
+  assert.equal(d.querySelectorAll('[data-row]').length,2);
+ });
  await test('invalid financial input is local and undo restores exact raw input',async({w,d,quote,fill,writes})=>{
   await w.Workspace.editor(quote);fill('[data-row="0"] [data-key=quantity]','-1');d.querySelector('#editor-retry').click();await tick();assert.equal(writes.length,0);const stored=JSON.parse(w.localStorage.getItem('smetra.draft.qa.w.q'));assert.equal(stored.snapshot.items[0]._raw.quantity,'-1');d.querySelector('#editor-undo').click();assert.equal(d.querySelector('[data-row="0"] [data-key=quantity]').value,'1');
  });
