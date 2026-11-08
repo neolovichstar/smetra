@@ -190,7 +190,7 @@ class AssistantJobTests(unittest.TestCase):
         result = self.call('/assistant/jobs/'+job['id'],token=owner)[1]['job']
         self.assertEqual(result['status'],'completed')
         self.assertEqual(result['attempts'],3)
-        self.assertEqual(len(self.call('/assistant',token=owner)[1]['messages']),2)
+        self.assertEqual(len(self.call('/assistant/conversations/'+job['conversation_id'],token=owner)[1]['messages']),2)
 
     def test_worker_auth_and_pending_thread_deletion(self):
         owner, _ = self.account('job-worker-auth')
