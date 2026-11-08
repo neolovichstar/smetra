@@ -20,6 +20,15 @@ const {JSDOM} = require(process.env.SMETRA_JSDOM_MODULE || 'jsdom');
   assert.match(styles,/height:min\(880px,calc\(100dvh - 28px\)\)/,'Dialog must grow vertically');
   assert.match(styles,/width:min\(980px,calc\(100vw - 24px\)\)/,'Dialog width is not increased');
 
+  const navigation=new JSDOM(html,{url:'https://smetra.test/app',runScripts:'outside-only',pretendToBeVisual:true});
+  try{
+    navigation.window.eval(fs.readFileSync('apps/web/product-ui.js','utf8'));
+    const sidebar=navigation.window.document.querySelector('#sidebar');
+    assert.deepEqual([...sidebar.querySelectorAll('.sidebar-disclosure')].map(button=>button.textContent),['Объекты и файлы','Аккаунт'],'Runtime navigation keeps the actual group names');
+    for(const section of ['construction','files','documents','chats','changelog'])assert.ok(sidebar.querySelector('[data-tab='+section+']'));
+    assert.equal(sidebar.querySelector('[data-tab=calculators]'),null);
+  }finally{navigation.window.close()}
+
   const dom=new JSDOM('<!doctype html><body><button id="assistant-knowledge"></button><dialog id="assistant-knowledge-panel"></dialog></body>',{
     url:'https://smetra.test/app',runScripts:'dangerously',pretendToBeVisual:true
   });
