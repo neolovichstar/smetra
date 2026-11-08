@@ -53,7 +53,9 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  assert.equal(await evaluate("api('/quotes').then(r=>r.quotes.length)"),1);
  await evaluate("tab='billing';render()");await until("document.querySelector('#plan-cards')");
  const prices=await evaluate("api('/billing').then(r=>r.pricing)");assert.ok(prices.annual_saving_kopecks>0);
- assert.equal(await evaluate("document.querySelectorAll('[data-product]').length===3&&[...document.querySelectorAll('[data-product]')].every(b=>b.disabled)"),true,'CI shop is off, so all paid products are unavailable');
+ assert.equal(await evaluate("document.querySelectorAll('[data-product]').length===3&&[...document.querySelectorAll('[data-product]')].every(b=>b.textContent.trim()==='Купить')"),true,'Paid cards must expose a clear Buy action');
+ assert.match(await evaluate("document.querySelector('#catalog-checkout-note').textContent"),/Приём платежей сейчас отключён/,'Disabled shop is explained without hiding Buy actions');
+ await click('[data-product=pro_solo]');assert.match(await evaluate("document.querySelector('#catalog-checkout-note').textContent"),/Приём платежей сейчас отключён/,'Buy explains why checkout is unavailable without opening a payment');
  await click('[data-period=year]');assert.equal(await evaluate("document.querySelector('[data-period=year]').getAttribute('aria-pressed')"),'true');assert.equal(await evaluate("document.querySelectorAll('.catalog-plan').length"),4);
  await shot('growth-billing-mobile');
  for(const width of [320,390,768,1440]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});await wait(150);assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Billing overflow '+width)}
