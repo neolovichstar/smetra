@@ -30,7 +30,7 @@ assert(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Use an isolat
  await p.locator('.assistant-message.assistant').filter({hasText:'Поток начат.'}).waitFor();
  assert.equal(await p.locator('#assistant-new-thread').isEnabled(),true);
  await p.screenshot({path:'data/qa/assistant-durable-stream-mobile.png'});
- await p.goto(base+'/app#profile');await p.locator('#profile-form').waitFor();
+ await p.goto(base+'/app#profile');await p.locator('.profile-overview').waitFor();
  const finished=await until(async()=>{const j=(await api('/assistant/jobs/'+saved.id)).job;return j.status==='completed'?j:false});
  assert.equal(finished.result.answer,'Поток начат. Ответ сохранён.');
  const history=(await api('/assistant/conversations/'+first.id)).messages;
