@@ -11,8 +11,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  const screenshot=async name=>{const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync('data/'+name+'.png',Buffer.from(shot.data,'base64'))};
  await send('Runtime.enable');await send('Page.enable');await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  await send('Page.navigate',{url:'http://localhost:8084/app'});await until("document.querySelector('#auth-form')?.onsubmit");await evaluate('sessionStorage.clear()');
- await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('[data-work=quote-new]')");
- await evaluate("document.querySelector('[data-tab=files]').click()");await until("document.querySelector('[data-filter=files]')");await evaluate("document.querySelector('[data-filter=files]').click()");await until("document.querySelector('[data-file-open]')");
+ await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('#assistant-form')");
+ // The AI-first sidebar intentionally hides Files, but its route still exists.
+ // Exercise the real File Office viewer through its supported deep link.
+ await evaluate("(async()=>{tab='files';location.hash='files';await renderNavigation()})()");
+ await until("document.querySelector('[data-filter=files]')");await evaluate("document.querySelector('[data-filter=files]').click()");await until("document.querySelector('[data-file-open]')");
  const files=await evaluate("api('/files').then(r=>r.items)");
  const open=async name=>{const file=files.find(f=>f.name===name);assert.ok(file);await evaluate(`document.querySelector('[data-file-open="${file.id}"]').click()`);await until("document.querySelector('.file-office-toolbar input')");return file};
  await open('brief.docx');assert.ok((await evaluate("document.querySelector('.file-office-content').textContent")).includes('Техническое задание'));
