@@ -308,4 +308,9 @@
     }catch(error){notify(error.message)}finally{button.disabled=false}
   }
   window.SmetraConstruction = () => {const nextAccount=user?.id,nextWorkspace=sessionStorage.getItem('workspace_id');if(account!==nextAccount||workspace!==nextWorkspace){selected=null;account=nextAccount;workspace=nextWorkspace}return selected ? detail() : list()};
+  window.SmetraConstruction.openObject = id => {
+    if(typeof id!=='string'||!id||id.length>80)throw Error('Объект не найден');
+    selected=id;account=user?.id;workspace=sessionStorage.getItem('workspace_id');
+    return window.SmetraNavigateTo('construction');
+  };
 })();

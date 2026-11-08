@@ -12,7 +12,7 @@ window.SmetraARScan = (() => {
     const mine = ++revision, owner = user, workspace = sessionStorage.getItem('workspace_id');
     let closed = false, stream = null, xr = null, renderer = null, hitSource = null;
     let nativeBusy = false, cameraRequest = 0, rooms = [], objects = [], dimensions = [], points = [], hit = null;
-    let xrSupported = false, objectCreated = '', saving = false;
+    let xrSupported = false, objectCreated = '', measuredObjectId = '', saving = false;
     const active = () => !closed && parentActive() && revision === mine && user === owner && tab === 'ar-scan' && workspace === sessionStorage.getItem('workspace_id');
     view(`<section class="ar-page" aria-label="AR Скан">
       <div class="ar-stage">
@@ -178,26 +178,32 @@ window.SmetraARScan = (() => {
     }
     async function showReview(values) {
       rooms = (values || []).slice(0,12).map((r, index) => ({name: String(r.name || 'Комната '+(index+1)),unit: 'м',length: r.length || '',width: r.width || '',height: r.height || '',openings_m2: r.openings_m2 || '0',source: r.source === 'manual' ? 'manual' : 'ar'}));
-      $('.ar-review').hidden = false;stopCamera();await endXR();if (!active()) return;
+      $('.ar-review').hidden = false;$('.ar-stage').inert = true;stopCamera();await endXR();if (!active()) return;
       $('[data-ar-rooms]').innerHTML = rooms.map((room, index) => `<fieldset data-ar-room="${index}"><legend>Помещение ${index+1}${room.source === 'manual' ? ' · ручной обмер' : ' · AR-обмер'}</legend><label class="ar-label">Название<input name="name" maxlength="120" required value="${esc(room.name)}"></label><div class="ar-dimensions">${[['length','Длина, м'],['width','Ширина, м'],['height','Высота, м']].map(([key,label])=>`<label class="ar-label">${label}<input name="${key}" type="number" inputmode="decimal" min="0.5" max="100" step="0.01" required value="${esc(room[key])}"></label>`).join('')}</div><label class="ar-label">Окна и двери, м²<input name="openings_m2" type="number" inputmode="decimal" min="0" step="0.01" required value="${esc(room.openings_m2)}"></label></fieldset>`).join('');
       $('[data-ar-confirm]').checked = false;$('[data-ar-save-status]').textContent = '';$('[data-ar-save]').disabled = false;
       await loadObjects();
     }
     $('[data-ar-manual]').onclick = () => showReview([{name: 'Комната 1',source: 'manual'}]);
     root.addEventListener('beforexrselect', event => event.preventDefault());
-    $('[data-ar-review-close]').onclick = () => {$('.ar-review').hidden = true;if (!nativeBusy) void openCamera();};
+    $('[data-ar-review-close]').onclick = () => {$('.ar-review').hidden = true;$('.ar-stage').inert = false;if (!nativeBusy) void openCamera();};
     $('[data-ar-object]').onchange = () => {const fresh = $('[data-ar-object]').value === 'new';$('[data-ar-new-object]').hidden = !fresh;$('[data-ar-object-name]').required = fresh;};
-    $('[data-ar-open-object]').onclick = () => window.SmetraNavigateTo('construction');
+    $('[data-ar-open-object]').onclick = async () => {
+      const id = measuredObjectId;
+      if (!id) {await window.SmetraNavigateTo('construction');return;}
+      await window.SmetraLoadFeature?.('construction');if (!active()) return;
+      await window.SmetraConstruction.openObject(id);
+    };
     $('[data-ar-form]').onsubmit = async event => {
       event.preventDefault();if (saving || !active()) return;
       const selected = $('[data-ar-object]').value;if (!selected || !$('[data-ar-confirm]').checked) return;
       const measured = [...root.querySelectorAll('[data-ar-room]')].map((fieldset,index) => {const row = {...rooms[index]};for (const input of fieldset.querySelectorAll('input')) row[input.name] = input.value;return row;});
       saving = true;$('[data-ar-save]').disabled = true;$('[data-ar-save-status]').textContent = 'Проверяю размеры…';
-      let importing = false;
+      let importing = false, creating = false, uncertain = false;
       try {
         let objectId = selected;
-        if (selected === 'new') {if (!objectCreated) {const result = await api('/construction/objects',{method: 'POST',body: JSON.stringify({name: $('[data-ar-object-name]').value.trim()})});objectCreated = result.object.id;}objectId = objectCreated;}
+        if (selected === 'new') {if (!objectCreated) {creating = true;const result = await api('/construction/objects',{method: 'POST',body: JSON.stringify({name: $('[data-ar-object-name]').value.trim()})});objectCreated = result.object.id;creating = false;}objectId = objectCreated;}
         if (!active()) return;
+        measuredObjectId = objectId;
         await api('/construction/objects/'+encodeURIComponent(objectId)+'/scan/preview',{method: 'POST',body: JSON.stringify({rooms: measured})});
         if (!active()) return;
         importing = true;
@@ -206,10 +212,10 @@ window.SmetraARScan = (() => {
         $('[data-ar-save-status]').textContent = 'Добавлено помещений: '+result.zones.length+'.';$('[data-ar-open-object]').hidden = false;$('[data-ar-save]').hidden = true;
       } catch (error) {
         if (!active()) return;
-        const uncertain = importing && !error.status;
+        uncertain = (importing || creating) && !error.status;
         $('[data-ar-save-status]').textContent = uncertain ? 'Не удалось подтвердить сохранение. Проверьте помещения объекта перед повторным импортом.' : error.message;
         $('[data-ar-save]').disabled = uncertain;if (uncertain) $('[data-ar-open-object]').hidden = false;
-      } finally {saving = false;if (active() && !importing) $('[data-ar-save]').disabled = false;}
+      } finally {saving = false;if (active() && !importing && !uncertain) $('[data-ar-save]').disabled = false;}
     };
     if (window.SmetraShell?.available) {
       await window.SmetraShell.ready;if (!active()) return;

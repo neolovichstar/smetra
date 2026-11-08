@@ -34,6 +34,8 @@ async function setup({capture,native}={}){
   d.querySelector('[data-ar-object]').value='object';d.querySelector('[data-ar-form]').requestSubmit();await tick();assert.equal(calls.filter(c=>c.options.method==='POST').length,0);
   d.querySelector('[data-ar-confirm]').checked=true;d.querySelector('[data-ar-form]').requestSubmit();await tick();await tick();
   const writes=calls.filter(c=>c.options.method==='POST');assert.deepEqual(writes.map(c=>c.path),['/construction/objects/object/scan/preview','/construction/objects/object/scan/import']);assert.equal(JSON.parse(writes[1].options.body).rooms[0].source,'manual');assert.equal(JSON.parse(writes[1].options.body).review_confirmed,true);assert.equal(d.querySelector('[data-ar-save]').hidden,true);
+  let opened;const w=d.defaultView;w.SmetraLoadFeature=async()=>{};w.SmetraConstruction={openObject:async id=>{opened=id}};
+  d.querySelector('[data-ar-open-object]').click();await tick();assert.equal(opened,'object','Open the exact measured object');
  });
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exitCode=1});
