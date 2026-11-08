@@ -87,7 +87,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <header class="assistant-header" hidden><span id="assistant-quota" class="assistant-quota"></span></header>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Память ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
-      <div class="assistant-composer"><div id="assistant-decision-slot" class="assistant-decision-slot" aria-live="polite"></div><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
+      <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
         <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
@@ -749,48 +749,31 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }
     messages.append(item);return {item,body};
   };
-  const decisionSlot=document.getElementById('assistant-decision-slot');
-  const proposalQueue=[];
-  const updateDecisions=()=>{
-    if(!decisionSlot?.isConnected)return;
-    decisionSlot.replaceChildren();
-    const next=proposalQueue.find(item=>item.isConnected&&item.dataset.proposalState==='pending');
-    if(!next)return;
-    const heading=document.createElement('div');heading.className='assistant-decision-heading';
-    const kicker=document.createElement('span');kicker.textContent='Подтвердите действие';
-    const summary=document.createElement('strong');summary.textContent=next.querySelector('h3')?.textContent||'Предложение ИИ';
-    heading.append(kicker,summary);
-    const controls=document.createElement('div');controls.className='assistant-decision-buttons';
-    const yes=document.createElement('button');yes.type='button';yes.className='btn primary';yes.textContent='Принять';yes.onclick=()=>next.querySelector('[data-confirm]')?.click();
-    const no=document.createElement('button');no.type='button';no.className='btn ghost';no.textContent='Отклонить';no.onclick=()=>next.querySelector('[data-dismiss]')?.click();
-    controls.append(yes,no);decisionSlot.append(heading,controls);
-  };
-  const showQuestion=(question)=>{
-    if(!decisionSlot?.isConnected||!question||typeof question.question!=='string')return;
-    const options=Array.isArray(question.options)?question.options.slice(0,4):[];
+  // Clarifying choices belong to the assistant's message, never in a
+  // floating composer banner. Confirmations stay in their proposal cards.
+  const showQuestion=(question,answerItem)=>{
+    if(!active()||!answerItem?.isConnected||!question||typeof question.question!=='string')return;
+    const options=Array.isArray(question.options)?question.options.filter(value=>typeof value==='string'&&value.trim()).slice(0,4):[];
     if(options.length<2)return;
-    decisionSlot.replaceChildren();
-    const group=document.createElement('div');group.className='assistant-decision-heading';
-    const tag=document.createElement('span');tag.textContent='Ассистент уточняет';
-    const title=document.createElement('strong');title.textContent=question.question;
-    title.style.whiteSpace='normal';group.append(tag,title);
+    const section=document.createElement('section');section.className='assistant-question-inline';
+    const title=document.createElement('strong');title.textContent=question.question.trim();section.append(title);
     const choices=document.createElement('div');choices.className='assistant-question-choice';
     const reply=value=>{
-      if(working||!active()||!value.trim())return;
-      decisionSlot.replaceChildren();input.value=value.trim();input.dispatchEvent(new Event('input',{bubbles:true}));
+      if(working||!active()||!section.isConnected||!value.trim())return;
+      input.value=value.trim();input.dispatchEvent(new Event('input',{bubbles:true}));
+      section.remove();
       document.querySelector('#assistant-form')?.requestSubmit();
     };
     for(const value of options){
-      if(typeof value!=='string'||!value.trim())continue;
-      const button=document.createElement('button');button.type='button';button.textContent=value;button.onclick=()=>reply(value);
-      choices.append(button);
+      const button=document.createElement('button');button.type='button';button.textContent=value;
+      button.onclick=()=>reply(value);choices.append(button);
     }
     const custom=document.createElement('form');custom.className='assistant-question-custom';
     const field=document.createElement('input');field.type='text';field.maxLength=300;field.placeholder='Свой вариант ответа';field.setAttribute('aria-label','Свой вариант ответа');field.required=true;
     const sendChoice=document.createElement('button');sendChoice.type='submit';sendChoice.textContent='Отправить';
     custom.append(field,sendChoice);
     custom.addEventListener('submit',event=>{event.preventDefault();reply(field.value)});
-    decisionSlot.append(group,choices,custom);
+    section.append(choices,custom);answerItem.append(section);
   };
   const renderedProposalIds=new Set();
   const addAction=action=>{
@@ -802,7 +785,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const quoteDraft=action.tool==='create_quotes'&&Array.isArray(action.arguments?.items)&&action.arguments.items.length>0;
     const detail=quoteDraft?'':action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
     item.innerHTML=`<span class="assistant-proposal-state">Требует подтверждения · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
-    actions.append(item);proposalQueue.push(item);updateDecisions();
+    actions.append(item);
     if(quoteDraft)assistantQuoteDraftPreview(item.querySelector('.proposal-fields'),action.arguments);
     if(action.tool==='create_document'){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
@@ -823,7 +806,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!active()||!item.isConnected)return;
         const result=await api('/assistant/confirm',{method:'POST',headers:{...scopeHeaders},body:JSON.stringify({id:action.id})});
         if(!active()||!item.isConnected)return;
-        item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);
+        item.dataset.proposalState='applied';quotePreview?.clearProposal?.(action.id);
         renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);
         const createdQuote=action.tool==='create_quotes'?result.result?.quote:null;
         if(createdQuote?.id)await focusQuote(createdQuote);
@@ -844,7 +827,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});
         if(!active()||!item.isConnected)return;
         item.dataset.proposalState='dismissed';quotePreview?.clearProposal?.(action.id);
-        item.remove();updateDecisions();
+        item.remove();
       }catch(error){dismiss.disabled=false;notify(error.message)}
     };
   };
@@ -1225,7 +1208,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0],assistantMessage.item);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='background'){setActivity('Выполняю запрос…');status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error||'Не удалось завершить ответ')}
       };
