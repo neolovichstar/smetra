@@ -59,7 +59,7 @@ class FormulaTests(unittest.TestCase):
 
     def test_rejects_excessive_nesting(self):
         with self.assertRaises(DomainError):
-            calculate("("*35 + "1" + ")"*35)
+            calculate("+"*20 + "1")
 
 
 class RuleStoreTests(unittest.TestCase):
