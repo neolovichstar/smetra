@@ -400,7 +400,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     try{await action();}catch(error){if(active())notify(error.message);}
     finally{threadBusy=false;if(active())setThreadBusy(false);}
   }
-  document.querySelectorAll('.assistant-conversation-row').forEach(row=>{
+  const bindConversationRow=row=>{
     const id=row.dataset.threadId||'',path=id?'/assistant/conversations/'+encodeURIComponent(id):'/assistant/conversations/general';
     const more=row.querySelector('[data-thread-menu]'),menu=row.querySelector('[data-thread-menu-panel]');
     const closeRowMenu=()=>{if(!menu)return;menu.hidden=true;more?.setAttribute('aria-expanded','false');row.classList.remove('is-menu-open','is-renaming');const actions=menu.querySelector('.assistant-conversation-menu-actions');if(actions)actions.hidden=false;const form=menu.querySelector('[data-thread-rename-form]');if(form)form.hidden=true};
@@ -458,7 +458,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     row.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&menu&&!menu.hidden){event.preventDefault();closeRowMenu();more?.focus();}
     });
-  });
+  };
+  document.querySelectorAll('.assistant-conversation-row').forEach(bindConversationRow);
   document.querySelector('.assistant-page').addEventListener('click',event=>{
     if(!event.target.closest('.assistant-conversation-row-actions,.assistant-conversation-menu'))closeConversationMenus();
     if(!event.target.closest('.assistant-history-panel,#assistant-history-toggle')&&toolrail.classList.contains('is-history-expanded'))closeHistoryPanel();
@@ -997,6 +998,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const label=document.createElement('span');label.className='assistant-conversation-title';label.textContent=item.title;
       button.innerHTML=assistantIcon('chat',16);button.append(label);button.onclick=()=>{sessionStorage.setItem('smetra.assistant.conversation',id);window.SmetraAssistant()};
       row.append(button);
+      const actions=document.createElement('div');actions.className='assistant-conversation-actions';
+      const more=document.createElement('button');more.className='assistant-conversation-icon-button assistant-conversation-more';more.type='button';more.dataset.threadMenu='';more.setAttribute('aria-expanded','false');more.setAttribute('aria-label','Действия для нового диалога');more.title='Действия';more.innerHTML=assistantIcon('more',16);
+      const trash=document.createElement('button');trash.className='assistant-conversation-icon-button assistant-conversation-delete';trash.type='button';trash.dataset.threadDelete='';trash.title='Удалить диалог';trash.setAttribute('aria-label','Удалить диалог');trash.innerHTML=assistantIcon('trash',16);
+      actions.append(more,trash);row.append(actions);
+      const menu=document.createElement('div');menu.className='assistant-conversation-menu';menu.dataset.threadMenuPanel='';menu.hidden=true;
+      menu.innerHTML='<div class="assistant-conversation-menu-actions"><button type="button" data-thread-rename>Переименовать</button><button type="button" data-thread-pin>Закрепить</button></div><form class="assistant-history-rename-form" data-thread-rename-form hidden><label>Название диалога<input data-thread-rename-input maxlength="120" required aria-label="Название диалога"></label><div class="assistant-history-rename-actions"><button type="submit" class="is-primary">Сохранить</button><button type="button" data-thread-rename-cancel>Отмена</button></div></form>';
+      row.append(menu);
+      bindConversationRow(row);
       document.querySelector('#assistant-history-list')?.prepend(row);
       const count=document.querySelector('.assistant-history-count');if(count)count.textContent=String(threadIndex.items.length);
       const option=document.createElement('option');option.value=id;option.textContent=item.title;
