@@ -39,11 +39,12 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
     ctrl.destroy();
 
     const html=fs.readFileSync('apps/web/app.html','utf8');
-    const css=fs.readFileSync('apps/web/ui/precision-controls.css','utf8');
+    const css=fs.readFileSync('apps/web/ui/tools.css','utf8');
     const workspace=fs.readFileSync('apps/web/ui/workspace.css','utf8');
-    assert.match(html,/precision-controls\.css\?v=20261108-r2/,'Control stylesheet must load in deployed HTML');
+    assert.match(html,/tools\.css\?v=20261108-controls3/,'Number controls must ship with the final design-system CSS');
+    assert.doesNotMatch(html,/precision-controls\.css/,'No extra stylesheet layer');
     assert.match(css,/::-webkit-inner-spin-button/,'WebKit number spinner override');
-    assert.match(css,/-moz-appearance:\s*textfield\s*!important/,'Firefox number spinner override');
+    assert.match(css,/-moz-appearance:\s*textfield/,'Firefox number spinner override');
     assert.match(workspace,/width:calc\(50% - 4px\)/,'Valid billing thumb width');
     assert.doesNotMatch(workspace,/calc\(\(100% - 8px\)\/2\)/,'Unsupported division should not return');
     console.log('PASS: empty AI quote panel, real progress and draft, browser number controls and billing slider');
