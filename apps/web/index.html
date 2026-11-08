@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0a0b">
 <meta name="mailru-domain" content="UQnzfKGMGVOWLYk5" />
-<title>сметра. — сметный сервис для ремонта и строительства</title>
-<meta name="description" content="сметра. — веб-сервис и Android-приложение для строительных смет, проектов, согласования, работы с клиентами и оплаты. ИИ помогает готовить сметы; подключение Google Drive для импорта документов выполняется только с разрешения пользователя.">
+<title>сметра. Сметы для ремонта и строительства</title>
+<meta name="description" content="сметра. Сервис строительных смет с ИИ-ассистентом. Подготовьте смету, согласуйте её с клиентом и учитывайте оплаты. Работает в браузере и на Android. Google Drive подключается отдельно с вашего разрешения.">
 <link rel="icon" href="/favicon.ico">
 <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/ui/tokens.css?v=20261026-r21">
@@ -14,14 +14,14 @@
 <link rel="stylesheet" href="/ui/components.css?v=20261030-quote1">
 <link rel="stylesheet" href="/ui/site.css?v=20261026-r21">
 <script src="/ui/plans.js?v=20261028-quota3" defer></script>
-<script src="/landing.js?v=20261030-quote1" defer></script>
+<script src="/landing.js?v=20261108-copy1" defer></script>
 <script type="module" src="/room3d.js?v=20261026-r21"></script>
 </head>
 <body class="site-page landing-page dark">
 <a class="skip-link" href="#landing">К содержимому</a>
 <header class="site-nav" id="site-nav">
   <div class="site-nav-inner">
-    <a href="/" class="brand" aria-label="Сметра — на главную">сметра<span class="brand-mark">.</span></a>
+    <a href="/" class="brand" aria-label="Сметра. На главную">сметра<span class="brand-mark">.</span></a>
     <nav class="site-links" aria-label="Разделы страницы">
       <a href="#how">Как это работает</a>
       <a href="#assistant">Ассистент</a>
@@ -39,9 +39,9 @@
 <main id="landing" class="landing">
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
-      <p class="hero-kicker reveal">сметра. — сервис для мастеров, бригад и строительных компаний</p>
-      <h1 id="hero-title" class="reveal">Смета, которую клиент понимает и&nbsp;подтверждает.</h1>
-      <p class="hero-lead reveal">Соберите позиции и итог, отправьте клиенту ссылку, ведите этапы и поступления. ИИ-ассистент подготовит черновик по описанию или фото — суммы считает Сметра.</p>
+      <p class="hero-kicker reveal">Для мастеров, бригад и строительных компаний</p>
+      <h1 id="hero-title" class="reveal">Смета, которую клиент понимает.</h1>
+      <p class="hero-lead reveal">Опишите работы ассистенту. Проверьте смету и отправьте клиенту ссылку на согласование. Этапы работ и оплаты можно вести здесь же.</p>
       <div class="hero-actions reveal">
         <a class="btn large primary" href="/app?register=1">Создать смету бесплатно</a>
         <a class="btn large ghost" href="#how">Как это работает</a>
@@ -58,8 +58,8 @@
   <section id="how" class="section how" aria-labelledby="how-title">
     <header class="section-head reveal">
       <p class="section-kicker">Как это работает</p>
-      <h2 id="how-title">Один путь от запроса до оплаты</h2>
-      <p>Каждый шаг связан с предыдущим: заявка становится сметой, согласованная смета — заказом, заказ — поступлениями. Ничего не нужно переносить вручную.</p>
+      <h2 id="how-title">От заявки к выполненному заказу</h2>
+      <p>Сохраните заявку, подготовьте смету и согласуйте её с клиентом. По согласованной смете можно создать заказ, вести этапы и записывать оплаты.</p>
     </header>
     <div class="flow reveal" data-flow>
       <div class="flow-steps" role="tablist" aria-label="Этапы работы">
@@ -73,7 +73,7 @@
         <article class="flow-panel is-active" data-panel="0">
           <div class="flow-copy">
             <h3>Заявка приходит по вашей ссылке</h3>
-            <p>Отправьте клиенту ссылку на форму: он опишет задачу, бюджет и срок, приложит фото или план. Заявка появится в лидах и в карточке клиента.</p>
+            <p>Отправьте клиенту ссылку на форму. Он укажет задачу, бюджет и срок, приложит фото или план. Заявка появится в лидах и в карточке клиента.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Новая заявка</small><span class="fc-pill">Лиды · Новый</span></div>
@@ -84,7 +84,7 @@
         <article class="flow-panel" data-panel="1" hidden>
           <div class="flow-copy">
             <h3>Смета из расценок или по описанию</h3>
-            <p>Добавьте позиции из своих расценок или попросите ассистента собрать черновик. Количество, цена, скидки, наценки и налоги пересчитываются сервером — итог всегда точный.</p>
+            <p>Попросите ассистента собрать черновик по описанию и вашим расценкам. Проверьте объёмы и цены. Сметра пересчитает итог с учётом скидок, наценок и налогов.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Смета · 4 позиции</small><span class="fc-pill">Черновик</span></div>
@@ -95,7 +95,7 @@
         <article class="flow-panel" data-panel="2" hidden>
           <div class="flow-copy">
             <h3>Клиент открывает ссылку и решает</h3>
-            <p>Без регистрации: позиции, условия и итог в зафиксированной версии. Клиент согласует, просит изменения или задаёт вопрос. Вы видите, когда смету открыли.</p>
+            <p>Клиент видит позиции, условия и итог без регистрации. Он может согласовать смету, попросить изменения или задать вопрос. Вы видите, когда он открыл ссылку.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Предложение · версия 2</small><span class="fc-pill fc-pill-success">Согласовано</span></div>
@@ -118,7 +118,7 @@
         <article class="flow-panel" data-panel="4" hidden>
           <div class="flow-copy">
             <h3>Поступления и остаток по заказу</h3>
-            <p>Записывайте полученные оплаты и расходы — Сметра покажет, сколько получено, сколько осталось и денежный результат заказа.</p>
+            <p>Записывайте оплаты и расходы. Сметра покажет поступления, остаток к оплате и разницу между доходами и расходами заказа.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Оплаты по заказу</small><span class="fc-pill">2 из 3</span></div>
@@ -127,32 +127,32 @@
           </div>
         </article>
       </div>
-      <p class="flow-note">Пример для наглядности. Данные вымышленные, интерфейс — настоящий.</p>
+      <p class="flow-note">Пример работы со сметой. Имена, даты и суммы вымышлены.</p>
     </div>
   </section>
 
   <section id="assistant" class="section assistant" aria-labelledby="assistant-title">
     <div class="assistant-copy reveal">
       <p class="section-kicker">ИИ-ассистент</p>
-      <h2 id="assistant-title">Опишите работы — получите черновик сметы</h2>
-      <p>Напишите своими словами или приложите фото помещения. Ассистент предложит позиции и объёмы, найдёт нужную смету или клиента, подготовит документ.</p>
+      <h2 id="assistant-title">Черновик сметы по вашему описанию</h2>
+      <p>Опишите работы и укажите замеры. Можно приложить фото или план. Ассистент предложит позиции, а недостающие данные попросит уточнить.</p>
       <ul class="check-list">
-        <li><strong>Суммы считает Сметра.</strong> Ассистент передаёт позиции и параметры, а количество, стоимость, скидки и итог рассчитывает сервер.</li>
-        <li><strong>Ничего не меняется без вас.</strong> Каждая правка показана как «было → станет» и сохраняется только после подтверждения.</li>
-        <li><strong>Можно отменить.</strong> Применённое изменение откатывается одной кнопкой.</li>
+        <li>Сметра считает итог по ценам и объёмам в смете. Их нужно проверить перед отправкой клиенту.</li>
+        <li>Правки ассистента видны до сохранения. Вы проверяете их и нажимаете "Применить".</li>
+        <li>Если для правки доступна отмена, рядом появится кнопка "Отменить".</li>
       </ul>
       <a class="btn primary" href="/app?register=1#assistant">Попробовать ассистента</a>
     </div>
     <div class="chat-demo reveal" data-chat-demo role="img" aria-label="Пример диалога: ассистент предлагает изменить цену в смете, итог пересчитан сервером, изменение ждёт подтверждения">
       <div class="chat-window" aria-hidden="true">
-        <div class="chat-msg chat-user" data-chat-step="1"><span class="chat-photo">фото_ванная.jpg</span>Добавь гидроизоляцию по полу и подними цену укладки до 1 900 ₽</div>
-        <div class="chat-msg chat-bot" data-chat-step="2"><span class="chat-typing"><i></i><i></i><i></i></span><span class="chat-text" data-stream="Подготовил изменения по смете «Ванная, Садовая 5». Площадь пола по фото оценил в 8,5 м² — проверьте замер."></span></div>
+        <div class="chat-msg chat-user" data-chat-step="1">Площадь пола 8,5 м². Добавь гидроизоляцию по 750 ₽/м² и подними цену укладки до 1 900 ₽/м²</div>
+        <div class="chat-msg chat-bot" data-chat-step="2"><span class="chat-typing"><i></i><i></i><i></i></span><span class="chat-text" data-stream="Подготовил две правки. Площадь и цены взял из вашего сообщения. Проверьте изменения и нажмите &quot;Применить&quot;."></span></div>
         <div class="chat-proposal" data-chat-step="3">
           <span class="chat-proposal-state">Требует подтверждения</span>
           <strong>Изменить смету · 2 строки</strong>
           <div class="chat-diff"><span>Гидроизоляция пола</span><span><em>новая строка</em> 8,5 м² × 750 ₽</span></div>
           <div class="chat-diff"><span>Укладка керамогранита · цена</span><span><del>1 800 ₽</del> 1 900 ₽</span></div>
-          <div class="chat-diff chat-diff-total"><span>Итог (расчёт сервера)</span><span><del>62 500 ₽</del> <b>71 275 ₽</b></span></div>
+          <div class="chat-diff chat-diff-total"><span>Итог после правок</span><span><del>62 500 ₽</del> <b>71 275 ₽</b></span></div>
           <div class="chat-actions"><span class="mini-btn is-primary">Применить</span><span class="mini-btn">Не сейчас</span></div>
         </div>
       </div>
@@ -162,7 +162,7 @@
   <section id="features" class="section features" aria-labelledby="features-title">
     <header class="section-head reveal">
       <p class="section-kicker">Возможности</p>
-      <h2 id="features-title">Всё, что нужно в работе, — по задачам</h2>
+      <h2 id="features-title">Сметы и учёт работ</h2>
     </header>
     <div class="feature-groups">
       <article class="feature-group reveal">
@@ -204,8 +204,8 @@
   <section id="pricing" class="section pricing" aria-labelledby="pricing-title">
     <header class="section-head reveal">
       <p class="section-kicker">Тарифы</p>
-      <h2 id="pricing-title">Начните бесплатно, платите за рост</h2>
-      <p>Оплата разовая, без автопродления: доступ на 31 или 366 дней. Платёж проходит на защищённой странице ЮKassa.</p>
+      <h2 id="pricing-title">Выберите тариф под свои задачи</h2>
+      <p>Разовая оплата за 31 или 366 дней через ЮKassa. Автопродления и автоматических списаний нет.</p>
     </header>
     <div class="pricing-period reveal" role="group" aria-label="Период оплаты">
       <button type="button" class="btn" data-period="month" aria-pressed="true">Месяц</button>
@@ -219,10 +219,10 @@
         <caption>Сравнение тарифов</caption>
         <thead><tr><th scope="col">Возможность</th><th scope="col">Старт</th><th scope="col">PRO Solo</th><th scope="col">PRO Плюс</th><th scope="col">TEAM</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Сметы</th><td>10</td><td>Без ограничений</td><td>Без ограничений</td><td>Без ограничений</td></tr>
+          <tr><th scope="row">Сметы</th><td>3 при регистрации</td><td>Без ограничений</td><td>Без ограничений</td><td>Без ограничений</td></tr>
           <tr><th scope="row">Согласование по ссылке</th><td>Да</td><td>Да</td><td>Да</td><td>Да</td></tr>
           <tr><th scope="row">PDF и Excel без отметки Сметры</th><td>—</td><td>Да</td><td>Да</td><td>Да</td></tr>
-          <tr><th scope="row">Сообщения ИИ-ассистенту в месяц</th><td>3</td><td>100</td><td>100</td><td>100 на участника</td></tr>
+          <tr><th scope="row">Токены ИИ-ассистента в месяц</th><td>60 тыс.</td><td>2 млн</td><td>4 млн</td><td>8 млн на команду</td></tr>
           <tr><th scope="row">Поступления, расходы, кассовый разрыв</th><td>—</td><td>—</td><td>Да</td><td>Да</td></tr>
           <tr><th scope="row">Материалы и мониторинг цен</th><td>—</td><td>—</td><td>Да</td><td>Да</td></tr>
           <tr><th scope="row">Хранилище файлов</th><td>—</td><td data-storage="pro_solo">500 МБ</td><td data-storage="pro_plus">5 ГБ</td><td data-storage="team">5 ГБ</td></tr>
@@ -240,19 +240,19 @@
     </header>
     <div class="faq-list reveal">
       <details><summary>Нужно ли клиенту регистрироваться?</summary><p>Нет. Клиент открывает смету по ссылке, видит позиции, условия и итог, может согласовать, попросить изменения или задать вопрос.</p></details>
-      <details><summary>Кто считает итоговую сумму — ИИ?</summary><p>Нет. Ассистент предлагает позиции и параметры, а количество, стоимость, скидки, налоги и итог рассчитывает сервер Сметры. Изменения в смете сохраняются только после вашего подтверждения.</p></details>
-      <details><summary>Что будет после 3 бесплатные сметы при регистрации?</summary><p>Созданные сметы остаются доступны для редактирования. Для новых смет после стартового лимита понадобится PRO Solo или выше. Ранее зарегистрированные пользователи сохраняют прежний лимит.</p></details>
-      <details><summary>Как оплачивается тариф?</summary><p>Разовым платежом на сайте через ЮKassa — на 31 или 366 дней. Автоматического продления и списаний нет. Данные карты Сметра не получает.</p></details>
-      <details><summary>Можно ли работать с телефона?</summary><p>Да. Сайт адаптирован под телефон, а Android-приложение использует тот же аккаунт: сметы, клиенты и доступ к тарифу общие.</p></details>
+      <details><summary>Как считается итог сметы?</summary><p>Ассистент предлагает позиции, а Сметра рассчитывает стоимость по указанным ценам и объёмам с учётом скидок и налогов. Проверьте исходные данные перед отправкой клиенту. Правки ассистента сохраняются после вашего подтверждения.</p></details>
+      <details><summary>Что будет после трёх бесплатных смет?</summary><p>Созданные сметы можно редактировать без расхода лимита. Для новых смет после стартового лимита понадобится PRO Solo или выше. Для части ранее зарегистрированных пользователей сохранён лимит 10 смет. Остаток доступен в кабинете.</p></details>
+      <details><summary>Как оплачивается тариф?</summary><p>Разовым платежом на сайте через ЮKassa за 31 или 366 дней. Автоматического продления и списаний нет. Данные карты Сметра не получает.</p></details>
+      <details><summary>Можно ли работать с телефона?</summary><p>Да. Сайт работает на телефоне. В Android-приложении тот же аккаунт, сметы и клиенты.</p></details>
       <details><summary>Можно ли перенести свои расценки и выгрузить данные?</summary><p>Расценки импортируются из таблицы Excel или CSV. Все данные пространства можно скачать одним ZIP-архивом в настройках.</p></details>
-      <details><summary>Зачем «сметре.» доступ к Google Drive?</summary><p>Только по вашему разрешению: чтобы показать папки и после вашего выбора найти в них рабочие документы — прайс-листы, счета и сметы. Доступ к Google Диску предоставляется отдельно от входа через Google. Сервис запрашивает чтение, не редактирует и не удаляет ваши файлы. Для распознавания документов может применяться сторонний ИИ-провайдер; подробности указаны в <a href="/privacy#google-drive">политике конфиденциальности</a>.</p></details>
+      <details><summary>Зачем Сметре доступ к Google Drive?</summary><p>Чтобы найти прайс-листы, счета и сметы в выбранных вами папках. Вы отдельно разрешаете доступ на чтение. Вход через Google такого доступа не даёт. Сметра не меняет и не удаляет файлы на Google Диске. Для распознавания документов может использоваться сторонний ИИ-провайдер. Подробности есть в <a href="/privacy#google-drive">политике конфиденциальности</a>.</p></details>
     </div>
   </section>
 
   <section class="section cta" aria-labelledby="cta-title">
     <div class="cta-inner reveal">
-      <h2 id="cta-title">Первая смета — сегодня</h2>
-      <p>Регистрация занимает минуту. 3 сметы бесплатно, редактирование без ограничений и без банковской карты.</p>
+      <h2 id="cta-title">Создайте первую смету</h2>
+      <p>3 сметы бесплатно при регистрации. Созданные сметы можно редактировать без расхода лимита. Банковская карта не нужна.</p>
       <div class="hero-actions"><a class="btn large primary" href="/app?register=1">Создать смету бесплатно</a><a class="btn large ghost" href="/app">У меня есть аккаунт</a></div>
     </div>
   </section>

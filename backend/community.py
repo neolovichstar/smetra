@@ -576,11 +576,14 @@ SUPPORT_PRODUCT_GUIDE = (
 
 
 def _support_prompt(user, user_stats):
+    from backend.assistant_style import WRITING_STYLE
+
     return (
-        "Ты — специалист поддержки сервиса «Сметра» (сметы для ремонта и отделки). "
-        "Отвечай по-русски, тепло и по делу, как живой человек в мессенджере: 1–5 коротких "
-        "предложений или короткий нумерованный список шагов. Без канцелярита, рекламы и эмодзи. "
-        "Называй разделы и кнопки точно так, как в интерфейсе, в «кавычках». "
+        "Ты ИИ-помощник поддержки Сметры, сервиса смет для ремонта и отделки. "
+        "Отвечай по делу коротким абзацем. Если нужно выполнить несколько действий, дай нумерованные шаги. "
+        "Называй разделы и кнопки точно так, как в интерфейсе. "
+        + WRITING_STYLE
+        + " "
         + SUPPORT_PRODUCT_GUIDE
         + "Тарифы (цены от сервера, не меняй их): " + _plan_lines() + ". "
         "Если не хватает данных, задай один уточняющий вопрос. Текущий тариф, оплаты, команду и "
@@ -716,8 +719,7 @@ def _support_ai_reply(user, user_stats, history, message):
         }
     if not api_key:
         return {
-            "reply": "Не хочу гадать и вводить вас в заблуждение: автоматическая поддержка сейчас недоступна. "
-                     "Я передал обращение сотруднику — ответ придёт в этот чат.",
+            "reply": "ИИ-помощник сейчас недоступен. Обращение передано сотруднику поддержки. Ответ придёт в этот чат.",
             "escalate": True, "reason": "support_ai_unavailable",
         }
     messages = [{"role": "system", "content": _support_prompt(user, user_stats)}]
@@ -750,8 +752,7 @@ def _support_ai_reply(user, user_stats, history, message):
                 "reason": reason or ("user_requested_human" if human_requested else "ai_handoff")}
     except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError, TypeError, ApiError):
         return {
-            "reply": "Пока не получается надёжно ответить автоматически. "
-                     "Я передал ваше обращение специалисту — ответ придёт в этот чат.",
+            "reply": "Не удалось получить ответ ИИ-помощника. Обращение передано сотруднику поддержки. Ответ придёт в этот чат.",
             "escalate": True, "reason": "support_ai_error",
         }
 
@@ -1007,7 +1008,7 @@ def _support_route(handler, method, path, query, con, user):
         subject = _text(data.get("subject") or "Новый вопрос", 120, required=True)
         conversation_id = _new_conversation(con, "support", subject, user["id"])
         _add_member(con, conversation_id, user["id"], "customer")
-        _add_message(con, conversation_id, None, "system", "Обращение создано. Опишите вопрос — ассистент поддержки ответит здесь.")
+        _add_message(con, conversation_id, None, "system", "Обращение создано. Напишите вопрос в этот чат.")
         row = con.execute("SELECT * FROM chat_conversations WHERE id=?", (conversation_id,)).fetchone()
         return handler.send_json(201, {"thread": {
             "id": row["id"], "subject": row["subject"], "status": row["status"],

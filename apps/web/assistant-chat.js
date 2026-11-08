@@ -750,17 +750,27 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   // Clarifying choices belong to the assistant's message, never in a
   // floating composer banner. Confirmations stay in their proposal cards.
-  const showQuestion=(question,answerItem)=>{
+  let lastQuestionReply=null;
+  const showQuestion=(question,answerItem,replyPrompt)=>{
     if(!active()||!answerItem?.isConnected||!question||typeof question.question!=='string')return;
     const options=Array.isArray(question.options)?question.options.filter(value=>typeof value==='string'&&value.trim()).slice(0,4):[];
     if(options.length<2)return;
+    const signature=JSON.stringify([question.question.trim(),options.map(value=>value.trim())]);
+    // A repeated model response must not ask the user to select the same
+    // answer again. A later, unrelated request can still ask this question.
+    if(lastQuestionReply?.signature===signature&&lastQuestionReply.answer===replyPrompt)return;
     const section=document.createElement('section');section.className='assistant-question-inline';
     const title=document.createElement('strong');title.textContent=question.question.trim();section.append(title);
     const choices=document.createElement('div');choices.className='assistant-question-choice';
     const reply=value=>{
       if(working||!active()||!section.isConnected||!value.trim())return;
+      if(quota.remaining<(quota.unit==='tokens'?1500:1)){showTokensDialog();return}
+      if(threadBusy||attachingCount||fileBlocking||!data.available||backgroundEnabled===false)return;
+      if((input.value.trim()&&input.value.trim()!==value.trim())||pendingPhotos.length){
+        status.textContent='В поле есть черновик. Отправьте его или очистите поле перед выбором ответа.';input.focus();return;
+      }
+      lastQuestionReply={signature,answer:value.trim()};
       input.value=value.trim();input.dispatchEvent(new Event('input',{bubbles:true}));
-      section.remove();
       document.querySelector('#assistant-form')?.requestSubmit();
     };
     for(const value of options){
@@ -1249,6 +1259,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
       const accepted=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key,...scopeHeaders},body});
       currentJobId=accepted.job.id;queued=true;jobRequest=null;bindCreatedConversation(accepted.job);observedChatJobs.add(currentJobId);
+      if(active())messages.querySelectorAll('.assistant-question-inline').forEach(node=>node.remove());
       if(cancelRequested){
         await api('/assistant/jobs/'+encodeURIComponent(currentJobId),{method:'DELETE',headers:{...scopeHeaders}});
         throw new DOMException('Ответ остановлен','AbortError');
@@ -1291,7 +1302,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0],assistantMessage.item);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0],assistantMessage.item,prompt);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='background'){setActivity('Выполняю запрос…');status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error||'Не удалось завершить ответ')}
       };

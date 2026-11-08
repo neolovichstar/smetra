@@ -4,6 +4,7 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no});return {promise,resolve,reject}};
 async function setup(existing=false){
  const dom=new JSDOM('<body><main id="content"></main></body>',{url:'https://smetra.test/app',runScripts:'dangerously',pretendToBeVisual:true}),w=dom.window,notices=[],posts=[];
+ let poll;w.setInterval=callback=>{poll=callback;return 1};w.clearInterval=()=>{};
  w.matchMedia=()=>({matches:false});
  const initial=w.document.createElement('script');initial.textContent="let user={id:'fixture-user'},tab='support';const view=html=>document.querySelector('#content').innerHTML=html;";w.document.head.append(initial);
  w.notify=text=>notices.push(text);
@@ -18,7 +19,7 @@ async function setup(existing=false){
  for(const file of ['ui/icons.js','ui/chat-kit.js','support-chat.js']){const el=w.document.createElement('script');el.textContent=fs.readFileSync('apps/web/'+file,'utf8');w.document.head.append(el)}
  await w.SmetraSupport.render();
  if(existing){w.document.querySelector('[data-thread]').click();await tick()}
- return {w,doc:w.document,task,posts,notices,close:()=>{w.SmetraSupport.stop();dom.window.close()}};
+ return {w,doc:w.document,task,posts,notices,poll:()=>poll?.(),close:()=>{w.SmetraSupport.stop();dom.window.close()}};
 }
 (async()=>{
  const failures=[];
@@ -58,5 +59,39 @@ async function setup(existing=false){
   task.reject(Error('Network unavailable'));await tick();assert.equal(input.value,'Другой вопрос');
   assert.doesNotMatch(doc.querySelector('#support-messages').textContent,/Первый вопрос/);
  });
+ await test('late loading failure cannot replace a new support conversation',async({w,doc})=>{
+  const response=deferred(),original=w.api;
+  w.api=path=>path.endsWith('/messages')?response.promise:original(path);
+  doc.querySelector('[data-thread]').click();
+  doc.querySelector('#support-new').click();
+  response.reject(Error('Old ticket failed'));await tick();await tick();
+  assert.ok(doc.querySelector('.tg-welcome'));
+  assert.equal(doc.querySelector('.tg-error'),null);
+ },true);
+ await test('reopening the same ticket ignores its older loading response',async({w,doc})=>{
+  const response=deferred(),original=w.api;let reads=0;
+  w.api=path=>path.endsWith('/messages')&&++reads===1?response.promise:original(path);
+  doc.querySelector('[data-thread]').click();
+  doc.querySelector('#support-new').click();doc.querySelector('[data-thread]').click();await tick();
+  response.resolve({messages:[{id:'old',body:'Outdated response',sender_type:'assistant',created_at:1}]});await tick();await tick();
+  assert.match(doc.querySelector('#support-messages').textContent,/Ответ поддержки/);
+  assert.doesNotMatch(doc.querySelector('#support-messages').textContent,/Outdated response/);
+ },true);
+ await test('handoff confirmation cannot target a ticket after switching conversations',async({w,doc,posts})=>{
+  const confirmation=deferred();w.SmetraDialog={confirm:()=>confirmation.promise};
+  doc.querySelector('#support-handoff').click();doc.querySelector('#support-new').click();
+  confirmation.resolve(true);await tick();await tick();
+  assert.equal(posts.length,0,'No request for the previously selected ticket');
+  assert.equal(doc.querySelector('#support-title').textContent,'Поддержка Сметры');
+ },true);
+ await test('polling preserves reading position and follows new messages only near the bottom',async({w,doc,poll})=>{
+  const log=doc.querySelector('#support-messages');let count=1;
+  Object.defineProperties(log,{scrollHeight:{get:()=>1000},clientHeight:{get:()=>200}});
+  w.api=async()=>({messages:Array.from({length:++count},(_,index)=>({id:'m'+index,body:'Message '+index,sender_type:'assistant',created_at:index}))});
+  log.scrollTop=120;poll();await tick();await tick();
+  assert.equal(log.scrollTop,120,'Do not jump while reading older messages');
+  log.scrollTop=790;poll();await tick();await tick();
+  assert.equal(log.scrollTop,1000,'Follow replies when already near the bottom');
+ },true);
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exitCode=1});
