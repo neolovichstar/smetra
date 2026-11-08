@@ -860,27 +860,28 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       await window.SmetraNavigateTo('calculators');
     },
   };
-  const explicitNavigation=/^\s*(?:пожалуйста[, ]*)?(?:открой|покажи|перейди|переключись|отобрази|разверни)\b/iu;
+  const explicitNavigation=/^\s*(?:пожалуйста\s*,?\s*)?(?:открой|покажи|перейди|переключись|отобрази|разверни)(?=\s|$|[,!.?:])/iu;
   const sectionFromRequest=text=>{
     if(!explicitNavigation.test(text||''))return null;
     const sections=[
-      ['billing',/\b(?:подписк\w*|тариф\w*|оплат\w*|биллинг)\b/iu],
-      ['settings',/\bнастройк\w*/iu],
-      ['profile',/\bпрофил\w*/iu],
-      ['inbox',/\bполученн\w*\s+смет\w*/iu],
-      ['construction',/\bстроительств\w*|\bобъект\w*/iu],
-      ['quotes',/\bсмет\w*/iu],
-      ['files',/\bхранилищ\w*|\bфайл\w*/iu],
-      ['calendar',/\bкалендар\w*/iu],
-      ['tasks',/\bзадач\w*/iu],
-      ['projects',/\bзаказ\w*/iu],
-      ['clients',/\bклиент\w*/iu],
-      ['finance',/\bфинанс\w*/iu],
-      ['documents',/\bдокумент\w*/iu],
-      ['support',/\bподдержк\w*/iu],
-      ['calculators',/\bкалькулятор\w*/iu],
+      ['billing',/(?:подписк[а-яё]*|тариф[а-яё]*|оплат[а-яё]*|биллинг)/iu],
+      ['settings',/настройк[а-яё]*/iu],
+      ['profile',/профил[а-яё]*/iu],
+      ['inbox',/полученн[а-яё]*\s+смет[а-яё]*/iu],
+      ['construction',/(?:строительств[а-яё]*|объект[а-яё]*)/iu],
+      ['quotes',/смет[а-яё]*/iu],
+      ['files',/(?:хранилищ[а-яё]*|файл[а-яё]*)/iu],
+      ['calendar',/календар[а-яё]*/iu],
+      ['tasks',/задач[а-яё]*/iu],
+      ['projects',/заказ[а-яё]*/iu],
+      ['clients',/клиент[а-яё]*/iu],
+      ['finance',/финанс[а-яё]*/iu],
+      ['documents',/документ[а-яё]*/iu],
+      ['support',/поддержк[а-яё]*/iu],
+      ['calculators',/калькулятор[а-яё]*/iu],
     ];
-    const matches=sections.filter(([,pattern])=>pattern.test(text));
+    const matches=sections.filter(([,pattern])=>pattern.test(text))
+      .filter(([section])=>section!=='quotes'||!(/полученн[а-яё]*\s+смет[а-яё]*/iu.test(text)));
     // Never guess when an instruction mentions multiple different pages.
     return matches.length===1?{action:'open_section',section:matches[0][0]}:null;
   };
