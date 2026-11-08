@@ -184,7 +184,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(tab==='quotes')await window.Workspace.editor(quote);
     }catch(error){notify(error.message)}
   };
-  const quotePreview=window.SmetraQuoteVisuals?.mountAssistant({
+  const mountQuotePreview=()=>window.SmetraQuoteVisuals?.mountAssistant({
     host:assistantStudioRoot,
     getUserId:()=>user?.id,
     fetchQuote:id=>api('/quotes/'+encodeURIComponent(id)),
@@ -192,6 +192,20 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     onToggle:open=>{const button=document.querySelector('#assistant-quotes');if(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('is-active',open)}},
     onOpenEditor:openQuoteEditor,
   });
+  let quotePreview=mountQuotePreview(),quotePreviewLoading=null;
+  const ensureQuotePreview=async()=>{
+    if(quotePreview)return quotePreview;
+    if(!quotePreviewLoading){
+      quotePreviewLoading=(async()=>{
+        if(!window.SmetraLoadFeature)return null;
+        await window.SmetraLoadFeature('quoteVisuals');
+        if(!active()||!assistantStudioRoot.isConnected)return null;
+        quotePreview=mountQuotePreview();
+        return quotePreview;
+      })().finally(()=>{quotePreviewLoading=null});
+    }
+    return quotePreviewLoading;
+  };
   const syncAssistantConversationState=()=>{
     idleGreeting?.update();
     if(!assistantStudioRoot||!messages?.isConnected)return;
@@ -494,8 +508,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     sessionStorage.removeItem('smetra.assistant.conversation');
     if(active())await window.SmetraAssistant();
   });
-  document.querySelector('#assistant-quotes').onclick=()=>{if(!quotePreview){notify('Предпросмотр смет недоступен');return}closeHistoryPanel();if(!quotePreview.visible&&!quotePreview.currentId&&context?.entity==='quotes'&&context.id)quotePreview.load(context.id).catch(()=>{});else quotePreview.toggle()};
-  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
+  document.querySelector('#assistant-quotes').onclick=async()=>{
+    let preview;
+    try{preview=await ensureQuotePreview()}catch{notify('Не удалось загрузить предпросмотр смет. Повторите попытку.');return}
+    if(!preview||!active())return;
+    closeHistoryPanel();
+    if(!preview.visible&&!preview.currentId&&context?.entity==='quotes'&&context.id)preview.load(context.id).catch(()=>{});
+    else preview.toggle();
+  };
+  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraLoadFeature('knowledge');if(!active())return;await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
@@ -1086,6 +1107,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   renderDelivery();
   refreshJobs();
+  // Preview assets are optional for reading and sending messages. Warm them
+  // after the chat is usable; if offline, the Smetы button can retry on demand.
+  void ensureQuotePreview().catch(()=>{});
   const refreshFile=async()=>{
     clearTimeout(filePollTimer);const sequence=++filePollSeq;
     if(!fileStatus.isConnected)return;
