@@ -372,9 +372,14 @@ def tools():
             "или себестоимости. price_change_percent — сценарий изменения цены ТОЛЬКО будущих закупок "
             "от -100 до 1000 процентов; ничего не сохраняет. Неизвестные цены — null, не ноль. "
             "Заказанное не означает оплаченное; прогноз не равен расходам или прибыли. "
+            "При наличии сохранённых предложений supplier_comparison сравнивает ЦЕЛИКОВУЮ стоимость "
+            "товаров с доставкой, остатки, минимальную партию, город и срок: лучшие варианты без "
+            "партнёрских комиссий. Неполное предложение НЕ называть самым дешёвым. "
+            "needed_by — необязательная дата YYYY-MM-DD, site_city — необязательный город объекта. "
             "В ответе не более 20 групп, materials_truncated означает, что полный список доступен в объекте. "
             "Не выдумывать цены, наличие у поставщиков или нормативы расхода.",
-            {"id": text, "price_change_percent": {"type": "string"}},
+            {"id": text, "price_change_percent": {"type": "string"},
+             "needed_by": {"type": "string"}, "site_city": {"type": "string"}},
             ("id",),
         ),
         function(
@@ -894,13 +899,31 @@ def read_tool(service, name, args):
         return service.route("GET", "construction", ["objects", object_id], {}, {})[1]
     if name == "get_procurement_plan":
         object_id = string(args.get("id", ""), "ID", 80, True)
+        query = {
+            "price_change": [args.get("price_change_percent", "0")],
+            "needed_by": [args.get("needed_by", "")],
+            "site_city": [args.get("site_city", "")],
+        }
         result = service.route("GET", "construction", ["objects", object_id, "procurement-plan"],
-                               {"price_change": [args.get("price_change_percent", "0")]}, {})[1]
-        return {**result, "materials_truncated": len(result['materials']) > 20, "materials": [
-            {**{key: value for key, value in item.items() if key != 'material_ids'},
-             "notes": item['notes'][:500], "zones": item['zones'][:10]}
-            for item in result['materials'][:20]
-        ]}
+                               query, {})[1]
+        # Preserve aggregate totals, but keep sensitive, user-entered supplier
+        # quotes and long comparison lists out of the assistant context.
+        def brief(item):
+            entry = {key: value for key, value in item.items()
+                     if key not in ("material_ids", "supplier_quotes", "supplier_comparison")}
+            entry["notes"] = item["notes"][:500]
+            entry["zones"] = item["zones"][:10]
+            comp = item.get("supplier_comparison")
+            if comp:
+                entry["supplier_comparison"] = {
+                    **{key: value for key, value in comp.items()
+                       if key not in ("alternatives", "excluded")},
+                    "alternatives": comp["alternatives"][:2],
+                    "excluded": comp["excluded"][:4],
+                }
+            return entry
+        return {**result, "materials_truncated": len(result['materials']) > 20,
+                "materials": [brief(item) for item in result['materials'][:20]]}
     if name == "calculate_construction":
         fields = {key: args.get(key, 0) for key in ("length", "width", "height", "openings")}
         fields["formula"] = args.get("formula", "area")
@@ -1428,7 +1451,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         "материалы, которых нет в смете или в словах пользователя. Если пользователь отказался или просил не показывать предложения — "
         "не предлагай их снова в этом разговоре. Не навязывай покупку в ответах на вопросы, не связанные с закупкой."
     )
-    system += " Для вопросов о закупках, остатке материалов, перерасходе и сценариях удорожания используй get_procurement_plan; это расчёт по учтённым данным, не подтверждение рыночных цен или оплаты. Для строительных расчётов сначала прочитай объект и реальные замеры. Формулы проверяй через calculate_construction; не представляй предположения как измеренные данные. Создание объекта, помещения, замера, позиции и записи факта только предлагай к подтверждению."
+    system += " Для вопросов о закупках, остатке материалов, перерасходе и сценариях удорожания используй get_procurement_plan; это расчёт по учтённым данным, не подтверждение рыночных цен или оплаты. При выборе поставщика сравнивай ПОЛНУЮ стоимость закупки с доставкой, реальные заявленные остатки, минимальную партию, географию и срок: supplier_comparison из get_procurement_plan показывает вычисленные сервером варианты. НИКОГДА не сортируй варианты по партнёрской комиссии или платному статусу. Если данные о доставке, запасах или сроках отсутствуют, прямо скажи, что лучший вариант пока нельзя определить; не выдавай непроверенную цену за рыночную. Подбор двух поставщиков не учитывает скидки на общую корзину. Для строительных расчётов сначала прочитай объект и реальные замеры. Формулы проверяй через calculate_construction; не представляй предположения как измеренные данные. Создание объекта, помещения, замера, позиции и записи факта только предлагай к подтверждению."
     system += (
         " Умные формулы: когда расчёт не покрыт типовым калькулятором и пользователь просит точную формулу, "
         "используй calculate_formula: передай выражение с разрешёнными числовыми переменными. "
