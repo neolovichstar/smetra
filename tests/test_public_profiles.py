@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import venv
 from pathlib import Path
+from unittest.mock import patch
 import unittest
 import urllib.request
 import urllib.parse
@@ -157,6 +158,74 @@ class PublicProfilesTests(unittest.TestCase):
             {"content_base64": base64.b64encode(raw).decode()},
             token,
         )
+
+    def test_google_avatar_sync_updates_provider_photo_but_never_manual_choice(self):
+        from backend.public_profiles import _normalize_avatar, save_google_avatar
+
+        token, user_id = self.person("google-avatar")
+        images = []
+        for color in ("#772233", "#336677"):
+            output = io.BytesIO()
+            Image.new("RGB", (100, 80), color).save(output, "PNG")
+            images.append((output.getvalue(), _normalize_avatar(output.getvalue())))
+
+        with self.mod.db() as con:
+            self.assertTrue(save_google_avatar(con, user_id, images[0][1]))
+            first = self.mod.user_view(
+                con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone(), con
+            )["avatar_url"] if hasattr(self.mod, "user_view") else None
+            row = con.execute(
+                "SELECT source,content_hash FROM profile_avatars WHERE user_id=?", (user_id,)
+            ).fetchone()
+            self.assertEqual(row["source"], "google")
+            old_hash = row["content_hash"]
+            self.assertTrue(save_google_avatar(con, user_id, images[1][1]))
+            changed = con.execute(
+                "SELECT source,content_hash FROM profile_avatars WHERE user_id=?", (user_id,)
+            ).fetchone()
+            self.assertEqual(changed["source"], "google")
+            self.assertNotEqual(changed["content_hash"], old_hash)
+
+        code, uploaded = self.upload(token, images[0][0])
+        self.assertEqual(code, 200, uploaded)
+        manual_url = uploaded["avatar_url"]
+        with self.mod.db() as con:
+            self.assertFalse(save_google_avatar(con, user_id, images[1][1]))
+        self.assertEqual(self.call("/me", token=token)[1]["user"]["avatar_url"], manual_url)
+
+        self.assertEqual(self.call("/profile/avatar", "DELETE", token=token)[0], 200)
+        with self.mod.db() as con:
+            self.assertFalse(save_google_avatar(con, user_id, images[1][1]))
+            row = con.execute(
+                "SELECT source,content_hash FROM profile_avatars WHERE user_id=?", (user_id,)
+            ).fetchone()
+            self.assertEqual((row["source"], row["content_hash"]), ("manual", ""))
+        self.assertEqual(self.call("/me", token=token)[1]["user"]["avatar_url"], "")
+
+    def test_google_avatar_fetch_enforces_trusted_host_and_mime_type(self):
+        from backend.public_profiles import google_avatar_photo, _NoAvatarRedirect
+
+        with patch("backend.public_profiles.urllib.request.build_opener") as opener:
+            for url in (
+                "http://lh3.googleusercontent.com/a/photo",
+                "https://lh3.googleusercontent.com.evil.test/a/photo",
+                "https://127.0.0.1/photo",
+                "https://lh3.googleusercontent.com:8080/a/photo",
+                "https://evil.test/photo",
+            ):
+                self.assertIsNone(google_avatar_photo(url))
+            opener.assert_not_called()
+
+            content = io.BytesIO()
+            Image.new("RGB", (96, 96), "#557799").save(content, "PNG")
+            response = io.BytesIO(content.getvalue())
+            response.headers = {"Content-Type": "image/png"}
+            opener.return_value.open.return_value = response
+            image = google_avatar_photo("https://lh3.googleusercontent.com/a/photo")
+            self.assertIsNotNone(image)
+            self.assertEqual(image[:4], b"RIFF")
+            self.assertEqual(image[8:12], b"WEBP")
+            self.assertIsInstance(opener.call_args.args[0], _NoAvatarRedirect)
 
     def test_avatar_reencode_delete_and_provider_does_not_restore(self):
         token, uid = self.person()
