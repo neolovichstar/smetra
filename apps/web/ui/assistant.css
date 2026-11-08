@@ -683,10 +683,8 @@
 .memory-overview-window{height:100%}
 .memory-overview-window .knowledge-window-head{flex:none}
 .knowledge-window-body.memory-overview{display:block;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px 30px}
-.memory-facts{display:flex;flex-direction:column;gap:0;max-width:100%;margin:0 auto}
-.memory-fact{padding:18px 2px 20px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
-.memory-fact:first-child{padding-top:4px}
-.memory-fact:last-child{border-bottom:none}
+.memory-facts{display:flex;flex-direction:column;gap:16px;max-width:100%;margin:0 auto}
+.memory-fact{margin:0;padding:0;border:0;overflow-wrap:anywhere}
 .memory-fact h3{margin:0 0 8px;color:var(--text);font-size:var(--fs-14);font-weight:600}
 .memory-fact p{margin:0;white-space:pre-wrap;color:var(--text-2);font-size:var(--fs-14);line-height:1.65}
 .memory-overview .knowledge-empty{min-height:100%;justify-content:center;max-width:480px}
