@@ -54,6 +54,7 @@ const assert = require('node:assert/strict');
   await until("document.querySelector('.construction-object')");
   await evaluate("document.querySelector('.construction-object').click()");
   await until("document.querySelectorAll('.construction-price-select').length===2");
+  await evaluate("(()=>{const section=document.querySelector('#construction-prices').closest('details[data-mobile-disclosure]');if(section&&!section.open)section.querySelector(':scope > summary').click()})()");
   assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'), true);
   await evaluate("document.querySelector('#construction-price-all').click();document.querySelector('#construction-prices [type=submit]').click()");
   await until("document.querySelector('#construction-price-apply')");

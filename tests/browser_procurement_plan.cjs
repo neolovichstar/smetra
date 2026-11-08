@@ -63,6 +63,7 @@ const fs = require('node:fs');
   await until(`document.querySelector('.construction-object[data-id="${objectId}"]')`);
   await evaluate(`document.querySelector('.construction-object[data-id="${objectId}"]').click()`);
   await until("document.querySelectorAll('.procurement-material').length===2");
+  await evaluate("(()=>{const section=document.querySelector('#construction-procurement-plan').closest('details[data-mobile-disclosure]');if(section&&!section.open)section.querySelector(':scope > summary').click()})()");
   assert.match(await evaluate("document.querySelector('.procurement-summary').innerText"), /2 групп материалов из 3 позиций/);
   assert.match(await evaluate("document.querySelector('.procurement-material').innerText"), /Докупить 6 л/);
   assert.equal(await evaluate("document.querySelector('.procurement-material header strong').textContent"), 'Краска <strong>белая</strong>');

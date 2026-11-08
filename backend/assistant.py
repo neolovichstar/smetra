@@ -1772,9 +1772,10 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             )
         if conversation_id:
             # Conditional update protects user-renamed titles and races.
+            # PostgreSQL needs a type for the nullable, standalone title parameter.
             row = service.con.execute(
                 "UPDATE assistant_conversations SET updated_at=?, "
-                "title=CASE WHEN title='Новый диалог' AND ? IS NOT NULL "
+                "title=CASE WHEN title='Новый диалог' AND CAST(? AS TEXT) IS NOT NULL "
                 "THEN ? ELSE title END "
                 "WHERE id=? AND workspace_id=? AND user_id=? RETURNING title",
                 (stamp(), suggested_title, suggested_title, conversation_id, service.wid, service.user["id"]),

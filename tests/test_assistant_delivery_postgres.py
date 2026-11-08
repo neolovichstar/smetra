@@ -6,6 +6,7 @@ import secrets
 import time
 import unittest
 import uuid
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -84,6 +85,75 @@ class DurableChatPostgresTests(unittest.TestCase):
         self.assertEqual(row["status"], "completed")
         self.assertEqual(json.loads(row["result"])["answer"], "Сохранено один раз")
         self.assertEqual(self.admin.execute("SELECT count(*) FROM assistant_messages WHERE workspace_id=?", (self.wid,)).fetchone()[0], 1)
+
+    def test_real_chat_saves_first_and_later_turns_and_preserves_renamed_title(self):
+        """Exercise the real answer transaction, including PostgreSQL title typing."""
+        conversation_id = str(uuid.uuid4())
+        moment = int(time.time())
+        self.admin.execute(
+            "INSERT INTO assistant_conversations(id,workspace_id,user_id,title,created_at,updated_at) "
+            "VALUES(?,?,?,'Новый диалог',?,?)",
+            (conversation_id, self.wid, self.uid, moment, moment),
+        )
+
+        def reply(messages, on_delta):
+            on_delta("Сохранённый ответ")
+            return {"content": "Сохранённый ответ", "tool_calls": [],
+                    "_usage": {"prompt_tokens": 10, "completion_tokens": 5}}
+
+        # Stub the external model and unrelated profile/billing schemas only.
+        # Context history, queue completion, message/title SQL and RLS stay real.
+        with ExitStack() as mocks:
+            provider = mocks.enter_context(patch("backend.assistant.query_model_stream", side_effect=reply))
+            title = mocks.enter_context(patch("backend.chat_titles.generate_title", return_value="Смета кухни"))
+            mocks.enter_context(patch("backend.assistant.assistant_model", return_value=("fixture-model", False)))
+            mocks.enter_context(patch("backend.profile_memory.assistant_context", return_value=""))
+            mocks.enter_context(patch("backend.assistant_recall.automatic_history_context", return_value=""))
+            mocks.enter_context(patch("backend.ai_tokens.charge", return_value=15))
+            mocks.enter_context(patch("backend.assistant.public_quota", return_value={"remaining": 100}))
+            mocks.enter_context(patch("backend.redis_infra.acquire_lock", side_effect=lambda *args, **kwargs: Lease(None, "", "")))
+            for index, expected_title in enumerate(("Смета кухни", "Смета кухни", "Мой проект")):
+                with self.subTest(turn=index):
+                    if index == 2:
+                        self.admin.execute("UPDATE assistant_conversations SET title=? WHERE id=?",
+                                           (expected_title, conversation_id))
+                    prompt = f"Вопрос {index + 1}"
+                    job_id = self.job if index == 0 else str(uuid.uuid4())
+                    if index == 0:
+                        self.admin.execute("UPDATE assistant_jobs SET conversation_id=?,prompt=? WHERE id=?",
+                                           (conversation_id, prompt, job_id))
+                    else:
+                        self.admin.execute(
+                            "INSERT INTO assistant_jobs(id,workspace_id,user_id,session_hash,request_key,request_hash,"
+                            "prompt,quota_key,conversation_id,next_attempt_at,created_at,updated_at) "
+                            "VALUES(?,?,?,?,?,?,?,'fixture',?,0,?,?)",
+                            (job_id, self.wid, self.uid, self.session, secrets.token_hex(16), "fixture",
+                             prompt, conversation_id, moment, moment),
+                        )
+                    service, handler = self.service()
+                    DurableChatStream(service, job_id).write(handler)
+                    job = self.admin.execute("SELECT status,result FROM assistant_jobs WHERE id=?", (job_id,)).fetchone()
+                    self.assertEqual(job["status"], "completed")
+                    self.assertEqual(json.loads(job["result"])["answer"], "Сохранённый ответ")
+                    self.assertIn(b"event: done", handler.wfile.getvalue())
+                    self.assertIsNone(service.runtime_connection)
+
+                    # A fresh scoped request must read the saved messages/title;
+                    # reconnecting to the job must not generate or save twice.
+                    fresh, replay_handler = self.service()
+                    rows = fresh.con.execute(
+                        "SELECT role,content FROM assistant_messages WHERE conversation_id=? ORDER BY created_at,id",
+                        (conversation_id,),
+                    ).fetchall()
+                    self.assertEqual([(row["role"], row["content"]) for row in rows],
+                                     [(role, content) for turn in range(index + 1)
+                                      for role, content in (("user", f"Вопрос {turn + 1}"), ("assistant", "Сохранённый ответ"))])
+                    self.assertEqual(fresh.con.execute("SELECT title FROM assistant_conversations WHERE id=?",
+                                                       (conversation_id,)).fetchone()["title"], expected_title)
+                    DurableChatStream(fresh, job_id).write(replay_handler)
+                    self.assertIn(b"event: done", replay_handler.wfile.getvalue())
+                    self.assertEqual(provider.call_count, index + 1)
+            title.assert_called_once()
 
     def test_revoked_membership_cannot_commit_a_pending_answer(self):
         def revoked(service, prompt, **callbacks):
