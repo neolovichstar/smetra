@@ -99,6 +99,21 @@ def build_partner_bundle():
 
 
 def build():
+    # Public legal pages must have both a static document and a production route.
+    # Catch broken /disclaimer and /refund links at build time rather than in production.
+    rewrites = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))["rewrites"]
+    for route, filename in {
+        "/terms": "terms.html",
+        "/privacy": "privacy.html",
+        "/contacts": "contacts.html",
+        "/disclaimer": "disclaimer.html",
+        "/refund": "refund.html",
+    }.items():
+        matches = [entry for entry in rewrites if entry.get("source") == route]
+        if len(matches) != 1 or matches[0].get("destination") != "/" + filename:
+            raise RuntimeError(f"Missing or incorrect legal route: {route}")
+        if not (WEB / filename).is_file():
+            raise RuntimeError(f"Missing legal document: {filename}")
     for source in WEB.glob("*.js"):
         subprocess.run(["node", "--check", str(source)], check=True)
     for source in WEB.glob("*.html"):
