@@ -48,6 +48,14 @@
       "destination": "/terms.html"
     },
     {
+      "source": "/disclaimer",
+      "destination": "/disclaimer.html"
+    },
+    {
+      "source": "/refund",
+      "destination": "/refund.html"
+    },
+    {
       "source": "/contacts",
       "destination": "/contacts.html"
     },
