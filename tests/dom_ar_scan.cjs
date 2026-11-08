@@ -41,6 +41,20 @@ async function setup({capture,native}={}){
   const writes=calls.filter(c=>c.options.method==='POST');assert.deepEqual(writes.map(c=>c.path),['/construction/objects/object/scan/preview','/construction/objects/object/scan/import']);assert.equal(JSON.parse(writes[1].options.body).rooms[0].source,'manual');assert.equal(JSON.parse(writes[1].options.body).review_confirmed,true);assert.equal(d.querySelector('[data-ar-save]').hidden,true);
   let opened;const w=d.defaultView;w.SmetraLoadFeature=async()=>{};w.SmetraConstruction={openObject:async id=>{opened=id}};
   d.querySelector('[data-ar-open-object]').click();await tick();assert.equal(opened,'object','Open the exact measured object');
+  d.querySelector('[data-ar-review-close]').click();d.querySelector('[data-ar-manual]').click();await tick();await tick();
+  assert.equal(d.querySelector('[data-ar-save]').hidden,false,'A new room can be saved after an earlier import');
+  assert.equal(d.querySelector('[data-ar-open-object]').hidden,true,'A new review does not show the previous import result');
+  assert.equal(d.querySelector('[data-ar-confirm]').checked,false);
+ });
+ await test('a rejected import can be corrected and retried without closing the review',async({w,d,calls})=>{
+  const original=w.api;let attempts=0;
+  w.api=async(path,options)=>{if(path.endsWith('/scan/import')&&++attempts===1){const error=new Error('Площадь проёмов превышает площадь стен');error.status=400;throw error}return original(path,options)};
+  d.querySelector('[data-ar-manual]').click();await tick();await tick();
+  for(const [name,value]of Object.entries({length:'4',width:'3',height:'2.7',openings_m2:'99'}))d.querySelector('[name='+name+']').value=value;
+  d.querySelector('[data-ar-object]').value='object';d.querySelector('[data-ar-confirm]').checked=true;d.querySelector('[data-ar-form]').requestSubmit();await tick();await tick();
+  assert.match(d.querySelector('[data-ar-save-status]').textContent,/Площадь проёмов/);assert.equal(d.querySelector('[data-ar-save]').disabled,false);assert.equal(d.querySelector('[data-ar-review-close]').disabled,false);
+  d.querySelector('[name=openings_m2]').value='1';d.querySelector('[data-ar-form]').requestSubmit();await tick();await tick();
+  assert.equal(attempts,2);assert.equal(calls.filter(c=>c.path.endsWith('/scan/import')).length,1);assert.equal(d.querySelector('[data-ar-save]').hidden,true);
  });
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exitCode=1});

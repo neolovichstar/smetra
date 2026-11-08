@@ -181,7 +181,7 @@ window.SmetraARScan = (() => {
       rooms = (values || []).slice(0,12).map((r, index) => ({name: String(r.name || 'Комната '+(index+1)),unit: 'м',length: r.length || '',width: r.width || '',height: r.height || '',openings_m2: r.openings_m2 || '0',source: r.source === 'manual' ? 'manual' : 'ar'}));
       $('.ar-review').hidden = false;$('.ar-stage').inert = true;stopCamera();await endXR();if (!active()) return;
       $('[data-ar-rooms]').innerHTML = rooms.map((room, index) => `<fieldset data-ar-room="${index}"><legend>Помещение ${index+1}${room.source === 'manual' ? ' · ручной обмер' : ' · AR-обмер'}</legend><label class="ar-label">Название<input name="name" maxlength="120" required value="${esc(room.name)}"></label><div class="ar-dimensions">${[['length','Длина, м'],['width','Ширина, м'],['height','Высота, м']].map(([key,label])=>`<label class="ar-label">${label}<input name="${key}" type="number" inputmode="decimal" min="0.5" max="100" step="0.01" required value="${esc(room[key])}"></label>`).join('')}</div><label class="ar-label">Окна и двери, м²<input name="openings_m2" type="number" inputmode="decimal" min="0" step="0.01" required value="${esc(room.openings_m2)}"></label></fieldset>`).join('');
-      $('[data-ar-confirm]').checked = false;$('[data-ar-save-status]').textContent = '';$('[data-ar-save]').disabled = false;
+      $('[data-ar-confirm]').checked = false;$('[data-ar-save-status]').textContent = '';$('[data-ar-save]').disabled = false;$('[data-ar-save]').hidden = false;$('[data-ar-open-object]').hidden = true;measuredObjectId = '';
       await loadObjects();
     }
     $('[data-ar-manual]').onclick = () => showReview([{name: 'Комната 1',source: 'manual'}]);
@@ -198,8 +198,8 @@ window.SmetraARScan = (() => {
       event.preventDefault();if (saving || !active()) return;
       const selected = $('[data-ar-object]').value;if (!selected || !$('[data-ar-confirm]').checked) return;
       const measured = [...root.querySelectorAll('[data-ar-room]')].map((fieldset,index) => {const row = {...rooms[index]};for (const input of fieldset.querySelectorAll('input')) row[input.name] = input.value;return row;});
-      saving = true;$('[data-ar-save]').disabled = true;$('[data-ar-save-status]').textContent = 'Проверяю размеры…';
-      let importing = false, creating = false, uncertain = false;
+      saving = true;$('[data-ar-save]').disabled = true;$('[data-ar-review-close]').disabled = true;$('[data-ar-save-status]').textContent = 'Проверяю размеры…';
+      let importing = false, creating = false, uncertain = false, saved = false;
       try {
         let objectId = selected;
         if (selected === 'new') {if (!objectCreated) {creating = true;const result = await api('/construction/objects',{method: 'POST',body: JSON.stringify({name: $('[data-ar-object-name]').value.trim()})});objectCreated = result.object.id;creating = false;}objectId = objectCreated;}
@@ -210,13 +210,13 @@ window.SmetraARScan = (() => {
         importing = true;
         const result = await api('/construction/objects/'+encodeURIComponent(objectId)+'/scan/import',{method: 'POST',body: JSON.stringify({rooms: measured,review_confirmed: true})});
         if (!active()) return;
-        $('[data-ar-save-status]').textContent = 'Добавлено помещений: '+result.zones.length+'.';$('[data-ar-open-object]').hidden = false;$('[data-ar-save]').hidden = true;
+        saved = true;$('[data-ar-save-status]').textContent = 'Добавлено помещений: '+result.zones.length+'.';$('[data-ar-open-object]').hidden = false;$('[data-ar-save]').hidden = true;
       } catch (error) {
         if (!active()) return;
         uncertain = (importing || creating) && !error.status;
         $('[data-ar-save-status]').textContent = uncertain ? 'Не удалось подтвердить сохранение. Проверьте помещения объекта перед повторным импортом.' : error.message;
         $('[data-ar-save]').disabled = uncertain;if (uncertain) $('[data-ar-open-object]').hidden = false;
-      } finally {saving = false;if (active() && !importing && !uncertain) $('[data-ar-save]').disabled = false;}
+      } finally {saving = false;if (active()) {$('[data-ar-save]').disabled = uncertain || saved;$('[data-ar-review-close]').disabled = false;}}
     };
     if (window.SmetraShell?.available) {
       await window.SmetraShell.ready;if (!active()) return;
