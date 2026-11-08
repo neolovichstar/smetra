@@ -104,14 +104,6 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         <section class="assistant-history-panel" id="assistant-history-panel" aria-label="История диалогов">
           <div class="assistant-history-heading" id="assistant-history-heading"><span>Диалоги</span><span class="assistant-history-count">${threadIndex.items.length}</span></div>
           <div class="assistant-history-list" id="assistant-history-list" role="list" aria-label="История диалогов">
-            <div class="assistant-conversation-row assistant-conversation-general${!activeConversation?' is-active':''}" data-thread-row data-thread-id="" data-pinned="0" role="listitem"${data.messages?.length?'':' hidden'}>
-              <button class="assistant-conversation-open" type="button" data-conversation="" aria-pressed="${!activeConversation}" title="Общий диалог">
-                ${assistantIcon('chat',16)}<span class="assistant-conversation-title">Общий диалог</span>
-              </button>
-              <div class="assistant-conversation-actions">
-                <button class="assistant-conversation-icon-button assistant-conversation-delete" type="button" data-thread-delete aria-label="Удалить общий диалог" title="Удалить диалог">${assistantIcon('trash',16)}</button>
-              </div>
-            </div>
             ${threadIndex.items.map(item=>`<div class="assistant-conversation-row${item.id===activeConversation?' is-active':''}" data-thread-row data-thread-id="${escapeHtml(item.id)}" data-pinned="${item.pinned?'1':'0'}" role="listitem">
               <button class="assistant-conversation-open" type="button" data-conversation="${escapeHtml(item.id)}" aria-pressed="${item.id===activeConversation}" title="${escapeHtml(item.title)}">
                 ${assistantIcon('chat',16)}<span class="assistant-conversation-title">${escapeHtml(item.title)}</span>${item.pinned?`<span class="assistant-conversation-pinned" aria-label="Закреплён" title="Закреплён">${assistantIcon('pin',14)}</span>`:''}
@@ -135,7 +127,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             
           </div>
         </section>
-        <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Общий диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
+        <label class="visually-hidden" for="assistant-thread-select">Диалог</label><select id="assistant-thread-select" hidden><option value="">Новый диалог</option>${threadIndex.items.map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeConversation?'selected':''}>${escapeHtml(item.title)}</option>`).join('')}</select>
       </div>
     </aside>
   </section>`);
@@ -184,7 +176,6 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const syncAssistantConversationState=()=>{
     if(!assistantStudioRoot||!messages?.isConnected)return;
     const next=Boolean(messages.querySelector('.assistant-message.user'));
-    if(next&&!activeConversation)assistantStudioRoot.querySelector('.assistant-conversation-general')?.removeAttribute('hidden');
     if(next===assistantStudioRoot.classList.contains('has-conversation'))return;
     const dock=assistantStudioRoot.querySelector('.assistant-composer');
     const before=dock?.getBoundingClientRect().top;
@@ -384,7 +375,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const selectedThread=threadIndex.items.find(item=>item.id===activeConversation);
   let threadPath=activeConversation?'/assistant/conversations/'+encodeURIComponent(activeConversation):'';
   const clearLocalDraft=()=>{try{sessionStorage.removeItem(draftSlot())}catch{}};
-  document.querySelector('#assistant-thread-select').onchange=event=>{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',event.target.value);window.SmetraAssistant()};
+  document.querySelector('#assistant-thread-select').onchange=event=>{sessionStorage.removeItem('smetra.assistant.context');if(event.target.value)sessionStorage.setItem('smetra.assistant.conversation',event.target.value);else sessionStorage.removeItem('smetra.assistant.conversation');window.SmetraAssistant()};
   const toolrail=document.querySelector('.assistant-studio'),toolrailToggle=document.querySelector('#assistant-toolrail-toggle');
   const historyToggle=document.querySelector('#assistant-history-toggle');
   const closeConversationMenus=(exceptRow=null)=>{
@@ -476,7 +467,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(event.key!=='Escape')return;
     if(toolrail.classList.contains('is-history-expanded')){event.preventDefault();closeHistoryPanel();historyToggle.focus();}
   });
-  document.querySelector('#assistant-new-thread').onclick=event=>threadAction(event.currentTarget,async()=>{const created=await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Новый диалог',...(context?{context_entity:context.entity,context_id:context.id}:{})})});if(!active())return;sessionStorage.setItem('smetra.assistant.conversation',created.conversation.id);await window.SmetraAssistant()});
+  document.querySelector('#assistant-new-thread').onclick=event=>threadAction(event.currentTarget,async()=>{
+    // A blank composer is not a stored conversation. The first successful
+    // message submission will create the durable thread on the server.
+    clearLocalDraft();
+    sessionStorage.removeItem('smetra.assistant.context');
+    sessionStorage.removeItem('smetra.assistant.conversation');
+    if(active())await window.SmetraAssistant();
+  });
   document.querySelector('#assistant-quotes').onclick=()=>{if(!quotePreview){notify('Предпросмотр смет недоступен');return}closeHistoryPanel();if(!quotePreview.visible&&!quotePreview.currentId&&context?.entity==='quotes'&&context.id)quotePreview.load(context.id).catch(()=>{});else quotePreview.toggle()};
   document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
@@ -948,6 +946,28 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     button.onclick=async()=>{button.disabled=true;try{await api('/assistant/undo',{method:'POST',body:JSON.stringify({id:action.id})});item.replaceChildren(title);title.textContent='Изменение отменено · '+action.summary;notify('Изменение отменено')}catch(error){button.disabled=false;notify(error.message)}};
   };
   renderQuota(quota);
+  const bindCreatedConversation=job=>{
+    const id=typeof job?.conversation_id==='string'?job.conversation_id:'';
+    if(!id||!active()||activeConversation===id)return;
+    if(activeConversation)return; // Never switch an existing conversation from a late response.
+    activeConversation=id;
+    threadPath='/assistant/conversations/'+encodeURIComponent(id);
+    sessionStorage.setItem('smetra.assistant.conversation',id);
+    if(!threadIndex.items.some(item=>item.id===id)){
+      const item={id,title:'Новый диалог',pinned:0};
+      threadIndex.items.unshift(item);
+      const row=document.createElement('div');row.className='assistant-conversation-row is-active';row.dataset.threadRow='';row.dataset.threadId=id;row.dataset.pinned='0';row.setAttribute('role','listitem');
+      const button=document.createElement('button');button.className='assistant-conversation-open';button.type='button';button.dataset.conversation=id;button.title='Новый диалог';button.setAttribute('aria-pressed','true');
+      const label=document.createElement('span');label.className='assistant-conversation-title';label.textContent=item.title;
+      button.innerHTML=assistantIcon('chat',16);button.append(label);button.onclick=()=>{sessionStorage.setItem('smetra.assistant.conversation',id);window.SmetraAssistant()};
+      row.append(button);
+      document.querySelector('#assistant-history-list')?.prepend(row);
+      const count=document.querySelector('.assistant-history-count');if(count)count.textContent=String(threadIndex.items.length);
+      const option=document.createElement('option');option.value=id;option.textContent=item.title;
+      document.querySelector('#assistant-thread-select')?.append(option);
+    }
+    const select=document.querySelector('#assistant-thread-select');if(select)select.value=id;
+  };
   let jobRequest=null,jobPollTimer=null,jobLoadSeq=0;
   const observedChatJobs=new Set();
   const dismissedJobsKey='smetra.assistant.dismissedJobs:'+user.id+':'+currentWorkspace;
@@ -977,8 +997,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const now=Date.now()/1000;
       result.jobs.filter(job=>{
         if(!job?.id||dismissedJobIds.has(String(job.id))||job.status==='cancelled')return false;
+        // Completed answers belong to the transcript, never to a permanent processing banner.
+        // Do not display chat jobs from unrelated conversations in this composer.
+        if(job.kind==='chat')return (job.conversation_id||'')===activeConversation&&['queued','running','retry','failed'].includes(job.status);
         if(['queued','running','retry'].includes(job.status))return true;
-        return ['completed','failed'].includes(job.status)&&now-Number(job.updated_at||job.created_at||0)<86400;
+        return job.status==='failed'&&now-Number(job.updated_at||job.created_at||0)<86400;
       }).slice(0,5).forEach(job=>{
         const row=document.createElement('div');row.className='assistant-job';row.dataset.status=job.status;
         const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
@@ -1064,7 +1087,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   refreshFile();
   // Empty chats start with a blank message area, never canned prompts.
-  thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
+  if(activeConversation)thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.filter(action=>(action.conversation_id||'')===activeConversation).forEach(addAction);
   (data.recent_actions||[]).filter(action=>action.undo_until&&(action.conversation_id||'')===activeConversation).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
@@ -1165,7 +1188,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const body=JSON.stringify({text:prompt,context:submitted.context?{entity:submitted.context.entity,id:submitted.context.id}:null,...(savedIds.length?{file_ids:savedIds}:{}),...(activeConversation?{conversation_id:activeConversation}:{})});
       if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
       const accepted=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key,...scopeHeaders},body});
-      currentJobId=accepted.job.id;queued=true;jobRequest=null;observedChatJobs.add(currentJobId);
+      currentJobId=accepted.job.id;queued=true;jobRequest=null;bindCreatedConversation(accepted.job);observedChatJobs.add(currentJobId);
       if(cancelRequested){
         await api('/assistant/jobs/'+encodeURIComponent(currentJobId),{method:'DELETE',headers:{...scopeHeaders}});
         throw new DOMException('Ответ остановлен','AbortError');
