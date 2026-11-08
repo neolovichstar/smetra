@@ -178,25 +178,19 @@ async function setup(enabled=true,voice=false,remaining=3){
   await w.SmetraAssistant();await tick();
   assert.equal(doc.querySelector('.assistant-job'),null,'Completed jobs never stay above the input');
  });
- await test('cancelled background jobs disappear and stay dismissed after refresh',async({w,doc})=>{
-  const original=w.api,now=Date.now()/1000;let deletes=0;
+ await test('background queue statuses never render a redundant task banner',async({w,doc})=>{
+  const original=w.api,now=Date.now()/1000;
   const jobs=[
-   {id:'cancelled-old',kind:'chat',prompt:'This was already cancelled',status:'cancelled',updated_at:now},
-   {id:'active-job',kind:'chat',prompt:'Remove this job',status:'queued',updated_at:now}
+   {id:'cancelled-old',kind:'chat',prompt:'Already cancelled',status:'cancelled',updated_at:now},
+   {id:'active-job',kind:'chat',prompt:'Still running',status:'queued',updated_at:now},
+   {id:'failed-job',kind:'chat',prompt:'Failure status',status:'failed',updated_at:now}
   ];
-  w.api=async(path,options={})=>{
-   if(path==='/assistant/jobs'&&!options.method)return {enabled:true,jobs};
-   if(path==='/assistant/jobs/active-job'&&options.method==='DELETE'){deletes++;return {quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}}}
-   return original(path,options);
-  };
+  w.api=async(path,options={})=>path==='/assistant/jobs'&&!options.method?{enabled:true,jobs}:original(path,options);
   await w.SmetraAssistant();await tick();
-  assert.equal(doc.querySelectorAll('.assistant-job').length,1,'cancelled records must never be rendered');
-  assert.match(doc.querySelector('.assistant-job').textContent,/Remove this job/);
-  doc.querySelector('.assistant-job button').click();await tick();await tick();
-  assert.equal(deletes,1);assert.equal(doc.querySelector('.assistant-job'),null,'task should be removed immediately after successful cancellation');
-  assert.ok(JSON.parse(w.sessionStorage.getItem('smetra.assistant.dismissedJobs:qa:qa-workspace')).includes('active-job'));
+  assert.equal(doc.querySelector('.assistant-jobs,.assistant-job'),null,'no task banner for any job state');
+  assert.ok(doc.querySelector('#assistant-form'),'composer stays available');
   await w.SmetraAssistant();await tick();
-  assert.equal(doc.querySelector('.assistant-job'),null,'dismissed task must not reappear from a stale queue response');
+  assert.equal(doc.querySelector('.assistant-jobs,.assistant-job'),null,'task banner never reappears after refresh');
  });
  await test('normal send queues once and streams the same durable job',async({w,doc,requests})=>{
   let sent;
