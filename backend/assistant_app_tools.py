@@ -243,6 +243,16 @@ def audit_quote(service, quote_id):
         label = f"Строка {index} «{item['name']}»"
         if item.get("included") is False:
             continue
+        # Older/imported quotes can contain invalid quantities even though new
+        # quotes are rejected by the current calculator. Report them explicitly.
+        try:
+            quantity = Decimal(str(item.get("quantity", "")).replace(",", "."))
+            invalid_quantity = not quantity.is_finite() or quantity <= 0
+        except (InvalidOperation, TypeError, ValueError):
+            invalid_quantity = True
+        if invalid_quantity:
+            findings.append({"severity": "high", "row": index,
+                             "issue": label + ": нулевое или некорректное количество"})
         if not item["unit_price"]:
             findings.append({"severity": "high", "row": index, "issue": label + ": нет цены"})
         key = (item.get("category", "").casefold(), item["name"].casefold(), item["unit"].casefold())
@@ -255,6 +265,8 @@ def audit_quote(service, quote_id):
     for row in service.con.execute("SELECT name,unit,price FROM catalog_items WHERE workspace_id=? LIMIT 2000", (service.wid,)):
         catalog[(row["name"].casefold(), row["unit"].casefold())] = row["price"]
     for index, item in enumerate(items, 1):
+        if item.get("included") is False:
+            continue
         reference = catalog.get((item["name"].casefold(), item["unit"].casefold()))
         if reference and item["unit_price"]:
             ratio = item["unit_price"] / reference
