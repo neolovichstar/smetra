@@ -151,6 +151,7 @@ jobs:
           for i in $(seq 1 30); do grep -Fq PROFILE_FIXTURE_READY data/profile-fixture.log && break; sleep 1; done
           grep -Fq PROFILE_FIXTURE_READY data/profile-fixture.log || { cat data/profile-fixture.log; exit 1; }
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_public_profiles.cjs
+          SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_account_layout.cjs
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_vault_controls.cjs
       - name: Durable assistant streaming, navigation and cancellation
         run: |
@@ -173,6 +174,7 @@ jobs:
             data/qa/section-*.png
             data/qa/ar-scan-*.png
             data/qa/account-*.png
+            data/qa/account-layout/
             data/qa/support-*.png
             data/qa/procurement-*.png
             data/qa/growth-*.png

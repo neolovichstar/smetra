@@ -50,7 +50,7 @@ body.sidebar-compact .app-shell{grid-template-columns:var(--sidebar-rail) minmax
 .main{display:grid;grid-template-columns:minmax(0,var(--content-max));justify-content:center;align-content:start}
 .main>*{min-width:0}
 /* Pages with their own section rail sit flush against the main sidebar. */
-#content:is([data-section="assistant"],[data-section="support"],[data-section="profile"],[data-section="settings"]){padding:0;grid-template-columns:minmax(0,1fr);justify-content:stretch}
+#content:is([data-section="assistant"],[data-section="support"],[data-section="profile"],[data-section="usage"],[data-section="settings"]){padding:0;grid-template-columns:minmax(0,1fr);justify-content:stretch}
 .main.app-view-enter>*{animation:view-enter 260ms var(--ease)}
 @keyframes view-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 
@@ -172,7 +172,7 @@ body.sidebar-compact #logout{opacity:0;pointer-events:none;width:0;overflow:hidd
   @media (max-width:374px){.mobile-tabbar button{font-size:11px;letter-spacing:-.02em}}
   body.keyboard-open{--tabbar-space:0px}
   .main{padding-bottom:calc(var(--s-9) + var(--tabbar-space))}
-  #content:is([data-section="profile"],[data-section="settings"]){padding-bottom:var(--tabbar-space)}
+  #content:is([data-section="profile"],[data-section="usage"],[data-section="settings"]){padding-bottom:var(--tabbar-space)}
   .sidebar{bottom:var(--tabbar-space)}
   .nav-backdrop{bottom:var(--tabbar-space)}
 }

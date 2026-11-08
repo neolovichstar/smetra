@@ -442,6 +442,19 @@ async function renderAccountHub(active){
   view(`<section class="hub account-hub${collapsed?' is-rail-collapsed':''}" aria-label="Личный кабинет"><nav class="hub-rail" aria-label="Личный кабинет">${railToggleMarkup(collapsed,'hub-rail-toggle')}<div class="hub-identity"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></div></div><div class="hub-tabs" id="account-sections">${sections.map(([id,label,icon])=>`<button type="button" class="hub-tab" data-account-section="${id}" aria-current="${id===selected?'page':'false'}" title="${label}">${window.SmetraIcons?.svg(icon,18)||''}<span>${label}</span></button>`).join('')}</div></nav><div class="hub-main" id="account-content"></div></section>`);
   bindRailToggle(document.querySelector('#hub-rail-toggle'),document.querySelector('.hub'),'smetra.hub.rail-collapsed');
   document.querySelectorAll('[data-account-section]').forEach(button=>button.onclick=()=>window.SmetraNavigateTo(button.dataset.accountSection));
+  const sectionRail=document.querySelector('#account-sections');
+  const revealCurrentSection=()=>{
+    if(!sectionRail.isConnected||getComputedStyle(sectionRail).flexDirection!=='row'||sectionRail.scrollWidth<=sectionRail.clientWidth)return;
+    const current=sectionRail.querySelector('[aria-current="page"]');if(!current)return;
+    const rail=sectionRail.getBoundingClientRect(),button=current.getBoundingClientRect(),inset=12;
+    if(button.left<rail.left+inset)sectionRail.scrollLeft+=button.left-rail.left-inset;
+    else if(button.right>rail.right-inset)sectionRail.scrollLeft+=button.right-rail.right+inset;
+  };
+  revealCurrentSection();
+  if(typeof ResizeObserver!=='undefined'){
+    const observer=new ResizeObserver(()=>{if(sectionRail.isConnected)revealCurrentSection();else observer.disconnect()});
+    observer.observe(sectionRail);
+  }
   const host=document.querySelector('#account-content');
   if(selected==='profile'){await window.SmetraProfile?.overview(active,host);return;}
   if(selected==='usage'){host.innerHTML='<section class="account-usage"><header class="settings-page-heading"><h1>Использование</h1><p>Расход токенов, лимиты и хранилище.</p></header><div id="hub-usage-host" aria-busy="true"><p class="muted">Загружаю данные…</p></div></section>';await renderUsage(active);return;}
@@ -451,17 +464,17 @@ async function renderSettingsContent(active,settingsHost){
   const owner=user,current=accountHubTab(),icon=name=>window.SmetraIcons?.svg(name,18)||'';
   settingsHost.innerHTML=`<section class="settings-content-page" aria-label="Настройки"><header class="settings-page-heading"><h1>Настройки</h1><p>Аккаунт, приватность и параметры работы.</p></header>
     <div class="settings-top-tabs" role="tablist" aria-label="Разделы настроек">${accountHubTabs.map(([id,label])=>`<button type="button" role="tab" id="hub-tab-${id}" data-hub-tab="${id}" aria-controls="hub-panel-${id}" aria-selected="${id===current}" tabindex="${id===current?0:-1}">${label}</button>`).join('')}</div><div class="settings-content-panels">
-      <section class="hub-panel" id="hub-panel-details" role="tabpanel" aria-labelledby="hub-tab-details"${current==='details'?'':' hidden'}><header class="hub-head"><div><span class="profile-overline">НАСТРОЙКИ</span><h1>Личные данные</h1></div><a class="btn small" href="#profile">Мой профиль ↗</a></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
-      <section class="hub-panel" id="hub-panel-privacy" role="tabpanel" aria-labelledby="hub-tab-privacy"${current==='privacy'?'':' hidden'}><header class="hub-head"><h1>Приватность</h1><p>Выберите, какие данные о вас видны другим людям.</p></header><div id="hub-public-profile-host"></div></section>
-      <section class="hub-panel" id="hub-panel-account" role="tabpanel" aria-labelledby="hub-tab-account"${current==='account'?'':' hidden'}><header class="hub-head"><h1>Аккаунт и вход</h1></header>
+      <section class="hub-panel" id="hub-panel-details" role="tabpanel" aria-labelledby="hub-tab-details"${current==='details'?'':' hidden'}><header class="hub-head"><div><span class="profile-overline">НАСТРОЙКИ</span><h2>Личные данные</h2></div><a class="btn small" href="#profile">Мой профиль ↗</a></header><div id="hub-profile-host"><p class="muted">Загружаем профиль…</p></div></section>
+      <section class="hub-panel" id="hub-panel-privacy" role="tabpanel" aria-labelledby="hub-tab-privacy"${current==='privacy'?'':' hidden'}><header class="hub-head"><h2>Приватность</h2><p>Выберите, какие данные о вас видны другим людям.</p></header><div id="hub-public-profile-host"></div></section>
+      <section class="hub-panel" id="hub-panel-account" role="tabpanel" aria-labelledby="hub-tab-account"${current==='account'?'':' hidden'}><header class="hub-head"><h2>Аккаунт и вход</h2></header>
         <div class="hub-card"><div class="hub-row"><div><strong>Электронная почта</strong><small>${escapeHtml(user.email)}</small></div><span class="pill ${user.email_verified?'status-accepted':'status-draft'}">${user.email_verified?'Подтверждена':'Не подтверждена'}</span></div>
         <div class="hub-row"><div><strong>Публичный ID</strong><small>По нему вас находят в центре общения. Почта не раскрывается.</small></div><span class="hub-id"><code id="hub-public-id">…</code><button class="icon-button" type="button" id="hub-copy-id" aria-label="Скопировать ID" title="Скопировать ID">${icon('copy')}</button></span></div>
         <div class="hub-row"><div class="hub-photo"><span class="hub-avatar sidebar-avatar" aria-hidden="true">${userAvatarMarkup(user)}</span><div><strong>Фото профиля</strong><small>Ваше фото в переписках и публичном профиле. JPEG, PNG или WebP.</small></div></div><div class="avatar-upload-controls" id="hub-avatar-controls"></div></div></div>
       </section>
-      <section class="hub-panel" id="hub-panel-assistant" role="tabpanel" aria-labelledby="hub-tab-assistant"${current==='assistant'?'':' hidden'}><header class="hub-head"><h1>Ассистент</h1></header><div class="settings-page"><section id="settings-personalization" class="settings-personalization-host"></section></div></section>
-      <section class="hub-panel" id="hub-panel-appearance" role="tabpanel" aria-labelledby="hub-tab-appearance"${current==='appearance'?'':' hidden'}><header class="hub-head"><h1>Внешний вид</h1></header><div class="hub-card"><div class="hub-row"><div><strong>Тема</strong><small>Тёмная бережёт глаза вечером, светлая удобнее на ярком солнце.</small></div><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></div></section>
-      <section class="hub-panel" id="hub-panel-data" role="tabpanel" aria-labelledby="hub-tab-data"${current==='data'?'':' hidden'}><header class="hub-head"><h1>Данные и экспорт</h1></header><div class="settings-page"><section id="settings-export" class="settings-export-host"></section></div></section>
-      <section class="hub-panel" id="hub-panel-danger" role="tabpanel" aria-labelledby="hub-tab-danger"${current==='danger'?'':' hidden'}><header class="hub-head"><h1>Удаление аккаунта</h1><p>Необратимое действие — сметы и доступ будут удалены.</p></header><div class="hub-card hub-danger"><p>Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></section>
+      <section class="hub-panel" id="hub-panel-assistant" role="tabpanel" aria-labelledby="hub-tab-assistant"${current==='assistant'?'':' hidden'}><header class="hub-head"><h2>Ассистент</h2></header><div class="settings-page"><section id="settings-personalization" class="settings-personalization-host"></section></div></section>
+      <section class="hub-panel" id="hub-panel-appearance" role="tabpanel" aria-labelledby="hub-tab-appearance"${current==='appearance'?'':' hidden'}><header class="hub-head"><h2>Внешний вид</h2></header><div class="hub-card"><div class="hub-row"><div><strong>Тема</strong><small>Тёмная бережёт глаза вечером, светлая удобнее на ярком солнце.</small></div><button class="btn" id="theme-alt" type="button">Сменить тему</button></div></div></section>
+      <section class="hub-panel" id="hub-panel-data" role="tabpanel" aria-labelledby="hub-tab-data"${current==='data'?'':' hidden'}><header class="hub-head"><h2>Данные и экспорт</h2></header><div class="settings-page"><section id="settings-export" class="settings-export-host"></section></div></section>
+      <section class="hub-panel" id="hub-panel-danger" role="tabpanel" aria-labelledby="hub-tab-danger"${current==='danger'?'':' hidden'}><header class="hub-head"><h2>Удаление аккаунта</h2><p>Необратимое действие — сметы и доступ будут удалены.</p></header><div class="hub-card hub-danger"><p>Скачайте архив данных перед удалением. После подтверждения восстановить аккаунт будет нельзя.</p><button class="btn danger" id="delete-account" type="button">Удалить мой аккаунт</button></div></section>
 </div></section>`;
   const tabs=[...document.querySelectorAll('[data-hub-tab]')];
   const tabList=document.querySelector('.settings-top-tabs');
@@ -494,7 +507,13 @@ async function renderSettingsContent(active,settingsHost){
     document.querySelectorAll('#sidebar-avatar,.hub-avatar').forEach(node=>node.innerHTML=userAvatarMarkup(owner));
   }});
   void window.SmetraPublicProfile?.mountSettings({host:$('#hub-public-profile-host'),user:owner,api,active});
-  document.querySelector('.settings-top-tabs').addEventListener('keydown',event=>{const index=tabs.findIndex(button=>button.getAttribute('aria-selected')==='true');const step={ArrowDown:1,ArrowRight:1,ArrowUp:-1,ArrowLeft:-1}[event.key];if(!step)return;event.preventDefault();select(tabs[(index+step+tabs.length)%tabs.length].dataset.hubTab,true)});
+  tabList.addEventListener('keydown',event=>{
+    const index=tabs.findIndex(button=>button.getAttribute('aria-selected')==='true');
+    const step={ArrowDown:1,ArrowRight:1,ArrowUp:-1,ArrowLeft:-1}[event.key];
+    const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:step?(index+step+tabs.length)%tabs.length:null;
+    if(next===null)return;
+    event.preventDefault();select(tabs[next].dataset.hubTab,true);
+  });
   syncThemeLabel();$('#theme-alt')?.addEventListener('click',theme);
   const deleteAccountButton=$('#delete-account');
   if(deleteAccountButton)deleteAccountButton.onclick=async event=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;let confirmed=false;try{confirmed=await window.SmetraDialog.confirm({title:'Удалить аккаунт?',message:'Аккаунт, сметы и доступ будут удалены без возможности восстановления.',confirmLabel:'Удалить аккаунт',danger:true});if(!confirmed||user!==owner)return;await api('/me',{method:'DELETE'});if(user!==owner)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()}catch(err){if(user===owner)notify(err.message)}finally{if(button.isConnected)button.disabled=false}};
