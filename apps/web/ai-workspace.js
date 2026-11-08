@@ -15,10 +15,7 @@ window.SmetraKnowledgePanel=async function(root){
       <button id="knowledge-close" type="button" aria-label="Закрыть память">${icon('x')}</button>
     </header>
     <div class="knowledge-window-body memory-overview" role="region" aria-label="Запомненное ассистентом">
-      ${items.length?'<div class="memory-facts">'+items.map(item=>`<article class="memory-fact">
-        <h3>${escape(item.title)}</h3>
-        <p>${escape(item.content)}</p>
-      </article>`).join('')+'</div>':
+      ${items.length?'<div class="memory-facts">'+items.map(item=>`<p class="memory-fact">${escape(item.content)}</p>`).join('')+'</div>':
       '<div class="knowledge-empty"><h3>Пока нечего вспомнить</h3><p>Ассистент сможет запомнить полезные сведения из вашего разговора. Например, скажите ему: «Запомни, что я работаю с ремонтом квартир».</p></div>'}
     </div>
   </section>`;
