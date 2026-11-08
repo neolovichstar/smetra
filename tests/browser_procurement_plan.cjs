@@ -78,6 +78,7 @@ const assert = require('node:assert/strict');
   await evaluate("document.querySelector('[data-procurement-reset]').click()");
   await until("document.querySelector('.procurement-budget')?.innerText.includes('246,00')");
   assert.equal(await evaluate("document.querySelector('#construction-material [name=unit]').value"),'л');
+  assert.equal(await evaluate("document.querySelectorAll('#construction-material [name=cost_price],#construction-quantity [name=cost_price]').length"),2);
   assert.equal(await evaluate("document.querySelector('#construction-quantity [name=unit]').value"),'м²');
   assert.equal(await evaluate("Array.from(document.querySelector('#construction-material [name=unit]').options).some(o=>o.value==='кг')"),true);
   // The UI download must actually reach the authenticated XLSX endpoint.
