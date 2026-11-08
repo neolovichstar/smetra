@@ -147,6 +147,7 @@ def plan(service, obj, change='0', needed_by='', site_city=''):
                      shortage_groups=sum(Decimal(item['shortage_quantity']) > 0 for item in items)),
     )
     if finance:
+        result['supplier_quotes_editable'] = service.role in ('owner', 'admin', 'manager')
         def total(key):
             return amount(Decimal(sum(item[key] for item in budgets)), 1) if all(item[key] is not None for item in budgets) else None
 
