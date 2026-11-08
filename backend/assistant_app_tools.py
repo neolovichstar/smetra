@@ -43,7 +43,7 @@ CALCULATORS = {
 }
 DEFAULTS = {"openings": "0", "waste": {"tile": "10", "laminate": "8", "paint": "10", "plaster": "10", "concrete": "5"}}
 
-READ_TOOLS = ("material_calculator", "cloud_drive_status", "usage_limits", "finance_report", "audit_quote", "weekly_summary")
+READ_TOOLS = ("material_calculator", "cloud_drive_status", "usage_limits", "finance_report", "audit_quote", "weekly_summary", "calculate_formula", "list_calculation_rules")
 # Sections almost every renovation estimate needs; a missing one is a question, not an error.
 TYPICAL_STAGES = {
     "демонтаж": ("демонтаж",), "черновые работы": ("штукатур", "стяжк", "выравнив", "грунт"),
@@ -68,6 +68,30 @@ def tools(function):
             {"kind": {"type": "string", "enum": list(CALCULATORS)},
              "values": {"type": "object", "additionalProperties": {"type": "string"}}},
             ("kind", "values"),
+        ),
+        function(
+            "calculate_formula",
+            "Выполнить точный расчёт по формуле на сервере с Decimal, без арифметики модели. "
+            "Вызывай для расхода, площади, объёма, процента запаса или сложных условий. "
+            "rule_id — сохранённое правило; иначе expression — арифметическое выражение с переменными. "
+            "Тернарное условие: area*(1.15 if complex>0 else 1.10). "
+            "values — переменные как строки; без подписки функция недоступна, предложи тариф PRO Solo.",
+            {"rule_id": text, "expression": text, "title": text, "unit": text,
+             "values": {"type": "object", "additionalProperties": {"type": "string"}}}, (),
+        ),
+        function(
+            "list_calculation_rules",
+            "Прочитать сохранённые формулы текущей команды, доступные по PRO Solo и выше.",
+            {}, (),
+        ),
+        function(
+            "save_calculation_rule",
+            "Предложить сохранить профессиональную формулу для повторного использования; "
+            "обязательно подтвердить действие пользователем. По PRO Solo и выше. "
+            "expression — безопасная формула с переменными, defaults — согласованные значения по умолчанию.",
+            {"title": text, "expression": text, "unit": text,
+             "defaults": {"type": "object", "additionalProperties": {"type": "string"}}},
+            ("title", "expression"),
         ),
         function(
             "cloud_drive_status",
@@ -179,6 +203,9 @@ def calculate_material(kind, values):
 
 
 def read(service, name, args):
+    if name in ("calculate_formula", "list_calculation_rules"):
+        from backend.smart_formulas import evaluate, list_rules
+        return evaluate(service, args) if name == "calculate_formula" else list_rules(service)
     if name == "material_calculator":
         return calculate_material(args.get("kind"), args.get("values") or {})
     if name == "cloud_drive_status":
