@@ -97,6 +97,50 @@ class CheckoutRegressions(unittest.TestCase):
             self.assertEqual(con.execute("SELECT count(*) FROM events WHERE user_id=? AND name='checkout_started'", (user_id,)).fetchone()[0], 1)
             self.assertEqual(con.execute('SELECT plan FROM users WHERE id=?', (user_id,)).fetchone()[0], 'free')
 
+    def test_promotional_team_access_does_not_block_real_checkout(self):
+        token, user_id = self.account()
+        from backend.business import ensure_workspace
+        with self.mod.db() as con:
+            owner = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            workspace_id = ensure_workspace(con, owner)
+            con.execute(
+                "UPDATE workspaces SET plan='team',subscription_status='active',entitlement_until=? WHERE id=?",
+                (self.mod.now() + 60 * 86400, workspace_id),
+            )
+        def provider(handler, path, method, payload, key):
+            return self.payment(payload, key)
+        with self.env(), patch.object(self.mod.Handler, 'provider_call', provider):
+            status, response = self.checkout(token, 'promo-to-pro-paid-0001')
+        self.assertEqual(status, 201, response)
+
+    def test_different_tier_still_cannot_replace_paid_grant(self):
+        token, user_id = self.account()
+        from backend.business import ensure_workspace
+        from backend.revenue import prepare_intent
+        with self.mod.db() as con:
+            owner = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            workspace_id = ensure_workspace(con, owner)
+            con.execute(
+                "UPDATE workspaces SET plan='team',subscription_status='active',entitlement_until=? WHERE id=?",
+                (self.mod.now() + 60 * 86400, workspace_id),
+            )
+            # The protection needs a real settled provider grant, not a
+            # fabricated subscription badge or a pending payment.
+            intent = prepare_intent(con, owner, 'paid-team-period-0001', 'team_month',
+                                    'other', False, workspace_id=workspace_id)
+            payment_id = self.mod.uid()
+            con.execute(
+                "INSERT INTO payments(id,user_id,provider_id,plan,amount_kopecks,status,idempotency_key,confirmation_url,created_at,activated_at) "
+                "VALUES(?,?,?,?,?,'succeeded',?,?,?,?)",
+                (payment_id, user_id, 'provider-paid-'+payment_id, 'team_month',
+                 intent['amount_kopecks'], 'paid-team-period-0001',
+                 'https://pay.example.test/paid', self.mod.now(), self.mod.now()),
+            )
+            con.execute("UPDATE billing_intents SET payment_id=? WHERE id=?", (payment_id, intent['id']))
+            with self.assertRaisesRegex(ValueError, 'Действующий оплаченный тариф'):
+                prepare_intent(con, owner, 'paid-switch-to-solo-001', 'pro_month',
+                               'other', False, workspace_id=workspace_id)
+
     def test_wrong_payment_owner_is_not_persisted(self):
         token, user_id = self.account()
 
