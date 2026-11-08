@@ -697,8 +697,62 @@ def route(service, method, parts, query, data):
         if method != "GET":
             raise DomainError(405, "Метод не поддерживается")
         from backend.procurement_plan import plan, supplier_xlsx
-        result = plan(service, obj, query.get('price_change', ['0'])[0])
+        result = plan(
+            service, obj, query.get('price_change', ['0'])[0],
+            needed_by=query.get('needed_by', [''])[0],
+            site_city=query.get('site_city', [''])[0],
+        )
         return 200, supplier_xlsx(result) if rest[-1].endswith('.xlsx') else result
+    if rest == ["supplier-quotes"] and method == "POST":
+        if not service.finance_visible():
+            raise DomainError(403, "Для сравнения предложений требуется доступ к закупочным ценам")
+        service.write_access(managerial=True)
+        from backend.smart_procurement import quote_fields, MAX_QUOTES_PER_OBJECT
+        count = service.con.execute(
+            "SELECT count(*) FROM construction_supplier_quotes WHERE workspace_id=? AND object_id=?",
+            (service.wid, obj["id"]),
+        ).fetchone()[0]
+        if count >= MAX_QUOTES_PER_OBJECT:
+            raise DomainError(409, "На объекте слишком много предложений")
+        values = quote_fields(data)
+        material = row_in_object(service, "construction_quantities", values["material_id"], obj["id"])
+        if material["kind"] != "material":
+            raise DomainError(400, "Предложение должно относиться к материалу объекта")
+        count_material = service.con.execute(
+            "SELECT count(*) FROM construction_supplier_quotes WHERE workspace_id=? AND object_id=? AND material_id=?",
+            (service.wid, obj["id"], material["id"]),
+        ).fetchone()[0]
+        if count_material >= 20:
+            raise DomainError(409, "Для одного материала разрешено не больше 20 предложений")
+        values.update(id=identity(), workspace_id=service.wid, object_id=obj["id"],
+                      created_at=stamp(), updated_at=stamp())
+        service.insert("construction_supplier_quotes", values)
+        service.emit("construction_supplier_quote", values["id"], "Предложение поставщика добавлено")
+        return 201, {"quote": values}
+    if len(rest) == 2 and rest[0] == "supplier-quotes":
+        if not service.finance_visible():
+            raise DomainError(403, "Для сравнения предложений требуется доступ к закупочным ценам")
+        quote = row_in_object(service, "construction_supplier_quotes", rest[1], obj["id"])
+        if method == "PATCH":
+            service.write_access(managerial=True)
+            from backend.smart_procurement import quote_fields
+            values = quote_fields(data, quote)
+            material = row_in_object(service, "construction_quantities", values["material_id"], obj["id"])
+            if material["kind"] != "material":
+                raise DomainError(400, "Предложение должно относиться к материалу объекта")
+            values["updated_at"] = stamp()
+            service.update("construction_supplier_quotes", quote["id"], values)
+            service.emit("construction_supplier_quote", quote["id"], "Предложение поставщика обновлено")
+            return 200, {"quote": dict(quote, **values)}
+        if method == "DELETE":
+            service.write_access(managerial=True)
+            service.con.execute(
+                "DELETE FROM construction_supplier_quotes WHERE id=? AND workspace_id=? AND object_id=?",
+                (quote["id"], service.wid, obj["id"]),
+            )
+            service.emit("construction_supplier_quote", quote["id"], "Предложение поставщика удалено")
+            return 200, {"ok": True}
+        raise DomainError(405, "Метод не поддерживается")
     if not rest:
         if method == "GET":
             return 200, detail(service, obj)
