@@ -27,8 +27,8 @@ function setup(saved){
  await test('failed account deletion prevents duplicate requests and enables retry',async({w,doc})=>{
   let reject,calls=0;await w.render();w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};const button=doc.querySelector('#delete-account');button.click();button.click();await tick();doc.querySelector('dialog.sm-dialog [data-dialog-confirm]').click();await tick();assert.equal(calls,1);assert.equal(button.disabled,true);reject(Error('Try again'));await tick();assert.equal(button.disabled,false);assert.match(doc.querySelector('#toast').textContent,/Try again/);
  });
- await test('support topic buttons change selection and retain the written question',async({w,doc})=>{
-  w.eval("tab='support'");await w.render();const topics=[...doc.querySelectorAll('[data-support-topic]')];topics[0].click();doc.querySelector('#message').value+='My question';topics[1].click();assert.equal(doc.querySelector('#message').value,topics[1].dataset.supportTopic+': My question');assert.equal(topics[1].getAttribute('aria-pressed'),'true');
+ await test('support welcome stays helpful without canned topic buttons',async({w,doc})=>{
+  w.eval("tab='support'");await w.render();assert.equal(doc.querySelector('[data-support-topic]'),null);assert.match(doc.querySelector('.tg-welcome').textContent,/Чем помочь/);assert.equal(doc.querySelector('#message').value,'');
  });
  await test('support submit prevents duplicates and keeps text on failure',async({w,doc})=>{
   w.eval("tab='support'");await w.render();let reject,calls=0;w.api=()=>{calls++;return new Promise((yes,no)=>reject=no)};doc.querySelector('#message').value='Help me';const form=doc.querySelector('#support-form');form.requestSubmit();form.requestSubmit();assert.equal(calls,1);reject(Error('Offline'));await tick();assert.equal(doc.querySelector('#message').value,'Help me');assert.equal(form.querySelector('button').disabled,false);

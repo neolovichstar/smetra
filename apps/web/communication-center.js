@@ -131,7 +131,7 @@ function renderMessages(){
  compose.querySelector('.comms-banner')?.remove();
  box.disabled=c.status==='closed';box.placeholder=box.disabled?'Переписка закрыта':'Сообщение…';send.disabled=box.disabled||state.busy||!box.value.trim();
  if(!state.messages.length){el.innerHTML='<div class="comms-empty"><div class="comms-empty-icon">'+icon('chat')+'</div><h3>Начните разговор</h3><p>История сохранится в этой переписке.</p></div>';return}
- const rows=state.messages.map(m=>{const mine=Boolean(m.sender_id&&m.sender_id===state.userId);return {id:m.id,body:m.body,created_at:Number(m.created_at||0),mine,kind:m.sender_type==='system'?'system':m.sender_type,author:m.sender_type==='assistant'?'ИИ поддержки':m.sender_type==='admin'?'Сотрудник поддержки':mine?'Вы':(m.sender_name||c.partner_name||'Участник')}});
+ const rows=state.messages.map(m=>{const mine=Boolean(m.sender_id&&m.sender_id===state.userId);return {id:m.id,body:m.body,attachments:m.metadata?.attachments||[],created_at:Number(m.created_at||0),mine,kind:m.sender_type==='system'?'system':m.sender_type,author:m.sender_type==='assistant'?'ИИ поддержки':m.sender_type==='admin'?'Сотрудник поддержки':mine?'Вы':(m.sender_name||c.partner_name||'Участник')}});
  const group=c.kind==='object'||c.kind==='community'||state.tab==='support';
  el.innerHTML=K?K.thread(rows,{showAuthors:group}):rows.map(m=>'<article class="comms-message'+(m.mine?' mine':'')+'"><p>'+esc(m.body)+'</p></article>').join('');
  el.scrollTop=el.scrollHeight;

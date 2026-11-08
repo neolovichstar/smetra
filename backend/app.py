@@ -387,6 +387,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except ValueError:
             raise ApiError(400, "Некорректная длина запроса") from None
         maximum = 1_450_000 if path == "/api/profile/avatar" else 7_000_000 if path == "/api/files" else 1_400_000 if self.command == "PATCH" and path.startswith("/api/files/") else 2_000_000 if path == "/api/voice/draft" else 3_000_000 if path in ("/api/ai/draft", "/api/assistant/stream", "/api/assistant/chat", "/api/design-projects/draft") else 2_100_000 if path.startswith("/api/construction/objects/") and path.endswith("/import") else 1_500_000 if path == "/api/public/intake" else 65536
+        if path == "/api/support" or re.fullmatch(r"/api/support/threads/[A-Za-z0-9_-]+/messages", path):
+            maximum = 1_000_000
         if size < 0 or size > maximum:
             raise ApiError(413, "Слишком большой запрос")
         if self.headers.get("Content-Encoding", "identity").lower() != "identity":

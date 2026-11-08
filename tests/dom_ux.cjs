@@ -4,7 +4,7 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 (async()=>{
  const html=fs.readFileSync('apps/web/app.html','utf8');
  assert.ok(html.indexOf('/ui/ux.js')>html.indexOf('/app.js'),'Conveniences load after the router');
- const dom=new JSDOM(`<!doctype html><body><main id="content"><div class="topline"><div class="topline-actions"><button class="btn primary" id="create">Создать смету</button></div></div><input id="list-search" type="search"><form><label for="doc">Документ</label><input id="doc" type="file"><input id="hidden-file" type="file" hidden></form></main></body>`,{runScripts:'outside-only',url:'https://smetra.online/app#quotes',pretendToBeVisual:true});
+ const dom=new JSDOM(`<!doctype html><body><nav id="mobile-tabbar"><button data-tab="ar-scan" id="ar"></button></nav><main id="content"><div class="topline"><div class="topline-actions"><button class="btn primary" id="create">Создать смету</button></div></div><input id="list-search" type="search"><form><label for="doc">Документ</label><input id="doc" type="file"><input id="hidden-file" type="file" hidden></form></main></body>`,{runScripts:'outside-only',url:'https://smetra.online/app#quotes',pretendToBeVisual:true});
  const w=dom.window,d=w.document;
  w.matchMedia=()=>({matches:false,addEventListener(){}});
  w.HTMLElement.prototype.getBoundingClientRect=function(){return{width:this.hidden?0:120,height:30,top:0,left:0,right:120,bottom:30}};
@@ -30,5 +30,8 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
  d.activeElement.blur();key('?','Slash',{shiftKey:true});
  assert.ok(d.querySelector('dialog.keys-help[open]'),'«?» shows the shortcut list');
  assert.match(d.querySelector('.keys-help-list').textContent,/Быстрый переход/);
- console.log('PASS: Russian file picker, late inputs, «/», «N» and «?» shortcuts');
+ let staleBacks=0;const back=d.createElement('button');back.dataset.work='navigate';back.onclick=()=>staleBacks++;d.querySelector('#content').append(back);
+ const ar=d.querySelector('#ar');ar.onclick=()=>ar.classList.add('active');ar.click();assert.equal(staleBacks,0,'A new mobile tab must not activate the previous screen shortcut');ar.click();assert.equal(staleBacks,1,'A deliberate repeated tap may leave the current record');
+ dom.window.close();
+ console.log('PASS: safe mobile tab navigation, Russian file picker, late inputs, «/», «N» and «?» shortcuts');
 })().catch(error=>{console.error(error);process.exit(1)});

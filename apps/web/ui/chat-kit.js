@@ -38,8 +38,9 @@
       if (m.kind === 'system') { html += `<div class="tg-service"><span>${esc(m.body)}</span></div>`; previous = null; continue; }
       const grouped = previous && previous.mine === m.mine && previous.author === m.author && (m.created_at - previous.created_at) < 300;
       const author = showAuthors && !m.mine && !grouped && m.author ? `<span class="tg-author tg-tint-${tint(m.author)}">${esc(m.author)}</span>` : '';
+      const attachments=(Array.isArray(m.attachments)?m.attachments:[]).slice(0,3).filter(image=>typeof image.data_url==='string'&&image.data_url.length<=400000&&/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image.data_url)).map(image=>`<img class="tg-attachment-image" src="${esc(image.data_url)}" alt="${esc(image.name||'Изображение к обращению')}" loading="lazy">`).join('');
       html += `<div class="tg-msg${m.mine ? ' is-mine' : ''}${grouped ? ' is-grouped' : ''}${m.pending ? ' is-pending' : ''}${m.failed ? ' is-failed' : ''}" data-message-id="${esc(m.id || '')}">`
-        + `<div class="tg-bubble">${author}<span class="tg-text">${linkify(m.body)}</span><span class="tg-meta">${m.failed ? 'не отправлено' : esc(clock(m.created_at))}${m.mine && !m.failed ? `<span class="tg-tick" aria-hidden="true">${m.pending ? '' : '✓✓'}</span>` : ''}</span></div></div>`;
+        + `<div class="tg-bubble">${author}${attachments}<span class="tg-text">${linkify(m.body)}</span><span class="tg-meta">${m.failed ? 'не отправлено' : esc(clock(m.created_at))}${m.mine && !m.failed ? `<span class="tg-tick" aria-hidden="true">${m.pending ? '' : '✓✓'}</span>` : ''}</span></div></div>`;
       previous = m;
     }
     return html;

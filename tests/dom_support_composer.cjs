@@ -25,6 +25,19 @@ async function setup(existing=false){
  const failures=[];
  const test=async(name,run,existing=false)=>{const env=await setup(existing);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.stack)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#message');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('support has an internal neutral send control and no canned topics',async({doc})=>{
+  assert.ok(doc.querySelector('.support-compose-surface .tg-send'));assert.ok(doc.querySelector('#support-attach'));assert.equal(doc.querySelector('[data-support-topic]'),null);assert.match(doc.querySelector('.tg-welcome').textContent,/Чем помочь/);
+ });
+ await test('pasted screenshots are previewed, sent without text and restored after failure',async({w,doc,task,posts})=>{
+  w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
+  w.Image=class{constructor(){this.naturalWidth=100;this.naturalHeight=80}set src(value){w.setTimeout(()=>this.onload(),0)}};
+  w.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){}});w.HTMLCanvasElement.prototype.toBlob=function(callback){callback(new w.Blob(['fake-fixture-pixels'],{type:'image/webp'}))};
+  const paste=new w.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(paste,'clipboardData',{value:{files:[new w.File(['fixture'],'Снимок.png',{type:'image/png'})]}});doc.querySelector('#message').dispatchEvent(paste);
+  for(let i=0;i<15&&!doc.querySelector('.support-attachment');i++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(paste.defaultPrevented,true);assert.ok(doc.querySelector('.support-attachment img'));assert.equal(doc.querySelector('#message').required,false);doc.querySelector('#support-form').requestSubmit();
+  assert.equal(posts[0].body.attachments.length,1);assert.equal(posts[0].body.message,'');assert.ok(doc.querySelector('.tg-attachment-image'));
+  task.reject(Error('Offline'));await tick();await tick();assert.ok(doc.querySelector('.support-attachment img'));assert.equal(doc.querySelector('.tg-send').disabled,false);
+ });
  await test('new support message clears immediately and a later response preserves the next draft',async({w,doc,task,posts})=>{
   const input=type(w,doc,'Как работает ассистент?');doc.querySelector('#support-form').requestSubmit();
   assert.equal(input.value,'');assert.equal(posts[0].body.message,'Как работает ассистент?');

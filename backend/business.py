@@ -2599,6 +2599,11 @@ class Service:
         return (result[0], without_finance(result[1]), *result[2:])
 
     def routed(self, method, kind, parts, query, data):
+        if kind == "profile-summary":
+            if method != "GET" or parts:
+                raise DomainError(405, "Метод не поддерживается")
+            from backend.profile_summary import summary
+            return 200, summary(self)
         if kind == "dashboard" and method == "GET":
             _, context = self.workspace("GET", [], {})
             _, overview = self.overview(limit=4)
@@ -2852,6 +2857,7 @@ class Service:
 
 ROUTES = set(ENTITIES) | {
     "dashboard",
+    "profile-summary",
     "intake",
     "assistant",
     "workspace",

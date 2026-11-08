@@ -65,9 +65,16 @@
 
   // Re-tapping the current tab: scroll to the top, or leave an open record.
   const bar = document.getElementById('mobile-tabbar');
+  // The route handler updates .active before the event bubbles to the bar.
+  // Remember its state before navigation so a new tab cannot click a stale
+  // back/shortcut button from the previous screen while its module is loading.
+  const repeatedTabs = new WeakSet();
+  bar?.addEventListener('click', event => {
+    if (event.target.closest('[data-tab]')?.classList.contains('active')) repeatedTabs.add(event);
+  }, true);
   bar?.addEventListener('click', event => {
     const button = event.target.closest('[data-tab]');
-    if (!button || !button.classList.contains('active')) return;
+    if (!button || !repeatedTabs.has(event)) return;
     if (scrollY > 40) { scrollTo({ top: 0, behavior: 'smooth' }); return; }
     const back = [...(content()?.querySelectorAll('[data-work=navigate],#construction-back,#knowledge-back,#file-editor-back,#review-back') || [])].find(visible);
     back?.click();
