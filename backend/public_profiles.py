@@ -10,6 +10,9 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from backend.business import DomainError as ApiError, transaction, stamp
@@ -39,10 +42,12 @@ FIELDS = frozenset(
 
 def ensure_schema(con):
     con.executescript(
-        (
-            Path(__file__).parent / "migrations/034_public_profiles_avatars.sql"
-        ).read_text()
+        (Path(__file__).parent / "migrations/034_public_profiles_avatars.sql").read_text()
     )
+    columns = {row["name"] for row in con.execute("PRAGMA table_info(profile_avatars)")}
+    if "source" not in columns:
+        # Existing uploads and deletion tombstones must never be auto-overwritten.
+        con.execute("ALTER TABLE profile_avatars ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'")
 
 
 def public_id(user_id):
@@ -305,17 +310,14 @@ def require_contact(con, user_id, kind):
         )
 
 
-def store_avatar(con, user, raw):
-    try:
-        content = (
-            base64.b64decode(raw, validate=True)
-            if isinstance(raw, str) and len(raw) <= 1_398_104
-            else b""
-        )
-    except (ValueError, binascii.Error):
-        content = b""
-    if not content or len(content) > 1_048_576:
-        raise ApiError(400, "Выберите фото JPEG, PNG или WebP")
+class _NoAvatarRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow an OAuth-supplied picture redirect to an unknown host."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+def _normalize_avatar(content):
     try:
         result = subprocess.run(
             [
@@ -352,6 +354,76 @@ def store_avatar(con, user, raw):
         raise ApiError(
             400, "Не удалось обработать фото. Используйте JPEG, PNG или WebP"
         )
+    return content
+
+
+def google_avatar_photo(picture):
+    """Fetch a Google OIDC picture safely; failure must not block sign-in."""
+    if not isinstance(picture, str) or len(picture) > 2048:
+        return None
+    try:
+        url = urllib.parse.urlsplit(picture)
+        if (
+            url.scheme != "https"
+            or url.hostname not in {
+                "lh3.googleusercontent.com",
+                "lh4.googleusercontent.com",
+                "lh5.googleusercontent.com",
+                "lh6.googleusercontent.com",
+            }
+            or url.username or url.password or url.port not in (None, 443)
+            or url.fragment
+        ):
+            return None
+        opener = urllib.request.build_opener(_NoAvatarRedirect())
+        request = urllib.request.Request(
+            picture, headers={"Accept": "image/jpeg,image/png,image/webp"}
+        )
+        with opener.open(request, timeout=4) as response:
+            if response.headers.get("Content-Type", "").split(";")[0].strip().lower() not in (
+                "image/jpeg", "image/png", "image/webp"
+            ):
+                return None
+            if int(response.headers.get("Content-Length") or 0) > 1_048_576:
+                return None
+            content = response.read(1_048_577)
+        if not content or len(content) > 1_048_576:
+            return None
+        return _normalize_avatar(content)
+    except (OSError, ValueError, TypeError, ApiError, urllib.error.URLError):
+        return None
+
+
+def save_google_avatar(con, user_id, content):
+    """Only refresh provider-managed images; manual edits always win."""
+    if not isinstance(content, bytes) or not 20 <= len(content) <= 160_000:
+        return False
+    if content[:4] != b"RIFF" or content[8:12] != b"WEBP":
+        return False
+    digest = hashlib.sha256(content).hexdigest()
+    result = con.execute(
+        "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at,source) "
+        "VALUES(?,?,?,?,'google') ON CONFLICT(user_id) DO UPDATE SET "
+        "content_hash=excluded.content_hash,content=excluded.content,"
+        "updated_at=excluded.updated_at,source='google' "
+        "WHERE profile_avatars.source='google'",
+        (user_id, digest, content, stamp()),
+    )
+    return result.rowcount > 0
+
+
+def store_avatar(con, user, raw):
+    try:
+        content = (
+            base64.b64decode(raw, validate=True)
+            if isinstance(raw, str) and len(raw) <= 1_398_104
+            else b""
+        )
+    except (ValueError, binascii.Error):
+        content = b""
+    if not content or len(content) > 1_048_576:
+        raise ApiError(400, "Выберите фото JPEG, PNG или WebP")
+    content = _normalize_avatar(content)
     digest = hashlib.sha256(content).hexdigest()
     with transaction(
         con,
@@ -359,8 +431,8 @@ def store_avatar(con, user, raw):
     ):
         assert_active(con, user)
         con.execute(
-            "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at) VALUES(?,?,?,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET content_hash=excluded.content_hash,content=excluded.content,updated_at=excluded.updated_at",
+            "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at,source) VALUES(?,?,?,?,'manual') "
+            "ON CONFLICT(user_id) DO UPDATE SET content_hash=excluded.content_hash,content=excluded.content,updated_at=excluded.updated_at,source='manual'",
             (user["id"], digest, content, stamp()),
         )
     return avatar_url(con, user)
@@ -374,8 +446,8 @@ def delete_avatar(con, user):
     ):
         assert_active(con, user)
         con.execute(
-            "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at) VALUES(?,'',NULL,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET content_hash='',content=NULL,updated_at=excluded.updated_at",
+            "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at,source) VALUES(?,'',NULL,?,'manual') "
+            "ON CONFLICT(user_id) DO UPDATE SET content_hash='',content=NULL,updated_at=excluded.updated_at,source='manual'",
             (user["id"], stamp()),
         )
 
