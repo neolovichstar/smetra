@@ -872,6 +872,18 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     open_quote_editor:async item=>openQuoteEditor(item.quote_id),
     open_calculator:async item=>{try{sessionStorage.setItem('smetra.calculator.open',item.calculator)}catch{}tab='calculators';location.hash='calculators';await window.render()},
   };
+  const autoOpenApprovedUi=(list,originalPrompt)=>{
+    // Navigation is harmless but can interrupt the chat; do it only when the
+    // person explicitly asked to open/show a panel. Never auto-start OAuth.
+    if(!Array.isArray(list)||!/(?:^|\\s)(?:открой|покажи|перейди|отобрази|разверни|запусти)(?:\\s|[,.!?:]|$)/iu.test(originalPrompt||''))return;
+    const safe=new Set(['open_section','open_billing','open_quote','open_quote_editor','open_calculator']);
+    const entry=list.find(item=>safe.has(item?.action)&&clientActionRun[item.action]);
+    if(!entry)return;
+    setTimeout(()=>{
+      if(!active()||!messages.isConnected)return;
+      Promise.resolve(clientActionRun[entry.action](entry)).catch(error=>notify(error.message||'Не удалось открыть инструмент'));
+    },0);
+  };
   const renderClientActions=(item,list)=>{
     if(!item||!Array.isArray(list)||!list.length)return;
     const bar=document.createElement('div');bar.className='assistant-client-actions';bar.setAttribute('role','group');bar.setAttribute('aria-label','Действия в приложении');
@@ -1216,7 +1228,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='background'){setActivity('Выполняю запрос…');status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error||'Не удалось завершить ответ')}
       };
