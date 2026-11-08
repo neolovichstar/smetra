@@ -61,7 +61,7 @@ class CreationRequestTests(unittest.TestCase):
         self.assertEqual(sorted(status for status, _ in responses), [200, 201], responses)
         thread_id = responses[0][1]["conversation"]["id"]
         self.assertEqual(thread_id, responses[1][1]["conversation"]["id"])
-        self.assertEqual(len(self.call("/assistant/conversations", token=owner)[1]["items"]), 1)
+        self.assertEqual(len(self.call("/assistant/conversations", token=owner)[1]["items"]), 0, "An unused conversation must remain hidden")
         self.assertEqual(self.call("/assistant/conversations", "POST", {"title": "Changed"}, owner, key="retry-thread")[0], 409)
         self.assertEqual(self.call("/assistant/conversations/"+thread_id, "DELETE", token=owner)[0], 200)
         self.assertEqual(self.call("/assistant/conversations", "POST", body, owner, key="retry-thread")[0], 409)
