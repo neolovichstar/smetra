@@ -121,7 +121,7 @@ class PublicProfilePostgresTests(unittest.TestCase):
     def test_runtime_owns_only_its_profile_terms_and_avatar(self):
         for i, user in enumerate(self.users):
             self.admin.execute(
-                "INSERT INTO profile_avatars VALUES(?,'fixture',?,?)",
+                "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at) VALUES(?,'fixture',?,?)",
                 (user["id"], b"private", int(time.time())),
             )
         runtime = self.runtime()
@@ -158,7 +158,7 @@ class PublicProfilePostgresTests(unittest.TestCase):
         try:
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                 runtime.execute(
-                    "INSERT INTO profile_avatars VALUES(?,'stolen',?,0) ON CONFLICT(user_id) DO UPDATE SET content=excluded.content",
+                    "INSERT INTO profile_avatars(user_id,content_hash,content,updated_at) VALUES(?,'stolen',?,0) ON CONFLICT(user_id) DO UPDATE SET content=excluded.content",
                     (self.users[1]["id"], b"attack"),
                 )
             runtime.finish(False)
