@@ -1,6 +1,7 @@
 """Durable assistant conversations and curated workspace knowledge."""
 
 from contextlib import contextmanager
+import json
 
 from backend.business import DomainError, choice, identity, integer, stamp, string, transaction
 
@@ -185,7 +186,34 @@ def _conversations(service, method, parts, data):
             "ORDER BY created_at DESC,id DESC LIMIT 50",
             (row["id"], service.wid, service.user["id"]),
         ).fetchall()
-        return 200, {"conversation": dict(row), "messages": [dict(item) for item in reversed(messages)]}
+        history = [dict(item) for item in reversed(messages)]
+        # UI navigation actions are persisted in the durable job result,
+        # not inferred again from assistant text. Restore only server-validated
+        # client actions for the matching completed assistant message.
+        completed = service.con.execute(
+            "SELECT result FROM assistant_jobs WHERE conversation_id=? AND workspace_id=? "
+            "AND user_id=? AND kind='chat' AND status='completed' "
+            "ORDER BY updated_at DESC LIMIT 20",
+            (row["id"], service.wid, service.user["id"]),
+        ).fetchall()
+        used = set()
+        for job in completed:
+            try:
+                result = json.loads(job["result"])
+                answer, actions = result.get("answer"), result.get("client_actions")
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if not isinstance(answer, str) or not isinstance(actions, list) or not actions:
+                continue
+            for index in range(len(history)-1, -1, -1):
+                message = history[index]
+                if index not in used and message["role"] == "assistant" and message["content"] == answer:
+                    message["client_actions"] = [
+                        action for action in actions[:3] if isinstance(action, dict)
+                    ]
+                    used.add(index)
+                    break
+        return 200, {"conversation": dict(row), "messages": history}
     if method == "PATCH":
         if not isinstance(data, dict) or not set(data).issubset({"title", "pinned", "context_entity", "context_id"}) or not data:
             raise DomainError(400, "Неверные поля диалога")
