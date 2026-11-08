@@ -946,3 +946,72 @@ html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-sel
 
 /* Support composer: attachments and a small neutral send button inside one field. */
 .support-studio #support-form{display:block;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}.support-compose-surface{position:relative;width:100%;border:1px solid var(--line-strong);border-radius:24px;background:var(--surface-1)}.support-compose-surface:focus-within{border-color:var(--text-3)}.support-studio #message{display:block;width:100%;min-height:48px;padding:14px 50px 12px 46px;border:0;border-radius:24px;background:none;box-shadow:none;line-height:1.4}.support-studio .tg-send{position:absolute;right:8px;bottom:8px;width:32px;height:32px;min-width:32px;min-height:32px;background:#f4f4f4;color:#111}.support-studio .tg-send svg{width:18px;height:18px}.support-attach{position:absolute;left:8px;bottom:8px;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;color:var(--text-2)}.support-attach:hover{background:var(--surface-2)}.support-attach:disabled{opacity:.4}.support-attachments{display:flex;gap:8px;padding:12px 12px 0;flex-wrap:wrap}.support-attachments[hidden]{display:none}.support-attachment{position:relative;width:76px;height:76px;border-radius:12px;overflow:hidden;border:1px solid var(--line)}.support-attachment img{width:100%;height:100%;object-fit:cover}.support-attachment button{position:absolute;top:3px;right:3px;display:grid;place-items:center;background:#111c;color:#fff;border-radius:50%;width:24px;height:24px}.tg-attachment-image{display:block;max-width:min(320px,100%);max-height:320px;width:auto;height:auto;border-radius:10px;margin:0 0 8px;object-fit:contain}.support-studio .tg-compose input[hidden]{display:none}.support-studio .tg-send:focus-visible,.support-attach:focus-visible{outline:2px solid var(--text-2);outline-offset:3px}
+
+
+/* Dense, legible admin workspace. One-screen operational overview, not oversized cards. */
+.admin-head{align-items:center;gap:12px;margin:0 0 8px}
+.admin-head h1{font-size:clamp(19px,2vw,24px);line-height:1.2;margin:0}
+.admin-head p{font-size:12px;margin:3px 0 0}
+.admin-refresh{min-height:30px;padding:0 10px;font-size:12px;flex:none}
+.admin-dateline{margin-bottom:7px;font-size:11px}
+.admin-metrics{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:8px;border-radius:8px}
+.admin-metrics>*{gap:2px;padding:10px 12px;min-width:0}
+.admin-metrics strong{font-size:clamp(17px,1.6vw,21px);line-height:1.2;overflow-wrap:anywhere}
+.admin-metrics span,.admin-metrics small{font-size:11px;line-height:1.3}
+.admin-tabs{display:flex;align-items:center;gap:3px;max-width:100%;overflow-x:auto;scrollbar-width:thin;border-bottom:1px solid var(--line)}
+.admin-tabs button{flex:none;min-height:32px;min-width:0;padding:6px 10px;font-size:12px;white-space:nowrap;border-radius:6px 6px 0 0}
+.admin-section{margin-top:9px;padding:13px 15px;border-radius:9px}
+.admin-section-head{align-items:center;margin-bottom:11px;gap:8px}
+.admin-section-head h2{font-size:16px;line-height:1.25}
+.admin-section-head p{font-size:12px;line-height:1.4;margin-top:3px}
+.admin-controls{gap:8px;margin-bottom:9px}
+#content .admin-search{padding:0 10px}
+#admin-user-search{min-height:32px;font-size:12px}
+.admin-table :is(th,td){padding:8px 9px;font-size:12px;line-height:1.3}
+.admin-person{gap:7px}
+.admin-avatar{width:25px;height:25px}
+.admin-row-action>button{min-height:27px;padding:0 8px;font-size:11px}
+.admin-plan,.admin-state{height:19px;padding:0 7px;font-size:11px}
+.admin-ticket,.admin-audit>div{padding:9px 0}
+.admin-ticket p{margin:4px 0;font-size:12px}
+.admin-empty,.admin-loading,.admin-error{padding:12px 0}
+.admin-analytics .admin-section-head{margin-bottom:12px}
+.admin-analytics .admin-revenue-group+.admin-revenue-group{margin-top:12px}
+.admin-analytics .admin-revenue-group>h3,.admin-analytics>h3{margin:14px 0 7px;font-size:13px}
+.admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{gap:6px}
+.admin-analytics .admin-revenue-metrics>div{min-height:62px;gap:6px;padding:9px 11px;border-radius:7px}
+.admin-analytics .admin-revenue-metrics strong{font-size:clamp(16px,1.5vw,20px)}
+.admin-analytics .admin-growth-funnel>div{min-height:54px;gap:6px;padding:8px 10px;border-radius:7px}
+.admin-analytics .admin-growth-funnel strong{font-size:17px}
+.admin-analytics .admin-funnel-section{margin-top:10px}
+.admin-analytics .admin-funnel-section>h4{margin-bottom:6px}
+.admin-analytics .admin-table th,.admin-analytics .admin-table td{padding:8px 10px}
+.admin-analytics .admin-footnote{margin:8px 0 10px;line-height:1.45}
+.admin-traffic{display:grid;gap:12px;min-width:0}
+.admin-traffic .admin-section-head{margin:0}
+.admin-traffic-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.admin-traffic-metrics>div{min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:3px}
+.admin-traffic-metrics span,.admin-traffic-metrics small{font-size:11px;color:var(--text-3)}
+.admin-traffic-metrics strong{font-size:22px;font-variant-numeric:tabular-nums}
+.admin-traffic-panel{min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:8px}
+.admin-traffic-panel-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.admin-traffic-panel-head h3{font-size:13px;font-weight:600}
+.admin-traffic-panel-head small,.admin-traffic-axis{font-size:11px;color:var(--text-3)}
+.admin-traffic-chart{display:block;width:100%;height:130px;overflow:visible;color:var(--text-3)}
+.admin-traffic-chart rect{fill:var(--text-2)}
+.admin-traffic-chart rect:hover{fill:var(--text)}
+.admin-traffic-axis{display:flex;justify-content:space-between;margin-top:5px}
+.admin-traffic .admin-footnote{margin:0;line-height:1.45}
+@media(max-width:780px){
+ .admin-metrics,.admin-traffic-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .admin-section{padding:10px}
+ .admin-head{gap:8px}
+ .admin-head p{display:none}
+ .admin-traffic-chart{height:105px}
+}
+@media(max-width:360px){
+ .admin-metrics>*,.admin-traffic-metrics>div{padding:8px}
+ .admin-analytics .admin-revenue-metrics,.admin-analytics .admin-growth-funnel{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .admin-tabs button{padding:6px 8px}
+}
