@@ -4,7 +4,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const deferred=()=>{let resolve,reject;const promise=new Promise((done,fail)=>{resolve=done;reject=fail});return {promise,resolve,reject}};
 function setup(full=false){
- const dom=new JSDOM(full?fs.readFileSync('apps/web/app.html','utf8'):'<div id="content"></div><div id="toast" class="hidden"></div>',{url:'https://example.test/app#files',runScripts:'dangerously'}),w=dom.window,doc=w.document;
+ const dom=new JSDOM(full?fs.readFileSync('apps/web/app.html','utf8'):'<div id="content"></div><div id="toast" class="hidden"></div>',{url:full?'https://example.test/app#assistant':'https://example.test/app#files',runScripts:'dangerously'}),w=dom.window,doc=w.document;
  w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.confirm=()=>true;
  w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;
  w.load=source=>{const script=doc.createElement('script');script.textContent=source;doc.head.append(script)};
@@ -21,7 +21,7 @@ function setup(full=false){
  const test=async(name,run,full=false)=>{const env=setup(full);try{await tick();await tick();await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  await test('browser back and forward update screen and sidebar',async({w,doc})=>{
   doc.querySelector('[data-tab="support"]').click();await tick();assert.equal(doc.querySelector('#content').dataset.section,'support');
-  w.history.back();await tick();await tick();await tick();assert.equal(doc.querySelector('#content').dataset.section,'files');assert.ok(doc.querySelector('[data-tab="files"]').classList.contains('active'));
+  w.history.back();await tick();await tick();await tick();assert.equal(doc.querySelector('#content').dataset.section,'assistant');assert.ok(doc.querySelector('[data-tab="assistant"]').classList.contains('active'));
   w.history.forward();await tick();await tick();await tick();assert.equal(doc.querySelector('#content').dataset.section,'support');
  },true);
  await test('content anchor does not navigate away from current section',async({w,doc})=>{
@@ -36,8 +36,8 @@ function setup(full=false){
  await test('late navigation completion cannot steal focus or scroll',async({w,doc})=>{
   const request=deferred(),focus=[];doc.querySelector('#content').focus=()=>focus.push(w.eval('tab'));
   const original=w.Workspace.render;w.Workspace.render=section=>section==='support'?request.promise:original(section);
-  const pending=doc.querySelector('[data-tab="support"]').onclick();doc.querySelector('[data-tab="files"]').click();await tick();
-  request.resolve(true);await pending;assert.deepEqual(focus,['files']);
+  const pending=doc.querySelector('[data-tab="support"]').onclick();doc.querySelector('[data-tab="quotes"]').click();await tick();
+  request.resolve(true);await pending;assert.deepEqual(focus,['quotes']);
  },true);
  await test('save from old account cannot notify new account',async({w,doc})=>{
   await w.SmetraFileEditor.open({id:'note',name:'note.md',sha256:'qa'});await tick();const request=deferred();w.api=()=>request.promise;
