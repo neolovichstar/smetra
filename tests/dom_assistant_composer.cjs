@@ -415,6 +415,30 @@ async function setup(enabled=true,voice=false,remaining=3){
   controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Первый ответ',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));await tick();
   assert.doesNotMatch(doc.querySelector('#assistant-messages').textContent,/Первый ответ/);
  });
+ await test('composer never creates a duplicate confirmation banner; questions render inline in chat',async({w,doc,requests})=>{
+  assert.equal(doc.querySelector('#assistant-decision-slot'),null,'No composer decision slot');
+  const result={
+    answer:'Уточню один параметр.',actions:[{id:'new-action',tool:'create_clients',summary:'Добавить клиента',arguments:{name:'Компания'}}],
+    questions:[{question:'Какой материал выбрать?',options:['Краска','Штукатурка']}],
+    quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000},
+  };
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){
+    controller.enqueue(new TextEncoder().encode('event: done\n'+'data: '+JSON.stringify(result)+'\n\n'));controller.close();
+  }})});
+  type(w,doc,'Подбери материал');doc.querySelector('#assistant-form').requestSubmit();
+  await tick();await tick();await tick();
+  assert.equal(doc.querySelector('.assistant-decision-slot'),null,'No duplicated fixed decision banner');
+  assert.equal(doc.querySelector('#assistant-actions .assistant-proposal')?.querySelectorAll('[data-confirm]').length,1,'Inline proposal still has confirmation');
+  const question=doc.querySelector('#assistant-messages .assistant-question-inline');
+  assert.ok(question,'Clarifying question belongs to the chat');
+  assert.match(question.textContent,/Какой материал выбрать/);
+  assert.equal(question.querySelectorAll('.assistant-question-choice button').length,2);
+  question.querySelector('.assistant-question-choice button').click();
+  await tick();await tick();
+  assert.equal(doc.querySelector('.assistant-question-inline'),null,'Question choices close after replying');
+  assert.equal(requests.length,2,'Choosing an option submits a new chat prompt');
+  assert.equal(JSON.parse(requests[1].body).text,'Краска');
+ });
  await test('pending proposals are scoped to their conversation and old creation cards do not return',async({w,doc})=>{
   const original=w.api;const thread={id:'thread-a',title:'A',context_entity:'',context_id:''};
   w.api=async(path,options={})=>{
