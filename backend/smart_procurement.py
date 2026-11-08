@@ -37,7 +37,7 @@ def _number(value, label, optional=False):
 def quote_fields(data, previous=None):
     if not isinstance(data, dict):
         raise DomainError(400, "Укажите условия предложения")
-    old = previous or {}
+    old = dict(previous) if previous is not None else {}
     get = lambda key, default=None: data.get(key, old.get(key, default))
     price = integer(get("unit_price_kopecks"), "Цена поставщика", 1, 100_000_000_000)
     shipping = get("delivery_kopecks")
