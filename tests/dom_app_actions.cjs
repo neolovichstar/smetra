@@ -63,7 +63,11 @@ async function ready(){await new Promise((resolve,reject)=>{let text='';child.st
  }
  await visit('notifications');click('[data-work=read-notifications]');await until(()=>!doc.querySelector('.unread'),'Read notifications');
  console.log('PASS: client, catalog, project, task and lead edits and notification acknowledgement');
- await visit('quotes');click('[data-work=quote-new]');await until(()=>doc.querySelector('#estimate-editor'),'Quote editor');fill('#f-title','UI quote');
+ await visit('quotes');click('[data-work=quote-new]');await until(()=>w.location.hash==='#assistant'&&/составит смету/.test(doc.querySelector('#assistant-input')?.placeholder||''),'New estimate opens the assistant');
+ assert.equal(doc.querySelector('#estimate-editor'),null,'there is no blank manual estimate form');
+ // The assistant creates the estimate; the full manual editor then works on the existing one.
+ const seeded=(await w.api('/quotes',{method:'POST',body:JSON.stringify({title:'Черновик ИИ',client:'Клиент',items:[{name:'Работа',quantity:'1',unit_price:100}]})})).quote;
+ await visit('quotes');await w.Workspace.editor(seeded);await until(()=>doc.querySelector('#estimate-editor'),'Quote editor');fill('#f-title','UI quote');
  const client=query('#f-client_id');client.value=[...client.options].find(option=>option.value)?.value||'';client.dispatchEvent(new w.Event('change',{bubbles:true}));
  fill('[data-row="0"] [data-key=name]','UI work');fill('[data-row="0"] [data-key=unit_price]','20');click('#add-row');assert.equal(doc.querySelectorAll('[data-row]').length,2);click('[data-remove="1"]');assert.equal(doc.querySelectorAll('[data-row]').length,1);
  click('#editor-bulk-all');fill('#editor-bulk-value','1.1');click('#editor-bulk-preview');click('#editor-bulk-apply');assert.equal(query('[data-row="0"] [data-key=coefficient]').value,'1.1');click('#editor-bulk-undo');assert.equal(Number(query('[data-row="0"] [data-key=coefficient]').value),1);

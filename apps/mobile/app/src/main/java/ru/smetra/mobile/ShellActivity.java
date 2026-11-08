@@ -13,6 +13,7 @@ import android.net.Network;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.view.Gravity;
 import android.view.View;
@@ -29,10 +30,9 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
+import android.graphics.drawable.GradientDrawable;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewCompat;
@@ -54,9 +54,18 @@ public final class ShellActivity extends Activity {
     static final int PERMISSION_CAMERA = 21, PERMISSION_NOTIFICATIONS = 22, PERMISSION_AR = 23, PERMISSION_MICROPHONE = 24;
     private static final int DARK = 0xFF0B0B0C, LIGHT = 0xFFF7F7F5;
 
-    private FrameLayout root;
+    private static final long READY_POLL_MS = 150, READY_LIMIT_MS = 15000;
+
+    /** root spans the whole window (the loading cover lives here); content is inset from the system bars. */
+    private FrameLayout root, content;
     private WebView web;
     private View cover;
+    private StartupMark mark;
+    private long coverShownAt;
+    private int retries;
+    private final Runnable scheduledRetry = this::retry;
+    /** Never trap the user behind the mark, e.g. when a restored page fires no load events. */
+    private final Runnable coverTimeout = this::coverTimedOut;
     private ShellBridge bridge;
     private ValueCallback<Uri[]> fileCallback;
     private Uri cameraOutput;
@@ -75,8 +84,11 @@ public final class ShellActivity extends Activity {
         }
         ShellSession.migrateLegacyToken(this);
         root = new FrameLayout(this);
-        root.setBackgroundColor(DARK);
+        root.setBackgroundColor(Color.BLACK);
+        content = new FrameLayout(this);
+        root.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        ShellFiles.pruneCache(this);
         applyWindowStyle();
         createWebView();
         showCover(null);
@@ -103,7 +115,7 @@ public final class ShellActivity extends Activity {
             getWindow().setDecorFitsSystemWindows(false);
             root.setOnApplyWindowInsetsListener((view, insets) -> {
                 android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                content.setPadding(bars.left, bars.top, bars.right, bars.bottom);
                 return WindowInsets.CONSUMED;
             });
         }
@@ -124,6 +136,10 @@ public final class ShellActivity extends Activity {
         } else {
             getWindow().setStatusBarColor(value ? DARK : LIGHT);
             getWindow().setNavigationBarColor(value ? DARK : LIGHT);
+            // Android 8–10: dark icons on the light theme, otherwise they vanish on white.
+            int flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            View decor = getWindow().getDecorView();
+            decor.setSystemUiVisibility(value ? decor.getSystemUiVisibility() & ~flags : decor.getSystemUiVisibility() | flags);
         }
     }
 
@@ -159,7 +175,7 @@ public final class ShellActivity extends Activity {
         web.setWebViewClient(new ShellClient());
         web.setWebChromeClient(new ShellChrome());
         web.setDownloadListener((url, agent, disposition, mime, length) -> openExternal(Uri.parse(url)));
-        root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        content.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
     private final class ShellClient extends WebViewClient {
@@ -183,28 +199,35 @@ public final class ShellActivity extends Activity {
         @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) { failed = false; }
 
         @Override public void onPageFinished(WebView view, String url) {
-            if (!failed) { pageReady = true; hideCover(); }
+            if (!failed) {
+                pageReady = true;
+                retries = 0;
+                root.removeCallbacks(scheduledRetry);
+                awaitAppReady();
+            }
             CookieManager.getInstance().flush();
         }
 
         @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
             if (!request.isForMainFrame()) return;
             failed = true;
-            showCover("Нет соединения с Сметрой. Проверьте интернет — мы переподключимся сами.");
+            showCover("Нет соединения со Сметрой.\nПроверьте интернет — мы переподключимся сами.");
+            scheduleRetry();
         }
 
         @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse response) {
             if (request.isForMainFrame() && response.getStatusCode() >= 500) {
                 failed = true;
-                showCover("Сметра обновляется или временно недоступна. Повторим через несколько секунд.");
-                root.postDelayed(ShellActivity.this::retry, 5000);
+                showCover("Сметра обновляется или временно недоступна.\nПовторим через несколько секунд.");
+                scheduleRetry();
             }
         }
 
         @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
             // The renderer crashed or was killed for memory: rebuild instead of crashing the app.
             String url = view.getUrl();
-            root.removeView(view);
+            content.removeView(view);
+            if (bridge != null) bridge.close();
             view.destroy();
             createWebView();
             web.loadUrl(url != null && BridgeProtocol.sameOrigin(url, ShellSession.ORIGIN) ? url : ShellSession.ORIGIN + "/app");
@@ -399,54 +422,116 @@ public final class ShellActivity extends Activity {
 
     // ---------- loading and offline ----------
 
+    /**
+     * Full-window cover: the animated mark sits exactly where the system
+     * splash icon was. With a message it stops moving and shows the reason
+     * and a retry button underneath, keeping the mark in place.
+     */
     private void showCover(String message) {
-        if (cover != null) root.removeView(cover);
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER);
-        box.setBackgroundColor(dark ? DARK : LIGHT);
-        int pad = (int) (32 * getResources().getDisplayMetrics().density);
-        box.setPadding(pad, pad, pad, pad);
-        TextView mark = new TextView(this);
-        mark.setText("сметра.");
-        mark.setTextSize(28);
-        mark.setTextColor(dark ? 0xFFF5F5F4 : 0xFF111111);
-        mark.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        box.addView(mark);
-        if (message == null) {
-            ProgressBar spinner = new ProgressBar(this);
-            spinner.setIndeterminate(true);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(pad, pad);
-            lp.topMargin = pad / 2;
-            box.addView(spinner, lp);
-        } else {
-            TextView text = new TextView(this);
-            text.setText(message);
-            text.setTextSize(15);
-            text.setGravity(Gravity.CENTER);
-            text.setTextColor(dark ? 0xFFA1A1A0 : 0xFF555555);
-            text.setPadding(0, pad / 2, 0, pad / 2);
-            box.addView(text);
-            Button retry = new Button(this);
-            retry.setText("Повторить");
-            retry.setAllCaps(false);
-            retry.setOnClickListener(v -> retry());
-            box.addView(retry);
+        int ink = dark ? 0xFFFFFFFF : 0xFF111111;
+        float density = getResources().getDisplayMetrics().density;
+        if (cover == null) {
+            FrameLayout box = new FrameLayout(this);
+            box.setBackgroundColor(dark ? Color.BLACK : LIGHT);
+            box.setClickable(true);
+            mark = new StartupMark(this, ink);
+            box.addView(mark, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            cover = box;
+            root.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
-        cover = box;
-        root.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        if (message == null) root.postDelayed(() -> { if (!pageReady && !failed && cover == box) hideCover(); }, 12000);
+        FrameLayout box = (FrameLayout) cover;
+        box.animate().cancel();
+        box.setAlpha(1f);
+        if (box.getChildCount() > 1) box.removeViewAt(1);
+        mark.setAnimating(message == null);
+        mark.setAlpha(message == null ? 1f : 0.35f);
+        root.removeCallbacks(coverTimeout);
+        if (message == null) {
+            box.setContentDescription("Загрузка");
+            coverShownAt = SystemClock.uptimeMillis();
+            root.postDelayed(coverTimeout, READY_LIMIT_MS);
+            return;
+        }
+        int pad = Math.round(32 * density);
+        LinearLayout notice = new LinearLayout(this);
+        notice.setOrientation(LinearLayout.VERTICAL);
+        notice.setGravity(Gravity.CENTER_HORIZONTAL);
+        notice.setPadding(pad, 0, pad, 0);
+        TextView text = new TextView(this);
+        text.setText(message);
+        text.setTextSize(15);
+        text.setLineSpacing(0, 1.25f);
+        text.setGravity(Gravity.CENTER);
+        text.setTextColor(dark ? 0x99FFFFFF : 0x99111111);
+        notice.addView(text);
+        TextView again = new TextView(this);
+        again.setText("Повторить");
+        again.setTextSize(15);
+        again.setTextColor(ink);
+        again.setGravity(Gravity.CENTER);
+        again.setMinHeight(Math.round(44 * density));
+        again.setPadding(Math.round(24 * density), 0, Math.round(24 * density), 0);
+        GradientDrawable pill = new GradientDrawable();
+        pill.setCornerRadius(999 * density);
+        pill.setStroke(Math.max(1, Math.round(density)), dark ? 0x40FFFFFF : 0x33111111);
+        again.setBackground(pill);
+        again.setFocusable(true);
+        again.setClickable(true);
+        again.setOnClickListener(v -> { retries = 0; retry(); });
+        LinearLayout.LayoutParams button = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        button.topMargin = Math.round(20 * density);
+        notice.addView(again, button);
+        // Below the mark, whose centre stays at the centre of the window.
+        box.addView(notice, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        notice.setVisibility(View.INVISIBLE);
+        StartupMark current = mark;
+        notice.post(() -> {
+            notice.setTranslationY(current.halfHeight() + 40 * density + notice.getHeight() / 2f);
+            notice.setVisibility(View.VISIBLE);
+        });
+        box.setContentDescription(message);
+        box.announceForAccessibility(message);
     }
+
+    /**
+     * The page has loaded, but /app still runs its own boot (session, data).
+     * Keep the native mark until the cabinet leaves the boot state, so the
+     * user sees one loading screen instead of two.
+     */
+    private void awaitAppReady() {
+        if (cover == null || web == null) return;
+        if (SystemClock.uptimeMillis() - coverShownAt > READY_LIMIT_MS) { hideCover(); return; }
+        web.evaluateJavascript("(function(){var b=document.body;if(!b)return'wait';"
+            + "if(!b.classList.contains('smetra-app-booting'))return'ready';"
+            + "var r=document.getElementById('app-startup-retry');return r&&!r.hidden?'ready':'wait'})()", value -> {
+            if (cover == null || failed) return;
+            if ("\"ready\"".equals(value)) hideCover();
+            else root.postDelayed(this::awaitAppReady, READY_POLL_MS);
+        });
+    }
+
+    private void coverTimedOut() { if (!failed) hideCover(); }
 
     private void hideCover() {
         if (cover == null) return;
         View old = cover;
         cover = null;
-        old.animate().alpha(0f).setDuration(180).withEndAction(() -> root.removeView(old)).start();
+        mark = null;
+        root.removeCallbacks(coverTimeout);
+        old.animate().alpha(0f).setDuration(200).withEndAction(() -> root.removeView(old)).start();
+    }
+
+    /** Server or network trouble: retry on our own with backoff (3, 6, 12, 24, 30 s). */
+    private void scheduleRetry() {
+        root.removeCallbacks(scheduledRetry);
+        long delay = Math.min(30000L, 3000L << Math.min(retries, 4));
+        retries++;
+        root.postDelayed(scheduledRetry, delay);
     }
 
     void retry() {
         if (web == null) return;
+        root.removeCallbacks(scheduledRetry);
         showCover(null);
         String url = web.getUrl();
         if (url == null || !BridgeProtocol.sameOrigin(url, ShellSession.ORIGIN)) web.loadUrl(ShellSession.ORIGIN + "/app");
@@ -457,7 +542,7 @@ public final class ShellActivity extends Activity {
         ConnectivityManager manager = getSystemService(ConnectivityManager.class);
         if (manager == null) return;
         network = new ConnectivityManager.NetworkCallback() {
-            @Override public void onAvailable(Network n) { runOnUiThread(() -> { if (failed) retry(); }); }
+            @Override public void onAvailable(Network n) { runOnUiThread(() -> { if (failed) { retries = 0; retry(); } }); }
         };
         try { manager.registerDefaultNetworkCallback(network); } catch (RuntimeException ignored) { network = null; }
     }
@@ -486,10 +571,11 @@ public final class ShellActivity extends Activity {
             ConnectivityManager manager = getSystemService(ConnectivityManager.class);
             try { if (manager != null) manager.unregisterNetworkCallback(network); } catch (RuntimeException ignored) { }
         }
+        if (root != null) { root.removeCallbacks(scheduledRetry); root.removeCallbacks(coverTimeout); }
         if (pendingMediaRequest != null) pendingMediaRequest.deny();
         if (bridge != null) bridge.close();
         if (web != null) {
-            root.removeView(web);
+            content.removeView(web);
             web.destroy();
             web = null;
         }

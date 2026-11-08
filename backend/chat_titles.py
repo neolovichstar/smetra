@@ -67,7 +67,7 @@ def generate_title(prompt, model, paid=False):
                  "Никаких кавычек, форматирования, номеров, JSON и пояснений."},
                 {"role": "user", "content": redacted},
             ],
-            "max_tokens": 45, "temperature": 0.1,
+            "max_tokens": 45, **({} if model.startswith("anthropic/") else {"temperature": 0.1}),
             "usage": {"include": True},
         }).encode(),
         headers={

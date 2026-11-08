@@ -82,7 +82,17 @@ async function setup(enabled=true,voice=false,remaining=3){
   rec.stop();await tick();
   assert.equal(input.value,'Составь смету');
   assert.equal(button.type,'submit');assert.ok(button.querySelector('svg'),'send has a visible SVG');
-  assert.equal(button.disabled,true,'sending remains blocked while quota is exhausted');
+  // With an empty balance Send stays clickable and explains how to continue instead of sending.
+  assert.equal(button.disabled,false,'send explains the empty balance instead of looking broken');
+  button.click();await tick();await tick();
+  const dialog=doc.querySelector('.assistant-tokens-dialog');
+  assert.ok(dialog,'zero-balance dialog opens');
+  assert.match(dialog.textContent,/ИИ-токены закончились/);
+  assert.match(dialog.textContent,/Подключить PRO/);
+  assert.equal(input.value,'Составь смету','the draft is kept');
+  assert.equal(doc.querySelectorAll('.assistant-message.user').length,0,'nothing was sent');
+  dialog.querySelector('.assistant-tokens-actions .btn:last-child').click();await tick();
+  assert.equal(doc.querySelector('.assistant-tokens-dialog'),null,'dialog closes');
   assert.equal(voice.disabled,false,'microphone stays usable after transcription');
   assert.match(doc.querySelector('#assistant-status').textContent,/Текст в поле/);
  },true,true,0);

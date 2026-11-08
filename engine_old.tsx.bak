@@ -1,0 +1,479 @@
+import React, {useLayoutEffect, useMemo} from 'react';
+import {AbsoluteFill, Audio, Sequence, continueRender, delayRender, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
+import {ThreeCanvas} from '@remotion/three';
+import {useFrame, useThree} from '@react-three/fiber';
+import {Environment, Lightformer, Text3D} from '@react-three/drei';
+import * as THREE from 'three';
+import fontBold from '../public/fonts/onest-800.typeface.json';
+import allWords from '../words.json';
+import {Cam, Shot, LEAD, TR, buildShots, camAt, toCamera} from './shots';
+import sfxMeta from '../public/sfx/meta.json';
+
+export const FPS = 30;
+export const C = {
+  bg: '#050507', card: '#111113', card2: '#16161a', line: '#26262b', text: '#f5f5f7', muted: '#a3a3ab',
+  dim: '#6d6d75', accent: '#6ea8ff', accentStrong: '#3d86ff', green: '#5fd38d', orange: '#f5a524', red: '#f2766c',
+};
+const FONT: any = fontBold;
+
+/* ---------- time helpers ---------- */
+export const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+export const easeOut = (x: number) => 1 - Math.pow(1 - clamp(x), 3);
+export const easeOutExpo = (x: number) => (x >= 1 ? 1 : x <= 0 ? 0 : 1 - Math.pow(2, -10 * x));
+export const easeInOut = (x: number) => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+export const easeBack = (x: number) => { x = clamp(x); const c1 = 1.7, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+export const ap = (t: number, at: number, dur = 0.4) => easeOut((t - at) / dur);
+export const apBack = (t: number, at: number, dur = 0.5) => (t < at ? 0 : easeBack((t - at) / dur));
+export const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
+export const rub = (n: number) => Math.round(n).toLocaleString('ru-RU').replace(/ |,/g, ' ') + ' ₽';
+const rand = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+/* ---------- words ---------- */
+export type Word = {w: string; s: number; e: number};
+const FIX: Record<string, string> = {
+  еще: 'ещё', все: 'всё', найдет: 'найдёт', разберется: 'разберётся', Объемы: 'Объёмы', ее: 'её',
+  договоренности: 'договорённости', Сметту: 'смету', Введите: 'Ведите', Сметы: 'сметы', Смету: 'смету', '–': '—',
+};
+export const cleanWord = (raw: string) => {
+  let w = raw.replace(/[.,]+$/, '').replace(/^[«"]|[»"]$/g, '');
+  w = FIX[w] ?? w;
+  if (/^сметр/.test(w)) w = 'С' + w.slice(1);
+  return w;
+};
+export const getWords = (id: string, timeFix: Record<number, number> = {}): Word[] =>
+  ((allWords as any)[id].words as Word[]).map((x, i) => ({...x, s: timeFix[i] ?? x.s}));
+export const audioDuration = (id: string) => (allWords as any)[id].duration as number;
+
+/* ---------- definitions ---------- */
+export type Layout = 'left' | 'center' | 'top' | 'outro';
+export type Group = {
+  lines: [number, number][]; layout?: Layout; size?: number; accent?: number[]; skip?: number[];
+  text?: Record<number, string>; until?: number; same?: boolean; wide?: boolean; logo?: number; start?: number;
+};
+export type UIItem = {from: number; to: number; pos?: 'right' | 'center' | 'left' | 'low'; tilt?: number; scale?: number; render: (t: number) => React.ReactNode};
+export type AudioPart = {src: string; at?: number; startFrom?: number; endAt?: number};
+export type VideoDef = {
+  id: string; title: string; audio: AudioPart[]; duration: number; groups: Group[]; ui: UIItem[];
+  cta?: number; orb?: [number, number]; timeFix?: Record<number, number>; seed?: number;
+  clicks?: number[];
+};
+
+/* ---------- layout ---------- */
+const res = FONT.resolution;
+const charW = (ch: string) => (FONT.glyphs[ch]?.ha ?? FONT.glyphs['о'].ha);
+export const textW = (s: string, size: number) => [...s].reduce((a, ch) => a + charW(ch), 0) * size / res;
+const spaceW = (size: number) => charW(' ') * size / res * 1.25;
+
+const LAYOUT: Record<Layout, {x: number; y: number; align: 'left' | 'center'; size: number; maxW: number}> = {
+  left: {x: -8.0, y: 0.1, align: 'left', size: 1.45, maxW: 7.6},
+  center: {x: 0, y: 0, align: 'center', size: 2.0, maxW: 16},
+  top: {x: 0, y: 3.15, align: 'center', size: 0.85, maxW: 14},
+  outro: {x: 0, y: -1.4, align: 'center', size: 0.9, maxW: 14},
+};
+
+type Placed = {key: string; text: string; x: number; y: number; size: number; s: number; accent: boolean; order: number};
+type GroupInfo = {start: number; exit: number; shot: number; words: Placed[]; style: number; logo?: number; layout: Layout};
+
+const planGroups = (def: VideoDef, words: Word[]) => {
+  const starts = def.groups.map(g => g.start ?? (g.lines.length ? Math.min(words[g.lines[0][0]].s, g.logo ?? Infinity) : g.logo ?? 0));
+  const shots = buildShots(def.groups.map((g, i) => ({start: starts[i], same: g.same, wide: g.layout === 'center' || g.layout === 'top' || g.layout === 'outro'})), def.seed ?? 7);
+  const infos: GroupInfo[] = def.groups.map((g, gi) => {
+    const layout = g.layout ?? 'left';
+    const L = LAYOUT[layout];
+    const lines = g.lines.map(([a, b]) => {
+      const ws: {i: number; text: string}[] = [];
+      for (let i = a; i <= b; i++) if (!g.skip?.includes(i)) ws.push({i, text: g.text?.[i] ?? cleanWord(words[i].w)});
+      return ws;
+    });
+    // lines that carry an accent word are set bigger — the "hero" line of the phrase
+    const mult = lines.map(ws => (ws.some(w => g.accent?.includes(w.i)) && lines.length > 1 ? 1.32 : 1));
+    let size = g.size ?? L.size;
+    const lw = (ws: any[], sz: number) => ws.reduce((a, w) => a + textW(w.text, sz), 0) + spaceW(sz) * (ws.length - 1);
+    const fit = Math.min(1, ...lines.map((ws, li) => L.maxW / Math.max(0.01, lw(ws, size * mult[li]))));
+    size *= fit;
+    const heights = mult.map(m => size * m * 1.389 * 1.08);
+    const totalH = heights.reduce((a, b) => a + b, 0);
+    let y = L.y + totalH / 2;
+    const placed: Placed[] = [];
+    let order = 0;
+    lines.forEach((ws, li) => {
+      const sz = size * mult[li];
+      y -= heights[li];
+      let x = L.align === 'center' ? L.x - lw(ws, sz) / 2 : L.x;
+      ws.forEach(w => {
+        placed.push({key: `${gi}-${w.i}`, text: w.text, x, y: y + heights[li] * 0.22, size: sz, s: words[w.i].s, accent: !!g.accent?.includes(w.i), order: order++});
+        x += textW(w.text, sz) + spaceW(sz);
+      });
+    });
+    const exit = g.until ?? (gi + 1 < def.groups.length ? starts[gi + 1] - 0.1 : def.duration + 5);
+    // a phrase that stays on the outro plane keeps the logo on screen
+    const logo = g.logo ?? (g.same && gi > 0 ? def.groups[gi - 1].logo : undefined);
+    return {start: starts[gi], exit, shot: gi, words: placed, style: gi % 3, logo, layout};
+  });
+  return {shots, infos};
+};
+
+/* ---------- 3D type ---------- */
+const whiteMat = {color: '#ffffff', roughness: 0.22, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.12, emissive: '#ffffff', emissiveIntensity: 0.06};
+const accentMat = {color: '#7fb2ff', roughness: 0.2, metalness: 0.15, clearcoat: 1, emissive: '#3d86ff', emissiveIntensity: 1.1};
+
+const Glyphs: React.FC<{text: string; size: number; mat: any; opacity: number}> = ({text, size, mat, opacity}) => (
+  <Text3D font={FONT} size={size} height={size * 0.32} curveSegments={6} bevelEnabled bevelThickness={size * 0.03} bevelSize={size * 0.016} bevelSegments={2}>
+    {text}
+    <meshPhysicalMaterial {...mat} transparent opacity={opacity} />
+  </Text3D>
+);
+
+/** a word slamming into the plane exactly on its syllable; accent words assemble letter by letter from a scatter */
+const Word3D: React.FC<{p: Placed; t: number; style: number; exit: number}> = ({p, t, style, exit}) => {
+  const k = t - p.s + 0.04;
+  if (k < -0.02) return null;
+  const q = easeInOut((t - exit - p.order * 0.02) / 0.3);
+  if (q >= 1) return null;
+  const mat = p.accent ? accentMat : whiteMat;
+  if (p.accent) {
+    const r = rand(p.text.length * 97 + Math.round(p.s * 100));
+    let x = p.x;
+    return (
+      <group position={[0, q * 1.2, q * 5]}>
+        {[...p.text].map((ch, i) => {
+          const w = textW(ch, p.size);
+          const e = easeOutExpo((k - i * 0.025) / 0.42);
+          const sx = (r() - 0.5) * 5, sy = (r() - 0.5) * 3.5, sz = 1 + r() * 3, rx = (r() - 0.5) * 5, ry = (r() - 0.5) * 5, rz = (r() - 0.5) * 3;
+          const node = (
+            <group key={i} position={[x + w / 2 + sx * (1 - e), p.y + p.size * 0.35 + sy * (1 - e), sz * (1 - e)]} rotation={[rx * (1 - e), ry * (1 - e), rz * (1 - e)]}>
+              <group position={[-w / 2, -p.size * 0.35, 0]}><Glyphs text={ch} size={p.size} mat={mat} opacity={clamp(e * 3) * (1 - q)} /></group>
+            </group>
+          );
+          x += w;
+          return node;
+        })}
+      </group>
+    );
+  }
+  const e = easeOutExpo(k / 0.32);
+  const w = textW(p.text, p.size);
+  // three entrance flavours rotate per phrase so the edit doesn't repeat itself
+  const from = style === 0 ? {z: 7, rx: 0, ry: 0, y: 0} : style === 1 ? {z: 1.5, rx: -1.4, ry: 0, y: -p.size * 1.2} : {z: 3, rx: 0, ry: 1.3, y: 0};
+  return (
+    <group position={[p.x + w / 2, p.y + p.size * 0.35 + from.y * (1 - e) + q * p.size, from.z * (1 - e) + q * 5]}
+      rotation={[from.rx * (1 - e) - q * 0.5, from.ry * (1 - e), 0]} scale={1 + (1 - e) * 0.3}>
+      <group position={[-w / 2, -p.size * 0.35, 0]}><Glyphs text={p.text} size={p.size} mat={mat} opacity={clamp(e * 2.5) * (1 - q)} /></group>
+    </group>
+  );
+};
+
+const Logo3D: React.FC<{at: number; t: number; y: number; size: number}> = ({at, t, y, size}) => {
+  if (t < at - 0.05) return null;
+  const total = textW('сметра', size) + size * 0.32;
+  let x = -total / 2;
+  return (
+    <group position={[0, y, 0]}>
+      {'сметра'.split('').map((ch, i) => {
+        const e = easeOutExpo((t - at - i * 0.04) / 0.5);
+        const w = textW(ch, size);
+        const node = (
+          <group key={i} position={[x + w / 2, (1 - e) * (i % 2 ? 3 : -3), (1 - e) * 9]} rotation={[(1 - e) * 2.2, (1 - e) * (i - 2.5) * 0.4, 0]}>
+            <group position={[-w / 2, -size * 0.36, 0]}><Glyphs text={ch} size={size} mat={whiteMat} opacity={clamp(e * 3)} /></group>
+          </group>
+        );
+        x += w;
+        return node;
+      })}
+      <mesh position={[x + size * 0.17, -size * 0.36 + size * 0.13, size * 0.16]} scale={size * 0.13 * apBack(t, at + 0.35, 0.6) || 0.0001}>
+        <sphereGeometry args={[1, 48, 48]} />
+        <meshPhysicalMaterial color="#6ea8ff" emissive="#3d86ff" emissiveIntensity={3 + Math.sin(t * 5) * 0.5} roughness={0.15} clearcoat={1} />
+      </mesh>
+    </group>
+  );
+};
+
+/* ---------- background ---------- */
+const glowTex = (() => {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d')!; const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+})();
+
+const Haze: React.FC<{shot: Shot; i: number; t: number}> = ({shot, i, t}) => {
+  const r = rand(i * 31 + 5);
+  const blobs = useMemo(() => Array.from({length: 4}).map(() => ({
+    p: [(r() - 0.5) * 30, (r() - 0.5) * 14, -8 - r() * 14] as [number, number, number], s: 14 + r() * 18,
+    c: r() > 0.35 ? '#2f6fe8' : '#cfe0ff', o: 0.12 + r() * 0.16,
+  })), [i]);
+  return (
+    <group position={shot.pos} quaternion={shot.quat}>
+      {blobs.map((b, k) => (
+        <sprite key={k} position={b.p} scale={b.s * (1 + Math.sin(t * 0.7 + k) * 0.06)}>
+          <spriteMaterial map={glowTex} color={b.c} transparent opacity={b.o} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </sprite>
+      ))}
+    </group>
+  );
+};
+
+const Dust: React.FC<{shots: Shot[]}> = ({shots}) => {
+  const geo = useMemo(() => {
+    const r = rand(42), n = 5000, p = new Float32Array(n * 3);
+    const box = new THREE.Box3(); shots.forEach(s => box.expandByPoint(s.pos)); box.expandByScalar(30);
+    for (let i = 0; i < n; i++) {
+      p[i * 3] = lerp(box.min.x, box.max.x, r()); p[i * 3 + 1] = lerp(box.min.y, box.max.y, r()); p[i * 3 + 2] = lerp(box.min.z, box.max.z, r());
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3)); return g;
+  }, [shots]);
+  return <points geometry={geo}><pointsMaterial size={0.07} color="#cfe0ff" transparent opacity={0.7} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} /></points>;
+};
+
+const Orb: React.FC<{t: number; on: [number, number]; shot: Shot}> = ({t, on, shot}) => {
+  const p = ap(t, on[0], 0.8) * (1 - ap(t, on[1], 0.6));
+  if (p <= 0) return null;
+  return (
+    <group position={shot.pos} quaternion={shot.quat}>
+      <group position={[0, 0.3, -6]} scale={p * (1 + Math.sin(t * 5) * 0.03)}>
+        <mesh><sphereGeometry args={[2.4, 64, 64]} /><meshPhysicalMaterial color="#2f6fe8" emissive="#3d86ff" emissiveIntensity={1.6} roughness={0.08} clearcoat={1} /></mesh>
+        <mesh rotation={[1.2, t * 0.8, 0]}><torusGeometry args={[3.6, 0.03, 16, 200]} /><meshBasicMaterial color="#9cc4ff" /></mesh>
+        <mesh rotation={[0.4, -t * 0.6, 0.8]}><torusGeometry args={[4.3, 0.022, 16, 200]} /><meshBasicMaterial color="#6ea8ff" /></mesh>
+      </group>
+    </group>
+  );
+};
+
+/* ---------- post: one custom pass — glow (mip taps), radial zoom blur on flights, chromatic split ---------- */
+const POST_FRAG = `
+  uniform sampler2D tex; uniform float zoom; uniform float ca; uniform float glow; uniform float grain; uniform float seed;
+  varying vec2 vUv;
+  vec3 bright(vec2 uv, float lod) { vec3 c = textureLod(tex, uv, lod).rgb; return max(c - 0.45, 0.0) * 1.6; }
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
+  void main() {
+    vec2 d = vUv - 0.5;
+    vec3 acc = vec3(0.0); float tot = 0.0;
+    for (int i = 0; i < 20; i++) {
+      float f = float(i) / 19.0; float w = 1.0 - f * 0.55;
+      vec2 uv = 0.5 + d * (1.0 - zoom * f);
+      vec2 o = d * ca;
+      acc += vec3(texture(tex, uv + o).r, texture(tex, uv).g, texture(tex, uv - o).b) * w; tot += w;
+    }
+    vec3 col = acc / tot;
+    vec3 g = bright(vUv, 2.0) * 0.5 + bright(vUv, 3.5) * 0.7 + bright(vUv, 5.0) * 0.9 + bright(vUv, 6.5) * 0.8;
+    col += g * glow * vec3(0.75, 0.86, 1.0);
+    col *= smoothstep(1.05, 0.25, length(d * vec2(1.25, 1.0)));
+    col += (hash(vUv * 1000.0) - 0.5) * grain;
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+
+const Post: React.FC<{speed: number; kick: number; t: number}> = ({speed, kick, t}) => {
+  const {gl, scene, camera, size} = useThree();
+  const rt = useMemo(() => {
+    const r = new THREE.WebGLRenderTarget(size.width, size.height, {type: THREE.HalfFloatType, samples: 4});
+    r.texture.generateMipmaps = true; r.texture.minFilter = THREE.LinearMipmapLinearFilter; return r;
+  }, [size.width, size.height]);
+  const quad = useMemo(() => {
+    const mat = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3 as any,
+      uniforms: {tex: {value: rt.texture}, zoom: {value: 0}, ca: {value: 0}, glow: {value: 1}, grain: {value: 0.05}, seed: {value: 0}},
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: POST_FRAG.replace('varying vec2 vUv;', 'in vec2 vUv; out vec4 outColor;').replace('gl_FragColor', 'outColor'),
+    });
+    mat.vertexShader = 'out vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+    const s = new THREE.Scene(); s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+    return {s, mat, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)};
+  }, [rt]);
+  const u = quad.mat.uniforms;
+  u.zoom.value = Math.min(0.32, speed * 0.26 + kick * 0.04);
+  u.ca.value = 0.002 + speed * 0.025 + kick * 0.008;
+  u.glow.value = 1.0 + kick * 0.9 + speed * 0.6;
+  u.seed.value = Math.floor(t * 30) % 97;
+  useFrame(() => {
+    gl.setRenderTarget(rt); gl.clear(); gl.render(scene, camera);
+    gl.setRenderTarget(null); gl.render(quad.s, quad.cam);
+  }, 1);
+  return null;
+};
+
+const CameraSync: React.FC<{cam: Cam; shake: number; t: number}> = ({cam, shake, t}) => {
+  const camera = useThree(s => s.camera) as THREE.PerspectiveCamera;
+  useLayoutEffect(() => {
+    toCamera(cam, camera);
+    if (shake > 0) {
+      camera.position.add(new THREE.Vector3(Math.sin(t * 91) * shake * 0.12, Math.cos(t * 77) * shake * 0.1, 0));
+      camera.updateMatrixWorld(true);
+    }
+  });
+  return null;
+};
+
+/* ---------- motion state shared by 3D and UI ---------- */
+const useMotion = (def: VideoDef, t: number) => {
+  const words = useMemo(() => getWords(def.id, def.timeFix), [def]);
+  const plan = useMemo(() => planGroups(def, words), [def, words]);
+  const cam = camAt(plan.shots, t);
+  // accent words "hit": short shake + flash when they land
+  const kick = plan.infos.flatMap(g => g.words.filter(w => w.accent && w.order >= 0)).reduce((a, w) => {
+    const k = t - w.s;
+    return k >= 0 && k < 0.35 ? Math.max(a, 1 - k / 0.35) : a;
+  }, 0);
+  return {plan, cam, kick};
+};
+
+const Scene: React.FC<{def: VideoDef; t: number}> = ({def, t}) => {
+  const {plan, cam, kick} = useMotion(def, t);
+  const {shots, infos} = plan;
+  return (
+    <>
+      <CameraSync cam={cam} shake={kick * 0.6} t={t} />
+      <color attach="background" args={[C.bg]} />
+      <fog attach="fog" args={[C.bg, 22, 70]} />
+      <ambientLight intensity={0.25} />
+      <directionalLight position={[-6, 8, 14]} intensity={2.6} />
+      <directionalLight position={[8, 2, -6]} intensity={3} color="#6ea8ff" />
+      <Environment resolution={256} frames={1}>
+        <Lightformer form="rect" intensity={2.5} position={[0, 6, -8]} scale={[14, 4, 1]} />
+        <Lightformer form="rect" intensity={5} color="#6ea8ff" position={[-8, 1, 2]} rotation-y={Math.PI / 2} scale={[24, 0.6, 1]} />
+        <Lightformer form="rect" intensity={3} position={[8, -1, 2]} rotation-y={-Math.PI / 2} scale={[24, 0.4, 1]} />
+      </Environment>
+      <Dust shots={shots} />
+      {shots.map((s, i) => (i > 0 && s.pos.equals(shots[i - 1].pos) ? null : <Haze key={i} shot={s} i={i} t={t} />))}
+      {def.orb && <Orb t={t} on={def.orb} shot={shots[infos.findIndex(g => g.start >= def.orb![0] - 0.5)] ?? shots[0]} />}
+      {infos.map((g, gi) => {
+        if (t < g.start - 1.2 || t > g.exit + 1.5) return null;
+        const s = shots[gi];
+        const outro = g.layout === 'outro';
+        return (
+          <group key={gi} position={s.pos} quaternion={s.quat}>
+            {g.words.map(w => <Word3D key={w.key} p={w} t={t} style={g.style} exit={g.exit} />)}
+            {g.logo !== undefined && <Logo3D at={g.logo} t={t} y={outro ? 1.2 : 0} size={outro ? 2 : 2.6} />}
+          </group>
+        );
+      })}
+      <Post speed={cam.speed} kick={kick} t={t} />
+    </>
+  );
+};
+
+/* ---------- UI panels living in the same 3D world (CSS3D projection) ---------- */
+const eps = (v: number) => (Math.abs(v) < 1e-10 ? 0 : v);
+const camCSS = (m: THREE.Matrix4) => { const e = m.elements; return `matrix3d(${eps(e[0])},${eps(-e[1])},${eps(e[2])},${eps(e[3])},${eps(e[4])},${eps(-e[5])},${eps(e[6])},${eps(e[7])},${eps(e[8])},${eps(-e[9])},${eps(e[10])},${eps(e[11])},${eps(e[12])},${eps(-e[13])},${eps(e[14])},${eps(e[15])})`; };
+const objCSS = (m: THREE.Matrix4) => { const e = m.elements; return `translate(-50%,-50%) matrix3d(${eps(e[0])},${eps(e[1])},${eps(e[2])},${eps(e[3])},${eps(-e[4])},${eps(-e[5])},${eps(-e[6])},${eps(-e[7])},${eps(e[8])},${eps(e[9])},${eps(e[10])},${eps(e[11])},${eps(e[12])},${eps(e[13])},${eps(e[14])},${eps(e[15])})`; };
+const PX = 0.0092; // world units per css px
+const UIPOS = {right: [4.5, -0.2], center: [0, -1.0], low: [0, -1.3], left: [-4.6, -0.2]} as const;
+
+const UILayer: React.FC<{def: VideoDef; t: number}> = ({def, t}) => {
+  const {plan, cam, kick} = useMotion(def, t);
+  const camera = useMemo(() => new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 200), []);
+  toCamera(cam, camera);
+  if (kick > 0) { camera.position.add(new THREE.Vector3(Math.sin(t * 91) * kick * 0.072, Math.cos(t * 77) * kick * 0.06, 0)); camera.updateMatrixWorld(true); }
+  const W = 1920, H = 1080;
+  const fov = camera.projectionMatrix.elements[5] * H / 2;
+  const blur = cam.speed * 9;
+  return (
+    <AbsoluteFill style={{perspective: fov, overflow: 'hidden', filter: blur > 0.3 ? `blur(${blur}px)` : undefined}}>
+      <div style={{position: 'absolute', width: W, height: H, transformStyle: 'preserve-3d',
+        transform: `translateZ(${fov}px) ${camCSS(camera.matrixWorldInverse)} translate(${W / 2}px,${H / 2}px)`}}>
+        {def.ui.map((u, i) => {
+          if (t < u.from - 0.6 || t > u.to + 0.8) return null;
+          const gi = Math.max(0, plan.infos.reduce((a, g, k) => (g.start <= u.from + 0.3 ? k : a), 0));
+          const s = plan.shots[gi];
+          const p = easeOutExpo((t - u.from) / 0.6);
+          const q = easeInOut((t - u.to) / 0.4);
+          const [lx, ly] = UIPOS[u.pos ?? 'right'];
+          const tilt = (u.tilt ?? (u.pos === 'right' || !u.pos ? -16 : u.pos === 'left' ? 14 : 0)) * Math.PI / 180;
+          const m = new THREE.Matrix4().compose(s.pos, s.quat, new THREE.Vector3(1, 1, 1))
+            .multiply(new THREE.Matrix4().makeTranslation(lx + (1 - p) * 2, ly - (1 - p) * 1.5 + q * 1.5, 0.4 - (1 - p) * 6 + q * 5))
+            .multiply(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler((1 - p) * 0.6, tilt + (1 - p) * -0.8 + Math.sin(t * 0.6 + i) * 0.03, (1 - p) * 0.2)))
+            .multiply(new THREE.Matrix4().makeScale(PX * (u.scale ?? 1), PX * (u.scale ?? 1), PX * (u.scale ?? 1)));
+          return (
+            <div key={i} style={{position: 'absolute', left: 0, top: 0, transform: objCSS(m), opacity: clamp(p * 2) * (1 - q), backfaceVisibility: 'hidden'}}>
+              <div style={{filter: `drop-shadow(0 0 ${30 + kick * 40}px rgba(61,134,255,.18))`}}>{u.render(t)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/* ---------- sound design: quiet whooshes on flights, impact on the logo, clicks on presses ---------- */
+type Sfx = {src: string; at: number; vol: number};
+const SFX: any = sfxMeta;
+const planSfx = (def: VideoDef, shots: Shot[], infos: GroupInfo[]): Sfx[] => {
+  const out: Sfx[] = [{src: 'swoosh', at: 0.05 - SFX.swoosh.peak, vol: 0.16}];
+  const flights = ['whoosh1', 'whoosh2', 'swoosh'];
+  shots.forEach((s, i) => {
+    if (i === 0) return;
+    const same = s.pos.equals(shots[i - 1].pos);
+    const name = same ? 'swoosh' : flights[i % 3];
+    out.push({src: name, at: s.start + LEAD - TR / 2 - SFX[name].peak, vol: same ? 0.09 : 0.17});
+  });
+  infos.forEach((g, gi) => {
+    if (def.groups[gi].logo === undefined) return;
+    out.push({src: 'impact', at: g.logo + 0.35 - SFX.impact.peak, vol: 0.26});
+    if (g.logo > 3) out.push({src: 'riser', at: g.logo - SFX.riser.peak, vol: 0.08});
+  });
+  (def.clicks ?? []).forEach(c => out.push({src: 'click', at: c - SFX.click.peak, vol: 0.22}));
+  return out;
+};
+
+/* ---------- overlays ---------- */
+const Flash: React.FC<{def: VideoDef; t: number}> = ({def, t}) => {
+  const {cam, kick} = useMotion(def, t);
+  const f = Math.max(0, cam.speed - 0.55) * 0.9 + kick * 0.12;
+  return (
+    <>
+      <AbsoluteFill style={{background: 'radial-gradient(ellipse at 50% 50%, rgba(220,235,255,1), rgba(110,168,255,.5) 40%, transparent 75%)', opacity: f, mixBlendMode: 'screen', pointerEvents: 'none'}} />
+      <AbsoluteFill style={{pointerEvents: 'none', opacity: cam.speed * 0.9, mixBlendMode: 'screen'}}>
+        <div style={{position: 'absolute', left: '-10%', right: '-10%', top: '49.6%', height: 6, background: 'linear-gradient(90deg, transparent, #9cc4ff 30%, #fff 50%, #9cc4ff 70%, transparent)', filter: 'blur(3px)'}} />
+      </AbsoluteFill>
+    </>
+  );
+};
+
+export const CTA: React.FC<{at: number; t: number}> = ({at, t}) => {
+  const p = easeOutExpo((t - at) / 0.6);
+  return (
+    <div style={{position: 'absolute', left: 0, right: 0, bottom: 110, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
+      opacity: clamp(p * 1.5), transform: `translateY(${(1 - p) * 40}px) scale(${0.9 + p * 0.1})`}}>
+      <div style={{background: '#ededef', color: '#0b0b0c', fontWeight: 600, fontSize: 32, padding: '20px 44px', borderRadius: 14, boxShadow: '0 0 80px rgba(110,168,255,.45)'}}>Создать смету бесплатно</div>
+      <div style={{color: C.muted, fontSize: 26, letterSpacing: 1}}>smetra.online</div>
+    </div>
+  );
+};
+
+const useFonts = () => {
+  const [h] = React.useState(() => delayRender('fonts'));
+  React.useEffect(() => {
+    const faces = [400, 500, 600, 700].map(w => new FontFace('Onest', `url(${staticFile(`fonts/onest-${w === 600 ? 700 : w}.ttf`)})`, {weight: String(w)}));
+    Promise.all(faces.map(f => f.load())).then(fs => { fs.forEach(f => (document as any).fonts.add(f)); continueRender(h); });
+  }, [h]);
+};
+
+export const Video: React.FC<{def: VideoDef}> = ({def}) => {
+  useFonts();
+  const frame = useCurrentFrame();
+  const {width, height} = useVideoConfig();
+  const t = frame / FPS;
+  const fadeOut = 1 - clamp((t - (def.duration - 0.4)) / 0.4);
+  return (
+    <AbsoluteFill style={{background: C.bg, fontFamily: 'Onest, sans-serif', color: C.text}}>
+      <ThreeCanvas width={width} height={height} camera={{fov: 35, position: [0, 0, 16], near: 0.1, far: 200}} gl={{antialias: false}} dpr={1} style={{position: 'absolute', inset: 0}}>
+        <Scene def={def} t={t} />
+      </ThreeCanvas>
+      <UILayer def={def} t={t} />
+      <Flash def={def} t={t} />
+      {def.cta !== undefined && <CTA at={def.cta} t={t} />}
+      <AbsoluteFill style={{background: '#000', opacity: 1 - fadeOut, pointerEvents: 'none'}} />
+      {useMemo(() => { const w = getWords(def.id, def.timeFix); const p = planGroups(def, w); return planSfx(def, p.shots, p.infos); }, [def]).map((x, i) => (
+        <Sequence key={'sfx' + i} from={Math.max(0, Math.round(x.at * FPS))}>
+          <Audio src={staticFile(`sfx/${x.src}.wav`)} volume={x.vol} startFrom={x.at < 0 ? Math.round(-x.at * FPS) : undefined} />
+        </Sequence>
+      ))}
+      {def.audio.map((a, i) => (
+        <Sequence key={i} from={Math.round((a.at ?? 0) * FPS)}>
+          <Audio src={staticFile(a.src)} startFrom={a.startFrom ? Math.round(a.startFrom * FPS) : undefined} endAt={a.endAt ? Math.round(a.endAt * FPS) : undefined} />
+        </Sequence>
+      ))}
+    </AbsoluteFill>
+  );
+};

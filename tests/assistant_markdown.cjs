@@ -13,7 +13,8 @@ const html=context.assistantMarkdown('# Смета\n\n**Итог:** 10 000 ₽\n
 assert.match(html,/<h1>Смета<\/h1>/);
 assert.match(html,/<strong>Итог:<\/strong>/);
 assert.match(html,/<ul>\s*<li>Работа<\/li>\s*<li>Материалы<\/li>\s*<\/ul>/);
-assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+// Code is highlighted token by token; the script must stay escaped text.
+assert.match(html, /&lt;script&gt;[\s\S]*alert[\s\S]*&lt;\/script&gt;/);assert.doesNotMatch(html,/<script/);
 assert.match(html, /href="https:\/\/example.org\/terms\?a=1&amp;b=2"/);
 
 const attack=context.assistantMarkdown('<img src=x onerror=alert(1)>\n\n[нажми](javascript:alert(1))');
@@ -41,3 +42,22 @@ assert.equal(context.assistantEditValue('notes',null),'—');
 const large=context.assistantEditPreview({rows:Array.from({length:8},(_,i)=>({field:'name',before:'До',after:'После '+i}))});
 assert.match(large,/<details><summary>Ещё 3 изменений/);assert.match(large,/После 7/);
 console.log('PASS: safe before/after diff, exact kopecks, long edit disclosure');
+
+// ChatGPT-style rendering: copyable tables with numeric alignment, source pills,
+// highlighted and collapsible code. Highlighting must never let markup through.
+const rich=context.assistantMarkdown([
+  '| Работа | Кол-во | Сумма |','|---|---|---|','| Покраска | 40 м² | 12 000 ₽ |','',
+  'Источник: https://www.example.org/prices','',
+  '```python','x = "\\"><img src=x onerror=alert(1)>"  # комментарий','def total(a):','    return a * 2','```','',
+  '```json','{"price": 100, "ok": true}','```','',
+  '```', ...Array.from({length:30},(_,i)=>'строка '+i), '```',
+].join('\n'));
+assert.match(rich,/data-copy-table/);
+assert.match(rich,/<td class="is-numeric">40 м²<\/td>/);assert.match(rich,/<td class="is-numeric">12 000 ₽<\/td>/);
+assert.match(rich,/<td>Покраска<\/td>/);
+assert.match(rich,/class="assistant-link-pill"[^>]*>example\.org<\/a>/);
+assert.match(rich,/<span class="tok-keyword">def<\/span>/);assert.match(rich,/<span class="tok-comment"># комментарий<\/span>/);
+assert.match(rich,/<span class="tok-key">&quot;price&quot;<\/span>/);assert.match(rich,/<span class="tok-number">100<\/span>/);
+assert.doesNotMatch(rich,/<img/);assert.match(rich,/&lt;img src=x onerror=alert\(1\)&gt;/);
+assert.match(rich,/assistant-code is-collapsed/);assert.match(rich,/data-code-expand[^>]*>Показать всё · 30 строк/);
+console.log('PASS: copyable tables, numeric columns, source pills, safe highlighted and collapsible code');

@@ -1051,7 +1051,9 @@ class Service:
         from backend.entitlements import workspace_feature_access
         paid_workspace = workspace_feature_access(self.con, self.wid, "clean_export", stamp())["allowed"]
         from backend.plan_catalog import starter_quote_limit
-        if (not paid_workspace and (owner["entitlement_until"] or 0) <= stamp()
+        # Estimates confirmed from an assistant proposal were paid in AI tokens.
+        ai_paid = bool(getattr(self, "assistant_quote_creation", None))
+        if (not paid_workspace and not ai_paid and (owner["entitlement_until"] or 0) <= stamp()
                 and count >= starter_quote_limit(owner)):
             raise DomainError(
                 402,

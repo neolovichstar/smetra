@@ -112,11 +112,41 @@
     const back=el('button','smetra-quote-preview-back icon-button');back.innerHTML=window.SmetraIcons?window.SmetraIcons.svg('arrow-left',18):'←';
     back.type='button';back.setAttribute('aria-label','К списку смет');back.title='К списку смет';back.hidden=true;
     back.onclick=()=>{seq++;loading=false;current=null;pending=null;render()};
-    header.append(back,titleWrap,close);panel.append(header);
+    const expand=el('button','smetra-quote-preview-expand icon-button');expand.type='button';
+    expand.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+    expand.setAttribute('aria-label','Развернуть редактор');expand.title='Развернуть';expand.setAttribute('aria-pressed','false');
+    header.append(back,titleWrap,expand,close);panel.append(header);
+    // Desktop: drag the left edge to share space between chat and estimate.
+    const grip=el('div','smetra-quote-preview-grip');grip.setAttribute('role','separator');grip.setAttribute('aria-orientation','vertical');
+    grip.setAttribute('aria-label','Ширина редактора сметы');grip.tabIndex=0;panel.append(grip);
     const content=el('div','smetra-quote-preview-content');panel.append(content);
     const hostRoot=host.closest('.assistant-studio');
     host.append(panel);
+    // Phones: the estimate is a full-screen layer; this chip brings it back from the chat.
+    const chip=el('button','smetra-quote-chip');chip.type='button';chip.hidden=true;
+    chip.innerHTML='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 4h10v16H7zM10 9h4M10 13h4"/></svg><span>Смета</span>';
+    chip.onclick=()=>setOpen(true);
+    (hostRoot||host).append(chip);
+    const syncChip=()=>{chip.hidden=visible||!(current||draft||mode)};
+    const WIDTH_KEY='smetra.preview.width';
+    const applyWidth=px=>{if(!hostRoot)return px;const max=Math.max(360,(hostRoot.clientWidth||window.innerWidth)*.68);const value=Math.round(Math.min(max,Math.max(340,px)));hostRoot.style.setProperty('--preview-w',value+'px');grip.setAttribute('aria-valuenow',String(value));return value};
+    try{const saved=Number(localStorage.getItem(WIDTH_KEY));if(saved>0)applyWidth(saved)}catch{}
+    grip.addEventListener('pointerdown',event=>{
+      if(event.button!==0||!hostRoot)return;event.preventDefault();grip.setPointerCapture(event.pointerId);hostRoot.classList.add('is-resizing');
+      const right=hostRoot.getBoundingClientRect().right;
+      const move=e=>applyWidth(right-e.clientX);
+      const up=e=>{grip.releasePointerCapture(e.pointerId);hostRoot.classList.remove('is-resizing');grip.removeEventListener('pointermove',move);grip.removeEventListener('pointerup',up);try{localStorage.setItem(WIDTH_KEY,String(applyWidth(right-e.clientX)))}catch{}};
+      grip.addEventListener('pointermove',move);grip.addEventListener('pointerup',up);
+    });
+    grip.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const now=panel.getBoundingClientRect().width;const value=applyWidth(now+(event.key==='ArrowLeft'?32:-32));try{localStorage.setItem(WIDTH_KEY,String(value))}catch{}});
+    grip.addEventListener('dblclick',()=>{hostRoot?.style.removeProperty('--preview-w');try{localStorage.removeItem(WIDTH_KEY)}catch{}});
+    expand.onclick=()=>{const wide=!hostRoot?.classList.contains('is-preview-wide');hostRoot?.classList.toggle('is-preview-wide',wide);expand.setAttribute('aria-pressed',String(wide));expand.setAttribute('aria-label',wide?'Свернуть редактор':'Развернуть редактор');expand.title=wide?'Свернуть':'Развернуть'};
     let current=null,pending=null,visible=false,seq=0,loading=false,pickSeq=0;
+    // New-estimate mode: an empty editor waits for the assistant; draft holds a
+    // server-validated create_quotes proposal (sections and totals computed by the server).
+    let mode=null,draft=null,progressText='',onExample=null,statusLine=null;
+    const EXAMPLES=['Составь смету на косметический ремонт комнаты 20 м²','Рассчитай ремонт ванной под ключ в Москве',
+      'Сделай подробную смету на электромонтаж двухкомнатной квартиры','Нужна смета на строительство каркасного дома 120 м²'];
     const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
     const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
     let layout=null,configureVisible=false;
@@ -128,6 +158,9 @@
       if(!visible)return;
       content.replaceChildren();
       back.hidden=!current||typeof listQuotes!=='function';
+      statusLine=null;
+      if(draft){renderDraft();return}
+      if(mode==='new'&&!current){renderNew();return}
       const listing=!current&&!loading&&typeof listQuotes==='function';
       heading.textContent=listing?'Сметы':'Смета';kicker.textContent=listing?'Выберите для предпросмотра':'Предпросмотр';
       if(!current){if(!loading)picker();return}
@@ -158,6 +191,55 @@
       foot.append(edit);
       if(pending)foot.append(el('p','smetra-visual-footnote','Предложения по позициям применяются только после подтверждения в чате.'));
       content.append(foot);
+    };
+    const status=()=>{statusLine=el('p','smetra-draft-status');statusLine.setAttribute('role','status');statusLine.setAttribute('aria-live','polite');paintStatus();return statusLine};
+    const paintStatus=()=>{if(!statusLine)return;statusLine.textContent=progressText;statusLine.hidden=!progressText;statusLine.classList.toggle('is-working',Boolean(progressText))};
+    const renderNew=()=>{
+      heading.textContent='Новая смета';kicker.textContent='Черновик появится здесь';
+      const box=el('div','smetra-draft-empty');
+      box.append(el('h3','','Опишите задачу в чате'),
+        el('p','','Ассистент разберёт запрос, задаст уточнение, если без него нельзя, и соберёт смету по разделам. Суммы считает сервер; вы проверяете и правите результат.'),status());
+      const list=el('div','smetra-draft-examples');list.setAttribute('role','list');
+      EXAMPLES.forEach(text=>{const b=el('button','smetra-draft-example',text);b.type='button';b.setAttribute('role','listitem');b.onclick=()=>onExample?.(text);list.append(b)});
+      box.append(list);content.append(box);
+    };
+    const renderDraft=()=>{
+      const p=draft.preview||{},currency=p.currency||'RUB',counts=p.counts||{};
+      heading.textContent=p.title||'Новая смета';kicker.textContent='Черновик ИИ';
+      const title=el('div','smetra-quote-preview-title');
+      title.append(el('h3','',p.title||'Смета'),el('span','smetra-quote-preview-state','Ждёт подтверждения в чате'));
+      content.append(title,status());
+      content.append(el('p','smetra-draft-meta',[`${counts.lines||0} поз.`,`работы ${counts.works||0}`,`материалы ${counts.materials||0}`,p.region?'регион: '+p.region:''].filter(Boolean).join(' · ')));
+      if(counts.estimated||counts.unknown){
+        const warn=el('p','smetra-draft-warning');
+        warn.textContent=[counts.estimated?`ориентировочных цен: ${counts.estimated}`:'',counts.unknown?`без цены: ${counts.unknown}`:''].filter(Boolean).join(', ')+' — проверьте перед отправкой клиенту.';
+        content.append(warn);
+      }
+      (Array.isArray(p.sections)?p.sections:[]).forEach(section=>{
+        const block=el('section','smetra-draft-section');
+        const head=el('header','smetra-draft-section-head');head.append(el('h4','',section.name||'Раздел'),el('span','',money(section.subtotal,currency)));
+        block.append(head);
+        const rows=el('ol','smetra-draft-rows');
+        (section.rows||[]).forEach(row=>{
+          const li=el('li','smetra-draft-row'+(row.price_status==='unknown'?' is-unknown':''));
+          const name=el('div','smetra-draft-name');name.append(el('strong','',row.name));
+          const tags=el('span','smetra-draft-tags');
+          if(row.kind==='material')tags.append(el('span','smetra-draft-tag','материал'));
+          if(row.price_status==='estimate')tags.append(el('span','smetra-draft-tag is-estimate','оценка'));
+          if(row.price_status==='unknown')tags.append(el('span','smetra-draft-tag is-unknown','нет цены'));
+          if(tags.children.length)name.append(tags);
+          li.append(name,el('span','smetra-draft-qty',`${String(row.quantity).replace('.',',')} ${row.unit} × ${money(row.unit_price,currency)}`),el('b','smetra-draft-sum',money(row.subtotal,currency)));
+          rows.append(li);
+        });
+        block.append(rows);content.append(block);
+      });
+      if(Array.isArray(p.assumptions)&&p.assumptions.length){
+        const box=el('details','smetra-draft-assumptions');box.open=true;box.append(el('summary','','Допущения ИИ · '+p.assumptions.length));
+        const list=el('ul');p.assumptions.forEach(text=>list.append(el('li','',text)));box.append(list);content.append(box);
+      }
+      const total=el('div','smetra-draft-total');total.append(el('span','','Итого · рассчитано сервером'),el('strong','',money(p.total,currency)));
+      content.append(total);
+      content.append(el('p','smetra-visual-footnote','Смета сохранится после «Применить» в чате. Потом её можно править вручную — без токенов.'));
     };
     // Without a selected quote the panel lists recent ones; the server keeps
     // totals, so the list only shows what the quote endpoint returned.
@@ -193,6 +275,7 @@
       }
       panel.hidden=!visible;panel.setAttribute('aria-hidden',String(!visible));
       hostRoot?.classList.toggle('has-quote-preview',visible);
+      syncChip();
       onToggle?.(visible);
       if(visible)render();
     }
@@ -206,7 +289,7 @@
         loading=false;
         current=response?.quote||response;
         if(!current||current.id!==id)throw Error('Смета недоступна');
-        pending=null;layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();
+        pending=null;draft=null;mode=null;progressText='';layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();syncChip();
       }catch(error){
         if(request===seq){loading=false;content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'))}
       }
@@ -216,11 +299,22 @@
         pending=null;
         if(visible)render();
       }
+      if(draft && (!actionId||draft.id===actionId)){
+        draft=null;
+        if(visible)render();
+        syncChip();
+      }
     };
     const propose=async action=>{
       if(!action||!action.tool||!action.arguments)return;
       const isQuote=/quote/.test(action.tool);
       if(!isQuote)return;
+      if(action.tool==='create_quotes'){
+        if(action.preview?.kind!=='quote_draft')return;
+        // The same proposal arrives twice (live event, then the final answer): keep one.
+        if(draft?.id===action.id)return;
+        ++seq;loading=false;current=null;pending=null;draft=action;mode='new';setOpen(true);render();return;
+      }
       const id=action.arguments.id;
       if(typeof id!=='string'||!id)return;
       if(!current||current.id!==id)await load(id);
@@ -241,9 +335,11 @@
       if(!current)return;
       const id=current.id;await load(id);
     };
-    return {load,propose,design,refresh,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
+    const startNew=(options={})=>{onExample=options.onExample||null;++seq;loading=false;current=null;pending=null;draft=null;mode='new';progressText='';setOpen(true);render()};
+    const progress=text=>{progressText=String(text||'').slice(0,120);if(visible&&(draft||mode==='new'))paintStatus()};
+    return {load,propose,design,refresh,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       clearProposal,
-      destroy:()=>{seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview');panel.remove()},
+      destroy:()=>{seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-w');chip.remove();panel.remove()},
       get currentId(){return current?.id||''}};
   }
   window.SmetraQuoteVisuals={mountAssistant,mountRooms,breakdown,serverAmounts,roomDiagram,money};

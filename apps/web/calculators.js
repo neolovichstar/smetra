@@ -284,7 +284,10 @@
         if (document.contains(root)) notify('Не удалось скопировать. Проверьте разрешение браузера.');
       }
     });
-    activate(selected);
+    // The assistant can open a specific calculator with a button under its answer.
+    let requested = '';
+    try { requested = sessionStorage.getItem('smetra.calculator.open') || ''; sessionStorage.removeItem('smetra.calculator.open'); } catch {}
+    activate(kinds[requested] ? requested : selected);
   }
 
   window.SmetraCalculators = Object.freeze({calculate, estimateDraft, render, kinds: Object.keys(kinds)});

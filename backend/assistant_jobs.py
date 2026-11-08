@@ -337,6 +337,7 @@ def process_job(handler, con, origin, job, on_event=None):
                     on_delta=lambda text: on_event('delta', {'text': text}),
                     on_source=lambda source: on_event('web_source', source),
                     on_design=lambda design: on_event('quote_design', design),
+                    on_proposal=lambda action: on_event('proposal', action),
                 )
             assistant.answer_chat(service, job['prompt'], **options)
         if service.runtime_connection:

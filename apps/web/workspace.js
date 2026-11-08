@@ -110,7 +110,7 @@ window.Workspace = (() => {
       </div>`).join('');
       html=`<div class="dashboard-intro">
         <div class="dashboard-intro-copy"><h1>Сегодня</h1><span class="dashboard-date">${e(todayLabel)}</span></div>
-        ${button('Создать смету','quote-new','','primary')}
+        ${button('Новая смета','quote-new','','primary')}
       </div>`+
         (roleCanWrite()?`<section class="capture-panel" aria-labelledby="capture-title">
           <div class="capture-heading"><h2 id="capture-title">Что нужно посчитать?</h2></div>
@@ -118,10 +118,10 @@ window.Workspace = (() => {
             <label class="sr-only" for="capture-text">Опишите работы</label>
             <textarea id="capture-text" rows="1" maxlength="8000" placeholder="Опишите работы или вставьте сообщение клиента" aria-describedby="capture-status"></textarea>
             ${capabilities.ai_drafting?'<label class="capture-file" for="capture-file" title="Прикрепить файл" aria-label="Прикрепить файл"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></label><input id="capture-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.txt,.md,.csv,.xlsx,.docx" aria-label="Прикрепить файл">':''}
-            <div class="capture-actions">${capabilities.ai_drafting?'<button class="btn primary" type="submit">Составить черновик</button>':'<button class="btn primary" type="button" id="capture-manual">Открыть редактор</button>'}</div>
+            <div class="capture-actions">${capabilities.ai_drafting?'<button class="btn primary" type="submit">Составить смету</button>':'<button class="btn primary" type="button" id="capture-manual">Составить с ассистентом</button>'}</div>
             <p id="capture-status" role="status"></p>
           </form>
-          <div class="capture-shortcuts">${button('Создать вручную','quote-new')}${button('Мои расценки','navigate','catalog')}${button('Спросить ассистента','navigate','assistant')}</div>
+          <div class="capture-shortcuts">${button('Мои расценки','navigate','catalog')}${button('Калькуляторы','navigate','calculators')}</div>
         </section>`:'')+
         `<div class="dashboard-metrics" aria-label="Показатели работы">
           ${metric('waiting','К получению',money(actions.summary.money?.receivable||0,balance.currency),'finance')}
@@ -146,7 +146,7 @@ window.Workspace = (() => {
       quotes=result.quotes;
       const total=quotes.length;
       html=`<section class="quotes-register" aria-labelledby="quotes-register-title">
-        <div class="topline"><div><h1 id="quotes-register-title">Сметы</h1><p class="muted">В списке: <span id="quotes-visible-count">${total}</span></p></div><div class="topline-actions">${roleCanWrite()?button('Создать смету','quote-new','','primary'):''}</div></div>
+        <div class="topline"><div><h1 id="quotes-register-title">Сметы</h1><p class="muted">В списке: <span id="quotes-visible-count">${total}</span></p></div><div class="topline-actions">${roleCanWrite()?button('Новая смета','quote-new','','primary'):''}</div></div>
         <div class="list-toolbar"><input type="search" id="workspace-search" placeholder="Найти смету или клиента" aria-label="Поиск смет"></div>
         <section class="data-list quotes-document" aria-label="Список смет">
           <div class="data-list-head quotes-document-columns" aria-hidden="true"><span>Смета</span><span>Клиент</span><span>Статус</span><span>Сумма</span><span>Изменена</span><span></span></div>
@@ -315,14 +315,15 @@ window.Workspace = (() => {
     try{input.value=localStorage.getItem(key)||''}catch{}
     input.addEventListener('input',()=>{try{localStorage.setItem(key,input.value)}catch{}});
     input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();form.requestSubmit()}});
-    const manual=async()=>{const text=input.value.trim();if(!text){input.reportValidity();return}await editor({title:text.split(/\n|[.!?]/)[0].slice(0,120),description:text,client:'',items:[{name:'',quantity:'1',unit:'усл.',unit_price:0}]})};
+    const manual=async()=>{const text=input.value.trim();if(!text){input.reportValidity();return}await window.SmetraNewEstimate?.(text)};
     form.querySelector('#capture-manual')?.addEventListener('click',()=>manual().catch(err=>{status.textContent=err.message}));
-    form.addEventListener('submit',async ev=>{ev.preventDefault();const button=form.querySelector('[type=submit]');if(!button||button.disabled)return;const text=input.value.trim(),file=form.querySelector('#capture-file')?.files[0];if(!text&&!file){input.focus();status.textContent='Вставьте запрос или выберите файл.';return}button.disabled=true;status.textContent='Составляем черновик…';try{const body={text};if(file){if(file.size>2_000_000)throw Error('Файл должен быть не больше 2 МБ');const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Не удалось прочитать файл'));reader.readAsDataURL(file)});body.file={name:file.name,mime:file.type||({pdf:'application/pdf',txt:'text/plain',md:'text/plain',csv:'text/csv',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}[file.name.split('.').pop().toLowerCase()]||''),content}}const result=await api('/ai/draft',{method:'POST',body:JSON.stringify(body)});await editor(result.draft);notify('Черновик готов. Проверьте позиции и цены.')}catch(err){status.textContent=err.message+' Текст сохранён здесь; можно повторить позже.'}finally{button.disabled=false}});
+    form.addEventListener('submit',async ev=>{ev.preventDefault();const button=form.querySelector('[type=submit]');if(!button||button.disabled)return;const text=input.value.trim(),file=form.querySelector('#capture-file')?.files[0];if(!text&&!file){input.focus();status.textContent='Вставьте запрос или выберите файл.';return}if(!file&&window.SmetraNewEstimate){await window.SmetraNewEstimate(text);return}button.disabled=true;status.textContent='Составляем черновик…';try{const body={text};if(file){if(file.size>2_000_000)throw Error('Файл должен быть не больше 2 МБ');const content=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Не удалось прочитать файл'));reader.readAsDataURL(file)});body.file={name:file.name,mime:file.type||({pdf:'application/pdf',txt:'text/plain',md:'text/plain',csv:'text/csv',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}[file.name.split('.').pop().toLowerCase()]||''),content}}const result=await api('/ai/draft',{method:'POST',body:JSON.stringify(body)});await editor(result.draft);notify('Черновик готов. Проверьте позиции и цены.')}catch(err){status.textContent=err.message+' Текст сохранён здесь; можно повторить позже.'}finally{button.disabled=false}});
   }
   async function action(b){
     const a=b.dataset.work,id=b.dataset.id;
     if(a==='navigate'){tab=id;location.hash=id;return window.render()}
-    if(a==='quote-new')return editor();
+    // A new estimate starts in the assistant; the editor opens existing ones.
+    if(a==='quote-new')return window.SmetraNewEstimate?.();
     if(a==='task-toggle'){
       const item=window.Workspace.records?.find(row=>row.id===id);if(!item||!roleCanWrite())return;
       b.disabled=true;
@@ -810,6 +811,6 @@ window.Workspace = (() => {
   }
   document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='k'&&user){ev.preventDefault();palette()}});
   document.querySelector('#command-open')?.addEventListener('click',()=>{if(user)palette()});
-  async function palette(){const root=openModal('Быстрый переход','Найдите клиента, смету, заказ или документ.',`<input id="command-search" type="search" placeholder="Поиск или действие…" aria-label="Глобальный поиск"><div id="command-results" class="command-results">${button('Создать смету','quote-new')}${Object.keys(names).slice(0,8).map(k=>button(names[k],'navigate',k)).join('')}</div>`);let timer;root.querySelector('input').focus();root.querySelector('input').oninput=ev=>{clearTimeout(timer);const q=ev.target.value;timer=setTimeout(async()=>{try{const r=await api('/search?q='+encodeURIComponent(q));if(!root.isConnected||root.querySelector('input')?.value!==q)return;root.querySelector('#command-results').innerHTML=r.items.map(i=>`<button class="command-result" data-work="${e(i.kind==='quotes'?'quote':'navigate')}" data-id="${e(i.kind==='quotes'?i.id:i.kind)}"><span>${e(i.name)}</span><small>${e(names[i.kind]||'Смета')}</small></button>`).join('')||'<p class="muted">Ничего не найдено</p>'}catch(err){notify(err.message)}},180)};root.querySelector('#command-results').onclick=async ev=>{const b=ev.target.closest('[data-work]');if(b){closeModal();await action(b)}}}
+  async function palette(){const root=openModal('Быстрый переход','Найдите клиента, смету, заказ или документ.',`<input id="command-search" type="search" placeholder="Поиск или действие…" aria-label="Глобальный поиск"><div id="command-results" class="command-results">${button('Новая смета с ИИ','quote-new')}${Object.keys(names).slice(0,8).map(k=>button(names[k],'navigate',k)).join('')}</div>`);let timer;root.querySelector('input').focus();root.querySelector('input').oninput=ev=>{clearTimeout(timer);const q=ev.target.value;timer=setTimeout(async()=>{try{const r=await api('/search?q='+encodeURIComponent(q));if(!root.isConnected||root.querySelector('input')?.value!==q)return;root.querySelector('#command-results').innerHTML=r.items.map(i=>`<button class="command-result" data-work="${e(i.kind==='quotes'?'quote':'navigate')}" data-id="${e(i.kind==='quotes'?i.id:i.kind)}"><span>${e(i.name)}</span><small>${e(names[i.kind]||'Смета')}</small></button>`).join('')||'<p class="muted">Ничего не найдено</p>'}catch(err){notify(err.message)}},180)};root.querySelector('#command-results').onclick=async ev=>{const b=ev.target.closest('[data-work]');if(b){closeModal();await action(b)}}}
   return {render,editor,manageFile,calculateLineTotal,majorToKopecks:amount,openQuote:quoteDetail,openEntity:entityDetail,publicPage,intakePage,download,records:[],currentWorkspaceId:()=>workspace?.id,reset:()=>{workspace=null;current=null;workspaces=[];generation++;window.Workspace.records=[];clearTimeout(modalTimer);if(modal?.open)modal.close();modal?.replaceChildren();document.body.classList.remove('modal-open');window.SmetraFilePreview?.close();sessionStorage.removeItem('smetra.assistant.context')},palette};
 })();

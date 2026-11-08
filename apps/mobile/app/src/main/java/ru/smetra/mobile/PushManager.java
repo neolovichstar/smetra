@@ -62,6 +62,10 @@ final class PushManager {
         prefs(c).edit().putString(TOKEN, pushToken).apply();
         if (!isEnabled(c)) return;
         String session = new TokenVault(c).read();
+        // The web shell moves the session into the WebView cookie and empties the vault.
+        if (session == null || session.isEmpty()) {
+            try { session = ShellSession.token(); } catch (RuntimeException noWebView) { session = null; }
+        }
         if (session != null && !session.isEmpty()) registerBackground(c, session, pushToken);
     }
 

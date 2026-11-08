@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
-import java.util.concurrent.Executors;
 import org.json.JSONObject;
 
 /**
@@ -19,7 +18,8 @@ final class ShellUpdates {
     private ShellUpdates() {}
 
     static void check(Activity activity, ShellBridge bridge) {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        // A one-off daemon thread: an executor here was never shut down and kept a thread alive.
+        Thread worker = new Thread(() -> {
             try {
                 ShellSession.Response response = ShellSession.call("GET", "/api/mobile/compat", null, false);
                 if (!response.ok()) return;
@@ -35,7 +35,9 @@ final class ShellUpdates {
             } catch (Exception ignored) {
                 // Offline or an older server: keep working with what is installed.
             }
-        });
+        }, "smetra-update-check");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     static void openStore(Activity activity) {

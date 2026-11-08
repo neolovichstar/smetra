@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>сметра. — UI motion</title>
+<style>
+/* Tokens copied from apps/web/ui/tokens.css (production branch b0e42a0). */
+@font-face{font-family:Onest;src:url('assets/onest-variable.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:block}
+:root{
+  --bg:#0a0a0b;--bg-sunken:#070708;--surface-1:#111113;--surface-2:#161618;--surface-3:#1c1c1f;--surface-4:#242428;
+  --line:rgba(255,255,255,.075);--line-strong:rgba(255,255,255,.13);
+  --text:#ededef;--text-2:#a7a7b0;--text-3:#83838c;--text-inverse:#0b0b0c;
+  --accent:#6ea8ff;--success:#5ccf8f;
+  --action:#ededef;--action-text:#0b0b0c;
+  --font:'Onest',system-ui,sans-serif;
+  --r-1:6px;--r-2:8px;--r-3:12px;--r-4:16px;
+  --shadow-float:0 16px 48px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.35);
+  --sel:rgba(237,237,239,.22);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+body{font-family:var(--font);color:var(--text);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 0}
+.num{font-variant-numeric:tabular-nums}
+#screen{position:fixed;left:0;top:0;overflow:hidden;background:var(--bg)}
+.plane{position:absolute;left:0;top:0;transform-origin:0 0}
+#persp{position:absolute;inset:0}
+svg.i{width:18px;height:18px;flex:none}
+
+/* ── ghost shell (back plane) ── */
+#shell{width:var(--ww);height:var(--wh)}
+.g-top{position:absolute;left:0;right:0;top:0;height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:16px}
+.brand{display:inline-flex;align-items:baseline;font-weight:650;letter-spacing:-.04em;color:var(--text);line-height:1}
+.brand b{color:var(--accent);font-weight:650}
+.g-top .brand{font-size:20px;margin-left:44px}
+.g-burger{position:absolute;left:20px;top:21px;width:18px;height:14px;display:flex;flex-direction:column;justify-content:space-between}
+.g-burger i{display:block;height:1.6px;background:var(--text-3);border-radius:2px}
+.g-search{margin-left:auto;display:flex;align-items:center;gap:8px;height:34px;padding:0 10px 0 12px;border:1px solid var(--line);border-radius:var(--r-2);color:var(--text-3);font-size:13px;width:240px}
+.g-search kbd{margin-left:auto;font:inherit;font-size:11px;padding:2px 6px;border:1px solid var(--line);border-radius:5px}
+.g-side{position:absolute;left:0;top:56px;bottom:0;width:248px;border-right:1px solid var(--line);padding:18px 12px}
+.g-side h6{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--text-3);text-transform:uppercase;padding:0 10px;margin:14px 0 6px}
+.g-side div{height:34px;display:flex;align-items:center;padding:0 10px;border-radius:var(--r-2);font-size:14px;color:var(--text-2)}
+.g-side div.on{background:var(--surface-3);color:var(--text)}
+.g-tabbar{display:none}
+
+/* ── main plane ── */
+#main{width:var(--ww);height:var(--wh)}
+.abs{position:absolute}
+.hide{visibility:hidden}
+
+/* composer: #assistant-form */
+#composer{left:var(--col-x);width:var(--col-w);top:var(--comp-y);display:flex;flex-direction:column;gap:6px;padding:10px 10px 10px 16px;border:1px solid var(--line-strong);border-radius:20px;background:var(--surface-1);box-shadow:0 1px 0 rgba(255,255,255,.02),0 12px 32px rgba(0,0,0,.18)}
+#c-input{min-height:28px;padding:6px 0 2px;font-size:16px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:normal}
+#c-ph{color:var(--text-3)}
+.caret{display:inline-block;width:1.5px;height:1.15em;background:var(--text);vertical-align:-.2em;margin-left:1px}
+.c-tools{display:flex;align-items:center;gap:6px}
+.c-tools .grow{flex:1}
+.abtn{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:50%;color:var(--text-2)}
+#c-send{background:var(--surface-3);color:var(--text-3)}
+#c-send.ready{background:var(--action);color:var(--action-text)}
+.c-foot{position:absolute;left:var(--col-x);width:var(--col-w);display:flex;justify-content:space-between;padding:6px 6px 0;color:var(--text-3);font-size:12px}
+#greet{left:var(--col-x);width:var(--col-w);text-align:center}
+#greet h2{font-size:28px;font-weight:600;letter-spacing:-.025em}
+#greet p{margin-top:8px;color:var(--text-2);font-size:15px}
+
+/* conversation */
+#bubble{right:calc(var(--ww) - var(--col-x) - var(--col-w));top:var(--bub-y);max-width:var(--bub-w);padding:10px 14px;border-radius:16px 16px 4px 16px;background:var(--surface-3);font-size:15px;line-height:1.5}
+#think{left:var(--col-x);top:var(--think-y);display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-2)}
+#think .orb{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--surface-3);color:var(--text)}
+#think .shimmer{background:linear-gradient(90deg,var(--text-3) 0%,var(--text-3) 40%,var(--text) 50%,var(--text-3) 60%,var(--text-3) 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
+#draft{left:var(--col-x);top:var(--draft-y);width:var(--col-w);display:grid;gap:12px}
+.dr-head{display:flex;justify-content:space-between;align-items:center}
+.dr-head strong{font-size:14px;font-weight:600}
+.dr-head span,.dr-meta{color:var(--text-3);font-size:13px}
+.dr-list{border:1px solid var(--line);border-radius:var(--r-2);overflow:hidden;background:var(--surface-1)}
+.dr-item{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:11px 13px}
+.dr-item+.dr-item{border-top:1px solid var(--line)}
+.dr-item .nm{font-weight:500;font-size:15px;line-height:1.45}
+.dr-item .q{font-size:12px;color:var(--text-3);margin-top:3px}
+.dr-item .pr{font-size:13px;text-align:right;color:var(--text)}
+.dr-total{display:flex;justify-content:space-between;align-items:baseline;padding:10px 13px;border-top:1px solid var(--line-strong);background:var(--surface-2);font-size:14px}
+.dr-total strong{font-size:16px}
+.dr-actions{display:flex;align-items:center;gap:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px;padding:0 14px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-2);color:var(--text);font-size:14px;font-weight:500;white-space:nowrap}
+.btn.primary{background:var(--action);color:var(--action-text);border-color:transparent;font-weight:600}
+.dr-note{font-size:12px;color:var(--text-3)}
+
+/* editor */
+#ed{left:var(--ed-x);top:var(--ed-y);width:var(--ed-w);padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface-1)}
+.ed-head{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:baseline;margin-bottom:12px}
+.ed-step{font-size:12px;font-weight:600;color:var(--text-3);letter-spacing:.04em}
+.ed-title{font-size:16px;font-weight:600}
+.ed-count{font-size:13px;color:var(--text-3)}
+.ed-hist{display:flex;align-items:center;justify-content:space-between;padding:6px 0 10px;border-bottom:1px solid var(--line)}
+.ed-hist>div{display:flex;gap:2px;align-items:center}
+.tool{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border-radius:var(--r-1);color:var(--text-2);font-size:13px}
+.tool.off{opacity:.4}
+#save-state{display:inline-flex;align-items:center;gap:6px;color:var(--text-3);font-size:13px;margin-right:8px}
+#save-state i{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.ed-item{display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:8px;padding:16px 0;border-bottom:1px solid var(--line)}
+.ed-item:last-child{border-bottom:0;padding-bottom:4px}
+.ed-drag{grid-column:1;display:grid;place-items:center;height:38px;color:var(--text-3);font-size:14px;letter-spacing:-2px}
+.ed-name{grid-column:2;height:38px;display:flex;align-items:center;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--bg-sunken);font-weight:500;font-size:15px}
+.ed-fields{grid-column:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(120px,1.1fr);gap:12px;margin-top:12px}
+.fld label{display:block;font-size:12px;color:var(--text-3);margin-bottom:6px}
+.inp{height:34px;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--bg-sunken);font-size:14px;font-variant-numeric:tabular-nums;white-space:pre}
+.inp.txt{justify-content:flex-start}
+.inp.focus{border-color:rgba(237,237,239,.42);box-shadow:0 0 0 3px rgba(237,237,239,.07)}
+.inp .selx{background:var(--sel);border-radius:2px}
+.ltot{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:6px;font-size:12px;color:var(--text-3)}
+.ltot output{display:flex;align-items:center;min-height:34px;font-size:15px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+#aside{left:var(--as-x);top:var(--as-y);width:var(--as-w);padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface-1);display:flex;flex-direction:column;gap:8px}
+#aside h3{font-size:13px;font-weight:500;color:var(--text-2)}
+#ed-total{font-size:32px;font-weight:600;letter-spacing:-.03em;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+#aside .muted{font-size:13px;color:var(--text-3)}
+#aside .btn{margin-top:12px;min-height:46px}
+/* roll */
+.roll{display:inline-flex;white-space:pre}
+.slot{position:relative;display:inline-block;overflow:hidden;text-align:center;line-height:1.3;padding:.08em 0;margin:-.08em 0;vertical-align:top}
+.slot span{display:block}
+.slot span+span{position:absolute;left:50%;top:.08em;width:max-content;margin-left:0;translate:-50% 0}
+
+/* menu: .select-menu */
+#menu{left:0;top:0;min-width:240px;display:flex;flex-direction:column;gap:2px;padding:4px;border:1px solid var(--line-strong);border-radius:var(--r-3);background:var(--surface-2);box-shadow:var(--shadow-float);transform-origin:100% 0}
+#menu .mh{padding:8px 10px 6px;font-size:12px;color:var(--text-3)}
+#menu .mi{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:var(--r-2);font-size:14px;color:var(--text)}
+#menu .mi svg{color:var(--text-2)}
+
+/* morph box */
+#morph{left:0;top:0;border:1px solid var(--line);background:var(--surface-1)}
+
+/* PDF page */
+#page{left:var(--pg-x);top:var(--pg-y);width:var(--pg-w);height:var(--pg-h);padding:var(--pg-pad);color:#17171a;font-size:var(--pg-fs)}
+.pg-top{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:1.2em;border-bottom:1px solid rgba(20,20,24,.14)}
+.pg-top .brand{font-size:1.5em;color:#17171a}
+.pg-top .brand b{color:#1f63e0}
+.pg-top small{font-size:.85em;color:#6c6c74}
+.pg-title{margin-top:2.2em;font-size:1.9em;font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.pg-sub{margin-top:.5em;color:#55555d}
+.pg-meta{display:flex;gap:2.4em;margin-top:1.6em;font-size:.88em;color:#55555d}
+.pg-meta b{display:block;color:#17171a;font-weight:600;margin-top:.25em}
+table.pg-t{width:100%;margin-top:2em;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.pg-t th{font-size:.78em;font-weight:600;color:#6c6c74;text-align:left;padding:0 .4em .7em;border-bottom:1px solid rgba(20,20,24,.18)}
+.pg-t td{padding:.9em .4em;border-bottom:1px solid rgba(20,20,24,.09)}
+.pg-t .r{text-align:right;white-space:nowrap}
+.pg-t tr.hl td{background:rgba(20,20,24,.05)}
+.pg-sum{display:flex;justify-content:space-between;align-items:baseline;margin-top:1.6em;padding-top:1em;border-top:2px solid #17171a}
+.pg-sum span{font-weight:600}
+.pg-sum strong{font-size:1.9em;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.pg-foot{position:absolute;left:var(--pg-pad);right:var(--pg-pad);bottom:calc(var(--pg-pad) * .8);display:flex;justify-content:space-between;font-size:.78em;color:#83838c}
+#file{left:var(--pg-x);top:calc(var(--pg-y) + var(--pg-h) + 22px);width:var(--pg-w);display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1)}
+#file .glyph{display:grid;place-items:center;width:40px;height:40px;border-radius:8px;background:var(--surface-3);font-size:10px;font-weight:700;color:var(--text-2)}
+#file b{font-size:14px;font-weight:500}
+#file small{display:block;font-size:12px;color:var(--text-3);margin-top:2px}
+#file .ok{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)}
+#file .ok i{width:16px;height:16px;border-radius:50%;background:rgba(92,207,143,.14);display:grid;place-items:center;color:var(--success)}
+
+/* logo */
+#logo{left:0;top:0;width:var(--ww);height:var(--wh);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;pointer-events:none}
+#logo .brand{font-size:var(--logo-fs)}
+#logo .brand .w{display:inline-block}
+#logo .brand b{display:inline-block;width:.28em}
+#logo .url{font-size:var(--url-fs);color:var(--text-2);letter-spacing:.01em}
+#dot{left:0;top:0;background:var(--accent)}
+
+/* ── screen layer ── */
+#hud{position:absolute;inset:0;pointer-events:none}
+.cap{position:absolute;display:flex;align-items:center;gap:12px;font-size:var(--cap-fs);font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+.cap{padding:.32em .6em .32em .46em;border-radius:.45em;background:rgba(10,10,11,.88);box-shadow:0 0 0 1px rgba(255,255,255,.06)}
+.cap i{display:block;width:8px;height:8px;border-radius:50%;background:var(--text)}
+.cap .w{display:inline-block}
+#demo{position:absolute;font-size:var(--demo-fs);color:var(--text-3)}
+#cursor{position:absolute;left:0;top:0;width:0;height:0}
+#cursor svg{position:absolute;overflow:visible}
+.ring{position:absolute;border-radius:50%;border:1.5px solid rgba(237,237,239,.9)}
+#subs{position:absolute;left:60px;right:60px;display:flex;justify-content:center;text-align:center}
+#subs span{display:inline-block;max-width:100%;padding:12px 22px;border-radius:16px;background:rgba(10,10,11,.78);font-size:44px;font-weight:600;line-height:1.22;letter-spacing:-.015em}
+#fade{position:absolute;inset:0;background:#000;pointer-events:none}
+
+/* ── vertical overrides ── */
+body.v .g-side{display:none}
+body.v .g-search{display:none}
+body.v .g-tabbar{display:flex;position:absolute;left:0;right:0;bottom:0;height:64px;border-top:1px solid var(--line);justify-content:space-around;align-items:center;color:var(--text-3);font-size:11px}
+body.v .g-tabbar span{display:flex;flex-direction:column;align-items:center;gap:4px}
+body.v .g-tabbar i{display:block;width:20px;height:20px;border:1.6px solid var(--text-3);border-radius:6px}
+body.v .ed-item{grid-template-columns:30px minmax(0,1fr)}
+body.v .ed-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+body.v .ltot{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}
+body.v #aside{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 12px}
+body.v #aside h3{flex:0 0 100%}
+body.v #aside .muted{display:none}
+body.v #aside .btn{margin:0 0 0 auto;min-height:40px}
+</style>
+</head>
+<body>
+<div id="screen">
+  <div id="persp">
+    <div id="shell" class="plane">
+      <div class="g-top"><span class="g-burger"><i></i><i></i></span><span class="brand">сметра<b>.</b></span><span class="g-search">Поиск<kbd>Ctrl K</kbd></span></div>
+      <div class="g-side">
+        <h6>Основное</h6><div>Сегодня</div><div id="nav-as" class="on">Ассистент</div><div id="nav-q">Сметы</div><div>Проекты</div><div>Клиенты</div>
+        <h6>Работа</h6><div>Объекты и замеры</div><div>Инструменты смет</div><div>Полученные сметы</div><div>Задачи</div>
+        <h6>Библиотека</h6><div>Расценки</div><div>Калькуляторы</div><div>Документы</div>
+      </div>
+      <div class="g-tabbar"><span><i></i>Главная</span><span><i></i>Сметы</span><span><i></i>Ассистент</span><span><i></i>Объекты</span><span><i></i>Ещё</span></div>
+    </div>
+    <div id="main" class="plane">
+      <div id="greet" class="abs"><h2>Что посчитаем?</h2><p>Опишите работы — соберу черновик сметы.</p></div>
+      <form id="composer" class="abs" onsubmit="return false">
+        <div id="c-input"><span id="c-text"></span><span id="c-caret" class="caret"></span><span id="c-ph">Опишите работы и объёмы…</span></div>
+        <div class="c-tools">
+          <span class="abtn" id="c-clip"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8.5 12.5 6.8-6.8a4 4 0 0 1 5.7 5.7l-8.8 8.8a6 6 0 0 1-8.5-8.5l8.5-8.5"/><path d="m7 14 8.5-8.5"/></svg></span>
+          <span class="grow"></span>
+          <span class="abtn"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 10.5a6.5 6.5 0 0 0 13 0M12 17v4M8.5 21h7"/></svg></span>
+          <span class="abtn" id="c-send"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
+        </div>
+      </form>
+      <div id="bubble" class="abs"></div>
+      <div id="think" class="abs"><span class="orb"><svg class="i" style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2z"/><path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1z"/></svg></span><span class="shimmer" id="think-t">Собираю черновик сметы…</span></div>
+      <div id="draft" class="abs">
+        <div class="dr-head"><strong>Черновик сметы</strong><span>3 позиции · только работы</span></div>
+        <div class="dr-list">
+          <div class="dr-item" id="dr1"><div><div class="nm">Покраска стен</div><div class="q">42 м² × 350 ₽</div></div><div class="pr num">14 700 ₽</div></div>
+          <div class="dr-item" id="dr2"><div><div class="nm">Укладка ламината</div><div class="q">18 м² × 550 ₽</div></div><div class="pr num">9 900 ₽</div></div>
+          <div class="dr-item" id="dr3"><div><div class="nm">Монтаж плинтуса</div><div class="q">17 м × 250 ₽</div></div><div class="pr num">4 250 ₽</div></div>
+          <div class="dr-total"><span>Итого</span><strong class="num">28 850 ₽</strong></div>
+        </div>
+        <div class="dr-actions"><span class="btn" id="dr-open">Открыть в редакторе</span><span class="dr-note">Ничего не сохранится без вашего «да»</span></div>
+      </div>
+
+      <div id="morph" class="abs"></div>
+      <div id="ed" class="abs">
+        <div class="ed-head"><span class="ed-step">02</span><span class="ed-title">Позиции</span><span class="ed-count">3 позиции</span></div>
+        <div class="ed-hist">
+          <div><span class="tool off">↶ Отменить</span><span class="tool off">↷ Вернуть</span></div>
+          <div><span id="save-state"><i></i><em style="font-style:normal" id="save-t">Черновик</em></span><span class="tool" id="exp-btn"><svg class="i" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Экспорт</span></div>
+        </div>
+        <div class="ed-item" id="ei1"><span class="ed-drag">⋮⋮</span><div class="ed-name">Покраска стен</div>
+          <div class="ed-fields"><div class="fld"><label>Количество</label><div class="inp">42</div></div><div class="fld"><label>Единица</label><div class="inp txt">м²</div></div><div class="fld"><label>Цена, ₽</label><div class="inp">350</div></div><div class="ltot">Сумма<output>14 700 ₽</output></div></div></div>
+        <div class="ed-item" id="ei2"><span class="ed-drag">⋮⋮</span><div class="ed-name">Укладка ламината</div>
+          <div class="ed-fields"><div class="fld"><label>Количество</label><div class="inp">18</div></div><div class="fld"><label>Единица</label><div class="inp txt">м²</div></div><div class="fld"><label>Цена, ₽</label><div class="inp" id="price"></div></div><div class="ltot">Сумма<output id="lt2"></output></div></div></div>
+        <div class="ed-item" id="ei3"><span class="ed-drag">⋮⋮</span><div class="ed-name">Монтаж плинтуса</div>
+          <div class="ed-fields"><div class="fld"><label>Количество</label><div class="inp">17</div></div><div class="fld"><label>Единица</label><div class="inp txt">м</div></div><div class="fld"><label>Цена, ₽</label><div class="inp">250</div></div><div class="ltot">Сумма<output>4 250 ₽</output></div></div></div>
+      </div>
+      <div id="aside" class="abs"><h3>Общая сумма</h3><div id="ed-total"></div><p class="muted">Только работы · расценки демонстрационные</p><span class="btn primary">Сохранить и закрыть</span></div>
+      <div id="menu" class="abs"><div class="mh">Смета · Комната 18 м²</div>
+        <div class="mi" id="mi-pdf"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Скачать PDF</div>
+        <div class="mi"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7M8 13h8M8 17h8"/></svg>Экспорт CSV</div>
+        <div class="mi"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Скопировать название</div>
+      </div>
+
+      <div id="page" class="abs">
+        <div class="pg-top"><span class="brand">сметра<b>.</b></span><small>Смета № 18 · 7 ноября 2026</small></div>
+        <div class="pg-title">Ремонт комнаты 18 м²</div>
+        <div class="pg-sub">Только работы, без материалов</div>
+        <div class="pg-meta"><span>Объект<b>Комната, 18 м²</b></span><span>Позиций<b>3</b></span></div>
+        <table class="pg-t">
+          <thead><tr><th>Работа</th><th class="r">Кол-во</th><th class="r">Цена</th><th class="r">Сумма</th></tr></thead>
+          <tbody>
+            <tr><td>Покраска стен</td><td class="r">42 м²</td><td class="r">350 ₽</td><td class="r">14 700 ₽</td></tr>
+            <tr id="pg-r2"><td>Укладка ламината</td><td class="r">18 м²</td><td class="r">650 ₽</td><td class="r">11 700 ₽</td></tr>
+            <tr><td>Монтаж плинтуса</td><td class="r">17 м</td><td class="r">250 ₽</td><td class="r">4 250 ₽</td></tr>
+          </tbody>
+        </table>
+        <div class="pg-sum" id="pg-sum"><span>Итого</span><strong>30 650 ₽</strong></div>
+        <div class="pg-foot"><span>Расценки демонстрационные</span><span>smetra.online</span></div>
+      </div>
+      <div id="file" class="abs"><span class="glyph">PDF</span><div><b>Смета — комната 18 м².pdf</b><small>1 страница · готово к отправке</small></div><span class="ok"><i><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg></i>Скачано</span></div>
+
+      <div id="logo" class="abs"><span class="brand" id="logo-b"><span class="w" id="logo-w">сметра</span><b id="logo-slot"></b></span><span class="url" id="logo-url">smetra.online</span></div>
+      <div id="dot" class="abs"></div>
+    </div>
+  </div>
+  <div id="hud">
+    <div class="cap" id="cap1"><i></i><span>Черновик по описанию</span></div>
+    <div class="cap" id="cap2"><i></i><span>Ваши расценки</span></div>
+    <div class="cap" id="cap3"><i></i><span>Документ для заказчика</span></div>
+    <div id="demo">Расценки демонстрационные</div>
+    <div id="subs"><span id="subs-t"></span></div>
+    <div id="rings"></div>
+    <div id="cursor">
+      <svg id="cur-arrow" viewBox="0 0 24 24"><path d="M3.5 2.2 20 13.2l-7.3.9 4.2 7.6-3 1.6-4.2-7.7-5.4 5.2z" fill="#f4f4f5" stroke="#0b0b0c" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      <svg id="cur-hand" viewBox="0 0 24 24"><path d="M9 11V4.3a1.6 1.6 0 0 1 3.2 0V10l.2-1.6a1.6 1.6 0 0 1 3.1.4V10.6l.2-.9a1.5 1.5 0 0 1 2.9.6v1.1l.2-.4a1.4 1.4 0 0 1 2.6.8v4.2a6.6 6.6 0 0 1-6.6 6.6h-1.3a6 6 0 0 1-4.9-2.5l-3.8-5.4a1.6 1.6 0 0 1 2.4-2z" fill="#f4f4f5" stroke="#0b0b0c" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      <svg id="cur-beam" viewBox="0 0 24 24"><path d="M8.5 3.2c1.6 0 2.8.5 3.5 1.4.7-.9 1.9-1.4 3.5-1.4M8.5 20.8c1.6 0 2.8-.5 3.5-1.4.7.9 1.9 1.4 3.5 1.4M12 4.6v14.8M10 12h4" fill="none" stroke="#0b0b0c" stroke-width="3.6" stroke-linecap="round"/><path d="M8.5 3.2c1.6 0 2.8.5 3.5 1.4.7-.9 1.9-1.4 3.5-1.4M8.5 20.8c1.6 0 2.8-.5 3.5-1.4.7.9 1.9 1.4 3.5 1.4M12 4.6v14.8M10 12h4" fill="none" stroke="#f4f4f5" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </div>
+    <div id="fade"></div>
+  </div>
+</div>
+<script src="timeline.js"></script>
+</body>
+</html>

@@ -199,6 +199,41 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const attachmentBar=document.createElement('div');attachmentBar.className='assistant-attachment-bar';
   attachmentBar.innerHTML='<button type="button" id="assistant-attach" class="assistant-action-button" aria-label="Прикрепить файл или фото" title="Прикрепить файл или фото">'+assistantIcon('paperclip',18)+'</button><input type="file" id="assistant-attach-input" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.pdf,.txt,.md,.docx,.xlsx,.csv,.mp3,.wav,.m4a,.ogg,.webm,.flac,.aac" multiple hidden><span></span>';
   attachmentBar.querySelector('span').hidden=true;
+  // Usage ring next to the paperclip: fills as the month's tokens are spent; opens the limits panel.
+  const usageRing=document.createElement('button');usageRing.type='button';usageRing.id='assistant-usage';usageRing.className='assistant-action-button assistant-usage';
+  usageRing.setAttribute('aria-haspopup','dialog');usageRing.setAttribute('aria-expanded','false');usageRing.setAttribute('aria-controls','assistant-usage-panel');usageRing.hidden=true;
+  usageRing.innerHTML='<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle class="assistant-usage-track" cx="10" cy="10" r="7.5"/><circle class="assistant-usage-fill" cx="10" cy="10" r="7.5" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90 10 10)"/></svg>';
+  attachmentBar.querySelector('#assistant-attach').after(usageRing);
+  const usagePanel=document.createElement('div');usagePanel.id='assistant-usage-panel';usagePanel.className='assistant-usage-panel';usagePanel.setAttribute('role','dialog');usagePanel.setAttribute('aria-label','Лимиты ассистента');usagePanel.hidden=true;
+  composer.append(usagePanel);
+  const closeUsagePanel=()=>{if(usagePanel.hidden)return;usagePanel.hidden=true;usageRing.setAttribute('aria-expanded','false')};
+  usageRing.onclick=event=>{event.stopPropagation();const open=usagePanel.hidden;usagePanel.hidden=!open;usageRing.setAttribute('aria-expanded',String(open));if(open)usagePanel.querySelector('a')?.focus({preventScroll:true})};
+  const usageOutside=event=>{if(!usageRing.isConnected){document.removeEventListener('pointerdown',usageOutside,true);document.removeEventListener('keydown',usageEscape,true);return}if(!usagePanel.contains(event.target)&&!usageRing.contains(event.target))closeUsagePanel()};
+  const usageEscape=event=>{if(!usageRing.isConnected)return;if(event.key==='Escape'&&!usagePanel.hidden){event.stopPropagation();closeUsagePanel();usageRing.focus()}};
+  document.addEventListener('pointerdown',usageOutside,true);document.addEventListener('keydown',usageEscape,true);
+  let usageKey='';
+  const renderUsage=value=>{
+    // renderQuota runs on every keystroke; redraw only when the numbers change.
+    const key=[value.plan,value.unit,value.monthly_limit,value.monthly_used,value.limit,value.used,value.remaining,value.wallet,value.resets_at].join('|');
+    if(key===usageKey)return;usageKey=key;
+    const limit=Number(value.monthly_limit||value.limit||0),used=Math.min(limit,Number(value.monthly_used??value.used??0)),wallet=Number(value.wallet||0);
+    if(!limit){usageRing.hidden=true;closeUsagePanel();return}
+    const pct=Math.min(100,Math.round(used*100/limit)),left=Number(value.remaining??limit-used);
+    const level=pct>=90?'is-critical':pct>=70?'is-warning':'';
+    const tokens=value.unit==='tokens',plan=value.plan==='free'?'Старт':'Про';
+    const num=n=>{n=Number(n||0);return n>=1e6?(n/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':n>=1e4?Math.round(n/1e3).toLocaleString('ru-RU')+' тыс.':n.toLocaleString('ru-RU')};
+    const reset=value.resets_at?new Date(value.resets_at*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}):'';
+    usageRing.hidden=false;
+    usageRing.classList.remove('is-warning','is-critical');if(level)usageRing.classList.add(level);
+    usageRing.querySelector('.assistant-usage-fill').setAttribute('stroke-dasharray',pct+' 100');
+    const label=`Лимиты ассистента: использовано ${pct}%${reset?', сброс '+reset:''}`;
+    usageRing.setAttribute('aria-label',label);usageRing.title=label;
+    const row=(name,meta,percent,cls)=>`<div class="assistant-usage-row"><div class="assistant-usage-row-head"><span>${name}</span><span class="assistant-usage-meta">${meta}</span></div><div class="assistant-usage-bar ${cls||''}"><span style="width:${percent}%"></span></div></div>`;
+    usagePanel.innerHTML=`<div class="assistant-usage-head"><span>Лимиты ассистента · ${plan}</span><a href="/app#billing" data-usage-more>${tokens?'Подробнее':'Тарифы'} <span aria-hidden="true">→</span></a></div>`
+      +row(tokens?'Токены за месяц':'Запросы за месяц',`${reset?'Сброс '+reset+' · ':''}${pct} %`,pct,level)
+      +`<p class="assistant-usage-note">Осталось ${num(left)}${tokens?' токенов':''}${wallet?` · из них на балансе ${num(wallet)}`:''}</p>`;
+    usagePanel.querySelector('[data-usage-more]').onclick=()=>{closeUsagePanel();if(tokens)try{sessionStorage.setItem('smetra.billing.view','tokens')}catch{}};
+  };
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   let backgroundEnabled=null;
   const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
@@ -260,8 +295,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   const syncSendButton=()=>{
     const canSend=Boolean(input.value.trim()||pendingPhotos.length);
-    const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
-    send.disabled=!canSend||working||threadBusy||attachingCount>0||fileBlocking||!data.available||quotaBlocked||backgroundEnabled===false;
+    // An empty balance does not disable sending: the click explains how to continue.
+    send.disabled=!canSend||working||threadBusy||attachingCount>0||fileBlocking||!data.available||backgroundEnabled===false;
     voiceButton.disabled=working||threadBusy||fileBlocking||!data.available;
     send.classList.toggle('has-message',canSend);
     voiceButton.classList.toggle('is-recording',voiceListening||voiceStarting);
@@ -643,6 +678,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const renderQuota=value=>{
     if(!value||typeof value.remaining!=='number'||!active()||!composer.isConnected)return;
     quota=value;
+    renderUsage(value);
     // Usage is metered in model tokens; a reply needs a small reserve to start.
     const tokens=value.unit==='tokens',minimum=tokens?1500:1,empty=value.remaining<minimum;
     const short=n=>{n=Number(n||0);return n>=1e6?(n/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':n>=1e4?Math.round(n/1e3).toLocaleString('ru-RU')+' тыс.':n.toLocaleString('ru-RU')};
@@ -789,7 +825,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!active()||!item.isConnected)return;
         item.dataset.proposalState='applied';updateDecisions();quotePreview?.clearProposal?.(action.id);
         renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);
-        quotePreview?.refresh().catch(()=>{});
+        const createdQuote=action.tool==='create_quotes'?result.result?.quote:null;
+        if(createdQuote?.id)await focusQuote(createdQuote);
+        else quotePreview?.refresh().catch(()=>{});
         notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены');
       }catch(error){
         if(!active()||!item.isConnected)return;
@@ -809,6 +847,82 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         item.remove();updateDecisions();
       }catch(error){dismiss.disabled=false;notify(error.message)}
     };
+  };
+  // A newly created estimate becomes the open estimate: the editor shows it and
+  // follow-up requests («замени ламинат…») edit this estimate.
+  const focusQuote=async quote=>{
+    context={entity:'quotes',id:quote.id,label:quote.title||'Смета'};
+    try{
+      if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'quotes',context_id:quote.id})});
+      sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));
+    }catch{}
+    if(!active())return;
+    saveDraft();renderContext();
+  };
+  // Buttons the assistant offered (validated by the server); nothing runs until the user clicks.
+  const clientActionRun={
+    connect_cloud_drive:async item=>{
+      const result=await api('/premium/cloud/oauth/'+encodeURIComponent(item.provider));
+      if(!result?.authorize_url)throw Error('Сервис не вернул ссылку авторизации');
+      location.assign(result.authorize_url);
+    },
+    open_section:async item=>{tab=item.section;location.hash=item.section;await window.render()},
+    open_billing:async()=>{tab='billing';location.hash='billing';await window.render()},
+    open_quote:async item=>{tab='quotes';location.hash='quotes';await window.render();await window.Workspace?.openQuote?.(item.quote_id)},
+    open_quote_editor:async item=>openQuoteEditor(item.quote_id),
+    open_calculator:async item=>{try{sessionStorage.setItem('smetra.calculator.open',item.calculator)}catch{}tab='calculators';location.hash='calculators';await window.render()},
+  };
+  const renderClientActions=(item,list)=>{
+    if(!item||!Array.isArray(list)||!list.length)return;
+    const bar=document.createElement('div');bar.className='assistant-client-actions';bar.setAttribute('role','group');bar.setAttribute('aria-label','Действия в приложении');
+    list.slice(0,3).forEach(entry=>{
+      const run=clientActionRun[entry?.action];if(!run)return;
+      const button=document.createElement('button');button.type='button';button.className='btn small assistant-client-action';
+      button.textContent=String(entry.label||'Открыть').slice(0,60);
+      button.onclick=async()=>{if(button.disabled)return;button.disabled=true;try{await run(entry)}catch(error){notify(error.status===402?'Облачные папки доступны на тарифе PRO':error.message)}finally{if(button.isConnected)button.disabled=false}};
+      bar.append(button);
+    });
+    if(bar.children.length)item.append(bar);
+  };
+  // Zero balance: only AI requests stop. A compact dialog offers a rewarded
+  // video (Android, free plan, server-confirmed), PRO, or manual work on the
+  // open estimate. The draft in the composer is kept.
+  let tokensDialog=null;
+  const showTokensDialog=async()=>{
+    if(tokensDialog?.isConnected){tokensDialog.querySelector('button')?.focus();return}
+    const dialog=document.createElement('dialog');dialog.className='assistant-tokens-dialog';dialog.setAttribute('aria-labelledby','assistant-tokens-title');
+    dialog.innerHTML='<h2 id="assistant-tokens-title">ИИ-токены закончились</h2><p>Вы можете продолжать работать с существующими сметами вручную или получить новые ИИ-токены.</p><p class="assistant-tokens-status" role="status" hidden></p><div class="assistant-tokens-actions"></div>';
+    const actions=dialog.querySelector('.assistant-tokens-actions'),note=dialog.querySelector('.assistant-tokens-status');
+    const say=text=>{note.textContent=text;note.hidden=!text};
+    const close=()=>{if(dialog.open&&typeof dialog.close==='function')dialog.close();dialog.remove();tokensDialog=null;input.focus({preventScroll:true})};
+    const addButton=(label,cls,run)=>{const b=document.createElement('button');b.type='button';b.className='btn '+cls;b.textContent=label;b.onclick=run;actions.append(b);return b};
+    tokensDialog=dialog;document.body.append(dialog);
+    if(window.SmetraShell?.available&&quota.plan==='free'){
+      let offer=null;try{offer=await api('/assistant/ad-reward')}catch{}
+      await window.SmetraShell.ready;
+      if(offer?.enabled&&window.SmetraShell.has('ads')){
+        const amount=Number(offer.amount||0),short=amount>=1e3?Math.round(amount/1e3).toLocaleString('ru-RU')+' тыс.':amount.toLocaleString('ru-RU');
+        const watch=addButton('Посмотреть рекламу · +'+short+' токенов','primary',async()=>{
+          watch.disabled=true;say('Загружаю видео…');
+          try{
+            const result=await window.SmetraShell.call('ads.rewarded.show',{},{timeout:0});
+            if(result.quota)renderQuota(result.quota);
+            notify('Начислено '+Number(result.granted||0).toLocaleString('ru-RU')+' токенов');close();
+          }catch(error){
+            // One explicit retry per click, never an automatic loop.
+            say(error.code==='not_completed'?'Видео закрыто до конца — токены не начислены.':error.message||'Видео сейчас недоступно. Попробуйте позже.');
+            watch.disabled=false;watch.textContent='Повторить';
+          }
+        });
+        if(!offer.available){watch.disabled=true;say(offer.claimed_today?'Бонус за видео сегодня уже получен. Следующий — завтра.':'Видео сейчас недоступно.')}
+      }
+    }
+    addButton('Подключить PRO',actions.children.length?'':'primary',()=>{try{sessionStorage.setItem('smetra.billing.view','tokens');sessionStorage.setItem('smetra.paywall.source','ai_limit')}catch{}close();tab='billing';location.hash='billing';window.render()});
+    if(context?.entity==='quotes'&&context.id)addButton('Продолжить без ИИ','ghost',()=>{const id=context.id;close();openQuoteEditor(id)});
+    else addButton('Понятно','ghost',close);
+    dialog.addEventListener('cancel',event=>{event.preventDefault();close()});
+    if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+    actions.querySelector('button:not(:disabled)')?.focus();
   };
   // Like ChatGPT's "Memory updated": a quiet note under the answer with a way to review it.
   const showMemoryNote=(item,updates)=>{
@@ -955,7 +1069,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   refreshFile();
   if(!thread.messages.length){
-    messages.innerHTML='<div class="assistant-welcome"><h2>С чего начнём?</h2><p>Опишите работы словами или прикрепите фото объекта — ассистент предложит позиции сметы. Суммы считает Сметра, а изменения сохраняются только после вашего подтверждения.</p><div class="assistant-suggestions"><button type="button" data-prompt="Помоги составить новую смету. Спроси необходимые детали.">'+assistantIcon('file-text',16)+'<span>Составить смету</span></button><button type="button" data-prompt="Какие сметы ожидают согласования?">'+assistantIcon('check',16)+'<span>Проверить согласования</span></button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">'+assistantIcon('wallet',16)+'<span>Разобраться в оплатах</span></button></div></div>';
+    messages.innerHTML='<div class="assistant-welcome"><h2>С чего начнём?</h2><p>Опишите работы словами или прикрепите фото объекта — ассистент предложит позиции сметы. Суммы считает Сметра, а изменения сохраняются только после вашего подтверждения.</p><div class="assistant-suggestions"><button type="button" data-prompt="Составь смету на косметический ремонт комнаты 20 м²">'+assistantIcon('file-text',16)+'<span>Составить смету</span></button><button type="button" data-prompt="Какие сметы ожидают согласования?">'+assistantIcon('check',16)+'<span>Проверить согласования</span></button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">'+assistantIcon('wallet',16)+'<span>Разобраться в оплатах</span></button></div></div>';
     messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize();syncSendButton();renderQuota(quota)});
   }
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
@@ -992,13 +1106,25 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     try{await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})})}catch{}
   };
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
+  // «Новая смета» opens here: the editor waits on the right, the task goes in the chat.
+  let estimateIntent=null;
+  try{estimateIntent=JSON.parse(sessionStorage.getItem('smetra.assistant.intent')||'null');sessionStorage.removeItem('smetra.assistant.intent')}catch{}
+  if(estimateIntent?.kind==='new-quote'&&Date.now()-Number(estimateIntent.at||0)<60000){
+    if(context?.entity==='quotes'){context=null;sessionStorage.removeItem('smetra.assistant.context');renderContext()}
+    input.placeholder='Опишите объект и работы — ассистент составит смету';
+    quotePreview?.startNew?.({onExample:text=>{input.value=text;resize();saveDraft();syncSendButton();input.focus()}});
+    // The submit handler is attached below; send after this synchronous setup finishes.
+    if(estimateIntent.text){input.value=estimateIntent.text;resize();saveDraft();syncSendButton();setTimeout(()=>{if(active()&&!send.disabled&&input.value===estimateIntent.text)document.querySelector('#assistant-form').requestSubmit()},0)}
+    else input.focus();
+  }
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
   document.querySelector('#assistant-form').onsubmit=async event=>{
     event.preventDefault();
     // The displayed transcript is the source of truth at submit time.
     // Abort recognition before clearing the composer so late results cannot reappear.
     if(voiceListening||voiceStarting){stopVoiceInput();syncSendButton()}
-    let prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||attachingCount||fileBlocking||quota.remaining<(quota.unit==='tokens'?1500:1)||!data.available||backgroundEnabled===false)return;
+    let prompt=input.value.trim();if((!prompt&&!pendingPhotos.length)||working||threadBusy||attachingCount||fileBlocking||!data.available||backgroundEnabled===false)return;
+    if(quota.remaining<(quota.unit==='tokens'?1500:1)){showTokensDialog();return}
     if(window.SmetraEstimateSafety){try{if(!(await window.SmetraEstimateSafety.ensureConsent()))return}catch(error){status.textContent=error.message;return}}
     if(!active()||working||threadBusy||attachingCount)return;
     prompt=input.value.trim();if(!prompt&&!pendingPhotos.length)return;
@@ -1073,6 +1199,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(kind==='status'&&typeof payload.text==='string'&&payload.text.trim()){hasModelProgress=true;setActivity(payload.text.trim());status.textContent=payload.text.trim()}
         if(kind==='web_source'){showSource(payload);if(!hasModelProgress)setActivity('Проверяю источники…')}
         if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});if(!hasModelProgress)setActivity('Конструирую смету…')}
+        // A validated estimate proposal arrives as soon as the server checked it, before the answer ends.
+        if(kind==='proposal'&&payload&&typeof payload.id==='string'){quotePreview?.propose(payload).catch(()=>{});if(!hasModelProgress)setActivity('Составляю смету…')}
+        if(kind==='status'&&typeof payload.text==='string')quotePreview?.progress?.(payload.text.trim());
         if(kind==='done'){if(activeConversation&&typeof payload.conversation_title==='string'){
           const title=payload.conversation_title.trim();
           if(title){
@@ -1087,7 +1216,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='background'){setActivity('Выполняю запрос…');status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error||'Не удалось завершить ответ')}
       };
@@ -1119,6 +1248,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs();return;
       }
       restoreSubmittedDraft(submitted);
+      // Another tab spent the last tokens: the server refused before any charge.
+      if(error.status===429&&/Токены/.test(error.message||'')){api('/assistant').then(value=>{if(active()&&value?.quota)renderQuota(value.quota)}).catch(()=>{});showTokensDialog()}
       cancelAnimationFrame(paintFrame);
       assistantMessage.item.classList.remove('streaming');
       if(error.name!=='AbortError'&&generated&&assistantMessage.item.isConnected)paint();

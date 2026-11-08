@@ -215,7 +215,8 @@ def _draft(service, data):
             },
         },
         "max_tokens": 5000,
-        "temperature": 0.1,
+        # Claude Haiku 5.5 rejects non-default sampling; other models keep a low temperature.
+        **({} if model.startswith("anthropic/") else {"temperature": 0.1}),
         "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
         **({"provider": {"require_parameters": True}} if paid_model or not image_url else {}),
     }

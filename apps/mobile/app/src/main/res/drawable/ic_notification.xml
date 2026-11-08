@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar icon for push notifications: white silhouette on transparent. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <group android:translateX="-3.652" android:translateY="-4.513" android:scaleX="0.0615" android:scaleY="0.0615">
+        <path android:fillColor="#FFFFFF" android:pathData="M130,114h249a12,12 0,0 1,12,12v15a12,12 0,0 1,-12,12h-249a12,12 0,0 1,-12,-12v-15a12,12 0,0 1,12,-12zM130,204h189a12,12 0,0 1,12,12v15a12,12 0,0 1,-12,12h-189a12,12 0,0 1,-12,-12v-15a12,12 0,0 1,12,-12zM130,294h249a12,12 0,0 1,12,12v15a12,12 0,0 1,-12,12h-249a12,12 0,0 1,-12,-12v-15a12,12 0,0 1,12,-12zM130,384h109a12,12 0,0 1,12,12v15a12,12 0,0 1,-12,12h-109a12,12 0,0 1,-12,-12v-15a12,12 0,0 1,12,-12z"/>
+    </group>
+</vector>
