@@ -321,11 +321,19 @@
     }
   }
   async function refreshNotes(mine) {
+    const unreadSnapshot=window.SmetraReleaseUnread?.snapshot();
     const result=await api('/changelog');
     if(!activeNews(mine))return;
-    notes=result.items;canPublish=result.can_publish;
-    window.SmetraReleaseUnread?.set(result.unread_count);
+    notes=result.items.map(note=>window.SmetraReleaseUnread?.hasRead(note.id)?{...note,has_viewed:1}:note);canPublish=result.can_publish;
+    window.SmetraReleaseUnread?.set(result.unread_count,unreadSnapshot);
     await paintNews(mine);
+  }
+  function syncReadIndicator(note,mine){
+    if(!activeNews(mine))return;
+    const entry=[...document.querySelectorAll('.changelog-entry')].find(node=>node.dataset.id===note.id);
+    const copy=entry?.querySelector('.changelog-copy'),indicator=copy?.querySelector('.changelog-new-indicator');
+    if(note.has_viewed)indicator?.remove();
+    else if(copy&&!indicator){const badge=document.createElement('span');badge.className='changelog-new-indicator';badge.textContent='Не прочитано';copy.append(badge);}
   }
   function editor(note,mine) {
     const dialog=document.createElement('dialog');dialog.className='changelog-editor';
@@ -380,10 +388,11 @@
   async function renderNews(active=()=>true) {
     cleanup();
     const mine=epoch,owner=user;
+    const unreadSnapshot=window.SmetraReleaseUnread?.snapshot();
     const result=await api('/changelog');
     if(!active()||epoch!==mine||owner!==user||tab!=='changelog')return;
-    notes=result.items;canPublish=result.can_publish;openedNote='';
-    window.SmetraReleaseUnread?.set(result.unread_count);
+    notes=result.items.map(note=>window.SmetraReleaseUnread?.hasRead(note.id)?{...note,has_viewed:1}:note);canPublish=result.can_publish;openedNote='';
+    window.SmetraReleaseUnread?.set(result.unread_count,unreadSnapshot);
     view('<section id="changelog-root" class="vault-root">'+head('Что нового','История изменений Сметры. Оценивайте обновления, чтобы помогать нам делать сервис лучше.')+
       '<div class="changelog-toolbar"><span>Обновления продукта</span>'+(canPublish?'<button class="btn primary" id="changelog-publish">+ Опубликовать</button>':'')+'</div>'+
       '<div id="changelog-list" class="changelog-list"></div></section>');
@@ -408,12 +417,15 @@
         const note=notes.find(item=>item.id===open.dataset.note);
         openedNote=openedNote===note.id?'':note.id;
         await paintNews(mine);
-        if(openedNote&&note.published){
+        if(activeNews(mine)&&openedNote===note.id&&note.published&&!note.has_viewed){
+          note.has_viewed=1;syncReadIndicator(note,mine);
           try{
-            await api('/changelog/'+encodeURIComponent(note.id)+'/view',{method:'POST',body:'{}'});
-            if(activeNews(mine))await refreshNotes(mine);
-            void window.SmetraReleaseUnread?.refresh(true);
-          }catch(err){notify(err.message);}
+            await window.SmetraReleaseUnread.markRead(note.id);
+          }catch(err){
+            if(owner!==user)return;
+            const current=notes.find(item=>item.id===note.id);if(current){current.has_viewed=0;syncReadIndicator(current,mine);}
+            if(activeNews(mine))notify(err.message);
+          }
         }
       }
     });

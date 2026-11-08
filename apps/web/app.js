@@ -180,34 +180,56 @@ const sidebarIcons={
 Object.keys(sidebarIcons).forEach(name=>sidebarIcons[name]=window.SmetraIcons?.paths[sidebarIcons[name]]||'');
 // Product update notifications are derived from authenticated server-side views.
 const SmetraReleaseUnread=(()=>{
-  let inFlight=null,sequence=0,lastRefresh=0;
-  function set(count){
+  let inFlight=null,sequence=0,lastRefresh=0,count=0;
+  const pendingReads=new Map(),readIds=new Set();
+  function paint(next){
+    count=Number.isFinite(Number(next))?Math.max(0,Math.floor(Number(next))):0;
     const button=document.querySelector('#sidebar .sidebar-group button[data-tab="changelog"]');
     if(!button)return;
-    const value=Number.isFinite(Number(count))?Math.max(0,Math.floor(Number(count))):0;
     let badge=button.querySelector('.sidebar-unread-badge');
-    if(value===0){badge?.remove();button.removeAttribute('data-unread');return;}
+    if(count===0){badge?.remove();button.removeAttribute('data-unread');button.setAttribute('aria-label','Что нового');return;}
     if(!badge){badge=document.createElement('span');badge.className='sidebar-unread-badge';badge.setAttribute('aria-label','Непрочитанные обновления');button.append(badge);}
-    badge.textContent=value>99?'99+':String(value);
-    button.dataset.unread=String(value);
-    button.setAttribute('aria-label','Что нового — '+value+' непрочитанных обновлений');
+    badge.textContent=count>99?'99+':String(count);
+    button.dataset.unread=String(count);
+    button.setAttribute('aria-label','Что нового — '+count+' непрочитанных обновлений');
+  }
+  function set(next,snapshot=sequence){
+    if(snapshot!==sequence||pendingReads.size)return;
+    paint(next);
   }
   async function refresh(force=false){
-    if(!user || document.body.classList.contains('auth-mode'))return;
+    if(!user || document.body.classList.contains('auth-mode')||pendingReads.size)return;
     if(inFlight)return inFlight;
     if(!force && Date.now()-lastRefresh<15000)return;
     const owner=user,request=++sequence;
-    inFlight=(async()=>{
+    const task=(async()=>{
       try{
         const result=await api('/changelog/unread');
         if(user===owner&&request===sequence){set(result.unread_count);lastRefresh=Date.now();}
       }catch{/* Badge failure must never interrupt the app or expose user data. */}
-      finally{inFlight=null;}
+      finally{if(inFlight===task)inFlight=null;}
     })();
-    return inFlight;
+    inFlight=task;
+    return task;
   }
-  function reset(){sequence++;lastRefresh=0;set(0);}
-  return {set,refresh,reset};
+  function markRead(id){
+    if(pendingReads.has(id))return pendingReads.get(id);
+    if(readIds.has(id))return Promise.resolve();
+    const owner=user;
+    readIds.add(id);sequence++;lastRefresh=0;inFlight=null;paint(count-1);
+    const task=api('/changelog/'+encodeURIComponent(id)+'/view',{method:'POST',body:'{}'}).catch(error=>{
+      if(user===owner&&pendingReads.get(id)===task){readIds.delete(id);paint(count+1);}
+      throw error;
+    }).finally(()=>{
+      if(user!==owner||pendingReads.get(id)!==task)return;
+      pendingReads.delete(id);sequence++;lastRefresh=0;inFlight=null;
+      if(!pendingReads.size)void refresh(true);
+    });
+    pendingReads.set(id,task);
+    return task;
+  }
+  function reset(){sequence++;lastRefresh=0;inFlight=null;pendingReads.clear();readIds.clear();paint(0);}
+  return {set,refresh,reset,markRead,snapshot:()=>sequence,hasRead:id=>readIds.has(id)};
 })();
 window.SmetraReleaseUnread=SmetraReleaseUnread;
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)void SmetraReleaseUnread.refresh();});

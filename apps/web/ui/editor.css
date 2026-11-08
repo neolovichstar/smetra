@@ -173,3 +173,92 @@
   .workspace-page #content:has(#estimate-editor) .editor-recommendation{align-items:stretch;flex-direction:column;gap:12px}
   .workspace-page #content:has(#estimate-editor) .editor-recommendation-actions{justify-content:flex-start;flex-wrap:wrap}
 }
+
+/* A separate workspace for the document and its live appearance settings. */
+dialog.smetra-appearance-dialog{width:min(1440px,calc(100vw - 48px));height:min(960px,90dvh);max-width:calc(100vw - 48px);max-height:90dvh;margin:auto;padding:0;overflow:hidden;border-radius:20px;background:var(--surface-1)}
+dialog.smetra-appearance-dialog[open]{display:flex;flex-direction:column}
+.smetra-appearance-header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex:none;padding:20px 24px;border-bottom:1px solid var(--line)}
+.smetra-appearance-header>div{min-width:0}
+.smetra-appearance-header h2{margin:0;color:var(--text);font-size:20px;font-weight:600;letter-spacing:-.025em}
+.smetra-appearance-header p{margin:5px 0 0;color:var(--text-3);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.smetra-appearance-header .smetra-appearance-close{flex:none;width:40px;height:40px;font-size:25px;font-weight:400;border-radius:10px}
+.smetra-appearance-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;flex:1;min-height:0;min-width:0}
+.smetra-appearance-preview{min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:32px;background:var(--surface-2);scrollbar-gutter:stable}
+.smetra-appearance-preview>.smetra-document{max-width:840px;margin:0 auto;min-height:100%;box-shadow:0 8px 32px #00000014,0 0 0 1px #00000008}
+.smetra-appearance-settings{min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:22px;border-left:1px solid var(--line);scrollbar-gutter:stable}
+.smetra-appearance-settings .smetra-document-config{padding:0;border:0;gap:24px;background:transparent}
+.smetra-appearance-settings .smetra-document-config h3{font-size:15px}
+.smetra-appearance-settings .smetra-document-config-group{gap:10px}
+.smetra-appearance-settings .smetra-document-config-options,.smetra-appearance-settings .smetra-document-config-styles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.smetra-appearance-settings .smetra-document-config :is(.smetra-document-config-choice,.smetra-document-config-styles button){min-height:40px;padding:8px 10px;border-radius:9px;font-size:12px;line-height:1.4;white-space:normal;text-align:left}
+.smetra-appearance-settings .smetra-document-config-choice[aria-pressed=true],.smetra-appearance-settings .smetra-document-config-styles button[aria-pressed=true]{border-color:var(--text-2);background:var(--surface-3);color:var(--text)}
+.smetra-appearance-settings .smetra-document-config-rows{gap:0;padding:0}
+.smetra-appearance-settings .smetra-document-config-row{display:block;padding:12px 0}
+.smetra-document-config-row-head{display:flex;align-items:center;gap:6px;min-width:0}
+.smetra-document-config-row-head>span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:13px;font-weight:500}
+.smetra-document-config-row-head>button{flex:none}
+.smetra-document-config-fields{margin-top:8px;color:var(--text-3);font-size:12px}
+.smetra-document-config-fields>summary{min-height:28px;font-weight:400}
+.smetra-document-config-field{display:grid;gap:6px;margin-top:12px;font-size:12px;color:var(--text-2)}
+.smetra-document-config-field :is(input,textarea,select){width:100%;min-width:0;min-height:38px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit;line-height:1.5;resize:vertical}
+.smetra-document-config-field .select-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;height:auto;min-height:38px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit;line-height:1.5;text-align:left}
+.smetra-document-config-field .select-trigger>.select-chevron{flex:none}
+.smetra-appearance-save-state{margin:22px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--text-3);font-size:12px;line-height:1.55}
+.smetra-appearance-dialog :is(button,input,textarea,select,summary):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Shared document typography follows the paper width, including the chat rail. */
+.smetra-document[data-document-version]{container-type:inline-size;width:100%;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:28px 22px;padding:clamp(20px,3vw,42px);border-radius:8px;font-size:13px;line-height:1.65;letter-spacing:0;box-sizing:border-box}
+.smetra-document[data-document-version] .smetra-document-title{padding-bottom:24px;border-bottom:2px solid var(--doc-ink)}
+.smetra-document[data-document-version] .smetra-document-title small{margin-bottom:16px;color:var(--doc-muted);font-size:9px;font-weight:600;letter-spacing:.14em}
+.smetra-document[data-document-version] .smetra-document-title h2{margin:0;font-size:clamp(24px,2.3vw,34px);font-weight:600;line-height:1.2;letter-spacing:-.035em}
+.smetra-document[data-document-version] .smetra-document-title p{margin:10px 0 0;font-size:13px;line-height:1.6}
+.smetra-document[data-document-version] h3{margin:0 0 14px;font-size:14px;line-height:1.4;font-weight:600;letter-spacing:-.015em}
+.smetra-document[data-document-version] :is(.smetra-document-intro,.smetra-document-notes,.smetra-document-terms,.smetra-document-section)>p{margin:0;white-space:pre-wrap}
+.smetra-document[data-document-version] .smetra-document-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:8px 20px;padding:0 0 24px;border-top:0;border-bottom:1px solid var(--doc-line)}
+.smetra-document[data-document-version] .smetra-document-summary>span{font-size:12px}
+.smetra-document[data-document-version] .smetra-document-summary>strong{font-size:clamp(23px,2.5vw,34px);font-weight:600;line-height:1.2;letter-spacing:-.035em;text-align:right;white-space:nowrap}
+.smetra-document[data-document-version] .smetra-document-summary>:is(p,small){grid-column:1/-1;margin:0}
+.smetra-document[data-document-version] :is(.smetra-document-table-head,.smetra-document-line){display:grid;grid-template-columns:minmax(0,1fr) 65px minmax(70px,auto) minmax(80px,auto);gap:10px;align-items:baseline}
+.smetra-document[data-document-version] .smetra-document-table-head{padding:10px 0;border-top:1px solid var(--doc-line);border-bottom:1px solid var(--doc-line);color:var(--doc-muted);font-size:10px;font-weight:500;letter-spacing:.02em}
+.smetra-document[data-document-version] .smetra-document-table-head>span:not(:first-child){text-align:right}
+.smetra-document[data-document-version] .smetra-document-line{padding:13px 0;border-top:0;border-bottom:1px solid var(--doc-line);font-size:12px}
+.smetra-document[data-document-version] .smetra-document-line-caption{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:baseline;gap:3px 8px}
+.smetra-document[data-document-version] .smetra-document-line-caption>small:first-child{font-size:9px;color:var(--doc-muted)}
+.smetra-document[data-document-version] .smetra-document-line-caption>span{font-weight:500;line-height:1.5}
+.smetra-document[data-document-version] .smetra-document-line-caption>p{display:block;grid-column:2;margin:3px 0 0;font-size:11px;line-height:1.5}
+.smetra-document[data-document-version] .smetra-document-line :is(.smetra-document-line-quantity,.smetra-document-line-price,strong){grid-column:auto;grid-row:auto;min-width:0;font-size:11px;line-height:1.5;font-weight:400;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.smetra-document[data-document-version] .smetra-document-line>strong{font-weight:600}
+.smetra-document[data-document-version] .smetra-document-category{margin-top:12px;padding:10px 0 8px;color:var(--doc-ink);font-size:11px;font-weight:600}
+.smetra-document[data-document-version] .smetra-document-excluded{grid-column:2;color:var(--doc-muted);font-size:10px}
+.smetra-document[data-document-version] .smetra-document-line.is-excluded>strong{text-decoration:line-through;color:var(--doc-muted);font-weight:400}
+.smetra-document[data-document-version] .smetra-visual-heading{flex-wrap:wrap;margin-bottom:6px}
+.smetra-document[data-document-version] .smetra-visual-heading>small{font-size:10px}
+.smetra-document[data-document-version] .smetra-visual-bars{gap:14px}
+.smetra-document[data-document-version] .smetra-visual-bar-label{font-size:11px}
+.smetra-document[data-document-version] .smetra-visual-footnote{font-size:10px;line-height:1.55;color:var(--doc-muted)}
+.smetra-document[data-document-version].smetra-document--minimal .smetra-document-title{border-bottom:1px solid var(--doc-line)}
+.smetra-document[data-document-version].smetra-document--technical{font-family:var(--font-mono);font-size:12px}
+.smetra-document[data-document-version].smetra-document--technical .smetra-document-title h2{font-size:25px;letter-spacing:-.04em}
+.smetra-document[data-document-version].smetra-document--compact{gap:18px;padding:22px}
+.smetra-document[data-document-version].smetra-document--compact .smetra-document-line{padding:8px 0}
+@container (max-width:560px){
+ .smetra-document[data-document-version] .smetra-document-table-head{display:none}
+ .smetra-document[data-document-version] .smetra-document-line{grid-template-columns:minmax(0,1fr) auto;gap:5px 10px}
+ .smetra-document[data-document-version] .smetra-document-line-caption{grid-column:1/-1}
+ .smetra-document[data-document-version] .smetra-document-line>.smetra-document-line-quantity{grid-column:1;text-align:left;padding-left:28px}
+ .smetra-document[data-document-version] .smetra-document-line>.smetra-document-line-price{display:none}
+ .smetra-document[data-document-version] .smetra-document-line>strong{grid-column:2}
+ .smetra-document[data-document-version] .smetra-document-summary{grid-template-columns:1fr;gap:8px}
+ .smetra-document[data-document-version] .smetra-document-summary>strong{text-align:left}
+ .smetra-document[data-document-version] .is-half{grid-column:1/-1}
+}
+@media(max-width:800px){
+ dialog.smetra-appearance-dialog{width:calc(100vw - 16px);max-width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);border-radius:14px}
+ .smetra-appearance-header{padding:14px 16px;gap:12px}
+ .smetra-appearance-header h2{font-size:18px}
+ .smetra-appearance-body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,42%) minmax(0,1fr)}
+ .smetra-appearance-preview{padding:16px}
+ .smetra-appearance-preview>.smetra-document{min-height:0}
+ .smetra-appearance-settings{padding:20px 18px;border-left:0;border-top:1px solid var(--line)}
+ .smetra-appearance-preview .smetra-document[data-document-version]{padding:20px;gap:22px}
+}

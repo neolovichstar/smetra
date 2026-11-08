@@ -51,7 +51,7 @@
       row.append(label,track);bars.append(row);
     }
     node.append(bars);
-    const footer=el('p','smetra-visual-footnote','Диаграмма построена по подтверждённым расчётным суммам сервера. Неизвестные цены не оцениваются.');
+    const footer=el('p','smetra-visual-footnote','Распределение по позициям с указанной стоимостью. Позиции без цены в диаграмму не включены.');
     node.append(footer);return node;
   };
   const svgNode=(tag,attrs={},text)=>{
@@ -111,7 +111,7 @@
     // «К списку» brings back the picker without closing the panel.
     const back=el('button','smetra-quote-preview-back icon-button');back.innerHTML=window.SmetraIcons?window.SmetraIcons.svg('arrow-left',18):'←';
     back.type='button';back.setAttribute('aria-label','К списку смет');back.title='К списку смет';back.hidden=true;
-    back.onclick=()=>{seq++;loading=false;current=null;pending=null;render()};
+    back.onclick=()=>{closeAppearance(false);seq++;loading=false;current=null;pending=null;render()};
     const expand=el('button','smetra-quote-preview-expand icon-button');expand.type='button';
     expand.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
     expand.setAttribute('aria-label','Развернуть редактор');expand.title='Развернуть';expand.setAttribute('aria-pressed','false');
@@ -147,7 +147,57 @@
     let mode=null,draft=null,progressText='',statusLine=null;
     const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
     const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
-    let layout=null,configureVisible=false;
+    let layout=null,currentContext=null,documentNode=null,appearanceDialog=null,appearancePreview=null,appearanceOwner=null,appearanceGuard=null;
+    const appearanceActive=()=>appearanceOwner&&visible&&!loading&&host.isConnected&&current===appearanceOwner.quote&&storageSpace()===appearanceOwner.space&&storageUser()===appearanceOwner.user;
+    function closeAppearance(restoreFocus=true){
+      const dialog=appearanceDialog;if(!dialog)return;
+      appearanceDialog=null;appearancePreview=null;appearanceOwner=null;
+      appearanceGuard?.disconnect();appearanceGuard=null;
+      if(dialog.open)dialog.close();dialog.remove();
+      if(restoreFocus&&visible)content.querySelector('.smetra-quote-preview-tune')?.focus({preventScroll:true});
+    }
+    function paintAppearance(){
+      if(!appearanceDialog)return;
+      if(!appearanceActive()){closeAppearance(false);return}
+      appearancePreview.replaceChildren(window.SmetraQuoteLayout.render({quote:current,layout,pending}));
+    }
+    function openAppearance(){
+      if(!visible||!host.isConnected||!current||loading||!window.SmetraQuoteLayout||currentContext?.user!==storageUser()||currentContext?.space!==storageSpace())return;
+      if(appearanceDialog?.open){appearanceDialog.querySelector('button')?.focus();return}
+      appearanceOwner={quote:current,space:storageSpace(),user:storageUser()};
+      const dialog=el('dialog','smetra-appearance-dialog');appearanceDialog=dialog;
+      dialog.setAttribute('aria-label','Оформление сметы');
+      const top=el('header','smetra-appearance-header');
+      const label=el('div');label.append(el('h2','','Оформление сметы'),el('p','',current.title||'Смета'));
+      const done=el('button','smetra-appearance-close icon-button');done.type='button';done.autofocus=true;
+      done.setAttribute('aria-label','Закрыть настройки оформления');done.textContent='×';done.onclick=()=>closeAppearance();
+      top.append(label,done);
+      const body=el('div','smetra-appearance-body');
+      const preview=el('section','smetra-appearance-preview');preview.setAttribute('aria-label','Предпросмотр документа');
+      appearancePreview=preview;
+      const aside=el('aside','smetra-appearance-settings');aside.setAttribute('aria-label','Настройки оформления');
+      const saveState=el('p','smetra-appearance-save-state','Изменения сохраняются автоматически');saveState.setAttribute('role','status');
+      const controls=el('div','smetra-appearance-controls');aside.append(controls,saveState);body.append(preview,aside);dialog.append(top,body);
+      window.SmetraQuoteLayout.configure({container:controls,value:layout,onChange:newLayout=>{
+        if(!appearanceActive()){closeAppearance(false);return}
+        layout=newLayout;
+        const saved=window.SmetraQuoteLayout.save(appearanceOwner.space,appearanceOwner.user,current.id,layout);
+        const next=window.SmetraQuoteLayout.render({quote:current,layout,pending});
+        if(documentNode?.isConnected)documentNode.replaceWith(next);documentNode=next;
+        paintAppearance();
+        saveState.textContent=saved?'Изменения сохранены':'Предпросмотр обновлён. Не удалось сохранить оформление на устройстве.';
+      }});
+      dialog.addEventListener('cancel',event=>{event.preventDefault();closeAppearance()});
+      dialog.addEventListener('close',()=>{if(appearanceDialog===dialog)closeAppearance()});
+      dialog.addEventListener('click',event=>{
+        if(event.target!==dialog)return;
+        const box=dialog.getBoundingClientRect();
+        if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeAppearance();
+      });
+      doc.body.append(dialog);paintAppearance();dialog.showModal();
+      appearanceGuard=new MutationObserver(()=>{if(!appearanceActive())closeAppearance(false)});
+      appearanceGuard.observe(doc.body,{childList:true,subtree:true});
+    }
     const themeObserver=new MutationObserver(()=>{
       if(visible && (!layout || layout.appearance==='auto') && current)render();
     });
@@ -170,20 +220,12 @@
       if(pending)content.append(el('p','smetra-quote-preview-pending','Ниже показан вариант с изменениями ассистента. Итог пересчитан сервером; в смету он попадёт только после «Применить» в чате.'));
       content.append(title);
       const bar=el('div','smetra-quote-preview-controls');
-      const tune=el('button','smetra-quote-preview-tune',configureVisible?'Закрыть настройки':'Настроить вид');
-      tune.type='button';tune.setAttribute('aria-expanded',String(configureVisible));
-      tune.onclick=()=>{configureVisible=!configureVisible;render()};
+      const tune=el('button','smetra-quote-preview-tune','Настроить вид');
+      tune.type='button';tune.setAttribute('aria-haspopup','dialog');
+      tune.onclick=openAppearance;
       bar.append(tune);content.append(bar);
-      if(configureVisible&&window.SmetraQuoteLayout){
-        const controls=el('div','smetra-quote-layout-controls');content.append(controls);
-        window.SmetraQuoteLayout.configure({container:controls,value:layout,onChange:newLayout=>{
-          layout=newLayout;
-          window.SmetraQuoteLayout.save(storageSpace(),storageUser(),quote.id,layout);
-          render();
-        }});
-      }
-      const doc=window.SmetraQuoteLayout?.render({quote,layout,pending})||el('p','','Предпросмотр пока недоступен.');
-      content.append(doc);
+      documentNode=window.SmetraQuoteLayout?.render({quote,layout,pending})||el('p','','Предпросмотр пока недоступен.');
+      content.append(documentNode);paintAppearance();
       const foot=el('div','smetra-quote-preview-actions');
       const edit=el('button','smetra-quote-open-editor','Открыть полный редактор');
       edit.type='button';edit.onclick=()=>{if(quote.id)onOpenEditor?.(quote.id)};
@@ -270,11 +312,12 @@
       const next=Boolean(open);
       if(closeTimer!==null){clearTimeout(closeTimer);closeTimer=null}
       if(!next){
-        const restoreFocus=panel.contains(document.activeElement);
+        const restoreFocus=panel.contains(document.activeElement)||Boolean(appearanceDialog?.contains(document.activeElement));
+        closeAppearance(false);
         if(visible){
           // Invalidate async loads so an old response cannot reopen a
           // dismissed preview.
-          ++seq;++pickSeq;loading=false;pending=null;configureVisible=false;
+          ++seq;++pickSeq;loading=false;pending=null;
         }
         visible=false;
         // Collapse the grid track immediately; the CSS grid transition
@@ -310,14 +353,17 @@
     }
     const load=async id=>{
       if(!id)return;
+      closeAppearance(false);
+      const requestUser=storageUser(),requestSpace=storageSpace();
       const request=++seq;loading=true;setOpen(true);
       content.replaceChildren(el('p','smetra-visual-empty','Загружаю смету…'));
       try{
         const response=await fetchQuote(id);
-        if(request!==seq||!host.isConnected)return;
+        if(request!==seq||!host.isConnected||storageUser()!==requestUser||storageSpace()!==requestSpace)return;
         loading=false;
         current=response?.quote||response;
         if(!current||current.id!==id)throw Error('Смета недоступна');
+        currentContext={user:requestUser,space:requestSpace};
         pending=null;draft=null;mode=null;progressText='';layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();syncChip();
       }catch(error){
         if(request===seq){loading=false;content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'))}
@@ -342,7 +388,7 @@
         if(action.preview?.kind!=='quote_draft')return;
         // The same proposal arrives twice (live event, then the final answer): keep one.
         if(draft?.id===action.id)return;
-        ++seq;loading=false;current=null;pending=null;draft=action;mode='new';setOpen(true);render();return;
+        closeAppearance(false);++seq;loading=false;current=null;pending=null;draft=action;mode='new';setOpen(true);render();return;
       }
       const id=action.arguments.id;
       if(typeof id!=='string'||!id)return;
@@ -356,6 +402,7 @@
       if(!validated)return;
       if(!current||current.id!==payload.id)await load(payload.id);
       if(!current||current.id!==payload.id)return;
+      closeAppearance(false);
       layout=validated;
       window.SmetraQuoteLayout.save(storageSpace(),storageUser(),payload.id,validated);
       setOpen(true);
@@ -364,11 +411,11 @@
       if(!current)return;
       const id=current.id;await load(id);
     };
-    const startNew=()=>{++seq;loading=false;current=null;pending=null;draft=null;mode='new';progressText='';setOpen(true);render()};
+    const startNew=()=>{closeAppearance(false);++seq;loading=false;current=null;pending=null;draft=null;mode='new';progressText='';setOpen(true);render()};
     const progress=text=>{progressText=String(text||'').slice(0,120);if(visible&&(draft||mode==='new'))paintStatus()};
     return {load,propose,design,refresh,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       clearProposal,
-      destroy:()=>{if(closeTimer!==null)clearTimeout(closeTimer);seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-saved-w');chip.remove();panel.remove()},
+      destroy:()=>{closeAppearance(false);if(closeTimer!==null)clearTimeout(closeTimer);seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-saved-w');chip.remove();panel.remove()},
       get currentId(){return current?.id||''}};
   }
   window.SmetraQuoteVisuals={mountAssistant,mountRooms,breakdown,serverAmounts,roomDiagram,money};

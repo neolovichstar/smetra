@@ -14,7 +14,9 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   assert.match(styles,/@media \(prefers-reduced-motion:reduce\)/,'System reduced-motion preference is respected');
   assert.match(styles,/#billing-plans:not\(\[hidden\]\),#billing-tokens:not\(\[hidden\]\)/,'Both panels have an entrance transition');
   assert.match(app,/ui\/base\.css\?v=20261108-spinner1/,'Spinner styles must not be served from old cache');
-  assert.match(app,/ui\/workspace\.css\?v=20261108-profile1/,'Billing styles must not be served from old cache');
+  const workspaceRevision=app.match(/ui\/workspace\.css\?v=([^"\s]+)/)?.[1];
+  assert.match(workspaceRevision||'',/^\d{8}-[a-z0-9-]+$/i,'Workspace styles use a cache revision');
+  assert.ok(workspaceRevision.slice(0,8)>='20261108'&&workspaceRevision!=='20261108-profile1','Workspace styles must bypass the previous cached layout; later revisions remain valid');
   assert.match(featureManifest,/ecosystem-billing\.js\?v=20261108-tabs1/,'Billing JS must not be served from old cache');
 
   const dom=new JSDOM('<!doctype html><html><body><main id="content"></main></body></html>',{

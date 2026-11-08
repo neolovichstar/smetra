@@ -34,8 +34,9 @@
    const l=safeLayout(layout)||safeLayout(base());
    const dark=l.appearance==='dark'||(l.appearance==='auto'&&document.documentElement.dataset.theme==='dark');
    const root=node('article','smetra-document smetra-document--'+l.style+' smetra-document-tone--'+l.tone+(dark?' smetra-document--dark':' smetra-document--light'));
+   root.dataset.documentVersion='2';
    root.setAttribute('aria-label','Предпросмотр сметы, '+(dark?'тёмная':'светлая')+' тема');
-   const configured=pending?.preview&&['quote_items','quote_structure'].includes(pending.preview.kind);
+   const configured=pending?.arguments?.id===quote.id&&pending?.preview&&['quote_items','quote_structure'].includes(pending.preview.kind);
    const items=configured&&Array.isArray(pending?.arguments?.items)?pending.arguments.items:Array.isArray(quote.items)?quote.items:[];
    const currency=quote.currency||'RUB',format=v=>window.SmetraQuoteVisuals?.money(v,currency)||'—';
    const isPending=configured&&pending.arguments?.id===quote.id;
@@ -69,16 +70,28 @@
          const section=node('section','smetra-document-items');
          section.append(node('h3','',heading||'Позиции'));
          if(block.description)section.append(node('p','smetra-document-note',block.description));
-         const table=node('div','smetra-document-lines');
+         const table=node('div','smetra-document-lines');table.setAttribute('role','table');table.setAttribute('aria-label',heading||'Позиции сметы');
+         const columns=node('div','smetra-document-table-head');columns.setAttribute('role','row');
+         ['Наименование','Кол-во','Цена','Сумма'].forEach(text=>{const cell=node('span','',text);cell.setAttribute('role','columnheader');columns.append(cell)});
+         table.append(columns);
+         let category='';
          items.slice(0,200).forEach((item,i)=>{
-           const line=node('div','smetra-document-line');
-           const caption=node('div','smetra-document-line-caption');
+           const group=String(item.category||'').trim();
+           if(group&&group!==category){const label=node('div','smetra-document-category',group);label.setAttribute('role','row');const cell=node('span','',group);cell.setAttribute('role','cell');cell.setAttribute('aria-colspan','4');label.replaceChildren(cell);table.append(label)}
+           category=group;
+           const line=node('div','smetra-document-line'+(item.included===false?' is-excluded':''));line.setAttribute('role','row');
+           const caption=node('div','smetra-document-line-caption');caption.setAttribute('role','cell');
            caption.append(node('small','',String(i+1).padStart(2,'0')),node('span','',item.name||'Позиция'));
            if(item.description)caption.append(node('p','',item.description));
-           line.append(caption,node('span','smetra-document-line-quantity',String(item.quantity||'—')+' '+String(item.unit||'')),
-            node('strong','',cost(item.subtotal)===null?'—':format(item.subtotal)));
+           if(item.included===false)caption.append(node('small','smetra-document-excluded','Не включено в итог'));
+           const quantity=node('span','smetra-document-line-quantity',String(item.quantity??'—').replace('.',',')+' '+String(item.unit||''));
+           const price=node('span','smetra-document-line-price',cost(item.unit_price)===null?'—':format(item.unit_price));
+           const subtotal=node('strong','',cost(item.subtotal)===null?'—':format(item.subtotal));
+           [quantity,price,subtotal].forEach(cell=>cell.setAttribute('role','cell'));
+           line.append(caption,quantity,price,subtotal);
            table.append(line);
          });
+         if(!items.length)section.append(node('p','smetra-document-note','Позиции появятся после добавления работ и материалов.'));
          section.append(table);add(section,block);break;
        }
        case 'breakdown':{
@@ -93,7 +106,7 @@
          add(metric,block);break;
        }
        case 'notes':add(textBlock('notes',heading||'Примечания',block.description||quote.description),block);break;
-       case 'terms':add(textBlock('terms',heading||'Условия',block.description||quote.terms),block);break;
+       case 'terms':if(String(block.description||quote.terms||'').trim())add(textBlock('terms',heading||'Условия',block.description||quote.terms),block);break;
        case 'section':add(textBlock('section',heading||'Раздел',block.description),block);break;
        case 'divider':add(node('hr','smetra-document-divider'),block);break;
        case 'rooms':{
@@ -116,15 +129,22 @@
  const configure=({container,value,onChange})=>{
    const l=safeLayout(value)||base();
    const wrapper=node('section','smetra-document-config');
-   wrapper.append(node('h3','','Оформление сметы'));
-   wrapper.append(node('p','smetra-document-config-hint','Изменения применяются к предпросмотру. Данные, суммы и цены остаются серверными.'));
+   wrapper.append(node('h3','','Настройки документа'));
+   wrapper.append(node('p','smetra-document-config-hint','Оформление сохраняется автоматически. Цены и итоговая стоимость не меняются.'));
+   const publish=()=>onChange(safeLayout(l));
+   const choice=(container,property,value)=>{
+     l[property]=value;
+     container.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.value===value)));
+     publish();
+   };
    const appearance=node('div','smetra-document-config-group');
    appearance.append(node('span','smetra-document-config-label','Тема листа'));
    const appearanceOptions=node('div','smetra-document-config-options');
    [['auto','Как в приложении'],['dark','Тёмная'],['light','Светлая']].forEach(([value,label])=>{
      const button=node('button','smetra-document-config-choice',label);
+     button.dataset.value=value;
      button.type='button';button.setAttribute('aria-pressed',String(l.appearance===value));
-     button.onclick=()=>{l.appearance=value;onChange(safeLayout(l))};
+     button.onclick=()=>choice(appearanceOptions,'appearance',value);
      appearanceOptions.append(button);
    });
    appearance.append(appearanceOptions);wrapper.append(appearance);
@@ -133,8 +153,9 @@
    const styles=node('div','smetra-document-config-styles');
    ['editorial','minimal','technical','compact'].forEach(style=>{
      const b=node('button','',''+({editorial:'Редакционный',minimal:'Минимализм',technical:'Технический',compact:'Компактный'}[style]));
+     b.dataset.value=style;
      b.type='button';b.setAttribute('aria-pressed',String(l.style===style));
-     b.onclick=()=>{l.style=style;onChange(safeLayout(l))};styles.append(b);
+     b.onclick=()=>choice(styles,'style',style);styles.append(b);
    });
    styleGroup.append(styles);wrapper.append(styleGroup);
    const details=node('div','smetra-document-config-group');
@@ -142,35 +163,64 @@
    const tones=node('div','smetra-document-config-options');
    [['neutral','Нейтральный'],['graphite','Графит'],['warm','Тёплый'],['sage','Шалфей'],['sand','Песок']].forEach(([value,label])=>{
      const b=node('button','smetra-document-config-choice',label);
+     b.dataset.value=value;
      b.type='button';b.setAttribute('aria-pressed',String(l.tone===value));
-     b.onclick=()=>{l.tone=value;onChange(safeLayout(l))};tones.append(b);
+     b.onclick=()=>choice(tones,'tone',value);tones.append(b);
    });
    details.append(tones);wrapper.append(details);
    wrapper.append(node('span','smetra-document-config-label','Структура документа'));
    const rows=node('div','smetra-document-config-rows');
    const relabel={title:'Заголовок',intro:'Введение',summary:'Итого',items:'Позиции',breakdown:'Диаграмма',notes:'Заметки',
      divider:'Разделитель',section:'Секция',metrics:'Показатели',terms:'Условия',rooms:'Помещения'};
-   l.blocks.forEach((block,index)=>{
+   let nextKey=l.blocks.length;
+   l.blocks.forEach((block,index)=>block.key=String(index));
+   const renderRows=(focusKey,focusAction)=>{
+    const expanded=new Set([...rows.querySelectorAll('details[open]')].map(details=>details.dataset.key));
+    rows.replaceChildren();
+    l.blocks.forEach((block,index)=>{
      const row=node('div','smetra-document-config-row');
-     row.append(node('span','',block.title||relabel[block.kind]||block.kind));
+     row.dataset.key=block.key;
+     const head=node('div','smetra-document-config-row-head');
+     const caption=node('span','',block.title||relabel[block.kind]||block.kind);head.append(caption);
      for(const [symbol,direction] of [['↑',-1],['↓',1]]){
        const move=node('button','',symbol);move.type='button';move.disabled=index+direction<0||index+direction>=l.blocks.length;
-       move.onclick=()=>{const other=l.blocks[index+direction];l.blocks[index+direction]=block;l.blocks[index]=other;onChange(safeLayout(l))};
-       row.append(move);
+       move.dataset.action=String(direction);move.setAttribute('aria-label',(direction<0?'Поднять':'Опустить')+' блок «'+(block.title||relabel[block.kind])+'»');
+       move.onclick=()=>{const other=l.blocks[index+direction];l.blocks[index+direction]=block;l.blocks[index]=other;publish();renderRows(block.key,String(direction))};
+       head.append(move);
      }
      if(!['summary','items'].includes(block.kind)){
        const remove=node('button','','×');remove.type='button';remove.setAttribute('aria-label','Убрать блок');
-       remove.onclick=()=>{l.blocks.splice(index,1);onChange(safeLayout(l))};row.append(remove);
+       remove.setAttribute('aria-label','Убрать блок «'+(block.title||relabel[block.kind])+'»');
+       remove.onclick=()=>{l.blocks.splice(index,1);publish();renderRows();(add.closest('.select-control')?.querySelector('.select-trigger')||add).focus()};head.append(remove);
+     }
+     row.append(head);
+     if(block.kind!=='divider'){
+       const fields=node('details','smetra-document-config-fields');fields.dataset.key=block.key;fields.open=expanded.has(block.key);
+       fields.append(node('summary','','Текст и размер'));
+       for(const [property,label,tag,maxLength] of [['title','Заголовок','input',100],['description','Описание','textarea',400]]){
+         const field=node('label','smetra-document-config-field');field.append(node('span','',label));
+         const input=node(tag);input.value=block[property];input.maxLength=maxLength;input.setAttribute('aria-label',label+' блока '+(index+1));
+         if(tag==='input')input.type='text';else input.rows=3;
+         input.oninput=()=>{block[property]=input.value;if(property==='title')caption.textContent=input.value||relabel[block.kind];publish()};
+         field.append(input);fields.append(field);
+       }
+       const width=node('label','smetra-document-config-field');width.append(node('span','','Ширина блока'));
+       const select=node('select');select.setAttribute('aria-label','Ширина блока '+(index+1));
+       for(const [value,label] of [['full','На всю ширину'],['half','Половина листа']]){const option=node('option','',label);option.value=value;select.append(option)}
+       select.value=block.width;select.onchange=()=>{block.width=select.value;publish()};width.append(select);fields.append(width);row.append(fields);
      }
      rows.append(row);
-   });
+    });
+    if(focusKey!==undefined){const row=[...rows.children].find(row=>row.dataset.key===focusKey);const button=row?.querySelector('[data-action="'+focusAction+'"]');(button&&!button.disabled?button:row?.querySelector('summary'))?.focus()}
+   };
    wrapper.append(rows);
    const add=node('select','smetra-document-config-add');
    add.setAttribute('aria-label','Добавить блок');add.append(node('option','','Добавить блок…'));
    [...KINDS].forEach(kind=>{const o=node('option','',relabel[kind]);o.value=kind;add.append(o)});
    add.onchange=()=>{if(!KINDS.has(add.value)||l.blocks.length>=24)return;
-      l.blocks.push({kind:add.value,title:'',description:'',width:'full'});
-      onChange(safeLayout(l))};wrapper.append(add);
+      l.blocks.push({kind:add.value,title:'',description:'',width:'full',key:String(nextKey++)});
+      publish();renderRows();add.selectedIndex=0};wrapper.append(add);
+   renderRows();
    container.replaceChildren(wrapper);
  };
  window.SmetraQuoteLayout={render,base,safeLayout,load,save,configure};

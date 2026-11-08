@@ -4,7 +4,7 @@
 
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js?v=20261026-r21','/chat-markdown.js?v=20261108-ai1']},
-    quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261026-r21','/quote-visual-core.js?v=20261108-slide1']},
+    quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261108-designer1','/quote-visual-core.js?v=20261108-designer1']},
     assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-clipboard.js?v=20261028-audio1','/assistant-chat.js?v=20261108-profile1','/ai-workspace.js?v=20261108-memory1']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261108-profile1']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r21']},
