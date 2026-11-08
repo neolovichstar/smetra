@@ -144,9 +144,7 @@
     let current=null,pending=null,visible=false,seq=0,loading=false,pickSeq=0;
     // New-estimate mode: an empty editor waits for the assistant; draft holds a
     // server-validated create_quotes proposal (sections and totals computed by the server).
-    let mode=null,draft=null,progressText='',onExample=null,statusLine=null;
-    const EXAMPLES=['Составь смету на косметический ремонт комнаты 20 м²','Рассчитай ремонт ванной под ключ в Москве',
-      'Сделай подробную смету на электромонтаж двухкомнатной квартиры','Нужна смета на строительство каркасного дома 120 м²'];
+    let mode=null,draft=null,progressText='',statusLine=null;
     const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
     const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
     let layout=null,configureVisible=false;
@@ -162,6 +160,7 @@
       if(draft){renderDraft();return}
       if(mode==='new'&&!current){renderNew();return}
       const listing=!current&&!loading&&typeof listQuotes==='function';
+      kicker.hidden=false;
       heading.textContent=listing?'Сметы':'Смета';kicker.textContent=listing?'Выберите для предпросмотра':'Предпросмотр';
       if(!current){if(!loading)picker();return}
       const quote=current;
@@ -195,17 +194,17 @@
     const status=()=>{statusLine=el('p','smetra-draft-status');statusLine.setAttribute('role','status');statusLine.setAttribute('aria-live','polite');paintStatus();return statusLine};
     const paintStatus=()=>{if(!statusLine)return;statusLine.textContent=progressText;statusLine.hidden=!progressText;statusLine.classList.toggle('is-working',Boolean(progressText))};
     const renderNew=()=>{
-      heading.textContent='Новая смета';kicker.textContent='Черновик появится здесь';
-      const box=el('div','smetra-draft-empty');
-      box.append(el('h3','','Опишите задачу в чате'),
-        el('p','','Ассистент разберёт запрос, задаст уточнение, если без него нельзя, и соберёт смету по разделам. Суммы считает сервер; вы проверяете и правите результат.'),status());
-      const list=el('div','smetra-draft-examples');list.setAttribute('role','list');
-      EXAMPLES.forEach(text=>{const b=el('button','smetra-draft-example',text);b.type='button';b.setAttribute('role','listitem');b.onclick=()=>onExample?.(text);list.append(b)});
-      box.append(list);content.append(box);
+      // Keep the workspace panel ready for the real AI draft, without a fake
+      // empty document or canned example prompts. Progress is displayed only
+      // when the assistant starts working.
+      heading.textContent='Новая смета';
+      kicker.textContent='';
+      kicker.hidden=true;
+      content.append(status());
     };
     const renderDraft=()=>{
       const p=draft.preview||{},currency=p.currency||'RUB',counts=p.counts||{};
-      heading.textContent=p.title||'Новая смета';kicker.textContent='Черновик ИИ';
+      heading.textContent=p.title||'Новая смета';kicker.textContent='Черновик ИИ';kicker.hidden=false;
       const title=el('div','smetra-quote-preview-title');
       title.append(el('h3','',p.title||'Смета'),el('span','smetra-quote-preview-state','Ждёт подтверждения в чате'));
       content.append(title,status());
@@ -335,7 +334,7 @@
       if(!current)return;
       const id=current.id;await load(id);
     };
-    const startNew=(options={})=>{onExample=options.onExample||null;++seq;loading=false;current=null;pending=null;draft=null;mode='new';progressText='';setOpen(true);render()};
+    const startNew=()=>{++seq;loading=false;current=null;pending=null;draft=null;mode='new';progressText='';setOpen(true);render()};
     const progress=text=>{progressText=String(text||'').slice(0,120);if(visible&&(draft||mode==='new'))paintStatus()};
     return {load,propose,design,refresh,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       clearProposal,

@@ -57,7 +57,13 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await click('[data-period=year]');assert.equal(await evaluate("document.querySelector('[data-period=year]').getAttribute('aria-pressed')"),'true');assert.equal(await evaluate("document.querySelectorAll('.catalog-plan').length"),4);
  await shot('growth-billing-mobile');
  for(const width of [320,390,768,1440]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<701});await wait(150);assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Billing overflow '+width)}
- await evaluate("tab='quotes';render()");await until("document.querySelector('[data-work=quote-new]')");await click('[data-work=quote-new]');await until("document.querySelector('#estimate-editor')");await fill('#f-title','Preserved draft');
+ await evaluate("tab='quotes';render()");await until("document.querySelector('[data-work=quote-new]')");await click('[data-work=quote-new]');await until("document.querySelector('#assistant-form')");
+ assert.equal(await evaluate("document.querySelector('#estimate-editor')===null"),true,'AI-first new estimate opens the chat, not a blank form');
+ // Check the quota upsell on a real, existing editable estimate instead.
+ await evaluate("tab='quotes';location.hash='quotes';render()");await until("document.querySelector('[data-work=quote-new]')");
+ const existingId=await evaluate("api('/quotes').then(r=>r.quotes[0].id)");
+ await evaluate(`(async()=>{const detail=await api('/quotes/'+${JSON.stringify(existingId)});await Workspace.editor(detail.quote)})()`);
+ await until("document.querySelector('#estimate-editor')");await fill('#f-title','Preserved draft');
  await evaluate("SmetraGrowth.paywall('quote_limit')");assert.equal(await evaluate("document.querySelector('#f-title').value"),'Preserved draft');await shot('growth-contextual-offer');
  await click('.contextual-upgrade .primary');await until("document.querySelector('#plan-cards')");assert.equal(await evaluate("sessionStorage.getItem('smetra.checkout.return.'+user.id)"),'quotes');
  assert.deepEqual(errors,[]);console.log('PASS: first-run → seven honest starters → saved quote; server annual price; no unavailable checkout; contextual offer retains draft; 320/390/768/1440 layouts');ws.close();

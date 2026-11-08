@@ -325,7 +325,7 @@
 
 /* Plans / Tokens switch: shared sliding thumb, no selected-button jump. */
 .billing-switch{position:relative;isolation:isolate;display:inline-grid;grid-template-columns:repeat(2,minmax(0,1fr));align-self:flex-start;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface-1)}
-.billing-switch::before{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 8px)/2);border-radius:var(--r-pill);background:var(--surface-inverse);pointer-events:none;z-index:0;transform:translateX(0);transition:transform 280ms cubic-bezier(.22,1,.36,1)}
+.billing-switch::before{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 4px);border-radius:var(--r-pill);background:var(--surface-inverse);pointer-events:none;z-index:0;transform:translateX(0);transition:transform 280ms cubic-bezier(.22,1,.36,1)}
 .billing-switch.is-tokens::before{transform:translateX(calc(100% + 2px))}
 #content .billing-switch button{position:relative;z-index:1;min-width:132px;min-height:40px;padding:0 16px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font-size:var(--fs-14);font-weight:500;box-shadow:none;transition:color 220ms ease}
 #content .billing-switch button:hover{color:var(--text)}
