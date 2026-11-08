@@ -326,3 +326,18 @@
 .changelog-body h2>.changelog-svg-icon,.changelog-body h3>.changelog-svg-icon,.changelog-preview h2>.changelog-svg-icon,.changelog-preview h3>.changelog-svg-icon{vertical-align:-3px}
 .changelog-body li>.changelog-svg-icon,.changelog-preview li>.changelog-svg-icon{width:15px;height:15px;margin-right:8px;color:#b7b7b7}
 @media(max-width:640px){.changelog-title{gap:8px}.changelog-title>.changelog-svg-icon{width:17px;height:17px;flex-basis:17px}}
+
+
+/* Native number steppers: removed globally without weakening the design system.
+   Last stylesheet wins over earlier browser/theme appearance rules. */
+input[type="number"],#content input[type="number"],dialog input[type="number"]{
+  -moz-appearance:textfield;
+  appearance:textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button{
+  -webkit-appearance:none;
+  appearance:none;
+  display:none;
+  margin:0;
+}
