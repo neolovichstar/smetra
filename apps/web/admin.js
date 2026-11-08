@@ -14,7 +14,7 @@
   function heading() {
     const stats = state.overview.stats;
     const dateLabel = new Intl.DateTimeFormat('ru-RU',{dateStyle:'long',timeStyle:'short'}).format(new Date());
-    return `<div class="admin-head"><div><span class="admin-kicker"><i></i> СМЕТРА / УПРАВЛЕНИЕ</span><h1>Пульс платформы<span>.</span></h1><p>Пользователи, обращения и оплаты.</p></div><button class="admin-refresh" type="button" data-admin-refresh aria-label="Обновить данные"><span aria-hidden="true">↻</span> Обновить</button></div>
+    return `<div class="admin-head"><div><span class="admin-kicker"><i></i> СМЕТРА / УПРАВЛЕНИЕ</span><h1>Администрирование<span>.</span></h1><p>Пользователи, посещения и платежи</p></div><button class="admin-refresh" type="button" data-admin-refresh aria-label="Обновить данные"><span aria-hidden="true">↻</span> Обновить</button></div>
       <div class="admin-dateline"><span>Операционная сводка</span><time>${label(dateLabel)}</time></div>
       <div class="admin-metrics" aria-label="Показатели платформы">
         <div><span>Пользователи</span><strong>${count(stats.users)}</strong><small>всего активных аккаунтов</small></div>
@@ -24,7 +24,8 @@
       </div>
       <nav class="admin-tabs" aria-label="Разделы администрирования">
         <button data-admin-section="users" type="button">Пользователи</button>
-        <button data-admin-section="revenue" type="button">Выручка и активация</button>
+        <button data-admin-section="revenue" type="button">Выручка</button>
+        <button data-admin-section="traffic" type="button">Посещения</button>
         <button data-admin-section="support" type="button">Поддержка <span>${count(state.overview.tickets.filter(t=>t.status==='open').length)}</span></button>
         <button data-admin-section="payments" type="button">Платежи</button>
         <button data-admin-section="audit" type="button">Журнал</button>
@@ -105,16 +106,55 @@
       button.classList.toggle('active',active);
       button.setAttribute('aria-current',active?'page':'false');
     });
-    if(state.section==='revenue'){
-      target.innerHTML='<p class="admin-loading">Считаем подтверждённые оплаты и воронку…</p>';
+    if(state.section==='revenue'||state.section==='traffic'){
+      const kind=state.section;
+      target.innerHTML='<p class="admin-loading">Загружаем статистику…</p>';
       const owner=user,current=++state.request;
-      api('/admin/revenue').then(data=>{if(user!==owner||tab!=='admin'||state.section!=='revenue'||current!==state.request)return;target.innerHTML=revenueSection(data)}).catch(error=>{if(user===owner&&state.section==='revenue'&&current===state.request)target.innerHTML=`<p class="admin-error">${label(error.message)}</p>`});return;
+      api(kind==='traffic'?'/admin/traffic':'/admin/revenue').then(data=>{
+        if(user!==owner||tab!=='admin'||state.section!==kind||current!==state.request)return;
+        target.innerHTML=kind==='traffic'?trafficSection(data):revenueSection(data);
+      }).catch(error=>{if(user===owner&&state.section===kind&&current===state.request)target.innerHTML=`<p class="admin-error">${label(error.message)}</p>`});return;
     }
     target.innerHTML = ({users:usersSection,support:supportSection,payments:paymentsSection,audit:auditSection})[state.section]();
     if (state.section==='users') {
       document.querySelector('#admin-user-filter').value = state.status;
       loadUsers();
     }
+  }
+
+  function trafficSection(data){
+    const daily=Array.isArray(data.daily)?data.daily:[];
+    const maximum=Math.max(1,...daily.map(item=>Number(item.visitors)||0));
+    const chart=daily.map((item,index)=>{
+      const visitors=Math.max(0,Number(item.visitors)||0);
+      const height=Math.round(88*visitors/maximum);
+      return '<rect x="'+(8+index*12)+'" y="'+(96-height)+'" width="7" height="'+height+'" rx="2"><title>'+label(item.day)+' · '+count(visitors)+' посетителей</title></rect>';
+    }).join('');
+    const pageNames={landing:'Главная страница',app:'Приложение и вход'};
+    const pages=Array.isArray(data.pages)?data.pages:[];
+    return `<div class="admin-traffic">
+      <div class="admin-section-head"><div><h2>Посещения сайта</h2><p>Уникальные браузеры и просмотры. Данные с момента включения счётчика.</p></div><span class="admin-section-count">UTC</span></div>
+      <div class="admin-traffic-metrics">
+        <div><span>Сегодня</span><strong>${count(data.today)}</strong><small>посетителей</small></div>
+        <div><span>7 дней</span><strong>${count(data.week)}</strong><small>уникальных</small></div>
+        <div><span>30 дней</span><strong>${count(data.month)}</strong><small>уникальных</small></div>
+        <div><span>Просмотры за 30 дней</span><strong>${count(data.views_30d)}</strong><small>открытий страниц</small></div>
+      </div>
+      <section class="admin-traffic-panel" aria-label="Посетители за последние 30 дней">
+        <div class="admin-traffic-panel-head"><h3>Динамика за 30 дней</h3><small>Уникальные браузеры в день</small></div>
+        <svg class="admin-traffic-chart" viewBox="0 0 376 104" preserveAspectRatio="none" role="img" aria-label="График посещений за 30 дней">
+          <path d="M0 96H376" fill="none" stroke="currentColor" stroke-opacity=".15"/>
+          ${chart}
+        </svg>
+        <div class="admin-traffic-axis"><span>${daily.length?label(daily[0].day):'—'}</span><span>${daily.length?label(daily[daily.length-1].day):'—'}</span></div>
+      </section>
+      <section class="admin-traffic-panel"><div class="admin-traffic-panel-head"><h3>По страницам · 30 дней</h3></div>
+        <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Страница</th><th>Посетители</th><th>Просмотры</th></tr></thead><tbody>
+        ${pages.length?pages.map(row=>`<tr><td>${label(pageNames[row.page]||row.page)}</td><td>${count(row.visitors)}</td><td>${count(row.views)}</td></tr>`).join(''):'<tr><td colspan="3">Посещений пока нет</td></tr>'}
+        </tbody></table></div>
+      </section>
+      <p class="admin-footnote">Уникальность приблизительная: один браузер считается один раз за период, разные устройства могут считаться отдельно. IP, email и действия посетителей не записываются. Статистика хранится до 90 дней и не включает историю до установки счётчика. Отказ от отслеживания в браузере учитывается.</p>
+    </div>`;
   }
 
   function revenueSection(data){
