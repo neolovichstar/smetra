@@ -16,7 +16,7 @@
     calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261108-compact1']},
     arScan:{ready:()=>!!window.SmetraARScan,files:['/ar-scan.js?v=20261108-ar5']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261028-revenue1']},
-    growth:{ready:()=>!!window.SmetraGrowth&&!!window.SmetraPaymentUI,files:['/payment-ui.js?v=20261108-paywall1','/ecosystem-billing.js?v=20261108-paywall1','/growth.js?v=20261108-paywall1']},
+    growth:{ready:()=>!!window.SmetraGrowth&&!!window.SmetraPaymentUI,files:['/payment-ui.js?v=20261108-paywall1','/ecosystem-billing.js?v=20261109-checkout1','/growth.js?v=20261108-paywall1']},
     quoteReview:{ready:()=>!!window.SmetraQuoteReview,files:['/quote-review.js?v=20261026-r21']},
     estimateAudit:{ready:()=>!!window.SmetraEstimateAudit,files:['/estimate-audit.js?v=20261026-r21']},
     quoteEditor:{ready:()=>!!window.SmetraQuoteEditorState&&!!window.SmetraEstimateAudit,deps:['estimateAudit'],files:['/quote-editor-state.js?v=20261026-r21']},
