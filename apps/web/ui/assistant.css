@@ -300,7 +300,7 @@
 .assistant-upgrade.hidden{display:none}
 
 /* Knowledge window */
-.assistant-knowledge-dialog{width:min(980px,calc(100vw - 24px));height:min(680px,calc(100dvh - 48px));padding:0;overflow:hidden}
+.assistant-knowledge-dialog{width:min(980px,calc(100vw - 24px));height:min(880px,calc(100dvh - 28px));max-height:calc(100dvh - 20px);padding:0;overflow:hidden}
 .assistant-knowledge-dialog.hidden{display:none}
 .knowledge-window{display:flex;flex-direction:column;height:100%}
 .knowledge-window-head{display:flex;align-items:flex-start;gap:12px;padding:var(--s-5) var(--s-5) var(--s-4)}
@@ -678,3 +678,19 @@
 .assistant-tokens-dialog .assistant-tokens-status{color:var(--text-3);font-size:var(--fs-13)}
 .assistant-tokens-actions{display:grid;gap:8px;margin-top:var(--s-5)}
 .assistant-tokens-actions .btn{width:100%;justify-content:center}
+
+/* Vertical, read-only memory overview — not the old knowledge CRUD dashboard. */
+.memory-overview-window{height:100%}
+.memory-overview-window .knowledge-window-head{flex:none}
+.knowledge-window-body.memory-overview{display:block;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px 30px}
+.memory-facts{display:flex;flex-direction:column;gap:0;max-width:100%;margin:0 auto}
+.memory-fact{padding:18px 2px 20px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.memory-fact:first-child{padding-top:4px}
+.memory-fact:last-child{border-bottom:none}
+.memory-fact h3{margin:0 0 8px;color:var(--text);font-size:var(--fs-14);font-weight:600}
+.memory-fact p{margin:0;white-space:pre-wrap;color:var(--text-2);font-size:var(--fs-14);line-height:1.65}
+.memory-overview .knowledge-empty{min-height:100%;justify-content:center;max-width:480px}
+@media(max-width:700px){
+  .assistant-knowledge-dialog{height:calc(100dvh - 20px);max-height:calc(100dvh - 20px)}
+  .knowledge-window-body.memory-overview{padding:12px 18px 22px}
+}
