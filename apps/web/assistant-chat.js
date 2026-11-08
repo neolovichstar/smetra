@@ -247,13 +247,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   composer.insertBefore(attachmentBar,document.querySelector('#assistant-form'));
   let backgroundEnabled=null;
-  const jobList=document.createElement('div');jobList.className='assistant-jobs';jobList.setAttribute('aria-live','polite');
   const composeTools=document.createElement('div');composeTools.className='assistant-compose-tools';
   composeTools.append(attachmentBar,document.querySelector('#assistant-voice'),document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
   const assistantForm=document.querySelector('#assistant-form');
   assistantForm.append(composeTools);
-  // Recovery and file tasks stay with the transcript; the text field stays clear.
-  document.querySelector('.assistant-content').append(jobList);
   const send=document.querySelector('#assistant-send');
   const voiceButton=document.querySelector('#assistant-voice');
   const status=document.querySelector('#assistant-status');
@@ -1046,17 +1043,13 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   let jobRequest=null,jobPollTimer=null,jobLoadSeq=0;
   const observedChatJobs=new Set();
-  const dismissedJobsKey='smetra.assistant.dismissedJobs:'+user.id+':'+currentWorkspace;
-  const dismissedJobIds=new Set();
-  try{for(const id of JSON.parse(sessionStorage.getItem(dismissedJobsKey)||'[]'))dismissedJobIds.add(String(id))}catch{}
-  const rememberDismissedJob=id=>{dismissedJobIds.add(String(id));try{sessionStorage.setItem(dismissedJobsKey,JSON.stringify([...dismissedJobIds].slice(-100)))}catch{}};
   const refreshJobs=async()=>{
     clearTimeout(jobPollTimer);const sequence=++jobLoadSeq;
-    if(!jobList.isConnected)return;
+    if(!composer.isConnected)return;
     try{
       if(document.hidden){jobPollTimer=setTimeout(refreshJobs,15000);return}
       const result=await api('/assistant/jobs');
-      if(!active()||!jobList.isConnected||sequence!==jobLoadSeq)return;
+      if(!active()||!composer.isConnected||sequence!==jobLoadSeq)return;
       backgroundEnabled=!!result.enabled;
       renderDelivery();
       for(const job of result.jobs){
@@ -1078,37 +1071,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         }
       }
       renderQuota(quota);
-      jobList.replaceChildren();
-      const labels={queued:'В очереди',running:'В работе',retry:'Повторю позже',completed:'Готово',failed:'Не удалось завершить',cancelled:'Отменено'};
-      const now=Date.now()/1000;
-      result.jobs.filter(job=>{
-        if(!job?.id||dismissedJobIds.has(String(job.id))||job.status==='cancelled')return false;
-        // Completed answers belong to the transcript, never to a permanent processing banner.
-        // Do not display chat jobs from unrelated conversations in this composer.
-        if(job.kind==='chat')return !(working&&job.id===currentJobId)&&(job.conversation_id||'')===activeConversation&&['queued','running','retry','failed'].includes(job.status);
-        if(['queued','running','retry'].includes(job.status))return true;
-        return job.status==='failed'&&now-Number(job.updated_at||job.created_at||0)<86400;
-      }).slice(0,5).forEach(job=>{
-        const row=document.createElement('div');row.className='assistant-job';row.dataset.status=job.status;
-        const description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('span');
-        title.textContent=job.prompt;
-        const stalled=job.status==='queued'&&Date.now()/1000-Number(job.updated_at||job.created_at||0)>90;
-        detail.textContent=job.error||(stalled?'Долго ожидает запуска. Задача сохранена, но обработчик ещё не забрал её.':job.progress||labels[job.status]);
-        if(stalled)row.dataset.stalled='true';
-        detail.setAttribute('role','status');description.append(title,detail);row.append(description);
-        const active=['queued','running','retry'].includes(job.status);
-        if(active||job.status==='completed'){
-          const button=document.createElement('button');button.type='button';button.textContent=active?'Отменить':['file_index','file_ocr'].includes(job.kind)?'Открыть документ':'Открыть ответ';button.disabled=!!job.cancel_requested;
-          button.onclick=async()=>{button.disabled=true;try{
-            if(active){const cancelled=await api('/assistant/jobs/'+encodeURIComponent(job.id),{method:'DELETE'});rememberDismissedJob(job.id);row.classList.add('assistant-job-removing');row.setAttribute('aria-hidden','true');row.remove();renderQuota(cancelled.quota);refreshJobs();refreshFile()}
-            else if(['file_index','file_ocr'].includes(job.kind)){window.SmetraAssistantContext({entity:'files',id:job.file_id,workspace_id:currentWorkspace,label:job.prompt.replace(/^(Подготовка|Распознавание) · /,'')});window.SmetraAssistant()}
-            else{sessionStorage.removeItem('smetra.assistant.context');sessionStorage.setItem('smetra.assistant.conversation',job.conversation_id||'');window.SmetraAssistant()}
-          }catch(error){button.disabled=false;notify(error.message)}};row.append(button);
-        }
-        jobList.append(row);
-      });
       if(result.jobs.some(job=>['queued','running','retry'].includes(job.status)))jobPollTimer=setTimeout(refreshJobs,2000);
-    }catch{if(active()&&jobList.isConnected&&sequence===jobLoadSeq)jobPollTimer=setTimeout(refreshJobs,15000)}
+    }catch{if(active()&&composer.isConnected&&sequence===jobLoadSeq)jobPollTimer=setTimeout(refreshJobs,15000)}
   };
   const renderDelivery=()=>{
     if(!active()||!composer.isConnected)return;
@@ -1296,7 +1260,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         const raw=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
         if(!kind||!raw)return;
         const payload=JSON.parse(raw);
-        if(kind==='done'){completed=true;observedChatJobs.delete(currentJobId);rememberDismissedJob(currentJobId);jobList.replaceChildren();jobLoadSeq++}
+        if(kind==='done'){completed=true;observedChatJobs.delete(currentJobId);jobLoadSeq++}
         if(kind==='background')delegated=true;
         if(kind==='error'){terminalFailure=true;if(payload.cancelled){const error=new DOMException('Ответ остановлен','AbortError');throw error}}
         if(!active()||!messages.isConnected)return;
