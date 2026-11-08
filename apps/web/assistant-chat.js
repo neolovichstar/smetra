@@ -885,13 +885,16 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     // Never guess when an instruction mentions multiple different pages.
     return matches.length===1?{action:'open_section',section:matches[0][0]}:null;
   };
-  const autoOpenApprovedUi=(list,originalPrompt)=>{
-    // Only the user's explicit request may trigger a navigation. The AI's
-    // answer text alone never changes pages, and OAuth never auto-starts.
-    if(!explicitNavigation.test(originalPrompt||''))return;
+  const navigationForRequest=(list,originalPrompt)=>{
+    if(!explicitNavigation.test(originalPrompt||''))return null;
+    // Opening a section, quote or calculator is permitted; sign-in and data
+    // mutations still require a separate explicit user interaction.
     const safe=new Set(['open_section','open_billing','open_quote','open_quote_editor','open_calculator']);
-    const entry=(Array.isArray(list)?list:[]).find(item=>safe.has(item?.action)&&clientActionRun[item.action])
+    return (Array.isArray(list)?list:[]).find(item=>safe.has(item?.action)&&clientActionRun[item.action])
       ||sectionFromRequest(originalPrompt);
+  };
+  const autoOpenApprovedUi=(list,originalPrompt)=>{
+    const entry=navigationForRequest(list,originalPrompt);
     if(!entry)return;
     setTimeout(()=>{
       if(!active()||!messages.isConnected)return;
@@ -1020,7 +1023,17 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(job.kind==='chat'&&(job.conversation_id||'')===activeConversation){
           if(['queued','running','retry'].includes(job.status))observedChatJobs.add(job.id);
           else if(job.status==='completed'&&observedChatJobs.has(job.id)&&!(working&&currentJobId===job.id)){
-            observedChatJobs.delete(job.id);await window.SmetraAssistant();return;
+            observedChatJobs.delete(job.id);
+            // A background reply has reached its committed terminal state.
+            // Execute explicit navigation only after the server completed it.
+            try{
+              const detail=await api('/assistant/jobs/'+encodeURIComponent(job.id));
+              if(!active()||sequence!==jobLoadSeq)return;
+              const entry=navigationForRequest(detail.job?.result?.client_actions,job.prompt);
+              if(entry){await clientActionRun[entry.action](entry);return;}
+            }catch(error){if(active())notify(error.message||'Не удалось открыть раздел');}
+            if(active())await window.SmetraAssistant();
+            return;
           }
         }
       }
@@ -1120,9 +1133,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   refreshFile();
   // Empty chats start with a blank message area, never canned prompts.
-  if(activeConversation)thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
-  data.actions.filter(action=>(action.conversation_id||'')===activeConversation).forEach(addAction);
-  (data.recent_actions||[]).filter(action=>action.undo_until&&(action.conversation_id||'')===activeConversation).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id)});
+  if(activeConversation)thread.messages.forEach(message=>{
+    const bubble=addMessage(message.role,message.content,message.id);
+    if(message.role==='assistant'&&Array.isArray(message.client_actions)){
+      renderClientActions(bubble.item,message.client_actions);
+    }
+  });
+  if(activeConversation)data.actions.filter(action=>action.conversation_id===activeConversation).forEach(addAction);
+  (data.recent_actions||[]).filter(action=>activeConversation&&action.undo_until&&action.conversation_id===activeConversation).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id)});
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<(quota.unit==='tokens'?1500:1))status.textContent='Токены закончились: обычные и фоновые ответы расходуют общий баланс. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
