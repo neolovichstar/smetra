@@ -171,9 +171,6 @@ class PublicProfilesTests(unittest.TestCase):
 
         with self.mod.db() as con:
             self.assertTrue(save_google_avatar(con, user_id, images[0][1]))
-            first = self.mod.user_view(
-                con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone(), con
-            )["avatar_url"] if hasattr(self.mod, "user_view") else None
             row = con.execute(
                 "SELECT source,content_hash FROM profile_avatars WHERE user_id=?", (user_id,)
             ).fetchone()
