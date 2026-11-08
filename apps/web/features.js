@@ -8,7 +8,7 @@
     assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-clipboard.js?v=20261028-audio1','/assistant-chat.js?v=20261108-blank1','/ai-workspace.js?v=20261108-memory1']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261026-r21']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r21']},
-    construction:{ready:()=>!!window.SmetraConstruction&&!!window.SmetraProcurementPlan,deps:['quoteVisuals'],files:['/procurement-plan.js?v=20261108-plan1','/construction.js?v=20261108-plan1']},
+    construction:{ready:()=>!!window.SmetraConstruction&&!!window.SmetraProcurementPlan,deps:['quoteVisuals'],files:['/procurement-plan.js?v=20261108-suppliers1','/construction.js?v=20261108-plan1']},
     calculators:{ready:()=>!!window.SmetraCalculators,files:['/calculators.js?v=20261108-ai1']},
     admin:{ready:()=>!!window.SmetraAdmin,files:['/admin.js?v=20261028-revenue1']},
     growth:{ready:()=>!!window.SmetraGrowth,files:['/ecosystem-billing.js?v=20261108-tabs1','/growth.js?v=20261028-quota3']},
