@@ -39,6 +39,12 @@ async function setup(enabled=true,voice=false,remaining=3){
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('empty assistant chat contains no example messages or suggested prompts',async({doc})=>{
+   assert.ok(doc.querySelector('#assistant-form'),'Composer stays functional');
+   assert.equal(doc.querySelector('#assistant-input').value,'','No example is prefilled');
+   assert.equal(doc.querySelector('#assistant-messages').children.length,0,'Empty chat displays no onboarding panel');
+   assert.equal(doc.querySelectorAll('.assistant-welcome,.assistant-suggestions,[data-prompt]').length,0);
+ });
  await test('idle attachment hint is hidden but file uploads remain available',async({doc})=>{
    const hint=doc.querySelector('.assistant-attachment-bar > span');
    assert.ok(hint);
