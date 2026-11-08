@@ -11,6 +11,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  const until=async expression=>{for(let i=0;i<120;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100))}throw Error(expression+'\n'+await evaluate('document.body.innerText'))};
  await send('Runtime.enable');await send('Page.enable');
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')});
  await send('Page.navigate',{url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')+'/app'});
  await until("document.querySelector('#auth-form')?.onsubmit && document.querySelector('#auth-login-tab')?.onclick");
  await evaluate("sessionStorage.clear();document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");

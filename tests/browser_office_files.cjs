@@ -10,7 +10,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  const until=async expression=>{for(let i=0;i<120;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100))}throw Error(expression+'\n'+await evaluate('document.body.innerText'))};
  const screenshot=async name=>{const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync('data/'+name+'.png',Buffer.from(shot.data,'base64'))};
  await send('Runtime.enable');await send('Page.enable');await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
- await send('Page.navigate',{url:'http://localhost:8084/app'});await until("document.querySelector('#auth-form')?.onsubmit");await evaluate('sessionStorage.clear()');
+ await send('Page.navigate',{url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')+'/app'});await until("document.querySelector('#auth-form')?.onsubmit");await evaluate('sessionStorage.clear()');
  await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('#assistant-form')");
  // The AI-first sidebar intentionally hides Files, but its route still exists.
  // Exercise the real File Office viewer through its supported deep link.

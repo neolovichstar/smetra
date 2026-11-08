@@ -81,9 +81,9 @@ probe and provider fallback drills remain operational release checks.
 - All 34 DOM suites passed, including delayed payments, stale sessions, failed
   synchronization, preserved drafts and confirmed checkout. The real-API action
   harness exercised 193 buttons/forms without JavaScript errors.
-- The initial full Python run executed 1349 cases: three release/CSS-contract
-  failures were fixed and their targeted checks passed. The final full run and
-  GitHub PostgreSQL/Android/browser gates are checked again for publication.
+- Final full Python discovery: 1303 cases passed, with 17 environment-dependent
+  skips. The PostgreSQL and Android GitHub jobs passed separately. Browser gates
+  are checked again after updating their obsolete eager-conversation assumptions.
 - Ruff, web build/CSP hash validation, dependency audit and focused security
   regressions passed. The dependency audit found no known advisories at this run.
 - Android debug/release assembly and lint passed. JVM cryptography tests passed.

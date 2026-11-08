@@ -300,7 +300,9 @@ def main():
         from backend import assistant
 
         assistant.query_model_stream = stream_fixture
-        assistant.query_model = lambda messages: {"content": "Фоновая задача завершена."}
+        # A cron worker may claim the job before the browser opens its SSE.
+        # Both delivery paths must produce the same deterministic fixture reply.
+        assistant.query_model = lambda messages: stream_fixture(messages, lambda _text: None)
         from backend import community
         community._support_completion = lambda payload, timeout: {
             "reply": "Тестовое обращение передано сотруднику поддержки.",

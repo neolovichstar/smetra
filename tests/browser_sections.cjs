@@ -18,7 +18,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await until("document.querySelector('#auth-form')?.onsubmit");
   await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
   await until("!!document.querySelector('#assistant-form')?.onsubmit");
-  await until("document.querySelector('link[rel=\\\"prefetch\\\"][href*=\\\"/assistant-chat.js\\\"]')");
+  await until('[...document.querySelectorAll("link[rel=prefetch]")].some(link=>link.href.includes("/profile-ui.js"))');
   for(const file of ['profile-ui.js','admin.js','construction.js']){
     const state=await evaluate(`(()=>({executed:!!document.querySelector('script[src*=${JSON.stringify('/'+file)}]'),prefetched:!!document.querySelector('link[rel="prefetch"][href*=${JSON.stringify('/'+file)}]')}))()`);
     assert.equal(state.executed,false,'Initial screen must not execute '+file);
@@ -85,8 +85,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
     }
     if(route==='calendar')assert.equal(await evaluate("!!document.querySelector('.agenda-day')"),true);
     if(route==='support'){
-      await evaluate("document.querySelector('[data-support-topic]').click()");
-      assert.equal(await evaluate("document.querySelector('#message').value.length>0"),true);
+      assert.equal(await evaluate("!!document.querySelector('[data-support-topic]')"),false,'Support opens without canned topic chips');
+      assert.equal(await evaluate("!!document.querySelector('#support-form')&&document.querySelector('#message').value===''"),true,'Support composer starts ready for the user message');
     }
   }
   if(await evaluate("user.role==='admin'")){
