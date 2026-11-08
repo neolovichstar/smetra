@@ -250,7 +250,7 @@
         const items=(await listQuotes())||[];
         if(request!==pickSeq||loading||!host.isConnected||current)return;
         content.replaceChildren();
-        if(!items.length){content.append(el('p','smetra-visual-empty','Смет пока нет. Попросите ассистента: «Составь смету на покраску стен 40 м²».'));return}
+        if(!items.length){content.append(el('p','smetra-visual-empty','Смет пока нет.'));return}
         const list=el('div','smetra-quote-picker');list.setAttribute('role','list');
         items.slice(0,30).forEach(quote=>{
           const row=el('button','smetra-quote-picker-row');row.type='button';row.setAttribute('role','listitem');
