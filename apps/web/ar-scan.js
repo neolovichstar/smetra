@@ -42,9 +42,10 @@ window.SmetraARScan = (() => {
     const instruction = text => {if (active()) $('[data-ar-instruction]').textContent = text;};
     const stopCamera = () => {cameraRequest++;stream?.getTracks().forEach(track => track.stop());stream = null;video.srcObject = null;};
     const endXR = async () => {const session = xr;xr = null;hitSource?.cancel();hitSource = null;renderer?.setAnimationLoop(null);if (session) await session.end().catch(() => {});renderer?.dispose();renderer = null;};
-    const cleanup = () => {if (closed) return;closed = true;stopCamera();void endXR();document.body.classList.remove('ar-scanning');document.removeEventListener('smetra:before-view', cleanup);document.removeEventListener('visibilitychange', visibility);window.removeEventListener('pagehide', cleanup);};
+    const cleanup = () => {if (closed) return;closed = true;stopCamera();void endXR();document.body.classList.remove('ar-scanning');document.removeEventListener('smetra:before-view', cleanup);document.removeEventListener('smetra:auth-reset', cleanup);document.removeEventListener('visibilitychange', visibility);window.removeEventListener('pagehide', cleanup);};
     dispose = cleanup;
     document.addEventListener('smetra:before-view', cleanup, {once: true});
+    document.addEventListener('smetra:auth-reset', cleanup, {once: true});
     window.addEventListener('pagehide', cleanup, {once: true});
     function visibility() {if (document.hidden) {stopCamera();void endXR();} else if (active() && !nativeBusy && !xr && $('.ar-review').hidden) void openCamera();}
     document.addEventListener('visibilitychange', visibility);
