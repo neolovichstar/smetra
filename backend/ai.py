@@ -30,6 +30,12 @@ except ModuleNotFoundError:
     )
 
 
+try:
+    from backend.estimate_completeness import recommend
+except ModuleNotFoundError:
+    from estimate_completeness import recommend
+
+
 def available():
     return bool(os.getenv("OPENROUTER_API_KEY"))
 
@@ -277,6 +283,7 @@ def _draft(service, data):
                 "description": string(value.get("description", ""), "Описание", 5000),
                 "terms": string(value.get("terms", ""), "Условия", 5000),
                 "items": value["items"],
+                "recommendations": recommend(value["items"], prompt),
                 # Opaque, one-use server capability. It authorizes provenance
                 # attribution only; all pricing remains server-validated.
                 "ai_draft_usage_id": usage_id,
