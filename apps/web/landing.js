@@ -246,7 +246,7 @@
           <h3>${escape(plan.name)}</h3>
           <div class="plan-price"><strong>${money(price / 100)}</strong><span>${unit}</span>${saving > 0 ? `<small>Выгода ${money(saving / 100)} в год</small>` : ''}</div>
           <ul>${(features()[plan.code] || []).map(item => `<li>${escape(item)}</li>`).join('')}</ul>
-          <a class="btn ${plan.code === 'pro_solo' ? 'primary' : ''}" href="${free ? '/app?register=1' : '/app?register=1#billing'}">${free ? 'Начать бесплатно' : 'Выбрать ' + escape(plan.name)}</a>
+          <a class="btn ${plan.code === 'pro_solo' ? 'primary' : ''}" href="${free ? '/app?register=1' : '/app?register=1#billing'}">${free ? 'Начать бесплатно' : 'Купить ' + escape(plan.name)}</a>
         </article>`;
       }).join('');
     };
