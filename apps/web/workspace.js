@@ -310,6 +310,7 @@ window.Workspace = (() => {
           <div class="editor-conflict" id="editor-conflict" hidden><p>Другая редакция сохранена на сервере. Ваши правки остались здесь.</p><button type="button" class="btn small" id="editor-reload">Открыть серверную</button><button type="button" class="btn small" id="editor-save-copy">Сохранить правки копией</button></div>
           <button type="button" class="editor-tool" id="editor-retry" hidden>Повторить сохранение</button>
           <div id="editor-rows"></div>
+          <div id="editor-recommendations" class="editor-recommendations" aria-live="polite" hidden></div>
           <details class="editor-bulk" id="editor-bulk"><summary>Массовое изменение позиций</summary><div class="editor-bulk-heading"><strong>Выбранные позиции</strong><span id="editor-bulk-count">Не выбраны</span><button class="editor-bulk-link" type="button" id="editor-bulk-all">Выбрать все</button></div><div class="editor-bulk-controls"><label>Поле<select id="editor-bulk-field"><option value="coefficient">Коэффициент цены</option><option value="markup">Наценка, %</option><option value="unit">Единица</option><option value="category">Категория</option></select></label><label>Новое значение<input id="editor-bulk-value" type="text" inputmode="decimal" maxlength="100" placeholder="Например, 1.15" autocomplete="off"></label><button class="btn small" type="button" id="editor-bulk-preview">Сравнить</button></div><div id="editor-bulk-diff" aria-live="polite"></div><button class="editor-bulk-link" type="button" id="editor-bulk-undo" hidden>Отменить последнюю правку</button></details>
         </section>
         <details class="editor-section editor-terms"><summary><span class="editor-step" aria-hidden="true">03</span><span class="editor-terms-title">Условия и сроки</span><span class="editor-optional">При необходимости</span></summary><div class="editor-terms-body">${field('terms','Условия выполнения',q.terms||'','textarea')}<div class="form-grid">${field('due_date','Срок выполнения',q.due_date||'','date')}${field('expiry','Предложение действительно до',q.expires_at?new Date(q.expires_at*1000).toISOString().slice(0,10):'','date')}</div></div></details>
@@ -320,6 +321,64 @@ window.Workspace = (() => {
     const selectedRows=new Set();let pendingBulk=null,lastBulk=null,history,writer;
     const live=()=>active()&&form.isConnected&&user===owner&&workspace?.id===workspaceId;
     const rowId=()=>crypto.randomUUID();
+
+    const recommendationBox=form.querySelector('#editor-recommendations');
+    let recommendations=Array.isArray(quote?.recommendations)?quote.recommendations:[];
+    const ignoredRecommendations=new Set();
+    let recommendationTimer,recommendationRevision=0;
+    const showRecommendations=()=>{
+      recommendationBox.replaceChildren();
+      const visible=recommendations.filter(item=>item&&typeof item.name==='string'&&typeof item.kind==='string'&&!ignoredRecommendations.has(item.kind));
+      recommendationBox.hidden=!visible.length;
+      if(!visible.length)return;
+      const heading=document.createElement('div');heading.className='editor-recommendations-heading';
+      const title=document.createElement('strong');title.textContent='Возможно забытые расходы';
+      const note=document.createElement('p');note.textContent='Проверьте эти позиции. Они не добавляются и не влияют на итог без вашего решения.';
+      heading.append(title,note);recommendationBox.append(heading);
+      visible.forEach(item=>{
+        const line=document.createElement('div');line.className='editor-recommendation';
+        const details=document.createElement('div');details.className='editor-recommendation-details';
+        const name=document.createElement('strong');name.textContent=item.name;
+        const reason=document.createElement('p');reason.textContent=item.reason||'Проверьте необходимость этой позиции';
+        details.append(name,reason);
+        const actions=document.createElement('div');actions.className='editor-recommendation-actions';
+        const add=document.createElement('button');add.type='button';add.className='btn small';add.textContent='Добавить в смету';
+        add.addEventListener('click',()=>{
+          if(!live()||rows.length>=200){notify('В смете может быть до 200 позиций');return}
+          if(rows.some(row=>String(row.name||'').toLowerCase()===item.name.toLowerCase())){ignoredRecommendations.add(item.kind);showRecommendations();return}
+          rows.push({line_id:rowId(),name:item.name,description:item.reason||'',quantity:'1',unit:item.unit||'усл.',unit_price:0,cost_price:0,category:'Дополнительные расходы',coefficient:'1',tax:'0',discount:'0',markup:'0',optional:true,included:false});
+          ignoredRecommendations.add(item.kind);
+          structureChanged();
+          notify('Позиция добавлена вне итога. Укажите количество и цену перед включением.');
+        });
+        const hide=document.createElement('button');hide.type='button';hide.className='editor-recommendation-dismiss';hide.textContent='Не нужно';hide.setAttribute('aria-label','Скрыть предложение: '+item.name);
+        hide.addEventListener('click',()=>{ignoredRecommendations.add(item.kind);showRecommendations()});
+        actions.append(add,hide);line.append(details,actions);recommendationBox.append(line);
+      });
+    };
+    const scheduleRecommendations=()=>{
+      clearTimeout(recommendationTimer);
+      const version=++recommendationRevision;
+      if(!rows.some(row=>String(row.name||'').trim())&&!String(form.elements.description.value||'').trim()){
+        recommendations=[];showRecommendations();return;
+      }
+      recommendationTimer=setTimeout(async()=>{
+        if(!live()||version!==recommendationRevision)return;
+        try{
+          const result=await api('/quotes/recommendations',{method:'POST',body:JSON.stringify({
+            description:form.elements.description.value,
+            items:rows.map(row=>({name:row.name||'',category:row.category||'',description:row.description||'',optional:row.optional===true,included:row.included!==false}))
+          })});
+          if(!live()||version!==recommendationRevision)return;
+          recommendations=Array.isArray(result.recommendations)?result.recommendations:[];
+          showRecommendations();
+        }catch(error){
+          // Keep the previous suggestions if the network is temporarily unavailable.
+          if(!live()||version!==recommendationRevision)return;
+          recommendationBox.dataset.error='true';
+        }
+      },700);
+    };
     const bulkField=document.querySelector('#editor-bulk-field'),bulkValue=document.querySelector('#editor-bulk-value'),bulkDiff=document.querySelector('#editor-bulk-diff');
     const bulkCount=document.querySelector('#editor-bulk-count'),bulkAll=document.querySelector('#editor-bulk-all'),bulkUndo=document.querySelector('#editor-bulk-undo');
     const lineTotal=calculateLineTotal;
@@ -328,9 +387,9 @@ window.Workspace = (() => {
     const clearBulk=()=>{pendingBulk=null;bulkDiff.replaceChildren();bulkState()};
     const paint=()=>{const countLabel=document.querySelector('#editor-position-count');if(countLabel){const count=rows.length,mod100=count%100,mod10=count%10;countLabel.textContent=`${count} ${mod10===1&&mod100!==11?'позиция':mod10>=2&&mod10<=4&&(mod100<12||mod100>14)?'позиции':'позиций'}`;}document.querySelector('#editor-rows').innerHTML=rows.map((i,n)=>`<div class="editor-item" data-row="${n}"><div class="item-heading"><label class="editor-row-select"><input type="checkbox" data-bulk-select="${n}" aria-label="Выбрать позицию ${n+1}" ${selectedRows.has(n)?'checked':''}></label><button type="button" class="editor-drag" draggable="true" data-drag="${n}" aria-label="Перетащить позицию ${n+1}">⠿</button><input data-key="name" aria-label="Название позиции ${n+1}" value="${e(i.name)}" placeholder="Название услуги, работы или товара" required maxlength="200"><button type="button" class="icon-button" data-remove="${n}" aria-label="Удалить позицию ${n+1}">×</button></div><div class="editor-row-tools"><span>Позиция ${n+1}</span><div><button type="button" data-move="${n}" data-direction="-1" ${n===0?'disabled':''} aria-label="Переместить позицию ${n+1} вверх">↑</button><button type="button" data-move="${n}" data-direction="1" ${n===rows.length-1?'disabled':''} aria-label="Переместить позицию ${n+1} вниз">↓</button><button type="button" data-duplicate="${n}" aria-label="Копировать позицию ${n+1}">Копировать</button></div></div><div class="item-fields">${rowField('quantity','Количество',i._raw?.quantity??i.quantity,'number','0.0001')}${rowField('unit','Единица',i.unit)}${rowField('unit_price','Цена',i._raw?.unit_price??i.unit_price/100,'number','0.01')}${rowField('cost_price','Себестоимость',i._raw?.cost_price??i.cost_price/100,'number','0.01')}</div><details><summary>Скидка, налог и детали</summary><div class="item-fields">${rowField('discount','Скидка, %',i._raw?.discount??(i.discount||0),'number','0.01')}${rowField('tax','Налог, %',i._raw?.tax??(i.tax||0),'number','0.01')}${rowField('markup','Наценка, %',i._raw?.markup??(i.markup||0),'number','0.01')}${rowField('coefficient','Коэффициент цены',i._raw?.coefficient??(i.coefficient||1),'number','0.001')}${rowField('category','Категория',i.category||'')}</div><label class="check-label"><input type="checkbox" data-key="optional" ${i.optional?'checked':''}> Дополнительная позиция</label><label class="check-label"><input type="checkbox" data-key="included" ${i.included?'checked':''}> Включена в итог</label></details></div>`).join('');total();bulkState()};
     const rowContainer=document.querySelector('#editor-rows');
-    rowContainer.oninput=ev=>{const key=ev.target.dataset.key;if(!key)return;const index=Number(ev.target.closest('[data-row]').dataset.row),row=rows[index];if(ev.target.type==='number'){row._raw??={};row._raw[key]=ev.target.value}try{row[key]=ev.target.type==='checkbox'?ev.target.checked:['unit_price','cost_price'].includes(key)?amount(ev.target.value):ev.target.value;ev.target.setCustomValidity('')}catch(error){ev.target.setCustomValidity(error.message);return}if(lastBulk?.field===key&&lastBulk.changes.some(change=>change.index===index))lastBulk=null;total();clearBulk()};
+    rowContainer.oninput=ev=>{const key=ev.target.dataset.key;if(!key)return;const index=Number(ev.target.closest('[data-row]').dataset.row),row=rows[index];if(ev.target.type==='number'){row._raw??={};row._raw[key]=ev.target.value}try{row[key]=ev.target.type==='checkbox'?ev.target.checked:['unit_price','cost_price'].includes(key)?amount(ev.target.value):ev.target.value;ev.target.setCustomValidity('')}catch(error){ev.target.setCustomValidity(error.message);return}if(lastBulk?.field===key&&lastBulk.changes.some(change=>change.index===index))lastBulk=null;total();clearBulk();scheduleRecommendations()};
     rowContainer.onchange=ev=>{if(ev.target.dataset.bulkSelect===undefined)return;const index=Number(ev.target.dataset.bulkSelect);if(ev.target.checked){if(selectedRows.size>=50){ev.target.checked=false;notify('За один раз можно изменить до 50 строк');return}selectedRows.add(index)}else selectedRows.delete(index);clearBulk()};
-    const changed=(group=null)=>{if(!history)return;history.push(snapshot(),group);historyState();writer?.changed()};
+    const changed=(group=null)=>{if(!history)return;history.push(snapshot(),group);historyState();writer?.changed();scheduleRecommendations()};
     const structureChanged=()=>{selectedRows.clear();lastBulk=null;clearBulk();paint();changed()};
     const move=(from,to)=>{if(to<0||to>=rows.length||from===to)return;rows.splice(to,0,rows.splice(from,1)[0]);structureChanged()};
     rowContainer.onclick=ev=>{const duplicate=ev.target.closest('[data-duplicate]'),moving=ev.target.closest('[data-move]');if(duplicate){if(rows.length>=200){notify('До 200 позиций в смете');return}const index=Number(duplicate.dataset.duplicate),copy=structuredClone(rows[index]);copy.line_id=rowId();rows.splice(index+1,0,copy);structureChanged();return}if(moving){const index=Number(moving.dataset.move);move(index,index+Number(moving.dataset.direction));return}const b=ev.target.closest('[data-remove]');if(!b)return;if(rows.length===1){notify('Оставьте хотя бы одну позицию');return}rows.splice(Number(b.dataset.remove),1);selectedRows.clear();lastBulk=null;clearBulk();paint();changed()};
@@ -377,7 +436,8 @@ window.Workspace = (() => {
     const payload=()=>{const d=formObject(form);return {title:d.title,client:d.client,client_id:d.client_id||null,currency:d.currency,description:d.description,terms:d.terms,due_date:d.due_date,custom_fields:custom.read(form),expires_at:d.expiry?Math.floor(new Date(d.expiry+'T23:59:59').getTime()/1000):null,items:rows.map(({_raw,...row})=>row)}};
     const restore=stored=>{rows=structuredClone(stored.items).map(row=>({line_id:rowId(),...row}));for(const [key,value] of Object.entries(stored.fields)){const control=form.elements[key];if(!control)continue;if(control.type==='checkbox')control.checked=value;else if(control.multiple)Array.from(control.options).forEach(option=>option.selected=value.includes(option.value));else control.value=value??''}selectedRows.clear();lastBulk=null;clearBulk();paint();window.SmetraSelects?.enhance(form)};
     const historyState=()=>{form.querySelector('#editor-undo').disabled=!history.canUndo;form.querySelector('#editor-redo').disabled=!history.canRedo};
-    paint();history=new window.SmetraQuoteEditorState.History(snapshot());
+    paint();showRecommendations();if(!quote?.recommendations)scheduleRecommendations();history=new window.SmetraQuoteEditorState.History(snapshot());
+    form.elements.description.addEventListener('input',scheduleRecommendations);
     const saveState=form.querySelector('#editor-save-state'),retry=form.querySelector('#editor-retry'),conflict=form.querySelector('#editor-conflict');
     const recovery=form.querySelector('#editor-recovery');let local;
     try{local=JSON.parse(localStorage.getItem(draftKey)||'null');recovery.hidden=!local?.snapshot}catch{}
@@ -394,7 +454,7 @@ window.Workspace = (() => {
       state:(kind,text)=>{saveState.dataset.state=kind;saveState.textContent=text+(saveState.dataset.localUnavailable?' · Локальное хранилище недоступно':'');retry.hidden=!['offline','invalid'].includes(kind);conflict.hidden=kind!=='conflict'},
       accept:(quote,first)=>{q=quote;if(first){aiDraftUsageId='';user.quote_count++}}
     });
-    window.SmetraQuoteEditor={leave:()=>{writer.stop();if(window.SmetraQuoteEditor?.form===form)window.SmetraQuoteEditor=null},form};
+    window.SmetraQuoteEditor={leave:()=>{clearTimeout(recommendationTimer);recommendationRevision++;writer.stop();if(window.SmetraQuoteEditor?.form===form)window.SmetraQuoteEditor=null},form};
     const undo=()=>{const value=history.undo();if(value){restore(value);historyState();writer.changed()}};
     const redo=()=>{const value=history.redo();if(value){restore(value);historyState();writer.changed()}};
     form.querySelector('#editor-undo').onclick=undo;form.querySelector('#editor-redo').onclick=redo;
