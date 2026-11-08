@@ -294,6 +294,7 @@ jobs:
               con.execute(communication.split("ALTER TABLE smetra.billing_subscriptions")[0] + "\nCOMMIT;")
               con.execute("ALTER TABLE smetra.users ADD COLUMN IF NOT EXISTS avatar_id TEXT NOT NULL DEFAULT ''")
               con.execute(Path("supabase/migrations/20261027150811_public_profiles_avatars.sql").read_text())
+              con.execute(Path("supabase/migrations/20261108193000_oauth_avatar_source.sql").read_text())
               con.execute("CREATE ROLE smetra_ci_runtime LOGIN PASSWORD 'fixture-only' IN ROLE smetra_runtime")
           PY
       - name: Verify pool saturation, atomic fallback limits, SSE durability and RLS
