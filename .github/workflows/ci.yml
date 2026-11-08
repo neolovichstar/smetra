@@ -93,6 +93,7 @@ jobs:
           node tests/browser_growth.cjs
           node tests/browser_pwa.cjs
           node tests/browser_construction_prices.cjs
+          node tests/browser_procurement_plan.cjs
       - name: Assistant preview, undo and conversation context in mobile browser
         run: |
           python scripts/android_ui_fixture.py > data/assistant-fixture.log 2>&1 &
@@ -165,6 +166,7 @@ jobs:
             data/office-*.png
             data/assistant-studio-*.png
             data/qa/section-*.png
+            data/qa/procurement-*.png
             data/qa/growth-*.png
             data/qa/quote-review-*.png
             data/qa/quote-editor-*.png

@@ -693,6 +693,12 @@ def route(service, method, parts, query, data):
         raise DomainError(405, "Метод не поддерживается")
     obj = service.get("construction_objects", parts[1])
     rest = parts[2:]
+    if rest in (["procurement-plan"], ["procurement-plan.xlsx"]):
+        if method != "GET":
+            raise DomainError(405, "Метод не поддерживается")
+        from backend.procurement_plan import plan, supplier_xlsx
+        result = plan(service, obj, query.get('price_change', ['0'])[0])
+        return 200, supplier_xlsx(result) if rest[-1].endswith('.xlsx') else result
     if not rest:
         if method == "GET":
             return 200, detail(service, obj)
