@@ -3,7 +3,14 @@ window.SmetraBillingCatalog=async function(active,b,space,owner,revision,{return
  const alive=()=>active()&&user===owner&&(typeof authRevision!=='number'||authRevision===revision);
  const e=escapeHtml,pricing=b.pricing,workspace=space.workspace,access=space.entitlements||{};
  const owns=workspace?.owner_id===owner.id;
- const available=b.email_verified&&['live','test'].includes(b.checkout_mode)&&owns;
+ const checkoutBlockReason=!owns
+  ?'Тариф этого пространства может оплатить только его владелец. Переключитесь на своё рабочее пространство.'
+  :!b.email_verified
+  ?'Перед оплатой подтвердите адрес электронной почты в аккаунте.'
+  :!['live','test'].includes(b.checkout_mode)
+  ?'Приём платежей сейчас отключён. Подписка не будет списана, пока платёжный магазин не подключён.'
+  :'';
+ const available=!checkoutBlockReason;
  const names={starter:'Старт',pro_solo:'PRO Solo',pro_plus:'PRO Плюс',team:'TEAM'};
  // Shared with the landing page (ui/plans.js); this copy is only a fallback.
  const features=window.SmetraPlanFeatures||{
@@ -72,23 +79,37 @@ window.SmetraBillingCatalog=async function(active,b,space,owner,revision,{return
   document.querySelector('#plan-cards').innerHTML=Object.entries(pricing.catalog).map(([tier,product])=>{
    const code=codes[tier]?.[period]||codes[tier]?.month,option=pricing.plans[code],current=access.tier===tier;
    const chosenPeriod=code?.endsWith('year')?'год':'месяц';
-   return '<article class="catalog-plan '+(tier===selected?'selected':'')+'"><span class="overline">'+(tier==='starter'?'БАЗОВЫЙ ДОСТУП':tier==='team'?'ДЛЯ КОМПАНИИ':'ДЛЯ СПЕЦИАЛИСТА')+'</span><h2>'+e(names[tier])+'</h2><div class="catalog-plan-price"><strong>'+e(rub(option?.amount_kopecks||0))+'</strong><span>'+(option?' / '+chosenPeriod:'')+'</span></div><ul>'+features[tier].map(text=>'<li>'+e(text)+'</li>').join('')+'</ul>'+(tier==='starter'?'<p class="note">'+(current?'Ваш текущий тариф':'Бесплатный доступ')+'</p>':'<button class="btn '+(tier===selected?'primary':'')+'" data-product="'+tier+'" '+(available&&!busy?'':'disabled')+'>'+(current?'Продлить':'Выбрать')+'</button>')+'</article>';
+   return '<article class="catalog-plan '+(tier===selected?'selected':'')+'"><span class="overline">'+(tier==='starter'?'БАЗОВЫЙ ДОСТУП':tier==='team'?'ДЛЯ КОМПАНИИ':'ДЛЯ СПЕЦИАЛИСТА')+'</span><h2>'+e(names[tier])+'</h2><div class="catalog-plan-price"><strong>'+e(rub(option?.amount_kopecks||0))+'</strong><span>'+(option?' / '+chosenPeriod:'')+'</span></div><ul>'+features[tier].map(text=>'<li>'+e(text)+'</li>').join('')+'</ul>'+(tier==='starter'?'<p class="note">'+(current?'Ваш текущий тариф':'Бесплатный доступ')+'</p>':'<button class="btn '+(tier===selected?'primary':'')+'" type="button" data-product="'+tier+'" '+(busy?'disabled':'')+' aria-describedby="catalog-checkout-note">'+(current?'Продлить':'Купить')+'</button>')+'</article>';
   }).join('');
   document.querySelector('#catalog-period-note').textContent=period==='year'?'Годовой тариф на 366 дней. Экономия относительно помесячной оплаты.':'Цены за 31 день. TEAM включает пять участников вместе с владельцем.';
+  if(checkoutBlockReason){const note=document.querySelector('#catalog-checkout-note');if(note&&!note.textContent.trim())note.textContent=checkoutBlockReason;}
   document.querySelectorAll('[data-product]').forEach(button=>button.onclick=()=>checkout(button.dataset.product));
   document.querySelectorAll('[data-period]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.period===period)));
  }
  async function checkout(tier){
-  if(!alive()||!available||busy)return;busy=true;selected=tier;paint();
+  if(!alive()||busy)return;
+  if(!available){
+   const note=document.querySelector('#catalog-checkout-note');
+   if(note){note.textContent=checkoutBlockReason;note.setAttribute('role','alert');note.scrollIntoView?.({block:'nearest',behavior:'smooth'});}
+   return;
+  }
+  busy=true;selected=tier;paint();
   const code=codes[tier][period]||codes[tier].month,keyName='smetra.checkout.'+owner.id+'.'+workspace.id+'.'+code;
   let key=sessionStorage.getItem(keyName);if(!key){key=crypto.randomUUID();sessionStorage.setItem(keyName,key)}
   const note=document.querySelector('#catalog-checkout-note');note.textContent='Готовим защищённую оплату…';
   try{
-   const result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:code,workspace_id:workspace.id,expected_amount_kopecks:pricing.plans[code].amount_kopecks,source:'pricing_page'})});
+   let result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:code,workspace_id:workspace.id,expected_amount_kopecks:pricing.plans[code].amount_kopecks,source:'pricing_page'})});
    if(!alive())return;
+   // A cancelled payment cannot be reused: create a fresh intent automatically.
+   if(['canceled','refunded'].includes(result.status)){
+    sessionStorage.removeItem(keyName);
+    key=crypto.randomUUID();sessionStorage.setItem(keyName,key);
+    result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:code,workspace_id:workspace.id,expected_amount_kopecks:pricing.plans[code].amount_kopecks,source:'pricing_page'})});
+    if(!alive())return;
+   }
    window.SmetraPaymentUI?.remember(owner,result);
-   if(['canceled','refunded'].includes(result.status)){sessionStorage.removeItem(keyName);throw Error('Предыдущая оплата отменена. Повторите для создания новой.')}
-   if(result.status==='succeeded'){await synchronize();return}
+   if(result.status==='succeeded'){sessionStorage.removeItem(keyName);await synchronize();return}
+   if(result.status!=='pending'||typeof result.url!=='string')throw Error('Не удалось открыть оплату. Проверьте статус платежа.');
    const target=new URL(result.url);if(target.protocol!=='https:')throw Error('Некорректная ссылка оплаты');location.href=target.href;
   }catch(error){if(alive()){if(error.status===409)sessionStorage.removeItem(keyName);note.textContent=error.message}}
   finally{busy=false;if(alive())paint()}
