@@ -19,6 +19,8 @@ RETENTION = (
     ("partner_console_sessions", "id", "expires_at", 7 * 86400),
     ("partner_site_events", "id", "created_at", 180 * 86400),
     ("partner_outbound_clicks", "id", "created_at", 180 * 86400),
+    # Keep pseudonymous audience statistics for at most 90 days.
+    ("site_visits", "id", "created_at", 90 * 86400),
     # The same table also holds monthly AI quota counters. Do NOT delete
     # current or recent counters; only keys untouched for four months.
     ("rate_limits", "key", "started", 120 * 86400),
