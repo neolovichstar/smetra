@@ -295,8 +295,14 @@ def active_rules(service):
         "SELECT title,content FROM workspace_knowledge WHERE workspace_id=? AND kind='rule' AND enabled=1 "
         "ORDER BY updated_at DESC LIMIT 5", (service.wid,),
     ).fetchall()
-    # Owner-curated rules are user preferences, subordinate to the safety prompt.
-    # Calculator rules are machine-readable data, not instructions for the model.\n    # The model can read them with list_calculation_rules when requested.\n    from backend.smart_formulas import PREFIX\n\n    return "\n".join(\n        f"{row['title']}: {row['content'][:800]}"\n        for row in rows if not row["content"].startswith(PREFIX)\n    )[:3000]
+    # Curated human rules are preferences. Machine-readable calculator data
+    # must never be injected into the assistant's instruction context.
+    from backend.smart_formulas import PREFIX
+
+    return "\n".join(
+        f"{row['title']}: {row['content'][:800]}"
+        for row in rows if not row["content"].startswith(PREFIX)
+    )[:3000]
 
 
 def find_knowledge(service, query=""):
