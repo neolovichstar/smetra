@@ -46,6 +46,7 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_auth_session_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_billing_session_races.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_billing_tabs.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_payment_ui.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_quote_preview_empty.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_quote_appearance_dialog.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_ai_first_workspace.cjs
@@ -155,6 +156,7 @@ jobs:
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_public_profiles.cjs
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_account_layout.cjs
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_vault_controls.cjs
+          SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_payments.cjs
       - name: Durable assistant streaming, navigation and cancellation
         run: |
           SMETRA_ACTION_QA=1 SMETRA_DURABLE_QA=1 SMETRA_FIXTURE_PORT=8085 python scripts/android_ui_fixture.py > data/durable-fixture.log 2>&1 &
@@ -177,6 +179,7 @@ jobs:
             data/qa/ar-scan-*.png
             data/qa/account-*.png
             data/qa/account-layout/
+            data/qa/payments/
             data/qa/support-*.png
             data/qa/procurement-*.png
             data/qa/growth-*.png
@@ -198,6 +201,8 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Native session isolation under delayed work
         run: |
+          javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/VaultCipher.java tests/VaultCipherTest.java
+          java -cp data/native-session-tests ru.smetra.mobile.VaultCipherTest
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/ArMeasurementGeometry.java tests/ArMeasurementGeometryTest.java
           java -cp data/native-session-tests ru.smetra.mobile.ArMeasurementGeometryTest
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeSessionWork.java tests/NativeSessionWorkTest.java

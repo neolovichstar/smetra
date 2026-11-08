@@ -252,8 +252,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   composeTools.append(attachmentBar,document.querySelector('#assistant-voice'),document.querySelector('#assistant-send'),document.querySelector('#assistant-stop'));
   const assistantForm=document.querySelector('#assistant-form');
   assistantForm.append(composeTools);
-  // Background jobs belong to the composer surface directly above the message field.
-  assistantForm.insertBefore(jobList,input);
+  // Recovery and file tasks stay with the transcript; the text field stays clear.
+  document.querySelector('.assistant-content').append(jobList);
   const send=document.querySelector('#assistant-send');
   const voiceButton=document.querySelector('#assistant-voice');
   const status=document.querySelector('#assistant-status');
@@ -1085,7 +1085,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!job?.id||dismissedJobIds.has(String(job.id))||job.status==='cancelled')return false;
         // Completed answers belong to the transcript, never to a permanent processing banner.
         // Do not display chat jobs from unrelated conversations in this composer.
-        if(job.kind==='chat')return (job.conversation_id||'')===activeConversation&&['queued','running','retry','failed'].includes(job.status);
+        if(job.kind==='chat')return !(working&&job.id===currentJobId)&&(job.conversation_id||'')===activeConversation&&['queued','running','retry','failed'].includes(job.status);
         if(['queued','running','retry'].includes(job.status))return true;
         return job.status==='failed'&&now-Number(job.updated_at||job.created_at||0)<86400;
       }).slice(0,5).forEach(job=>{
@@ -1255,9 +1255,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(!['http:','https:'].includes(url.protocol)||!url.hostname||url.username||url.password)return;
       if([...sources.querySelectorAll('a')].some(a=>a.href===url.href))return;
       const chip=document.createElement('a');chip.className='assistant-source';chip.href=url.href;chip.target='_blank';chip.rel='noopener noreferrer';
-      const icon=document.createElement('img');icon.alt='';icon.loading='lazy';
-      icon.src='https://www.google.com/s2/favicons?domain='+encodeURIComponent(url.hostname)+'&sz=32';
-      icon.onerror=()=>{const fallback=document.createElement('span');fallback.className='assistant-source-fallback';fallback.textContent=url.hostname[0].toUpperCase();icon.replaceWith(fallback)};
+      const icon=document.createElement('span');icon.className='assistant-source-fallback';icon.setAttribute('aria-hidden','true');icon.textContent=url.hostname[0].toUpperCase();
       const name=document.createElement('span');name.className='assistant-source-name';name.textContent=url.hostname;
       chip.append(icon,name);sources.append(chip);
     };

@@ -84,7 +84,7 @@ async function ready(){await new Promise((resolve,reject)=>{let text='';child.st
  fill('#workspace-f-company_details','UI company');await submit('#workspace-settings');await until(()=>doc.querySelector('#toast').textContent==='Настройки сохранены','Business settings');assert.equal((await w.api('/workspace')).workspace.settings.company_details,'UI company');
  console.log('PASS: team dialog, custom fields and business settings');
  await visit('support');assert.equal(doc.querySelector('[data-support-topic]'),null);fill('#message','UI support request');await submit('#support-form');await until(()=>query('#message').value==='','Support saved');
- await visit('billing');click('#sync');await until(()=>doc.querySelector('#toast').textContent.includes('Про активен'),'Billing sync');
+ await visit('billing');click('#sync');await until(()=>doc.querySelector('#toast').textContent.includes('Статус оплаты обновлён')||doc.querySelector('.payment-dialog--waiting'),'Billing sync');assert.equal(doc.querySelector('.payment-dialog--success'),null,'A pre-existing plan is not proof of a new payment');w.SmetraPaymentUI?.close();
  await visit('admin');for(const section of ['support','payments','audit','users']){click('[data-admin-section="'+section+'"]');await pause(100);assert.ok(doc.querySelector('#admin-section').textContent.trim())}
  click('[data-admin-section=support]');await until(()=>doc.querySelector('[data-admin-ticket]'),'Support ticket');
  const ticket=query('[data-admin-ticket]'),ticketId=ticket.dataset.adminTicket;click(ticket);await until(()=>!doc.querySelector('[data-admin-ticket="'+ticketId+'"]'),'Close ticket');

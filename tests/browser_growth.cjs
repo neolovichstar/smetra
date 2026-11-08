@@ -65,6 +65,6 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await evaluate(`(async()=>{const detail=await api('/quotes/'+${JSON.stringify(existingId)});await Workspace.editor(detail.quote)})()`);
  await until("document.querySelector('#estimate-editor')");await fill('#f-title','Preserved draft');
  await evaluate("SmetraGrowth.paywall('quote_limit')");assert.equal(await evaluate("document.querySelector('#f-title').value"),'Preserved draft');await shot('growth-contextual-offer');
- await click('.contextual-upgrade .primary');await until("document.querySelector('#plan-cards')");assert.equal(await evaluate("sessionStorage.getItem('smetra.checkout.return.'+user.id)"),'quotes');
+ await click('.payment-dialog--offer .payment-action');await until("document.querySelector('#plan-cards')");assert.equal(await evaluate("sessionStorage.getItem('smetra.checkout.return.'+user.id)"),'quotes');
  assert.deepEqual(errors,[]);console.log('PASS: first-run → seven honest starters → saved quote; server annual price; no unavailable checkout; contextual offer retains draft; 320/390/768/1440 layouts');ws.close();
 })().catch(error=>{console.error(error);process.exit(1)});

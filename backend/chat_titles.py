@@ -51,7 +51,10 @@ def generate_title(prompt, model, paid=False):
     text = str(prompt or "").strip()
     if not text:
         return "Новый диалог"
-    if len(text) < 65 or not os.getenv("OPENROUTER_API_KEY"):
+    # The title must never hold up an ordinary chat's terminal frame. Operators
+    # may opt into semantic titles, with the previous bounded 7s request.
+    if (os.getenv("SMETRA_AI_GENERATE_TITLES", "0") != "1"
+            or len(text) < 65 or not os.getenv("OPENROUTER_API_KEY")):
         return fallback_title(text)
     redacted = _SECRET.sub("[секрет скрыт]", text[:650])
     redacted = re.sub(r"(?i)\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b", "[почта скрыта]", redacted)

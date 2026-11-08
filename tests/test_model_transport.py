@@ -4,7 +4,22 @@ import unittest
 import urllib.error
 import urllib.request
 from unittest.mock import patch
-from backend.model_transport import open_completion
+from backend.model_transport import interactive_preferences, open_completion
+
+
+class InteractivePreferencesTests(unittest.TestCase):
+    def test_prefers_low_latency_without_exposing_reasoning(self):
+        import os
+        with patch.dict(os.environ, {}, clear=True):
+            prefs = interactive_preferences()
+        self.assertEqual(prefs["provider"], {"sort": "latency"})
+        self.assertEqual(prefs["reasoning"], {"enabled": True, "effort": "low", "exclude": True})
+
+    def test_reasoning_override_is_bounded(self):
+        import os
+        for effort, expected in (("medium", "medium"), ("high", "high"), ("invalid", "low")):
+            with patch.dict(os.environ, {"SMETRA_AI_REASONING_EFFORT": effort}):
+                self.assertEqual(interactive_preferences()["reasoning"]["effort"], expected)
 
 
 class ModelFailoverTests(unittest.TestCase):

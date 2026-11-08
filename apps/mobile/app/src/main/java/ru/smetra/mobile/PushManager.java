@@ -97,6 +97,7 @@ final class PushManager {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection)new URL(BuildConfig.API_BASE_URL + path).openConnection();
+            connection.setInstanceFollowRedirects(false);
             connection.setRequestMethod(method);
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(5000);

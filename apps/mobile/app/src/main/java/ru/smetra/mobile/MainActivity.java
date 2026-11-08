@@ -96,12 +96,12 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);presentation=MobilePresentation.cached(this);presentation.apply(this);ui=new SmetraUi(this);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
-        vault=new TokenVault(this);token=vault.read();
+        vault=new TokenVault(this);token=vault.read();removePlaintextCache();
         if(state!=null)pendingPdfDocument=state.getString("pending_pdf_document");
         if(state!=null){assistantAttachmentRequestKey=state.getString("assistant_attachment_request_key","");assistantAttachmentPicking=state.getBoolean("assistant_attachment_picking",false);assistantAttachmentThread=state.getString("assistant_attachment_thread","");assistantAttachmentAccount=state.getString("assistant_attachment_account","");String uri=state.getString("assistant_attachment_uri");if(uri!=null)assistantAttachmentUri=android.net.Uri.parse(uri);try{String file=state.getString("assistant_attachment_uploaded");if(file!=null)assistantUploadedAttachment=new JSONObject(file);}catch(Exception ignored){}}
         String legacy=getPreferences(MODE_PRIVATE).getString("token",null);
         if(token==null&&legacy!=null){try{vault.save(legacy);token=legacy;}catch(Exception ignored){token=null;}}
-        getPreferences(MODE_PRIVATE).edit().remove("token").apply();
+        getPreferences(MODE_PRIVATE).edit().remove("token").remove("oauth_verifier").apply();
         if(!openLink(getIntent())){if(token==null)login(false);else{page("С возвращением","home",false);loading(content);refresh();}}
         refreshPresentation();
     }
@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
         });}catch(Exception ignored){/* Keep the last native presentation while offline. */}});
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
-    private boolean openLink(Intent intent){if(intent==null)return false;if("ru.smetra.mobile.OPEN_NOTIFICATIONS".equals(intent.getAction())){if(token==null)login(false);else notificationsCenter();return true;}if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=getPreferences(MODE_PRIVATE).getString("oauth_verifier",null);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
+    private boolean openLink(Intent intent){if(intent==null)return false;if("ru.smetra.mobile.OPEN_NOTIFICATIONS".equals(intent.getAction())){if(token==null)login(false);else notificationsCenter();return true;}if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=ShellAuth.takeVerifier(this);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
     private void afterLogin(){PushManager.syncIfEnabled(this,token);if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
     @Override public void onDestroy(){clearAssistantRewardUi();assistantRewardedAdLoader=null;cancelAssistantStream();if(quoteDraftEditor!=null)quoteDraftEditor.close();assistantWorker.shutdownNow();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
     private void cancelAssistantStream(){
@@ -146,6 +146,7 @@ public class MainActivity extends Activity {
     private JSONObject request(String path,String method,JSONObject body,String sessionToken)throws Exception{
         final byte[] payload=body==null?null:body.toString().getBytes(StandardCharsets.UTF_8);
         HttpURLConnection c=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api"+path).openConnection();
+        c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(10000);c.setReadTimeout(path.startsWith("/assistant")?110000:(path.equals("/ai/draft")||path.equals("/files")&&method.equals("POST"))?65000:20000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json");
         if(sessionToken!=null)c.setRequestProperty("Authorization","Bearer "+sessionToken);
         try{
@@ -165,7 +166,7 @@ public class MainActivity extends Activity {
             try{
                 JSONObject data=request(path,method,body,sessionToken);
                 postWorkerResult(()->{if(version==pageVersion&&!isFinishing()&&java.util.Objects.equals(sessionToken,token)){
-                    if(method.equals("GET")&&(path.equals("/dashboard")||path.equals("/quotes")||path.equals("/clients")||path.equals("/projects")))getPreferences(MODE_PRIVATE).edit().putString("cache:"+path,data.toString()).apply();
+                    if(method.equals("GET"))cacheResponse(path,data,sessionToken);
                     restore(submit);done.onResult(data);
                 }});
             }catch(Exception error){postWorkerResult(()->{
@@ -175,7 +176,7 @@ public class MainActivity extends Activity {
                 }
                 if(error instanceof ApiException&&((ApiException)error).status==401&&token!=null){clearSession();login(false);message("Сессия завершена. Войдите снова.");return;}
                 if(!(error instanceof ApiException)&&method.equals("GET")){
-                    String cached=getPreferences(MODE_PRIVATE).getString("cache:"+path,null);
+                    String cached=cachedResponse(path,sessionToken);
                     if(cached!=null){try{done.onResult(new JSONObject(cached));message("Нет сети · показаны сохранённые данные");return;}catch(Exception ignored){}}
                 }
                 String description=error instanceof ApiException?error.getMessage():"Не удалось подключиться. Проверьте интернет и попробуйте ещё раз.";
@@ -188,6 +189,28 @@ public class MainActivity extends Activity {
         });
     }
     private void restore(Button button){if(button!=null){button.setEnabled(true);button.setAlpha(1);}}
+
+    private static final String[] OFFLINE_PATHS={"/dashboard","/quotes","/clients","/projects"};
+    private TokenVault offlineVault(String path,String sessionToken){
+        if(sessionToken==null)return null;
+        for(String allowed:OFFLINE_PATHS)if(allowed.equals(path))return new TokenVault(this,"offline_"+path.substring(1),sessionToken);
+        return null;
+    }
+    private void removePlaintextCache(){
+        android.content.SharedPreferences.Editor edit=getPreferences(MODE_PRIVATE).edit();
+        for(String path:OFFLINE_PATHS)edit.remove("cache:"+path);
+        edit.apply();
+    }
+    private void cacheResponse(String path,JSONObject response,String sessionToken){
+        TokenVault cache=offlineVault(path,sessionToken);if(cache==null)return;
+        try{cache.save(response.toString());}catch(Exception ignored){try{cache.save(null);}catch(Exception unavailable){}}
+    }
+    private String cachedResponse(String path,String sessionToken){
+        TokenVault cache=offlineVault(path,sessionToken);return cache==null?null:cache.read();
+    }
+    private void clearOfflineCache(){
+        for(String path:OFFLINE_PATHS)try{new TokenVault(this,"offline_"+path.substring(1)).save(null);}catch(Exception ignored){}
+    }
 
     private void requireLegalConsent(Runnable onAccepted){
         if(token==null){message("Войдите в Сметру перед использованием AI");return;}
@@ -260,7 +283,7 @@ public class MainActivity extends Activity {
         ui.sheet("Вы проверили объёмы и цены?",AI_ESTIMATE_DISCLAIMER,"Да, всё верно",false,onConfirmed);
     }
 
-    private void clearSession(){legalConsentAccepted=false;String oldToken=token;if(oldToken!=null&&PushManager.isEnabled(this)){PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,null);}token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}getPreferences(MODE_PRIVATE).edit().clear().apply();}
+    private void clearSession(){legalConsentAccepted=false;String oldToken=token;if(oldToken!=null&&PushManager.isEnabled(this)){PushManager.setEnabled(this,false);PushManager.unregister(this,PushManager.getInstallationId(this),oldToken,null);}token=null;me=null;assistantConversation="";assistantContext=null;clearAssistantAttachment();catalogSearch="";catalogCategory="";catalogCurrency="RUB";catalogFavorites=false;catalogRecent=false;catalogItems=new JSONArray();Analytics.clearUser();try{vault.save(null);}catch(Exception ignored){}clearOfflineCache();getPreferences(MODE_PRIVATE).edit().clear().apply();}
     private static byte[] readLimited(InputStream input,int maximum)throws IOException{if(input==null)throw new IOException("Пустой ответ сервера");ByteArrayOutputStream output=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1){if(output.size()+count>maximum)throw new IOException("Файл слишком большой");output.write(buffer,0,count);}return output.toByteArray();}
     private int dp(float value){return ui.dp(value);}
     private void message(String message){
@@ -379,7 +402,7 @@ public class MainActivity extends Activity {
         ui.space(content,18);TextView legal=ui.label("Продолжая, вы принимаете условия использования и политику конфиденциальности.",11,MUTED,false);content.addView(legal);button("Условия и конфиденциальность",false,v->openUrl(BuildConfig.API_BASE_URL+"/privacy"));
     }
     private void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception error){message("Не удалось открыть браузер");}}
-    private void startIdentity(String provider,boolean registrationIntent){if(registrationIntent&&!registrationConsentAccepted){message("Примите соглашение перед регистрацией");return;}try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);getPreferences(MODE_PRIVATE).edit().putString("oauth_verifier",verifier).apply();String url=BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge+"&intent="+(registrationIntent?"register":"login");if(registrationIntent)url+="&legal_acceptance=1&legal_version="+REGISTRATION_CONSENT_VERSION;openUrl(url);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
+    private void startIdentity(String provider,boolean registrationIntent){if(registrationIntent&&!registrationConsentAccepted){message("Примите соглашение перед регистрацией");return;}try{byte[] bytes=new byte[48];new java.security.SecureRandom().nextBytes(bytes);String verifier=android.util.Base64.encodeToString(bytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);String challenge=android.util.Base64.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)),android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);new TokenVault(this,"oauth_pkce").save(new JSONObject().put("verifier",verifier).put("started_at",System.currentTimeMillis()).toString());getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();String url=BuildConfig.API_BASE_URL+"/api/auth/oauth/"+provider+"/start?app_challenge="+challenge+"&intent="+(registrationIntent?"register":"login");if(registrationIntent)url+="&legal_acceptance=1&legal_version="+REGISTRATION_CONSENT_VERSION;openUrl(url);}catch(Exception error){message("Не удалось начать вход. Попробуйте ещё раз.");}}
     private boolean proActive(JSONObject account){return account!=null&&"pro".equals(account.optString("plan"))&&account.optLong("entitlement_until")>System.currentTimeMillis()/1000;}
     private String subscriptionDate(JSONObject account){
         return java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG,new Locale("ru","RU"))
@@ -839,6 +862,7 @@ public class MainActivity extends Activity {
             try{
                 if(version!=pageVersion||isFinishing())return;
                 connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api/assistant/stream").openConnection();
+                connection.setInstanceFollowRedirects(false);
                 assistantConnection=connection;
                 if(version!=pageVersion||isFinishing()) { connection.disconnect(); return; }
                 connection.setConnectTimeout(10000);
@@ -1559,6 +1583,7 @@ public class MainActivity extends Activity {
         sessionWork.execute(()->{HttpURLConnection connection=null;try{
             String path=documentId.startsWith("file:")?"/api/files/"+documentId.substring(5):documentId.startsWith("assistant:")?"/api/assistant/actions/"+documentId.substring(10)+"/preview.pdf":documentId.startsWith("report:")?"/api/construction/objects/"+documentId.substring(7)+"/report.pdf?review_confirmed=1":"/api/documents/"+documentId+"/pdf?review_confirmed=1";
             connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+path).openConnection();
+            connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(10000);connection.setReadTimeout(30000);
             connection.setRequestProperty("Authorization","Bearer "+sessionWork.tokenForRequest(token));
             if(connection.getResponseCode()!=200||connection.getContentType()==null||(!documentId.startsWith("file:")&&!connection.getContentType().startsWith("application/pdf")))throw new IOException("File unavailable");
@@ -1913,6 +1938,7 @@ public class MainActivity extends Activity {
         final int version=pageVersion;
         sessionWork.execute(()->{HttpURLConnection connection=null;try{
             connection=(HttpURLConnection)new URL(BuildConfig.API_BASE_URL+"/api/files/"+fileId).openConnection();
+            connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(10000);connection.setReadTimeout(20000);
             connection.setRequestProperty("Authorization","Bearer "+sessionWork.tokenForRequest(token));
             String contentType=connection.getContentType();

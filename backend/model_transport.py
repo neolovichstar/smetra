@@ -1,12 +1,22 @@
 """Bounded failover before any response bytes are consumed."""
 import json
 import logging
+import os
 import time
 import urllib.error
 import urllib.request
 
 log = logging.getLogger(__name__)
 FREE_ROUTER = "openrouter/free"
+
+
+def interactive_preferences():
+    """Prioritize first text without changing the model or bypassing its tools."""
+    effort = os.getenv("SMETRA_AI_REASONING_EFFORT", "low").strip().lower()
+    if effort not in {"low", "medium", "high"}:
+        effort = "low"
+    return {"reasoning": {"enabled": True, "effort": effort, "exclude": True},
+            "provider": {"sort": "latency"}}
 
 
 def open_completion(request, timeout):

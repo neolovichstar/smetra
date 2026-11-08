@@ -1,5 +1,5 @@
 /* Four server-priced products; payment callbacks remain the only grant authority. */
-window.SmetraBillingCatalog=async function(active,b,space,owner,revision){
+window.SmetraBillingCatalog=async function(active,b,space,owner,revision,{returning=false}={}){
  const alive=()=>active()&&user===owner&&(typeof authRevision!=='number'||authRevision===revision);
  const e=escapeHtml,pricing=b.pricing,workspace=space.workspace,access=space.entitlements||{};
  const owns=workspace?.owner_id===owner.id;
@@ -50,6 +50,7 @@ window.SmetraBillingCatalog=async function(active,b,space,owner,revision){
   try{
    const result=await api('/billing/tokens/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({millions,expected_amount_kopecks:tokenPrice(millions),source:'pricing_page'})});
    if(!alive())return;
+   window.SmetraPaymentUI?.remember(owner,result);
    if(['canceled','refunded','succeeded'].includes(result.status)){sessionStorage.removeItem(keyName)}
    if(result.status==='succeeded'){await synchronize();return}
    if(['canceled','refunded'].includes(result.status))throw Error('Предыдущая оплата закрыта. Нажмите ещё раз, чтобы начать новую.');
@@ -85,6 +86,7 @@ window.SmetraBillingCatalog=async function(active,b,space,owner,revision){
   try{
    const result=await api('/billing/checkout',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({plan:code,workspace_id:workspace.id,expected_amount_kopecks:pricing.plans[code].amount_kopecks,source:'pricing_page'})});
    if(!alive())return;
+   window.SmetraPaymentUI?.remember(owner,result);
    if(['canceled','refunded'].includes(result.status)){sessionStorage.removeItem(keyName);throw Error('Предыдущая оплата отменена. Повторите для создания новой.')}
    if(result.status==='succeeded'){await synchronize();return}
    const target=new URL(result.url);if(target.protocol!=='https:')throw Error('Некорректная ссылка оплаты');location.href=target.href;
@@ -93,12 +95,19 @@ window.SmetraBillingCatalog=async function(active,b,space,owner,revision){
  }
  async function synchronize(){
   const button=document.querySelector('#catalog-sync');if(!alive()||button.disabled)return;button.disabled=true;
-  try{const result=await api('/billing/sync',{method:'POST'});if(!alive())return;user=result.user;await render()}
+  try{
+   const result=await (window.SmetraPaymentUI?window.SmetraPaymentUI.sync(owner,revision):api('/billing/sync',{method:'POST'}));
+   if(!alive())return;user=result.user;await render();
+   window.SmetraPaymentUI?.outcome(owner,revision,result,{before:b.payments,manual:true,retry:()=>document.querySelector('#catalog-sync')?.click()});
+  }
   catch(error){if(alive())document.querySelector('#catalog-checkout-note').textContent=error.message}
   finally{if(button.isConnected)button.disabled=false}
  }
  document.querySelectorAll('[data-period]').forEach(button=>button.onclick=()=>{if(busy)return;period=button.dataset.period;paint()});
  document.querySelector('#catalog-sync').onclick=synchronize;paint();
  if(tokens){document.querySelectorAll('[data-billing-tab]').forEach(button=>{button.onclick=()=>showTab(button.dataset.billingTab);button.onkeydown=event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();showTab(tab==='plans'?'tokens':'plans');document.querySelector('[data-billing-tab="'+tab+'"]').focus()}}});showTab(tab)}
- if(new URLSearchParams(location.search).has('payment')&&b.payments.some(p=>p.status==='pending'))await synchronize();
+ if(returning){
+  if(b.payments.some(p=>p.status==='pending'))await synchronize();
+  else window.SmetraPaymentUI?.outcome(owner,revision,b,{before:b.payments,manual:true,retry:()=>document.querySelector('#catalog-sync')?.click()});
+ }
 };

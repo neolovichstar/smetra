@@ -7,7 +7,7 @@ import os
 import re
 import urllib.error
 import urllib.request
-from backend.model_transport import open_completion
+from backend.model_transport import interactive_preferences, open_completion
 
 
 # Monetary results must live in numeric unit_price fields, never in model prose.
@@ -223,8 +223,8 @@ def _draft(service, data):
         "max_tokens": 5000,
         # Claude Haiku 5.5 rejects non-default sampling; other models keep a low temperature.
         **({} if model.startswith("anthropic/") else {"temperature": 0.1}),
-        "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
-        **({"provider": {"require_parameters": True}} if paid_model or not image_url else {}),
+        **interactive_preferences(),
+        **({"provider": {**interactive_preferences()["provider"], "require_parameters": True}} if paid_model or not image_url else {}),
     }
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",

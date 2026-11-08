@@ -17,7 +17,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
   const workspaceRevision=app.match(/ui\/workspace\.css\?v=([^"\s]+)/)?.[1];
   assert.match(workspaceRevision||'',/^\d{8}-[a-z0-9-]+$/i,'Workspace styles use a cache revision');
   assert.ok(workspaceRevision.slice(0,8)>='20261108'&&workspaceRevision!=='20261108-profile1','Workspace styles must bypass the previous cached layout; later revisions remain valid');
-  assert.match(featureManifest,/ecosystem-billing\.js\?v=20261108-tabs1/,'Billing JS must not be served from old cache');
+  assert.match(featureManifest,/ecosystem-billing\.js\?v=20261108-paywall1/,'Billing JS must not be served from old cache');
 
   const dom=new JSDOM('<!doctype html><html><body><main id="content"></main></body></html>',{
     url:'https://smetra.test/app',runScripts:'dangerously',pretendToBeVisual:true

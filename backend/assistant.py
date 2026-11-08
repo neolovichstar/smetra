@@ -8,7 +8,7 @@ import os
 import time
 import urllib.error
 import urllib.request
-from backend.model_transport import open_completion
+from backend.model_transport import interactive_preferences, open_completion
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 
 ENTITIES = (
@@ -635,7 +635,7 @@ def query_model(messages, model=None, paid_model=False):
         "max_tokens": 3500,
         "usage": {"include": True},
             **sampling(model),
-            "reasoning": {"enabled": True, "effort": "medium", "exclude": True},
+            **interactive_preferences(),
     }
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -684,7 +684,7 @@ def _stream_payload(model, messages, paid_model, tools_enabled=True, reasoning=T
         payload["tool_choice"] = _MODEL_TOOL_CHOICE.get()
         payload["max_tool_calls"] = 4
     if reasoning:
-        payload["reasoning"] = {"enabled": True, "effort": "medium", "exclude": True}
+        payload.update(interactive_preferences())
     return payload
 
 

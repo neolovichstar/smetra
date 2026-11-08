@@ -33,6 +33,9 @@ public class DesignSmoke extends Instrumentation {
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
+            if("true".equals(arguments.getString("vaultOnly"))){
+                VaultSmoke.run(getTargetContext());result.putString("stream","PASS: Android Keystore encrypted storage, nonce freshness, account isolation, tamper rejection and one-time expiring PKCE\n");finish(Activity.RESULT_OK,result);return;
+            }
             activity=startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             waitText("Войти по почте");SystemClock.sleep(700);shot("01-welcome");click("Войти по почте");waitText("Войти в пространство");shot("01-login");
             fill("android-design@test.invalid","android design test only");click("Войти в пространство");

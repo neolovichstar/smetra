@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from email.message import EmailMessage
 from backend.plan_catalog import PURCHASES
+from backend.service_errors import DatabaseBusyError
 
 try:
     from backend import business, mytracker, revenue, token_packs
@@ -321,7 +322,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        if status == 429:
+        if status in (429, 503):
             self.send_header("Retry-After", str(getattr(self, "retry_after", 60)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -330,7 +331,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(), xr-spatial-tracking=(self)")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net https://www.google.com/s2/favicons; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         if cookie:
             self.send_header("Set-Cookie", cookie)
@@ -619,6 +620,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if err.status == 429:
                 payload.update(code="rate_limited", retryAfter=getattr(self, "retry_after", 60))
             self.send_json(err.status, payload)
+        except DatabaseBusyError:
+            self.retry_after = 2
+            self.send_json(503, {
+                "error": "Сервис занят. Повторите запрос через несколько секунд",
+                "code": "service_busy", "retryAfter": self.retry_after,
+                "request_id": self.request_id,
+            })
         except sqlite3.IntegrityError:
             self.send_json(
                 409,
@@ -765,7 +773,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Request-ID", getattr(self, "request_id", ""))
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net https://www.google.com/s2/favicons; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob: https://avatars.yandex.net; frame-src blob:; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
         )
         self.end_headers()
         self.wfile.write(data)
@@ -1540,7 +1548,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous['id'],)).fetchone()
                 return self.send_json(
                     200,
-                    {"url": previous["confirmation_url"], "status": 'refunded' if refunded else previous["status"]},
+                    {"url": previous["confirmation_url"], "status": 'refunded' if refunded else previous["status"], "payment_id": previous["id"]},
                 )
             try:
                 intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount, data.get('workspace_id'))
@@ -1576,7 +1584,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 saved, created = revenue.persist_checkout(con,user,key,plan,intent,result)
             except ValueError:
                 raise ApiError(409,"Conflicting checkout") from None
-            return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"]})
+            return self.send_json(201 if created else 200, {"url":saved["confirmation_url"],"status":saved["status"],"payment_id":saved["id"]})
         if path == "/api/billing/tokens/checkout" and method == "POST":
             return self.token_checkout(con, user)
         if path == "/api/billing/sync" and method == "POST":
@@ -1808,7 +1816,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if previous["plan"] != plan or previous["amount_kopecks"] != amount:
                 raise ApiError(409, "Ключ уже использован для другой покупки")
             refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous["id"],)).fetchone()
-            return self.send_json(200, {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"]})
+            return self.send_json(200, {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"], "payment_id": previous["id"]})
         workspace_id = business.ensure_workspace(con, user)
         con.execute(
             "INSERT INTO billing_intents(id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,is_test,created_at,bonus_ai_messages,workspace_id) "
@@ -1836,7 +1844,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             saved, created = revenue.persist_checkout(con, user, key, plan, intent, result)
         except ValueError:
             raise ApiError(409, "Conflicting checkout") from None
-        return self.send_json(201 if created else 200, {"url": saved["confirmation_url"], "status": saved["status"]})
+        return self.send_json(201 if created else 200, {"url": saved["confirmation_url"], "status": saved["status"], "payment_id": saved["id"]})
 
     def apply_payment(self, con, local, remote):
         self.verify_yookassa_shop(remote)

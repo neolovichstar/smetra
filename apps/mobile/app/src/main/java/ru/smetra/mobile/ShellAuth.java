@@ -14,7 +14,7 @@ import org.json.JSONObject;
 
 /**
  * Sign-in with an identity provider in the system browser (Custom Tabs), never
- * in the WebView. PKCE: the verifier stays in app-private storage, the browser
+ * in the WebView. PKCE: the verifier is sealed with Android Keystore, the browser
  * only sees its SHA-256 challenge. The server returns a one-time ticket to
  * smetra://auth; native code exchanges ticket + verifier for the HttpOnly
  * session cookie and puts it into the WebView jar. No token reaches JS.
@@ -42,7 +42,9 @@ final class ShellAuth {
         int flags = Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING;
         String verifier = Base64.encodeToString(bytes, flags);
         String challenge = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)), flags);
-        prefs(activity).edit().putString(VERIFIER, verifier).putLong(STARTED, System.currentTimeMillis()).apply();
+        clearLegacy(activity);
+        new TokenVault(activity,"oauth_pkce").save(new JSONObject().put(VERIFIER,verifier)
+            .put(STARTED,System.currentTimeMillis()).toString());
         Uri.Builder url = Uri.parse(ShellSession.ORIGIN + "/api/auth/oauth/" + provider + "/start").buildUpon()
             .appendQueryParameter("app_challenge", challenge)
             .appendQueryParameter("intent", intent);
@@ -58,7 +60,7 @@ final class ShellAuth {
 
     /** True while a browser sign-in started by this app is still pending. */
     static boolean pending(Context context) {
-        return System.currentTimeMillis() - prefs(context).getLong(STARTED, 0) < TTL_MS && prefs(context).contains(VERIFIER);
+        return challenge(context)!=null;
     }
 
     /** Account linking needs the WebView session, so it stays in the WebView flow. */
@@ -71,12 +73,9 @@ final class ShellAuth {
 
     /** Verifier for a pending sign-in, consumed once. */
     static String takeVerifier(Context context) {
-        SharedPreferences prefs = prefs(context);
-        String verifier = prefs.getString(VERIFIER, null);
-        long started = prefs.getLong(STARTED, 0);
-        prefs.edit().remove(VERIFIER).remove(STARTED).apply();
-        if (verifier == null || System.currentTimeMillis() - started > TTL_MS) return null;
-        return verifier;
+        JSONObject value=challenge(context);
+        try{new TokenVault(context,"oauth_pkce").save(null);}catch(Exception error){return null;}
+        return value==null?null:value.optString(VERIFIER,null);
     }
 
     /** Blocking exchange; returns null on success or a user-facing error. */
@@ -99,7 +98,19 @@ final class ShellAuth {
         }
     }
 
-    private static SharedPreferences prefs(Context context) {
-        return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    private static void clearLegacy(Context context) {
+        SharedPreferences legacy=context.getApplicationContext().getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        if(legacy.contains(VERIFIER)||legacy.contains(STARTED))legacy.edit().clear().apply();
+    }
+
+    private static JSONObject challenge(Context context) {
+        clearLegacy(context);
+        try{
+            String sealed=new TokenVault(context,"oauth_pkce").read();
+            if(sealed==null)return null;
+            JSONObject value=new JSONObject(sealed);
+            long age=System.currentTimeMillis()-value.optLong(STARTED,0);
+            return age>=0&&age<TTL_MS&&value.optString(VERIFIER,"").matches("[A-Za-z0-9_-]{43,128}")?value:null;
+        }catch(Exception error){return null;}
     }
 }

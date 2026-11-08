@@ -1,6 +1,7 @@
 """Drive a durable, owned chat job over SSE without tying its lifetime to the socket."""
 import json
 import logging
+import time
 
 from backend.business import DomainError
 from backend import assistant_jobs
@@ -23,9 +24,13 @@ class DurableChatStream:
             service.con = service.global_con
         con = service.global_con
         connected = True
+        started = time.monotonic()
+        first_text_ms = None
 
         def send(kind, value):
-            nonlocal connected
+            nonlocal connected, first_text_ms
+            if kind == "delta" and value.get("text") and first_text_ms is None:
+                first_text_ms = round((time.monotonic() - started) * 1000)
             if not connected:
                 return
             try:
@@ -81,3 +86,9 @@ class DurableChatStream:
                       getattr(handler, "request_id", ""), type(error).__name__)
             # The durable record remains available to the scheduler and history.
             send("background", {"job": {"id": self.job_id, "status": "queued"}})
+        finally:
+            # Timings contain no prompt, answer, user identity or provider key.
+            print(json.dumps({"event": "assistant_latency", "request_id": getattr(handler, "request_id", ""),
+                              "first_text_ms": first_text_ms,
+                              "total_ms": round((time.monotonic() - started) * 1000),
+                              "connected": connected}), flush=True)

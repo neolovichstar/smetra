@@ -7,6 +7,13 @@ from backend.chat_titles import clean_title, fallback_title, generate_title, TIT
 
 
 class ChatTitleTests(unittest.TestCase):
+    def test_long_first_message_does_not_wait_for_second_model_by_default(self):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "testing-only", "SMETRA_AI_GENERATE_TITLES": "0"}), \
+                patch("backend.assistant.open_completion") as completion:
+            title = generate_title("Подготовь подробную смету ремонта гостиной с покраской потолков и монтажом плинтусов", "openrouter/free")
+        self.assertNotEqual(title, "Новый диалог")
+        completion.assert_not_called()
+
     def test_first_message_title_fits_sidebar_without_cutting_words(self):
         title = fallback_title("Пожалуйста, сделай профессиональный расчёт косметического ремонта комнаты площадью 20 квадратных метров")
         self.assertLessEqual(len(title), TITLE_LIMIT)
@@ -21,7 +28,7 @@ class ChatTitleTests(unittest.TestCase):
         self.assertNotIn("test@example.com", clean_title("Смета test@example.com"))
 
     def test_short_first_message_avoids_extra_provider_call(self):
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "testing-only"}, clear=False):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "testing-only", "SMETRA_AI_GENERATE_TITLES": "1"}, clear=False):
             with patch("backend.assistant.open_completion") as completion:
                 title = generate_title("Подготовь смету на кухню", "openrouter/free")
         self.assertIn("смету", title.lower())
@@ -38,7 +45,7 @@ class ChatTitleTests(unittest.TestCase):
                 pass
 
         request = "Нужно составить список работ для косметического ремонта гостиной с покраской потолков и монтажом плинтусов"
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "testing-only"}, clear=False):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "testing-only", "SMETRA_AI_GENERATE_TITLES": "1"}, clear=False):
             with patch("backend.assistant.open_completion", return_value=Response()) as completion:
                 title = generate_title(request, "openrouter/free")
         self.assertEqual(title, "Смета косметического ремонта")

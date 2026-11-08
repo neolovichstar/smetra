@@ -15,11 +15,14 @@ from contextlib import nullcontext
 from functools import lru_cache
 
 import psycopg
+from backend.service_errors import DatabaseBusyError
 
 try:
-    from psycopg_pool import ConnectionPool
+    from psycopg_pool import ConnectionPool, PoolTimeout, TooManyRequests
+    _POOL_BUSY_ERRORS = (PoolTimeout, TooManyRequests)
 except ImportError:  # The direct-connection fallback keeps local/minimal tools usable.
     ConnectionPool = None
+    _POOL_BUSY_ERRORS = ()
 
 TABLES = frozenset(["email_login_challenges","estimate_shares","estimate_share_responses"]) | frozenset(
     "users sessions email_tokens quotes payments refunds events support audit workspaces workspace_members clients catalog_items catalog_price_history quote_items quote_versions activity projects project_stages tasks leads project_payments expenses comments notifications notification_reads custom_field_definitions estimate_templates documents files ai_usage schema_migrations file_payloads rate_limits legal_acceptances".split()
@@ -60,6 +63,16 @@ _POOL_LOCK = threading.Lock()
 _POOLS = {}
 
 
+def _tls_mode(database_url, local_test):
+    if local_test:
+        return "disable"
+    # kwargs override URI parameters in libpq. Never downgrade an explicitly
+    # verified certificate/hostname to encryption without authentication.
+    options = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(database_url).query))
+    requested = options.get("sslmode", "")
+    return requested if requested in ("verify-ca", "verify-full") else "require"
+
+
 def _connection_pool(database_url, local_test):
     """Return a small process-local pool; Vercel warm instances can reuse TLS sessions."""
     if ConnectionPool is None:
@@ -73,15 +86,21 @@ def _connection_pool(database_url, local_test):
             except ValueError:
                 max_size = 2
             max_size = max(1, min(4, max_size))
+            try:
+                max_waiting = int(os.getenv("SMETRA_DB_POOL_MAX_WAITING", "16"))
+            except ValueError:
+                max_waiting = 16
+            max_waiting = max(1, min(256, max_waiting))
             pool = ConnectionPool(
                 conninfo=database_url,
                 min_size=0,
                 max_size=max_size,
+                max_waiting=max_waiting,
                 timeout=5,
                 max_idle=5,
                 max_lifetime=300,
                 kwargs={
-                    "sslmode": "disable" if local_test else "require",
+                    "sslmode": _tls_mode(database_url, local_test),
                     "connect_timeout": 5,
                     "prepare_threshold": None,
                     "autocommit": True,
@@ -203,11 +222,14 @@ class Connection:
         local_test = os.getenv("SMETRA_LOCAL_POSTGRES") == "1" and loopback
         self.pool = _connection_pool(database_url, local_test)
         if self.pool is not None:
-            self.raw = self.pool.getconn(timeout=5)
+            try:
+                self.raw = self.pool.getconn(timeout=5)
+            except _POOL_BUSY_ERRORS:
+                raise DatabaseBusyError("Database capacity temporarily exhausted") from None
         else:
             self.raw = psycopg.connect(
                 database_url,
-                sslmode="disable" if local_test else "require",
+                sslmode=_tls_mode(database_url, local_test),
                 connect_timeout=5,
                 prepare_threshold=None,
                 autocommit=True,

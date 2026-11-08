@@ -17,14 +17,14 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   await send('Page.navigate',{url:site+'/app'});
   await until("document.querySelector('#auth-form')?.onsubmit");
   await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
-  await until("document.querySelector('.workspace-home')");
+  await until("!!document.querySelector('#assistant-form')?.onsubmit");
   await until("document.querySelector('link[rel=\\\"prefetch\\\"][href*=\\\"/assistant-chat.js\\\"]')");
-  for(const file of ['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js']){
+  for(const file of ['profile-ui.js','admin.js','construction.js']){
     const state=await evaluate(`(()=>({executed:!!document.querySelector('script[src*=${JSON.stringify('/'+file)}]'),prefetched:!!document.querySelector('link[rel="prefetch"][href*=${JSON.stringify('/'+file)}]')}))()`);
     assert.equal(state.executed,false,'Initial screen must not execute '+file);
     if(['assistant-chat.js','ai-workspace.js','profile-ui.js','admin.js','construction.js','vendor/markdown-it-15.0.2.min.js'].includes(file))assert.equal(state.prefetched,true,'Idle-prefetch should warm '+file+' without executing it');
   }
-  assert.equal(await evaluate("typeof window.SmetraAssistant"),'undefined','Assistant stays uninitialized until its section opens');
+  assert.equal(await evaluate("typeof window.SmetraAssistant"),'function','Default assistant route loads its required feature');
   const testTask=await evaluate("api('/tasks',{method:'POST',body:JSON.stringify({name:'Mobile deadline check',due_date:'2026-10-06'})}).then(result=>result.item)");
   fs.mkdirSync('data/qa',{recursive:true});
   const routes=process.env.SMETRA_REVENUE_QA==='1'?['billing']:['dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','billing','support','profile','settings','activity'];
@@ -41,7 +41,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
         const layout=await evaluate(`(()=>{const c=document.querySelector('.assistant-content'),p=document.querySelector('.assistant-composer'),s=document.querySelector('.assistant-studio'),m=document.querySelector('.main'),r=e=>{const x=e.getBoundingClientRect(),z=getComputedStyle(e);return {top:Math.round(x.top),bottom:Math.round(x.bottom),height:Math.round(x.height),minHeight:z.minHeight,heightCss:z.height,position:z.position,flex:z.flex,overflow:z.overflow}};return {viewport:innerHeight,content:r(c),composer:r(p),studio:r(s),main:r(m),scrollHeight:document.documentElement.scrollHeight}})()`);
         assert.equal(layout.content.bottom<=layout.composer.top+1&&layout.composer.bottom<=900+1,true,'Assistant composer overlaps content or viewport at '+width+': '+JSON.stringify(layout));
         await evaluate("document.querySelector('.assistant-content').scrollTop=document.querySelector('.assistant-content').scrollHeight");
-        assert.equal(await evaluate(`(()=>{const job=document.querySelector('.assistant-job'),form=document.querySelector('#assistant-form'),composer=document.querySelector('.assistant-composer');return !job||(form.contains(job)&&job.getBoundingClientRect().top>=composer.getBoundingClientRect().top&&job.getBoundingClientRect().bottom<=form.getBoundingClientRect().bottom+1)})()`),true,'Background jobs must stay attached to the composer and visible at '+width);
+        assert.equal(await evaluate(`(()=>{const job=document.querySelector('.assistant-job'),form=document.querySelector('#assistant-form'),composer=document.querySelector('.assistant-composer');return !job||(!form.contains(job)&&!composer.contains(job)&&!!job.closest('.assistant-content'))})()`),true,'Background jobs must stay in the transcript, outside the message input, at '+width);
       }
       if([390,1440].includes(width))fs.writeFileSync(`data/qa/section-${route}-${width}.png`,Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
     }

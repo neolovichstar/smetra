@@ -106,6 +106,13 @@ def main():
         )
         token = account["token"]
         call("/me/legal-consent", {"accepted": True, "version": "2026-10-19-ai-estimate-v1"}, token)
+        # Browser suites exercise many tool rounds on this one disposable user.
+        # Preserve real metering without exhausting the new token-based allowance.
+        from backend import ai_tokens
+        with app.db() as con:
+            ai_tokens.ensure_schema(con)
+            ai_tokens.credit(con, account['user']['id'], 5_000_000, 'admin_adjust',
+                             note='Isolated UI fixture', ref='ui-fixture-budget')
         if os.getenv('SMETRA_ACTION_QA') == '1':
             with app.db() as con:
                 con.execute("UPDATE users SET role='admin',plan='pro',entitlement_until=?,email_verified_at=? WHERE id=?", (int(time.time())+3600,int(time.time()),account['user']['id']))
@@ -252,6 +259,9 @@ def main():
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
             prompt = next((message['content'] for message in reversed(messages) if message['role'] == 'user'), '')
+            if prompt == 'Увеличь цену на 10%':
+                return {"content": None, "tool_calls": [{"id": "fixture-owned-bulk", "type": "function",
+                        "function": {"name": seed_tool, "arguments": json.dumps(seed_args)}}]}
             if os.getenv('SMETRA_DURABLE_QA') == '1' and prompt in ('UI durable question', 'UI cancel durable question'):
                 on_delta('Поток начат. ')
                 time.sleep(3)

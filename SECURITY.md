@@ -2,6 +2,8 @@
 
 This is an implementation status, not a security certification.
 
+Latest release hardening and its measured limits: [Production readiness, 8 November 2026](docs/PRODUCTION_READINESS_2026-11-08.md).
+
 Current threat model, unresolved risks and verification status: `docs/THREAT_MODEL.md`, `docs/SECURITY_TEST_STATUS.md`. Incident and credential rotation procedure: `docs/INCIDENT_RESPONSE.md`.
 
 ## In place

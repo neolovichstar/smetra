@@ -101,8 +101,15 @@ def _fernet():
     if not key:
         raise business.DomainError(503, "Не настроено защищённое хранилище OAuth-токенов")
     try:
-        from cryptography.fernet import Fernet
-        return Fernet(key.encode())
+        from cryptography.fernet import Fernet, MultiFernet
+        # New writes use the primary key; retired keys are read-only fallbacks
+        # during a controlled rotation. Existing ciphertext stays compatible.
+        retired = (os.getenv("CLOUD_TOKEN_DECRYPTION_KEYS") or "").strip()
+        old_keys = [value.strip() for value in retired.split(",") if value.strip()]
+        if len(old_keys) > 4:
+            raise ValueError("Too many retired encryption keys")
+        keys = list(dict.fromkeys([key, *old_keys]))
+        return MultiFernet([Fernet(value.encode()) for value in keys])
     except Exception:
         raise business.DomainError(503, "Ключ шифрования OAuth настроен некорректно") from None
 
