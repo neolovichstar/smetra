@@ -516,7 +516,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(!preview.visible&&!preview.currentId&&context?.entity==='quotes'&&context.id)preview.load(context.id).catch(()=>{});
     else preview.toggle();
   };
-  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');await window.SmetraLoadFeature('knowledge');if(!active())return;await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
+  document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');if(!window.SmetraKnowledgePanel){await window.SmetraLoadFeature?.('knowledge');}if(!active()||!window.SmetraKnowledgePanel)throw Error('Не удалось загрузить панель памяти');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
   try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
   const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
