@@ -20,7 +20,7 @@ def amount(quantity, price):
     return result
 
 
-def plan(service, obj, change='0'):
+def plan(service, obj, change='0', needed_by='', site_city=''):
     change = decimal(change, 'Изменение будущих цен, %', '-100', '1000', places=2)
     materials = service.con.execute(
         'SELECT q.*,z.name AS zone_name FROM construction_quantities q '
@@ -109,6 +109,34 @@ def plan(service, obj, change='0'):
             item['procurement_budget'] = budget
             budgets.append(budget)
         items.append(item)
+    # User-entered supplier offers have their own protected finance scope.
+    # Missing stock, shipping or destination is never estimated or silently
+    # promoted to a verified "best" price.
+    if finance:
+        from backend.smart_procurement import compare, MAX_QUOTES_PER_MATERIAL
+        quote_rows = service.con.execute(
+            "SELECT * FROM construction_supplier_quotes WHERE workspace_id=? AND object_id=? "
+            "ORDER BY updated_at DESC,id LIMIT 200",
+            (service.wid, obj["id"]),
+        ).fetchall()
+        by_group = {}
+        for row in quote_rows:
+            group = by_id.get(row['material_id'])
+            if group is not None:
+                by_group.setdefault(group['id'], []).append(dict(row))
+        for item in items:
+            related = by_group.get(item['id'], [])
+            if related:
+                item['supplier_quotes'] = related
+                selection = related[:MAX_QUOTES_PER_MATERIAL]
+                item['supplier_comparison'] = compare(
+                    item['to_buy_quantity'], selection, needed_by=needed_by, site_city=site_city,
+                )
+                item['supplier_comparison']['quotes_truncated'] = len(related) > len(selection)
+        # Validate scenario even for empty plans, so malformed dates/cities
+        # never appear to have been accepted.
+        if not quote_rows:
+            compare('0', [], needed_by=needed_by, site_city=site_city)
     items.sort(key=lambda item: (Decimal(item['to_buy_quantity']) == 0, normalized(item['title']), item['id']))
     result = dict(
         object_id=obj['id'], object_name=obj['name'], generated_at=stamp(), price_change_percent=str(change),
