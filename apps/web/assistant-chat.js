@@ -1080,10 +1080,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }catch(error){if(fileStatus.isConnected&&sequence===filePollSeq){fileStatus.textContent=error.message;filePollTimer=setTimeout(refreshFile,15000)}}
   };
   refreshFile();
-  if(!thread.messages.length){
-    messages.innerHTML='<div class="assistant-welcome"><h2>С чего начнём?</h2><p>Опишите работы словами или прикрепите фото объекта — ассистент предложит позиции сметы. Суммы считает Сметра, а изменения сохраняются только после вашего подтверждения.</p><div class="assistant-suggestions"><button type="button" data-prompt="Составь смету на косметический ремонт комнаты 20 м²">'+assistantIcon('file-text',16)+'<span>Составить смету</span></button><button type="button" data-prompt="Какие сметы ожидают согласования?">'+assistantIcon('check',16)+'<span>Проверить согласования</span></button><button type="button" data-prompt="Покажи поступления и остатки по заказам.">'+assistantIcon('wallet',16)+'<span>Разобраться в оплатах</span></button></div></div>';
-    messages.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{input.value=button.dataset.prompt;saveDraft();input.focus();resize();syncSendButton();renderQuota(quota)});
-  }
+  // Empty chats start with a blank message area, never canned prompts.
   thread.messages.forEach(message=>addMessage(message.role,message.content,message.id));
   data.actions.filter(action=>(action.conversation_id||'')===activeConversation).forEach(addAction);
   (data.recent_actions||[]).filter(action=>action.undo_until&&(action.conversation_id||'')===activeConversation).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id)});
@@ -1142,7 +1139,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     prompt=input.value.trim();if(!prompt&&!pendingPhotos.length)return;
     const submitted=takeSubmittedDraft();
     working=true;cancelRequested=false;currentJobId=null;renderQuota(quota);stop.hidden=false;stop.disabled=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
-    messages.querySelector('.assistant-welcome')?.remove();messages.querySelectorAll('.assistant-error').forEach(node=>node.remove());
+    messages.querySelectorAll('.assistant-error').forEach(node=>node.remove());
     const sentPhotos=submitted.photos;
     const userMessage=addMessage('user',prompt||(sentPhotos.length?'Посмотри прикреплённые фотографии.':''));
     if(sentPhotos.length){const attached=document.createElement('small');attached.className='assistant-message-attachment';attached.textContent='Фото: '+sentPhotos.map(file=>file.name).join(', ');userMessage.body.append(attached)}
