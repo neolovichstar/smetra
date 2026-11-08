@@ -129,7 +129,7 @@
     (hostRoot||host).append(chip);
     const syncChip=()=>{chip.hidden=visible||!(current||draft||mode)};
     const WIDTH_KEY='smetra.preview.width';
-    const applyWidth=px=>{if(!hostRoot)return px;const max=Math.max(360,(hostRoot.clientWidth||window.innerWidth)*.68);const value=Math.round(Math.min(max,Math.max(340,px)));hostRoot.style.setProperty('--preview-w',value+'px');grip.setAttribute('aria-valuenow',String(value));return value};
+    const applyWidth=px=>{if(!hostRoot)return px;const max=Math.max(360,(hostRoot.clientWidth||window.innerWidth)*.68);const value=Math.round(Math.min(max,Math.max(340,px)));hostRoot.style.setProperty('--preview-saved-w',value+'px');grip.setAttribute('aria-valuenow',String(value));return value};
     try{const saved=Number(localStorage.getItem(WIDTH_KEY));if(saved>0)applyWidth(saved)}catch{}
     grip.addEventListener('pointerdown',event=>{
       if(event.button!==0||!hostRoot)return;event.preventDefault();grip.setPointerCapture(event.pointerId);hostRoot.classList.add('is-resizing');
@@ -139,7 +139,7 @@
       grip.addEventListener('pointermove',move);grip.addEventListener('pointerup',up);
     });
     grip.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const now=panel.getBoundingClientRect().width;const value=applyWidth(now+(event.key==='ArrowLeft'?32:-32));try{localStorage.setItem(WIDTH_KEY,String(value))}catch{}});
-    grip.addEventListener('dblclick',()=>{hostRoot?.style.removeProperty('--preview-w');try{localStorage.removeItem(WIDTH_KEY)}catch{}});
+    grip.addEventListener('dblclick',()=>{hostRoot?.style.removeProperty('--preview-saved-w');try{localStorage.removeItem(WIDTH_KEY)}catch{}});
     expand.onclick=()=>{const wide=!hostRoot?.classList.contains('is-preview-wide');hostRoot?.classList.toggle('is-preview-wide',wide);expand.setAttribute('aria-pressed',String(wide));expand.setAttribute('aria-label',wide?'Свернуть редактор':'Развернуть редактор');expand.title=wide?'Свернуть':'Развернуть'};
     let current=null,pending=null,visible=false,seq=0,loading=false,pickSeq=0;
     // New-estimate mode: an empty editor waits for the assistant; draft holds a
@@ -265,18 +265,47 @@
         if(request===pickSeq&&!loading&&!current)content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить сметы'));
       }
     };
+    let closeTimer=null;
     function setOpen(open){
-      visible=Boolean(open);
-      if(!visible){
-        // Invalidate earlier async load/picker promises; otherwise an old
-        // proposal re-opens a panel immediately after the user closes it.
-        ++seq;++pickSeq;loading=false;pending=null;configureVisible=false;
+      const next=Boolean(open);
+      if(closeTimer!==null){clearTimeout(closeTimer);closeTimer=null}
+      if(!next){
+        if(visible){
+          // Invalidate async loads so an old response cannot reopen a
+          // dismissed preview.
+          ++seq;++pickSeq;loading=false;pending=null;configureVisible=false;
+        }
+        visible=false;
+        // Collapse the grid track immediately; the CSS grid transition
+        // smoothly returns the entire chat and composer to their full width.
+        hostRoot?.classList.remove('has-quote-preview');
+        panel.setAttribute('aria-hidden','true');
+        panel.inert=true;
+        const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
+        if(!reducedMotion&&!panel.hidden){
+          panel.classList.add('is-closing');
+          closeTimer=setTimeout(()=>{
+            closeTimer=null;
+            if(!visible){panel.hidden=true;panel.classList.remove('is-closing')}
+          },260);
+        }else{
+          panel.hidden=true;
+          panel.classList.remove('is-closing');
+        }
+        syncChip();
+        onToggle?.(false);
+        if(panel.contains(document.activeElement))hostRoot?.querySelector('#assistant-input')?.focus({preventScroll:true});
+        return;
       }
-      panel.hidden=!visible;panel.setAttribute('aria-hidden',String(!visible));
-      hostRoot?.classList.toggle('has-quote-preview',visible);
+      visible=true;
+      panel.classList.remove('is-closing');
+      panel.hidden=false;
+      panel.inert=false;
+      panel.setAttribute('aria-hidden','false');
+      hostRoot?.classList.add('has-quote-preview');
       syncChip();
-      onToggle?.(visible);
-      if(visible)render();
+      onToggle?.(true);
+      render();
     }
     const load=async id=>{
       if(!id)return;
@@ -338,7 +367,7 @@
     const progress=text=>{progressText=String(text||'').slice(0,120);if(visible&&(draft||mode==='new'))paintStatus()};
     return {load,propose,design,refresh,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       clearProposal,
-      destroy:()=>{seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-w');chip.remove();panel.remove()},
+      destroy:()=>{if(closeTimer!==null)clearTimeout(closeTimer);seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-saved-w');chip.remove();panel.remove()},
       get currentId(){return current?.id||''}};
   }
   window.SmetraQuoteVisuals={mountAssistant,mountRooms,breakdown,serverAmounts,roomDiagram,money};
