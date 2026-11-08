@@ -158,7 +158,7 @@ def normalize_rule(data):
     expression = string(data.get("expression", ""), "Формула", 260, True)
     unit = string(data.get("unit", ""), "Единица", 40)
     defaults = data.get("defaults", {})
-    tree, names = _tree(expression)
+    _, names = _tree(expression)
     if not isinstance(defaults, dict) or len(defaults) > 12:
         raise DomainError(400, "Некорректные значения по умолчанию")
     if any(k not in names for k in defaults):
