@@ -57,7 +57,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 69
+REQUIRED_CLOUD_SCHEMA_VERSION = 71
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -157,6 +157,8 @@ def migrate():
         ensure_ai_tokens(con)
         from backend.public_profiles import ensure_schema as ensure_public_profiles
         ensure_public_profiles(con)
+        from backend.traffic import ensure_schema as ensure_traffic
+        ensure_traffic(con)
 
 
 def now():
@@ -524,7 +526,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if self.headers.get('Content-Type', '').split(';', 1)[0].strip().lower() != 'application/json':
                         raise ApiError(415, 'Отправьте данные в формате JSON')
                 root = path.split("/", 3)[2]
-                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox"}:
+                if root not in business.ROUTES | {"partners", "auth", "webhooks", "billing", "admin", "me", "profile", "support", "mobile", "cron", "shared-inbox", "public"}:
                     raise ApiError(404, "Не найдено")
                 if root == "cron":
                     if method != "GET" or path not in ("/api/cron/assistant", "/api/cron/push", "/api/cron/product-monitor", "/api/cron/cloud-sync", "/api/cron/maintenance"):
@@ -789,6 +791,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def api(self, method, path, query, con):
+        if path == "/api/public/visit" and method == "POST":
+            from backend.traffic import record as record_visit
+            self.throttle("traffic:" + hashlib.sha256(self.client_address[0].encode()).hexdigest(), 120, 3600)
+            data = self.body()
+            if not isinstance(data, dict) or set(data) != {"visitor_id", "page"}:
+                raise ApiError(400, "Некорректная статистика посещения")
+            try:
+                record_visit(con, data.get("visitor_id"), data.get("page"))
+            except (TypeError, ValueError, AttributeError):
+                raise ApiError(400, "Некорректный идентификатор посещения") from None
+            return self.send_json(200, {"ok": True})
         # Stable versioned public contract with aliases for existing pilot clients.
         if path.startswith("/api/partners/v1/"):
             path = "/api/partners/" + path[len("/api/partners/v1/"):]
@@ -1362,6 +1375,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_json(200, {"user": user_view(user, con)})
         if path == "/api/admin/revenue" and method == "GET":
             return self.send_json(200, revenue.dashboard(con))
+        if path == "/api/admin/traffic" and method == "GET":
+            from backend.traffic import overview as traffic_overview
+            return self.send_json(200, traffic_overview(con))
         if path == "/api/billing/events" and method == "POST":
             self.throttle('growth:'+user['id'], 60, 3600)
             data = self.body()
