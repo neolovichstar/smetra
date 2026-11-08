@@ -461,9 +461,12 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       try{
         const created=await api('/assistant/conversations',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({title:prompt.replace(/\s+/g,' ').trim().slice(0,120),...(context?{context_entity:context.entity,context_id:context.id}:{})})});
         if(!active())return;
+        const pendingDraftSlot=draftSlot();
         activeConversation=created.conversation.id;
         threadPath='/assistant/conversations/'+encodeURIComponent(activeConversation);
         sessionStorage.setItem('smetra.assistant.conversation',activeConversation);
+        try{sessionStorage.removeItem(pendingDraftSlot)}catch{}
+        saveDraft();
       }catch(error){
         if(active())status.textContent=error.message;
         working=false;stop.hidden=true;requestController=null;
