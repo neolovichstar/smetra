@@ -11,7 +11,9 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  const until=async expression=>{for(let i=0;i<120;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100))}throw Error(expression+'\n'+await evaluate('document.body.innerText'))};
  await send('Runtime.enable');await send('Page.enable');
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
- await send('Network.enable');await send('Network.deleteCookies',{name:'session',url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')});
+ // Cookie deletion needs no Network event subscription. Large attachment POST
+ // bodies would otherwise be copied into multi-megabyte CDP event frames.
+ await send('Network.deleteCookies',{name:'session',url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')});
  await send('Page.navigate',{url:'about:blank'});await until("location.href==='about:blank'&&document.readyState==='complete'");
  await send('Page.navigate',{url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')+'/app'});
  await until("document.querySelector('#auth-form')?.onsubmit && document.querySelector('#auth-login-tab')?.onclick");
