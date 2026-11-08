@@ -86,7 +86,13 @@ class GoogleLoginTests(unittest.TestCase):
                 {"sub": "1234567890123456789", "name": "Анна", "email": "anna@example.test", "email_verified": True, "picture": "https://evil.example/pic"},
             ]) as mock_remote:
                 result = identity.profile("google", "code", "state", "verifier", "https://smetra.online/api/auth/oauth/google/callback", "")
-            self.assertEqual(result, ("1234567890123456789", "Анна", "anna@example.test"))
+            self.assertEqual(result, ("1234567890123456789", "Анна", "anna@example.test", "https://evil.example/pic"))
+            # UserInfo picture is not used directly; only trusted Google hosts
+            # may be downloaded and processed by the isolated image decoder.
+            from backend.public_profiles import google_avatar_photo
+            with patch("backend.public_profiles.urllib.request.build_opener") as opener:
+                self.assertIsNone(google_avatar_photo(result[3]))
+                opener.assert_not_called()
             self.assertEqual(mock_remote.call_args_list[0].args[0], "https://oauth2.googleapis.com/token")
             self.assertEqual(mock_remote.call_args_list[1].kwargs["headers"]["Authorization"], "Bearer opaque-token")
             with patch("backend.identity.remote", side_effect=[
