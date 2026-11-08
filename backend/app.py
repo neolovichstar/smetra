@@ -664,6 +664,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
+            "/legal": ("legal.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
             "/disclaimer": ("disclaimer.html", "text/html"),
             "/refund": ("refund.html", "text/html"),
