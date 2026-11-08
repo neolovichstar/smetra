@@ -875,7 +875,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const autoOpenApprovedUi=(list,originalPrompt)=>{
     // Navigation is harmless but can interrupt the chat; do it only when the
     // person explicitly asked to open/show a panel. Never auto-start OAuth.
-    if(!Array.isArray(list)||!/(?:^|\\s)(?:открой|покажи|перейди|отобрази|разверни|запусти)(?:\\s|[,.!?:]|$)/iu.test(originalPrompt||''))return;
+    if(!Array.isArray(list)||!/(?:^|\s)(?:открой|покажи|перейди|отобрази|разверни|запусти)(?:\s|[,.!?:]|$)/iu.test(originalPrompt||''))return;
     const safe=new Set(['open_section','open_billing','open_quote','open_quote_editor','open_calculator']);
     const entry=list.find(item=>safe.has(item?.action)&&clientActionRun[item.action]);
     if(!entry)return;
