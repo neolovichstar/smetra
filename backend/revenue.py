@@ -131,7 +131,20 @@ def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None, 
     current_tier = PLAN_TIER.get(workspace["plan"], "starter")
     target_tier = PLAN_TIER.get(plan, "starter")
     if workspace["entitlement_until"] > now() and current_tier not in ("starter", target_tier):
-        raise ValueError("An active workspace cannot silently exchange its paid period for another tier")
+        # Admin/trial access can be granted without a payment. It must not
+        # prevent its owner from purchasing a real subscription. By contrast,
+        # never discard a provider-confirmed, non-refunded paid term by
+        # silently switching tiers.
+        legacy_workspace_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + user["id"]))
+        paid_term = con.execute(
+            "SELECT 1 FROM payments p JOIN billing_intents b ON b.payment_id=p.id "
+            "WHERE p.user_id=? AND (b.workspace_id=? OR (b.workspace_id IS NULL AND ?=?)) "
+            "AND b.is_test=0 AND p.status='succeeded' "
+            "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') LIMIT 1",
+            (user["id"], workspace_id, workspace_id, legacy_workspace_id),
+        ).fetchone()
+        if paid_term:
+            raise ValueError("Действующий оплаченный тариф нельзя заменить без сохранения уже оплаченного периода. Продлите текущий тариф или дождитесь окончания подписки.")
     offer = pricing(con, user)
     option = offer['plans'][plan]
     if expected_amount is not None and expected_amount != option['amount_kopecks']:
