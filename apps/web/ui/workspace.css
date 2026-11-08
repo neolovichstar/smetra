@@ -323,16 +323,22 @@
 @media (max-width:1100px){.catalog-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-plan:nth-child(3){border-left:0}.catalog-plan:nth-child(n+3){border-top:1px solid var(--line)}}
 @media (max-width:620px){.catalog-plan-grid{grid-template-columns:1fr}.catalog-plan+.catalog-plan{border-left:0;border-top:1px solid var(--line)}}
 
-/* Plans / Tokens switch */
-.billing-switch{display:inline-flex;align-self:flex-start;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface-1)}
-#content .billing-switch button{min-width:132px;min-height:40px;padding:0 16px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font-size:var(--fs-14);font-weight:500;box-shadow:none;transition:background-color var(--t-base) var(--ease),color var(--t-base) var(--ease)}
+/* Plans / Tokens switch: shared sliding thumb, no selected-button jump. */
+.billing-switch{position:relative;isolation:isolate;display:inline-grid;grid-template-columns:repeat(2,minmax(0,1fr));align-self:flex-start;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface-1)}
+.billing-switch::before{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 8px)/2);border-radius:var(--r-pill);background:var(--surface-inverse);pointer-events:none;z-index:0;transform:translateX(0);transition:transform 280ms cubic-bezier(.22,1,.36,1)}
+.billing-switch.is-tokens::before{transform:translateX(calc(100% + 2px))}
+#content .billing-switch button{position:relative;z-index:1;min-width:132px;min-height:40px;padding:0 16px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font-size:var(--fs-14);font-weight:500;box-shadow:none;transition:color 220ms ease}
 #content .billing-switch button:hover{color:var(--text)}
-#content .billing-switch button[aria-selected="true"]{background:var(--surface-inverse);color:var(--text-inverse)}
-#content .billing-switch button:focus-visible{outline:none;box-shadow:var(--focus-ring)}
-.billing-switch-thumb{display:none}
-#billing-plans{display:flex;flex-direction:column;gap:var(--s-5)}
+#content .billing-switch button[aria-selected="true"]{background:transparent;color:var(--text-inverse)}
+#content .billing-switch button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;box-shadow:none}
+#billing-plans,#billing-tokens{display:flex;flex-direction:column;gap:var(--s-5)}
 #billing-plans[hidden],#billing-tokens[hidden]{display:none}
-#billing-tokens{display:flex;flex-direction:column;gap:var(--s-5);animation:fade-in var(--t-base) var(--ease)}
+#billing-plans:not([hidden]),#billing-tokens:not([hidden]){animation:billing-panel-enter 230ms cubic-bezier(.22,1,.36,1) both}
+@keyframes billing-panel-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){
+  .billing-switch::before,#content .billing-switch button{transition:none}
+  #billing-plans:not([hidden]),#billing-tokens:not([hidden]){animation:none}
+}
 /* Tokens */
 .token-hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1);overflow:hidden}
 .token-balance{display:flex;flex-direction:column;gap:6px;padding:var(--s-6)}
