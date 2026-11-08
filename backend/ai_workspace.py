@@ -86,7 +86,9 @@ def _conversations(service, method, parts, data):
     if method == "GET" and not parts:
         rows = service.con.execute(
             "SELECT id,title,context_entity,context_id,pinned,created_at,updated_at "
-            "FROM assistant_conversations WHERE workspace_id=? AND user_id=? "
+            "FROM assistant_conversations c WHERE workspace_id=? AND user_id=? "
+            "AND (EXISTS (SELECT 1 FROM assistant_messages m WHERE m.conversation_id=c.id) "
+            "OR EXISTS (SELECT 1 FROM assistant_jobs j WHERE j.conversation_id=c.id)) "
             "ORDER BY pinned DESC,updated_at DESC LIMIT 50",
             (service.wid, service.user["id"]),
         ).fetchall()
