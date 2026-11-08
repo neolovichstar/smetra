@@ -270,6 +270,7 @@
       const next=Boolean(open);
       if(closeTimer!==null){clearTimeout(closeTimer);closeTimer=null}
       if(!next){
+        const restoreFocus=panel.contains(document.activeElement);
         if(visible){
           // Invalidate async loads so an old response cannot reopen a
           // dismissed preview.
@@ -294,7 +295,7 @@
         }
         syncChip();
         onToggle?.(false);
-        if(panel.contains(document.activeElement))hostRoot?.querySelector('#assistant-input')?.focus({preventScroll:true});
+        if(restoreFocus)hostRoot?.querySelector('#assistant-input')?.focus({preventScroll:true});
         return;
       }
       visible=true;
