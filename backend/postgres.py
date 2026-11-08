@@ -53,6 +53,7 @@ TABLES = TABLES | frozenset("partner_accounts partner_api_tokens partner_clicks 
 TABLES = TABLES | frozenset("ai_token_wallets ai_token_ledger assistant_bonus_grants assistant_bonus_usage".split())
 TABLES = TABLES | frozenset("public_profiles profile_search_terms profile_avatars".split())
 TABLES = TABLES | frozenset(["construction_supplier_quotes"])
+TABLES = TABLES | frozenset(["site_visits"])
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
