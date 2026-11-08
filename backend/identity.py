@@ -120,7 +120,13 @@ def profile(provider, code, state, verifier, callback, device):
         if user.get("email_verified") is not True or not isinstance(email, str) or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
             raise ValueError("Google email not verified")
         name = user.get("name")
-        return subject, name if isinstance(name, str) and name.strip() else "Пользователь", email
+        picture = user.get("picture")
+        return (
+            subject,
+            name if isinstance(name, str) and name.strip() else "Пользователь",
+            email,
+            picture if isinstance(picture, str) else "",
+        )
     if not device:
         raise ValueError('missing VK device binding')
     params.pop('code')
@@ -304,6 +310,14 @@ def route(h, con, method, path, query, origin):
         # Backward compatible with three-field VK provider responses.
         subject, name, email = details[:3]
         avatar_id = details[3] if len(details) > 3 and provider == "yandex" else None
+        google_photo = None
+        if provider == "google" and len(details) > 3:
+            # An unavailable photo never interrupts OAuth or account linking.
+            try:
+                from backend.public_profiles import google_avatar_photo
+                google_photo = google_avatar_photo(details[3])
+            except Exception:
+                google_photo = None
     except Exception:
         return redirect(h, origin + "/app?auth_error=provider")
     # All VK ID methods use the same VK application identity namespace.
@@ -362,6 +376,9 @@ def route(h, con, method, path, query, origin):
             )
         if avatar_id is not None:
             con.execute("UPDATE users SET avatar_id=? WHERE id=?", (avatar_id, user_id))
+        if google_photo:
+            from backend.public_profiles import save_google_avatar
+            save_google_avatar(con, user_id, google_photo)
         if (
             row["legal_acceptance"] == 1
             and row["legal_version"] == REGISTRATION_CONSENT_VERSION
