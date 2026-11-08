@@ -136,6 +136,9 @@ def calculate(expression, values=None, defaults=None):
         if not isinstance(name, str) or not IDENTIFIER.fullmatch(name) or name not in names:
             raise DomainError(400, "Неизвестная переменная")
     merged = {k: _decimal(v) for k, v in {**defaults, **values}.items()}
+    missing = [name for name in names if name not in merged]
+    if missing:
+        raise DomainError(400, "Укажите значение переменной " + missing[0])
     with localcontext() as ctx:
         ctx.prec = 28
         try:
