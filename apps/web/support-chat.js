@@ -28,7 +28,7 @@ window.SmetraSupport = (() => {
         <header class="tg-head">
           <button class="icon-button tg-back" type="button" id="support-back" aria-label="К списку обращений">${icon('arrow-left')}</button>
           <span class="tg-avatar tg-avatar-brand" aria-hidden="true">${icon('headset', 20)}</span>
-          <div class="tg-head-copy"><strong id="support-title">Поддержка Сметры</strong><small id="support-status">ИИ-помощник · отвечает за несколько секунд</small></div>
+          <div class="tg-head-copy"><strong id="support-title">Поддержка Сметры</strong><small id="support-status">ИИ-помощник · можно позвать сотрудника</small></div>
           <button class="btn small" type="button" id="support-handoff" hidden>${icon('user')}<span>Позвать сотрудника</span></button>
         </header>
         ${typeof emailNotice === 'function' ? emailNotice() : ''}
@@ -58,7 +58,7 @@ window.SmetraSupport = (() => {
     const welcome = () => `<div class="tg-welcome">
         <span class="tg-avatar tg-avatar-brand tg-avatar-lg" aria-hidden="true">${icon('headset', 28)}</span>
         <h2>Чем помочь?</h2>
-        <p>Опишите, что не получается. ИИ-помощник ответит сразу, а если вопрос требует проверки — передаст его сотруднику. История сохранится здесь.</p>
+        <p>Опишите, что не получается. Сначала ответит ИИ-помощник. Если нужна проверка сотрудника, он передаст обращение. Переписка сохранится здесь.</p>
         <div class="support-topics tg-chips">${topics.map(topic => `<button type="button" data-support-topic="${kit().esc(topic)}" aria-pressed="false">${kit().esc(topic)}</button>`).join('')}</div>
       </div>`;
 
@@ -72,7 +72,7 @@ window.SmetraSupport = (() => {
     const paintHead = () => {
       const c = state.current;
       title.textContent = c ? (c.subject || 'Обращение') : 'Поддержка Сметры';
-      status.textContent = !c ? 'ИИ-помощник · отвечает за несколько секунд'
+      status.textContent = !c ? 'ИИ-помощник · можно позвать сотрудника'
         : c.status === 'closed' ? 'Обращение закрыто'
         : c.needs_human ? 'Передано сотруднику · ответим здесь'
         : 'ИИ-помощник · можно позвать сотрудника';
@@ -80,14 +80,15 @@ window.SmetraSupport = (() => {
       handoff.hidden = !c || c.needs_human || c.status === 'closed';
       const closed = c?.status === 'closed';
       input.disabled = closed; syncSend();
-      input.placeholder = closed ? 'Обращение закрыто — создайте новое' : 'Сообщение…';
+      input.placeholder = closed ? 'Обращение закрыто. Создайте новое' : 'Сообщение…';
       root.classList.toggle('is-chat-open', Boolean(c) || root.classList.contains('is-composing'));
     };
 
-    const paintMessages = (extra = '') => {
+    const paintMessages = (extra = '', follow = true) => {
+      const scrollTop = log.scrollTop;
       if (!state.current && !state.messages.length) { log.innerHTML = welcome() + extra; bindTopics(); return; }
       log.innerHTML = kit().thread(state.messages, { showAuthors: true }) + extra;
-      log.scrollTop = log.scrollHeight;
+      log.scrollTop = follow ? log.scrollHeight : scrollTop;
     };
 
     const paintList = () => {
@@ -124,21 +125,22 @@ window.SmetraSupport = (() => {
     };
 
     const loadMessages = async (quiet = false) => {
-      const c = state.current; if (!c) return;
+      const c = state.current, targetRevision = threadRevision; if (!c) return;
       const data = await api('/support/threads/' + encodeURIComponent(c.id) + '/messages');
-      if (!active() || state.current?.id !== c.id) return;
+      if (!active() || threadRevision !== targetRevision || state.current?.id !== c.id) return;
       const next = toMessages(Array.isArray(data?.messages) ? data.messages : []);
       if (quiet && next.length === state.messages.length) return;
-      state.messages = next; paintMessages();
+      const follow = !quiet || log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+      state.messages = next; paintMessages('', follow);
     };
 
     const open = async id => {
-      threadRevision++;
+      const targetRevision = ++threadRevision;
       state.current = state.threads.find(t => t.id === id) || null;
       state.messages = []; paintList(); paintHead();
       log.innerHTML = '<div class="tg-loading" role="status">Загружаем переписку…</div>';
-      try { await loadMessages(); } catch (error) { if (active()) log.innerHTML = `<p class="tg-error" role="alert">${kit().esc(error.message)}</p>`; }
-      if (active() && matchMedia?.('(min-width:801px)')?.matches) input.focus({ preventScroll: true });
+      try { await loadMessages(); } catch (error) { if (active() && threadRevision === targetRevision) log.innerHTML = `<p class="tg-error" role="alert">${kit().esc(error.message)}</p>`; }
+      if (active() && threadRevision === targetRevision && matchMedia?.('(min-width:801px)')?.matches) input.focus({ preventScroll: true });
     };
 
     const fresh = () => {
@@ -155,12 +157,13 @@ window.SmetraSupport = (() => {
 
     handoff.onclick = async () => {
       const c = state.current; if (!c || handoff.disabled) return;
+      const targetRevision = threadRevision;
       const ok = await window.SmetraDialog.confirm({ title: 'Позвать сотрудника?', message: 'Обращение попадёт в очередь команды поддержки. Ответ придёт в эту переписку.', confirmLabel: 'Позвать' });
-      if (!ok || !active()) return;
+      if (!ok || !active() || threadRevision !== targetRevision || state.current?.id !== c.id) return;
       handoff.disabled = true;
       try {
         await api('/support/threads/' + encodeURIComponent(c.id) + '/handoff', { method: 'POST', body: JSON.stringify({ reason: 'user_requested_human' }) });
-        if (!active()) return;
+        if (!active() || threadRevision !== targetRevision || state.current?.id !== c.id) return;
         c.needs_human = true; paintHead(); await loadMessages(); await loadThreads();
       } catch (error) { notify(error.message); }
       finally { handoff.disabled = false; }

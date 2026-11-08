@@ -14,6 +14,11 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+try:
+    from backend.estimate_completeness import recommend as recommend_quote_costs
+except ModuleNotFoundError:
+    from estimate_completeness import recommend as recommend_quote_costs
+
 
 try:
     BUSINESS_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -1516,6 +1521,19 @@ class Service:
         raise DomainError(405, "Метод не поддерживается")
 
     def quotes(self, method, parts, query, data):
+        if method == "POST" and parts == ["recommendations"]:
+            # Preview only, never changes a quote or consumes an AI token.
+            self.h.throttle("quote-recommendations:" + self.user["id"], 90, 60)
+            items = data.get("items")
+            if not isinstance(items, list) or len(items) > 200:
+                raise DomainError(400, "В смете может быть до 200 позиций")
+            description = string(data.get("description", ""), "Описание", 8000)
+            for item in items:
+                if not isinstance(item, dict):
+                    raise DomainError(400, "Проверьте позиции сметы")
+                for field, limit in (("name", 200), ("category", 100), ("description", 3000)):
+                    string(item.get(field, ""), "Позиция", limit)
+            return 200, {"recommendations": recommend_quote_costs(items, description)}
         if not parts:
             if method == "POST":
                 return self.create_quote_request(data)

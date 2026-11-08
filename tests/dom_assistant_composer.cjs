@@ -466,11 +466,36 @@ async function setup(enabled=true,voice=false,remaining=3){
   assert.ok(question,'Clarifying question belongs to the chat');
   assert.match(question.textContent,/Какой материал выбрать/);
   assert.equal(question.querySelectorAll('.assistant-question-choice button').length,2);
+  type(w,doc,'Мой следующий черновик');question.querySelector('.assistant-question-choice button').click();await tick();
+  assert.equal(doc.querySelector('#assistant-input').value,'Мой следующий черновик','A choice must not overwrite an unsent draft');
+  assert.equal(requests.length,1,'Do not send or replace a different draft');
+  assert.ok(question.isConnected);
+  type(w,doc,'');
   question.querySelector('.assistant-question-choice button').click();
   await tick();await tick();
   assert.equal(doc.querySelector('.assistant-question-inline'),null,'Question choices close after replying');
   assert.equal(requests.length,2,'Choosing an option submits a new chat prompt');
   assert.equal(JSON.parse(requests[1].body).text,'Краска');
+  type(w,doc,'Теперь подбери материал для другой комнаты');doc.querySelector('#assistant-form').requestSubmit();
+  await tick();await tick();await tick();
+  assert.ok(doc.querySelector('.assistant-question-inline'),'A new request may ask the same question again');
+ });
+ await test('question choices remain available when the last answer exhausts the token balance',async({w,doc,requests})=>{
+  const result={answer:'Выберите материал.',actions:[],questions:[{question:'Какой материал?',options:['Краска','Штукатурка']}],quota:{remaining:0,limit:3,plan:'free',resets_at:2000000000}};
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify(result)+'\n\n'));controller.close()}})});
+  type(w,doc,'Подбери материал');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();await tick();
+  doc.querySelector('.assistant-question-choice button').click();await tick();await tick();
+  assert.ok(doc.querySelector('.assistant-question-inline'),'The unanswered question must stay visible');
+  assert.ok(doc.querySelector('.assistant-tokens-dialog'));
+  assert.equal(doc.querySelector('#assistant-input').value,'');assert.equal(requests.length,1);
+ });
+ await test('declining estimate consent does not discard question choices',async({w,doc,requests})=>{
+  const result={answer:'Выберите материал.',actions:[],questions:[{question:'Какой материал?',options:['Краска','Штукатурка']}],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}};
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify(result)+'\n\n'));controller.close()}})});
+  type(w,doc,'Подбери материал');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();await tick();
+  w.SmetraEstimateSafety={ensureConsent:async()=>false};
+  doc.querySelector('.assistant-question-choice button').click();await tick();await tick();
+  assert.ok(doc.querySelector('.assistant-question-inline'));assert.equal(requests.length,1);
  });
  await test('pending proposals are scoped to their conversation and old creation cards do not return',async({w,doc})=>{
   const original=w.api;const thread={id:'thread-a',title:'A',context_entity:'',context_id:''};

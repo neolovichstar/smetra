@@ -261,6 +261,6 @@
         if (!Array.isArray(data.plans) || !data.plans.length) throw Error();
         plans = data.plans; render();
       })
-      .catch(() => { plansHost.innerHTML = '<p class="plans-loading">Не удалось загрузить цены. Актуальная стоимость всегда показана в кабинете перед оплатой.</p>'; });
+      .catch(() => { plansHost.innerHTML = '<p class="plans-loading">Не удалось загрузить цены. Откройте раздел "Тариф и оплата" в кабинете, чтобы посмотреть стоимость.</p>'; });
   }
 })();
