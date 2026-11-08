@@ -847,22 +847,54 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(!result?.authorize_url)throw Error('Сервис не вернул ссылку авторизации');
       location.assign(result.authorize_url);
     },
-    open_section:async item=>{tab=item.section;location.hash=item.section;await window.render()},
-    open_billing:async()=>{tab='billing';location.hash='billing';await window.render()},
-    open_quote:async item=>{tab='quotes';location.hash='quotes';await window.render();await window.Workspace?.openQuote?.(item.quote_id)},
+    open_section:async item=>window.SmetraNavigateTo(item.section),
+    open_billing:async()=>window.SmetraNavigateTo('billing'),
+    open_quote:async item=>{
+      await window.SmetraNavigateTo('quotes');
+      if(typeof window.Workspace?.openQuote!=='function')throw Error('Просмотр сметы недоступен');
+      await window.Workspace.openQuote(item.quote_id);
+    },
     open_quote_editor:async item=>openQuoteEditor(item.quote_id),
-    open_calculator:async item=>{try{sessionStorage.setItem('smetra.calculator.open',item.calculator)}catch{}tab='calculators';location.hash='calculators';await window.render()},
+    open_calculator:async item=>{
+      try{sessionStorage.setItem('smetra.calculator.open',item.calculator)}catch{}
+      await window.SmetraNavigateTo('calculators');
+    },
+  };
+  const explicitNavigation=/^\s*(?:пожалуйста[, ]*)?(?:открой|покажи|перейди|переключись|отобрази|разверни)\b/iu;
+  const sectionFromRequest=text=>{
+    if(!explicitNavigation.test(text||''))return null;
+    const sections=[
+      ['billing',/\b(?:подписк\w*|тариф\w*|оплат\w*|биллинг)\b/iu],
+      ['settings',/\bнастройк\w*/iu],
+      ['profile',/\bпрофил\w*/iu],
+      ['inbox',/\bполученн\w*\s+смет\w*/iu],
+      ['construction',/\bстроительств\w*|\bобъект\w*/iu],
+      ['quotes',/\bсмет\w*/iu],
+      ['files',/\bхранилищ\w*|\bфайл\w*/iu],
+      ['calendar',/\bкалендар\w*/iu],
+      ['tasks',/\bзадач\w*/iu],
+      ['projects',/\bзаказ\w*/iu],
+      ['clients',/\bклиент\w*/iu],
+      ['finance',/\bфинанс\w*/iu],
+      ['documents',/\bдокумент\w*/iu],
+      ['support',/\bподдержк\w*/iu],
+      ['calculators',/\bкалькулятор\w*/iu],
+    ];
+    const matches=sections.filter(([,pattern])=>pattern.test(text));
+    // Never guess when an instruction mentions multiple different pages.
+    return matches.length===1?{action:'open_section',section:matches[0][0]}:null;
   };
   const autoOpenApprovedUi=(list,originalPrompt)=>{
-    // Navigation is harmless but can interrupt the chat; do it only when the
-    // person explicitly asked to open/show a panel. Never auto-start OAuth.
-    if(!Array.isArray(list)||!/(?:^|\s)(?:открой|покажи|перейди|отобрази|разверни|запусти)(?:\s|[,.!?:]|$)/iu.test(originalPrompt||''))return;
+    // Only the user's explicit request may trigger a navigation. The AI's
+    // answer text alone never changes pages, and OAuth never auto-starts.
+    if(!explicitNavigation.test(originalPrompt||''))return;
     const safe=new Set(['open_section','open_billing','open_quote','open_quote_editor','open_calculator']);
-    const entry=list.find(item=>safe.has(item?.action)&&clientActionRun[item.action]);
+    const entry=(Array.isArray(list)?list:[]).find(item=>safe.has(item?.action)&&clientActionRun[item.action])
+      ||sectionFromRequest(originalPrompt);
     if(!entry)return;
     setTimeout(()=>{
       if(!active()||!messages.isConnected)return;
-      Promise.resolve(clientActionRun[entry.action](entry)).catch(error=>notify(error.message||'Не удалось открыть инструмент'));
+      Promise.resolve(clientActionRun[entry.action](entry)).catch(error=>notify(error.message||'Не удалось открыть раздел'));
     },0);
   };
   const renderClientActions=(item,list)=>{
