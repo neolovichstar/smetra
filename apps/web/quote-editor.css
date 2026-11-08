@@ -186,3 +186,38 @@
   .workspace-page #content:has(#estimate-editor) .editor-aside .btn[type=submit]{padding:9px 10px;font-size:11px}
 }
 @media(prefers-reduced-motion:reduce){.workspace-page #content:has(#estimate-editor) #estimate-editor :is(input,textarea,.select-trigger),.workspace-page #content:has(#estimate-editor) .editor-layout summary:after{transition:none}}
+
+/* Context-based, non-billable suggestions for missed estimate costs. */
+.workspace-page #content:has(#estimate-editor) .editor-recommendations{
+  margin:19px 0 23px;padding:19px 20px 6px;border:1px solid #343434;
+  border-radius:12px;background:#151515;color:#eaeaea;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendations[hidden]{display:none}
+.workspace-page #content:has(#estimate-editor) .editor-recommendations-heading strong{font-size:14px;font-weight:650}
+.workspace-page #content:has(#estimate-editor) .editor-recommendations-heading p{
+  margin:6px 0 12px;color:#a4a4a4;font-size:12px;line-height:1.55;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation{
+  display:flex;align-items:center;justify-content:space-between;gap:17px;
+  padding:14px 0;border-top:1px solid #303030;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-details{min-width:0}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-details strong{font-size:12px;font-weight:600}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-details p{
+  margin:5px 0 0;color:#9d9d9d;font-size:11px;line-height:1.55;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-actions{
+  display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-actions .btn{
+  min-height:35px;padding:7px 11px;border-color:#555;color:#f2f2f2;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-dismiss{
+  min-height:35px;padding:7px 6px;border:0;background:transparent;color:#aaa;font-size:11px;
+}
+.workspace-page #content:has(#estimate-editor) .editor-recommendation-dismiss:hover{color:#fff}
+@media(max-width:700px){
+  .workspace-page #content:has(#estimate-editor) .editor-recommendations{padding:15px 15px 4px}
+  .workspace-page #content:has(#estimate-editor) .editor-recommendation{align-items:stretch;flex-direction:column;gap:12px}
+  .workspace-page #content:has(#estimate-editor) .editor-recommendation-actions{justify-content:flex-start;flex-wrap:wrap}
+}
