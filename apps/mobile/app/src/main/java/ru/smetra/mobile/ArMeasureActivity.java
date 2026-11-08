@@ -74,6 +74,8 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
     private FloatBuffer quadBuffer, uvBuffer;
     private final float[] view = new float[16], projection = new float[16], mvp = new float[16];
     private int width, height;
+    private final float[] planeModel = new float[16], planeMvp = new float[16];
+    private int wallCount, floorCount, frameCount;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -112,7 +114,7 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
         GradientDrawable ring = new GradientDrawable();
         ring.setShape(GradientDrawable.OVAL);
         ring.setStroke(dp(2), 0xFFFFFFFF);
-        ring.setColor(0x334C8DFF);
+        ring.setColor(0x33C9FFDF);
         mark.setBackground(ring);
         return mark;
     }
@@ -146,6 +148,7 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
         roomName.setTextColor(0xFFF5F5F4);
         roomName.setHintTextColor(0xFF8A8A88);
         roomName.setSingleLine(true);
+        roomName.setVisibility(View.GONE);
         panel.addView(roomName);
         manualHeight = new EditText(this);
         manualHeight.setHint("Высота вручную, м (например 2,7)");
@@ -182,7 +185,8 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
                     if (i < 2) lines.append("   ");
                 }
                 lines.append("\nПомещений добавлено: ").append(rooms.length())
-                    .append(". Замер приблизительный — проверьте размеры перед импортом.");
+                    .append(". Найдено стен: ").append(wallCount).append(", пол: ").append(floorCount > 0 ? "найден" : "ищу")
+                    .append(".\nПрямоугольная комната. Сверьте размеры рулеткой перед сохранением.");
                 readout.setText(lines.toString());
                 if (!tracking) hint.setText("Медленно поводите телефоном, чтобы камера нашла пол и стены");
                 else if (step < 3) hint.setText("Наведите круг на " + (anchors.size() % 2 == 0 ? "начало" : "конец") + " — " + STEP_NAMES[step].toLowerCase(Locale.ROOT)
@@ -191,13 +195,17 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
                 addPoint.setEnabled(tracking && step < 3);
                 addPoint.setAlpha(addPoint.isEnabled() ? 1f : .5f);
                 manualHeight.setVisibility(step == 2 ? View.VISIBLE : View.GONE);
-                next.setText(step >= 3 ? "Добавить" : step == 2 ? "Без высоты" : rooms.length() > 0 ? "Готово" : "Отмена");
+                next.setText(step >= 3 ? "Проверить" : step == 2 ? "Ввести высоту" : rooms.length() > 0 ? "Готово" : "Отмена");
             }
         });
     }
 
     private void undo() {
         synchronized (this) {
+            if (step == 3 && anchors.size() < 6) {
+                step = 2; lengths[2] = 0;
+                refresh(); return;
+            }
             if (!anchors.isEmpty()) {
                 if (anchors.size() % 2 == 0 && step > 0) { step--; lengths[step] = 0; }
                 anchors.remove(anchors.size() - 1).detach();
@@ -219,6 +227,8 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
                 } catch (NumberFormatException error) { hint.setText("Введите высоту или измерьте её двумя точками"); return; }
             } else if (step >= 3) {
                 addRoom();
+                finishWithRooms();
+                return;
             } else {
                 finishWithRooms();
                 return;
@@ -330,6 +340,7 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
         if (current == null) return;
         try {
             current.setCameraTextureName(cameraTexture);
+            current.setDisplayGeometry(getWindowManager().getDefaultDisplay().getRotation(), width, height);
             Frame frame = current.update();
             if (frame.hasDisplayGeometryChanged()) {
                 frame.transformCoordinates2d(Coordinates2d.OPENGL_NORMALIZED_DEVICE_COORDINATES, quad, Coordinates2d.TEXTURE_NORMALIZED, quadUv);
@@ -339,14 +350,16 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
             Camera camera = frame.getCamera();
             boolean nowTracking = camera.getTrackingState() == TrackingState.TRACKING;
             if (nowTracking != tracking) { tracking = nowTracking; refresh(); }
-            if (!nowTracking) return;
+            if (!nowTracking) { synchronized (this) { placeRequested = false; } return; }
             camera.getViewMatrix(view, 0);
             camera.getProjectionMatrix(projection, 0, 0.05f, 50f);
             Matrix.multiplyMM(mvp, 0, projection, 0, view, 0);
+            drawSurfaces(current);
             boolean place;
             synchronized (this) { place = placeRequested; placeRequested = false; }
             if (place) place(frame);
             drawMarks();
+            if (++frameCount % 30 == 0) refresh();
         } catch (Exception ignored) {
             // A dropped frame is harmless; the next one retries.
         }
@@ -370,8 +383,14 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
             anchors.add(anchor);
             if (anchors.size() % 2 == 0) {
                 Pose a = anchors.get(anchors.size() - 2).getPose(), b = anchor.getPose();
-                float dx = a.tx() - b.tx(), dy = a.ty() - b.ty(), dz = a.tz() - b.tz();
-                lengths[step] = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+                float measured = ArMeasurementGeometry.distance(step, a.tx(), a.ty(), a.tz(), b.tx(), b.ty(), b.tz());
+                if (!Float.isFinite(measured)) {
+                    anchors.remove(anchors.size() - 1).detach();
+                    final String message = step == 2 ? "Поставьте верхнюю точку над нижней. Высота от 0,5 до 100 м." : "Поставьте точки на одной высоте. Длина от 0,5 до 100 м.";
+                    runOnUiThread(() -> hint.setText(message));
+                    return;
+                }
+                lengths[step] = measured;
                 step++;
             }
         }
@@ -417,12 +436,51 @@ public final class ArMeasureActivity extends Activity implements GLSurfaceView.R
         GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 0, vertices);
         GLES20.glEnableVertexAttribArray(position);
         GLES20.glLineWidth(6f);
-        GLES20.glUniform4f(GLES20.glGetUniformLocation(lineProgram, "u_Color"), 0.30f, 0.55f, 1f, 1f);
+        GLES20.glUniform4f(GLES20.glGetUniformLocation(lineProgram, "u_Color"), .79f, 1f, .87f, 1f);
         GLES20.glDrawArrays(GLES20.GL_LINES, 0, points.length / 3 - (points.length / 3) % 2);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(lineProgram, "u_Size"), 28f);
         GLES20.glUniform4f(GLES20.glGetUniformLocation(lineProgram, "u_Color"), 1f, 1f, 1f, 1f);
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, points.length / 3);
         GLES20.glDisableVertexAttribArray(position);
+    }
+
+    /** Draw only ARCore's tracked plane polygons. No synthetic coverage or walls. */
+    private void drawSurfaces(Session current) {
+        int walls = 0, floors = 0, drawn = 0;
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+        GLES20.glDepthMask(false);
+        GLES20.glUseProgram(lineProgram);
+        int position = GLES20.glGetAttribLocation(lineProgram, "a_Position");
+        int color = GLES20.glGetUniformLocation(lineProgram, "u_Color");
+        for (Plane plane : current.getAllTrackables(Plane.class)) {
+            if (drawn >= 32 || plane.getSubsumedBy() != null || plane.getTrackingState() != TrackingState.TRACKING) continue;
+            FloatBuffer polygon = plane.getPolygon();
+            int count = Math.min(polygon.remaining() / 2, 256);
+            if (count < 3) continue;
+            boolean wall = plane.getType() == Plane.Type.VERTICAL;
+            if (wall) walls++;
+            else if (plane.getType() == Plane.Type.HORIZONTAL_UPWARD_FACING) floors++;
+            float[] vertices = new float[count * 3];
+            for (int i = 0; i < count; i++) { vertices[i * 3] = polygon.get(); vertices[i * 3 + 2] = polygon.get(); }
+            plane.getCenterPose().toMatrix(planeModel, 0);
+            Matrix.multiplyMM(planeMvp, 0, mvp, 0, planeModel, 0);
+            GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(lineProgram, "u_Mvp"), 1, false, planeMvp, 0);
+            FloatBuffer data = buffer(vertices);
+            GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 0, data);
+            GLES20.glEnableVertexAttribArray(position);
+            GLES20.glUniform4f(color, wall ? .66f : 1f, wall ? .96f : 1f, wall ? .78f : 1f, wall ? .24f : .08f);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, count);
+            GLES20.glUniform4f(color, .79f, 1f, .87f, wall ? .72f : .26f);
+            GLES20.glLineWidth(2f);
+            GLES20.glDrawArrays(GLES20.GL_LINE_LOOP, 0, count);
+            drawn++;
+        }
+        synchronized (this) { wallCount = walls; floorCount = floors; }
+        GLES20.glDisableVertexAttribArray(position);
+        GLES20.glDepthMask(true);
+        GLES20.glDisable(GLES20.GL_BLEND);
     }
 
     private static FloatBuffer buffer(float[] values) {

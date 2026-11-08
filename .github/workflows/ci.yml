@@ -64,6 +64,7 @@ jobs:
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_app_actions.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_native_bridge.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_tabbar.cjs
+          SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_ar_scan.cjs
           SMETRA_JSDOM_MODULE="$PWD/data/dom/node_modules/jsdom" node tests/dom_ux.cjs
       - run: python scripts/build_web.py
       - uses: actions/upload-artifact@v4
@@ -189,6 +190,8 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Native session isolation under delayed work
         run: |
+          javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/ArMeasurementGeometry.java tests/ArMeasurementGeometryTest.java
+          java -cp data/native-session-tests ru.smetra.mobile.ArMeasurementGeometryTest
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeSessionWork.java tests/NativeSessionWorkTest.java
           java -cp data/native-session-tests ru.smetra.mobile.NativeSessionWorkTest
           javac -d data/native-session-tests apps/mobile/app/src/main/java/ru/smetra/mobile/NativeImageSize.java tests/NativeImageSizeTest.java

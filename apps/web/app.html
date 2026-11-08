@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/ui/assistant.css?v=20261108-chat-history3">
   <link rel="stylesheet" href="/ui/modules.css?v=20261108-suppliers1">
   <link rel="stylesheet" href="/ui/tools.css?v=20261108-controls3">
+  <link rel="stylesheet" href="/ui/ar-scan.css?v=20261108-ar1">
   <script src="/ui/native.js?v=20261026-r21"></script>
   <script src="/ui/icons.js?v=20261026-r21"></script>
   <script src="/ui/dialog.js?v=20261026-r21"></script>
@@ -161,7 +162,8 @@
     <aside id="sidebar" class="sidebar" aria-label="Рабочие разделы">
       <div class="sidebar-scroll">
         <div class="sidebar-group"><span class="sidebar-heading">Работа с ИИ</span><button data-tab="assistant" class="active">Ассистент</button><button data-tab="quotes">Сметы</button><button data-tab="inbox">Полученные сметы</button></div>
-        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
+        <div class="sidebar-group"><span class="sidebar-heading">Объекты и файлы</span><button data-tab="construction">Объекты и замеры</button><button data-tab="files">Хранилище</button><button data-tab="documents">Документы</button><button data-tab="chats">Чаты объектов</button></div>
+        <div class="sidebar-group sidebar-group-secondary"><span class="sidebar-heading">Аккаунт</span><button data-tab="changelog">Что нового</button><button data-tab="billing">Тариф и оплата</button><button data-tab="support">Поддержка</button><button data-tab="settings">Настройки</button><button data-tab="admin" id="admin-nav" class="hidden">Админ</button></div>
       </div>
       <div class="sidebar-foot">
         <button id="sidebar-profile" class="sidebar-profile-trigger" data-tab="profile" type="button" aria-label="Открыть профиль">
@@ -179,14 +181,14 @@
       <button type="button" data-tab="quotes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h7M9 17h7"/></svg><span>Сметы</span></button>
       <button type="button" data-tab="assistant" class="tabbar-primary"><span class="tabbar-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z"/><path d="m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg></span><span>Ассистент</span></button>
       <button type="button" data-tab="billing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg><span>Тариф</span></button>
-      <button type="button" id="tabbar-more" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>Ещё</span></button>
+      <button type="button" id="tabbar-ar" data-tab="ar-scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><path d="m7 9 2-2h6l2 2v8H7z"/><circle cx="12" cy="12" r="2.5"/></svg><span>AR Скан</span></button>
     </nav>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/features.js?v=20261108-bugs1" defer></script>
+  <script src="/features.js?v=20261108-ar1" defer></script>
   <script src="/select-menu.js?v=20261026-r21" defer></script>
   <script src="/public-profile-ui.js?v=20261027-profiles1" defer></script>
-  <script src="/app.js?v=20261108-chat-history3" defer></script>
+  <script src="/app.js?v=20261108-ar1" defer></script>
   <script src="/workspace.js?v=20261108-costs1" defer></script>
   <script src="/workspace-vault.js?v=20261028-release-svg2" defer></script>
   <script src="/field-flows.js?v=20261028-geometry2" defer></script>
@@ -197,7 +199,7 @@
   <script src="/product-ui.js?v=20261026-r21" defer></script>
 <script src="/support-chat.js?v=20261108-bugs1" defer></script>
 <script src="/communication-center.js?v=20261028-quote-mail1" defer></script>
-<script src="/ui/tabbar.js?v=20261108-workbench1" defer></script>
+<script src="/ui/tabbar.js?v=20261108-ar1" defer></script>
 <script src="/ui/ux.js?v=20261026-r21" defer></script>
 </body>
 </html>
