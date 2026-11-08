@@ -1,5 +1,6 @@
 /* Run with an isolated Smetra server and Chrome CDP. Exercises price editing in the real web UI. */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 (async () => {
   const site = 'http://localhost:' + (process.env.SMETRA_TEST_PORT || '8082');
   const debuggerUrl = 'http://127.0.0.1:' + (process.env.SMETRA_CDP_PORT || '9223') + '/json';

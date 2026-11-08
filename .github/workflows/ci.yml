@@ -173,6 +173,7 @@ jobs:
             data/qa/section-*.png
             data/qa/ar-scan-*.png
             data/qa/account-*.png
+            data/qa/support-*.png
             data/qa/procurement-*.png
             data/qa/growth-*.png
             data/qa/quote-review-*.png
