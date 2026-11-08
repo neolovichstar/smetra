@@ -69,14 +69,6 @@
 .assistant-studio:not(.has-conversation) .assistant-main-column{justify-content:center}
 .assistant-studio:not(.has-conversation) .assistant-content{flex:0 1 auto;min-height:0;overflow-y:auto;padding-top:0;padding-bottom:var(--s-5)}
 
-.assistant-welcome{display:flex;flex-direction:column;align-items:center;gap:var(--s-3);text-align:center;animation:view-enter 420ms var(--ease) both}
-.assistant-welcome h2{font-size:clamp(26px,3.2vw,34px);font-weight:600;letter-spacing:var(--tracking-display)}
-.assistant-welcome p{max-width:56ch;color:var(--text-2);font-size:var(--fs-15)}
-.assistant-suggestions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:var(--s-3)}
-.assistant-suggestions button{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px;border:1px solid var(--line-strong);border-radius:var(--r-pill);color:var(--text-2);font-size:var(--fs-14);transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
-.assistant-suggestions button:hover{background:var(--surface-2);color:var(--text);border-color:color-mix(in srgb,var(--text) 25%,transparent)}
-.assistant-suggestions svg{width:16px;height:16px;color:var(--text-3)}
-
 /* Messages */
 .assistant-message{position:relative;display:flex;flex-direction:column;gap:6px;min-width:0;animation:message-in 280ms var(--ease) both}
 @keyframes message-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
