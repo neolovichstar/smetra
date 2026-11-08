@@ -103,6 +103,7 @@ def build():
     # Catch broken /disclaimer and /refund links at build time rather than in production.
     rewrites = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))["rewrites"]
     for route, filename in {
+        "/legal": "legal.html",
         "/terms": "terms.html",
         "/privacy": "privacy.html",
         "/contacts": "contacts.html",
