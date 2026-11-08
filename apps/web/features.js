@@ -1,11 +1,15 @@
 /* Optional screens load when opened; failed loads remain retryable. */
 (() => {
+  // In-flight loads only. A script whose execution did not initialize its API
+  // must be reloadable; retaining an already fulfilled Promise made Retry useless.
   const pending=new Map();
+  const attempts=new Map();
 
   const features={
     markdown:{ready:()=>!!window.SmetraMarkdown,files:['/vendor/markdown-it-15.0.2.min.js?v=20261026-r21','/chat-markdown.js?v=20261108-ai1']},
     quoteVisuals:{ready:()=>!!window.SmetraQuoteVisuals&&!!window.SmetraQuoteLayout,files:['/quote-layout-renderer.js?v=20261108-designer1','/quote-visual-core.js?v=20261108-designer1']},
-    assistant:{ready:()=>!!window.SmetraAssistant&&!!window.SmetraKnowledgePanel,deps:['markdown','quoteVisuals'],files:['/assistant-clipboard.js?v=20261028-audio1','/assistant-chat.js?v=20261108-fast1','/ai-workspace.js?v=20261108-memory1']},
+    assistant:{ready:()=>!!window.SmetraAssistant,deps:['markdown'],files:['/assistant-clipboard.js?v=20261109-recovery1','/assistant-chat.js?v=20261109-recovery1']},
+    knowledge:{ready:()=>!!window.SmetraKnowledgePanel,files:['/ai-workspace.js?v=20261109-recovery1']},
     profile:{ready:()=>!!window.SmetraProfile,files:['/profile-ui.js?v=20261108-compact1']},
     dataExport:{ready:()=>!!window.SmetraDataExport,files:['/data-export.js?v=20261026-r21']},
     construction:{ready:()=>!!window.SmetraConstruction&&!!window.SmetraProcurementPlan,deps:['quoteVisuals'],files:['/procurement-plan.js?v=20261108-suppliers1','/construction.js?v=20261108-compact1']},
@@ -21,21 +25,45 @@
   };
   const load=source=>{
     if(pending.has(source))return pending.get(source);
+    const attempt=(attempts.get(source)||0)+1;
+    attempts.set(source,attempt);
     const request=new Promise((resolve,reject)=>{
-      const script=document.createElement('script');script.src=source;script.async=false;
-      const timer=setTimeout(()=>fail(),15000);
-      const fail=()=>{clearTimeout(timer);script.remove();pending.delete(source);reject(Error('Не удалось загрузить раздел. Проверьте интернет и повторите попытку.'))};
-      script.onload=()=>{clearTimeout(timer);resolve()};script.onerror=fail;document.head.append(script);
+      const script=document.createElement('script');
+      // A cached but partially evaluated script must not strand the page
+      // indefinitely. On retries ask for a fresh response.
+      script.src=attempt===1?source:source+(source.includes('?')?'&':'?')+'recovery='+attempt;
+      script.async=false;
+      let settled=false;
+      const finish=error=>{
+        if(settled)return;
+        settled=true;clearTimeout(timer);
+        if(error){script.remove();reject(error)}
+        else resolve();
+      };
+      const timer=setTimeout(()=>finish(Error('Раздел загружается слишком долго. Повторите попытку.')),10000);
+      script.onload=()=>finish();
+      script.onerror=()=>finish(Error('Не удалось загрузить раздел. Проверьте интернет и повторите попытку.'));
+      document.head.append(script);
     });
-    pending.set(source,request);return request;
+    pending.set(source,request);
+    // Do not retain either resolved or rejected loads. Otherwise onload can
+    // fire without the JS evaluating, and Retry will forever reuse that result.
+    void request.then(
+      ()=>{if(pending.get(source)===request)pending.delete(source)},
+      ()=>{if(pending.get(source)===request)pending.delete(source)}
+    );
+    return request;
   };
   window.SmetraLoadFeature=async name=>{
     const feature=features[name];if(!feature)throw Error('Раздел не найден');
     if(feature.ready())return;
     for(const dependency of feature.deps||[])await window.SmetraLoadFeature(dependency);
-    // Ordered classic scripts retain execution order while fetching concurrently.
     await Promise.all(feature.files.map(load));
-    if(!feature.ready())throw Error('Не удалось открыть раздел. Повторите попытку.');
+    if(feature.ready())return;
+    // One fresh retry for an asset that fetched successfully but failed to
+    // initialize (including a stale HTTP/browser cache entry).
+    await Promise.all(feature.files.map(load));
+    if(!feature.ready())throw Error('Не удалось запустить раздел. Повторите попытку.');
   };
   let warmed=false;
   window.SmetraWarmFeatures=()=>{
