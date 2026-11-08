@@ -14,6 +14,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
   const until=async expression=>{for(let attempt=0;attempt<100;attempt++){if(await evaluate(expression))return;await wait(100)}throw Error('Timeout: '+expression)};
   await send('Page.enable');await send('Runtime.enable');await send('Network.enable');
   await send('Network.deleteCookies',{name:'session',url:site});
+  await send('Page.navigate',{url:'about:blank'});await until("location.href==='about:blank'&&document.readyState==='complete'");
   await send('Page.navigate',{url:site+'/app'});
   await until("document.querySelector('#auth-form')?.onsubmit");
   await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");

@@ -86,6 +86,10 @@ probe and provider fallback drills remain operational release checks.
   are checked again after updating their obsolete eager-conversation assumptions.
 - Ruff, web build/CSP hash validation, dependency audit and focused security
   regressions passed. The dependency audit found no known advisories at this run.
+- The live Supabase security advisor returned no WARN/ERROR entries and 73 INFO
+  entries for RLS-enabled tables without policies. Those entries require reading
+  the actual grants and service-role boundary; they are not a security
+  certification. [Advisor explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
 - Android debug/release assembly and lint passed. JVM cryptography tests passed.
   A separately named QA package on an API-35 emulator passed actual Android
   Keystore storage, nonce freshness, session binding, tamper rejection and

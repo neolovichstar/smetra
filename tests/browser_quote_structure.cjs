@@ -15,7 +15,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  await until("document.querySelector('#auth-form')?.onsubmit&&!document.querySelector('#auth').classList.contains('hidden')");
  await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-form').onsubmit({preventDefault(){}})");
  await until("!!document.querySelector('#assistant-form')?.onsubmit");
- await evaluate("(async()=>{const history=(await api('/assistant/conversations')).items.find(item=>item.title==='История прежнего чата');if(!history)throw Error('Seeded structure conversation missing');sessionStorage.setItem('smetra.assistant.conversation',history.id);await window.SmetraAssistant()})()");await until("document.querySelector('.assistant-proposal')?.textContent.includes('Добавить позиции')");
+ await evaluate("(async()=>{const history=(await api('/assistant')).actions.find(item=>item.conversation_id);if(!history)throw Error('Seeded structure conversation missing');sessionStorage.setItem('smetra.assistant.conversation',history.conversation_id);await window.SmetraAssistant()})()");await until("document.querySelector('.assistant-proposal')?.textContent.includes('Добавить позиции')");
  const quote=await evaluate("api('/quotes').then(r=>r.quotes.find(q=>q.title==='Айдентика и упаковка'))");
  const read=()=>evaluate(`api('/quotes/${quote.id}').then(r=>r.quote)`);
  const original=await read();assert.equal(original.items.length,1);

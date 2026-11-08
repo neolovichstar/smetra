@@ -249,12 +249,13 @@ def main():
         if structure_qa or resource_qa:
             with app.db() as con:
                 con.execute("UPDATE users SET plan='pro',entitlement_until=? WHERE email=?", (int(time.time()) + 3600, 'android-design@test.invalid'))
+        seed_thread = call('/assistant/conversations', {'title': 'Проверка изменений'}, token)['conversation']['id']
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-not-a-real-key"), patch(
             "backend.assistant.query_model",
             return_value={"content": None, "tool_calls": [{"id": "fixture-bulk", "type": "function",
                 "function": {"name": seed_tool, "arguments": json.dumps(seed_args)}}]},
         ):
-            call("/assistant/chat", {"text": "Увеличь цену на 10%"}, token)
+            call("/assistant/chat", {"text": "Увеличь цену на 10%", "conversation_id": seed_thread}, token)
         # Deterministic streaming exercises the real quota/history/context routes;
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
