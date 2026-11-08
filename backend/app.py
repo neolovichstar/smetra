@@ -1552,7 +1552,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
             try:
                 intent = revenue.prepare_intent(con,user,key,plan,data.get('source'),mode=='test',expected_amount, data.get('workspace_id'))
-            except ValueError:
+            except ValueError as exc:
+                if str(exc).startswith('Действующий оплаченный тариф'):
+                    raise ApiError(409, str(exc)) from None
                 raise ApiError(409,'Условия оплаты изменились. Обновите страницу тарифа.') from None
             amount = intent['amount_kopecks']
             request = {
