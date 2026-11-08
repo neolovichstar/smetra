@@ -198,6 +198,26 @@ class IdentityAssistantTests(unittest.TestCase):
         connection.close()
         return result
 
+    def test_google_login_returns_verified_account_profile_photo(self):
+        from backend.identity import profile
+        account = {
+            "sub": "123456789012345", "email_verified": True,
+            "email": "google-avatar@example.test", "name": "Google User",
+            "picture": "https://lh3.googleusercontent.com/a/test-picture=s96-c",
+        }
+        with patch.dict(os.environ, GOOGLE_AUTH_CLIENT_ID="test-google", GOOGLE_AUTH_CLIENT_SECRET="test-secret"), patch(
+            "backend.identity.remote",
+            side_effect=[{"access_token": "test-access"}, account],
+        ):
+            found = profile(
+                "google", "code", "state", "verifier",
+                "https://smetra.online/api/auth/oauth/google/callback", "",
+            )
+        self.assertEqual(
+            found,
+            ("123456789012345", "Google User", "google-avatar@example.test", account["picture"]),
+        )
+
     def test_yandex_avatar_claim_is_propagated_without_trusting_picture_urls(self):
         from backend.identity import profile
         from backend.app import user_view
