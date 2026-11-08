@@ -41,6 +41,12 @@ except ModuleNotFoundError:
     )
 
 
+try:
+    from backend.estimate_completeness import recommend
+except ModuleNotFoundError:
+    from estimate_completeness import recommend
+
+
 def available():
     return bool(os.getenv("OPENROUTER_API_KEY"))
 
@@ -317,6 +323,7 @@ def _draft(service, data):
                 "description": draft_description,
                 "terms": draft_terms,
                 "items": validated_items,
+                "recommendations": recommend(validated_items, prompt),
                 "ai_draft_usage_id": usage_id,
             },
             "requires_review": True,
