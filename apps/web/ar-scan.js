@@ -220,7 +220,15 @@ window.SmetraARScan = (() => {
     };
     if (window.SmetraShell?.available) {
       await window.SmetraShell.ready;if (!active()) return;
-      try {const info = await window.SmetraShell.call('ar.status');if (!active()) return;if (info.status === 'supported') {void startNative();return;}} catch {}
+      try {
+        let info;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          info = await window.SmetraShell.call('ar.status', {}, {timeout: 3000});if (!active()) return;
+          if (info.status !== 'checking') break;
+          state('Проверяю поддержку AR на телефоне…');await new Promise(resolve => setTimeout(resolve,250));if (!active()) return;
+        }
+        if (info.status === 'supported') {void startNative();return;}
+      } catch {}
     }
     await openCamera();
   }

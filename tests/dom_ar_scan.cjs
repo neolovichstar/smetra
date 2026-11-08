@@ -29,6 +29,10 @@ async function setup({capture,native}={}){
   assert.deepEqual(nativeCalls,['ar.status','ar.measure']);assert.equal(camera.length,0);assert.equal(calls.length,0);
   nativeResult.resolve({rooms:[{name:'Кухня',length:'4',width:'3',height:'2.7',source:'arcore'}]});await tick();await tick();assert.equal(d.querySelector('.ar-review').hidden,false);assert.equal(d.querySelector('input[name=length]').value,'4');assert.equal(calls.filter(c=>c.options.method==='POST').length,0);
  },{native:{available:true,ready:Promise.resolve(),call:async op=>{nativeCalls.push(op);return op==='ar.status'?{status:'supported'}:nativeResult.promise}}});
+ let availabilityChecks=0,measurements=0;
+ await test('a transient ARCore availability check is retried before choosing manual camera mode',async({camera})=>{
+  assert.equal(availabilityChecks,2);assert.equal(measurements,1);assert.equal(camera.length,0);
+ },{native:{available:true,ready:Promise.resolve(),call:async op=>{if(op==='ar.status')return{status:++availabilityChecks===1?'checking':'supported'};measurements++;return new Promise(()=>{})}}});
  await test('dimensions require review and a server preview before an import',async({d,calls})=>{
   d.querySelector('[data-ar-manual]').click();await tick();await tick();
   for(const [name,value]of Object.entries({name:'Комната',length:'4',width:'3',height:'2.7',openings_m2:'1'}))d.querySelector('[name='+name+']').value=value;
