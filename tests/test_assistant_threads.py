@@ -180,6 +180,10 @@ class AssistantThreadTests(unittest.TestCase):
             self.assertEqual(self.call('/assistant/conversations', 'POST', {'adopt_general': True}, owner)[0], 409)
             self.assertEqual(self.call('/assistant/conversations/general', 'DELETE', token=owner)[0], 409)
         with patch.dict(os.environ, ASSISTANT_WORKER_SECRET='isolated-worker-secret-0123456789', OPENROUTER_API_KEY='test-only'):
-            self.assertEqual(self.call('/assistant/jobs', 'POST', {'text': 'Фоновая задача'}, owner, key='general-job')[0], 202)
-            self.assertEqual(self.call('/assistant/conversations', 'POST', {'adopt_general': True}, owner)[0], 409)
-            self.assertEqual(self.call('/assistant/conversations/general', 'DELETE', token=owner)[0], 409)
+            code, saved = self.call('/assistant/jobs', 'POST', {'text': 'Фоновая задача'}, owner, key='general-job')
+            self.assertEqual(code, 202)
+            self.assertTrue(saved['job']['conversation_id'])
+            # New jobs are no longer attached to the anonymous general thread;
+            # its independent operations cannot cancel or adopt this job.
+            self.assertEqual(self.call('/assistant/conversations', 'POST', {'adopt_general': True}, owner)[0], 201)
+            self.assertEqual(self.call('/assistant/conversations/general', 'DELETE', token=owner)[0], 200)
