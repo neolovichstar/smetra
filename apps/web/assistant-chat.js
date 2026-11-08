@@ -253,7 +253,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     usageRing.querySelector('.assistant-usage-fill').setAttribute('stroke-dasharray',pct+' 100');
     const label=`Лимиты ассистента: использовано ${pct}%${reset?', сброс '+reset:''}`;
     usageRing.setAttribute('aria-label',label);usageRing.title=label;
-    const row=(name,meta,percent,cls)=>`<div class="assistant-usage-row"><div class="assistant-usage-row-head"><span>${name}</span><span class="assistant-usage-meta">${meta}</span></div><div class="assistant-usage-bar ${cls||''}"><span style="width:${percent}%"></span></div></div>`;
+    const row=(name,meta,percent,cls)=>`<div class="assistant-usage-row"><div class="assistant-usage-row-head"><span>${name}</span><span class="assistant-usage-meta">${meta}</span></div><progress class="assistant-usage-bar ${cls||''}" max="100" value="${percent}" aria-label="${name}"></progress></div>`;
     usagePanel.innerHTML=`<div class="assistant-usage-head"><span>Лимиты ассистента · ${plan}</span><a href="/app#billing" data-usage-more>${tokens?'Подробнее':'Тарифы'} <span aria-hidden="true">→</span></a></div>`
       +row(tokens?'Токены за месяц':'Запросы за месяц',`${reset?'Сброс '+reset+' · ':''}${pct} %`,pct,level)
       +`<p class="assistant-usage-note">Осталось ${num(left)}${tokens?' токенов':''}${wallet?` · из них на балансе ${num(wallet)}`:''}</p>`;
