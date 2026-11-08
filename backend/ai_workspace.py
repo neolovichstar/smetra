@@ -295,8 +295,14 @@ def active_rules(service):
         "SELECT title,content FROM workspace_knowledge WHERE workspace_id=? AND kind='rule' AND enabled=1 "
         "ORDER BY updated_at DESC LIMIT 5", (service.wid,),
     ).fetchall()
-    # Owner-curated rules are user preferences, subordinate to the safety prompt.
-    return "\n".join(f"{row['title']}: {row['content'][:800]}" for row in rows)[:3000]
+    # Curated human rules are preferences. Machine-readable calculator data
+    # must never be injected into the assistant's instruction context.
+    from backend.smart_formulas import PREFIX
+
+    return "\n".join(
+        f"{row['title']}: {row['content'][:800]}"
+        for row in rows if not row["content"].startswith(PREFIX)
+    )[:3000]
 
 
 def find_knowledge(service, query=""):

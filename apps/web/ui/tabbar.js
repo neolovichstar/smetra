@@ -11,7 +11,7 @@
   more.addEventListener('click', () => toggle.click());
   const sync = () => {
     const open = document.body.classList.contains('nav-open');
-    const route = location.hash.slice(1) || 'dashboard';
+    const route = location.hash.slice(1) || 'assistant';
     more.setAttribute('aria-expanded', String(open));
     more.classList.toggle('active', open || !direct.has(route.split(/[/?]/)[0]));
     bar.querySelectorAll('[data-tab]').forEach(button => {

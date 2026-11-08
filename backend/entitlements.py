@@ -33,6 +33,7 @@ PLAN_TIER = {
 TIER_RANK = {"starter": 0, "pro_solo": 1, "pro_plus": 2, "team": 3}
 FEATURE_MINIMUM_TIER = {
     "visual_estimates": "pro_plus",
+    "smart_formulas": "pro_solo",
     "product_monitor": "pro_plus",
     "cloud_drives": "pro_plus",
     "team_management": "team",

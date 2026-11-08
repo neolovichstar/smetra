@@ -13,7 +13,13 @@ const assert = require('node:assert/strict');
   const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true,userGesture:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value};
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
   const until=async expression=>{for(let n=0;n<80;n++){if(await evaluate(expression))return;await wait(100)}throw Error('Timeout: '+expression+'\n'+await evaluate('document.body.innerText.slice(-1600)'))};
-  const click=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  const click=selector=>{
+    // QA still verifies legacy deep-link routes, even though the new AI-first
+    // sidebar no longer exposes separate buttons for every manual module.
+    const match=selector.match(/^\[data-tab=([a-z-]+)\]$/);
+    if(!match)return evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+    return evaluate(`(async()=>{const el=document.querySelector(${JSON.stringify(selector)});if(el){el.click();return;}tab=${JSON.stringify(match[1])};location.hash=${JSON.stringify(match[1])};await renderNavigation()})()`);
+  };
   const fill=(selector,value)=>evaluate(`{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}`);
   const shot=async name=>{fs.mkdirSync('data/qa',{recursive:true});fs.writeFileSync('data/qa/'+name+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'))};
   await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
@@ -44,10 +50,12 @@ const assert = require('node:assert/strict');
     await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
     await send('Page.navigate',{url:site+'/app#dashboard'});
   }
+  await until("document.querySelector('#shell')&&!document.querySelector('#shell').classList.contains('hidden')");
+  await evaluate("tab='dashboard';location.hash='dashboard';renderNavigation()");
   await until("document.querySelector('[data-work=quote-new]')");
   await until("document.querySelector('#capture-text')?.dataset.autogrow && document.querySelector('.sidebar-disclosure')");
   const navIconAudit=await evaluate("(()=>[...document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')].map(button=>({tab:button.dataset.tab,svg:button.querySelectorAll(':scope > svg').length,dataIcon:button.getAttribute('data-ui-icon'),before:getComputedStyle(button,'::before').content})))()");
-  assert.ok(navIconAudit.length>=10,'Primary navigation items are present');
+  assert.ok(navIconAudit.length>=6,'Primary navigation items are present');
   assert.ok(navIconAudit.every(item=>item.svg===1&&item.dataIcon===null&&item.before==='none'),'Each primary navigation item has exactly one canonical SVG and no generated icon: '+JSON.stringify(navIconAudit));
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.workspace-home .capture-panel')).backgroundColor"),'rgba(0, 0, 0, 0)','Dashboard composer stays on the canvas instead of a giant grey slab');
   assert.equal(await evaluate("document.querySelector('.workspace-home .capture-panel').getBoundingClientRect().bottom <= document.querySelector('.workspace-home .dashboard-metrics').getBoundingClientRect().top"),true,'Dashboard metrics never overlap the composer');
@@ -64,23 +72,19 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,'Visible icon rail remains keyboard accessible');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('#sidebar')).transitionDuration)>0"),true,'Sidebar collapse animates');
   await until("document.body.classList.contains('sidebar-compact')&&parseFloat(getComputedStyle(document.querySelector('.app-shell')).gridTemplateColumns.split(' ')[0])<=70");
-  assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-item-icon').length>=10"),true,'Navigation labels collapse while SVG icons remain');
+  assert.equal(await evaluate("document.querySelectorAll('#sidebar .sidebar-item-icon').length>=6"),true,'Navigation labels collapse while SVG icons remain');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('.app-shell')).gridTemplateColumns.split(' ')[0])<=70"),true,'Main content expands into the available width');
   await click('#sidebar-collapse');
   await until("!document.body.classList.contains('sidebar-compact')");
   assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,'Expanded sidebar remains accessible');
-  // Library starts expanded; make sure it is open before checking the collapse.
-  if(await evaluate("document.querySelector('[aria-controls=sidebar-group-2]').getAttribute('aria-expanded')")!=='true')await click('[aria-controls=sidebar-group-2]');
-  assert.equal(await evaluate("document.querySelector('[aria-controls=sidebar-group-2]').getAttribute('aria-expanded')"),'true');
-  await click('[aria-controls=sidebar-group-2]');
-  await until("getComputedStyle(document.querySelector('#sidebar-group-2')).visibility==='hidden'");
-  assert.equal(await evaluate("document.querySelector('[aria-controls=sidebar-group-2]').getAttribute('aria-expanded')"),'false');
+  // Compact navigation exposes only assistant, estimates and account routes.
+  assert.equal(await evaluate("(()=>{const titles=[...document.querySelectorAll('#sidebar .sidebar-heading')].map(x=>x.textContent.trim());return titles.includes('Работа с ИИ')&&titles.includes('Аккаунт')})()"),true,'AI-first groups replace the old manual sidebar');
   await fill('#capture-text','First line\nSecond line\nThird line\nFourth line');
   assert.equal(await evaluate("document.querySelector('#capture-text').getBoundingClientRect().height>44"),true);
   await fill('#capture-text','');
   await click('[data-tab=support]');await until("document.querySelector('#support-form')");
   await evaluate('history.back()');await until("['','#dashboard'].includes(location.hash)&&document.querySelector('#capture-text')?.dataset.autogrow");
-  assert.equal(await evaluate("document.querySelector('[data-tab=dashboard]').classList.contains('active')"),true,'Browser Back updates sidebar and screen');
+  assert.equal(await evaluate("tab==='dashboard'"),true,'Browser Back updates sidebar and screen');
   await evaluate('history.forward()');await until("location.hash==='#support'&&document.querySelector('#support-form')");
   await evaluate("location.hash='content'");await wait(100);assert.equal(await evaluate("!!document.querySelector('#support-form')"),true,'Skip link keeps current section');
   await click('[data-tab=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
@@ -97,7 +101,7 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("new DOMParser().parseFromString(assistantMarkdown('| Item | Price |\\n| --- | ---: |\\n| **Work** | 100 |'),'text/html').querySelectorAll('tbody td').length"),2);
   assert.equal(await evaluate("new DOMParser().parseFromString(assistantMarkdown('| Item | Price |\\n| --- | --- |\\n| <img src=x onerror=alert(1)> | 100 |'),'text/html').querySelector('img')===null"),true);
   await click('[data-tab=dashboard]');await until("document.querySelector('#capture-text')?.dataset.autogrow");
-  assert.equal(await evaluate("document.querySelector('[data-tab=dashboard]').classList.contains('active')"),true);
+  assert.equal(await evaluate("tab==='dashboard'"),true);
   for(const width of [320,390]){
     await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await wait(200);
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);

@@ -85,7 +85,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   view(`<section class="assistant-page assistant-refined assistant-studio${collapsedTools?' assistant-tools-collapsed':''}${historyExpanded?' is-history-expanded':''}">
     <div class="assistant-main-column">
       <header class="assistant-header" hidden><span id="assistant-quota" class="assistant-quota"></span></header>
-      <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Знания ассистента"></dialog>
+      <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Память ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
       <div class="assistant-composer"><div id="assistant-decision-slot" class="assistant-decision-slot" aria-live="polite"></div><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
@@ -99,7 +99,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
           <button class="btn small assistant-tool-new" id="assistant-new-thread" type="button" aria-label="Новый диалог" title="Новый диалог">${assistantIcon('plus')}<span class="assistant-tool-label">Новый диалог</span></button>
           <button class="btn small assistant-history-toggle" id="assistant-history-toggle" type="button" aria-label="Показать историю диалогов" title="История диалогов" aria-expanded="false" aria-controls="assistant-history-panel">${assistantIcon('chat')}<span class="assistant-tool-label">История</span></button>
           <button class="btn small assistant-tool-quotes" id="assistant-quotes" type="button" aria-label="Сметы" title="Сметы" aria-expanded="false" aria-controls="smetra-quote-preview">${assistantIcon('file-text')}<span class="assistant-tool-label">Сметы</span></button>
-          <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="База знаний" title="База знаний" aria-expanded="false" aria-controls="assistant-knowledge-panel">${assistantIcon('book')}<span class="assistant-tool-label">Знания</span></button>
+          <button class="btn small assistant-tool-knowledge" id="assistant-knowledge" type="button" aria-label="Память" title="Память" aria-expanded="false" aria-controls="assistant-knowledge-panel">${assistantIcon('book')}<span class="assistant-tool-label">Знания</span></button>
         </div>
         <section class="assistant-history-panel" id="assistant-history-panel" aria-label="История диалогов">
           <div class="assistant-history-heading" id="assistant-history-heading"><span>Диалоги</span><span class="assistant-history-count">${threadIndex.items.length}</span></div>
@@ -872,6 +872,18 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     open_quote_editor:async item=>openQuoteEditor(item.quote_id),
     open_calculator:async item=>{try{sessionStorage.setItem('smetra.calculator.open',item.calculator)}catch{}tab='calculators';location.hash='calculators';await window.render()},
   };
+  const autoOpenApprovedUi=(list,originalPrompt)=>{
+    // Navigation is harmless but can interrupt the chat; do it only when the
+    // person explicitly asked to open/show a panel. Never auto-start OAuth.
+    if(!Array.isArray(list)||!/(?:^|\s)(?:открой|покажи|перейди|отобрази|разверни|запусти)(?:\s|[,.!?:]|$)/iu.test(originalPrompt||''))return;
+    const safe=new Set(['open_section','open_billing','open_quote','open_quote_editor','open_calculator']);
+    const entry=list.find(item=>safe.has(item?.action)&&clientActionRun[item.action]);
+    if(!entry)return;
+    setTimeout(()=>{
+      if(!active()||!messages.isConnected)return;
+      Promise.resolve(clientActionRun[entry.action](entry)).catch(error=>notify(error.message||'Не удалось открыть инструмент'));
+    },0);
+  };
   const renderClientActions=(item,list)=>{
     if(!item||!Array.isArray(list)||!list.length)return;
     const bar=document.createElement('div');bar.className='assistant-client-actions';bar.setAttribute('role','group');bar.setAttribute('aria-label','Действия в приложении');
@@ -932,7 +944,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const note=document.createElement('div');note.className='assistant-memory-note';
     const text=document.createElement('span');
     text.textContent=[saved.length?'Память обновлена: '+saved.join(', '):'',forgotten.length?'Удалено из памяти: '+forgotten.join(', '):''].filter(Boolean).join(' · ');
-    const manage=document.createElement('button');manage.type='button';manage.textContent='Управлять';
+    const manage=document.createElement('button');manage.type='button';manage.textContent='Посмотреть';
     manage.onclick=()=>{const panel=document.querySelector('#assistant-knowledge-panel');if(panel)panel.dataset.scope='personal';document.querySelector('#assistant-knowledge')?.click()};
     note.innerHTML=assistantIcon('book',14);note.append(text,manage);item.append(note);
   };
@@ -1216,7 +1228,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0]);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
         if(kind==='background'){setActivity('Выполняю запрос…');status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error||'Не удалось завершить ответ')}
       };

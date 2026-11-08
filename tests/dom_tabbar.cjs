@@ -4,7 +4,7 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 (async()=>{
  const html=fs.readFileSync('apps/web/app.html','utf8');
  const bar=html.match(/<nav id="mobile-tabbar"[\s\S]*?<\/nav>/)[0];
- assert.deepEqual([...bar.matchAll(/data-tab="([a-z]+)"/g)].map(m=>m[1]),['dashboard','quotes','assistant','construction'],'Tab bar keeps the four primary sections');
+ assert.deepEqual([...bar.matchAll(/data-tab="([a-z]+)"/g)].map(m=>m[1]),['profile','quotes','assistant','billing'],'Tab bar keeps assistant, estimates and account controls available');
  assert.ok(/id="tabbar-more"[^>]*aria-controls="sidebar"/.test(bar),'«Ещё» opens the full section list');
  assert.ok(html.indexOf('/ui/tabbar.js')>html.indexOf('/app.js'),'Tab bar script loads after the router');
  const dom=new JSDOM(`<!doctype html><body><button id="nav-toggle"></button>${bar}<input id="field"></body>`,{runScripts:'outside-only',url:'https://smetra.online/app#clients'});
