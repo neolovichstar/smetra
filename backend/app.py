@@ -56,7 +56,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 67
+REQUIRED_CLOUD_SCHEMA_VERSION = 69
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -664,8 +664,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "/app": ("app.html", "text/html"),
             "/admin": ("admin.html", "text/html"),
             "/privacy": ("privacy.html", "text/html"),
+            "/legal": ("legal.html", "text/html"),
             "/terms": ("terms.html", "text/html"),
             "/disclaimer": ("disclaimer.html", "text/html"),
+            "/refund": ("refund.html", "text/html"),
             "/contacts": ("contacts.html", "text/html"),
             "/change.html": ("change.html", "text/html"),
             "/change.css": ("change.css", "text/css"),

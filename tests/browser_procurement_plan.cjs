@@ -68,6 +68,15 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("document.querySelector('.procurement-material header strong strong')===null"), true);
   assert.match(await evaluate("document.querySelector('.procurement-material').innerText"), /Кухня.*Гостиная|Гостиная.*Кухня/s);
   assert.match(await evaluate("document.querySelector('.procurement-budget').innerText"), /246,00/);
+
+  // Enter a real supplier quote through the UI; do not fabricate online availability.
+  assert.equal(await evaluate("!document.querySelector('[data-procurement-offer-form]').hidden"),true);
+  await evaluate("(()=>{const f=document.querySelector('[data-procurement-offer-form]');f.elements.supplier_name.value='ООО <Поставщик>';f.elements.unit_price_rub.value='12';f.elements.stock_quantity.value='6';f.elements.delivery_rub.value='3';f.elements.delivery_days.value='2';f.elements.delivery_city.value='Москва';f.requestSubmit()})()");
+  await until("document.querySelector('.procurement-best-title')?.innerText.includes('75,00')");
+  assert.equal(await evaluate("document.querySelector('.procurement-offer-line strong')?.textContent"),'ООО <Поставщик>');
+  assert.equal(await evaluate("document.querySelector('.procurement-offer-line strong span')===null"),true);
+  assert.match(await evaluate("document.querySelector('.procurement-comparison').innerText"),/Доставка|доставка/);
+
   await evaluate("document.querySelector('[data-procurement-filter]').click()");
   await until("document.querySelectorAll('.procurement-material').length===1");
   await evaluate("const input=document.querySelector('.procurement-scenario input');input.value='10';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.procurement-scenario [type=submit]').click()");

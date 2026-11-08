@@ -248,5 +248,130 @@ class ProcurementPlanTests(unittest.TestCase):
         self.assertEqual(result['procurement_budget']['unpriced_groups'], 0)
 
 
+    def quote(self, token, obj, material, name, price, stock='10', shipping=0, **other):
+        payload = {
+            'material_id': material, 'supplier_name': name, 'unit_price_kopecks': price,
+            'stock_quantity': stock, 'min_order_quantity': '0',
+            'delivery_kopecks': shipping, 'delivery_days': 2,
+            'delivery_city': 'Москва', **other,
+        }
+        code, data = self.call('/construction/objects/' + obj + '/supplier-quotes',
+                               'POST', payload, token)
+        self.assertEqual(code, 201, data)
+        return data['quote']['id']
+
+    def test_smart_supplier_total_includes_delivery_not_commission(self):
+        owner, _ = self.account('smart-price')
+        obj = self.object(owner)
+        material = self.material(owner, obj, quantity='10')
+        self.quote(owner, obj, material, 'Магазин А', 39000, shipping=30000)
+        self.quote(owner, obj, material, 'Магазин Б', 35000, shipping=180000)
+        compare = self.report(owner, obj)['materials'][0]['supplier_comparison']
+        self.assertEqual(compare['best']['suppliers'][0]['supplier'], 'Магазин А')
+        self.assertEqual(compare['best']['products_kopecks'], 390000)
+        self.assertEqual(compare['best']['delivery_kopecks'], 30000)
+        self.assertEqual(compare['best']['total_kopecks'], 420000)
+        self.assertEqual(compare['saving_vs_next_kopecks'], 110000)
+
+    def test_smart_supplier_split_when_no_single_offer_fills_stock(self):
+        owner, _ = self.account('smart-split')
+        obj = self.object(owner)
+        material = self.material(owner, obj, quantity='10')
+        self.quote(owner, obj, material, 'Первый', 30000, stock='6', shipping=10000)
+        self.quote(owner, obj, material, 'Второй', 32000, stock='4', shipping=10000)
+        result = self.report(owner, obj)['materials'][0]['supplier_comparison']['best']
+        self.assertEqual(result['kind'], 'split')
+        self.assertEqual(result['total_kopecks'], 328000)
+        self.assertEqual(sum(Decimal(x['quantity']) for x in result['suppliers']), Decimal('10'))
+
+    def test_smart_supplier_missing_data_is_never_a_free_delivery(self):
+        owner, _ = self.account('smart-unknown')
+        obj = self.object(owner)
+        material = self.material(owner, obj)
+        self.quote(owner, obj, material, 'Цена без доставки', 100, shipping=None)
+        self.quote(owner, obj, material, 'Неизвестный остаток', 100, stock=None)
+        result = self.report(owner, obj)['materials'][0]['supplier_comparison']
+        self.assertIsNone(result['best'])
+        self.assertEqual(len(result['excluded']), 2)
+        self.assertEqual(result['uncovered_quantity'], '10.0000')
+
+    def test_smart_supplier_destination_expiry_and_deadline(self):
+        import datetime as dt
+        from backend.business import business_date
+        owner, _ = self.account('smart-due')
+        obj = self.object(owner)
+        material = self.material(owner, obj)
+        self.quote(owner, obj, material, 'Из другого города', 100, delivery_city='Тула')
+        self.quote(owner, obj, material, 'Приедет поздно', 100, delivery_days=9)
+        self.quote(owner, obj, material, 'Вовремя', 200, delivery_days=1)
+        target = (business_date() + dt.timedelta(days=2)).isoformat()
+        code, data = self.call('/construction/objects/' + obj +
+            '/procurement-plan?site_city=%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&needed_by=' + target, token=owner)
+        self.assertEqual(code, 200, data)
+        comp = data['materials'][0]['supplier_comparison']
+        self.assertEqual(comp['best']['suppliers'][0]['supplier'], 'Вовремя')
+        self.assertEqual(len(comp['excluded']), 2)
+
+    def test_smart_supplier_minimum_order_increases_real_cost(self):
+        owner, _ = self.account('smart-minimum')
+        obj = self.object(owner)
+        material = self.material(owner, obj, quantity='3')
+        self.quote(owner, obj, material, 'Опт', 500, stock='100', shipping=0, min_order_quantity='10')
+        result = self.report(owner, obj)['materials'][0]['supplier_comparison']['best']
+        self.assertEqual(result['purchased_quantity'], '10')
+        self.assertEqual(result['total_kopecks'], 5000)
+
+    def test_smart_supplier_crud_does_not_cross_workspace_or_leak_cost(self):
+        owner, _ = self.account('smart-owner')
+        outsider, _ = self.account('smart-outsider')
+        obj = self.object(owner)
+        material = self.material(owner, obj)
+        quote_id = self.quote(owner, obj, material, 'Стройбаза', 4000, stock='10', shipping=1200)
+        base = '/construction/objects/' + obj + '/supplier-quotes'
+        self.assertEqual(self.call(base, 'POST', {
+            'material_id': material, 'supplier_name': 'Атакующий',
+            'unit_price_kopecks': 1, 'stock_quantity': '10', 'delivery_kopecks': 0,
+        }, outsider)[0], 404)
+        self.assertEqual(self.call(base + '/' + quote_id, 'DELETE', token=outsider)[0], 404)
+        owner_row = self.report(owner, obj)['materials'][0]
+        self.assertEqual(owner_row['supplier_quotes'][0]['id'], quote_id)
+        status, modified = self.call(base + '/' + quote_id, 'PATCH', {
+            'unit_price_kopecks': 3600,
+        }, owner)
+        self.assertEqual(status, 200, modified)
+        self.assertEqual(self.report(owner, obj)['materials'][0]['supplier_comparison']['best']['total_kopecks'], 37200)
+        self.assertEqual(self.call(base + '/' + quote_id, 'DELETE', token=owner)[0], 200)
+        self.assertNotIn('supplier_comparison', self.report(owner, obj)['materials'][0])
+
+    def test_smart_supplier_finance_revocation_hides_private_quotes(self):
+        owner, member, member_id, wid = self.team('smart-revocation', granted=True)
+        obj = self.object(owner)
+        material = self.material(owner, obj)
+        self.quote(owner, obj, material, 'Тайная закупочная цена', 19763)
+        self.assertIn('supplier_comparison', self.report(member, obj, workspace=wid)['materials'][0])
+        self.grant(owner, member_id, False)
+        result = self.report(member, obj, workspace=wid)
+        self.assertNotIn('supplier_quotes', json.dumps(result))
+        self.assertNotIn('supplier_comparison', json.dumps(result))
+        self.assertNotIn('19763', json.dumps(result))
+        self.assertEqual(self.call('/construction/objects/' + obj + '/supplier-quotes',
+                                   'POST', {'material_id': material}, member, workspace=wid)[0], 403)
+
+    def test_smart_supplier_malformed_and_unverifiable_quotes(self):
+        owner, _ = self.account('smart-invalid')
+        obj = self.object(owner)
+        material = self.material(owner, obj)
+        base = '/construction/objects/' + obj + '/supplier-quotes'
+        for value in ('NaN', '1e999999', '-1', '0.00001', '1000001'):
+            self.assertEqual(self.call(base, 'POST', {
+                'material_id': material, 'supplier_name': 'Поставщик', 'unit_price_kopecks': 100,
+                'stock_quantity': value, 'delivery_kopecks': 0,
+            }, owner)[0], 400, value)
+        self.assertEqual(self.call(base, 'POST', {
+            'material_id': material, 'supplier_name': '<script>alert(1)</script>',
+            'unit_price_kopecks': -1, 'stock_quantity': '10', 'delivery_kopecks': 0,
+        }, owner)[0], 400)
+
+
 if __name__ == '__main__':
     unittest.main()

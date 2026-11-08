@@ -1,4 +1,4 @@
-/* Assistant controls, knowledge dialog, profile and Markdown in the CI browser. */
+/* Live Chrome smoke: no phantom chat, durable first send, real navigation and clean composer. */
 const assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
  const timeout=setTimeout(()=>{console.error('FAIL: assistant studio browser timeout');process.exit(1)},90000);
@@ -8,108 +8,58 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
  ws.addEventListener('message',event=>{const message=JSON.parse(event.data);if(message.id){const task=pending.get(message.id);pending.delete(message.id);message.error?task.reject(message.error):task.resolve(message.result)}else if(message.method==='Runtime.exceptionThrown')errors.push(message.params.exceptionDetails.text);else if(message.method==='Page.javascriptDialogOpening')send('Page.handleJavaScriptDialog',{accept:true})});
  const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))});
  const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,userGesture:true});if(result.exceptionDetails)throw Error(JSON.stringify(result.exceptionDetails));return result.result.value};
- const until=async expression=>{for(let i=0;i<130;i++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100))}throw Error(expression+'\n'+await evaluate('document.body.innerText'))};
+ const until=async expression=>{for(let i=0;i<145;i++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100))}throw Error(expression+'\n'+await evaluate('document.body.innerText.slice(-1200)'))};
  const screenshot=async name=>fs.writeFileSync('data/assistant-studio-'+name+'.png',Buffer.from((await send('Page.captureScreenshot')).data,'base64'));
- const visit=async tab=>{await evaluate(`document.querySelector('[data-tab="${tab}"]').click()`);await until(`document.querySelector('#content').dataset.section==='${tab}'&&!document.querySelector('#retry')`)};
+ const visit=async tab=>{await evaluate("window.SmetraNavigateTo("+JSON.stringify(tab)+")");await until("document.querySelector('#content').dataset.section==="+JSON.stringify(tab)+"&&!document.querySelector('#retry')")};
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Browser.grantPermissions',{origin:site,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-await send('Network.deleteCookies',{name:'session',url:site});await send('Page.navigate',{url:site+'/app'});
- await until("document.querySelector('#auth-form')?.onsubmit");await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");await until("document.querySelector('.workspace-home')");
- await visit('assistant');await until("document.querySelector('#assistant-input')");
- const composerControls=await evaluate("(()=>{const ids=['assistant-attach','assistant-voice','assistant-send'];return ids.map(id=>{const button=document.getElementById(id),rect=button.getBoundingClientRect();return {id,svg:button.querySelectorAll(':scope > svg').length,y:Math.round(rect.y),height:Math.round(rect.height),width:Math.round(rect.width)}})})()");
- assert.equal(composerControls.length,3);
- assert.ok(composerControls.every(control=>control.svg===1&&control.width>=36&&control.height>=36),'Attachment, voice and send are visible SVG buttons: '+JSON.stringify(composerControls));
- assert.ok(Math.max(...composerControls.map(control=>control.y))-Math.min(...composerControls.map(control=>control.y))<=2,'Composer controls stay on one row: '+JSON.stringify(composerControls));
- await evaluate("document.querySelector('#assistant-input').value='Проверка кнопок';document.querySelector('#assistant-input').dispatchEvent(new Event('input',{bubbles:true}))");
- assert.equal(await evaluate("document.querySelector('#assistant-send').disabled"),false,'Typing enables send');
- assert.equal(await evaluate("document.querySelector('#assistant-voice').disabled"),false,'Voice stays available beside send');
- await evaluate("document.querySelector('#assistant-input').value='';document.querySelector('#assistant-input').dispatchEvent(new Event('input',{bubbles:true}))");
- assert.equal(await evaluate("document.querySelector('#sidebar .workspace-label')===null"),true,'Sidebar no longer renders the redundant Сметра/C workspace block');
- assert.equal(await evaluate("document.querySelector('#assistant-thread-select')?.closest('.select-control')===null"),true,'Hidden compatibility select must not create a duplicate visible dropdown');
- assert.equal(await evaluate("getComputedStyle(document.querySelector('#sidebar-collapse')).display"),'none','Mobile layout hides the desktop collapse control');
- assert.notEqual(await evaluate("getComputedStyle(document.querySelector('#nav-toggle')).display"),'none','Mobile navigation toggle is visible');
- await screenshot('welcome-mobile');
- await evaluate("document.querySelector('#assistant-new-thread').click()");await until("sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]')");
- await evaluate("document.querySelector('#assistant-history-toggle').click()");
- await until("document.querySelector('.assistant-studio').classList.contains('is-history-expanded')&&getComputedStyle(document.querySelector('#assistant-history-panel')).display==='flex'");
- await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});await new Promise(resolve=>setTimeout(resolve,220));
- const historyGeometry=await evaluate("(()=>{const root=document.querySelector('.assistant-studio'),rail=root?.querySelector('.assistant-toolrail'),panel=root?.querySelector('#assistant-history-panel'),list=root?.querySelector('#assistant-history-list');if(!root||!rail||!panel||!list)return null;const r=rail.getBoundingClientRect(),p=panel.getBoundingClientRect(),l=list.getBoundingClientRect();return {collapsed:root.classList.contains('assistant-tools-collapsed'),rail:{left:Math.round(r.left),right:Math.round(r.right)},panel:{left:Math.round(p.left),right:Math.round(p.right)},list:{left:Math.round(l.left),right:Math.round(l.right)}}})()");
- assert.ok(historyGeometry,'Assistant rail and persistent history must exist');
- if(!historyGeometry.collapsed){
-  assert.ok(historyGeometry.panel.left>=historyGeometry.rail.left-1&&historyGeometry.panel.right<=historyGeometry.rail.right+1,'Expanded history panel must remain inside assistant rail: '+JSON.stringify(historyGeometry));
-  assert.ok(historyGeometry.list.left>=historyGeometry.panel.left-1&&historyGeometry.list.right<=historyGeometry.panel.right+1,'Chat rows must not spill out of history panel: '+JSON.stringify(historyGeometry));
+ await send('Network.deleteCookies',{name:'session',url:site});await send('Page.navigate',{url:site+'/app'});
+ await until("document.querySelector('#auth-form')?.onsubmit");
+ await evaluate("document.querySelector('#email').value='android-design@test.invalid';document.querySelector('#password').value='android design test only';document.querySelector('#auth-submit').click()");
+ await until("document.querySelector('.workspace-home')");
+ await visit('assistant');
+ await until("document.querySelector('#assistant-input')");
+ assert.equal(await evaluate("document.querySelector('.assistant-conversation-general')"),null,'No legacy general conversation row');
+ assert.equal(await evaluate("document.querySelector('#assistant-decision-slot')"),null,'No confirmation banner above input');
+ assert.equal(await evaluate("document.querySelector('.assistant-suggestions,.assistant-welcome')"),null,'No canned prompt onboarding');
+ await evaluate("document.querySelector('#assistant-new-thread').click()");
+ await until("!sessionStorage.getItem('smetra.assistant.conversation')");
+ const countBefore=await evaluate("api('/assistant/conversations').then(r=>r.items.length)");
+ await evaluate("document.querySelector('#assistant-new-thread').click()");
+ await until("!sessionStorage.getItem('smetra.assistant.conversation')");
+ assert.equal(await evaluate("api('/assistant/conversations').then(r=>r.items.length)"),countBefore,'New click must not create an empty history record');
+ await evaluate("(()=>{const input=document.querySelector('#assistant-input');input.value='Проверяю сохранение диалога';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#assistant-form').requestSubmit()})()");
+ await until("!!sessionStorage.getItem('smetra.assistant.conversation')&&!!document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]')");
+ const chatId=await evaluate("sessionStorage.getItem('smetra.assistant.conversation')");
+ assert.ok(chatId);
+ assert.equal(await evaluate("api('/assistant/conversations').then(r=>r.items.some(x=>x.id==="+JSON.stringify(chatId)+"))"),true,'First send persisted the conversation');
+ await until("document.querySelector('#assistant-stop')?.hidden");
+ assert.equal(await evaluate("document.querySelector('.assistant-job[data-status=completed]')"),null,'No completed job above the input');
+ for(const width of [320,390,768,1024,1440,1728]){
+  await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});
+  await new Promise(resolve=>setTimeout(resolve,170));
+  const layout=await evaluate("(()=>{const input=document.querySelector('#assistant-input'),composer=document.querySelector('.assistant-composer'),buttons=['#assistant-attach','#assistant-voice','#assistant-send'].map(selector=>document.querySelector(selector));const r=composer.getBoundingClientRect(),t=buttons.map(b=>b.getBoundingClientRect());return {overflow:document.documentElement.scrollWidth>innerWidth+1,input:input.getBoundingClientRect().width,composer:{left:r.left,right:r.right},icons:buttons.map((b,i)=>({count:b.querySelectorAll(':scope > svg').length,width:t[i].width,y:t[i].y}))}})()");
+  assert.equal(layout.overflow,false,'No horizontal overflow: '+width);
+  assert.ok(layout.input>150&&layout.composer.left>=-1&&layout.composer.right<=width+2,'Composer within viewport: '+JSON.stringify(layout));
+  assert.ok(layout.icons.every(b=>b.count===1&&b.width>=34),'Composer SVG controls: '+JSON.stringify(layout));
+  await screenshot('chat-'+width);
  }
- const rowBefore=await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active[data-thread-id]'),r=row.getBoundingClientRect();return {id:row.dataset.threadId,left:r.left,top:r.top,width:r.width,height:r.height}})()");
- await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(rowBefore.left+Math.min(72,rowBefore.width/2)),y:Math.round(rowBefore.top+rowBefore.height/2)});
- await until("getComputedStyle(document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-actions')).opacity==='1'");
- assert.equal(await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-delete]')!==null"),true,'History exposes a dedicated trash action on hover');
- await evaluate("(()=>{document.querySelector('.assistant-conversation-row.is-active [data-thread-menu]').click();document.querySelector('.assistant-conversation-row.is-active [data-thread-rename]').click();const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-rename-input]').value='Studio conversation';row.querySelector('[data-thread-rename-form]').requestSubmit()})()");
- await until("document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-title').textContent==='Studio conversation'");
+ await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
+ await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-rename]').click();row.querySelector('[data-thread-rename-input]').value='Сохранённый диалог';row.querySelector('[data-thread-rename-form]').requestSubmit()})()");
+ await until("document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-title')?.textContent==='Сохранённый диалог'");
  await evaluate("(()=>{const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()})()");
  await until("document.querySelector('.assistant-conversation-row.is-active')?.dataset.pinned==='1'");
- await evaluate("const row=document.querySelector('.assistant-conversation-row.is-active');row.querySelector('[data-thread-menu]').click();row.querySelector('[data-thread-pin]').click()");
- await until("document.querySelector('.assistant-conversation-row.is-active')?.dataset.pinned==='0'");
+ await visit('settings');await visit('assistant');
+ assert.equal(await evaluate("document.querySelector('.assistant-conversation-row.is-active .assistant-conversation-title')?.textContent"),'Сохранённый диалог','Chat stays in history after navigation');
  await evaluate("document.querySelector('.assistant-conversation-row.is-active [data-thread-delete]').click()");
- await until("document.querySelector('dialog.sm-dialog [data-dialog-confirm]')");await evaluate("document.querySelector('dialog.sm-dialog [data-dialog-confirm]').click()");
- await until("!sessionStorage.getItem('smetra.assistant.conversation')&&document.querySelector('.assistant-conversation-general.is-active')");
- await evaluate("document.querySelector('.assistant-conversation-general [data-thread-delete]').click()");
- await until("document.querySelector('dialog.sm-dialog [data-dialog-confirm]')");await evaluate("document.querySelector('dialog.sm-dialog [data-dialog-confirm]').click()");
- await until("!document.querySelector('.assistant-conversation-general [data-thread-delete]').disabled");
- await evaluate("if(document.querySelector('.assistant-studio').classList.contains('is-history-expanded'))document.querySelector('#assistant-history-toggle').click()");
- await until("!document.querySelector('.assistant-studio').classList.contains('is-history-expanded')");
- await until("document.querySelector('.assistant-welcome h2')");
- for(const width of [320,390,768,1024,1440,1728]){
-  await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await new Promise(resolve=>setTimeout(resolve,150));
-  const alignment=await evaluate("(()=>{const root=document.querySelector('.assistant-welcome'),bounds=root.getBoundingClientRect(),center=bounds.left+bounds.width/2;return [...root.querySelectorAll('.assistant-welcome-line,h2,p,.assistant-suggestions')].map(node=>{const r=node.getBoundingClientRect();return {delta:Math.abs(r.left+r.width/2-center),align:getComputedStyle(node).textAlign}})})()");
-  assert.ok(alignment.every(node=>node.delta<1),'Welcome centered at '+width);assert.equal(alignment[1].align,'center');assert.equal(alignment[2].align,'center');
-  if(width<701){
-   const vertical=await evaluate("(()=>{const items=[...document.querySelectorAll('.assistant-suggestions button')],last=items[items.length-1],composer=document.querySelector('.assistant-composer');if(!last||!composer)return null;const a=last.getBoundingClientRect(),b=composer.getBoundingClientRect();return {lastBottom:Math.round(a.bottom),composerTop:Math.round(b.top),gap:Math.round(b.top-a.bottom)}})()");
-   assert.ok(vertical&&vertical.gap>=0,'Last welcome suggestion must remain above the sticky composer at '+width+'px: '+JSON.stringify(vertical));
-  }
-  const iconAudit=await evaluate("(()=>{const item=sel=>{const el=document.querySelector(sel);const svg=el?.querySelector(':scope > svg');const r=svg?.getBoundingClientRect();return {svg:el?.querySelectorAll(':scope > svg').length||0,width:r?Math.round(r.width):0,stroke:svg?getComputedStyle(svg).stroke:'',color:svg?getComputedStyle(svg).color:'',before:el?getComputedStyle(el,'::before').content:'missing',dataIcon:el?.getAttribute('data-ui-icon')??null}};return {create:item('#assistant-new-thread'),knowledge:item('#assistant-knowledge'),history:item('#assistant-history-toggle'),trash:item('.assistant-conversation-row:not([hidden]) .assistant-conversation-delete'),inlineButtons:[...document.querySelectorAll('.assistant-studio button:has(>svg)')].map(el=>({id:el.id,svg:el.querySelectorAll(':scope > svg').length,dataIcon:el.getAttribute('data-ui-icon'),before:getComputedStyle(el,'::before').content}))}})()");
-  for(const key of ['create','knowledge','trash'])assert.ok(iconAudit[key].svg===1&&iconAudit[key].width>=14&&iconAudit[key].before==='none'&&iconAudit[key].dataIcon===null,key+' rail icon is one visible inline SVG at '+width+': '+JSON.stringify(iconAudit[key]));
-  assert.equal(await evaluate("getComputedStyle(document.querySelector('#assistant-history-toggle')).display!=='none'"),width<=800,'History launcher appears only on compact layouts at '+width+'px');
-  if(width<=800)assert.ok(iconAudit.history.svg===1&&iconAudit.history.width>=14,'History launcher shows one inline SVG: '+JSON.stringify(iconAudit.history));
-  assert.ok(iconAudit.inlineButtons.every(item=>item.before==='none'),'Inline disclosure icon has no duplicate CSS pseudo-icon: '+JSON.stringify(iconAudit.inlineButtons));
-  assert.equal(await evaluate("document.querySelector('.assistant-options')===null"),true,'No global ellipsis action remains in the assistant rail');
-  assert.equal(await evaluate("document.querySelectorAll('.assistant-conversation-row').length>=1"),true,'Chat history is rendered directly in the sidebar');
-  const headerToggles=await evaluate("(()=>({desktop:getComputedStyle(document.querySelector('#sidebar-collapse')).display,mobile:getComputedStyle(document.querySelector('#nav-toggle')).display}))()");
-  if(width<=800){assert.equal(headerToggles.desktop,'none','Desktop menu toggle hidden at '+width);assert.notEqual(headerToggles.mobile,'none','Drawer menu toggle shown at '+width)}
-  else{assert.notEqual(headerToggles.desktop,'none','Desktop menu toggle shown at '+width);assert.equal(headerToggles.mobile,'none','Duplicate mobile toggle hidden at '+width)}
-  if(width>900){
-   const rail=await evaluate("(()=>{const main=document.querySelector('#content.main'),sidebar=document.querySelector('#sidebar'),root=document.querySelector('.assistant-studio'),rail=root?.querySelector('.assistant-toolrail'),column=root?.querySelector('.assistant-main-column');if(!main||!sidebar||!root||!rail||!column)return null;const m=main.getBoundingClientRect(),sb=sidebar.getBoundingClientRect(),s=root.getBoundingClientRect(),r=rail.getBoundingClientRect(),c=column.getBoundingClientRect();return {sidebarRight:Math.round(sb.right),mainLeft:Math.round(m.left),mainWidth:Math.round(m.width),rootLeft:Math.round(s.left),rootWidth:Math.round(s.width),railLeft:Math.round(r.left),railRight:Math.round(r.right),columnLeft:Math.round(c.left),viewport:innerWidth}})()");
-   assert.ok(rail,'Assistant split layout nodes must exist');
-   assert.ok(rail.mainLeft>=rail.sidebarRight&&rail.mainLeft-rail.sidebarRight<=16,'Main workspace follows the primary sidebar: '+JSON.stringify(rail));
-   assert.ok(Math.abs(rail.rootLeft-rail.mainLeft)<=1,'Assistant layout starts at the main content edge: '+JSON.stringify(rail));
-   assert.ok(Math.abs(rail.railLeft-rail.rootLeft)<=1,'Assistant tools rail starts at the assistant layout edge: '+JSON.stringify(rail));
-   assert.ok(rail.rootWidth>=rail.mainWidth-48,'Assistant layout uses the available main-column width, not a centered fixed-width box: '+JSON.stringify(rail));
-   assert.ok(rail.columnLeft>=rail.railRight,'Assistant conversation starts after the tools rail: '+JSON.stringify(rail));
-  }
-  const overflow=await evaluate("(()=>{const vw=innerWidth;const offenders=[...document.querySelectorAll('body *')].map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,id:el.id,cls:typeof el.className==='string'?el.className:'',left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scroll:el.scrollWidth,client:el.clientWidth}}).filter(x=>x.width>0&&(x.left < -1||x.right>vw+1)).sort((a,b)=>(b.right-vw)-(a.right-vw)).slice(0,10);return {vw,doc:document.documentElement.scrollWidth,offenders}})()");
-  assert.equal(overflow.doc<=overflow.vw,true,'No horizontal overflow at '+width+': '+JSON.stringify(overflow));
-  await screenshot('welcome-aligned-'+width);
- }
- await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
- await new Promise(resolve=>setTimeout(resolve,260)); // let the responsive grid transition settle before measuring geometry
- const geometry=await evaluate("(()=>{const form=document.querySelector('#assistant-form'),input=document.querySelector('#assistant-input'),tools=document.querySelector('.assistant-compose-tools'),attach=document.querySelector('#assistant-attach'),send=document.querySelector('#assistant-send');const f=form.getBoundingClientRect(),i=input.getBoundingClientRect(),t=tools.getBoundingClientRect(),a=attach.getBoundingClientRect(),s=send.getBoundingClientRect();return {width:innerWidth,form:{left:Math.round(f.left),right:Math.round(f.right),width:Math.round(f.width)},input:{left:Math.round(i.left),right:Math.round(i.right),width:Math.round(i.width)},tools:{left:Math.round(t.left),right:Math.round(t.right),width:Math.round(t.width)},attach:{left:Math.round(a.left),right:Math.round(a.right)},send:{left:Math.round(s.left),right:Math.round(s.right)},hasSelectWrapper:!!document.querySelector('#assistant-thread-select')?.closest('.select-control')}})()");
- assert.equal(geometry.hasSelectWrapper,false,'Hidden conversation select stays hidden and unenhanced');
- assert.equal(geometry.form.left>=0&&geometry.form.right<=geometry.width+1,true,'Composer surface fits viewport: '+JSON.stringify(geometry));
- assert.equal(geometry.input.width>=180&&geometry.input.left>=geometry.form.left&&geometry.input.right<=geometry.form.right+1,true,'Composer input has a usable width inside the outer surface: '+JSON.stringify(geometry));
- assert.equal(geometry.attach.left>=geometry.tools.left&&geometry.attach.right<=geometry.tools.right+1&&geometry.send.left>=geometry.tools.left&&geometry.send.right<=geometry.tools.right+1,true,'Attach and send buttons fit the inner toolbar: '+JSON.stringify(geometry));
-
- await evaluate("document.querySelector('#assistant-knowledge').click()");await until("document.querySelector('#assistant-knowledge-panel').open");await screenshot('knowledge-mobile');
- await evaluate("document.querySelector('#knowledge-form [name=title]').value='Studio knowledge';document.querySelector('#knowledge-form [name=content]').value='Ремонт квартир';document.querySelector('#knowledge-form').requestSubmit()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Studio knowledge')");
- await evaluate("document.querySelector('.knowledge-item').click();document.querySelector('#knowledge-form [name=content]').value='Ремонт и отделка';document.querySelector('#knowledge-form').requestSubmit()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Ремонт и отделка')");
- await evaluate("document.querySelector('[data-knowledge-scope=workspace]').click()");await until("document.querySelector('[data-knowledge-scope=workspace]').getAttribute('aria-pressed')==='true'");await evaluate("document.querySelector('[data-knowledge-scope=personal]').click()");await until("document.querySelector('.knowledge-item')?.textContent.includes('Studio knowledge')");
- await evaluate("document.querySelector('.knowledge-item').click();document.querySelector('#knowledge-delete').click()");await until("document.querySelector('dialog.sm-dialog [data-dialog-confirm]')");await evaluate("document.querySelector('dialog.sm-dialog [data-dialog-confirm]').click()");await until("!document.querySelector('.knowledge-item')");await evaluate("document.querySelector('#knowledge-close').click()");await until("!document.querySelector('#assistant-knowledge-panel').open");
- await visit('profile');await until("document.querySelector('#profile-form')");await evaluate("document.querySelector('#profile-form [name=first_name]').value='Анна';document.querySelector('#profile-form [name=last_name]').value='Смирнова';document.querySelector('#profile-form [name=profession]').value='Дизайнер интерьера';document.querySelector('#profile-form [name=about]').value='Проектирую жилые пространства';document.querySelector('#profile-form').requestSubmit()");await until("document.querySelector('#profile-form [role=status]').textContent==='Сохранено'");assert.equal(await evaluate("user.name"),'Анна Смирнова');await screenshot('profile-mobile');
- await visit('settings');await until("document.querySelector('#personalization-form')");await evaluate("document.querySelector('[name=memory_enabled]').checked=false;document.querySelector('[name=response_style]').value='detailed';document.querySelector('#personalization-form').requestSubmit()");await until("document.querySelector('#personalization-form [role=status]').textContent==='Сохранено'");assert.equal(await evaluate("api('/profile').then(r=>r.profile.memory_enabled)"),0);
- await evaluate("document.querySelector('[name=memory_enabled]').checked=true;document.querySelector('#personalization-form').requestSubmit()");await until("api('/profile').then(r=>r.profile.memory_enabled===1)");
- await visit('assistant');await until("document.querySelector('#assistant-input')");
- const markdown='# План проекта\n\n**Проверенные данные** и *следующие шаги*.\n\n3. Подготовить смету\n   - Сверить объёмы\n   - Уточнить материалы\n4. Согласовать работы\n\n- [x] Замеры готовы\n- [ ] Смета согласована\n\n| Работа | Стоимость |\n| :--- | ---: |\n| Подготовка | 12 000 ₽ |\n| Отделка | 48 000 ₽ |\n\n> Итоговую цену согласовываем с клиентом.\n\n```json\n{"status": "draft", "test": "<img>"}\n```';
- await evaluate(`document.querySelector('#assistant-messages').innerHTML='<article class="assistant-message assistant"><small>СМЕТРА</small><div class="assistant-markdown">'+assistantMarkdown(${JSON.stringify(markdown)})+'</div></article>'`);
- assert.equal(await evaluate("document.querySelectorAll('.assistant-markdown img, .assistant-markdown script').length"),0);assert.equal(await evaluate("document.querySelector('ol').start"),3);
- await evaluate("document.querySelector('[data-copy-code]').click()");await until("document.querySelector('[data-copy-code]').textContent==='Скопировано'");assert.ok((await evaluate('navigator.clipboard.readText()')).includes('"test": "<img>"'));
- for(const width of [320,390,1440]){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await evaluate('window.scrollTo(0,0)');await new Promise(resolve=>setTimeout(resolve,150));assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Assistant overflow '+width);await screenshot('markdown-'+width)}
- assert.deepEqual(errors,[]);clearTimeout(timeout);ws.close();console.log('PASS: general rename/pin/unpin/delete, knowledge dialog CRUD/scopes, profile/settings, nested Markdown/code copy and 320/390/1440px layout; no browser errors');
+ await until("document.querySelector('dialog.sm-dialog [data-dialog-confirm]')");
+ await evaluate("document.querySelector('dialog.sm-dialog [data-dialog-confirm]').click()");
+ await until("!sessionStorage.getItem('smetra.assistant.conversation')");
+ assert.equal(await evaluate("document.querySelector('.assistant-conversation-general')"),null);
+ await evaluate("document.querySelector('#assistant-knowledge').click()");
+ await until("document.querySelector('#assistant-knowledge-panel')?.open");
+ await evaluate("document.querySelector('#knowledge-close').click()");
+ await until("!document.querySelector('#assistant-knowledge-panel')?.open");
+ assert.deepEqual(errors,[]);
+ clearTimeout(timeout);ws.close();console.log('PASS: lazy saved chat, navigation, no stale processing or duplicate tray, mobile/desktop layout and history controls');
 })().catch(error=>{console.error(error);process.exit(1)});

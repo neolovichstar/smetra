@@ -85,6 +85,8 @@
 
 /* ───────── Estimate tools (field flows) ───────── */
 .ff-page{display:flex;flex-direction:column;gap:var(--s-4);max-width:920px}
+/* Center the received-estimates page within the workspace without shifting other tools. */
+.ff-inbox{width:100%;margin-inline:auto}
 .ff-section{padding:var(--s-5);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1);display:flex;flex-direction:column;gap:var(--s-3)}
 .ff-section>.ff-kicker{display:none}
 .ff-section h2{font-size:var(--fs-18)}
@@ -922,3 +924,22 @@ html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-sel
 [data-procurement-status]{font-size:13px;line-height:1.6;overflow-wrap:anywhere}[data-procurement-status]:empty{display:none}
 @media(max-width:1000px){.procurement-budget{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.procurement-toolbar{align-items:flex-start;flex-direction:column}.procurement-toolbar .btn{width:100%;box-sizing:border-box}.procurement-scenario{gap:10px}.procurement-scenario label{min-width:100%;box-sizing:border-box}.procurement-scenario .btn{flex:1;white-space:normal}.procurement-budget{gap:8px}.procurement-budget>div{padding:12px}.procurement-budget strong{font-size:16px}.procurement-material header,.procurement-price{align-items:flex-start;flex-direction:column;gap:6px}.procurement-material header b{flex:auto}.procurement-price strong{flex:auto}}
+
+
+/* Verified landed-cost procurement: neutral, compact and mobile-safe. */
+.procurement-comparison{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface-1)}
+.procurement-comparison h4,.procurement-quote-form h4{font-size:var(--fs-15);font-weight:650;margin:0 0 8px}
+.procurement-best{display:grid;gap:5px;padding:12px 14px;border-radius:var(--r-2);border:1px solid var(--line-strong)}
+.procurement-best-title{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:600}
+.procurement-best-parts{display:grid;gap:4px;font-size:var(--fs-13);color:var(--text-2)}
+.procurement-offer-line{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.procurement-offer-line>div{min-width:0}.procurement-offer-line .btn{flex:none}
+.procurement-offer-line strong{font-size:var(--fs-14)}
+.procurement-offer-line p{color:var(--text-2);overflow-wrap:anywhere}
+.procurement-quote-form{margin:22px 0 10px;padding:20px;border:1px solid var(--line);border-radius:var(--r-3)}
+.procurement-quote-form[hidden]{display:none}
+.procurement-quote-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0}
+.procurement-quote-fields label{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:var(--fs-12);color:var(--text-2)}
+.procurement-quote-fields input,.procurement-quote-fields select{width:100%;min-width:0;box-sizing:border-box}
+@media(max-width:950px){.procurement-quote-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.procurement-quote-fields{grid-template-columns:minmax(0,1fr)}.procurement-quote-form{padding:14px}.procurement-offer-line{align-items:flex-start;flex-wrap:wrap}.procurement-offer-line .btn{width:100%}.procurement-best-title{display:block}}

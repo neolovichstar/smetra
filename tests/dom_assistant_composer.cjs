@@ -39,6 +39,12 @@ async function setup(enabled=true,voice=false,remaining=3){
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('empty assistant chat contains no example messages or suggested prompts',async({doc})=>{
+   assert.ok(doc.querySelector('#assistant-form'),'Composer stays functional');
+   assert.equal(doc.querySelector('#assistant-input').value,'','No example is prefilled');
+   assert.equal(doc.querySelector('#assistant-messages').children.length,0,'Empty chat displays no onboarding panel');
+   assert.equal(doc.querySelectorAll('.assistant-welcome,.assistant-suggestions,[data-prompt]').length,0);
+ });
  await test('idle attachment hint is hidden but file uploads remain available',async({doc})=>{
    const hint=doc.querySelector('.assistant-attachment-bar > span');
    assert.ok(hint);
@@ -162,9 +168,10 @@ async function setup(enabled=true,voice=false,remaining=3){
   w.eval("tab='support'");doc.querySelector('#content').textContent='Support';w.sessionStorage.setItem('smetra.assistant.draft:qa:qa-workspace:global','New unsent draft');task.resolve({job:{id:'qa'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}});await tick();
   assert.equal(doc.querySelector('#content').textContent,'Support');assert.equal(w.sessionStorage.getItem('smetra.assistant.draft:qa:qa-workspace:global'),'New unsent draft');
  });
- await test('completed jobs expose an answer action',async({w,doc})=>{
-  const original=w.api;w.api=(path,options={})=>path==='/assistant/jobs'&&!options.method?Promise.resolve({enabled:true,jobs:[{id:'qa',kind:'chat',prompt:'Estimate',status:'completed',updated_at:Date.now()/1000}]}):original(path,options);
-  await w.SmetraAssistant();await tick();const button=doc.querySelector('.assistant-job button');assert.ok(button);assert.equal(button.disabled,false);
+ await test('completed jobs are stored in the transcript rather than a stale processing banner',async({w,doc})=>{
+  const original=w.api;w.api=(path,options={})=>path==='/assistant/jobs'&&!options.method?Promise.resolve({enabled:true,jobs:[{id:'qa',kind:'chat',conversation_id:'',prompt:'Estimate',status:'completed',updated_at:Date.now()/1000}]}):original(path,options);
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelector('.assistant-job'),null,'Completed jobs never stay above the input');
  });
  await test('cancelled background jobs disappear and stay dismissed after refresh',async({w,doc})=>{
   const original=w.api,now=Date.now()/1000;let deletes=0;
@@ -405,9 +412,65 @@ async function setup(enabled=true,voice=false,remaining=3){
   type(w,doc,'Первый запрос');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
   assert.equal(doc.querySelector('#assistant-new-thread').disabled,false);
   doc.querySelector('#assistant-new-thread').click();await tick();await tick();
-  assert.equal(created,1);assert.equal(w.sessionStorage.getItem('smetra.assistant.conversation'),'new-thread');
+  assert.equal(created,0,'New chat click must not write an empty conversation');
+  assert.equal(w.sessionStorage.getItem('smetra.assistant.conversation'),null);
+  assert.equal(doc.querySelectorAll('.assistant-conversation-row').length,0,'No default conversation in history');
   controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify({answer:'Первый ответ',actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}})+'\n\n'));await tick();
   assert.doesNotMatch(doc.querySelector('#assistant-messages').textContent,/Первый ответ/);
+ });
+ await test('first sent message creates durable conversation and history row, not page opening',async({w,doc,requests})=>{
+  assert.equal(doc.querySelectorAll('.assistant-conversation-row').length,0);
+  assert.equal(w.sessionStorage.getItem('smetra.assistant.conversation'),null);
+  let count=0;
+  const original=w.api;
+  w.api=async(path,options={})=>{
+    if(path==='/assistant/jobs'&&options.method==='POST'){
+      count++;
+      requests.push(options);
+      return {job:{id:'job-1',conversation_id:'auto-conversation',status:'queued'},quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}};
+    }
+    return original(path,options);
+  };
+  type(w,doc,'Первое настоящее сообщение');doc.querySelector('#assistant-form').requestSubmit();
+  await tick();await tick();
+  assert.equal(count,1);
+  assert.equal(w.sessionStorage.getItem('smetra.assistant.conversation'),'auto-conversation');
+  assert.equal(doc.querySelector('.assistant-conversation-title')?.textContent,'Новый диалог');
+  assert.equal(doc.querySelector('.assistant-history-count')?.textContent,'1');
+  assert.equal(doc.querySelector('.assistant-conversation-general'),null);
+ });
+ await test('unrelated processing jobs never appear above input in another conversation',async({w,doc})=>{
+  const original=w.api;
+  w.api=(path,options={})=>path==='/assistant/jobs'&&!options.method
+    ?Promise.resolve({enabled:true,jobs:[{id:'unrelated',conversation_id:'another-chat',kind:'chat',prompt:'Other work',status:'running',progress:'Обрабатываю запрос'}]})
+    :original(path,options);
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelector('.assistant-job'),null);
+  assert.doesNotMatch(doc.querySelector('#assistant-form').textContent,/Обрабатываю запрос/);
+ });
+ await test('composer never creates a duplicate confirmation banner; questions render inline in chat',async({w,doc,requests})=>{
+  assert.equal(doc.querySelector('#assistant-decision-slot'),null,'No composer decision slot');
+  const result={
+    answer:'Уточню один параметр.',actions:[{id:'new-action',tool:'create_clients',summary:'Добавить клиента',arguments:{name:'Компания'}}],
+    questions:[{question:'Какой материал выбрать?',options:['Краска','Штукатурка']}],
+    quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000},
+  };
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){
+    controller.enqueue(new TextEncoder().encode('event: done\n'+'data: '+JSON.stringify(result)+'\n\n'));controller.close();
+  }})});
+  type(w,doc,'Подбери материал');doc.querySelector('#assistant-form').requestSubmit();
+  await tick();await tick();await tick();
+  assert.equal(doc.querySelector('.assistant-decision-slot'),null,'No duplicated fixed decision banner');
+  assert.equal(doc.querySelector('#assistant-actions .assistant-proposal')?.querySelectorAll('[data-confirm]').length,1,'Inline proposal still has confirmation');
+  const question=doc.querySelector('#assistant-messages .assistant-question-inline');
+  assert.ok(question,'Clarifying question belongs to the chat');
+  assert.match(question.textContent,/Какой материал выбрать/);
+  assert.equal(question.querySelectorAll('.assistant-question-choice button').length,2);
+  question.querySelector('.assistant-question-choice button').click();
+  await tick();await tick();
+  assert.equal(doc.querySelector('.assistant-question-inline'),null,'Question choices close after replying');
+  assert.equal(requests.length,2,'Choosing an option submits a new chat prompt');
+  assert.equal(JSON.parse(requests[1].body).text,'Краска');
  });
  await test('pending proposals are scoped to their conversation and old creation cards do not return',async({w,doc})=>{
   const original=w.api;const thread={id:'thread-a',title:'A',context_entity:'',context_id:''};

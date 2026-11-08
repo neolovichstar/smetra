@@ -186,6 +186,55 @@ def route(service, method, parts, data):
         count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='chat' AND status IN ('queued','running','retry')", args).fetchone()['n']
         if count >= 2:
             raise DomainError(429, 'Дождитесь завершения текущих фоновых задач')
+        # The first real message creates a durable conversation atomically
+        # with the queued job. Opening the UI or clicking New must not write
+        # an empty conversation to the database.
+        if thread_id is None:
+            # Preserve older messages created by the legacy anonymous/general
+            # chat by archiving them once, without showing a permanent default.
+            orphaned = service.con.execute(
+                "SELECT 1 FROM assistant_messages WHERE workspace_id=? AND user_id=? "
+                "AND conversation_id IS NULL LIMIT 1", args,
+            ).fetchone()
+            if orphaned:
+                archive_id = identity()
+                service.con.execute(
+                    "INSERT INTO assistant_conversations("
+                    "id,workspace_id,user_id,title,context_entity,context_id,pinned,created_at,updated_at)"
+                    " VALUES(?,?,?,?,?,?,?,?,?)",
+                    (archive_id, *args, "История прежнего чата", "", "", 0, stamp(), stamp()),
+                )
+                service.con.execute(
+                    "UPDATE assistant_messages SET conversation_id=? WHERE workspace_id=? "
+                    "AND user_id=? AND conversation_id IS NULL", (archive_id, *args),
+                )
+                service.con.execute(
+                    "UPDATE assistant_jobs SET conversation_id=? WHERE workspace_id=? AND user_id=? "
+                    "AND conversation_id IS NULL AND status IN ('completed','failed','cancelled')",
+                    (archive_id, *args),
+                )
+            # Empty legacy dialogs were created on click, not on message.
+            # Remove only records without messages or jobs and not pinned.
+            service.con.execute(
+                "DELETE FROM assistant_conversations WHERE workspace_id=? AND user_id=? AND pinned=0 "
+                "AND NOT EXISTS (SELECT 1 FROM assistant_messages m "
+                "WHERE m.conversation_id=assistant_conversations.id) "
+                "AND NOT EXISTS (SELECT 1 FROM assistant_jobs j "
+                "WHERE j.conversation_id=assistant_conversations.id)", args,
+            )
+            count = service.con.execute(
+                "SELECT count(*) FROM assistant_conversations WHERE workspace_id=? AND user_id=?", args,
+            ).fetchone()[0]
+            if count >= 50:
+                raise DomainError(409, "Максимум 50 диалогов. Удалите ненужный диалог")
+            thread_id = identity()
+            service.con.execute(
+                "INSERT INTO assistant_conversations("
+                "id,workspace_id,user_id,title,context_entity,context_id,pinned,created_at,updated_at)"
+                " VALUES(?,?,?,?,?,?,?,?,?)",
+                (thread_id, *args, "Новый диалог", (context or {}).get('entity', ''),
+                 (context or {}).get('id', ''), 0, stamp(), stamp()),
+            )
         reservation = assistant.reserve_in_transaction(service)
         quota_key = reservation['key'] if isinstance(reservation, dict) else reservation
         bonus_grant_id = reservation.get('bonus_grant_id') if isinstance(reservation, dict) else None

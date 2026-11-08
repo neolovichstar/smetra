@@ -581,6 +581,24 @@ window.addEventListener('hashchange',()=>{
   if(!appSections.has(section)||section===tab)return;
   tab=section;closeNavigation();if(user)renderNavigation();
 });
+window.addEventListener('popstate',()=>{
+  const section=location.hash.slice(1)||'assistant';
+  if(!appSections.has(section)||section===tab)return;
+  tab=section;closeNavigation();if(user)renderNavigation();
+});
+// Verified UI-only navigation for assistant actions. No backend writes are
+// performed; history and visible section change as one operation.
+window.SmetraNavigateTo=async(section)=>{
+  if(!appSections.has(section))throw Error('Неизвестный раздел');
+  if(!user)throw Error('Сначала войдите в Сметру');
+  if(section==='admin'&&user.role!=='admin')throw Error('Нет доступа к администрированию');
+  if(tab!==section){
+    tab=section;
+    history.pushState({},'',location.pathname+location.search+'#'+encodeURIComponent(section));
+  }
+  closeNavigation();
+  await renderNavigation();
+};
 // New estimates are made by the assistant: the user describes the task and
 // reviews the draft in the editor beside the chat. There is no blank form.
 function openEstimateAssistant(text=''){

@@ -6,7 +6,7 @@
   height:calc(100dvh - var(--topbar-h) - var(--tabbar-space,0px));min-height:480px;transition:grid-template-columns var(--t-slow) var(--ease)
 }
 .assistant-studio.assistant-tools-collapsed{--rail-w:56px}
-.assistant-studio.has-quote-preview{--preview-w:min(460px,38vw)}
+.assistant-studio.has-quote-preview{--preview-w:var(--preview-saved-w,min(460px,38vw))}
 
 /* ───────── Rail ───────── */
 .assistant-toolrail{grid-area:rail;position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line);background:var(--bg);overflow:hidden}
@@ -68,14 +68,6 @@
 .assistant-thread{display:flex;flex-direction:column;gap:var(--s-6)}
 .assistant-studio:not(.has-conversation) .assistant-main-column{justify-content:center}
 .assistant-studio:not(.has-conversation) .assistant-content{flex:0 1 auto;min-height:0;overflow-y:auto;padding-top:0;padding-bottom:var(--s-5)}
-
-.assistant-welcome{display:flex;flex-direction:column;align-items:center;gap:var(--s-3);text-align:center;animation:view-enter 420ms var(--ease) both}
-.assistant-welcome h2{font-size:clamp(26px,3.2vw,34px);font-weight:600;letter-spacing:var(--tracking-display)}
-.assistant-welcome p{max-width:56ch;color:var(--text-2);font-size:var(--fs-15)}
-.assistant-suggestions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:var(--s-3)}
-.assistant-suggestions button{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px;border:1px solid var(--line-strong);border-radius:var(--r-pill);color:var(--text-2);font-size:var(--fs-14);transition:background-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
-.assistant-suggestions button:hover{background:var(--surface-2);color:var(--text);border-color:color-mix(in srgb,var(--text) 25%,transparent)}
-.assistant-suggestions svg{width:16px;height:16px;color:var(--text-3)}
 
 /* Messages */
 .assistant-message{position:relative;display:flex;flex-direction:column;gap:6px;min-width:0;animation:message-in 280ms var(--ease) both}
@@ -396,7 +388,12 @@
 }
 
 /* ───────── Estimate preview panel ───────── */
-.smetra-quote-preview{grid-area:preview;display:flex;flex-direction:column;min-width:0;min-height:0;border-left:1px solid var(--line);background:var(--surface-1);animation:panel-in var(--t-slow) var(--ease) both}
+.smetra-quote-preview{grid-area:preview;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;border-left:1px solid var(--line);background:var(--surface-1);animation:panel-in var(--t-slow) var(--ease) both}
+.smetra-quote-preview.is-closing{animation:none;opacity:0;transform:translateX(20px);transition:opacity 240ms var(--ease),transform 240ms var(--ease);pointer-events:none}
+@media (prefers-reduced-motion:reduce){
+  .assistant-studio{transition:none}
+  .smetra-quote-preview,.smetra-quote-preview.is-closing{animation:none;transition:none}
+}
 .smetra-quote-preview[hidden]{display:none}
 @keyframes panel-in{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
 .smetra-quote-preview-back[hidden]{display:none}
@@ -586,25 +583,16 @@
  .smetra-document-config-choice,.smetra-document-config-styles button{transition:none}
 }
 
-/* Compact, inline decision affordance above the message composer. */
-.assistant-decision-slot:empty{display:none}
-.assistant-decision-slot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:0 0 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--text)}
-.assistant-decision-heading{display:flex;flex-direction:column;gap:4px;min-width:0}
-.assistant-decision-heading span{font-size:11px;color:var(--text-3)}
-.assistant-decision-heading strong{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:450px}
-.assistant-decision-buttons{display:flex;gap:6px;align-items:center;flex:none}
-.assistant-decision-buttons .btn{min-height:32px;padding:0 10px;font-size:12px;border-radius:8px}
+/* Clarifying choices are part of the chat message; no composer decision tray. */
+.assistant-question-inline{display:flex;flex-direction:column;gap:10px;max-width:100%;margin-top:14px;color:var(--text)}
+.assistant-question-inline>strong{font-size:var(--fs-14);font-weight:600;line-height:1.5;overflow-wrap:anywhere}
 .assistant-question-choice{display:flex;flex-wrap:wrap;gap:7px}
-.assistant-question-choice button{border:1px solid var(--line);border-radius:9px;background:transparent;padding:7px 10px;color:var(--text-2);font-size:12px}
+.assistant-question-choice button{border:1px solid var(--line);border-radius:9px;background:transparent;padding:7px 10px;color:var(--text-2);font-size:var(--fs-12)}
 .assistant-question-choice button:hover{background:var(--surface-3);color:var(--text)}
-.assistant-question-custom{display:flex;gap:8px;min-width:0;flex:1 1 100%}
+.assistant-question-custom{display:flex;gap:8px;min-width:0;max-width:450px}
 .assistant-question-custom input{flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 10px}
-.assistant-decision-slot .assistant-question-custom button{min-height:34px;border:1px solid var(--line);border-radius:9px;padding:0 10px}
-@media(max-width:560px){
- .assistant-decision-slot{flex-direction:column;align-items:stretch;gap:10px}
- .assistant-decision-heading strong{max-width:100%}
- .assistant-decision-buttons{justify-content:flex-end}
-}
+.assistant-question-custom button{min-height:34px;border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--text-2)}
+@media(max-width:560px){.assistant-question-custom{max-width:100%}}
 
 /* Context menu styling applies to the authenticated cabinet only. */
 /* Focused right-click actions: compact, quiet and linked to the clicked object. */
@@ -622,6 +610,8 @@
 
 /* AI estimate drafting: live draft in the editor panel, resizable split, phone switch. */
 .smetra-quote-preview{position:relative}
+/* At tablet/phone sizes this is a true overlay, not a grid child. */
+@media (max-width:1280px){.smetra-quote-preview{position:fixed}}
 .smetra-quote-preview-grip{position:absolute;top:0;bottom:0;left:-4px;width:8px;cursor:col-resize;touch-action:none;z-index:2}
 .smetra-quote-preview-grip::after{content:'';position:absolute;top:50%;left:3px;width:2px;height:40px;margin-top:-20px;border-radius:2px;background:var(--line-strong);opacity:0;transition:opacity var(--t-fast) var(--ease)}
 .smetra-quote-preview-grip:hover::after,.smetra-quote-preview-grip:focus-visible::after,.assistant-studio.is-resizing .smetra-quote-preview-grip::after{opacity:1}
