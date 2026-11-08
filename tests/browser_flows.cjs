@@ -50,6 +50,8 @@ const assert = require('node:assert/strict');
     await send('Network.setCookie',{name:'session',value:account.token,url:site,httpOnly:true,sameSite:'Lax'});
     await send('Page.navigate',{url:site+'/app#dashboard'});
   }
+  await until("document.querySelector('#shell')&&!document.querySelector('#shell').classList.contains('hidden')");
+  await evaluate("tab='dashboard';location.hash='dashboard';renderNavigation()");
   await until("document.querySelector('[data-work=quote-new]')");
   await until("document.querySelector('#capture-text')?.dataset.autogrow && document.querySelector('.sidebar-disclosure')");
   const navIconAudit=await evaluate("(()=>[...document.querySelectorAll('#sidebar .sidebar-group button[data-tab]')].map(button=>({tab:button.dataset.tab,svg:button.querySelectorAll(':scope > svg').length,dataIcon:button.getAttribute('data-ui-icon'),before:getComputedStyle(button,'::before').content})))()");
