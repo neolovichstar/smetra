@@ -905,3 +905,20 @@ html.in-app :is(button,.btn,.sidebar,.app-nav){-webkit-user-select:none;user-sel
   .premium-cloud-sync-list .premium-folder-actions{justify-content:flex-end}
   .premium-synced-actions{flex-wrap:wrap;justify-content:flex-end}
 }
+
+/* Consolidated material planning and purchase cost scenarios. */
+.procurement-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0}
+.procurement-toolbar h3{margin:0;font-size:19px}.procurement-note{opacity:.68;font-size:13px;line-height:1.6;margin:8px 0;overflow-wrap:anywhere}
+.procurement-scenario{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:18px 0;border-block:1px solid rgba(128,128,128,.2)}
+.procurement-scenario[hidden]{display:none}.procurement-scenario label{display:grid;gap:9px;flex:1;min-width:200px;font-size:13px}
+.procurement-scenario input{width:100%;box-sizing:border-box;min-height:44px;border:1px solid rgba(128,128,128,.35);border-radius:10px;padding:10px 12px;background:transparent;color:inherit;font:inherit}
+.procurement-filter{display:flex;align-items:center;gap:10px;margin:18px 0;font-size:13px}.procurement-filter input{width:18px;height:18px;flex:none;accent-color:currentColor}
+.procurement-summary{opacity:.75;font-size:13px;margin:16px 0}.procurement-budget{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.procurement-budget>div{display:grid;align-content:start;gap:10px;padding:16px;border:1px solid rgba(128,128,128,.22);border-radius:14px;min-width:0}
+.procurement-budget span{font-size:12px;opacity:.68}.procurement-budget strong{font-size:19px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.procurement-material{border-top:1px solid rgba(128,128,128,.22);padding:18px 0;overflow-wrap:anywhere}.procurement-material header,.procurement-price{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.procurement-material header strong{font-size:16px}.procurement-material header b{font-size:14px;flex:none}.procurement-material p{font-size:13px;line-height:1.6;margin:8px 0}
+.procurement-price{font-size:12px;line-height:1.6;opacity:.8;margin-top:12px}.procurement-price strong{flex:none}.procurement-warning{font-weight:600}
+[data-procurement-status]{font-size:13px;line-height:1.6;overflow-wrap:anywhere}[data-procurement-status]:empty{display:none}
+@media(max-width:1000px){.procurement-budget{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.procurement-toolbar{align-items:flex-start;flex-direction:column}.procurement-toolbar .btn{width:100%;box-sizing:border-box}.procurement-scenario{gap:10px}.procurement-scenario label{min-width:100%;box-sizing:border-box}.procurement-scenario .btn{flex:1;white-space:normal}.procurement-budget{gap:8px}.procurement-budget>div{padding:12px}.procurement-budget strong{font-size:16px}.procurement-material header,.procurement-price{align-items:flex-start;flex-direction:column;gap:6px}.procurement-material header b{flex:auto}.procurement-price strong{flex:auto}}

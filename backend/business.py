@@ -30,6 +30,7 @@ FINANCE_KEYS = frozenset((
     "cash_profit", "planned_profit", "forecast_profit", "cash_result", "budget_used_pct",
     "overrun", "overruns", "orders_with_costs", "orders_without_costs", "expenses",
     "planned_cost_kopecks", "cost_kopecks", "actual_cost_kopecks",
+    "procurement_budget",
 ))
 FINANCE_ROLES = ("owner", "admin", "manager")
 
@@ -2512,6 +2513,7 @@ class Service:
             or kind == "export" and len(rest) == 2 and rest[0] in ("files", "versions")
             or kind == "documents" and len(rest) == 2 and rest[1] == "pdf"
             or kind == "transfer" and rest
+            or kind == "construction" and rest[-1:] == ["procurement-plan.xlsx"]
         ):
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
