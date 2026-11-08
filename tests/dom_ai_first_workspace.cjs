@@ -14,7 +14,7 @@ const {JSDOM} = require(process.env.SMETRA_JSDOM_MODULE || 'jsdom');
   assert.match(html,/data-tab="billing"/,'Billing remains reachable without AI credits');
   assert.match(html,/data-tab="settings"/,'Account controls remain reachable');
   assert.match(html,/data-tab="support"/,'Support remains reachable');
-  assert.match(html,/assistant\.css\?v=20261108-memory1/,'Updated CSS must bypass old cache');
+  assert.match(html,/assistant\.css\?v=20261108-slide1/,'Updated CSS must bypass old cache');
   assert.match(app,/'premium' : 'assistant'/,'Assistant is the default start page');
   assert.match(styles,/height:min\(880px,calc\(100dvh - 28px\)\)/,'Dialog must grow vertically');
   assert.match(styles,/width:min\(980px,calc\(100vw - 24px\)\)/,'Dialog width is not increased');
