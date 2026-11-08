@@ -9,7 +9,7 @@ import json
 import re
 from decimal import Decimal, InvalidOperation, DivisionByZero, localcontext
 
-from backend.business import DomainError, identity, stamp, string, transaction
+from backend.business import DomainError, identity, stamp, string
 
 PREFIX = "SMETRA_FORMULA_V1:"
 IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,39}\Z")
@@ -227,29 +227,29 @@ def save_rule(service, data):
     rule = normalize_rule(data)
     content = PREFIX + json.dumps({key: rule[key] for key in ("title", "expression", "unit", "defaults")},
                                   ensure_ascii=False, separators=(",", ":"))
-    with transaction(service.con):
-        rows = service.con.execute(
-            "SELECT id,title,content FROM workspace_knowledge WHERE workspace_id=? AND kind='rule' "
-            "AND title=? LIMIT 1", (service.wid, rule["title"]),
-        ).fetchall()
-        if rows:
-            if not rows[0]["content"].startswith(PREFIX):
-                raise DomainError(409, "Название занято другим правилом команды")
-            rid = rows[0]["id"]
-            service.con.execute(
-                "UPDATE workspace_knowledge SET content=?,enabled=1,updated_at=? WHERE id=? AND workspace_id=?",
-                (content, stamp(), rid, service.wid),
-            )
-        else:
-            count = service.con.execute(
-                "SELECT count(*) FROM workspace_knowledge WHERE workspace_id=?", (service.wid,),
-            ).fetchone()[0]
-            if count >= 50:
-                raise DomainError(409, "Достигнут лимит правил рабочего пространства")
-            rid = identity()
-            service.con.execute(
-                "INSERT INTO workspace_knowledge(id,workspace_id,title,content,kind,enabled,created_by,created_at,updated_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?)",
-                (rid, service.wid, rule["title"], content, "rule", 1, service.user["id"], stamp(), stamp()),
-            )
+    # The enclosing assistant-action transaction owns atomicity and idempotency.
+    rows = service.con.execute(
+        "SELECT id,title,content FROM workspace_knowledge WHERE workspace_id=? AND kind='rule' "
+        "AND title=? LIMIT 1", (service.wid, rule["title"]),
+    ).fetchall()
+    if rows:
+        if not rows[0]["content"].startswith(PREFIX):
+            raise DomainError(409, "Название занято другим правилом команды")
+        rid = rows[0]["id"]
+        service.con.execute(
+            "UPDATE workspace_knowledge SET content=?,enabled=1,updated_at=? WHERE id=? AND workspace_id=?",
+            (content, stamp(), rid, service.wid),
+        )
+    else:
+        count = service.con.execute(
+            "SELECT count(*) FROM workspace_knowledge WHERE workspace_id=?", (service.wid,),
+        ).fetchone()[0]
+        if count >= 50:
+            raise DomainError(409, "Достигнут лимит правил рабочего пространства")
+        rid = identity()
+        service.con.execute(
+            "INSERT INTO workspace_knowledge(id,workspace_id,title,content,kind,enabled,created_by,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (rid, service.wid, rule["title"], content, "rule", 1, service.user["id"], stamp(), stamp()),
+        )
     return {"id": rid, **rule, "saved": True}
