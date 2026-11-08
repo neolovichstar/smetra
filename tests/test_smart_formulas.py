@@ -120,6 +120,7 @@ class RuleStoreTests(unittest.TestCase):
             "INSERT INTO workspace_knowledge VALUES(?,?,?,?,?,?,?,?,?)",
             ("old", "one", "Строительные нормы", "Не перезаписывать", "rule", 1, "author", 1, 1),
         )
+        self.con.commit()
         with self.assertRaises(DomainError):
             save_rule(self.service, {"title": "Строительные нормы", "expression": "2*2"})
         self.assertEqual(self.con.execute("SELECT content FROM workspace_knowledge WHERE id='old'").fetchone()[0],
