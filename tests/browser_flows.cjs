@@ -78,7 +78,7 @@ const assert = require('node:assert/strict');
   await until("!document.body.classList.contains('sidebar-compact')");
   assert.equal(await evaluate("document.querySelector('#sidebar').inert"),false,'Expanded sidebar remains accessible');
   // Compact navigation exposes only assistant, estimates and account routes.
-  assert.equal(await evaluate("(()=>{const text=document.querySelector('#sidebar').textContent;return text.includes('Работа с ИИ')&&text.includes('Аккаунт')&&['construction','files','documents','chats','changelog'].every(route=>document.querySelector('#sidebar [data-tab='+route+']'))&&!document.querySelector('#sidebar [data-tab=calculators]')})()"),true,'Assistant, files and object pages remain available without calculator navigation');
+  assert.equal(await evaluate("(()=>{const text=document.querySelector('#sidebar').textContent;return text.includes('Работа с ИИ')&&text.includes('Аккаунт')&&['construction','files','documents','changelog'].every(route=>document.querySelector('#sidebar [data-tab='+route+']'))&&!document.querySelector('#sidebar [data-tab=calculators]')})()"),true,'Assistant, files and object pages remain available without calculator navigation');
   await fill('#capture-text','First line\nSecond line\nThird line\nFourth line');
   assert.equal(await evaluate("document.querySelector('#capture-text').getBoundingClientRect().height>44"),true);
   await fill('#capture-text','');
@@ -109,7 +109,8 @@ const assert = require('node:assert/strict');
   assert.equal(await evaluate("parseFloat(getComputedStyle(document.querySelector('#capture-text')).fontSize)>=16"),true,'Mobile input text stays readable');
 
     assert.equal(await evaluate("(()=>{const n=document.querySelector('.app-nav').getBoundingClientRect(),b=document.querySelector('#nav-toggle').getBoundingClientRect();return b.top>=n.top-1&&b.bottom<=n.bottom+1})()"),true);
-    assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44 && document.querySelector('#command-open').getBoundingClientRect().height >= 44"),true);
+    assert.equal(await evaluate("document.querySelector('#nav-toggle').getBoundingClientRect().width >= 44"),true,'Mobile menu keeps a usable touch target');
+    assert.equal(await evaluate("document.querySelector('#command-open').hidden"),true,'Header search stays hidden as requested');
     assert.equal(await evaluate("document.querySelector('.capture-actions button').getBoundingClientRect().width >= 44"),true);
     const captureGeometry=await evaluate("(()=>{const form=document.querySelector('#capture-form'),input=document.querySelector('#capture-text'),action=document.querySelector('.capture-actions'),button=action?.querySelector('button');if(!form||!input||!action||!button)return {missing:true};const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};const style=e=>{const s=getComputedStyle(e);return {display:s.display,gridArea:s.gridArea,gridColumn:s.gridColumn,gridRow:s.gridRow,gridTemplateAreas:s.gridTemplateAreas,gridTemplateColumns:s.gridTemplateColumns,maxWidth:s.maxWidth,minWidth:s.minWidth,visibility:s.visibility}};return {viewport:innerWidth,form:{...rect(form),...style(form)},input:{...rect(input),...style(input)},action:{...rect(action),...style(action)},button:{...rect(button),...style(button)},cssReady:[...document.styleSheets].some(ss=>ss.href?.includes('dashboard-reference.css'))}})()");
     console.log('QA mobile composer',width,JSON.stringify(captureGeometry));
