@@ -1,6 +1,5 @@
 """Regression tests for assistant quote audits on legacy and optional lines."""
 import unittest
-from types import SimpleNamespace
 
 from backend.assistant_app_tools import audit_quote
 
