@@ -37,6 +37,8 @@ body.nav-open .nav-toggle span:first-child{top:17.2px;transform:rotate(45deg)}
 body.nav-open .nav-toggle span:last-child{top:17.2px;transform:rotate(-45deg)}
 .nav-search{display:inline-flex;align-items:center;gap:10px;height:36px;min-width:240px;padding:0 8px 0 10px;border:1px solid var(--line-strong);border-radius:var(--r-2);background:var(--surface-1);color:var(--text-3);font-size:var(--fs-14);transition:border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
 .nav-search:hover{border-color:color-mix(in srgb,var(--text) 24%,transparent);color:var(--text-2)}
+/* Keep command search available to shortcuts/context actions, but remove the top-bar control. */
+.app-nav .nav-search[hidden]{display:none!important}
 .nav-search>span{flex:1;text-align:left}
 .nav-search svg{width:16px;height:16px}
 body.auth-mode .app-nav,body.auth-mode #shell{display:none}
