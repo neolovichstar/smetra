@@ -617,6 +617,91 @@ def _provider_timeout(maximum):
     return min(maximum, remaining)
 
 
+def _recover_textual_tool_markup(content):
+    """Fail closed on provider-emitted XML-like tool markup or cloud references.
+
+    When a provider falls back to writing a textual function call, convert
+    strictly validated, standalone read-only calls into real tool_calls.
+    Mutating calls are never allowed by this compatibility path. The caller
+    still performs the normal membership, scope and feature checks.
+    """
+    import re
+
+    marker = re.search(
+        r"<\\s*(?:tool_call\\b|function\\s*=|parameter\\s*=)"
+        r"|live\\.[A-Za-z0-9_-]{24,}={0,2}",
+        content, re.IGNORECASE,
+    )
+    if not marker:
+        return content, []
+
+    match = re.fullmatch(
+        r"\\s*<tool_call>\\s*<function=(read_cloud_file|analyze_cloud_pdf_page|list_cloud_files)>"
+        r"(.*?)</function>\\s*</tool_call>\\s*",
+        content, re.DOTALL,
+    )
+    if match and _MODEL_TOOL_CHOICE.get() != "none":
+        name, body = match.groups()
+        accepted = {
+            "read_cloud_file": {"id", "query", "page_start"},
+            "analyze_cloud_pdf_page": {"id", "page"},
+            "list_cloud_files": {"query"},
+        }[name]
+        params = {}
+        items = list(re.finditer(
+            r"<parameter=([a-z_]+)>\\s*(.*?)\\s*</parameter>",
+            body, re.DOTALL,
+        ))
+        if items and not re.sub(
+            r"<parameter=([a-z_]+)>\\s*(.*?)\\s*</parameter>",
+            "", body, flags=re.DOTALL,
+        ).strip():
+            for item in items:
+                key, raw = item.group(1), item.group(2).strip()
+                if key not in accepted or key in params:
+                    params = {}
+                    break
+                if key in ("page", "page_start"):
+                    if not raw.isascii() or not raw.isdecimal() or not 1 <= int(raw) <= 300:
+                        params = {}
+                        break
+                    params[key] = int(raw)
+                elif key == "id":
+                    if not re.fullmatch(
+                        r"(?:live\\.[A-Za-z0-9_=-]{30,2395}|[A-Za-z0-9_-]{1,80})", raw
+                    ):
+                        params = {}
+                        break
+                    params[key] = raw
+                elif key == "query":
+                    if not raw or len(raw) > 100:
+                        params = {}
+                        break
+                    params[key] = raw
+            if params and (name == "list_cloud_files" or "id" in params):
+                return "", [{
+                    "id": "recovered-" + identity(),
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": json.dumps(params, ensure_ascii=False),
+                    },
+                }]
+
+    # Tool markup is not prose. Do not show it or any embedded opaque ID in
+    # history, SSE, errors, or model replies, even if it is malformed or a
+    # provider-side fallback attempted a write.
+    if re.search(r"<\\s*(?:tool_call\\b|function\\s*=|parameter\\s*=)", content, re.IGNORECASE):
+        return "Не удалось завершить чтение документа. Повторите запрос на нужные страницы.", []
+
+    # A model can quote a live reference in otherwise ordinary prose.
+    return re.sub(
+        r"live\\.[A-Za-z0-9_-]{24,}={0,2}",
+        "[временная ссылка на файл скрыта]",
+        content,
+    ), []
+
+
 def _validated_reply(value):
     """Validate the entire provider envelope before running even one tool."""
     if not isinstance(value, dict):
@@ -651,6 +736,14 @@ def _validated_reply(value):
             raise ValueError("invalid model tool arguments")
         identifiers.add(call_id)
         normalised.append({"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments or "{}"}})
+    if not normalised:
+        content, recovered = _recover_textual_tool_markup(content)
+        normalised.extend(recovered)
+    else:
+        # Prefer genuine structured calls over duplicated plain-text markup.
+        safe_content, _ = _recover_textual_tool_markup(content)
+        content = ("" if safe_content.startswith("Не удалось завершить чтение документа.")
+                   else safe_content)
     result = {"content": content, "tool_calls": normalised}
     if isinstance(value.get("_usage"), dict):
         result["_usage"] = value["_usage"]
@@ -1735,10 +1828,19 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         calls = response.get("tool_calls") or []
         if not calls:
             if on_delta and not actions and not questions:
-                # These deltas belong to the committed answer, not an early
-                # thought that may be replaced after a tool call.
-                for fragment in final_round_deltas:
-                    on_delta(fragment)
+                # Never stream raw provider tokens: they could contain a
+                # temporary cloud access reference or pseudo-tool markup.
+                # Split the sanitised final text across original chunk lengths
+                # for normal UI streaming without leaking unvalidated content.
+                safe = response["content"]
+                position = 0
+                for untrusted_chunk in final_round_deltas:
+                    fragment = safe[position:position + len(untrusted_chunk)]
+                    position += len(fragment)
+                    if fragment:
+                        on_delta(fragment)
+                if position < len(safe):
+                    on_delta(safe[position:])
             break
         if turn == 3:
             raise DomainError(502, "Ассистент не смог завершить проверку. Уточните запрос и повторите.")
