@@ -4,10 +4,18 @@
 .venv*
 .agents
 .codex
+.claude
+.idea
+.vscode
+.pytest_cache
+.ruff_cache
 data
 dist
 node_modules
 apps/mobile
+smetra
+promo
+video
 tests
 docs
 supabase
@@ -18,5 +26,6 @@ supabase
 *.jks
 *.keystore
 *.p12
+*.bak
 **/__pycache__
 **/.gradle
