@@ -177,7 +177,12 @@ def read_chat_history(service, conversation_id, before_id="", limit=20):
 
 
 def automatic_history_context(service, prompt, excluded_ids):
-    """Only when memory is enabled; do not recall old data on forget requests."""
+    """Explicit cross-chat recall only; never mine history on ordinary tasks."""
+    from backend.context_window import explicit_history_reference
+
+    # Avoid both the DB scan and attached token costs on regular requests.
+    if not explicit_history_reference(prompt):
+        return ""
     if not profile(service.con, service.user)["memory_enabled"]:
         return ""
     if re.search(r"забуд|не вспоминай|удали.{0,20}истори|forget\b", prompt.casefold()):
@@ -188,7 +193,7 @@ def automatic_history_context(service, prompt, excluded_ids):
     # A few untrusted, attributed excerpts provide continuity without shipping
     # every conversation or paying for giant prompts.
     query = " ".join(terms[:5])
-    matches = search_chat_history(service, query, limit=3, scanned_limit=1500,
+    matches = search_chat_history(service, query, limit=3, scanned_limit=600,
                                   exclude_ids=excluded_ids)["items"]
     if not matches:
         return ""

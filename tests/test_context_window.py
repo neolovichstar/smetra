@@ -60,6 +60,38 @@ class ContextWindowTests(unittest.TestCase):
         self.assertIn("грунтовку",summary)
         self.assertGreaterEqual(stats["compressed_excerpts"],1)
 
+    def test_new_task_skips_old_dialogue_and_reduces_provider_tokens(self):
+        from backend.context_window import needs_older_history, explicit_history_reference
+
+        rows = [
+            line(i, "user" if i % 2 else "assistant",
+                 f"Задача {i}. Завершили старый проект, нельзя менять ставки. " + "подробности " * 65)
+            for i in range(180, 0, -1)
+        ]
+        recent, compressed, stats = pack_history(
+            rows, "Сделай смету по новому PDF", fixed_tokens=15500, total_tokens=32768
+        )
+        self.assertEqual(compressed, "")
+        self.assertFalse(stats["history_recall_enabled"])
+        self.assertLessEqual(len(recent), 10)
+        self.assertGreater(stats["estimated_tokens_not_sent"], 40000)
+        self.assertFalse(needs_older_history("Сделай смету по новому PDF"))
+        self.assertTrue(explicit_history_reference("Что мы обсуждали в прошлом чате?"))
+        self.assertFalse(explicit_history_reference("Сколько стоит установка розетки?"))
+
+    def test_followup_can_use_bounded_old_excerpt_without_resending_thread(self):
+        rows = [
+            line(i, "user", "Договорились использовать фирменную штукатурку. " + "заметки " * 40)
+            for i in range(95, 0, -1)
+        ]
+        recent, older, stats = pack_history(rows, "Напомни, как договаривались",
+                                             fixed_tokens=16000, total_tokens=32768)
+        self.assertTrue(older)
+        self.assertIn("штукатурку", older)
+        self.assertLessEqual(stats["compressed_excerpts"], 5)
+        self.assertLess(estimate_tokens(older), 1200)
+        self.assertGreater(stats["estimated_tokens_not_sent"], 0)
+
     def test_iterative_tool_context_compaction_keeps_protected_results(self):
         from unittest.mock import patch
 

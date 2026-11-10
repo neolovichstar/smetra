@@ -62,6 +62,19 @@ class CurrentCloudRequestTests(unittest.TestCase):
         self.assertEqual(model_messages[0][-2]["tool_calls"][0]["function"]["name"], "read_cloud_file")
         self.assertIn("Изучил", result["answer"])
 
+    def test_cloud_estimate_uses_compact_tool_catalog_not_whole_product(self):
+        from backend.assistant import model_tools, tools
+
+        query = [{"role": "user", "content":
+                  "Найди PDF в Google Диске и сделай смету по квартире"}]
+        slim = {item["function"]["name"] for item in model_tools(query)}
+        self.assertIn("create_quotes", slim)
+        self.assertIn("read_cloud_file", slim)
+        self.assertIn("analyze_cloud_pdf_page", slim)
+        self.assertIn("material_calculator", slim)
+        self.assertNotIn("delete_quotes", slim)
+        self.assertLess(len(slim), len(tools()) // 2)
+
     def test_does_not_select_ambiguous_pdf_or_other_provider(self):
         def fake(service, name, args):
             return {

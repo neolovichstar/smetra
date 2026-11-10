@@ -9,10 +9,30 @@ import re
 
 
 _MEMORY_HINT = re.compile(
-    r"(?i)запомни|договорил|решил|согласовал|услови|важно|нужно|нельзя|"
-    r"всегда|никогда|срок|бюджет|изменил|исправил|готово|результат|"
-    r"уточнил|напомни|сделай|выбрали|выбрал|решение"
+    r"(?i)запомни|договорил|решил|согласовал|услови|нельзя|всегда|"
+    r"никогда|срок|бюджет|изменил|выбрали|выбрал|решение|предпочитаю"
 )
+# Cross-chat search is opt-in through a genuine historical reference. Generic
+# commands must not scan last year's chats or pay to attach irrelevant quotes.
+_EXPLICIT_HISTORY = re.compile(
+    r"(?i)(?:в|из|о|по)\\s+(?:прошл\\w*|предыдущ\\w*|стар\\w*)\\s+"
+    r"(?:чате|чатах|диалогах|беседах|разговорах)|"
+    r"раньше|ранее|помнишь|вспомни|напомни|как\\s+мы\\s+(?:решили|обсуждали|"
+    r"договаривались|выбрали)|в\\s+другом\\s+чате|истори\\w*\\s+(?:чат|диалог)"
+)
+_FOLLOWUP = re.compile(
+    r"(?i)^\\s*(?:и\\s+|а\\s+|ну\\s+)?(?:продолжай|продолжи|дальше|"
+    r"завершай|ещ[её]|доделай|повтори|переделай|исправь|что\\s+дальше)|"
+    r"тот\\s+же|та\\s+же|того\\s+же|по\\s+нему|как\\s+раньше"
+)
+
+
+def explicit_history_reference(prompt):
+    return bool(_EXPLICIT_HISTORY.search(prompt or ""))
+
+
+def needs_older_history(prompt):
+    return explicit_history_reference(prompt) or bool(_FOLLOWUP.search(prompt or ""))
 _WORD = re.compile(r"[^\W_]{3,}", re.UNICODE)
 _IGNORE = frozenset(
     "это этот что как когда меня тебе этот где при для или если не надо нужно"
@@ -24,8 +44,9 @@ _IGNORE = frozenset(
 # configured provider can override this per deployment. Reserve tokens for
 # tool schemas, the next answer, tool results and error margin.
 DEFAULT_TOTAL = 32768
-MAX_HISTORY_ROWS = 240
-MAX_MESSAGES_IN_PROMPT = 18
+MAX_HISTORY_ROWS = 120
+MAX_MESSAGES_IN_PROMPT = 10
+MAX_OLDER_EXCERPTS = 5
 
 
 def estimate_tokens(value):
@@ -77,11 +98,13 @@ def pack_history(rows_desc, current_prompt, *, fixed_tokens=0, total_tokens=None
     """
     total = configured_total() if total_tokens is None else max(12000, int(total_tokens))
     # Estimate includes system, tools, profile, policies and explicit user input.
-    # 7k tokens reserved for output and tool results, with a 1k drift margin.
-    available = max(2200, min(16500, total - fixed_tokens - 8000))
-    usable = max(1700, available - 700)
-    recent_budget = max(1200, min(int(usable * .75), 12500))
-    older_budget = max(400, min(usable - recent_budget, 3400))
+    # Default cap is much lower than model context capacity because input is
+    # billed on *every* provider round. Reserve room for the answer and tools.
+    available = max(1800, min(6200, total - fixed_tokens - 8000))
+    usable = max(1600, available - 280)
+    recent_budget = max(1100, min(int(usable * .82), 3900))
+    older_budget = (max(0, min(900, usable - recent_budget))
+                    if needs_older_history(current_prompt) else 0)
     rows = list(rows_desc)
     recent = []
     recent_cost = 0
@@ -102,6 +125,7 @@ def pack_history(rows_desc, current_prompt, *, fixed_tokens=0, total_tokens=None
         recent_cost += amount
     if recent_override is not None:
         recent = list(recent_override)
+        recent_cost = sum(estimate_tokens(row["content"]) for row in recent)
 
     recent_ids = {row["id"] for row in recent}
     older = [row for row in rows if row["id"] not in recent_ids]
@@ -114,9 +138,10 @@ def pack_history(rows_desc, current_prompt, *, fixed_tokens=0, total_tokens=None
     # hallucinatory claims. Ranking favours relevance + explicit decisions.
     scored = sorted(enumerate(older), key=lambda item: (_rank(item[1], terms), -item[0]), reverse=True)
     for index, row in scored:
-        if len(selected) >= 12:
+        if len(selected) >= MAX_OLDER_EXCERPTS:
             break
-        if _rank(row, terms) < 5 and len(selected) >= 3:
+        # A generic "do it" from weeks ago is not useful continuity.
+        if not older_budget or (_rank(row, terms) < 6 and len(selected) >= 2):
             continue
         excerpt = _SECRET.sub("[секрет скрыт]", _clip(row["content"].strip(), 540))
         excerpt = excerpt.replace("\u0000", " ")
@@ -148,6 +173,10 @@ def pack_history(rows_desc, current_prompt, *, fixed_tokens=0, total_tokens=None
         "estimated_older_tokens": used,
         "estimated_budget": available,
         "truncated_older_history": len(rows) >= MAX_HISTORY_ROWS,
+        "history_recall_enabled": bool(older_budget),
+        "estimated_tokens_not_sent": max(0, sum(
+            estimate_tokens(row["content"]) for row in rows
+        ) - recent_cost - used),
     }
 
 

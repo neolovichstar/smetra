@@ -556,6 +556,22 @@ def model_tools(messages):
         for call in message.get("tool_calls", []):
             parts.append(call.get("function", {}).get("name", ""))
     context = " ".join(parts).casefold()
+    # Cloud-document estimates need a small stable toolbox, not hundreds of
+    # unrelated finance, CRM, order and team schemas on every provider round.
+    cloud_quote = bool(
+        re.search(r"(?i)(?:гугл|google|яндекс|yandex|drive|диск)", context)
+        and re.search(r"(?i)(?:pdf|пдф|документ|файл)", context)
+        and re.search(r"(?i)смет\w*", context)
+    )
+    if cloud_quote:
+        allowed = {
+            "cloud_drive_status", "list_cloud_files", "read_cloud_file",
+            "analyze_cloud_pdf_page", "create_quotes", "list_records",
+            "get_record", "material_calculator", "calculate_construction",
+            "calculate_formula", "search_internet", "search_workspace_storage",
+            "read_file", "suggest_app_action", "report_progress",
+        }
+        return [tool for tool in tools() if tool["function"]["name"] in allowed]
     assembly = bool(re.search(r"сборк|технологическ|параметр|норм.{0,20}расход|assembl", context))
     workflow = bool(re.search(r"прибыл|марж|скидк|прогноз|остат.{0,20}затрат|оставш.{0,20}расход|вариант|альтернатив|себестоимост|расценк.{0,20}факт|заверш.{0,20}заказ|forecast|discount|margin|alternative|actual_rate|actual_cost|economics", context))
     supplement = bool(re.search(r"допработ|дополнительн.{0,20}работ|protect_construction_change", context))
@@ -1753,9 +1769,15 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     from backend.context_window import build_chat_context
 
     personal_context = assistant_context(service)
+    task_tools = model_tools([{"role": "user", "content": prompt}])
     previous, compacted, context_stats = build_chat_context(
         service, conversation_id, prompt, system, personal_context, rules, "",
-        tool_schemas=model_tools([{"role": "user", "content": prompt}]),
+        tool_schemas=task_tools,
+    )
+    logging.getLogger(__name__).info(
+        "assistant_context selected=%s older=%s saved_estimate=%s tool_schemas=%s",
+        context_stats["recent_messages"], context_stats["compressed_excerpts"],
+        context_stats["estimated_tokens_not_sent"], len(task_tools),
     )
     # Old conversations are searched separately, scoped to the same user and
     # workspace. Keep automatic recall small and always honour memory opt-out.
