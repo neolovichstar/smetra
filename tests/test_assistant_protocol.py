@@ -36,14 +36,78 @@ class AssistantProtocolTests(unittest.TestCase):
 
         def provider(messages):
             choices.append(assistant._MODEL_TOOL_CHOICE.get())
-            return self.tool("read-" + str(len(choices))) if len(choices) <= 3 else {"content": "Проверка завершена."}
+            return self.tool("read-" + str(len(choices))) if len(choices) <= 4 else {"content": "Проверка завершена."}
 
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-only"), patch("backend.assistant.query_model", side_effect=provider):
             code, result = self.call("/assistant/chat", "POST", {"text": "Проверь связанные записи"}, token)
         self.assertEqual(code, 200, result)
         self.assertEqual(result["answer"], "Проверка завершена.")
-        self.assertEqual(choices, ["auto", "auto", "auto", "none"])
+        self.assertEqual(choices, ["auto", "auto", "auto", "auto", "none"])
         self.assertEqual(assistant._MODEL_TOOL_CHOICE.get(), "auto")
+
+    def test_textual_cloud_read_is_executed_as_a_tool_not_printed(self):
+        token, _ = self.account("protocol-text-cloud")
+        opaque = "live." + "a" * 120
+        raw = (
+            "<tool_call> <function=read_cloud_file> "
+            f"<parameter=id>{opaque}</parameter> "
+            "<parameter=page_start>37</parameter> "
+            "</function> </tool_call>"
+        )
+        responses = [
+            {"content": raw},
+            {"content": "Прочитана страница 37. Данные проверены только на этой странице."},
+        ]
+        with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-only"), patch(
+            "backend.assistant.query_model", side_effect=responses
+        ), patch("backend.assistant_app_tools.read", return_value={
+            "name": "План.pdf", "excerpts": [{"page": 37, "text": "Площадь 20 м2"}],
+            "truncated": True,
+        }) as reader:
+            code, result = self.call(
+                "/assistant/chat", "POST", {"text": "Прочитай страницу 37 PDF"}, token
+            )
+        self.assertEqual(code, 200, result)
+        self.assertEqual(reader.call_count, 1)
+        self.assertEqual(reader.call_args.args[1], "read_cloud_file")
+        self.assertEqual(reader.call_args.args[2]["page_start"], 37)
+        self.assertNotIn(opaque, result["answer"])
+        self.assertNotIn("<tool_call>", result["answer"])
+        self.assertIn("страница 37", result["answer"])
+
+    def test_final_provider_tool_markup_never_exposes_cloud_reference(self):
+        from backend import assistant
+
+        opaque = "live." + "a" * 128
+        xml = (f"<tool_call><function=read_cloud_file>"
+               f"<parameter=id>{opaque}</parameter>"
+               "<parameter=page_start>37</parameter></function></tool_call>")
+        token = assistant._MODEL_TOOL_CHOICE.set("none")
+        try:
+            result = assistant._validated_reply({"content": xml})
+        finally:
+            assistant._MODEL_TOOL_CHOICE.reset(token)
+        self.assertEqual(result["tool_calls"], [])
+        self.assertNotIn(opaque, result["content"])
+        self.assertNotIn("<tool_call>", result["content"])
+
+    def test_textual_provider_markup_never_executes_write_tool(self):
+        from backend import assistant
+
+        raw = ("<tool_call><function=delete_quote>"
+               "<parameter=id>some-id</parameter></function></tool_call>")
+        result = assistant._validated_reply({"content": raw})
+        self.assertEqual(result["tool_calls"], [])
+        self.assertNotIn("<function=", result["content"])
+
+    def test_leaked_live_reference_redacted_in_prose(self):
+        from backend import assistant
+
+        opaque = "live." + "b" * 95 + "=="
+        result = assistant._validated_reply({"content": "Ссылка: " + opaque})
+        self.assertEqual(result["tool_calls"], [])
+        self.assertNotIn(opaque, result["content"])
+        self.assertIn("скрыта", result["content"])
 
     def test_malformed_model_calls_fail_without_500_or_pending_changes(self):
         token, _ = self.account("protocol-malformed")

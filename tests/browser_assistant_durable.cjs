@@ -42,7 +42,9 @@ assert(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Use an isolat
  checks.push('live SSE continues after leaving the page; one saved answer and one token charge');
  await open('');const cancelled=await submit('UI cancel durable question');
  const second={id:cancelled.conversation_id};
- await p.locator('.assistant-message.assistant').filter({hasText:'Поток начат.'}).waitFor();
+ // Buffered tool-safe responses may show no partial text until completion.
+ // Cancel while the slow server request is active, not after final text appears.
+ await p.locator('#assistant-stop').waitFor({state:'visible'});
  await p.locator('#assistant-stop').click();
  await until(async()=>((await api('/assistant/jobs/'+cancelled.id)).job.status==='cancelled'));
  const stoppedHistory=await cx.request.get(base+'/api/assistant/conversations/'+second.id);
