@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from contextvars import ContextVar
 import base64
 import os
@@ -654,6 +655,71 @@ def _recover_textual_tool_markup(content):
     ), []
 
 
+
+# Some provider fallbacks reply with an XML-like textual "tool call" instead
+# of an API tool_calls array. Never display or persist internal tool references.
+# Only recover a strict subset of read-only functions. No write/action calls.
+_TOOL_TEXT = re.compile(
+    r"\\s*<tool_call>\\s*<function=([a-z_]{3,80})>(.*?)</function>\\s*</tool_call>\\s*",
+    re.DOTALL,
+)
+_TOOL_PARAM = re.compile(r"\\s*<parameter=([a-z_]{1,32})>(.*?)</parameter>", re.DOTALL)
+_TOOL_TEXT_READS = {
+    "cloud_drive_status": set(),
+    "list_cloud_files": {"query"},
+    "read_cloud_file": {"id", "query", "page_start"},
+    "analyze_cloud_pdf_page": {"id", "page"},
+}
+_LIVE_REF_TEXT = re.compile(r"live\\.g[A-Za-z0-9_-]{40,}={0,2}")
+
+
+def _decode_textual_read(content):
+    """Return validated read-only tool calls or None; fail closed otherwise."""
+    found = _TOOL_TEXT.fullmatch(content)
+    if not found:
+        if "<tool_call" in content or "<function=" in content or "</parameter>" in content:
+            raise ValueError("malformed textual tool call")
+        return None
+    name, block = found.groups()
+    accepted = _TOOL_TEXT_READS.get(name)
+    if accepted is None:
+        raise ValueError("textual write or unknown tool call")
+    arguments, current = {}, 0
+    for param in _TOOL_PARAM.finditer(block):
+        if block[current:param.start()].strip():
+            raise ValueError("malformed textual parameter")
+        key, value = param.groups()
+        if key not in accepted or key in arguments:
+            raise ValueError("unexpected textual tool parameter")
+        value = value.strip()
+        if key in ("page", "page_start"):
+            if not value.isascii() or not value.isdecimal() or not 1 <= int(value) <= 300:
+                raise ValueError("invalid page")
+            arguments[key] = int(value)
+        else:
+            if not value or len(value) > (2400 if key == "id" else 100):
+                raise ValueError("invalid textual parameter")
+            if key == "id" and name in ("read_cloud_file", "analyze_cloud_pdf_page") and not (
+                value.startswith("live.") or re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", value)
+            ):
+                raise ValueError("invalid cloud reference")
+            arguments[key] = value
+        current = param.end()
+    if block[current:].strip() or (name in ("read_cloud_file", "analyze_cloud_pdf_page") and "id" not in arguments):
+        raise ValueError("incomplete textual tool call")
+    # Bounded and read-only: same normal tool dispatcher, entitlement and
+    # workspace checks still run. Never put a raw cloud reference in a reply.
+    return [{
+        "id": "textual_read_" + identity().replace("-", "")[:28],
+        "type": "function",
+        "function": {
+            "name": name,
+            "arguments": json.dumps(arguments, ensure_ascii=False, allow_nan=False),
+        },
+    }]
+
+
+
 def _validated_reply(value):
     """Validate the entire provider envelope before running even one tool."""
     if not isinstance(value, dict):
@@ -670,6 +736,14 @@ def _validated_reply(value):
     calls = value.get("tool_calls")
     if calls is None:
         calls = []
+    if not calls:
+        recovered = _decode_textual_read(content)
+        if recovered is not None:
+            calls = recovered
+            content = ""
+    # Other answers can still quote a cloud reference in prose: mask it
+    # before any SSE delta, database commit, or history replay.
+    content = _LIVE_REF_TEXT.sub("[защищённая ссылка на файл]", content)
     if not isinstance(calls, list) or len(calls) > 4:
         raise ValueError("invalid model tool calls")
     normalised, identifiers = [], set()
