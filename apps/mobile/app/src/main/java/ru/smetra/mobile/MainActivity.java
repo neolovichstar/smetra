@@ -64,7 +64,9 @@ public class MainActivity extends Activity {
     private TextView assistantRewardHint,assistantQuotaLabel;
     private RewardedAdLoader assistantRewardedAdLoader;
     private RewardedAd assistantRewardedAd;
-    private String assistantRewardAdUnitId="";
+    private String assistantRewardAdUnitId="",assistantRewardProvider="yandex";
+    private VkRewardedAds assistantVkRewardedAd;
+    private boolean assistantVkConsentGranted=false,assistantVkConsentDialogOpen=false;
     private JSONObject assistantRewardAttempt=null;
     private boolean assistantRewardStarting=false;
     private boolean assistantRewardChecking=false,assistantRewardLoading=false,assistantRewardClaiming=false,assistantRewardLoadFailed=false;
@@ -149,6 +151,7 @@ public class MainActivity extends Activity {
         c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(10000);c.setReadTimeout(path.startsWith("/assistant")?110000:(path.equals("/ai/draft")||path.equals("/files")&&method.equals("POST"))?65000:20000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json");
         if(sessionToken!=null)c.setRequestProperty("Authorization","Bearer "+sessionToken);
+        if(path.equals("/assistant/ad-reward"))c.setRequestProperty("X-Smetra-Ad-SDK","vk-v1");
         try{
             if(body!=null){if(body.has("_request_key"))c.setRequestProperty("Idempotency-Key",body.optString("_request_key"));c.setDoOutput(true);c.setFixedLengthStreamingMode(payload.length);c.setRequestProperty("Content-Type","application/json");try(OutputStream output=c.getOutputStream()){output.write(payload);}}
             int code=c.getResponseCode();try(InputStream input=code<400?c.getInputStream():c.getErrorStream()){
@@ -689,6 +692,11 @@ public class MainActivity extends Activity {
             assistantRewardChecking=false;
             if(version!=pageVersion||assistantRewardPanel==null)return;
             boolean available=result.optBoolean("available");
+            String returnedProvider=result.optString("provider","yandex");
+            if(!returnedProvider.equals(assistantRewardProvider)){
+                destroyAssistantRewardedAd();
+                assistantRewardProvider=returnedProvider;
+            }
             assistantRewardAdUnitId=result.optString("ad_unit_id","");
             if(!available||assistantRewardAdUnitId.isEmpty()){
                 assistantRewardPanel.setVisibility(View.GONE);
@@ -705,6 +713,7 @@ public class MainActivity extends Activity {
         if(assistantRewardPanel!=null)assistantRewardPanel.setVisibility(View.GONE);
     }
     private void loadAssistantRewardedAd(int version){
+        if("vk".equals(assistantRewardProvider)){loadAssistantVkRewardedAd(version);return;}
         if(assistantRewardAdUnitId.isEmpty()||assistantRewardLoading||assistantRewardedAd!=null||assistantRewardPanel==null)return;
         assistantRewardLoading=true;assistantRewardLoadFailed=false;
         if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
@@ -734,6 +743,22 @@ public class MainActivity extends Activity {
         }
     }
     private void showAssistantRewardedAd(){
+        if("vk".equals(assistantRewardProvider)&&!assistantVkConsentGranted){
+            if(assistantVkConsentDialogOpen)return;
+            assistantVkConsentDialogOpen=true;
+            new AlertDialog.Builder(this)
+                .setTitle("VK Реклама")
+                .setMessage("Можно добровольно посмотреть рекламное видео и получить 3 дополнительных запроса. Для показа объявления VK может обрабатывать технические данные устройства. Персональные данные смет и переписки в рекламную сеть не передаются. Продолжить?")
+                .setPositiveButton("Продолжить",(dialog,which)->{
+                    assistantVkConsentDialogOpen=false;
+                    assistantVkConsentGranted=true;
+                    showAssistantRewardedAd();
+                })
+                .setNegativeButton("Не сейчас",(dialog,which)->assistantVkConsentDialogOpen=false)
+                .setOnCancelListener(dialog->assistantVkConsentDialogOpen=false)
+                .show();
+            return;
+        }
         if(assistantRewardAttempt==null){
             if(assistantRewardStarting)return;
             assistantRewardStarting=true;
@@ -745,6 +770,7 @@ public class MainActivity extends Activity {
                     if(attemptVersion!=pageVersion)return;
                     assistantRewardAttempt=result;
                     assistantRewardAdUnitId=result.optString("ad_unit_id");
+                    assistantRewardProvider=result.optString("provider","yandex");
                     showAssistantRewardedAd();
                 });
                 if(assistantRewardPanel!=null)assistantRewardPanel.postDelayed(()->assistantRewardStarting=false,12000);
@@ -752,6 +778,21 @@ public class MainActivity extends Activity {
             return;
         }
         if(assistantRewardClaiming||assistantRewardPanel==null||assistantRewardPanel.getVisibility()!=View.VISIBLE)return;
+        if("vk".equals(assistantRewardProvider)){
+            final int vkVersion=pageVersion;
+            if(assistantVkRewardedAd==null||!assistantVkRewardedAd.isLoaded()){
+                if(!assistantRewardLoading)loadAssistantVkRewardedAd(vkVersion);
+                return;
+            }
+            if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
+            if(assistantRewardHint!=null)assistantRewardHint.setText("Смотрим видео…");
+            assistantRewardEventHandled=false;
+            if(!assistantVkRewardedAd.show()){
+                assistantRewardLoadFailed=true;
+                if(assistantRewardButton!=null){assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
+            }
+            return;
+        }
         if(assistantRewardedAd==null){
             if(assistantRewardLoading||assistantRewardSdkInitializing)return;
             assistantRewardLoadFailed=false;assistantRewardShowWhenLoaded=true;
@@ -809,6 +850,64 @@ public class MainActivity extends Activity {
         });
         ad.show(this);
     }
+    private void loadAssistantVkRewardedAd(int version){
+        if(assistantRewardAdUnitId.isEmpty()||assistantRewardLoading||assistantRewardPanel==null)return;
+        final int slot;
+        try{
+            slot=Integer.parseInt(assistantRewardAdUnitId);
+            if(slot<=0)throw new NumberFormatException("VK slot");
+        }catch(NumberFormatException error){
+            assistantRewardLoadFailed=true;
+            if(assistantRewardHint!=null)assistantRewardHint.setText("Неверный рекламный блок VK.");
+            return;
+        }
+        assistantRewardLoading=true;assistantRewardLoadFailed=false;
+        if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
+        if(assistantRewardHint!=null)assistantRewardHint.setText("Подготавливаем VK-рекламу…");
+        try{
+            // Conservative age-restriction defaults. Explicit consent is only
+            // for this Activity session; do not assume consent across accounts.
+            com.my.target.common.MyTargetPrivacy.setUserConsent(assistantVkConsentGranted);
+            com.my.target.common.MyTargetPrivacy.setUserAgeRestricted(true);
+            if(assistantVkRewardedAd!=null)assistantVkRewardedAd.destroy();
+            final VkRewardedAds vk=new VkRewardedAds();
+            assistantVkRewardedAd=vk;
+            vk.load(this,slot,new VkRewardedAds.Listener(){
+                private boolean current(){return version==pageVersion&&!isFinishing()&&assistantRewardPanel!=null&&assistantVkRewardedAd==vk;}
+                @Override public void loaded(){
+                    if(!current())return;
+                    assistantRewardLoading=false;
+                    if(assistantRewardShowWhenLoaded){assistantRewardShowWhenLoaded=false;showAssistantRewardedAd();}
+                    else if(assistantRewardButton!=null){assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
+                }
+                @Override public void unavailable(){
+                    if(!current())return;
+                    assistantRewardLoading=false;assistantRewardLoadFailed=true;assistantRewardShowWhenLoaded=false;
+                    if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить загрузку видео");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
+                    if(assistantRewardHint!=null)assistantRewardHint.setText("Видео VK сейчас недоступно. Попробуйте позже.");
+                }
+                @Override public void shown(){
+                    if(current()&&assistantRewardHint!=null)assistantRewardHint.setText("Досмотрите видео до конца, чтобы получить бонус.");
+                }
+                @Override public void closed(){
+                    if(!current()||assistantRewardClaiming||assistantRewardEventHandled)return;
+                    if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить просмотр");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
+                    if(assistantRewardHint!=null)assistantRewardHint.setText("Бонус начисляется только за завершённый просмотр.");
+                }
+                @Override public void rewarded(){
+                    if(current()&&!assistantRewardEventHandled){
+                        assistantRewardEventHandled=true;
+                        claimAssistantAdReward();
+                    }
+                }
+            });
+        }catch(RuntimeException error){
+            assistantRewardLoading=false;assistantRewardLoadFailed=true;assistantRewardShowWhenLoaded=false;
+            if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить загрузку видео");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
+            if(assistantRewardHint!=null)assistantRewardHint.setText("Не удалось запустить VK-рекламу.");
+        }
+    }
+
     private void claimAssistantAdReward(){
         if(assistantRewardClaiming)return;
         assistantRewardClaiming=true;
@@ -835,6 +934,7 @@ public class MainActivity extends Activity {
         }
     }
     private void destroyAssistantRewardedAd(){
+        if(assistantVkRewardedAd!=null){assistantVkRewardedAd.destroy();assistantVkRewardedAd=null;}
         if(assistantRewardedAd!=null){assistantRewardedAd.setAdEventListener(null);assistantRewardedAd=null;}
         assistantRewardLoading=false;assistantRewardShowWhenLoaded=false;
     }
@@ -843,7 +943,7 @@ public class MainActivity extends Activity {
         assistantRewardAttempt=null;assistantRewardStarting=false;
         assistantRewardPanel=null;assistantRewardButton=null;assistantRewardHint=null;
         assistantQuotaLabel=null;assistantQuotaSendButton=null;
-        assistantRewardChecking=false;assistantRewardClaiming=false;assistantRewardLoadFailed=false;assistantRewardAdUnitId="";
+        assistantRewardChecking=false;assistantRewardClaiming=false;assistantRewardLoadFailed=false;assistantRewardAdUnitId="";assistantRewardProvider="yandex";
     }
     private void streamAssistant(String value,LinearLayout messages,EditText prompt,TextView allowance,Button send){
         final int version=pageVersion;
