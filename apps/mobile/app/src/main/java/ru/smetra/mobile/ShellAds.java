@@ -92,8 +92,18 @@ final class ShellAds {
                 @Override public void onDismiss(RewardedAd dismissed) {
                     if (!live(flow)) return;
                     flow.dismissed = true;
-                    if (flow.earned) claim(flow);
-                    else finish(flow, null, "not_completed", "Чтобы получить токены, досмотрите видео до конца");
+                    if (flow.earned) {
+                        claim(flow);
+                    } else {
+                        // Some SDK versions deliver onReward just after the
+                        // close callback. Keep the flow valid briefly rather
+                        // than denying an earned reward due to event order.
+                        MAIN.postDelayed(() -> {
+                            if (!live(flow)) return;
+                            if (flow.earned) claim(flow);
+                            else finish(flow, null, "not_completed", "Чтобы получить токены, досмотрите видео до конца");
+                        }, 900);
+                    }
                 }
                 @Override public void onReward(Reward reward, RewardedAd rewarded) {
                     if (!live(flow) || flow.earned) return;
