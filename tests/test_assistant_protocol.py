@@ -36,13 +36,13 @@ class AssistantProtocolTests(unittest.TestCase):
 
         def provider(messages):
             choices.append(assistant._MODEL_TOOL_CHOICE.get())
-            return self.tool("read-" + str(len(choices))) if len(choices) <= 3 else {"content": "Проверка завершена."}
+            return self.tool("read-" + str(len(choices))) if len(choices) <= 9 else {"content": "Проверка завершена."}
 
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-only"), patch("backend.assistant.query_model", side_effect=provider):
             code, result = self.call("/assistant/chat", "POST", {"text": "Проверь связанные записи"}, token)
         self.assertEqual(code, 200, result)
         self.assertEqual(result["answer"], "Проверка завершена.")
-        self.assertEqual(choices, ["auto", "auto", "auto", "none"])
+        self.assertEqual(choices, ["auto"] * 9 + ["none"])
         self.assertEqual(assistant._MODEL_TOOL_CHOICE.get(), "auto")
 
     def test_runtime_budget_is_longer_than_old_80_second_cutoff(self):
