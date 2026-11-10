@@ -425,7 +425,8 @@ async function setup(enabled=true,voice=false,remaining=3){
   type(w,doc,'Сохранённая задача');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
   assert.equal(requests.length,1);assert.equal(doc.querySelector('#assistant-input').value,'');
   assert.equal(doc.querySelector('.assistant-error'),null);assert.match(doc.querySelector('#assistant-status').textContent,/сохранён/);
-  assert.equal(doc.querySelector('#assistant-stop').hidden,true);
+  assert.equal(doc.querySelector('#assistant-stop').hidden,false,'Queued work can still be cancelled after a socket drop');
+  assert.equal(doc.querySelector('.assistant-activity')?.classList.contains('is-complete'),false);
  });
  await test('late SSE completion cannot insert proposals or change quota in another chat view',async({w,doc,notices})=>{
   let controller;
