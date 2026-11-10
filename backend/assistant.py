@@ -1693,6 +1693,11 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     from backend.assistant_style import WRITING_STYLE
     system += WRITING_STYLE
     system += " Стиль concise — кратко, balanced — с пояснениями, detailed — подробно."
+    system += (" Последний запрос пользователя — непустой текст, если он передан сервером. "
+               "Старые разговоры и память являются только справочным контекстом, "
+               "никогда не говори «вы ничего не написали» при наличии текущего запроса. "
+               "Если задача — найти PDF в подключённом диске, используй реальные результаты "
+               "инструментов, не подменяй её вопросами о старых беседах.")
     system += (" Личная память работает как у ChatGPT: remember_knowledge и forget_memory выполняются сразу, без подтверждения."
                " Запоминай, когда пользователь просит («запомни», «учти на будущее»), и сам, когда он сообщает устойчивое и полезное:"
                " специализацию, город и регион работ, типичные объекты, предпочтительные материалы и бренды, обычную наценку,"
@@ -1775,6 +1780,18 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             if image_url else prompt
         )},
     ]
+    # Deterministic preflight: an explicit Google/Yandex PDF request triggers
+    # actual permission-scoped search/read, even if the model ignores tool use.
+    # Keep synthetic protocol envelopes paired with *real* server-side calls.
+    from backend.assistant_cloud_task import prepare as prepare_cloud_request
+    for index, (name, args, result) in enumerate(prepare_cloud_request(service, prompt, on_status)):
+        call_id = "server_cloud_" + str(index + 1)
+        messages.append({"role": "assistant", "content": None, "tool_calls": [{
+            "id": call_id, "type": "function",
+            "function": {"name": name, "arguments": packed(args)},
+        }]})
+        messages.append({"role": "tool", "tool_call_id": call_id,
+                         "content": packed(result)[:6000]})
     model, paid_model = assistant_model(service, has_image=bool(image_url))
     actions, designs, questions, answer, remembered = [], [], [], "", False
     from backend import assistant_app_tools as app_tools
@@ -1820,6 +1837,21 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             (identity(),service.wid,service.user['id'],'assistant',model,'succeeded' if known else 'usage_unknown',max(0,usage['prompt_tokens']) if known else 0,max(0,usage['completion_tokens']) if known else 0,stamp()))
         answer = str(response.get("content") or "")[:12000]
         calls = response.get("tool_calls") or []
+        # A real user request was stored in the job payload. Some providers
+        # wrongly answer as if it were blank, often quoting old chat history.
+        # Retry that response once with the current request anchored in context.
+        if not calls and re.search(
+            r"вы ничего не написали|вы ничего не указали|в этом сообщении нет (?:запроса|текста)|пустое сообщение",
+            answer.casefold(),
+        ):
+            if turn < 3:
+                messages.append({"role": "assistant", "content": answer})
+                messages.append({"role": "user", "content": (
+                    "Предыдущий ответ ошибочен: запрос НЕ пустой. Выполни мою "
+                    "актуальную задачу без вопросов про старые беседы:\n" + prompt
+                )})
+                continue
+            raise DomainError(502, "Модель ошибочно восприняла запрос как пустой. Повторите отправку.")
         if not calls:
             if on_delta and not actions and not questions:
                 # These deltas belong to the committed answer, not an early
