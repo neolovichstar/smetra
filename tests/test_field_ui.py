@@ -16,11 +16,13 @@ class FieldUIRegressionTests(unittest.TestCase):
     def test_navigation_and_private_inbox(self):
         html=(WEB/"app.html").read_text(encoding="utf-8")
         js=(WEB/"app.js").read_text(encoding="utf-8")
-        # AI-first navigation exposes the assistant and shared inbox, while
-        # legacy fieldwork remains routable for tools/deep links.
-        for key in ("assistant", "inbox"):
-            self.assertIn('data-tab="'+key+'"', html)
-            self.assertIn("'"+key+"'", js)
+        # Shared inbox is now part of the Quotes sub-sidebar, not a main tab.
+        self.assertIn('data-tab="assistant"', html)
+        self.assertIn('data-tab="quotes"', html)
+        self.assertNotIn('data-tab="inbox"', html)
+        self.assertIn("'inbox'", js)
+        self.assertIn('data-quote-scope', (WEB/"workspace.js").read_text(encoding="utf-8"))
+        self.assertIn('renderInbox', (WEB/"field-flows.js").read_text(encoding="utf-8"))
         self.assertIn("'fieldwork'", js)
         self.assertNotIn('data-tab="fieldwork"', html)
         self.assertIn("smetra.pendingShare",js)
