@@ -544,10 +544,12 @@ def _safe_cloud_href(value):
         return False
 
 
-def _download(con, connection, file_row):
+def _download(con, connection, file_row, *, max_bytes=MAX_FILE_BYTES):
     provider, size = connection["provider"], int(file_row["size"] or 0)
-    if size > MAX_FILE_BYTES:
-        raise business.DomainError(413, "Файл больше 5 МБ; автоматический разбор пропущен")
+    if not isinstance(max_bytes, int) or not 1 <= max_bytes <= 100_000_000:
+        raise business.DomainError(400, "Недопустимый лимит чтения облачного файла")
+    if size < 1 or size > max_bytes:
+        raise business.DomainError(413, "Облачный файл превышает лимит чтения")
     token = _access_token(con, connection)
     if provider == "google_drive":
         native_mime = file_row.get("provider_mime", "")
@@ -565,9 +567,9 @@ def _download(con, connection, file_row):
         )
         try:
             with _safe_download_open(response, timeout=15) as result:
-                raw = result.read(MAX_FILE_BYTES + 1)
-                if len(raw) > MAX_FILE_BYTES:
-                    raise business.DomainError(413, "Файл больше 5 МБ; автоматический разбор пропущен")
+                raw = result.read(max_bytes + 1)
+                if len(raw) > max_bytes:
+                    raise business.DomainError(413, "Облачный файл превышает лимит чтения")
                 return raw
         except business.DomainError:
             raise
@@ -581,9 +583,9 @@ def _download(con, connection, file_row):
     request = urllib.request.Request(href, headers={"User-Agent": "SmetraCloudSync/1.0"}, method="GET")
     try:
         with _safe_download_open(request, timeout=15) as result:
-            raw = result.read(MAX_FILE_BYTES + 1)
-            if len(raw) > MAX_FILE_BYTES:
-                raise business.DomainError(413, "Файл больше 5 МБ; автоматический разбор пропущен")
+            raw = result.read(max_bytes + 1)
+            if len(raw) > max_bytes:
+                raise business.DomainError(413, "Облачный файл превышает лимит чтения")
             return raw
     except business.DomainError:
         raise
