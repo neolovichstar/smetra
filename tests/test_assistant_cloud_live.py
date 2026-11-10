@@ -166,5 +166,81 @@ class LiveCloudSearchTests(unittest.TestCase):
         self.assertTrue(result["files"][0]["id"].startswith("live."))
 
 
+    def test_cloud_pdf_vision_reads_single_page_without_storage(self):
+        import base64
+        import json
+
+        self.service.h = SimpleNamespace(throttle=lambda *_args: None)
+        jpeg = bytes((0xFF, 0xD8)) + b"tiny-private-page" + bytes((0xFF, 0xD9))
+        fake_page = {
+            "pages": [[2, base64.b64encode(jpeg).decode()]],
+            "total_pages": 4, "truncated": True,
+        }
+        response = SimpleNamespace(read=lambda _n: json.dumps({
+            "choices": [{"message": {"content": "Страница 2: комната 19 м²"}}]
+        }, ensure_ascii=False).encode())
+        class OpenResponse:
+            def __enter__(self): return response
+            def __exit__(self, *args): return False
+
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "fixture-not-real"}), patch(
+            "backend.cloud_drives._premium_access"
+        ), patch("backend.cloud_drives._worker_access"), patch(
+            "backend.cloud_drives._google_api", side_effect=self.google_api
+        ), patch("backend.cloud_drives._download", return_value=b"%PDF-secret") as download, patch(
+            "backend.file_processing.isolated_extract", return_value=fake_page
+        ) as render, patch("urllib.request.urlopen", return_value=OpenResponse()) as completion:
+            result = assistant_cloud.list_files(self.service, "дом на набережной")
+            analysis = assistant_cloud.analyze_page(
+                self.service, result["files"][0]["id"], page_number=2,
+            )
+        self.assertEqual(analysis["page"], 2)
+        self.assertEqual(analysis["total_pages"], 4)
+        self.assertIn("комната 19", analysis["analysis"])
+        self.assertFalse(analysis["source_stored"])
+        self.assertEqual(download.call_args.kwargs["max_bytes"], 100_000_000)
+        self.assertEqual(render.call_args.args[1], "cloud-render-pdf:2")
+        payload = json.loads(completion.call_args.args[0].data)
+        self.assertEqual(payload["provider"]["data_collection"], "deny")
+        self.assertEqual(payload["messages"][-1]["content"][-1]["type"], "image_url")
+        self.assertTrue(payload["messages"][-1]["content"][-1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
+        self.assertIsNone(self.con.execute(
+            "SELECT name FROM sqlite_master WHERE name='file_payloads'"
+        ).fetchone())
+
+    def test_cloud_pdf_vision_rejects_incorrect_page_image(self):
+        import base64
+        self.service.h = SimpleNamespace(throttle=lambda *_args: None)
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "fixture-not-real"}), patch(
+            "backend.cloud_drives._premium_access"
+        ), patch("backend.cloud_drives._worker_access"), patch(
+            "backend.cloud_drives._google_api", side_effect=self.google_api
+        ), patch("backend.cloud_drives._download", return_value=b"%PDF-secret"), patch(
+            "backend.file_processing.isolated_extract", return_value={
+                "pages": [[1, base64.b64encode(b"not jpeg").decode()]], "total_pages": 4
+            }
+        ), patch("urllib.request.urlopen") as network:
+            item = assistant_cloud.list_files(self.service, "дом на набережной")["files"][0]
+            with self.assertRaises(business.DomainError) as error:
+                assistant_cloud.analyze_page(self.service, item["id"], page_number=1)
+            self.assertEqual(error.exception.status, 422)
+            network.assert_not_called()
+
+    def test_cloud_pdf_renderer_can_read_second_page_in_isolated_process(self):
+        import io
+        from pypdf import PdfWriter
+        from backend.file_processing import isolated_extract
+
+        writer = PdfWriter()
+        for _ in range(3):
+            writer.add_blank_page(width=595, height=842)
+        file = io.BytesIO()
+        writer.write(file)
+        rendered = isolated_extract(file.getvalue(), "cloud-render-pdf:2")
+        self.assertEqual(rendered["total_pages"], 3)
+        self.assertEqual(rendered["pages"][0][0], 2)
+        self.assertEqual(len(rendered["pages"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

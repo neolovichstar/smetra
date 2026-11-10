@@ -86,7 +86,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  const quotaBeforeIndex=await evaluate("api('/assistant').then(result=>result.quota.used)");
  await evaluate("(()=>{const files=new DataTransfer();files.items.add(new File(['Paint walls. '+'a'.repeat(2100000)],'large-web.txt',{type:'text/plain'}));const input=document.querySelector('#assistant-attach-input');input.files=files.files;input.dispatchEvent(new Event('change'))})()");
  await until("document.querySelector('#assistant-context-label').textContent==='Файл: large-web.txt'");
- await evaluate("document.querySelector('#assistant-input').value='Черновик во время подготовки'");
+ await evaluate("(()=>{const field=document.querySelector('#assistant-input');field.value='Черновик во время подготовки';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
  await until("document.querySelector('.assistant-file-status').textContent.includes('Текст готов')");
  assert.equal(await evaluate("document.querySelector('#assistant-input').value"),'Черновик во время подготовки');
  assert.match(await evaluate("document.querySelector('.assistant-file-status').textContent"),/подготовлена часть текста/);
