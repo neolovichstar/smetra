@@ -242,6 +242,13 @@ def read(service, name, args):
                     "hint": "Облачные папки доступны на платном тарифе; предложи open_billing."}
         return {
             "available": True,
+            "direct_search_available": any(
+                row["status"] == "active" for row in connections
+            ),
+            "direct_search_hint": (
+                "Если Google Диск или Яндекс.Диск подключён (active), вызывай list_cloud_files "
+                "по названию файла. Папки могут быть пустыми: это НЕ запрещает прямой поиск."
+            ),
             "connections": [{"provider": PROVIDER_LABELS.get(row["provider"], row["provider"]), "provider_id": row["provider"],
                              "account": row["account_label"], "status": row["status"], "last_error": row["last_error"]}
                             for row in connections],
