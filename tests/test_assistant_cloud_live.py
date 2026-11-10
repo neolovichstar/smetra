@@ -168,12 +168,10 @@ class LiveCloudSearchTests(unittest.TestCase):
 
     def test_cloud_pdf_vision_reads_single_page_without_storage(self):
         import base64
-        import io
         import json
-        from backend import cloud_drives
 
         self.service.h = SimpleNamespace(throttle=lambda *_args: None)
-        jpeg = b"\\xff\\xd8" + b"tiny-private-page" + b"\\xff\\xd9"
+        jpeg = bytes((0xFF, 0xD8)) + b"tiny-private-page" + bytes((0xFF, 0xD9))
         fake_page = {
             "pages": [[2, base64.b64encode(jpeg).decode()]],
             "total_pages": 4, "truncated": True,
