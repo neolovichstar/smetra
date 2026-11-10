@@ -60,8 +60,10 @@ class AssistantProtocolTests(unittest.TestCase):
         from unittest.mock import patch
 
         owner, _ = self.account('assistant-reply-time')
-        with patch('backend.assistant.query_model',
-                   return_value={'content': 'Готово. Данные проверены.', 'tool_calls': []}):
+        with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-only"), patch(
+            'backend.assistant.query_model',
+            return_value={'content': 'Готово. Данные проверены.', 'tool_calls': []},
+        ):
             status, reply = self.call('/assistant/chat', 'POST', {'text': 'Проверь расчёт'}, owner)
         self.assertEqual(status, 200, reply)
         self.assertTrue(reply.get('assistant_message_id'))
