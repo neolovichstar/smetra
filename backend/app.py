@@ -1157,6 +1157,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             handler = email_otp.start if path.endswith("/start") else email_otp.confirm
             return handler(self, con, app_context)
         if path == "/api/auth/register" and method == "POST":
+            if os.getenv("EMAIL_SIGNUP_ENABLED", "1") != "1":
+                raise ApiError(503, "Регистрация по почте временно отключена. Используйте Яндекс ID или Google")
             # When passwordless registration is live, no client may bypass
             # mailbox verification through the legacy password endpoint.
             from backend.email_otp import configured as otp_configured

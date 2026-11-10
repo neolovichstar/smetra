@@ -749,7 +749,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       reward.textContent='Посмотреть видео · +45 тыс. токенов';upgrade.after(reward);
       reward.onclick=async()=>{reward.disabled=true;try{const result=await window.SmetraShell.call('ads.rewarded.show',{},{timeout:0});if(result.quota)renderQuota(result.quota);notify('Начислено '+Number(result.granted||0).toLocaleString('ru-RU')+' токенов')}catch(error){if(error.code!=='not_completed'&&error.code!=='cancelled')notify(error.message);else status.textContent=error.message}finally{reward.disabled=false}};
     }
-    if(reward)window.SmetraShell.ready.then(()=>{reward.hidden=!(empty&&value.plan==='free'&&window.SmetraShell.has('ads'))});
+    if(reward)window.SmetraShell.ready.then(async()=>{
+      reward.hidden=true;
+      if(!active()||!empty||value.plan!=='free'||!window.SmetraShell.has('ads'))return;
+      try{
+        const offer=await api('/assistant/ad-reward');
+        reward.hidden=!(active()&&reward.isConnected&&offer?.enabled&&offer.available&&quota.plan==='free'&&quota.remaining<=0);
+      }catch{reward.hidden=true}
+    }).catch(()=>{reward.hidden=true});
     const quotaBlocked=empty;
     const blocked=working||fileBlocking||!data.available||quotaBlocked;
     document.querySelectorAll('.assistant-regenerate').forEach(button=>{button.disabled=blocked||!button.dataset.prompt});

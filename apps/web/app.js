@@ -682,8 +682,8 @@ if($('#auth')){
   const syncEmailActions=()=>{
     const resetMode=new URLSearchParams(location.search).has('reset');
     const codeAvailable=window.SmetraEmailCodeAvailable===true&&!resetMode;
-    const providerOnly=registering&&window.SmetraEmailSignupAvailable===false&&!codeAvailable;
-    const useCode=codeAvailable&&(registering||!passwordLogin);
+    const providerOnly=registering&&window.SmetraEmailSignupAvailable===false;
+    const useCode=codeAvailable&&!providerOnly&&(registering||!passwordLogin);
     const usePassword=resetMode||(!useCode&&!providerOnly);
     const auth=$('#auth'),disclosure=$('#email-disclosure'),codeFlow=$('#email-code-flow');
     const method=useCode?'code':usePassword?'password':'provider';
@@ -706,7 +706,7 @@ if($('#auth')){
     methodSwitch.classList.toggle('hidden',!codeAvailable||registering||resetMode);
     methodSwitch.textContent=useCode?'Войти с паролем':'Получить код на почту';
     const divider=$('.auth-provider-divider span');if(divider)divider.textContent=providerOnly?'Продолжить через сервис':'или используйте сервис';
-    if(providerOnly)$('#auth-copy').textContent='Создайте аккаунт через доступный сервис ниже. Один профиль для сайта и приложения.';
+    if(providerOnly)$('#auth-copy').textContent='Регистрация по почте временно недоступна. Создайте аккаунт через Яндекс ID или Google.';
     else if(!resetMode)$('#auth-copy').textContent=registering?'Сметы, клиенты и объекты в одном месте. Первые 3 сметы бесплатно, редактирование без ограничений.':'Продолжите работу с того места, где остановились.';
     document.dispatchEvent(new CustomEvent('smetra:auth-method'));
   };

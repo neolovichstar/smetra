@@ -13,6 +13,11 @@ ATTEMPT_TTL = 86400
 
 
 def configured_unit():
+    # Fail closed until moderation has explicitly approved the placement.
+    # Production defaults off even if a slot ID is already configured.
+    approved = os.getenv("VK_REWARDED_APPROVED", "0" if os.getenv("VERCEL_ENV") == "production" else "1")
+    if approved != "1":
+        return ""
     # VK slot IDs are positive Java integers. Legacy Yandex configuration must
     # not accidentally enable another network or a release demo placement.
     unit = os.getenv("VK_REWARDED_SLOT_ID", "").strip()

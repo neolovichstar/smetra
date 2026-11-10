@@ -108,6 +108,8 @@ def deliver(address, code, intent):
 
 
 def start(handler, con, app):
+    if os.getenv("EMAIL_OTP_ENABLED", "1") != "1":
+        raise app.ApiError(503, "Вход по коду временно недоступен. Используйте пароль, Яндекс ID или Google")
     if not configured():
         raise app.ApiError(503, "Регистрация по почте временно недоступна")
     data = handler.body()
@@ -115,6 +117,8 @@ def start(handler, con, app):
     intent = data.get("intent")
     if intent not in ("login", "register"):
         raise app.ApiError(400, "Выберите вход или регистрацию")
+    if intent == "register" and os.getenv("EMAIL_SIGNUP_ENABLED", "1") != "1":
+        raise app.ApiError(503, "Регистрация по почте временно отключена. Используйте Яндекс ID или Google")
     name = str(data.get("name", "")).strip()
     if intent == "register" and not 1 <= len(name) <= 80:
         raise app.ApiError(400, "Укажите имя")
@@ -206,6 +210,8 @@ def _commit(con):
 
 
 def confirm(handler, con, app):
+    if os.getenv("EMAIL_OTP_ENABLED", "1") != "1":
+        raise app.ApiError(503, "Вход по коду временно недоступен")
     if not configured():
         raise app.ApiError(503, "Вход по почте временно недоступен")
     data = handler.body()
@@ -248,6 +254,9 @@ def confirm(handler, con, app):
                         (app.now(),user["id"]))
         user_id=user["id"]
     else:
+        # Also protect registrations started before the shutdown switch was set.
+        if os.getenv("EMAIL_SIGNUP_ENABLED", "1") != "1":
+            raise app.ApiError(503, "Регистрация по почте временно отключена")
         if row["intent"] != "register" or row["legal_version"] != app.REGISTRATION_CONSENT_VERSION:
             raise app.ApiError(400, "Сначала зарегистрируйтесь")
         user_id = app.uid()

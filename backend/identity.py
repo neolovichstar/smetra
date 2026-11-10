@@ -149,12 +149,16 @@ def profile(provider, code, state, verifier, callback, device):
 
 def route(h, con, method, path, query, origin):
     if path == "/api/auth/providers" and method == "GET":
+        from backend.email_otp import configured as otp_configured
+
+        email_otp_enabled = otp_configured() and os.getenv("EMAIL_OTP_ENABLED", "1") == "1"
+        email_signup_enabled = email_otp_enabled and os.getenv("EMAIL_SIGNUP_ENABLED", "1") == "1"
         return h.send_json(
             200, {
                 "providers": providers(), "rustore_url": os.getenv("RUSTORE_URL", ""),
-                "email_delivery_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
-                "email_code_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
-                "email_signup_available": __import__("backend.email_otp",fromlist=["configured"]).configured(),
+                "email_delivery_available": email_otp_enabled,
+                "email_code_available": email_otp_enabled,
+                "email_signup_available": email_signup_enabled,
             }
         )
     if path == "/api/auth/native/exchange" and method == "POST":

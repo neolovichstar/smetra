@@ -229,6 +229,35 @@ class EmailOTPTests(unittest.TestCase):
         self.assertIn('support@smetra.online',html)
         self.assertNotIn("<script",html)
 
+    def test_temporary_email_shutdown_preserves_password_and_oauth_routes(self):
+        with patch.dict(os.environ, {**CONFIG, "EMAIL_OTP_ENABLED": "0", "EMAIL_SIGNUP_ENABLED": "0"}):
+            status, capabilities = self.call("/auth/providers")
+            self.assertEqual(status, 200, capabilities)
+            self.assertFalse(capabilities["email_code_available"])
+            self.assertFalse(capabilities["email_delivery_available"])
+            self.assertFalse(capabilities["email_signup_available"])
+            self.assertEqual(self.call("/auth/email/start", "POST", {
+                "email": "closed@example.org", "intent": "register", "name": "Tester",
+                "legal_acceptance": True, "legal_version": "2026-10-19-registration-v1",
+            })[0], 503)
+            self.assertEqual(self.call("/auth/register", "POST", {
+                "email": "closed@example.org", "name": "Tester", "password": "longpassword123",
+            })[0], 503)
+            # Existing account/password authentication must remain available.
+            token, _ = self.account("email-existing-after-pause")
+            self.assertEqual(self.call("/me", token=token)[0], 200)
+
+    def test_email_signup_can_be_disabled_without_disabling_existing_code_logins(self):
+        with patch.dict(os.environ, {**CONFIG, "EMAIL_OTP_ENABLED": "1", "EMAIL_SIGNUP_ENABLED": "0"}):
+            status, capabilities = self.call("/auth/providers")
+            self.assertEqual(status, 200, capabilities)
+            self.assertTrue(capabilities["email_code_available"])
+            self.assertFalse(capabilities["email_signup_available"])
+            self.assertEqual(self.call("/auth/email/start", "POST", {
+                "email": "closed@example.org", "intent": "register", "name": "Tester",
+                "legal_acceptance": True, "legal_version": "2026-10-19-registration-v1",
+            })[0], 503)
+
     def test_frontend_has_paste_and_accessible_digits(self):
         from pathlib import Path
         web=Path(__file__).resolve().parents[1]/"apps/web"

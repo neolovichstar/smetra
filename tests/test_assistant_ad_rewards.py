@@ -147,6 +147,25 @@ class AssistantAdRewardTests(unittest.TestCase):
             self.assertTrue(replay["replayed"])
             self.assertEqual(replay["quota"]["wallet"], ai_tokens.AD_REWARD_TOKENS)
 
+    def test_pending_vk_moderation_hides_ad_despite_configured_slot(self):
+        from backend.rewarded_ads import configured_unit
+
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "2106762", "VK_REWARDED_APPROVED": "0"}):
+            self.assertEqual(configured_unit(), "")
+            token, user_id = self.account("ad-pending-moderation")
+            self.exhaust_free_quota(user_id)
+            status, offer = self.call("/assistant/ad-reward", token=token)
+            self.assertEqual(status, 200, offer)
+            self.assertFalse(offer["enabled"])
+            self.assertFalse(offer["available"])
+            self.assertEqual(offer["ad_unit_id"], "")
+            self.assertEqual(self.call("/assistant/ad-reward", "POST", {
+                "operation": "start", "provider": "vk",
+            }, token)[0], 503)
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "2106762", "VERCEL_ENV": "production"}):
+            os.environ.pop("VK_REWARDED_APPROVED", None)
+            self.assertEqual(configured_unit(), "")
+
     def test_guest_cannot_access_account_apis_or_create_ad_attempts(self):
         for path in ("/assistant/ad-reward", "/assistant", "/quotes", "/files", "/workspace"):
             with self.subTest(path=path):
