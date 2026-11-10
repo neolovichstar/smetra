@@ -577,6 +577,12 @@ function quoteList() { return quotes.length?quotes.map(quoteCard).join(''):'<div
 let sectionModulesLoaded=document.readyState==='complete';
 const sectionModulesReady=new Promise(resolve=>{const done=()=>{sectionModulesLoaded=true;resolve()};if(sectionModulesLoaded)return done();document.addEventListener('DOMContentLoaded',done,{once:true});addEventListener('load',done,{once:true});setTimeout(done,4000)});
 async function render() {
+  // Old /app#inbox links now open the Received tab inside the Quotes hub.
+  if(tab==='inbox'){
+    try{sessionStorage.setItem('smetra.quotes.scope','incoming')}catch{}
+    tab='quotes';
+    history.replaceState({},'',location.pathname+location.search+'#quotes');
+  }
   if(pendingPageLoadingTimer!==null){clearTimeout(pendingPageLoadingTimer);pendingPageLoadingTimer=null;}
   window.SmetraQuoteEditor?.leave();
   if(!user)return;
@@ -629,7 +635,7 @@ async function render() {
   } catch(err) { if(!active())return;view(`<section class="load-error" role="alert"><span class="load-error-mark" aria-hidden="true">!</span><span class="load-error-kicker">СМЕТРА / ЗАГРУЗКА РАЗДЕЛА</span><h2>Не удалось загрузить раздел</h2><p class="muted">${escapeHtml(err.message)}</p><button class="btn primary" id="retry">Повторить</button></section>`);$('#retry').onclick=render; } finally {clearTimeout(loadingTimer);if(pendingPageLoadingTimer===loadingTimer)pendingPageLoadingTimer=null;}
 }
 window.render=render;
-const appSections=new Set(['ar-scan','fieldwork','inbox','chats','premium','dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','changelog','activity','billing','support','profile','usage','settings','admin']);
+const appSections=new Set(['ar-scan','fieldwork','chats','premium','dashboard','clients','quotes','projects','construction','calculators','leads','tasks','calendar','assistant','finance','catalog','files','documents','team','notifications','changelog','activity','billing','support','profile','usage','settings','admin']);
 async function renderNavigation(){
   const owner=user,section=tab,pending=render(),revision=renderRevision;
   await pending;
@@ -637,18 +643,21 @@ async function renderNavigation(){
   $('#content')?.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
 }
 window.addEventListener('hashchange',()=>{
-  const section=location.hash.slice(1)||'assistant';
+  let section=location.hash.slice(1)||'assistant';
+  if(section==='inbox'){try{sessionStorage.setItem('smetra.quotes.scope','incoming')}catch{}section='quotes';history.replaceState({},'',location.pathname+location.search+'#quotes')}
   if(!appSections.has(section)||section===tab)return;
   tab=section;closeNavigation();if(user)renderNavigation();
 });
 window.addEventListener('popstate',()=>{
-  const section=location.hash.slice(1)||'assistant';
+  let section=location.hash.slice(1)||'assistant';
+  if(section==='inbox'){try{sessionStorage.setItem('smetra.quotes.scope','incoming')}catch{}section='quotes';history.replaceState({},'',location.pathname+location.search+'#quotes')}
   if(!appSections.has(section)||section===tab)return;
   tab=section;closeNavigation();if(user)renderNavigation();
 });
 // Verified UI-only navigation for assistant actions. No backend writes are
 // performed; history and visible section change as one operation.
 window.SmetraNavigateTo=async(section)=>{
+  if(section==='inbox'){try{sessionStorage.setItem('smetra.quotes.scope','incoming')}catch{}section='quotes'}
   if(!appSections.has(section))throw Error('Неизвестный раздел');
   if(!user)throw Error('Сначала войдите в Сметру');
   if(section==='admin'&&user.role!=='admin')throw Error('Нет доступа к администрированию');
@@ -776,7 +785,7 @@ if($('#auth')){
     const verificationTask=verification?api('/auth/verify',{method:'POST',body:JSON.stringify({token:verification})}).then(()=>{history.replaceState({},'', '/app');notify('Почта подтверждена')}).catch(e=>notify(e.message)):Promise.resolve();
     let pendingShare='';
     try{pendingShare=sessionStorage.getItem('smetra.pendingShare')||''}catch{}
-    if(params.has('share')||/^[a-f0-9-]{36}$/.test(pendingShare)){tab='inbox';}
+    if(params.has('share')||/^[a-f0-9-]{36}$/.test(pendingShare)){tab='quotes';try{sessionStorage.setItem('smetra.quotes.scope','incoming')}catch{}}
     const bootRevision=authRevision;
     const boot=async()=>{
       const label=$('#app-startup-label');

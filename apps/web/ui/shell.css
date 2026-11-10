@@ -368,3 +368,14 @@ dialog.workspace-dialog .form-actions{bottom:0;margin-bottom:0}
 #oauth-first-signin-label[hidden]{display:none!important}
 #oauth-first-signin-label input{flex:none;margin:3px 0 0;accent-color:#d9d9d9}
 #oauth-first-signin-label a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+
+/* The phone bottom bar already provides these routes. Do not duplicate them
+   inside the phone-only slide-out menu; keep desktop navigation unchanged. */
+@media(max-width:800px){
+  #sidebar .sidebar-group button[data-tab="assistant"],
+  #sidebar .sidebar-group button[data-tab="quotes"],
+  #sidebar .sidebar-group button[data-tab="billing"],
+  #sidebar .sidebar-group button[data-tab="ar-scan"],
+  #sidebar #sidebar-profile{display:none!important}
+  #sidebar .sidebar-foot{justify-content:flex-end}
+}

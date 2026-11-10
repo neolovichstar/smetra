@@ -67,13 +67,14 @@ window.SmetraFieldFlows=(()=>{
       }catch(error){feedback(ar,error.message);}
     };
   }
-  async function inbox(isCurrent){
+  async function inbox(isCurrent,host=null){
     const result=await api('/shared-inbox');if(!isCurrent())return;
     const items=result.inbox||[];
-    view('<section class="ff-page ff-inbox"><header class="ff-heading"><span class="ff-kicker">КЛИЕНТ / СОГЛАСОВАНИЕ</span><h1>Полученные сметы</h1><p>Документы доступны только владельцу подтверждённого почтового адреса.</p></header>'+
+    const paint=markup=>host?host.innerHTML=markup:view(markup);
+    paint('<section class="ff-page ff-inbox"><header class="ff-heading"><span class="ff-kicker">КЛИЕНТ / СОГЛАСОВАНИЕ</span><h1>Полученные сметы</h1><p>Документы доступны только владельцу подтверждённого почтового адреса.</p></header>'+
       '<div data-inbox-items>'+ (items.length?items.map(item=>'<button type="button" class="ff-inbox-row" data-id="'+esc(item.id)+'"><span><strong>'+esc(item.title)+'</strong><small>Версия '+esc(item.quote_version)+'</small></span><span>Открыть →</span></button>').join(''):
       '<p class="ff-empty">Пока нет предложений. Приглашённые сметы появятся здесь.</p>')+'</div><div data-inbox-detail hidden></div><p data-feedback hidden role="status"></p></section>');
-    const root=document.querySelector('.ff-inbox'),list=$(root,'[data-inbox-items]'),detail=$(root,'[data-inbox-detail]');
+    const root=host?$(host,'.ff-inbox'):document.querySelector('.ff-inbox'),list=$(root,'[data-inbox-items]'),detail=$(root,'[data-inbox-detail]');
     const show=async id=>{
       if(!items.some(i=>i.id===id))return;
       try{
@@ -126,5 +127,5 @@ window.SmetraFieldFlows=(()=>{
     };
     approve.onclick=()=>send('approve');change.onclick=()=>send('request_changes');
   }
-  return {render:(section,active)=>section==='inbox'?inbox(active):fieldwork(active),stop:()=>{}};
+  return {render:(section,active)=>section==='inbox'?inbox(active):fieldwork(active),renderInbox:(host,active)=>inbox(active,host),stop:()=>{}};
 })();
