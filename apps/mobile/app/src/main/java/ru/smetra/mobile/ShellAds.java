@@ -93,7 +93,11 @@ final class ShellAds {
                     if (!live(flow)) return;
                     flow.dismissed = true;
                     if (flow.earned) claim(flow);
-                    else finish(flow, null, "not_completed", "Чтобы получить токены, досмотрите видео до конца");
+                    else MAIN.postDelayed(() -> {
+                        // VK may deliver onReward just after onDismiss.
+                        if (live(flow) && !flow.earned)
+                            finish(flow, null, "not_completed", "Чтобы получить токены, досмотрите видео до конца");
+                    }, 900);
                 }
                 @Override public void onReward(Reward reward, RewardedAd rewarded) {
                     if (!live(flow) || flow.earned) return;

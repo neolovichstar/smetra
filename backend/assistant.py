@@ -617,6 +617,86 @@ def _provider_timeout(maximum):
     return min(maximum, remaining)
 
 
+def _recover_textual_tool_markup(content):
+    """Reject leaked provider tool syntax, recovering only safe read-only calls.
+
+    Some model providers emit text like
+    <tool_call><function=read_cloud_file><parameter=id>...</parameter>
+    rather than an OpenAI tool_calls envelope. Never expose such strings:
+    they can contain workspace-scoped temporary cloud references.
+    """
+    import re
+
+    marker = re.search(
+        r"<\s*(?:tool_call\b|function\s*=|parameter\s*=)"
+        r"|live\.[A-Za-z0-9_-]{24,}={0,2}",
+        content, re.IGNORECASE,
+    )
+    if not marker:
+        return content, []
+    # Only a complete, standalone, explicitly allowlisted read-only function
+    # is eligible for recovery. Never interpret text as a mutating action.
+    match = re.fullmatch(
+        r"\s*<tool_call>\s*<function=(read_cloud_file|analyze_cloud_pdf_page|list_cloud_files)>"
+        r"(.*?)</function>\s*</tool_call>\s*",
+        content, re.DOTALL,
+    )
+    if match and _MODEL_TOOL_CHOICE.get() != "none":
+        name, body = match.groups()
+        allowed = {
+            "read_cloud_file": {"id", "page_start", "query"},
+            "analyze_cloud_pdf_page": {"id", "page"},
+            "list_cloud_files": {"query"},
+        }[name]
+        params = {}
+        items = list(re.finditer(
+            r"<parameter=([a-z_]+)>\s*(.*?)\s*</parameter>",
+            body, re.DOTALL,
+        ))
+        if items and not re.sub(
+            r"<parameter=([a-z_]+)>\s*(.*?)\s*</parameter>",
+            "", body, flags=re.DOTALL,
+        ).strip():
+            for item in items:
+                key, value = item.group(1), item.group(2).strip()
+                if key not in allowed or key in params:
+                    params = {}
+                    break
+                params[key] = value
+            if (params and ("id" not in allowed or (
+                "id" in params and
+                re.fullmatch(r"(?:live\.[A-Za-z0-9_=-]{30,2395}|[A-Za-z0-9_-]{1,80})", params["id"])
+            ))):
+                if "page_start" in params or "page" in params:
+                    field = "page_start" if "page_start" in params else "page"
+                    raw_number = params[field]
+                    if not raw_number.isascii() or not raw_number.isdecimal() or not 1 <= int(raw_number) <= 300:
+                        params = {}
+                    else:
+                        params[field] = int(raw_number)
+                if "query" in params and len(params["query"]) > 100:
+                    params = {}
+                if params:
+                    return "", [{
+                        "id": "recovered-" + identity(),
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "arguments": json.dumps(params, ensure_ascii=False),
+                        },
+                    }]
+    # If malformed or tools are unavailable, show a neutral error rather than
+    # provider instructions, a fake completed action, or a cloud access token.
+    if re.search(r"<\s*(?:tool_call\b|function\s*=|parameter\s*=)", content, re.IGNORECASE):
+        return "Не удалось завершить чтение документа. Повторите запрос на нужные страницы.", []
+    # A model could also copy a live reference in ordinary prose.
+    return re.sub(
+        r"live\.[A-Za-z0-9_-]{24,}={0,2}",
+        "[временная ссылка на файл скрыта]",
+        content,
+    ), []
+
+
 def _validated_reply(value):
     """Validate the entire provider envelope before running even one tool."""
     if not isinstance(value, dict):
@@ -651,6 +731,13 @@ def _validated_reply(value):
             raise ValueError("invalid model tool arguments")
         identifiers.add(call_id)
         normalised.append({"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments or "{}"}})
+    if not normalised:
+        content, recovered = _recover_textual_tool_markup(content)
+        normalised.extend(recovered)
+    else:
+        # Structured tool calls take precedence. Never echo provider internals.
+        safe_content, _ = _recover_textual_tool_markup(content)
+        content = safe_content if not safe_content.startswith("Не удалось завершить чтение документа.") else ""
     result = {"content": content, "tool_calls": normalised}
     if isinstance(value.get("_usage"), dict):
         result["_usage"] = value["_usage"]

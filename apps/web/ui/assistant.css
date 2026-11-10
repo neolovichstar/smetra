@@ -650,8 +650,18 @@
 .smetra-draft-total{position:sticky;bottom:calc(-1 * var(--s-6));display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-3);margin:0 calc(-1 * var(--s-5));padding:14px var(--s-5);border-top:1px solid var(--line);background:color-mix(in srgb,var(--surface-1) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .smetra-draft-total span{color:var(--text-3);font-size:var(--fs-13)}
 .smetra-draft-total strong{font-size:var(--fs-18);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
-.assistant-client-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:var(--s-3)}
-.assistant-client-action{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assistant-client-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:14px}
+.assistant-client-action{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:42px;max-width:100%;padding:9px 15px 9px 12px;border:1px solid var(--line-strong);border-radius:13px;background:color-mix(in srgb,var(--surface-2) 86%,transparent);color:var(--text);font:inherit;font-size:var(--fs-13);font-weight:600;line-height:1.3;cursor:pointer;box-shadow:0 2px 10px #0000000a;transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+.assistant-client-action:hover:not(:disabled){background:var(--surface-3);border-color:var(--text-3);box-shadow:0 5px 20px #00000014;transform:translateY(-1px)}
+.assistant-client-action:active:not(:disabled){transform:translateY(0)}
+.assistant-client-action:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.assistant-client-action:disabled{opacity:.55;cursor:wait}
+.assistant-client-action-brand{flex:none;width:21px;height:21px;object-fit:contain}
+.assistant-client-action-icon{flex:none;display:grid;place-items:center;width:22px;height:22px;color:var(--text-2)}
+.assistant-client-action-icon svg{width:18px;height:18px}
+.assistant-client-action-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assistant-client-action--cloud{background:var(--surface-1);border-color:var(--line-strong)}
+@media(max-width:520px){.assistant-client-actions{gap:8px}.assistant-client-action{min-height:42px;max-width:100%;padding-inline:11px}}
 @media (max-width:1280px){
   .smetra-quote-preview-grip,.smetra-quote-preview-expand{display:none}
   .assistant-studio.has-quote-preview.is-preview-wide{--preview-w:0px}

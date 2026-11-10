@@ -6,6 +6,19 @@ window.SmetraAssistantContext=function(value){
   sessionStorage.removeItem('smetra.assistant.conversation');
 };
 
+// Provider-generated tool XML is never user-facing, including partial streams,
+// historical messages or the clipboard. Cloud references are bearer capabilities.
+function safeAssistantDisplayText(value,streaming=false){
+  const raw=String(value??'');
+  if(/<\s*(?:tool_call\b|function\s*=|parameter\s*=)/i.test(raw)){
+    return streaming?'Читаю документ…':'Не удалось завершить чтение документа. Повторите запрос.';
+  }
+  if(streaming&&/<\s*(?:t|to|too|tool|tool_|tool_c|tool_ca|tool_cal|tool_call|f|fu|fun|func|funct|functi|functio|function|p|pa|par|para|param|parame|paramet|paramete|parameter)\s*$/i.test(raw.trimEnd())){
+    return 'Читаю документ…';
+  }
+  return raw.replace(/live\.[A-Za-z0-9_-]{24,}={0,2}/g,'[временная ссылка скрыта]');
+}
+
 function assistantEditValue(field,value,currency='RUB'){
   if(value===null||value===undefined||value==='')return '—';
   if(['optional','included'].includes(field))return value?'Да':'Нет';
@@ -763,8 +776,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const item=document.createElement('article');item.className='assistant-message '+role;
     const label=document.createElement('small');label.className='visually-hidden';label.textContent=role==='user'?'Вы':'Сметра';
     const body=document.createElement('div');body.className='assistant-markdown';
-    body.dataset.source=text;
-    body.innerHTML=role==='user'?`<p>${escapeHtml(text).replace(/\n/g,'<br>')}</p>`:assistantMarkdown(text);
+    const displayText=role==='assistant'?safeAssistantDisplayText(text):text;
+    body.dataset.source=displayText;
+    body.innerHTML=role==='user'?`<p>${escapeHtml(text).replace(/\n/g,'<br>')}</p>`:assistantMarkdown(displayText);
     item.append(label,body);
     if(role==='assistant'){
       const toolbar=document.createElement('div');toolbar.className='assistant-message-actions';toolbar.setAttribute('role','group');toolbar.setAttribute('aria-label','Действия с ответом');
@@ -956,14 +970,38 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       Promise.resolve(clientActionRun[entry.action](entry)).catch(error=>notify(error.message||'Не удалось открыть раздел'));
     },0);
   };
+  const clientActionIcon=entry=>{
+    if(entry.action==='connect_cloud_drive'){
+      const path=entry.provider==='google_drive'?'/assets/providers/google-drive.png':entry.provider==='yandex_disk'?'/assets/providers/yandex-disk.svg':'';
+      if(!path)return null;
+      const img=document.createElement('img');img.src=path;img.alt='';img.width=21;img.height=21;img.decoding='async';img.className='assistant-client-action-brand';return img;
+    }
+    const names={open_quote:'file-text',open_quote_editor:'pencil',open_section:'folder-open',open_billing:'credit-card',open_calculator:'calculator'};
+    const span=document.createElement('span');span.className='assistant-client-action-icon';span.setAttribute('aria-hidden','true');
+    span.innerHTML=assistantIcon(names[entry.action]||'sparkles',18);return span;
+  };
   const renderClientActions=(item,list)=>{
     if(!item||!Array.isArray(list)||!list.length)return;
-    const bar=document.createElement('div');bar.className='assistant-client-actions';bar.setAttribute('role','group');bar.setAttribute('aria-label','Действия в приложении');
+    const bar=document.createElement('div');bar.className='assistant-client-actions';
+    bar.setAttribute('role','group');bar.setAttribute('aria-label','Действия в приложении');
+    const offered=new Set();
     list.slice(0,3).forEach(entry=>{
-      const run=clientActionRun[entry?.action];if(!run)return;
-      const button=document.createElement('button');button.type='button';button.className='btn small assistant-client-action';
-      button.textContent=String(entry.label||'Открыть').slice(0,60);
-      button.onclick=async()=>{if(button.disabled)return;button.disabled=true;try{await run(entry)}catch(error){notify(error.status===402?'Облачные папки доступны на тарифе PRO':error.message)}finally{if(button.isConnected)button.disabled=false}};
+      const run=clientActionRun[entry?.action];
+      const key=JSON.stringify(entry);
+      if(!run||offered.has(key))return;
+      offered.add(key);
+      const button=document.createElement('button');button.type='button';button.className='assistant-client-action';
+      if(entry.action==='connect_cloud_drive')button.classList.add('assistant-client-action--cloud');
+      const icon=clientActionIcon(entry);if(icon)button.append(icon);
+      const label=document.createElement('span');label.className='assistant-client-action-label';
+      label.textContent=String(entry.label||'Открыть').slice(0,60);button.append(label);
+      button.onclick=async()=>{
+        if(button.disabled)return;
+        button.disabled=true;button.setAttribute('aria-busy','true');
+        try{await run(entry)}
+        catch(error){notify(error.status===402?'Облачные папки доступны на тарифе PRO':error.message||'Не удалось выполнить действие')}
+        finally{if(button.isConnected){button.disabled=false;button.removeAttribute('aria-busy')}}
+      };
       bar.append(button);
     });
     if(bar.children.length)item.append(bar);
@@ -1252,7 +1290,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     };
     scrollBottom();
     let generated='',paintPending=false,completed=false,queued=false,delegated=false,terminalFailure=false,paintFrame=0,lastPaint=0;
-    const paint=()=>{if(!active()||!assistantMessage.item.isConnected)return;const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
+    const paint=()=>{if(!active()||!assistantMessage.item.isConnected)return;const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=safeAssistantDisplayText(generated,!completed);assistantMessage.body.innerHTML=assistantMarkdown(assistantMessage.body.dataset.source);if(follow)scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;const frame=()=>{if(performance.now()-lastPaint<32)paintFrame=requestAnimationFrame(frame);else paint()};paintFrame=requestAnimationFrame(frame)}};
     try{
       let savedIds=[];
