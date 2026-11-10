@@ -376,6 +376,6 @@ dialog.workspace-dialog .form-actions{bottom:0;margin-bottom:0}
   #sidebar .sidebar-group button[data-tab="quotes"],
   #sidebar .sidebar-group button[data-tab="billing"],
   #sidebar .sidebar-group button[data-tab="ar-scan"],
-  #sidebar #sidebar-profile{display:none!important}
+  #sidebar #sidebar-profile{display:none}
   #sidebar .sidebar-foot{justify-content:flex-end}
 }
