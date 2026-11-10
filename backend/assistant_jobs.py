@@ -344,6 +344,7 @@ def process_job(handler, con, origin, job, on_event=None):
         if lease is None:
             raise UserBusy()
         service.assistant_deferred_actions = []
+        service.assistant_job_created_at = job['created_at']
 
         def progress(message):
             row = con.execute("UPDATE assistant_jobs SET progress=?,updated_at=? WHERE id=? AND lease_token=? AND status='running' AND cancel_requested=0 RETURNING id", (message[:120], stamp(), job['id'], job['lease_token'])).fetchone()

@@ -781,7 +781,7 @@ def query_model(messages, model=None, paid_model=False):
         method="POST",
     )
     try:
-        with open_completion(request, timeout=_provider_timeout(40)) as response:
+        with open_completion(request, timeout=_provider_timeout(65)) as response:
             raw = response.read(250001)
         if len(raw) > 250000:
             raise ValueError("response too large")
@@ -843,9 +843,9 @@ def _stream_once(payload, on_delta, on_source):
     pieces, calls, total_bytes, total_chars, done, usage = [], {}, 0, 0, False, None
     seen_sources = set()
     try:
-        with open_completion(request, timeout=_provider_timeout(45)) as response:
+        with open_completion(request, timeout=_provider_timeout(65)) as response:
             for raw in response:
-                _provider_timeout(45)
+                _provider_timeout(65)
                 total_bytes += len(raw)
                 if total_bytes > 300_000:
                     raise ValueError("response too large")
@@ -1643,7 +1643,11 @@ def _confirm(service, action_id):
 def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=None, on_status=None, on_commit=None, image_url=None, on_source=None, on_design=None, on_proposal=None):
     from backend import ai_tokens
     service.assistant_conversation_id = conversation_id
-    deadline = time.monotonic() + 80
+    # Never let an application-only 80-second timer cut off a valid reply.
+    # Vercel functions still have a hard 120-second platform budget. Keep
+    # space for DB commit, stream finalization and cleanup before it expires.
+    budget = 104 if os.getenv("VERCEL") or os.getenv("VERCEL_ENV") else 300
+    deadline = time.monotonic() + budget
     service.assistant_deadline = deadline
     ai_tokens.start_meter()
     system = (
@@ -1807,16 +1811,16 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     proposal_fingerprints = {}
     inspected_image = False
     # Bound the reads and reserve one last round to explain the collected results.
-    for turn in range(4):
+    for turn in range(10):
         # Provider context also grows after tool calls. Reduce only older
         # request-local excerpts, keeping latest tool replies and call IDs.
         from backend.context_window import enforce_round_budget
 
         enforce_round_budget(messages, model_tools(messages))
         if on_status and remembered_status is None:
-            on_status("Анализирую запрос…")
+            on_status("Анализирую запрос…" if turn == 0 else "Сверяю результаты инструментов…")
         selection = _MODEL_CONTEXT.set((model, paid_model, on_source))
-        tool_choice = _MODEL_TOOL_CHOICE.set("none" if turn == 3 else "auto")
+        tool_choice = _MODEL_TOOL_CHOICE.set("none" if turn == 9 else "auto")
         time_limit = _MODEL_DEADLINE.set(deadline)
         try:
             # Provider may emit provisional natural-language text *before* tool
@@ -1864,8 +1868,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 for fragment in final_round_deltas:
                     on_delta(fragment)
             break
-        if turn == 3:
-            raise DomainError(502, "Ассистент не смог завершить проверку. Уточните запрос и повторите.")
+        if turn == 9:
+            raise DomainError(502, "Не удалось завершить все этапы задачи за один запуск. Попробуйте продолжить.")
         messages.append({"role": "assistant", "content": answer or None, "tool_calls": calls[:4]})
         pending_image = None
         for call in calls[:4]:
@@ -2037,8 +2041,12 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             suggested_title = generate_title(prompt, model, paid_model)
     with transaction(service.con):
         tokens_used = ai_tokens.charge(service, ai_tokens.metered(), "assistant", None)
+        assistant_message_id = identity()
         result = {"answer": answer, "actions": actions, "designs": designs, "questions": questions, "memory": memory_updates,
-                  "client_actions": client_actions, "tokens_used": tokens_used, "quota": public_quota(service)}
+                  "client_actions": client_actions, "tokens_used": tokens_used, "quota": public_quota(service),
+                  "assistant_message_id": assistant_message_id}
+        if hasattr(service, "assistant_job_created_at"):
+            result["duration_seconds"] = max(0, stamp() - int(service.assistant_job_created_at))
         if on_commit:
             on_commit(result)
         for values in getattr(service, "assistant_deferred_actions", []):
@@ -2050,7 +2058,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         for index, (role, content) in enumerate((("user", prompt), ("assistant", answer))):
             service.con.execute(
                 "INSERT INTO assistant_messages(id,workspace_id,user_id,role,content,created_at,conversation_id) VALUES(?,?,?,?,?,?,?)",
-                (identity(), service.wid, service.user["id"], role, content, moment + index, conversation_id),
+                (identity() if role == "user" else assistant_message_id,
+                 service.wid, service.user["id"], role, content, moment + index, conversation_id),
             )
         if conversation_id:
             # Conditional update protects user-renamed titles and races.

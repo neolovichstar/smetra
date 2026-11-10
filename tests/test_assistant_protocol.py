@@ -45,6 +45,30 @@ class AssistantProtocolTests(unittest.TestCase):
         self.assertEqual(choices, ["auto", "auto", "auto", "none"])
         self.assertEqual(assistant._MODEL_TOOL_CHOICE.get(), "auto")
 
+    def test_runtime_budget_is_longer_than_old_80_second_cutoff(self):
+        import inspect
+        from backend import assistant
+
+        body = inspect.getsource(assistant.answer_chat)
+        self.assertIn('budget = 104 if', body)
+        self.assertIn('for turn in range(10)', body)
+        self.assertIn('turn == 9', body)
+        # Hardware/provider deadlines still exist; no impossible promise of infinity.
+        self.assertIn('_MODEL_DEADLINE.set(deadline)', body)
+
+    def test_response_time_and_message_id_are_stored_with_successful_job(self):
+        from unittest.mock import patch
+        from backend import assistant
+
+        owner, _ = self.account('assistant-reply-time')
+        with patch('backend.assistant.query_model',
+                   return_value={'content': 'Готово. Данные проверены.', 'tool_calls': []}):
+            status, reply = self.call('/assistant/chat', 'POST', {'text': 'Проверь расчёт'}, owner)
+        self.assertEqual(status, 200, reply)
+        self.assertTrue(reply.get('assistant_message_id'))
+        # A direct response has no queued-job clock.
+        self.assertNotIn('duration_seconds', reply)
+
     def test_textual_cloud_read_is_executed_as_a_tool_not_printed(self):
         token, _ = self.account("protocol-text-cloud")
         opaque = "live." + "a" * 120
