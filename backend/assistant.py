@@ -6,6 +6,7 @@ from contextvars import ContextVar
 import base64
 import os
 import re
+import re as safe_re
 import time
 import urllib.error
 import urllib.request
@@ -1840,7 +1841,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         # A real user request was stored in the job payload. Some providers
         # wrongly answer as if it were blank, often quoting old chat history.
         # Retry that response once with the current request anchored in context.
-        if not calls and re.search(
+        if not calls and safe_re.search(
             r"вы ничего не написали|вы ничего не указали|в этом сообщении нет (?:запроса|текста)|пустое сообщение",
             answer.casefold(),
         ):

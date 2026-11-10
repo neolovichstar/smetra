@@ -60,12 +60,14 @@ class CurrentCloudRequestTests(unittest.TestCase):
         self.assertIn("Изучил", result["answer"])
 
     def test_does_not_select_ambiguous_pdf_or_other_provider(self):
-        fake = lambda service,name,args: {
-            "files": [
-                {"id": "a", "name": "Дом на набережной.pdf", "mime": "application/pdf", "provider": "google_drive"},
-                {"id": "b", "name": "Дом на набережной.pdf", "mime": "application/pdf", "provider": "google_drive"},
-                {"id": "c", "name": "Дом на набережной.pdf", "mime": "application/pdf", "provider": "yandex_disk"},
-            ], "errors": [], "truncated": False}
+        def fake(service, name, args):
+            return {
+                "files": [
+                    {"id": "a", "name": "Дом на набережной.pdf", "mime": "application/pdf", "provider": "google_drive"},
+                    {"id": "b", "name": "Дом на набережной.pdf", "mime": "application/pdf", "provider": "google_drive"},
+                    {"id": "c", "name": "Дом на набережной.pdf", "mime": "application/pdf", "provider": "yandex_disk"},
+                ], "errors": [], "truncated": False,
+            }
         with patch("backend.assistant_app_tools.read", side_effect=fake) as reader:
             result = prepare(object(), "найди pdf «дом на набережной» в google drive")
         self.assertEqual(len(result), 1)
