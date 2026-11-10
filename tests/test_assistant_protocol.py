@@ -174,8 +174,12 @@ class StreamingShapeTests(unittest.TestCase):
             "<tool_call><function=read_cloud_file><parameter=id>fileA</parameter><parameter=page_start>301</parameter></function></tool_call>",
             "Ответ: <tool_call><function=read_cloud_file><parameter=id>fileA</parameter></function></tool_call>",
         ):
-            with self.subTest(value=value[:45]), self.assertRaises(ValueError):
-                _validated_reply({"content": value})
+            with self.subTest(value=value[:45]):
+                parsed = _validated_reply({"content": value})
+                self.assertEqual(parsed["tool_calls"], [])
+                self.assertNotIn("<tool_call>", parsed["content"])
+                self.assertNotIn("live.", parsed["content"])
+                self.assertIn("Не удалось завершить чтение", parsed["content"])
 
     def test_cloud_reference_is_redacted_in_final_text(self):
         from backend.assistant import _validated_reply
@@ -183,7 +187,7 @@ class StreamingShapeTests(unittest.TestCase):
         ref = "live.g" + "A" * 180
         parsed = _validated_reply({"content": "Файл: " + ref + ". Обработка продолжается."})
         self.assertNotIn(ref, parsed["content"])
-        self.assertIn("[защищённая ссылка на файл]", parsed["content"])
+        self.assertIn("[временная ссылка на файл скрыта]", parsed["content"])
 
 
     def test_budget_expiry_does_not_open_another_provider_request(self):
