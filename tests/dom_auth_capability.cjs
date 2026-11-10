@@ -12,7 +12,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
  assert.equal(providerLinks[1].classList.contains('hidden'),true,'Unconfigured Google login must not appear');
  assert.ok(providerLinks.every(link=>link.getAttribute('href')==='/api/auth/oauth/'+link.dataset.provider+'/start'),'OAuth buttons only point to server-side routes');
  const disclosure=doc.querySelector('#email-disclosure'),name=doc.querySelector('#name'),tabs=doc.querySelector('.auth-tabs');
- assert.ok(disclosure.classList.contains('hidden'));assert.equal(name.required,false);assert.match(doc.querySelector('#auth-copy').textContent,/доступный сервис/);
+ assert.ok(disclosure.classList.contains('hidden'));assert.equal(name.required,false);assert.match(doc.querySelector('#auth-copy').textContent,/Регистрация по почте временно недоступна/);
  assert.equal(doc.querySelector('.auth-provider-divider span').textContent,'Продолжить через сервис');
  tabs.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.ok(!disclosure.classList.contains('hidden'));
  tabs.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.ok(disclosure.classList.contains('hidden'));
