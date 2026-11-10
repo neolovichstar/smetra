@@ -13,8 +13,8 @@ class CloudReadTests(unittest.TestCase):
         self.con.row_factory = sqlite3.Row
         self.con.executescript("""
         CREATE TABLE cloud_connections (
-            id TEXT, workspace_id TEXT, status TEXT,
-            provider TEXT, account_label TEXT
+            id TEXT, workspace_id TEXT, user_id TEXT, status TEXT,
+            provider TEXT, account_label TEXT, updated_at INTEGER
         );
         CREATE TABLE cloud_folder_bindings (
             id TEXT, workspace_id TEXT, status TEXT, folder_name TEXT
@@ -25,7 +25,7 @@ class CloudReadTests(unittest.TestCase):
             provider_mime TEXT, source_fingerprint TEXT,
             updated_at INTEGER, trashed INTEGER
         );
-        INSERT INTO cloud_connections VALUES ('c','w','active','google_drive','Test');
+        INSERT INTO cloud_connections VALUES ('c','w','u','active','google_drive','Test',1);
         INSERT INTO cloud_folder_bindings VALUES ('b','w','active','Проекты');
         INSERT INTO cloud_files VALUES (
             'f','w','b','c','Дизайн проект.pdf','application/pdf',
@@ -38,12 +38,16 @@ class CloudReadTests(unittest.TestCase):
         self.con.close()
 
     def test_lists_only_linked_workspace_files_without_tokens(self):
-        with patch("backend.cloud_drives._premium_access"):
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch("backend.cloud_drives._google_api", return_value={"files": []}):
             result = assistant_cloud.list_files(self.service)
         self.assertEqual(result["files"][0]["id"], "f")
         self.assertNotIn("provider_file_id", result["files"][0])
         self.con.execute("UPDATE cloud_folder_bindings SET status='disabled' WHERE id='b'")
-        with patch("backend.cloud_drives._premium_access"):
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch("backend.cloud_drives._google_api", return_value={"files": []}):
             self.assertEqual(assistant_cloud.list_files(self.service)["files"], [])
 
     def test_reads_52mb_pdf_transiently_and_cites_page(self):
