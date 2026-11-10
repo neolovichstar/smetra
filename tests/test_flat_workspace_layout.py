@@ -32,6 +32,13 @@ class FlatWorkspaceLayoutTests(unittest.TestCase):
         self.assertIn(".dashboard-metric", (WEB / "ui" / "workspace.css").read_text(encoding="utf-8"))
         self.assertIn(".assistant-composer", (WEB / "ui" / "assistant.css").read_text(encoding="utf-8"))
 
+    def test_mobile_assistant_shortcuts_are_centered(self):
+        css = (WEB / "ui" / "assistant.css").read_text(encoding="utf-8")
+        page = (WEB / "app.html").read_text(encoding="utf-8")
+        self.assertIn(".assistant-workbar{width:max-content;max-width:100%;margin-inline:auto;justify-content:center", css)
+        self.assertIn(".assistant-toolrail-body{justify-content:center", css)
+        self.assertIn("/ui/assistant.css?v=20261110-centered-workbar1", page)
+
     def test_important_overrides_stay_rare(self):
         total = sum(p.read_text(encoding="utf-8").count("!important") for p in (WEB / "ui").glob("*.css"))
         self.assertLess(total, 60)

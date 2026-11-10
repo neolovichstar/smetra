@@ -695,3 +695,15 @@
 .assistant-greeting[hidden],.has-conversation .assistant-greeting{display:none}
 @media(max-width:800px){.assistant-greeting{margin-bottom:22px}.assistant-greeting h1{font-size:28px}}
 @media(prefers-reduced-motion:reduce){.assistant-greeting{transition:none;transform:none}}
+
+/* Phone assistant shortcuts: center the actual four-icon workbar directly
+   beneath the floating app header, independent of conversation/preview state. */
+@media (max-width:800px){
+  .assistant-toolrail{justify-content:center}
+  .assistant-toolrail-body{justify-content:center;padding-inline:12px}
+  .assistant-workbar{width:max-content;max-width:100%;margin-inline:auto;justify-content:center;gap:clamp(8px,3.3vw,16px)}
+  .assistant-workbar .btn{flex:0 0 40px}
+}
+@media (max-width:360px){
+  .assistant-workbar{gap:6px}
+}
