@@ -47,18 +47,21 @@ FINANCE_ROLES = ("owner", "admin", "manager")
 
 
 # Events whose text is itself internal economics (the detail holds the amount).
-FINANCE_EVENTS = frozenset(("Расход записан",))
+FINANCE_EVENTS = frozenset(("Расход записан", "Публикация с маржой ниже установленного минимума подтверждена", "Минимальная маржа изменена"))
+FINANCE_ACTIONS = frozenset(("create_expenses", "update_order_forecast", "apply_estimate_discount", "set_minimum_margin",
+    "record_work_actual_cost", "apply_actual_rate", "save_estimate_assembly", "apply_estimate_assembly",
+    "recalculate_estimate_assembly", "protect_construction_change"))
 
 
 def finance_event(value):
-    return isinstance(value, dict) and (value.get("action") in FINANCE_EVENTS or value.get("message") in FINANCE_EVENTS)
+    return isinstance(value, dict) and any(isinstance(value.get(key), str) and value[key] in FINANCE_EVENTS for key in ("action", "message"))
 
 
 def finance_detail(value):
     """Protect diff values and whole expense actions, which use generic amount keys."""
     return isinstance(value, dict) and (
         isinstance(value.get("field"), str) and value["field"] in FINANCE_KEYS
-        or value.get("tool") == "create_expenses"
+        or isinstance(value.get("tool"), str) and value["tool"] in FINANCE_ACTIONS
     )
 
 

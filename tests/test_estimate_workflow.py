@@ -5,7 +5,7 @@ import unittest
 import uuid
 
 from backend.assistant import model_tools, prepare
-from backend.business import Service
+from backend.business import Service, without_finance
 from tests import test_business
 
 
@@ -92,6 +92,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("apply_estimate_discount", discount)
         discovered = model_tools([{"role": "assistant", "tool_calls": [{"function": {"name": "list_estimate_assemblies"}}]}])
         self.assertIn("apply_estimate_assembly", {tool["function"]["name"] for tool in discovered})
+
+    def test_financial_audits_and_previews_are_hidden_after_finance_access_revoked(self):
+        payload = {"activity": [{"action": "Публикация с маржой ниже установленного минимума подтверждена", "detail": "7.41%"},
+                                {"action": "Минимальная маржа изменена", "detail": "10%"}, {"action": "Смета создана", "detail": "Объект"}],
+                   "actions": [{"tool": "apply_estimate_discount", "preview": {"rows": [{"field": "Прибыль, коп.", "after": 800000}]}},
+                               {"tool": "save_estimate_assembly", "preview": {"rows": [{"field": "Клей", "after": "private_norm * area"}]}}]}
+        filtered = without_finance(payload)
+        self.assertEqual(filtered["activity"], [{"action": "Смета создана", "detail": "Объект"}])
+        self.assertEqual(filtered["actions"], [])
+        arbitrary = {"attributes": [{"tool": {}, "action": {}, "message": []}]}
+        self.assertEqual(without_finance(arbitrary), arbitrary)
 
     def alternatives(self):
         row = self.quote["items"][0]
