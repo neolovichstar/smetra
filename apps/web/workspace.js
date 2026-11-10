@@ -145,7 +145,20 @@ window.Workspace = (() => {
       const result=await api('/quotes');if(!active())return true;
       quotes=result.quotes;
       const total=quotes.length;
-      html=`<section class="quotes-register" aria-labelledby="quotes-register-title">
+      html=`<div class="quotes-hub">
+        <nav class="quotes-hub-rail" aria-label="Разделы смет">
+          <span class="quotes-hub-label">Сметы</span>
+          ${[
+            ['all','Все сметы','files'],
+            ['drafts','Черновики','file-text'],
+            ['sent','Отправленные','send'],
+            ['approved','Согласованные','check'],
+            ['incoming','Полученные','inbox']
+          ].map(([scope,label,icon])=>`<button type="button" data-quote-scope="${scope}" aria-pressed="false">${window.SmetraIcons?.svg(icon,18)||''}<span>${label}</span></button>`).join('')}
+        </nav>
+        <div class="quotes-hub-content">
+          <div class="quotes-hub-owned">
+            <section class="quotes-register" aria-labelledby="quotes-register-title">
         <div class="topline"><div><h1 id="quotes-register-title">Сметы</h1><p class="muted">В списке: <span id="quotes-visible-count">${total}</span></p></div><div class="topline-actions">${roleCanWrite()?button('Новая смета','quote-new','','primary'):''}</div></div>
         <div class="list-toolbar"><input type="search" id="workspace-search" placeholder="Найти смету или клиента" aria-label="Поиск смет"></div>
         <section class="data-list quotes-document" aria-label="Список смет">
@@ -154,7 +167,11 @@ window.Workspace = (() => {
         </section>
         ${quotes.length===30?button('Показать ещё','more-quotes','','ghost list-more'):''}
         <span id="quotes-footer-count" hidden>${total}</span>
-      </section>`;
+            </section>
+          </div>
+          <div class="quotes-hub-incoming" id="quotes-hub-incoming" hidden></div>
+        </div>
+      </div>`;
     }else if(['clients','catalog','projects','tasks','leads'].includes(section)){
       const result=await api('/'+section);if(!active())return true;
       html=mainTitle(names[section],'',add+(section==='leads'&&roleCanWrite()?button('Ссылка для заявки','intake-link'):''))+`<section class="panel"><div class="toolbar"><input id="workspace-search" type="search" aria-label="Поиск" placeholder="${section==='catalog'?'Название, категория или артикул':'Найти по названию'}">${section==='catalog'?`<select id="catalog-category" aria-label="Категория">${option([['','Все категории'],...(result.categories||[]).map(value=>[value,value])],'')}</select><label class="catalog-favorite-filter"><input id="catalog-favorites" type="checkbox"> Избранное</label><label class="catalog-favorite-filter"><input id="catalog-recent" type="checkbox"> Недавние</label>`:''}${['clients','catalog'].includes(section)?button(section==='catalog'?'Импорт':'Импорт CSV','import',section)+button('Экспорт CSV','export',section):''}</div><div id="records">${section==='leads'?kanban(result.items):entityRows(section,result.items)}</div>${result.items.length===50?button('Показать ещё','more-entities',section):''}</section>`;
@@ -279,8 +296,61 @@ window.Workspace = (() => {
   }
   function moneyRows(items,expense=false){return items.length?items.map(r=>`<div class="record-line money-row ${expense?'money-expense':'money-income'}"><span class="money-direction" aria-hidden="true">${expense?'−':'+'}</span><div><strong>${e(r.name)}</strong><small>${e(expense?r.category:labels[r.method]||r.method)} · ${e(r.payment_date||r.expense_date)}</small></div><b>${money(r.amount_kopecks,r.currency)}</b></div>`).join(''):empty(expense?'Расходов пока нет':'Поступлений пока нет',expense?'Добавьте расходы по проекту.':'Запишите первую оплату от клиента.')}
   function kanban(items){return `<div class="kanban">${(workspace.settings.pipeline||['Новый','Связались','Обсуждение','Смета','Ожидает решения','Выигран','Проигран']).map(s=>`<section class="kanban-column" data-stage="${e(s)}"><h3>${e(s)} <small>${items.filter(i=>i.status===s).length}</small></h3>${items.filter(i=>i.status===s).map(i=>`<button class="kanban-card" draggable="true" data-work="entity" data-kind="leads" data-id="${i.id}"><strong>${e(i.name)}</strong><small>${money(i.amount_kopecks,workspace.currency)}</small></button>`).join('')}</section>`).join('')}</div>`}
+  const quoteScopes=new Set(['all','drafts','sent','approved','incoming']);
+  function currentQuoteScope(){
+    try{const scope=sessionStorage.getItem('smetra.quotes.scope')||'all';return quoteScopes.has(scope)?scope:'all'}
+    catch{return 'all'}
+  }
+  function quoteSubset(items){
+    const scope=currentQuoteScope();
+    if(scope==='drafts')return items.filter(x=>x.approval_state==='draft');
+    if(scope==='sent')return items.filter(x=>['sent','viewed','changes_requested','rejected','expired'].includes(x.approval_state));
+    if(scope==='approved')return items.filter(x=>x.approval_state==='approved');
+    return items;
+  }
+  function paintQuoteSubset(items){
+    const host=document.querySelector('#records');
+    if(!host)return;
+    const subset=quoteSubset(items);
+    host.innerHTML=subset.length?quoteRows(subset,true):empty('В этом разделе пока нет смет','Откройте «Все сметы» для просмотра остальных.');
+    const count=document.querySelector('#quotes-visible-count'),footer=document.querySelector('#quotes-footer-count');
+    if(count)count.textContent=String(subset.length);
+    if(footer)footer.textContent=String(subset.length);
+  }
   function bind(section){
     const mine=generation;
+    if(section==='quotes'){
+      const hub=document.querySelector('.quotes-hub');
+      const owned=hub?.querySelector('.quotes-hub-owned'),incoming=hub?.querySelector('#quotes-hub-incoming');
+      if(hub&&owned&&incoming){
+        const activate=async scope=>{
+          if(!quoteScopes.has(scope)||mine!==generation||current!=='quotes'||!hub.isConnected)return;
+          try{sessionStorage.setItem('smetra.quotes.scope',scope)}catch{}
+          const isIncoming=scope==='incoming';
+          owned.hidden=isIncoming;incoming.hidden=!isIncoming;
+          hub.querySelectorAll('[data-quote-scope]').forEach(btn=>{
+            const selected=btn.dataset.quoteScope===scope;
+            btn.classList.toggle('is-active',selected);btn.setAttribute('aria-pressed',String(selected));
+          });
+          if(isIncoming){
+            if(!incoming.dataset.loaded){
+              incoming.dataset.loaded='1';
+              incoming.innerHTML='<div class="page-loading" role="status">Загружаем полученные сметы…</div>';
+              try{
+                if(typeof window.SmetraFieldFlows?.renderInbox!=='function')throw Error('Полученные сметы недоступны');
+                await window.SmetraFieldFlows.renderInbox(incoming,()=>mine===generation&&current==='quotes'&&tab==='quotes'&&incoming.isConnected);
+              }catch(error){
+                incoming.dataset.loaded='';
+                if(incoming.isConnected)incoming.innerHTML='<p class="muted" role="alert">Не удалось загрузить полученные сметы. Откройте раздел повторно.</p>';
+                notify(error.message);
+              }
+            }
+          }else paintQuoteSubset(quotes);
+        };
+        hub.querySelectorAll('[data-quote-scope]').forEach(btn=>btn.addEventListener('click',()=>{void activate(btn.dataset.quoteScope)}));
+        void activate(currentQuoteScope());
+      }
+    }
     document.querySelector('#content').onclick=ev=>{const b=ev.target.closest('[data-work]');if(b)action(b).catch(err=>notify(err.message))};
     if(section==='dashboard'){
       bindCapture();
@@ -297,7 +367,7 @@ window.Workspace = (() => {
       return;
     }
     let timer;
-    document.querySelector('#workspace-search')?.addEventListener('input',ev=>{clearTimeout(timer);const value=ev.target.value;timer=setTimeout(async()=>{if(mine!==generation)return;try{const result=await api('/'+section+'?q='+encodeURIComponent(value));if(mine!==generation||current!==section||document.querySelector('#workspace-search')?.value!==value)return;const list=result.quotes||result.items;window.Workspace.records=list;if(section==='quotes')quotes=list;document.querySelector('#records').innerHTML=section==='quotes'?quoteRows(list,true):section==='leads'?kanban(list):entityRows(section,list);if(section==='quotes'){const count=document.querySelector('#quotes-visible-count'),footer=document.querySelector('#quotes-footer-count');if(count)count.textContent=String(list.length);if(footer)footer.textContent=String(list.length)}const more=document.querySelector('[data-work^=more-]');if(more)more.classList.toggle('hidden',list.length<(section==='quotes'?30:50))}catch(err){if(mine===generation)notify(err.message)}},220)});
+    document.querySelector('#workspace-search')?.addEventListener('input',ev=>{clearTimeout(timer);const value=ev.target.value;timer=setTimeout(async()=>{if(mine!==generation)return;try{const result=await api('/'+section+'?q='+encodeURIComponent(value));if(mine!==generation||current!==section||document.querySelector('#workspace-search')?.value!==value)return;const list=result.quotes||result.items;window.Workspace.records=list;if(section==='quotes')quotes=list;if(section==='quotes')paintQuoteSubset(list);else document.querySelector('#records').innerHTML=section==='leads'?kanban(list):entityRows(section,list);const more=document.querySelector('[data-work^=more-]');if(more)more.classList.toggle('hidden',list.length<(section==='quotes'?30:50))}catch(err){if(mine===generation)notify(err.message)}},220)});
     document.querySelectorAll('[draggable]').forEach(el=>el.ondragstart=ev=>ev.dataTransfer.setData('text/plain',el.dataset.id));
     document.querySelectorAll('[data-stage]').forEach(el=>{el.ondragover=ev=>ev.preventDefault();el.ondrop=async ev=>{ev.preventDefault();const id=ev.dataTransfer.getData('text/plain');const item=window.Workspace.records.find(i=>i.id===id);if(!item)return;try{await api('/leads/'+id,{method:'PATCH',body:JSON.stringify({...item,status:el.dataset.stage})});await render('leads')}catch(err){notify(err.message)}}});
     const switcher=document.querySelector('#f-workspace');if(switcher)switcher.onchange=async()=>{sessionStorage.setItem('workspace_id',switcher.value);sessionStorage.removeItem('smetra.assistant.context');workspace=null;await render(current)};
@@ -343,7 +413,7 @@ window.Workspace = (() => {
     if(a==='read-notifications'){await api('/notifications',{method:'POST'});return render('notifications')}
     if(a==='more-quotes'||a==='more-entities'){
       const kind=a==='more-quotes'?'quotes':id;const existing=kind==='quotes'?quotes:window.Workspace.records;
-      const q=document.querySelector('#workspace-search')?.value||'';const filters=kind==='catalog'?catalogQuery():'q='+encodeURIComponent(q);const result=await api('/'+kind+'?offset='+existing.length+'&'+filters);const next=result.quotes||result.items;existing.push(...next);document.querySelector('#records').innerHTML=kind==='quotes'?quoteRows(existing,true):kind==='leads'?kanban(existing):entityRows(kind,existing);if(kind==='quotes'){const count=document.querySelector('#quotes-visible-count'),footer=document.querySelector('#quotes-footer-count');if(count)count.textContent=String(existing.length);if(footer)footer.textContent=String(existing.length)}if(next.length<(kind==='quotes'?30:50))b.disabled=true;return;
+      const q=document.querySelector('#workspace-search')?.value||'';const filters=kind==='catalog'?catalogQuery():'q='+encodeURIComponent(q);const result=await api('/'+kind+'?offset='+existing.length+'&'+filters);const next=result.quotes||result.items;existing.push(...next);if(kind==='quotes')paintQuoteSubset(existing);else document.querySelector('#records').innerHTML=kind==='leads'?kanban(existing):entityRows(kind,existing);if(next.length<(kind==='quotes'?30:50))b.disabled=true;return;
     }
     if(a==='document')return documentForm();
     if(a==='download-document')return download('/documents/'+id+'/pdf','smetra-'+id+'.pdf');
