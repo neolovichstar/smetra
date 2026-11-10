@@ -6,6 +6,15 @@ window.SmetraAssistantContext=function(value){
   sessionStorage.removeItem('smetra.assistant.conversation');
 };
 
+function safeAssistantDisplayText(value){
+  const raw=String(value??'');
+  // Backstop for historical answers and a provider that sends raw tool syntax
+  // during a partial SSE frame. Never render or copy temporary cloud refs.
+  if(/<\\s*(?:tool_call\\b|function\\s*=|parameter\\s*=)/i.test(raw)){
+    return 'Не удалось отобразить ответ из-за ошибки формата вызова инструмента. Повторите запрос.';
+  }
+  return raw.replace(/live\\.[A-Za-z0-9_-]{24,}={0,2}/g,'[временная ссылка скрыта]');
+}
 function assistantEditValue(field,value,currency='RUB'){
   if(value===null||value===undefined||value==='')return '—';
   if(['optional','included'].includes(field))return value?'Да':'Нет';
@@ -746,8 +755,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const item=document.createElement('article');item.className='assistant-message '+role;
     const label=document.createElement('small');label.className='visually-hidden';label.textContent=role==='user'?'Вы':'Сметра';
     const body=document.createElement('div');body.className='assistant-markdown';
-    body.dataset.source=text;
-    body.innerHTML=role==='user'?`<p>${escapeHtml(text).replace(/\n/g,'<br>')}</p>`:assistantMarkdown(text);
+    const displayText=role==='assistant'?safeAssistantDisplayText(text):text;
+    body.dataset.source=displayText;
+    body.innerHTML=role==='user'?`<p>${escapeHtml(text).replace(/\n/g,'<br>')}</p>`:assistantMarkdown(displayText);
     item.append(label,body);
     if(role==='assistant'){
       const toolbar=document.createElement('div');toolbar.className='assistant-message-actions';toolbar.setAttribute('role','group');toolbar.setAttribute('aria-label','Действия с ответом');
@@ -1267,7 +1277,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     };
     scrollBottom();
     let generated='',paintPending=false,completed=false,queued=false,delegated=false,terminalFailure=false,paintFrame=0,lastPaint=0;
-    const paint=()=>{if(!active()||!assistantMessage.item.isConnected)return;const follow=nearBottom();paintPending=false;lastPaint=performance.now();assistantMessage.body.dataset.source=generated;assistantMessage.body.innerHTML=assistantMarkdown(generated);if(follow)scrollBottom()};
+    const paint=()=>{if(!active()||!assistantMessage.item.isConnected)return;const follow=nearBottom();paintPending=false;lastPaint=performance.now();const safeGenerated=safeAssistantDisplayText(generated);assistantMessage.body.dataset.source=safeGenerated;assistantMessage.body.innerHTML=assistantMarkdown(safeGenerated);if(follow)scrollBottom()};
     const schedule=()=>{if(!paintPending){paintPending=true;const frame=()=>{if(performance.now()-lastPaint<32)paintFrame=requestAnimationFrame(frame);else paint()};paintFrame=requestAnimationFrame(frame)}};
     try{
       let savedIds=[];
