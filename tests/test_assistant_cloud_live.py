@@ -220,7 +220,7 @@ class LiveCloudSearchTests(unittest.TestCase):
                 "pages": [[1, base64.b64encode(b"not jpeg").decode()]], "total_pages": 4
             }
         ), patch("urllib.request.urlopen") as network:
-            item = assistant_cloud.list_files(self.service, "дом")["files"][0]
+            item = assistant_cloud.list_files(self.service, "дом на набережной")["files"][0]
             with self.assertRaises(business.DomainError) as error:
                 assistant_cloud.analyze_page(self.service, item["id"], page_number=1)
             self.assertEqual(error.exception.status, 422)
