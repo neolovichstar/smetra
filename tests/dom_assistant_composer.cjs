@@ -217,6 +217,31 @@ async function setup(enabled=true,voice=false,remaining=3){
   await w.SmetraAssistant();await tick();
   assert.equal(doc.querySelector('.assistant-jobs,.assistant-job'),null,'task banner never reappears after refresh');
  });
+ await test('a running answer shows a clock next to status and keeps final elapsed duration',async({w,doc})=>{
+   let stream;
+   w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){stream=controller}})});
+   type(w,doc,'Прочитай PDF полностью');
+   doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+   const activity=doc.querySelector('.assistant-activity'),time=activity?.querySelector('.assistant-activity-time');
+   assert.ok(time,'Timer visible beside running status');
+   assert.equal(time.textContent,'0:00');
+   assert.equal(activity.classList.contains('is-complete'),false);
+   const result={answer:'Смета готова',actions:[],assistant_message_id:'reply-timed-test',duration_seconds:77,
+     quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}};
+   stream.enqueue(new TextEncoder().encode('event: done\\ndata: '+JSON.stringify(result)+'\\n\\n'));
+   stream.close();await tick();await tick();
+   assert.equal(doc.querySelector('.assistant-activity-time')?.textContent,'1:17');
+   assert.equal(doc.querySelector('.assistant-activity.is-complete .assistant-activity-label')?.textContent,'Готово');
+   assert.equal(JSON.parse(w.sessionStorage.getItem('smetra.assistant.reply-timings:qa'))['reply-timed-test'],77);
+ });
+ await test('queued background answer keeps a running timer and Stop control',async({w,doc})=>{
+   type(w,doc,'Долгая обработка');
+   doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+   assert.match(doc.querySelector('.assistant-activity-label')?.textContent||'',/Выполняю|Продолжаю/);
+   assert.ok(doc.querySelector('.assistant-activity-time'),'Duration survives background handoff');
+   assert.equal(doc.querySelector('.assistant-activity')?.classList.contains('is-complete'),false);
+   assert.equal(doc.querySelector('#assistant-stop').hidden,false);
+ });
  await test('normal send queues once and streams the same durable job',async({w,doc,requests})=>{
   let sent;
   w.fetch=async(path,options)=>{sent={path,options};return {ok:true,body:new ReadableStream({start(controller){

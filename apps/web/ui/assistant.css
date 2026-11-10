@@ -94,6 +94,10 @@
 @keyframes breathe{0%,100%{transform:scale(.7);opacity:.55}50%{transform:scale(1);opacity:1}}
 .assistant-activity.is-complete .assistant-activity-indicator{display:none}
 .assistant-activity.is-complete{color:var(--text-3)}
+.assistant-activity-time{display:inline-flex;align-items:center;justify-content:center;min-width:44px;padding:3px 8px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--text-2);font-size:12px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum";line-height:1.3;white-space:nowrap}
+.assistant-activity.is-complete .assistant-activity-time{border-color:transparent;background:transparent;color:var(--text-3);padding-inline:3px}
+.assistant-activity-saved{margin-bottom:7px}
+.assistant-activity-saved .assistant-activity-label{font-weight:500}
 .assistant-activity-sources{display:flex;flex-wrap:wrap;gap:6px}
 .assistant-source{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 6px;border:1px solid var(--line);border-radius:var(--r-pill);color:var(--text-2);font-size:var(--fs-12)}
 .assistant-source:hover{text-decoration:none;color:var(--text);border-color:var(--line-strong)}

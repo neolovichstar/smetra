@@ -778,6 +778,31 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     branch:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M6 7.5v5a6.5 6.5 0 0 0 6.5 6.5H15.5M15.5 5H12a6 6 0 0 0-6 6"/></svg>'
   };
   const messageButton=(name,label)=>{const button=document.createElement('button');button.type='button';button.className='assistant-message-action assistant-action-'+name;button.title=label;button.setAttribute('aria-label',label);button.innerHTML=messageIcons[name];return button};
+  const timingStoreKey='smetra.assistant.reply-timings:'+user.id;
+  const responseTime=(seconds)=>{
+    const total=Math.max(0,Math.floor(Number(seconds)||0)),minutes=Math.floor(total/60),hours=Math.floor(minutes/60);
+    return hours?hours+':'+String(minutes%60).padStart(2,'0')+':'+String(total%60).padStart(2,'0')
+      :minutes+':'+String(total%60).padStart(2,'0');
+  };
+  const getReplyTimings=()=>{
+    try{const value=JSON.parse(sessionStorage.getItem(timingStoreKey)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}
+    catch{return {}}
+  };
+  const rememberReplyTiming=(id,seconds)=>{
+    if(typeof id!=='string'||!id||!Number.isFinite(Number(seconds)))return;
+    try{
+      const values=getReplyTimings();values[id]=Math.max(0,Math.min(86400,Math.floor(Number(seconds))));
+      const keys=Object.keys(values);for(const old of keys.slice(0,Math.max(0,keys.length-80)))delete values[old];
+      sessionStorage.setItem(timingStoreKey,JSON.stringify(values));
+    }catch{}
+  };
+  const completedResponseActivity=(seconds)=>{
+    const row=document.createElement('div');row.className='assistant-activity is-complete assistant-activity-saved';
+    row.setAttribute('aria-label','Время ответа');
+    const label=document.createElement('span');label.className='assistant-activity-label';label.textContent='Готово';
+    const timer=document.createElement('time');timer.className='assistant-activity-time';timer.textContent=responseTime(seconds);
+    row.append(label,timer);return row;
+  };
   const feedbackKey=(messageId,text)=>{const hash=Array.from(String(text)).reduce((value,char)=>Math.imul(value,31)+char.charCodeAt(0)>>>0,2166136261).toString(36);return 'smetra.assistant.feedback:'+user.id+':'+(activeConversation||'general')+':'+(messageId||hash)};
   const addMessage=(role,text,messageId)=>{
     const item=document.createElement('article');item.className='assistant-message '+role;
@@ -787,6 +812,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     body.dataset.source=displayText;
     body.innerHTML=role==='user'?`<p>${escapeHtml(text).replace(/\n/g,'<br>')}</p>`:assistantMarkdown(displayText);
     item.append(label,body);
+    if(role==='assistant'&&messageId){
+      const seconds=getReplyTimings()[messageId];
+      if(Number.isFinite(seconds))item.insertBefore(completedResponseActivity(seconds),body);
+    }
     if(role==='assistant'){
       const toolbar=document.createElement('div');toolbar.className='assistant-message-actions';toolbar.setAttribute('role','group');toolbar.setAttribute('aria-label','Действия с ответом');
       const copy=messageButton('copy','Скопировать ответ');copy.classList.add('assistant-copy');copy.onclick=()=>copyText(body.dataset.source,copy);toolbar.append(copy);
@@ -1125,7 +1154,20 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       renderDelivery();
       for(const job of result.jobs){
         if(job.kind==='chat'&&(job.conversation_id||'')===activeConversation){
-          if(['queued','running','retry'].includes(job.status))observedChatJobs.add(job.id);
+          const jobActivity=[...messages.querySelectorAll('.assistant-activity[data-job-id]')].find(node=>node.dataset.jobId===job.id);
+          if(['queued','running','retry'].includes(job.status)){
+            observedChatJobs.add(job.id);
+            const label=jobActivity?.querySelector('.assistant-activity-label');
+            if(label)label.textContent=String(job.progress||(job.status==='retry'?'Ожидаю повторного запуска…':'Выполняю запрос…')).slice(0,100);
+          }
+          else if(['failed','cancelled'].includes(job.status)&&observedChatJobs.has(job.id)&&!(working&&currentJobId===job.id)){
+            observedChatJobs.delete(job.id);
+            jobActivity?.dispatchEvent(new Event('smetra:assistant-finished'));
+            const label=jobActivity?.querySelector('.assistant-activity-label');
+            if(label)label.textContent=job.status==='cancelled'?'Остановлено':'Не удалось завершить';
+            if(currentJobId===job.id){currentJobId=null;stop.hidden=true}
+            status.textContent=job.status==='failed'?(job.error||'Не удалось завершить задачу'):'Ответ остановлен.';
+          }
           else if(job.status==='completed'&&observedChatJobs.has(job.id)&&!(working&&currentJobId===job.id)){
             observedChatJobs.delete(job.id);
             // A background reply has reached its committed terminal state.
@@ -1133,7 +1175,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             try{
               const detail=await api('/assistant/jobs/'+encodeURIComponent(job.id));
               if(!active()||sequence!==jobLoadSeq)return;
-              const entry=navigationForRequest(detail.job?.result?.client_actions,job.prompt);
+              const completedReply=detail.job?.result;
+              if(completedReply?.assistant_message_id)rememberReplyTiming(
+                completedReply.assistant_message_id,
+                completedReply.duration_seconds??Math.max(0,(job.updated_at||0)-(job.created_at||0))
+              );
+              jobActivity?.dispatchEvent(new Event('smetra:assistant-finished'));
+              if(currentJobId===job.id){currentJobId=null;stop.hidden=true}
+              const entry=navigationForRequest(completedReply?.client_actions,job.prompt);
               if(entry){await clientActionRun[entry.action](entry);return;}
             }catch(error){if(active())notify(error.message||'Не удалось открыть раздел');}
             if(active())await window.SmetraAssistant();
@@ -1282,9 +1331,26 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const activity=document.createElement('div');activity.className='assistant-activity';activity.setAttribute('role','status');
     const pulse=document.createElement('span');pulse.className='assistant-activity-indicator';pulse.setAttribute('aria-hidden','true');
     const activityLabel=document.createElement('span');activityLabel.className='assistant-activity-label';activityLabel.textContent='Думаю…';
+    const activityTime=document.createElement('time');activityTime.className='assistant-activity-time';activityTime.textContent='0:00';
+    activityTime.setAttribute('aria-label','Время выполнения');
     const sources=document.createElement('div');sources.className='assistant-activity-sources';
-    activity.append(pulse,activityLabel,sources);assistantMessage.item.prepend(activity);
+    activity.append(pulse,activityLabel,activityTime,sources);assistantMessage.item.prepend(activity);
     const setActivity=value=>{activityLabel.textContent=String(value||'Думаю…').slice(0,100)};
+    const elapsedSinceStart=performance.now();
+    const updateClock=()=>{activityTime.textContent=responseTime((performance.now()-elapsedSinceStart)/1000)};
+    let clockRunning=true;
+    const clockInterval=setInterval(()=>{
+      if(!activity.isConnected){clearInterval(clockInterval);clockRunning=false;return}
+      if(clockRunning)updateClock();
+    },1000);
+    const finishClock=(label='Готово',seconds=null)=>{
+      clockRunning=false;clearInterval(clockInterval);
+      if(seconds!==null&&Number.isFinite(Number(seconds)))activityTime.textContent=responseTime(seconds);
+      else updateClock();
+      activity.classList.add('is-complete');setActivity(label);
+      activityTime.setAttribute('aria-label','Время ответа');
+    };
+    activity.addEventListener('smetra:assistant-finished',()=>finishClock('Готово'),{once:true});
     const showSource=item=>{
       if(!item||typeof item.url!=='string'||sources.children.length>=3)return;
       let url;try{url=new URL(item.url)}catch{return}
@@ -1314,7 +1380,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const body=JSON.stringify({text:prompt,context:submitted.context?{entity:submitted.context.entity,id:submitted.context.id}:null,...(savedIds.length?{file_ids:savedIds}:{}),...(activeConversation?{conversation_id:activeConversation}:{})});
       if(!jobRequest||jobRequest.body!==body)jobRequest={body,key:crypto.randomUUID()};
       const accepted=await api('/assistant/jobs',{method:'POST',headers:{'Idempotency-Key':jobRequest.key,...scopeHeaders},body});
-      currentJobId=accepted.job.id;queued=true;jobRequest=null;bindCreatedConversation(accepted.job);observedChatJobs.add(currentJobId);
+      currentJobId=accepted.job.id;queued=true;jobRequest=null;
+      activity.dataset.jobId=currentJobId;
+      bindCreatedConversation(accepted.job);observedChatJobs.add(currentJobId);
       if(active())messages.querySelectorAll('.assistant-question-inline').forEach(node=>node.remove());
       if(cancelRequested){
         await api('/assistant/jobs/'+encodeURIComponent(currentJobId),{method:'DELETE',headers:{...scopeHeaders}});
@@ -1358,7 +1426,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             const option=[...document.querySelector('#assistant-thread-select').options].find(item=>item.value===activeConversation);
             if(option)option.textContent=title;
           }
-        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0],assistantMessage.item,prompt);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';activity.classList.add('is-complete');if(sources.children.length)setActivity('Источники');else activity.remove()}
+        }if(typeof payload.answer==='string')generated=payload.answer;cancelAnimationFrame(paintFrame);paint();(payload.actions||[]).forEach(addAction);if(Array.isArray(payload.questions)&&payload.questions.length)showQuestion(payload.questions[0],assistantMessage.item,prompt);(payload.designs||[]).forEach(design=>quotePreview?.design(design).catch(()=>{}));showMemoryNote(assistantMessage.item,payload.memory);renderClientActions(assistantMessage.item,payload.client_actions);autoOpenApprovedUi(payload.client_actions,prompt);quotePreview?.progress?.('');renderQuota(payload.quota);completed=true;status.textContent='';
+          const seconds=Number.isFinite(Number(payload.duration_seconds))&&payload.duration_seconds!=null
+            ?Number(payload.duration_seconds):Math.floor((performance.now()-elapsedSinceStart)/1000);
+          if(payload.assistant_message_id)rememberReplyTiming(payload.assistant_message_id,seconds);
+          finishClock('Готово',seconds)}
         if(kind==='background'){setActivity('Выполняю запрос…');status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs()}
         if(kind==='error'){renderQuota(payload.quota);throw Error(payload.error||'Не удалось завершить ответ')}
       };
@@ -1386,8 +1458,8 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       if(completed)return;
       if(queued&&!terminalFailure&&!cancelRequested){
         cancelAnimationFrame(paintFrame);assistantMessage.item.classList.remove('streaming');
-        activity.classList.add('is-complete');setActivity('Продолжаю выполнение…');
-        status.textContent='Запрос сохранён. Ответ появится в этом диалоге.';refreshJobs();return;
+        setActivity('Продолжаю выполнение в фоне…');
+        status.textContent='Запрос сохранён. Выполнение продолжается.';refreshJobs();return;
       }
       restoreSubmittedDraft(submitted);
       // Another tab spent the last tokens: the server refused before any charge.
@@ -1396,11 +1468,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       assistantMessage.item.classList.remove('streaming');
       if(error.name!=='AbortError'&&generated&&assistantMessage.item.isConnected)paint();
       if(error.name==='AbortError'){
+        finishClock('Остановлено');
         assistantMessage.item.remove();
         status.textContent='Ответ остановлен.';
       }else{
-        activity.classList.add('is-complete');
-        setActivity('Генерация прервана');
+        finishClock('Генерация прервана');
         if(!generated)assistantMessage.item.remove();
         status.textContent=(generated?'Ответ прервался: ':'')+error.message;
         // Restore the submitted draft for retry without overwriting a newer view or draft.
@@ -1412,7 +1484,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         requestAnimationFrame(scrollBottom);
       }
       try{renderQuota((await api('/assistant')).quota)}catch{}
-    }finally{working=false;stopSubmittedDraft=null;requestController=null;if(active()&&composer.isConnected){stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus();if(queued)refreshJobs()}}
+    }finally{working=false;stopSubmittedDraft=null;requestController=null;if(active()&&composer.isConnected){
+      stop.hidden=!(queued&&!completed&&!terminalFailure&&!cancelRequested);
+      renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus();if(queued)refreshJobs()
+    }}
   };
   // Initialize the tray after quota/state callbacks are constructed.
   renderPhoto();
