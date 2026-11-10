@@ -111,8 +111,8 @@ def validate_pdf(content):
     inspect(reader.trailer)
 
 
-def extract(content, mime, *, max_pdf_pages=100):
-    if not 0 < len(content) <= 5_000_000:
+def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000):
+    if not 0 < len(content) <= max_content_bytes:
         raise ValueError("size")
     pages = []
     from backend.office_documents import VIEWABLE, preview, text_sections
@@ -147,14 +147,18 @@ def extract(content, mime, *, max_pdf_pages=100):
 
 
 def main():
+    # Only the explicit cloud PDF mode may use a larger transient input.
+    # Standard uploads keep their existing strict 5 MB parser limit.
+    cloud_pdf = len(sys.argv) > 1 and sys.argv[1] == "cloud:application/pdf"
     try:
         import resource
 
-        resource.setrlimit(resource.RLIMIT_AS, (384 * 1024 * 1024, 384 * 1024 * 1024))
-        resource.setrlimit(resource.RLIMIT_CPU, (15, 15))
+        memory = (768 if cloud_pdf else 384) * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+        resource.setrlimit(resource.RLIMIT_CPU, (25 if cloud_pdf else 15, 25 if cloud_pdf else 15))
     except ImportError:
         pass  # Windows QA: parent still enforces input/output/time bounds.
-    content = sys.stdin.buffer.read(5_000_001)
+    content = sys.stdin.buffer.read(100_000_001 if cloud_pdf else 5_000_001)
     if sys.argv[1].startswith(("validate-office:", "preview:")):
         from backend.office_documents import CSV, archive, preview
 
@@ -176,6 +180,13 @@ def main():
             raise ValueError("size")
         validate_pdf(content)
         sys.stdout.buffer.write(b'{"valid":true}')
+        return
+    if cloud_pdf:
+        pages, truncated = extract(content, "application/pdf",
+                                   max_pdf_pages=300, max_content_bytes=100_000_000)
+        sys.stdout.buffer.write(json.dumps(
+            {"pages": pages, "truncated": truncated},
+            ensure_ascii=False).encode("utf-8"))
         return
     capture = sys.argv[1].startswith('capture:')
     mime = sys.argv[1].removeprefix('capture:')
