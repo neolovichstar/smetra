@@ -270,7 +270,7 @@ def analyze_page(service, file_id, page_number=1):
         raise DomainError(502, "Не удалось выполнить визуальный анализ PDF") from None
     return {
         "name": row["name"], "provider": connection["provider"],
-        "page": page, "total_pages": total, "analysis": analysis.strip()[:6000],
+        "page": page, "total_pages": total, "analysis": analysis.strip()[:3500],
         "source_stored": False,
         "note": (
             "Это машинное чтение только одной страницы. Нельзя считать черновик "
