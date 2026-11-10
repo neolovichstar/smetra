@@ -58,7 +58,6 @@ class AssistantProtocolTests(unittest.TestCase):
 
     def test_response_time_and_message_id_are_stored_with_successful_job(self):
         from unittest.mock import patch
-        from backend import assistant
 
         owner, _ = self.account('assistant-reply-time')
         with patch('backend.assistant.query_model',
