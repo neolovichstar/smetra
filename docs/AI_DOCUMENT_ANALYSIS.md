@@ -104,7 +104,8 @@ DDL выполняется только для явно переданной т�
   [assistant_recall.py](../backend/assistant_recall.py).
 - Интерфейс: [assistant-chat.js](../apps/web/assistant-chat.js),
   [quote-visual-core.js](../apps/web/quote-visual-core.js),
-  [assistant.css](../apps/web/ui/assistant.css).
+  [assistant.css](../apps/web/ui/assistant.css),
+  [app.html](../apps/web/app.html), [features.js](../apps/web/features.js).
 - Регрессии: [test_document_analysis.py](../tests/test_document_analysis.py),
   [test_design_vision.py](../tests/test_design_vision.py),
   [test_file_processing.py](../tests/test_file_processing.py),
