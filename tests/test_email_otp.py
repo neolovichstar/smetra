@@ -230,6 +230,8 @@ class EmailOTPTests(unittest.TestCase):
         self.assertNotIn("<script",html)
 
     def test_temporary_email_shutdown_preserves_password_and_oauth_routes(self):
+        # Establish an account before pausing new registration.
+        token, _ = self.account("email-existing-after-pause")
         with patch.dict(os.environ, {**CONFIG, "EMAIL_OTP_ENABLED": "0", "EMAIL_SIGNUP_ENABLED": "0"}):
             status, capabilities = self.call("/auth/providers")
             self.assertEqual(status, 200, capabilities)
@@ -244,7 +246,6 @@ class EmailOTPTests(unittest.TestCase):
                 "email": "closed@example.org", "name": "Tester", "password": "longpassword123",
             })[0], 503)
             # Existing account/password authentication must remain available.
-            token, _ = self.account("email-existing-after-pause")
             self.assertEqual(self.call("/me", token=token)[0], 200)
 
     def test_email_signup_can_be_disabled_without_disabling_existing_code_logins(self):
