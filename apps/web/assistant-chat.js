@@ -686,10 +686,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     document.querySelectorAll('.assistant-workbar summary').forEach(summary=>summary.setAttribute('aria-disabled',String(blocked)));
     if(blocked)closeConversationMenus();
   };
+  let stopSubmittedDraft=null;
   const stop=document.querySelector('#assistant-stop');
   stop.onclick=async()=>{
     if(!active()||stop.disabled)return;
-    cancelRequested=true;stop.disabled=true;requestController?.abort();
+    cancelRequested=true;stop.disabled=true;
+    // Restore immediately on Stop: don't race the server's final SSE frame or
+    // the async cancellation request against the input's local draft state.
+    if(stopSubmittedDraft)restoreSubmittedDraft(stopSubmittedDraft);
+    requestController?.abort();
     if(currentJobId){
       try{await api('/assistant/jobs/'+encodeURIComponent(currentJobId),{method:'DELETE',headers:{...scopeHeaders}})}
       catch(error){if(active())notify(error.message)}
@@ -1236,6 +1241,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(!active()||working||threadBusy||attachingCount)return;
     prompt=input.value.trim();if(!prompt&&!pendingPhotos.length)return;
     const submitted=takeSubmittedDraft();
+    stopSubmittedDraft=submitted;
     working=true;cancelRequested=false;currentJobId=null;renderQuota(quota);stop.hidden=false;stop.disabled=false;requestController=new AbortController();status.textContent='Подключаюсь к модели…';
     messages.querySelectorAll('.assistant-error').forEach(node=>node.remove());
     const sentPhotos=submitted.photos;
@@ -1376,7 +1382,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         requestAnimationFrame(scrollBottom);
       }
       try{renderQuota((await api('/assistant')).quota)}catch{}
-    }finally{working=false;requestController=null;if(active()&&composer.isConnected){stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus();if(queued)refreshJobs()}}
+    }finally{working=false;stopSubmittedDraft=null;requestController=null;if(active()&&composer.isConnected){stop.hidden=true;renderQuota(quota);input.disabled=!data.available;if(!input.disabled)input.focus();if(queued)refreshJobs()}}
   };
   // Initialize the tray after quota/state callbacks are constructed.
   renderPhoto();
