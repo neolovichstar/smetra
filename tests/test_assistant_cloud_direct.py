@@ -87,6 +87,31 @@ class CloudReadTests(unittest.TestCase):
         self.assertEqual(result["next_page"], 14)
         self.assertIn("cloud:application/pdf:13", extractor.call_args.args)
 
+    def test_full_49_page_pdf_reports_unreadable_text_pages_precisely(self):
+        missing = [25, 26, 27, 28, 29, 30, *range(37, 50)]
+        pages = [[page, "" if page in missing else f"Проверенные данные страницы {page}"]
+                 for page in range(1, 50)]
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch(
+            "backend.cloud_drives._download", return_value=b"%PDF-data"
+        ) as download, patch(
+            "backend.file_processing.isolated_extract",
+            return_value={"pages": pages, "truncated": False,
+                          "total_pages": 49, "next_page": None},
+        ) as extract:
+            result = assistant_cloud.read_file(self.service, "f", full_document=True)
+        self.assertEqual(result["pages_scanned"], 49)
+        self.assertEqual(result["total_pages"], 49)
+        self.assertEqual(result["missing_text_pages"], missing)
+        self.assertTrue(result["full_document_requested"])
+        self.assertFalse(result["text_coverage_complete"])
+        self.assertTrue(result["requires_visual"])
+        self.assertIn(24, result["text_pages_read"])
+        self.assertIn(36, result["text_pages_read"])
+        self.assertIn("cloud:application/pdf:full", extract.call_args.args)
+        self.assertEqual(download.call_count, 1)
+
     def test_refuses_unlinked_or_cross_workspace_file(self):
         with patch("backend.cloud_drives._premium_access"), patch("backend.cloud_drives._download") as download:
             self.service.wid = "another"

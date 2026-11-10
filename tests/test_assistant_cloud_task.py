@@ -66,6 +66,7 @@ class CurrentCloudRequestTests(unittest.TestCase):
         self.assertEqual(status, 200, result)
         self.assertEqual([name for name, _ in calls], ["list_cloud_files", "read_cloud_file"])
         self.assertEqual(calls[0][1]["query"], "дом на набережной")
+        self.assertTrue(calls[1][1]["full_document"])
         self.assertEqual(model_messages[0][-1]["role"], "tool")
         self.assertIn("Площадь 120 м2", model_messages[0][-1]["content"])
         self.assertEqual(model_messages[0][-2]["tool_calls"][0]["function"]["name"], "read_cloud_file")
