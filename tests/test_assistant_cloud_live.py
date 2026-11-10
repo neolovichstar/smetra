@@ -243,8 +243,6 @@ class LiveCloudSearchTests(unittest.TestCase):
 
 
     def test_cloud_pdf_text_parser_failure_auto_uses_visual_without_refetch(self):
-        from backend import business
-
         content = b"%PDF-private-file-bytes"
         visual = {
             "page": 1, "total_pages": 8,
@@ -310,7 +308,7 @@ class LiveCloudSearchTests(unittest.TestCase):
         self.assertEqual(result["visual_status"], "failed")
         self.assertTrue(result["requires_visual"])
         self.assertEqual(result["visual_error"], "Визуальная модель не настроена")
-        self.assertIn("НЕ", result["note"])
+        self.assertIn("Не утверждай", result["note"])
         self.assertEqual(result["excerpts"], [])
 
     def test_large_cloud_pdf_still_renders_and_extracts_without_recursive_validator(self):
