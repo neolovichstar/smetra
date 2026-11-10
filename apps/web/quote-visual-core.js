@@ -122,12 +122,6 @@
     const content=el('div','smetra-quote-preview-content');panel.append(content);
     const hostRoot=host.closest('.assistant-studio');
     host.append(panel);
-    // Phones: the estimate is a full-screen layer; this chip brings it back from the chat.
-    const chip=el('button','smetra-quote-chip');chip.type='button';chip.hidden=true;
-    chip.innerHTML='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 4h10v16H7zM10 9h4M10 13h4"/></svg><span>Смета</span>';
-    chip.onclick=()=>setOpen(true);
-    (hostRoot||host).append(chip);
-    const syncChip=()=>{chip.hidden=visible||!(current||draft||mode)};
     const WIDTH_KEY='smetra.preview.width';
     const applyWidth=px=>{if(!hostRoot)return px;const max=Math.max(360,(hostRoot.clientWidth||window.innerWidth)*.68);const value=Math.round(Math.min(max,Math.max(340,px)));hostRoot.style.setProperty('--preview-saved-w',value+'px');grip.setAttribute('aria-valuenow',String(value));return value};
     try{const saved=Number(localStorage.getItem(WIDTH_KEY));if(saved>0)applyWidth(saved)}catch{}
@@ -336,7 +330,6 @@
           panel.hidden=true;
           panel.classList.remove('is-closing');
         }
-        syncChip();
         onToggle?.(false);
         if(restoreFocus)hostRoot?.querySelector('#assistant-input')?.focus({preventScroll:true});
         return;
@@ -347,7 +340,6 @@
       panel.inert=false;
       panel.setAttribute('aria-hidden','false');
       hostRoot?.classList.add('has-quote-preview');
-      syncChip();
       onToggle?.(true);
       render();
     }
@@ -364,7 +356,7 @@
         current=response?.quote||response;
         if(!current||current.id!==id)throw Error('Смета недоступна');
         currentContext={user:requestUser,space:requestSpace};
-        pending=null;draft=null;mode=null;progressText='';layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();syncChip();
+        pending=null;draft=null;mode=null;progressText='';layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();
       }catch(error){
         if(request===seq){loading=false;content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'))}
       }
@@ -377,7 +369,6 @@
       if(draft && (!actionId||draft.id===actionId)){
         draft=null;
         if(visible)render();
-        syncChip();
       }
     };
     const propose=async action=>{
@@ -415,7 +406,7 @@
     const progress=text=>{progressText=String(text||'').slice(0,120);if(visible&&(draft||mode==='new'))paintStatus()};
     return {load,propose,design,refresh,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       clearProposal,
-      destroy:()=>{closeAppearance(false);if(closeTimer!==null)clearTimeout(closeTimer);seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-saved-w');chip.remove();panel.remove()},
+      destroy:()=>{closeAppearance(false);if(closeTimer!==null)clearTimeout(closeTimer);seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-saved-w');panel.remove()},
       get currentId(){return current?.id||''}};
   }
   window.SmetraQuoteVisuals={mountAssistant,mountRooms,breakdown,serverAmounts,roomDiagram,money};

@@ -258,11 +258,14 @@ def inspect_storage_image(service, file_id):
         raise DomainError(404, "Файл находится в архиве")
     if row["mime"] not in ("image/png", "image/jpeg"):
         raise DomainError(422, "Для текстовых документов используйте read_file")
-    if row["size"] > 1_500_000:
-        raise DomainError(413, "Для анализа изображения нужен размер до 1,5 МБ")
     from backend.attachments import download
 
     raw = download(row, service.con).data
-    data_url = "data:" + row["mime"] + ";base64," + base64.b64encode(raw).decode("ascii")
+    mime = row['mime']
+    resized = len(raw) > 1_500_000
+    if resized:
+        from backend.design_vision import prepare_image
+        raw, mime = prepare_image(raw), 'image/jpeg'
+    data_url = "data:" + mime + ";base64," + base64.b64encode(raw).decode("ascii")
     return {"file_id": row["id"], "name": row["name"], "mime": row["mime"],
-            "attached_to_next_model_turn": True}, data_url
+            "attached_to_next_model_turn": True, 'resized_for_analysis': resized}, data_url

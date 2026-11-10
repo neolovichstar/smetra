@@ -170,7 +170,7 @@ def route(service, method, parts, data):
         thread_id = selected['id']
         if 'context' not in data and selected['context_entity']:
             context = assistant.verified_context(service, {'entity': selected['context_entity'], 'id': selected['context_id']})
-    file_processing.ensure_ready(service, context)
+    file_processing.ensure_ready(service, context, allow_visual=True)
     request_hash = hashlib.sha256(packed([prompt, context, thread_id] + ([attachments] if attachments else [])).encode()).hexdigest()
     stored_context = {'context': context, 'attachments': attachments} if attachments else context
     service.h.throttle('assistant:' + service.user['id'], 12, 60)

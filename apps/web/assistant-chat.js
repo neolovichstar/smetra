@@ -104,10 +104,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       <header class="assistant-header" hidden><span id="assistant-quota" class="assistant-quota"></span></header>
       <dialog id="assistant-knowledge-panel" class="assistant-knowledge-dialog hidden" aria-label="Память ассистента"></dialog>
       <div class="assistant-content"><div id="assistant-messages" class="assistant-thread" role="log" aria-live="off"></div><div id="assistant-actions"></div></div>
-      <div class="assistant-composer"><div id="assistant-context" class="assistant-context hidden"><span>Контекст</span><strong id="assistant-context-label"></strong><button id="assistant-context-remove" class="icon-button" type="button" aria-label="Убрать контекст">${assistantIcon('x',16)}</button></div>
+      <div class="assistant-composer"><span id="assistant-status" class="visually-hidden" role="status"></span>
         <div class="assistant-greeting" aria-live="off"><h1>Что нового?</h1></div>
         <form id="assistant-form"><label class="visually-hidden" for="assistant-input">Сообщение ассистенту</label><textarea id="assistant-input" placeholder="Опишите задачу для Сметры…" rows="1" maxlength="3000" required></textarea><button class="assistant-action-button assistant-voice" id="assistant-voice" type="button" aria-label="Ввести сообщение голосом" title="Голосовой ввод" aria-pressed="false">${assistantIcon('microphone',18)}</button><button class="assistant-action-button assistant-send" id="assistant-send" type="submit" aria-label="Отправить сообщение" title="Отправить сообщение" disabled>${assistantIcon('arrow-up',18)}</button><button class="assistant-action-button assistant-stop" id="assistant-stop" type="button" aria-label="Остановить ответ" title="Остановить ответ" hidden>${assistantIcon('stop',16)}</button></form>
-        <div class="assistant-composer-foot"><span id="assistant-status" role="status"></span><span id="assistant-delivery-hint">Enter — отправить · Shift+Enter — новая строка</span></div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
+        <div class="assistant-composer-foot">ИИ может ошибаться. Проверяйте важные данные.</div><a id="assistant-upgrade" class="assistant-upgrade hidden" href="/app#billing">Токены закончились — купить токены или перейти на Про</a>
       </div>
     </div>
     <aside class="assistant-toolrail" aria-label="История и инструменты ассистента">
@@ -268,6 +268,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const send=document.querySelector('#assistant-send');
   const voiceButton=document.querySelector('#assistant-voice');
   const status=document.querySelector('#assistant-status');
+  const reportComposerIssue=message=>{status.textContent=message;notify(message)};
   const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
   let voiceRecognition=null,voiceListening=false,voiceStarting=false,voiceText='',voiceInterim='',voiceError=false;
   let voicePreview='',voicePreviewAt=0;
@@ -336,14 +337,14 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       // A delayed Android bridge handshake must not open the system recorder
       // after the assistant view or account has changed.
       if(!active()||!input.isConnected)return;
-      if(!window.SmetraShell.has('speech')){status.textContent='Распознавание речи недоступно на этом телефоне. Включите голосовой ввод Google или Яндекс-клавиатуры.';return}
+      if(!window.SmetraShell.has('speech')){reportComposerIssue('Распознавание речи недоступно на этом телефоне. Включите голосовой ввод Google или Яндекс-клавиатуры.');return}
       voiceStarting=true;syncSendButton();status.textContent='Говорите…';
       try{const result=await window.SmetraShell.call('speech.recognize',{},{timeout:0});if(!active()||!input.isConnected)return;const heard=String(result.text||'').trim();if(heard){input.value=(input.value.trim()?input.value.trim()+' ':'')+heard;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus()}status.textContent=heard?'Текст добавлен — проверьте и отправьте.':''}
-      catch(error){if(active()&&input.isConnected)status.textContent=error.code==='cancelled'?'':error.message}
+      catch(error){if(active()&&input.isConnected){if(error.code==='cancelled')status.textContent='';else reportComposerIssue(error.message)}}
       finally{if(active()&&input.isConnected){voiceStarting=false;syncSendButton()}}
       return;
     }
-    if(!SpeechRecognitionAPI){status.textContent='Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.';return}
+    if(!SpeechRecognitionAPI){reportComposerIssue('Голосовой ввод не поддерживается этим браузером. Откройте Сметру в актуальном Chrome.');return}
     voiceStarting=true;voiceError=false;voiceText='';voiceInterim='';voicePreview='';voicePreviewAt=input.value.length;syncSendButton();
     status.textContent='Запускаем распознавание речи…';
     try{
@@ -379,7 +380,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
             'audio-capture':'Не найден микрофон. Проверьте подключение устройства.',
             'network':'Сервис распознавания речи недоступен. Проверьте подключение к интернету.'
           };
-          status.textContent=errors[event.error]||'Голосовой ввод прерван. Нажмите микрофон и повторите попытку.';
+          reportComposerIssue(errors[event.error]||'Голосовой ввод прерван. Нажмите микрофон и повторите попытку.');
         };
         voiceRecognition.onend=()=>{
           const transcript=[voiceText,voiceInterim].filter(Boolean).join(' ').trim();voiceListening=false;voiceStarting=false;
@@ -399,6 +400,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       status.textContent=denied?'Нет доступа к микрофону. Разрешите его в адресной строке браузера и повторите попытку.':
         missing?'Микрофон не найден. Подключите устройство и попробуйте ещё раз.':
         'Не удалось включить микрофон. Проверьте разрешения сайта и повторите попытку.';
+      notify(status.textContent);
     }
   };
   voiceButton.addEventListener('click',startVoiceInput);
@@ -526,13 +528,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
   }
   if(!active())return;
-  const contextBar=document.querySelector('#assistant-context');
-  const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');contextBar.after(fileStatus);
+  const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');composer.insertBefore(fileStatus,document.querySelector('#assistant-form'));
   const renderContext=()=>{
-    contextBar.classList.toggle('hidden',!context);
     if(context?.entity==='quotes'&&context.id)quotePreview?.load(context.id).catch(()=>{});
-    if(context)document.querySelector('#assistant-context-label').textContent=({clients:'Клиент',quotes:'Смета',projects:'Заказ',files:'Файл',documents:'Документ'})[context.entity]+': '+(context.label||context.id);
-    else sessionStorage.removeItem('smetra.assistant.context');
+    if(!context)sessionStorage.removeItem('smetra.assistant.context');
   };
   renderContext();
   const draftUser=user.id;
@@ -544,7 +543,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   try{const shared=sessionStorage.getItem('smetra.shared.text');if(shared){sessionStorage.removeItem('smetra.shared.text');input.value=(input.value?input.value+'\n\n':'')+shared.slice(0,3000)}}catch{}
   try{const prefill=JSON.parse(sessionStorage.getItem('smetra.assistant.prefill')||'null');if(prefill&&context&&context.entity==='files'&&prefill.file_id===context.id&&prefill.workspace_id===currentWorkspace&&typeof prefill.text==='string'){input.value=prefill.text.slice(0,3000);input.focus();input.style.height=Math.min(input.scrollHeight,180)+'px'}sessionStorage.removeItem('smetra.assistant.prefill')}catch{sessionStorage.removeItem('smetra.assistant.prefill')}
   saveDraft();
-  document.querySelector('#assistant-context-remove').onclick=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();renderPhoto();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
+  const removeContext=async()=>{try{if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})});context=null;renderContext();renderPhoto();saveDraft();refreshFile();input.focus()}catch(error){notify(error.message)}};
   const fileInput=document.querySelector('#assistant-attach-input');
   const attachButton=document.querySelector('#assistant-attach');
   const attachmentInfo=attachmentBar.querySelector('span');
@@ -570,7 +569,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const name=document.createElement('span');name.className='assistant-attachment-name';name.textContent=context.label||'Документ';
       const remove=document.createElement('button');remove.type='button';remove.className='assistant-attachment-remove';
       remove.innerHTML=assistantIcon('x',14);remove.setAttribute('aria-label','Убрать файл из контекста');
-      remove.onclick=()=>document.querySelector('#assistant-context-remove')?.click();
+      remove.onclick=removeContext;
       chip.append(icon,name,remove);previewTray.append(chip);
     }
     previewTray.hidden=!previewTray.children.length;
@@ -636,21 +635,21 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(['png','jpg','jpeg'].includes(extension)){
       const expected=extension==='png'?'image/png':'image/jpeg';
       if(file.size<1||file.size>15_000_000||file.type&&file.type!==expected){
-        status.textContent='Прикрепите корректную фотографию PNG/JPG размером до 15 МБ';fileInput.value='';return;
+        reportComposerIssue('Прикрепите корректную фотографию PNG/JPG размером до 15 МБ');fileInput.value='';return;
       }
       let optimized;
-      try{optimized=await compressPhoto(file)}catch(error){status.textContent=error.message;fileInput.value='';return}
+      try{optimized=await compressPhoto(file)}catch(error){reportComposerIssue(error.message);fileInput.value='';return}
       if(!active())return;
       const currentBytes=pendingPhotos.reduce((sum,item)=>sum+item.file.size,0);
       if(pendingPhotos.length>=3||currentBytes+optimized.size>1_500_000){
-        status.textContent='Максимум 3 изображения общим размером до 1,5 МБ после сжатия';fileInput.value='';return;
+        reportComposerIssue('Максимум 3 изображения общим размером до 1,5 МБ после сжатия');fileInput.value='';return;
       }
       pendingPhotos.push({file:optimized,url:URL.createObjectURL(optimized)});renderPhoto();
       status.textContent='Фото готовы к отправке вместе с сообщением.';
       input.focus();return;
     }
     const isAudio=['mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension);
-    if(!['pdf','txt','md','docx','xlsx','csv','mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension)||file.size<1||file.size>maxUpload){status.textContent='Выберите фото, документ или аудио до '+maxUploadLabel;return}
+    if(!['pdf','txt','md','docx','xlsx','csv','mp3','wav','m4a','ogg','webm','flac','aac'].includes(extension)||file.size<1||file.size>maxUpload){reportComposerIssue('Выберите фото, документ или аудио до '+maxUploadLabel);return}
     attachButton.disabled=true;status.textContent='Прикрепляю файл…';
     const retrySlot='smetra.assistant.attachment:'+user.id+':'+currentWorkspace+':'+activeConversation;
     try{
@@ -681,7 +680,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         }
       }else status.textContent='Файл прикреплён. Задайте вопрос по его содержимому.';
       input.focus();
-    }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);status.textContent=error.message}
+    }catch(error){if(error.status===409)sessionStorage.removeItem(retrySlot);reportComposerIssue(error.message)}
     finally{fileInput.value=''}
     }finally{attachingCount--;if(active())renderQuota(quota)}
   };
@@ -692,7 +691,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     if(!active()||working||threadBusy||attachingCount||attachButton.disabled)return;
     if(!window.SmetraClipboardAttachments)return;
     void window.SmetraClipboardAttachments.paste(event,uploadAttachment).catch(error=>{
-      if(active())status.textContent=error.message||'Не удалось прикрепить файл из буфера';
+      if(active())reportComposerIssue(error.message||'Не удалось прикрепить файл из буфера');
     });
   });
 
@@ -1101,10 +1100,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     send.setAttribute('aria-label','Отправить сообщение');
     const quotaBlocked=quota.remaining<1&&quota.plan!=='pro';
     send.title=quotaBlocked?'Токены ассистента закончились. Черновик останется доступен.':'Отправить сообщение';
-    document.querySelector('#assistant-delivery-hint').textContent=backgroundEnabled===false
-      ?'Ассистент временно недоступен. Черновик останется в этом чате.'
-      :quotaBlocked?'Токены закончились — черновик останется доступен.'
-      :'Ответ сохранится в диалоге · Enter — отправить';
+    if(backgroundEnabled===false)send.title='Ассистент временно недоступен. Черновик останется в этом чате.';
   };
   renderDelivery();
   refreshJobs();

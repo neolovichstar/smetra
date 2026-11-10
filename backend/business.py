@@ -513,7 +513,7 @@ def migrate(con):
         (Path(__file__).parent / "migrations" / "018_creation_requests.sql").read_text(encoding="utf-8")
     )
     for table, additions in {
-        "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'"},
+        "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'", "index_version": "INTEGER NOT NULL DEFAULT 1 CHECK(index_version>=1)"},
         "assistant_jobs": {"kind": "TEXT NOT NULL DEFAULT 'chat'", "file_id": "TEXT REFERENCES files(id) ON DELETE CASCADE", "source_sha256": "TEXT NOT NULL DEFAULT ''"},
         "ai_usage": {"draft_claimed_at": "INTEGER"},
         "construction_changes": {"protected_quote_id": "TEXT REFERENCES quotes(id)", "internal_cost": "INTEGER NOT NULL DEFAULT 0", "budget_applied_at": "INTEGER", "calculation_json": "TEXT NOT NULL DEFAULT '[]'"},

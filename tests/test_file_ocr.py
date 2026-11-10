@@ -72,16 +72,14 @@ class FileOcrTests(unittest.TestCase):
         self.assertEqual(self.enqueue(owner, file, 'cached')['ocr_quota']['used'], 1)
         self.work().assert_not_called()
 
-    def test_pending_or_unread_scan_rejects_chat_before_monthly_reservation(self):
+    def test_pending_scan_rejects_chat_before_monthly_reservation(self):
         owner, _ = self.account('ocr-no-chat')
         file = self.upload(owner)
-        for active in (False, True):
-            if active:
-                self.enqueue(owner, file)
-            for path in ('/assistant/chat', '/assistant/stream', '/assistant/jobs'):
-                code, result = self.call(path, 'POST', {'text': 'Read document', 'context': {'entity': 'files', 'id': file['id']}}, owner, key='chat')
-                self.assertEqual(code, 409, result)
-            self.assertEqual(self.call('/assistant', token=owner)[1]['quota']['used'], 0)
+        self.enqueue(owner, file)
+        for path in ('/assistant/chat', '/assistant/stream', '/assistant/jobs'):
+            code, result = self.call(path, 'POST', {'text': 'Read document', 'context': {'entity': 'files', 'id': file['id']}}, owner, key='chat')
+            self.assertEqual(code, 409, result)
+        self.assertEqual(self.call('/assistant', token=owner)[1]['quota']['used'], 0)
 
     def test_private_metadata_job_and_wrong_type(self):
         owner, _ = self.account('ocr-private')

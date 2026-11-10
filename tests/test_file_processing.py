@@ -390,8 +390,8 @@ class ExtractorBoundsTests(unittest.TestCase):
         stream = io.BytesIO()
         writer.write(stream)
         pages, truncated = extract(stream.getvalue(), "application/pdf")
-        self.assertEqual(len(pages), 12)
-        self.assertTrue(truncated)
+        self.assertEqual(len(pages), 13)
+        self.assertFalse(truncated)
 
     def test_subprocess_parent_enforces_timeout_and_json_size(self):
         from backend.file_processing import isolated_extract

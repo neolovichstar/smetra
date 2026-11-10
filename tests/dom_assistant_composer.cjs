@@ -44,6 +44,10 @@ async function setup(enabled=true,voice=false,remaining=3){
    assert.equal(doc.querySelector('#assistant-input').value,'','No example is prefilled');
    assert.equal(doc.querySelector('#assistant-messages').children.length,0,'Empty chat displays no onboarding panel');
    assert.equal(doc.querySelectorAll('.assistant-welcome,.assistant-suggestions,[data-prompt]').length,0);
+   assert.equal(doc.querySelector('#assistant-context'),null);
+   assert.equal(doc.querySelector('.assistant-composer-foot').textContent,'ИИ может ошибаться. Проверяйте важные данные.');
+   assert.equal(doc.querySelector('.assistant-composer-foot #assistant-status'),null);
+   assert.ok(doc.querySelector('#assistant-status').classList.contains('visually-hidden'));
  });
  await test('the idle greeting fills the empty space and hides while writing or reading a conversation',async({w,doc})=>{
   const greeting=doc.querySelector('.assistant-greeting');assert.equal(greeting.textContent,'Что нового?');assert.equal(greeting.hidden,false);
@@ -255,7 +259,7 @@ async function setup(enabled=true,voice=false,remaining=3){
   doc.querySelector('#assistant-form').requestSubmit();await tick();
   assert.equal(doc.querySelector('#assistant-input').value,'');
   assert.equal(doc.querySelectorAll('.assistant-attachment-tile').length,0);
-  assert.ok(doc.querySelector('#assistant-context').classList.contains('hidden'));
+  assert.equal(doc.querySelector('#assistant-context'),null);
   assert.equal(w.sessionStorage.getItem('smetra.assistant.context'),null);
   assert.equal(sent.job_id,'job-1');const submitted=JSON.parse(requests[0].body);assert.equal(submitted.context.entity,'files');assert.equal(submitted.context.id,'document-1');
   task.resolve({ok:false,status:503,json:async()=>({error:'Try again'})});await tick();await tick();

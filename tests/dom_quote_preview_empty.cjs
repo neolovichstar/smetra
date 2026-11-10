@@ -18,6 +18,7 @@ const {JSDOM}=require(process.env.SMETRA_JSDOM_MODULE||'jsdom');
       getUserId:()=> 'test-user'
     });
     ctrl.startNew();
+    assert.equal(doc.querySelector('.smetra-quote-chip'),null,'No floating estimate chip over the composer');
     const panel=doc.querySelector('#smetra-quote-preview');
     assert.equal(panel.hidden,false,'Panel stays open');
     assert.equal(panel.querySelector('h2').textContent,'Новая смета');

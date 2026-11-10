@@ -15,6 +15,8 @@ def main():
     if any(os.getenv(name) for name in ("DATABASE_URL", "RUNTIME_DATABASE_URL", "VERCEL")):
         raise RuntimeError("This fixture requires a disposable local SQLite database")
     os.environ["ALLOW_UNVERIFIED_SIGNUP"] = "1"
+    os.environ['OPENROUTER_API_KEY'] = 'local-browser-fixture-with-network-blocked'
+    os.environ['ASSISTANT_WORKER_SECRET'] = 'local-browser-fixture-worker-secret-only-2026'
     from tests.test_protected_estimates import ProtectedEstimateTests
     ProtectedEstimateTests.setUpClass()
     fixture = ProtectedEstimateTests()
@@ -61,6 +63,16 @@ def main():
     with fixture.mod.db() as con:
         con.execute("UPDATE construction_objects SET project_id=? WHERE id=?", (open_project["item"]["id"], open_obj["object"]["id"]))
     data["workflow"].update(open_object_id=open_obj["object"]["id"], open_project_id=open_project["item"]["id"])
+    from backend.business import identity, stamp
+    thread_id = identity()
+    with fixture.mod.db() as con:
+        workspace = con.execute('SELECT workspace_id FROM workspace_members WHERE user_id=? AND role=\'owner\'',
+                                (fixture.owner_id,)).fetchone()[0]
+        con.execute('INSERT INTO assistant_conversations(id,workspace_id,user_id,title,context_entity,context_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+                    (thread_id, workspace, fixture.owner_id, 'Проверка чистого поля ввода', 'quotes', fixture.quote['id'], stamp(), stamp()))
+        con.execute('INSERT INTO assistant_messages(id,workspace_id,user_id,conversation_id,role,content,created_at) VALUES(?,?,?,?,?,?,?)',
+                    (identity(), workspace, fixture.owner_id, thread_id, 'user', 'Проверь смету по дизайн-проекту', stamp()))
+    data['assistant_thread_id'] = thread_id
     (ROOT / "data/protected-estimates-fixture.json").write_text(json.dumps(data), encoding="utf-8")
     print("PROTECTED_ESTIMATES_FIXTURE_READY " + fixture.base, flush=True)
     try:

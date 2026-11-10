@@ -7,8 +7,10 @@ import base64
 import math
 import urllib.parse
 
+from backend.document_text import MAX_INDEX_CHARS, normalize_text
 
-def render_scans(content):
+
+def render_scans(content, selection=None):
     """Render bounded page images in the credential-free subprocess."""
     validate_pdf(content)
     import pypdfium2 as pdfium
@@ -18,14 +20,34 @@ def render_scans(content):
         total = len(document)
         if not 1 <= total <= 100:
             raise ValueError('pages')
+        requested = (selection or {}).get('pages', list(range(1, min(2, total) + 1)))
+        region = (selection or {}).get('region')
+        if (not isinstance(requested, list) or not 1 <= len(requested) <= 2
+                or any(type(number) is not int or not 1 <= number <= total for number in requested)
+                or len(set(requested)) != len(requested)):
+            raise ValueError('page selection')
+        if region is not None and (not isinstance(region, list) or len(region) != 4
+                or any(type(value) not in (int, float) or not math.isfinite(value) for value in region)
+                or not (0 <= region[0] < 1 and 0 <= region[1] < 1
+                        and .15 <= region[2] <= 1 and .15 <= region[3] <= 1
+                        and region[0] + region[2] <= 1.000001 and region[1] + region[3] <= 1.000001)):
+            raise ValueError('region')
         pages = []
-        for number in range(min(2, total)):
-            page = document[number]
+        for number in requested:
+            page = document[number - 1]
             try:
                 width, height = page.get_size()
                 if not all(math.isfinite(value) and 1 <= value <= 10000 for value in (width, height)):
                     raise ValueError('dimensions')
-                bitmap = page.render(scale=1600 / max(width, height))
+                if region is None:
+                    crop = (0, 0, 0, 0)
+                    scale = 2000 / max(width, height)
+                else:
+                    x, y, view_width, view_height = region
+                    crop = (x * width, (1 - y - view_height) * height,
+                            (1 - x - view_width) * width, y * height)
+                    scale = 2200 / max(width * view_width, height * view_height)
+                bitmap = page.render(scale=scale, crop=tuple(max(0, value) for value in crop))
                 try:
                     image = bitmap.to_pil().convert('RGB')
                     try:
@@ -34,14 +56,15 @@ def render_scans(content):
                         raw = output.getvalue()
                         if len(raw) > 1_500_000:
                             raise ValueError('image size')
-                        pages.append([number + 1, base64.b64encode(raw).decode()])
+                        pages.append([number, base64.b64encode(raw).decode()])
                     finally:
                         image.close()
                 finally:
                     bitmap.close()
             finally:
                 page.close()
-        return {'pages': pages, 'truncated': total > 2, 'total_pages': total}
+        return {'pages': pages, 'truncated': len(requested) < total or region is not None,
+                'total_pages': total, 'region': region}
     finally:
         document.close()
 
@@ -118,13 +141,13 @@ def extract(content, mime, *, max_pdf_pages=100):
     from backend.office_documents import VIEWABLE, preview, text_sections
 
     if mime in VIEWABLE:
-        result = preview(content, mime)
+        result = preview(content, mime, for_assistant=True)
         return text_sections(result), result["truncated"]
     if mime == "text/plain":
         text = content.decode("utf-8-sig")
         # Bounded index, rather than claiming to index an unlimited document.
-        normalized = " ".join(text[:160_000].split())
-        return [(1, normalized[:120_000])], len(text) > 160_000 or len(normalized) > 120_000
+        normalized = normalize_text(text[:160_000])
+        return [(1, normalized[:MAX_INDEX_CHARS])], len(text) > 160_000 or len(normalized) > MAX_INDEX_CHARS
     if mime != "application/pdf":
         raise ValueError("mime")
     validate_pdf(content)
@@ -133,16 +156,23 @@ def extract(content, mime, *, max_pdf_pages=100):
     reader = PdfReader(io.BytesIO(content), strict=True)
     if reader.is_encrypted or len(reader.pages) > max_pdf_pages:
         raise ValueError("pdf")
-    truncated = len(reader.pages) > 12
-    for number, page in enumerate(reader.pages[:12], 1):
+    truncated = False
+    remaining = MAX_INDEX_CHARS
+    for number, page in enumerate(reader.pages, 1):
+        if remaining <= 0:
+            pages.append((number, ''))
+            truncated = True
+            continue
         if (
             page.get_contents() is not None
             and len(page.get_contents().get_data()) > 8_000_000
         ):
             raise ValueError("page stream")
-        text = page.extract_text() or ""
-        truncated |= len(text) > 10_000
-        pages.append((number, " ".join(text[:10_000].split())))
+        text = normalize_text(page.extract_text() or "")
+        length = min(60_000, remaining)
+        truncated |= len(text) > length
+        pages.append((number, text[:length]))
+        remaining -= len(pages[-1][1])
     return pages, truncated
 
 
@@ -166,10 +196,13 @@ def main():
             result = preview(content, mime)
         sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
         return
-    if sys.argv[1] == 'render-pdf':
+    if sys.argv[1] == 'render-pdf' or sys.argv[1].startswith('render-pdf:'):
         if not 0 < len(content) <= 5_000_000:
             raise ValueError('size')
-        sys.stdout.buffer.write(json.dumps(render_scans(content)).encode())
+        selection = json.loads(sys.argv[1].split(':', 1)[1]) if ':' in sys.argv[1] else None
+        if selection is not None and (not isinstance(selection, dict) or set(selection) - {'pages', 'region'}):
+            raise ValueError('selection')
+        sys.stdout.buffer.write(json.dumps(render_scans(content, selection)).encode())
         return
     if sys.argv[1] == "validate-pdf":
         if not 0 < len(content) <= 5_000_000:

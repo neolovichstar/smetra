@@ -9,6 +9,7 @@ import sys
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 from backend.office_documents import READABLE, VIEWABLE
 from backend.audio_transcription import MIMES as AUDIO_MIMES
+from backend.document_text import PARSER_VERSION, MAX_INDEX_CHARS, MAX_SOURCES
 
 ACTIVE = ("queued", "running", "retry")
 
@@ -44,6 +45,7 @@ def state(service, row):
         "truncated": bool(row["index_truncated"]),
         "supported": row["mime"] in READABLE or row["mime"] in AUDIO_MIMES,
         "method": row['index_method'],
+        "parser_version": row['index_version'],
         "missing_text_pages": missing,
         "ocr_supported": row['mime'] == 'application/pdf' and (status == 'needs_ocr' or row['index_method'] == 'ocr'),
     }
@@ -76,10 +78,9 @@ def enqueue(service, row, key=None):
         if previous["request_hash"] != request_hash:
             raise DomainError(409, "Этот ключ уже использован для другой обработки")
         return state(service, fresh)
-    if fresh["index_hash"] == fresh["sha256"] and fresh["index_status"] in (
-        *ACTIVE,
-        "ready",
-        "needs_ocr",
+    if fresh['index_hash'] == fresh['sha256'] and (
+        fresh['index_status'] in (*ACTIVE, 'needs_ocr')
+        or fresh['index_status'] == 'ready' and (fresh['index_method'] != 'text' or fresh['index_version'] >= PARSER_VERSION)
     ):
         return state(service, fresh)
     count = service.con.execute(
@@ -117,7 +118,7 @@ def enqueue(service, row, key=None):
     return state(service, service.get("files", row["id"]))
 
 
-def ensure_ready(service, context):
+def ensure_ready(service, context, *, allow_visual=False):
     if not context or context["entity"] != "files":
         return
     row = service.get("files", context["id"])
@@ -132,8 +133,13 @@ def ensure_ready(service, context):
         raise DomainError(
             409, "Документ ещё готовится. Дождитесь завершения — сообщение не потрачено"
         )
+    partial_text = row['index_status'] == 'needs_ocr' and row['index_hash'] == row['sha256'] and (
+        allow_visual and row['mime'] == 'application/pdf' or service.con.execute(
+            'SELECT 1 FROM file_text_chunks WHERE file_id=? AND workspace_id=? AND source_sha256=? LIMIT 1',
+            (row['id'], service.wid, row['sha256']),
+        ).fetchone() is not None)
     if (
-        row["index_status"] in ('failed', 'needs_ocr')
+        row["index_status"] == 'failed' or row['index_status'] == 'needs_ocr' and not partial_text
         or row["size"] > 2_000_000
         and not (row["index_status"] == "ready" and row["index_hash"] == row["sha256"])
     ):
@@ -177,7 +183,7 @@ def isolated_extract(raw, mime):
         timeout=25,
         env=environment,
     )
-    if result.returncode or len(result.stdout) > (4_100_000 if mime == 'render-pdf' else 800_000):
+    if result.returncode or len(result.stdout) > (4_100_000 if mime.startswith('render-pdf') else 800_000):
         raise ValueError("extractor")
     return json.loads(result.stdout)
 
@@ -199,19 +205,19 @@ def process(service, job, complete, progress, validate):
         pages = extracted["pages"]
         if (
             not isinstance(pages, list)
-            or len(pages) > 12
+            or len(pages) > MAX_SOURCES
             or any(
                 not isinstance(page, list)
                 or len(page) != 2
-                or not isinstance(page[0], int)
-                or not 1 <= page[0] <= 12
+                or type(page[0]) is not int
+                or not 1 <= page[0] <= MAX_SOURCES
                 or not isinstance(page[1], str)
-                or len(page[1]) > 120_000
+                or len(page[1]) > MAX_INDEX_CHARS
                 for page in pages
             )
         ):
             raise ValueError("pages")
-        if len({page[0] for page in pages}) != len(pages):
+        if len({page[0] for page in pages}) != len(pages) or sum(len(page[1]) for page in pages) > MAX_INDEX_CHARS:
             raise ValueError("duplicate pages")
     except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
         raise DomainError(
@@ -254,9 +260,10 @@ def process(service, job, complete, progress, validate):
                     ),
                 )
         service.con.execute(
-            "UPDATE files SET index_status=?,index_hash=sha256,index_error='',index_method='text',index_truncated=?,index_pages=? WHERE id=? AND workspace_id=?",
+            "UPDATE files SET index_status=?,index_hash=sha256,index_error='',index_method='text',index_version=?,index_truncated=?,index_pages=? WHERE id=? AND workspace_id=?",
             (
                 "needs_ocr" if needs_ocr else "ready",
+                PARSER_VERSION,
                 int(partial),
                 len(pages),
                 row["id"],
