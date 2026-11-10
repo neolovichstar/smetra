@@ -255,7 +255,7 @@ def analyze_page(service, file_id, page_number=1):
         }, method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=40) as response:
+        with urllib.request.urlopen(request, timeout=28) as response:
             body = response.read(140_001)
         if len(body) > 140_000:
             raise ValueError("response limit")
