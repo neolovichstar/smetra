@@ -1793,14 +1793,22 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     # actual permission-scoped search/read, even if the model ignores tool use.
     # Keep synthetic protocol envelopes paired with *real* server-side calls.
     from backend.assistant_cloud_task import prepare as prepare_cloud_request
-    for index, (name, args, result) in enumerate(prepare_cloud_request(service, prompt, on_status)):
+    cloud_preflight = prepare_cloud_request(service, prompt, on_status)
+    # Source must actually be read before drafting a quote. Missing prices are
+    # unknown, not a reason to ask whether to start the already-requested task.
+    requested_cloud_quote = bool(
+        cloud_request_info(prompt) is not None and safe_re.search(r"смет\w*", prompt, safe_re.I)
+        and any(name == "read_cloud_file" and isinstance(result, dict)
+                and result.get("excerpts") for name, _, result in cloud_preflight)
+    )
+    for index, (name, args, result) in enumerate(cloud_preflight):
         call_id = "server_cloud_" + str(index + 1)
         messages.append({"role": "assistant", "content": None, "tool_calls": [{
             "id": call_id, "type": "function",
             "function": {"name": name, "arguments": packed(args)},
         }]})
         messages.append({"role": "tool", "tool_call_id": call_id,
-                         "content": packed(result)[:6000]})
+                         "content": packed(result)[:48_000 if args.get("full_document") else 6000]})
     model, paid_model = assistant_model(service, has_image=bool(image_url))
     actions, designs, questions, answer, remembered = [], [], [], "", False
     from backend import assistant_app_tools as app_tools
@@ -1810,6 +1818,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     remembered_status = None
     proposal_fingerprints = {}
     inspected_image = False
+    draft_nudges = 0
     # Bound the reads and reserve one last round to explain the collected results.
     for turn in range(10):
         # Provider context also grows after tool calls. Reduce only older
@@ -1861,6 +1870,21 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 )})
                 continue
             raise DomainError(502, "Модель ошибочно восприняла запрос как пустой. Повторите отправку.")
+        if not calls and requested_cloud_quote and not actions:
+            if draft_nudges < 2 and turn < 9:
+                draft_nudges += 1
+                messages.append({"role": "assistant", "content": answer})
+                messages.append({"role": "user", "content": (
+                    "Выполни исходное поручение, не предлагай выбрать вариант. "
+                    "Ты уже получил проверенные текстовые данные PDF от инструментов. "
+                    "СЕЙЧАС вызови create_quotes для черновой сметы ПО ВСЕЙ КВАРТИРЕ. "
+                    "Неизвестные цены пометь price_status=unknown и unit_price=0. "
+                    "Не выдумывай отсутствующие размеры и объёмы. "
+                    "Страницы из missing_text_pages ещё требуют визуального анализа. "
+                    "Не спрашивай, создавать ли смету."
+                )})
+                continue
+            raise DomainError(502, "Не удалось сформировать черновик сметы из PDF. Попробуйте продолжить задачу.")
         if not calls:
             if on_delta and not actions and not questions:
                 # These deltas belong to the committed answer, not an early
@@ -1939,6 +1963,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                         on_status(remembered_status)
                     result = {"ok": True, "status": remembered_status}
                 elif name == "ask_user":
+                    if requested_cloud_quote and not actions:
+                        raise DomainError(409, "Смета уже заказана. Подготовь черновик, не спрашивай повторное разрешение.")
                     question=string(args.get("question",""),"Вопрос",200,True)
                     options=args.get("options")
                     if not isinstance(options,list) or not 2<=len(options)<=4:

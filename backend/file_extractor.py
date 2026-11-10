@@ -82,8 +82,12 @@ def cloud_pdf_preflight(content):
         raise ValueError("cloud pdf header/size")
 
 
-def extract_cloud_pdf(content, start_page=1):
-    """Extract at most 12 consecutive pages via PDFium, never whole-file OCR."""
+def extract_cloud_pdf(content, start_page=1, full_document=False):
+    """Extract every text layer (up to 100 pages), or a 12-page window.
+
+    All PDF bytes stay in the isolated extractor and are discarded afterwards.
+    Graphic-only pages are explicitly reported as missing text.
+    """
     cloud_pdf_preflight(content)
     import pypdfium2 as pdfium
 
@@ -92,18 +96,21 @@ def extract_cloud_pdf(content, start_page=1):
         total = len(document)
         if not 1 <= total <= 300 or not 1 <= start_page <= total:
             raise ValueError("cloud pdf pages")
+        if full_document and (total > 100 or start_page != 1):
+            raise ValueError("full pdf bounds")
         pages = []
-        truncated = total > 12 or start_page > 1
-        end = min(total, start_page + 11)
+        truncated = not full_document and (total > 12 or start_page > 1)
+        end = total if full_document else min(total, start_page + 11)
         for number in range(start_page, end + 1):
             page = document[number - 1]
             try:
                 textpage = page.get_textpage()
                 try:
-                    count = min(textpage.count_chars(), 12000)
+                    cap = 6000 if full_document else 12000
+                    count = min(textpage.count_chars(), cap)
                     raw_text = textpage.get_text_range(0, count)
-                    truncated |= textpage.count_chars() > 10000
-                    normalized = " ".join(raw_text[:10000].split())
+                    truncated |= textpage.count_chars() > cap
+                    normalized = " ".join(raw_text[:cap].split())
                     pages.append([number, normalized])
                 finally:
                     textpage.close()
@@ -320,10 +327,11 @@ def main():
         parts = sys.argv[1].split(":")
         if len(parts) not in (2, 3) or parts[:2] != ["cloud", "application/pdf"]:
             raise ValueError("cloud mode")
-        start_page = int(parts[2]) if len(parts) == 3 else 1
+        full_document = len(parts) == 3 and parts[2] == "full"
+        start_page = 1 if full_document or len(parts) == 2 else int(parts[2])
         if not 1 <= start_page <= 300:
             raise ValueError("page bounds")
-        result = extract_cloud_pdf(content, start_page)
+        result = extract_cloud_pdf(content, start_page, full_document=full_document)
         sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
         return
     capture = sys.argv[1].startswith('capture:')

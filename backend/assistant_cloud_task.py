@@ -102,7 +102,10 @@ def prepare(service, prompt, on_status=None):
     chosen = scored[0][1]
     if not isinstance(chosen.get("id"), str):
         return results
+    full_document = bool(re.search(r"полност|целиком|весь\b|всю\b|все\s+страниц", prompt, re.I))
     args = {"id": chosen["id"], "page_start": 1}
+    if full_document:
+        args["full_document"] = True
     if on_status:
         on_status("Читаю страницы PDF без сохранения оригинала…")
     try:
