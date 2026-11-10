@@ -1,4 +1,5 @@
 """Current user request must outrank old chats; cloud file search cannot be optional."""
+import copy
 import os
 import unittest
 from unittest.mock import patch
@@ -45,7 +46,7 @@ class CurrentCloudRequestTests(unittest.TestCase):
                     "total_pages": 1, "truncated": False, "source_stored": False}
             raise AssertionError(name)
         def provider(messages):
-            model_messages.append(messages)
+            model_messages.append(copy.deepcopy(messages))
             if len(model_messages) == 1:
                 return {"content": "Изучил страницу 1 PDF. Подготовлю смету только по подтверждённым данным."}
             return {"content": "", "tool_calls": [{
