@@ -36,6 +36,10 @@
       "destination": "/app.html"
     },
     {
+      "source": "/protected-estimate",
+      "destination": "/protected-estimate.html"
+    },
+    {
       "source": "/admin",
       "destination": "/admin.html"
     },
@@ -133,6 +137,22 @@
           "key": "Cache-Control",
           "value": "no-store, max-age=0"
         }
+      ]
+    },
+    {
+      "source": "/protected-estimate",
+      "headers": [
+        {"key": "Cache-Control", "value": "no-store, max-age=0"},
+        {"key": "X-Robots-Tag", "value": "noindex, noarchive, nosnippet"},
+        {"key": "Content-Security-Policy", "value": "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'"}
+      ]
+    },
+    {
+      "source": "/protected-estimate.html",
+      "headers": [
+        {"key": "Cache-Control", "value": "no-store, max-age=0"},
+        {"key": "X-Robots-Tag", "value": "noindex, noarchive, nosnippet"},
+        {"key": "Content-Security-Policy", "value": "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'"}
       ]
     },
     {

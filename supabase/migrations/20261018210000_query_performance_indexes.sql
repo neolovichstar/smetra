@@ -75,8 +75,13 @@ CREATE INDEX IF NOT EXISTS idx_leads_client_id ON smetra.leads(client_id);
 CREATE INDEX IF NOT EXISTS idx_native_web_tickets_user_id ON smetra.native_web_tickets(user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_states_link_user_id ON smetra.oauth_states(link_user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_tickets_user_id ON smetra.oauth_tickets(user_id);
-CREATE INDEX IF NOT EXISTS idx_quote_followups_created_by ON smetra.quote_followups(created_by);
-CREATE INDEX IF NOT EXISTS idx_quote_followups_quote_id ON smetra.quote_followups(quote_id);
+-- Some installations never enabled the optional legacy follow-up table.
+DO $$ BEGIN
+ IF to_regclass('smetra.quote_followups') IS NOT NULL THEN
+  CREATE INDEX IF NOT EXISTS idx_quote_followups_created_by ON smetra.quote_followups(created_by);
+  CREATE INDEX IF NOT EXISTS idx_quote_followups_quote_id ON smetra.quote_followups(quote_id);
+ END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_quote_versions_author_id ON smetra.quote_versions(author_id);
 CREATE INDEX IF NOT EXISTS idx_refunds_payment_id ON smetra.refunds(payment_id);
 CREATE INDEX IF NOT EXISTS idx_support_user_id ON smetra.support(user_id);

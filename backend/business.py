@@ -222,6 +222,8 @@ def calculate(items, *, allow_zero_total=False):
             tax_amount=int(tax_amount),
             internal_cost=cost_total,
         )
+        if "kind" in item:
+            row["kind"] = choice(item["kind"], ("work", "service", "material", "equipment", "other"), "Тип позиции")
         # Product presentation metadata is allow-listed; it never participates in quote math.
         metadata_strings = {
             'product_source_id': 100, 'product_title': 300, 'product_brand': 160,
@@ -516,6 +518,7 @@ def migrate(con):
         "custom_fields": "TEXT NOT NULL DEFAULT '{}'",
         "itemized": "INTEGER NOT NULL DEFAULT 0",
         "ai_generated": "INTEGER NOT NULL DEFAULT 0 CHECK(ai_generated IN (0,1))",
+        "protection_enabled": "INTEGER NOT NULL DEFAULT 0 CHECK(protection_enabled IN (0,1))",
     }
     existing = {r["name"] for r in con.execute("PRAGMA table_info(quotes)")}
     with transaction(con):
@@ -890,7 +893,9 @@ class Service:
                     )
                 ]
             )
-            result["public_url"] = self.origin + "/?quote=" + row["public_token"]
+            protected = bool(row["protection_enabled"]) if "protection_enabled" in row.keys() else False
+            result["protection_enabled"] = protected
+            result["public_url"] = None if protected else self.origin + "/?quote=" + row["public_token"]
             result["profit"] = row["amount_kopecks"] - row["internal_cost"]
         state = row["approval_state"]
         if (
@@ -937,28 +942,34 @@ class Service:
         )
         if result["expires_at"] is not None:
             integer(result["expires_at"], "Срок ссылки", 1, 4102444800)
-        client_id = data.get("client_id", old["client_id"] if old else None) or None
-        if client_id:
+        client_id = data.get("client_id", old["client_id"] if old else None)
+        if client_id not in (None, ""):
             self.get("clients", client_id)
+        else:
+            client_id = None
         result["client_id"] = client_id
         result["custom_fields"] = self.custom(
             "estimates",
             data.get("custom_fields", json.loads(old["custom_fields"]) if old else {}),
         )
         if "items" in data:
-            if not self.finance_visible() and isinstance(data["items"], list):
+            visible = self.finance_visible()
+            previous_items = self.quote_view(old)["items"] if old else []
+            supplied = data["items"]
+            if not visible and isinstance(supplied, list):
                 # The editor cannot see costs, so it must not overwrite them:
-                # a line keeps its stored cost, a new line starts without one.
-                stored = {item.get("line_id"): item.get("cost_price", 0) for item in (self.quote_view(old)["items"] if old else [])}
-                data = {**data, "items": [
-                    {**item, "cost_price": stored.get(item.get("line_id"), 0)} if isinstance(item, dict) else item
-                    for item in data["items"]
-                ]}
-            items, total, cost = calculate(data["items"], allow_zero_total=(old is None or old["status"] == "draft"))
+                # validate identities and match legacy rows before restoring costs.
+                supplied = [{**item, "cost_price": 0} if isinstance(item, dict) else item for item in supplied]
+            allow_zero = old is None or old["status"] == "draft"
+            items, total, cost = calculate(supplied, allow_zero_total=allow_zero)
             if old:
                 from backend.quote_versions import carry_identities
-
-                items = carry_identities(self.quote_view(old)["items"], items, data["items"])
+                items = carry_identities(previous_items, items, data["items"])
+            if not visible:
+                stored = {item.get("line_id"): item.get("cost_price", 0) for item in previous_items}
+                items, total, cost = calculate([
+                    {**item, "cost_price": stored.get(item["line_id"], 0)} for item in items
+                ], allow_zero_total=allow_zero)
             result.update(amount_kopecks=total, internal_cost=cost, itemized=1)
         elif old and old["itemized"]:
             items = None
@@ -1041,7 +1052,7 @@ class Service:
         )
         return 201, {"quote": quote}
 
-    def create_quote(self, data):
+    def create_quote(self, data, *, trusted_ai_generated=False):
         catalog_ids = data.get("catalog_ids", [])
         if not isinstance(catalog_ids, list) or len(catalog_ids) > 200:
             raise DomainError(400, "В одной смете может быть до 200 расценок")
@@ -1066,7 +1077,7 @@ class Service:
                 "для новой сметы нужен PRO",
             )
         values, items = self.quote_data(data)
-        ai_generated = 0
+        ai_generated = int(trusted_ai_generated)
         ai_draft_usage_id = data.get("ai_draft_usage_id")
         if ai_draft_usage_id is not None:
             ai_draft_usage_id = string(
@@ -1156,7 +1167,6 @@ class Service:
             "approval_state",
             "status",
             "published_version",
-            "ai_generated",
         ):
             snapshot.pop(key, None)
         snapshot["version"] = version
@@ -1188,6 +1198,9 @@ class Service:
         revenue.activate(self.con,self.user['id'],'estimate_shared',row['id'])
 
     def public(self, method, path, query):
+        if path.startswith("/api/public/protected/"):
+            from backend.protected_estimates import public_route
+            return public_route(self, method, path.removeprefix("/api/public/protected/").split("/"))
         if path == "/api/public/intake":
             return self.public_intake(method, query)
         if path in ("/api/public/change", "/api/public/change/respond"):
@@ -1201,7 +1214,7 @@ class Service:
         token = string(token, "Ссылка", 100, True)
         candidate = self.con.execute(
             "SELECT q.id,q.workspace_id FROM quotes q JOIN users u ON u.id=q.user_id "
-            "WHERE q.public_token=? AND u.blocked=0 AND u.deleted_at IS NULL",
+            "WHERE q.public_token=? AND q.protection_enabled=0 AND u.blocked=0 AND u.deleted_at IS NULL",
             (token,),
         ).fetchone()
         if not candidate:
@@ -1213,7 +1226,7 @@ class Service:
         )
         with transaction(self.con, lock_scopes=(lock_scope,)):
             row = self.con.execute(
-                "SELECT q.*,u.name AS author FROM quotes q JOIN users u ON u.id=q.user_id WHERE q.public_token=? AND u.blocked=0 AND u.deleted_at IS NULL",
+                "SELECT q.*,u.name AS author FROM quotes q JOIN users u ON u.id=q.user_id WHERE q.public_token=? AND q.protection_enabled=0 AND u.blocked=0 AND u.deleted_at IS NULL",
                 (token,),
             ).fetchone()
             if not row or not row["published_version"]:
@@ -1519,6 +1532,17 @@ class Service:
         raise DomainError(405, "Метод не поддерживается")
 
     def quotes(self, method, parts, query, data):
+        if len(parts) > 2:
+            raise DomainError(404, "Действие не найдено")
+        if not parts and method not in ("GET", "POST"):
+            raise DomainError(405, "Метод не поддерживается")
+        if len(parts) == 2:
+            action_methods = {"compare": "GET", "versions": "GET", "autosave": "PATCH",
+                              "copy": "POST", "template": "POST", "project": "POST", "publish": "POST", "status": "POST"}
+            if parts[1] not in action_methods:
+                raise DomainError(404, "Действие не найдено")
+            if method != action_methods[parts[1]]:
+                raise DomainError(405, "Метод не поддерживается")
         if method == "POST" and parts == ["recommendations"]:
             # Preview only, never changes a quote or consumes an AI token.
             self.h.throttle("quote-recommendations:" + self.user["id"], 90, 60)
@@ -1622,7 +1646,7 @@ class Service:
             snapshot["amount"] = snapshot["amount_kopecks"]
             if not snapshot["items"]:
                 snapshot.pop("items")
-            return 201, {"quote": self.create_quote(snapshot)}
+            return 201, {"quote": self.create_quote(snapshot, trusted_ai_generated=bool(row["ai_generated"]))}
         if method == "POST" and action == "template":
             name = string(data.get("name", row["title"]), "Название", 120, True)
             tid = identity()
@@ -1725,6 +1749,10 @@ class Service:
     def entity(self, kind, method, parts, query, data):
         config = ENTITIES[kind]
         table = config.get("table", kind)
+        if len(parts) > 1 and kind != "catalog":
+            raise DomainError(404, "Действие не найдено")
+        if not parts and method not in ("GET", "POST"):
+            raise DomainError(405, "Метод не поддерживается")
         if kind == "catalog" and len(parts) > 1:
             if len(parts) != 2 or parts[1] != "use" or method != "POST":
                 raise DomainError(404, "Действие не найдено")
@@ -1876,6 +1904,8 @@ class Service:
                 raise DomainError(
                     409, "Заказ хранит финансовую историю. Используйте статус «Отменён»"
                 )
+            if kind == "stages" and self.con.execute("SELECT 1 FROM project_payments WHERE stage_id=? LIMIT 1", (parts[0],)).fetchone():
+                raise DomainError(409, "Этап с поступлениями хранит финансовую историю и не удаляется")
             self.con.execute(
                 f"DELETE FROM {table} WHERE id=? AND workspace_id=?",
                 (parts[0], self.wid),
@@ -1902,9 +1932,11 @@ class Service:
                 data.get(key, old[key] if old else options[0]), options, key
             )
         for key, target in config["refs"].items():
-            value = data.get(key, old[key] if old else None) or None
-            if value:
+            value = data.get(key, old[key] if old else None)
+            if value not in (None, ""):
                 self.get(target, value)
+            else:
+                value = None
             if kind == "stages" and key == "project_id" and not value:
                 raise DomainError(400, "Выберите заказ")
             if old and kind == "stages" and value != old[key]:
@@ -1931,7 +1963,8 @@ class Service:
                 "Статус",
             )
         if kind in ("stages", "tasks"):
-            assignee = data.get("assignee", old["assignee"] if old else None) or None
+            assignee = data.get("assignee", old["assignee"] if old else None)
+            assignee = None if assignee in (None, "") else string(assignee, "Исполнитель", 100, True)
             if (
                 assignee
                 and not self.con.execute(
@@ -1947,6 +1980,16 @@ class Service:
                 ("RUB", "USD", "EUR", "KZT", "BYN", "GBP"),
                 "Валюта",
             )
+            if old:
+                paid = self.con.execute("SELECT coalesce(sum(amount_kopecks),0) FROM project_payments WHERE project_id=?", (old["id"],)).fetchone()[0]
+                if values["amount_kopecks"] < paid:
+                    raise DomainError(409, "Стоимость заказа не может быть меньше уже учтённых поступлений")
+                if values["currency"] != old["currency"] and self.con.execute(
+                    "SELECT 1 FROM project_payments WHERE project_id=? UNION ALL "
+                    "SELECT 1 FROM expenses WHERE project_id=? UNION ALL "
+                    "SELECT 1 FROM project_stages WHERE project_id=? LIMIT 1", (old["id"],) * 3,
+                ).fetchone():
+                    raise DomainError(409, "Валюта заказа с этапами или финансовыми записями не меняется")
             if (
                 old
                 and old["quote_id"]
@@ -1963,6 +2006,10 @@ class Service:
                 raise DomainError(
                     409, "Финансовые условия заказа зафиксированы согласованной сметой"
                 )
+        if kind == "stages" and old:
+            paid = self.con.execute("SELECT coalesce(sum(amount_kopecks),0) FROM project_payments WHERE stage_id=?", (old["id"],)).fetchone()[0]
+            if values["amount_kopecks"] < paid:
+                raise DomainError(409, "Стоимость этапа не может быть меньше уже учтённых поступлений")
         if kind in ("clients", "projects"):
             values["custom_fields"] = self.custom(
                 kind,
@@ -2032,6 +2079,20 @@ class Service:
         if len(key) < 16:
             raise DomainError(400, "Ключ операции слишком короткий")
         amount = integer(data.get("amount_kopecks"), "Сумма", 1)
+        normalized = {"comment": string(data.get("comment", ""), "Комментарий")}
+        if kind == "receipts":
+            stage = data.get("stage_id")
+            stage = None if stage in (None, "") else string(stage, "Этап", 100, True)
+            normalized.update(
+                stage_id=stage,
+                payment_date=date_value(data.get("payment_date", business_date().isoformat())),
+                method=choice(data.get("method", "bank_transfer"), ("bank_transfer", "cash", "external"), "Способ оплаты"),
+            )
+        else:
+            normalized.update(
+                category=string(data.get("category", ""), "Категория", 100, True),
+                expense_date=date_value(data.get("expense_date", business_date().isoformat())),
+            )
         previous = self.con.execute(
             f"SELECT * FROM {table} WHERE workspace_id=? AND idempotency_key=?",
             (self.wid, key),
@@ -2053,7 +2114,7 @@ class Service:
                 if (
                     key in data
                     and key in previous.keys()
-                    and data[key] != previous[key]
+                    and normalized[key] != previous[key]
                 ):
                     raise DomainError(409, "Ключ уже использован для другой операции")
             return 200, {"item": dict(previous)}
@@ -2062,9 +2123,9 @@ class Service:
             workspace_id=self.wid,
             project_id=project["id"],
             amount_kopecks=amount,
-            comment=string(data.get("comment", ""), "Комментарий"),
             idempotency_key=key,
             created_at=stamp(),
+            **normalized,
         )
         if kind == "receipts":
             paid = self.con.execute(
@@ -2073,7 +2134,6 @@ class Service:
             ).fetchone()[0]
             if amount + paid > project["amount_kopecks"]:
                 raise DomainError(409, "Сумма превышает остаток по заказу")
-            stage = data.get("stage_id") or None
             if stage:
                 stage_row = self.get("project_stages", stage)
                 if stage_row["project_id"] != project["id"]:
@@ -2084,24 +2144,6 @@ class Service:
                 ).fetchone()[0]
                 if stage_paid + amount > stage_row["amount_kopecks"]:
                     raise DomainError(409, "Сумма превышает стоимость этапа")
-            values.update(
-                stage_id=stage,
-                payment_date=date_value(
-                    data.get("payment_date", dt.date.today().isoformat())
-                ),
-                method=choice(
-                    data.get("method", "bank_transfer"),
-                    ("bank_transfer", "cash", "external"),
-                    "Способ оплаты",
-                ),
-            )
-        else:
-            values.update(
-                category=string(data.get("category", ""), "Категория", 100, True),
-                expense_date=date_value(
-                    data.get("expense_date", dt.date.today().isoformat())
-                ),
-            )
         self.insert(table, values)
         self.emit(
             "project",
@@ -2568,6 +2610,8 @@ class Service:
                 self.con,
                 lock_scopes=(f"workspace:{self.wid}", f"user:{self.user['id']}"),
             ):
+                if kind not in ("files", "changelog"):
+                    self.revalidate_write_access()
                 return self.route(method, kind, rest, query, data)
         return self.route(method, kind, rest, query, data)
 
@@ -2597,6 +2641,9 @@ class Service:
         return (result[0], without_finance(result[1]), *result[2:])
 
     def routed(self, method, kind, parts, query, data):
+        if kind == "protected-links":
+            from backend.protected_estimates import owner_route
+            return owner_route(self, method, parts, query, data)
         if kind == "profile-summary":
             if method != "GET" or parts:
                 raise DomainError(405, "Метод не поддерживается")
@@ -2814,11 +2861,12 @@ class Service:
             if method == "POST" and parts:
                 row = self.get("estimate_templates", parts[0])
                 snapshot = json.loads(row["snapshot"])
+                trusted_ai_generated = bool(snapshot.get("ai_generated"))
                 snapshot.update(data)
                 snapshot["amount"] = snapshot["amount_kopecks"]
                 if not snapshot.get("items"):
                     snapshot.pop("items", None)
-                return 201, {"quote": self.create_quote(snapshot)}
+                return 201, {"quote": self.create_quote(snapshot, trusted_ai_generated=trusted_ai_generated)}
         if kind == "comments":
             row = self.get(
                 "quotes", data.get("quote_id", query.get("quote_id", [""])[0])
@@ -2861,6 +2909,7 @@ ROUTES = set(ENTITIES) | {
     "workspace",
     "usage",
     "quotes",
+    "protected-links",
     "public",
     "overview",
     "receipts",

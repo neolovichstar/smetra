@@ -35,6 +35,7 @@ def embed_public_styles():
     policies = [
         header["value"]
         for block in config["headers"]
+        if block.get("source") == "/(.*)" and not block.get("has")
         for header in block["headers"]
         if header["key"].lower() == "content-security-policy"
     ]

@@ -54,6 +54,7 @@ TABLES = TABLES | frozenset("ai_token_wallets ai_token_ledger assistant_bonus_gr
 TABLES = TABLES | frozenset("public_profiles profile_search_terms profile_avatars".split())
 TABLES = TABLES | frozenset(["construction_supplier_quotes"])
 TABLES = TABLES | frozenset(["site_visits"])
+TABLES = TABLES | frozenset("protected_quote_links protected_quote_views protected_quote_events protected_quote_decisions".split())
 TOKENS = re.compile(r"('(?:''|[^'])*'|\"(?:\"\"|[^\"])*\")")
 _SIMPLE_INSERT_VALUES = re.compile(
     r"(?P<prefix>\s*INSERT\s+INTO\s+[a-z_][a-z0-9_]*(?:\s*\([^()]*\))?\s+VALUES)\s*"
@@ -370,6 +371,21 @@ class Connection:
             return self.raw.execute(
                 translate(sql, self.schema, parameters is not None), parameters
             )
+        except (psycopg.errors.LockNotAvailable, psycopg.errors.DeadlockDetected,
+                psycopg.errors.SerializationFailure, psycopg.errors.QueryCanceled):
+            # BEGIN IMMEDIATE acquires locks after establishing its boundary.
+            # If that acquisition fails, there is no transaction() body yet to
+            # roll it back. Leave runtime finish(False) a clean outer boundary.
+            if command == "BEGIN IMMEDIATE":
+                if self.runtime and self.nested:
+                    try:
+                        self.raw.execute("ROLLBACK TO SAVEPOINT smetra_write")
+                        self.raw.execute("RELEASE SAVEPOINT smetra_write")
+                    finally:
+                        self.nested = False
+                elif not self.runtime:
+                    self.raw.execute("ROLLBACK")
+            raise DatabaseBusyError("Database transaction temporarily unavailable") from None
         except psycopg.IntegrityError as error:
             raise sqlite3.IntegrityError(type(error).__name__) from None
 

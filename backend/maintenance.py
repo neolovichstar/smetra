@@ -9,6 +9,7 @@ import time
 
 # Keep expired login links for a short diagnostic buffer, but never indefinitely.
 RETENTION = (
+    ("protected_quote_views", "id", "expires_at", 7 * 86400),
     ("email_login_challenges", "id", "expires_at", 2 * 86400),
     ("email_tokens", "id", "expires_at", 7 * 86400),
     ("oauth_states", "state_hash", "expires_at", 2 * 86400),

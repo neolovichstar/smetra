@@ -56,7 +56,19 @@ REVOKE ALL ON smetra.chat_conversations FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON smetra.chat_members FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON smetra.chat_messages FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON smetra.app_presence FROM PUBLIC, anon, authenticated;
+CREATE TABLE IF NOT EXISTS smetra.billing_subscriptions (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL DEFAULT '',
+ workspace_id TEXT NOT NULL DEFAULT '',
+ product_code TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL DEFAULT 'pending',
+ is_test BOOLEAN NOT NULL DEFAULT FALSE,
+ current_period_end BIGINT NOT NULL DEFAULT 0
+);
 ALTER TABLE smetra.billing_subscriptions ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE smetra.billing_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE smetra.billing_subscriptions FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON smetra.billing_subscriptions FROM PUBLIC,anon,authenticated,smetra_runtime;
 ALTER TABLE smetra.assistant_jobs ADD COLUMN IF NOT EXISTS ad_reward_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reward_credit_daily
  ON smetra.assistant_ad_reward_credits(user_id,reward_date);

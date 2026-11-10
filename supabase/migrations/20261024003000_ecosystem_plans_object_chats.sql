@@ -1,6 +1,13 @@
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
+-- These columns existed in older manually provisioned databases. Include the
+-- foundation so a clean installation can apply this migration as well.
+ALTER TABLE smetra.workspaces ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+ALTER TABLE smetra.workspaces ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive';
+ALTER TABLE smetra.workspaces ADD COLUMN IF NOT EXISTS entitlement_until BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE smetra.workspaces ADD COLUMN IF NOT EXISTS seat_limit BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE smetra.billing_intents ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES smetra.workspaces(id) ON DELETE SET NULL;
 ALTER TABLE smetra.workspaces DROP CONSTRAINT IF EXISTS workspaces_plan_check;
 ALTER TABLE smetra.workspaces ADD CONSTRAINT workspaces_plan_check CHECK(plan IN (
  'free','starter','pro','pro_month','pro_year','pro_solo','pro_plus','pro_plus_month',

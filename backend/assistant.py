@@ -519,6 +519,8 @@ def tools():
     from backend.assistant_app_tools import tools as app_tools
 
     result.extend(app_tools(function))
+    from backend.protected_estimate_tools import tools as protected_tools
+    result.extend(protected_tools(function))
     return result
 
 
@@ -1014,6 +1016,8 @@ def prepare(service, name, args):
         "calculate_formula",
         "list_calculation_rules",
         "suggest_app_action",
+        "list_protected_estimates",
+        "get_protected_estimate_access",
     }
     if name not in allowed:
         raise DomainError(400, "Неизвестное действие")
@@ -1024,7 +1028,11 @@ def prepare(service, name, args):
         # Match the ordinary API before building previews or undo snapshots.
         # Stored quote-item costs are retained privately for deterministic edits.
         args = {key: value for key, value in args.items() if key not in ("cost_price", "internal_cost")}
-    if name == "save_calculation_rule":
+    from backend.protected_estimate_tools import WRITE_TOOLS as protected_writes
+    if name in protected_writes:
+        from backend.protected_estimate_tools import prepare as prepare_protected
+        args, summary = prepare_protected(service, name, args)
+    elif name == "save_calculation_rule":
         from backend.smart_formulas import normalize_rule, _require_paid
         service.write_access(True)
         _require_paid(service)
@@ -1272,6 +1280,9 @@ def _confirm(service, action_id):
             raise DomainError(404, "Действие не найдено")
         args = json.loads(row["arguments"])
         name = row["tool"]
+        from backend.protected_estimate_tools import WRITE_TOOLS as protected_writes
+        if name in protected_writes:
+            service.write_access(True)
         if not service.finance_visible() and (
             name == "create_expenses" or any(key in args for key in ("cost_price", "internal_cost"))
         ):
@@ -1293,7 +1304,9 @@ def _confirm(service, action_id):
             # normalization. Keep those actions confirmable after upgrading.
             args["client"] = "Клиент не указан"
         resource_undo = None
-        if name == "save_calculation_rule":
+        if name in protected_writes:
+            kind, parts, method = "protected-links", [], "POST"
+        elif name == "save_calculation_rule":
             # The subscription and managerial write permission are rechecked at
             # the moment of confirmation, not only when proposed.
             kind, parts, method = "calculation_rules", [], "POST"
@@ -1370,7 +1383,10 @@ def _confirm(service, action_id):
             if "Idempotency-Key" in service.h.headers:
                 del service.h.headers["Idempotency-Key"]
             service.h.headers["Idempotency-Key"] = action_id
-        if name in ("rename_file", "move_file", "create_document"):
+        if name in protected_writes:
+            from backend.protected_estimate_tools import apply as apply_protected
+            status, result = apply_protected(service, name, args)
+        elif name in ("rename_file", "move_file", "create_document"):
             result = applied
         elif name == "save_calculation_rule":
             from backend.smart_formulas import save_rule
@@ -1411,9 +1427,13 @@ def _confirm(service, action_id):
         if undo_fields and updated and type(updated.get("revision")) is int:
             result.update(undoable=True, undo_until=stamp() + 86400,
                           undo={"entity": kind, "id": updated["id"], "revision": updated["revision"], "fields": undo_fields})
+        stored_result = result
+        if name in protected_writes:
+            from backend.protected_estimate_tools import persisted_result
+            stored_result = persisted_result(result)
         service.con.execute(
             "UPDATE assistant_actions SET status='applied',result=? WHERE id=?",
-            (packed(result), action_id),
+            (packed(stored_result), action_id),
         )
         service.emit("ai", action_id, "Применено: " + row["summary"])
         # Persist the private undo state, but never return it to the model/client.
@@ -1440,6 +1460,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         "Изменения состава сметы делай через restructure_quote_items, массовые изменения нескольких полей строк одной сметы — одним batch_quote_changes после проверки текущих данных и точных номеров строк. Одна задача редактирования одной сметы — одно подтверждение; не создавай три независимые карточки для трёх цен. Не изменяй согласованную смету. Увеличение цены на процент — это умножение исходной цены на коэффициент, а не замена всех цен одной суммой. Не добавляй опциональные позиции, если запрос пользователя этого не требует. "
         "Используй только реально доступные инструменты. Не обещай оплату счёта, отправку письма, удаление аккаунта или иное действие, для которого нет инструмента. Не сообщай пользователю скрытые рассуждения; вместо них дай краткий проверяемый вывод и необходимые основания. "
         "Сначала сообщай результат, затем приводи данные, ограничения или следующий необходимый шаг. Точность и безопасность важнее стиля."
+    )
+    system += (
+        " Защищённые сметы: для контроля детализации, экспорта, получателя, срока и лимита открытий используй list_protected_estimates, get_protected_estimate_access и инструменты create/update/revoke_protected_estimate. Для передачи по почте используй send_protected_estimate: отправка допустима только после явного подтверждения пользователем карточки с адресатом. Сначала опубликуй проверенную версию через publish_quote, если публикации ещё нет. Не публикуй и не отправляй молча. Ссылки и коды показываются владельцу один раз, не сохраняй их в память. Просмотр не доказывает прочтение; не выдумывай личность зрителя. Скриншот видимой информации остаётся возможен. "
     )
     system += (
         " Покупка материалов у партнёров: когда пользователь спрашивает, где купить материалы, просит собрать закупку или список покупок, "
@@ -1695,6 +1718,9 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                     inspected_image = True
                 elif name in ("list_records", "get_record", "overview", "read_file", "analyze_design_image", "read_markdown", "list_files", "search_knowledge", "search_file_content", "find_partner_offers", "list_construction_objects", "get_construction_object", "get_procurement_plan", "calculate_construction", "get_file_metadata", "get_document", "list_documents", "search_workspace_storage", "search_internet", "search_chat_history", "list_chat_conversations", "read_chat_history"):
                     result = execute_read(service, name, args)
+                elif name in ("list_protected_estimates", "get_protected_estimate_access"):
+                    from backend.protected_estimate_tools import read as read_protected
+                    result = read_protected(service, name, args)
                 elif name in app_tools.READ_TOOLS:
                     result = app_tools.read(service, name, args)
                 elif name in app_tools.CLIENT_TOOLS:

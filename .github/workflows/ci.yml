@@ -175,6 +175,14 @@ jobs:
           grep -Fq ANDROID_UI_FIXTURE_READY data/durable-fixture.log || { cat data/durable-fixture.log; exit 1; }
           python -c "from PIL import Image; Image.new('RGB', (320, 240), 'steelblue').save('data/durable-photo.png')"
           SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_assistant_durable.cjs
+      - name: Protected estimates, permission changes and verified approval
+        run: |
+          python tests/protected_estimates_fixture.py > data/protected-estimates-fixture.log 2>&1 &
+          task_protected_pid=$!
+          trap 'kill "$task_protected_pid"' EXIT
+          for i in $(seq 1 30); do grep -Fq PROTECTED_ESTIMATES_FIXTURE_READY data/protected-estimates-fixture.log && break; sleep 1; done
+          grep -Fq PROTECTED_ESTIMATES_FIXTURE_READY data/protected-estimates-fixture.log || { cat data/protected-estimates-fixture.log; exit 1; }
+          SMETRA_PLAYWRIGHT_MODULE="$PWD/data/profile-browser/node_modules/playwright" SMETRA_CHROME_PATH="$(command -v google-chrome)" node tests/browser_protected_estimates.cjs
       - name: Browser fixture diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -190,6 +198,7 @@ jobs:
             data/qa/account-layout/
             data/qa/payments/
             data/qa/mobile-compact/
+            data/qa/protected-estimates/
             data/qa/support-*.png
             data/qa/procurement-*.png
             data/qa/growth-*.png
@@ -268,36 +277,6 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements-dev.txt
       - name: Prepare disposable database and limited runtime role
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          import psycopg
-
-          with psycopg.connect(os.environ["SMETRA_TEST_ADMIN_URL"], autocommit=True) as con:
-              con.execute("CREATE ROLE anon NOLOGIN")
-              con.execute("CREATE ROLE authenticated NOLOGIN")
-              # These existing migrations define the bridge's core schema/RLS.
-              # Hosted cron/realtime infrastructure is not needed by these tests.
-              for filename in (
-                  "20260927212249_bootstrap_smetra_postgres.sql",
-                  "20260927214435_russian_identity_and_assistant.sql",
-                  "20260929130000_client_intake.sql",
-                  "20260929211944_runtime_rls.sql",
-                  "20260930044414_ai_workspace.sql",
-                  "20261003132133_assistant_background_jobs.sql",
-              ):
-                  con.execute((Path("supabase/migrations") / filename).read_text())
-              con.execute("ALTER TABLE smetra.assistant_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat', ADD COLUMN file_id TEXT")
-              # Only the communication table/index/grant definitions are needed
-              # here; the rest of migration 51 depends on billing/reward schemas.
-              communication = Path("supabase/migrations/20261024010000_communication_rewards.sql").read_text()
-              con.execute(communication.split("ALTER TABLE smetra.billing_subscriptions")[0] + "\nCOMMIT;")
-              con.execute("ALTER TABLE smetra.users ADD COLUMN IF NOT EXISTS avatar_id TEXT NOT NULL DEFAULT ''")
-              con.execute(Path("supabase/migrations/20261027150811_public_profiles_avatars.sql").read_text())
-              con.execute(Path("supabase/migrations/20261108193000_oauth_avatar_source.sql").read_text())
-              con.execute(Path("supabase/migrations/20261109100000_site_traffic.sql").read_text())
-              con.execute("CREATE ROLE smetra_ci_runtime LOGIN PASSWORD 'fixture-only' IN ROLE smetra_runtime")
-          PY
+        run: python tests/postgres_fixture.py
       - name: Verify pool saturation, atomic fallback limits, SSE durability and RLS
-        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls tests.test_backend_security_delivery.PostgresChatPrivacyTests tests.test_public_profiles_postgres tests.test_assistant_delivery_postgres tests.test_assistant_action_postgres -v
+        run: python -m unittest tests.test_backend_stability tests.test_postgres_rls tests.test_backend_security_delivery.PostgresChatPrivacyTests tests.test_public_profiles_postgres tests.test_assistant_delivery_postgres tests.test_assistant_action_postgres tests.test_protected_estimates -v

@@ -262,3 +262,43 @@ dialog.smetra-appearance-dialog[open]{display:flex;flex-direction:column}
  .smetra-appearance-settings{padding:20px 18px;border-left:0;border-top:1px solid var(--line)}
  .smetra-appearance-preview .smetra-document[data-document-version]{padding:20px;gap:22px}
 }
+
+/* Published estimate access and history, inside the existing editor layer. */
+.protected-manager .protected-checkbox{display:flex;align-items:flex-start;gap:10px;font-size:12px;line-height:1.6;color:var(--text-2)}
+.protected-manager .protected-checkbox input{width:16px;height:16px;flex:0 0 16px;margin-top:3px;accent-color:var(--text)}
+.protected-manager{width:min(820px,calc(100vw - 24px));padding:0;border:1px solid var(--line-strong);border-radius:var(--r-3);background:var(--surface-1);color:var(--text);max-height:92dvh;overflow:auto;--accent:var(--text);--accent-text:var(--text)}
+.protected-manager::backdrop{background:#000a;backdrop-filter:blur(5px)}
+.protected-manager-head{display:flex;align-items:center;justify-content:space-between;padding:20px 26px;border-bottom:1px solid var(--line)}
+.protected-manager-head h2{font-size:20px;font-weight:550;letter-spacing:-.025em;margin:0}
+.protected-manager-body{padding:24px 26px}
+.protected-manager-intro{font-size:12px;line-height:1.65;color:var(--text-2);margin:0 0 20px}
+.protected-manager .protected-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.protected-manager .field{margin:0}
+.protected-manager input:not([type=checkbox]),.protected-manager select{width:100%;min-height:40px;background:var(--surface-2);color:var(--text);border:1px solid var(--line-strong);border-radius:var(--r-1);padding:9px 11px;font:inherit;font-size:12px}
+.protected-manager label{font-size:12px;display:block;margin:0 0 8px}
+.protected-manager fieldset{border:0;border-top:1px solid var(--line);padding:20px 0 0;margin:22px 0 0;min-width:0}
+.protected-manager legend{float:left;width:100%;font-size:12px;font-weight:600;margin:0 0 16px}
+.protected-manager .protected-options{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;clear:both}
+.protected-manager .protected-checkbox{padding:8px 0;margin:0;color:var(--text)}
+.protected-manager .protected-checkbox:has(input:disabled){opacity:.45}
+.protected-manager .protected-help{color:var(--text-3);font-size:10px;line-height:1.6;margin:10px 0 0;clear:both}
+.protected-manager .protected-actions{display:flex;flex-wrap:wrap;gap:8px;padding-top:24px}
+.protected-link-row{border-bottom:1px solid var(--line);padding:18px 0}
+.protected-link-row:first-child{padding-top:0}
+.protected-link-line{display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+.protected-link-line strong{font-size:13px;font-weight:550;overflow-wrap:anywhere}
+.protected-link-line span{font-size:11px;color:var(--text-2)}
+.protected-link-metrics{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-3);margin:10px 0 12px}
+.protected-link-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.protected-secret{background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-2);padding:18px;margin:0 0 24px}
+.protected-manager .protected-secret input{font-size:11px;margin-top:8px}
+.protected-secret p{font-size:11px;line-height:1.6;color:var(--text-2)}
+.protected-secret h3{font-size:15px;font-weight:550;margin:0 0 8px}
+.protected-secret .btn{margin-top:10px}
+.protected-history{list-style:none;padding:0;margin:18px 0}
+.protected-history li{padding:12px 0;border-bottom:1px solid var(--line);font-size:12px}
+.protected-history time{display:block;font-size:10px;color:var(--text-3);margin-bottom:5px}
+.protected-history details{margin-top:8px;font-size:11px;color:var(--text-2)}
+.protected-history pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
+.protected-manager :focus-visible{outline:2px solid var(--text-2);outline-offset:3px}
+@media(max-width:640px){.protected-manager-head{padding:18px}.protected-manager-body{padding:20px 18px}.protected-manager .protected-grid,.protected-manager .protected-options{grid-template-columns:1fr}.protected-link-line{flex-wrap:wrap;gap:6px}.protected-manager .protected-actions .btn{flex:1 1 auto;min-height:44px}}

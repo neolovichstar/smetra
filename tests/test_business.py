@@ -1754,7 +1754,7 @@ class BusinessFlows(unittest.TestCase):
     def test_ai_draft_provenance_is_server_owned_workspace_bound_and_single_use(self):
         token, user_id = self.account("ai-provenance-owner")
         workspace_id = self.call("/workspace", token=token)[1]["workspace"]["id"]
-        with sqlite3.connect(os.environ["DB_PATH"]) as con:
+        with contextlib.closing(sqlite3.connect(os.environ["DB_PATH"])) as con, con:
             draft_id = "ai-provenance-one-use"
             con.execute(
                 "INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,created_at) "
@@ -1801,7 +1801,7 @@ class BusinessFlows(unittest.TestCase):
         )
         self.assertEqual(status, 201, manual)
         self.assertEqual(manual["quote"]["ai_generated"], 0)
-        with sqlite3.connect(os.environ["DB_PATH"]) as con:
+        with contextlib.closing(sqlite3.connect(os.environ["DB_PATH"])) as con:
             claimed_at = con.execute(
                 "SELECT draft_claimed_at FROM ai_usage WHERE id=?", (draft_id,)
             ).fetchone()[0]

@@ -26,6 +26,8 @@ def _load_snapshot(con,share):
     ).fetchone()
     if not row or row["published_version"]!=share["quote_version"]:
         raise DomainError(409,"Версия сметы изменилась. Запросите новую ссылку")
+    if row["protection_enabled"]:
+        raise DomainError(403,"Для этой сметы используйте защищённую ссылку от исполнителя")
     snapshot=json.loads(row["snapshot"])
     try:
         verify_totals(snapshot,calculate)

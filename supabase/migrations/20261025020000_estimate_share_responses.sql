@@ -1,6 +1,28 @@
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
+CREATE TABLE IF NOT EXISTS smetra.estimate_shares (
+ id TEXT PRIMARY KEY,
+ workspace_id TEXT NOT NULL REFERENCES smetra.workspaces(id) ON DELETE CASCADE,
+ quote_id TEXT NOT NULL REFERENCES smetra.quotes(id) ON DELETE CASCADE,
+ quote_version BIGINT NOT NULL,
+ sender_user_id TEXT NOT NULL REFERENCES smetra.users(id) ON DELETE CASCADE,
+ recipient_email TEXT NOT NULL,
+ token_hash TEXT NOT NULL UNIQUE,
+ status TEXT NOT NULL DEFAULT 'active',
+ expires_at BIGINT NOT NULL,
+ created_at BIGINT NOT NULL,
+ revoked_at BIGINT NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_estimate_shares_active
+ ON smetra.estimate_shares(workspace_id,quote_id,quote_version,recipient_email) WHERE status='active';
+ALTER TABLE smetra.estimate_shares ENABLE ROW LEVEL SECURITY;
+ALTER TABLE smetra.estimate_shares FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON smetra.estimate_shares FROM PUBLIC,anon,authenticated;
+GRANT SELECT,INSERT,UPDATE,DELETE ON smetra.estimate_shares TO smetra_runtime;
+CREATE POLICY smetra_runtime_scope ON smetra.estimate_shares FOR ALL TO smetra_runtime
+ USING(workspace_id=nullif(current_setting('smetra.workspace_id',true),'') AND smetra.runtime_workspace_allowed(workspace_id))
+ WITH CHECK(workspace_id=nullif(current_setting('smetra.workspace_id',true),'') AND smetra.runtime_workspace_allowed(workspace_id));
 CREATE INDEX IF NOT EXISTS idx_estimate_shares_recipient
  ON smetra.estimate_shares(recipient_email,status,created_at DESC);
 CREATE TABLE IF NOT EXISTS smetra.estimate_share_responses (

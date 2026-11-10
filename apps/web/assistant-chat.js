@@ -856,6 +856,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!active()||!item.isConnected)return;
         item.dataset.proposalState='applied';quotePreview?.clearProposal?.(action.id);
         renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);
+        window.SmetraProtectedEstimates?.actionResult(item,result.result);
         const createdQuote=action.tool==='create_quotes'?result.result?.quote:null;
         if(createdQuote?.id)await focusQuote(createdQuote);
         else quotePreview?.refresh().catch(()=>{});

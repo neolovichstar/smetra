@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import http.server
 import json
+import math
 import os
 import re
 import secrets
@@ -57,7 +58,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 71
+REQUIRED_CLOUD_SCHEMA_VERSION = 72
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 
@@ -115,6 +116,10 @@ def db():
                             _SQLITE_WAL_FILES.add(wal_key)
         with con:
             yield con
+    except sqlite3.OperationalError as error:
+        if getattr(error, "sqlite_errorcode", 0) & 0xff in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+            raise DatabaseBusyError("Database transaction temporarily unavailable") from None
+        raise
     finally:
         con.close()
 
@@ -153,6 +158,7 @@ def migrate():
         con.executescript((ROOT / "backend" / "migrations" / "031_email_login_challenges.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "032_retention_indexes.sql").read_text(encoding="utf-8"))
         con.executescript((ROOT / "backend" / "migrations" / "033_estimate_share_responses.sql").read_text(encoding="utf-8"))
+        con.executescript((ROOT / "backend" / "migrations" / "039_protected_estimates.sql").read_text(encoding="utf-8"))
         from backend.ai_tokens import ensure_schema as ensure_ai_tokens
         ensure_ai_tokens(con)
         from backend.public_profiles import ensure_schema as ensure_public_profiles
@@ -372,11 +378,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if depth > 64:
                     raise ValueError("JSON nesting exceeds limit")
                 if isinstance(value, dict):
+                    for key in value:
+                        key.encode("utf-8")
                     pending.extend((child, depth + 1) for child in value.values())
                 elif isinstance(value, list):
                     pending.extend((child, depth + 1) for child in value)
+                elif isinstance(value, float) and not math.isfinite(value):
+                    raise ValueError("Non-finite JSON number")
+                elif isinstance(value, str):
+                    value.encode("utf-8")
             return data
-        except (ValueError, UnicodeDecodeError, RecursionError):
+        except (ValueError, UnicodeError, RecursionError):
             raise ApiError(400, "Некорректный JSON")
 
     def validate_body_length(self, path):
@@ -661,6 +673,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/people" or re.fullmatch(r"/u/(?:[A-Za-z][A-Za-z0-9_]{2,31}|SM-[A-Fa-f0-9]{32})", path):
             path = "/public-profile"
         public = {
+            "/protected-estimate": ("protected-estimate.html", "text/html"),
+            "/protected-estimate.html": ("protected-estimate.html", "text/html"),
             "/public-profile": ("public-profile.html", "text/html"),
             "/assets/providers/yandex-disk.svg": ("assets/providers/yandex-disk.svg", "image/svg+xml"),
             "/assets/providers/google-drive.png": ("assets/providers/google-drive.png", "image/png"),
@@ -1126,6 +1140,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header("Content-Security-Policy", "default-src 'none'; sandbox; frame-ancestors 'none'")
+                self.send_header("X-Frame-Options", "DENY")
                 self.end_headers()
                 self.wfile.write(payload.data)
                 return
