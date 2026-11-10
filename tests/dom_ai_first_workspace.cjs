@@ -16,7 +16,10 @@ const {JSDOM} = require(process.env.SMETRA_JSDOM_MODULE || 'jsdom');
   assert.match(html,/data-tab="settings"/,'Account controls remain reachable');
   assert.match(html,/data-tab="support"/,'Support remains reachable');
   assert.match(html,/assistant\.css\?v=20261108-profile1/,'Updated CSS must bypass old cache');
-  assert.match(app,/'premium' : 'assistant'/,'Assistant is the default start page');
+  assert.match(app,/location\.hash\.slice\(1\) \|\| 'assistant'/,'Assistant is the default start page');
+  assert.match(app,/cloudConnectedOnReturn/,'OAuth callback is handled explicitly');
+  assert.match(app,/returnUrl\.searchParams\.delete\('cloud'\)/,'OAuth callback query flag is removed');
+  assert.match(app,/history\.replaceState\(\{\},'',returnUrl\.pathname\+returnUrl\.search\+'#assistant'\)/,'OAuth redirects to assistant rather than retired materials screen');
   assert.match(styles,/height:min\(880px,calc\(100dvh - 28px\)\)/,'Dialog must grow vertically');
   assert.match(styles,/width:min\(980px,calc\(100vw - 24px\)\)/,'Dialog width is not increased');
 
