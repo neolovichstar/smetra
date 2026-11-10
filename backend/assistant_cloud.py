@@ -58,8 +58,8 @@ def list_files(service, query=""):
             "provider": row["provider"], "account": row["account_label"],
         })
     return {
-        "files": found[:20],
-        "truncated": live["limited"] or len(rows) > 20 or len(found) > 20,
+        "files": found[:10],
+        "truncated": live["limited"] or len(rows) > 20 or len(found) > 10,
         "connected_accounts_searched": live["connected_accounts_searched"],
         "errors": live["errors"],
         "note": (
