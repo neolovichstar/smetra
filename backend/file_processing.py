@@ -174,7 +174,7 @@ def isolated_extract(raw, mime):
         input=raw,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        timeout=25 if mime.startswith('cloud-render-pdf:') else (45 if mime.startswith('cloud:application/pdf') else 25),
+        timeout=18 if mime.startswith('cloud-render-pdf:') else (12 if mime.startswith('cloud:application/pdf') else 25),
         env=environment,
     )
     if result.returncode or len(result.stdout) > (4_100_000 if mime == 'render-pdf' or mime.startswith('cloud-render-pdf:') else 800_000):
