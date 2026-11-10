@@ -39,6 +39,15 @@ async function setup(enabled=true,voice=false,remaining=3){
  const failures=[];
  const test=async(name,run,enabled=true,voice=false,remaining=3)=>{const env=await setup(enabled,voice,remaining);try{await run(env);console.log('PASS:',name)}catch(error){failures.push(name+': '+error.message);console.error('FAIL:',name,error.message)}finally{env.close()}};
  const type=(w,doc,text)=>{const input=doc.querySelector('#assistant-input');input.value=text;input.dispatchEvent(new w.Event('input'));return input};
+ await test('internal tool markup and encrypted cloud references are never visible or copyable',async({w})=>{
+   const token='live.'+'A'.repeat(120)+'==';
+   const xml='<tool_call><function=read_cloud_file><parameter=id>'+token+'</parameter></function></tool_call>';
+   const hidden=w.safeAssistantDisplayText(xml);
+   assert.doesNotMatch(hidden,/<tool_call|read_cloud_file|live\./i);
+   assert.match(hidden,/формата вызова инструмента/);
+   assert.equal(w.safeAssistantDisplayText('Файл '+token),'Файл [временная ссылка скрыта]');
+   assert.equal(w.safeAssistantDisplayText('Смета готова.'),'Смета готова.');
+ });
  await test('empty assistant chat contains no example messages or suggested prompts',async({doc})=>{
    assert.ok(doc.querySelector('#assistant-form'),'Composer stays functional');
    assert.equal(doc.querySelector('#assistant-input').value,'','No example is prefilled');
