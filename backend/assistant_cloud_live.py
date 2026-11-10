@@ -7,7 +7,6 @@ is passed to the model for a subsequent read.
 """
 import json
 import re
-import time
 
 from cryptography.fernet import InvalidToken
 
@@ -16,7 +15,6 @@ from backend import cloud_drives
 
 _TOKEN_LIFETIME = 1800
 _MAX_PROVIDER_CALLS = 3
-_MAX_LIST_ITEMS = 500
 _MAX_RESULTS = 20
 _MAX_NAME_LEN = 250
 _WORDS = re.compile(r"[^\W_]+", re.UNICODE)
@@ -98,7 +96,10 @@ def _google_search(con, connection, terms):
                 "application/vnd.google-apps.presentation",
             )
             mime = "application/pdf" if native else cloud_drives._mime_for(name, provider_mime)
-            size = max(1, int(item.get("size") or 0)) if native else int(item.get("size") or 0)
+            try:
+                size = max(1, int(item.get("size") or 0)) if native else int(item.get("size") or 0)
+            except (ValueError, TypeError):
+                continue
             if (mime in cloud_drives.SUPPORTED_FILES and size > 0
                     and _file_match(name, terms)):
                 results.append({
@@ -136,7 +137,10 @@ def _yandex_search(con, connection, terms):
                 continue
             provider_mime = str(item.get("mime_type") or "application/octet-stream")[:120]
             mime = cloud_drives._mime_for(name, provider_mime)
-            size = int(item.get("size") or 0)
+            try:
+                size = int(item.get("size") or 0)
+            except (ValueError, TypeError):
+                continue
             if mime in cloud_drives.SUPPORTED_FILES and size > 0 and _file_match(name, terms):
                 results.append({
                     "provider_file_id": path, "name": name[:_MAX_NAME_LEN],
