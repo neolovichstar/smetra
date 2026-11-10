@@ -1,5 +1,6 @@
 """Workspace-scoped assistant with persisted, reviewable and idempotent actions."""
 
+import hashlib
 import json
 import logging
 from contextvars import ContextVar
@@ -627,6 +628,23 @@ def assistant_model(service, has_image=False):
 _MODEL_CONTEXT = ContextVar("smetra_model_context", default=None)
 _MODEL_TOOL_CHOICE = ContextVar("smetra_model_tool_choice", default="auto")
 _MODEL_DEADLINE = ContextVar("smetra_model_deadline", default=None)
+_MODEL_SESSION = ContextVar("smetra_openrouter_session", default="")
+
+
+def _cache_options(model):
+    """Provider-scoped, reversible OpenRouter prompt caching.
+
+    Stable session IDs are SHA256 digests: raw user/workspace identifiers and
+    chat text never appear in the API session ID. Claude cache writes cost
+    more than normal input; successful later reads can offset that cost.
+    """
+    session_id = _MODEL_SESSION.get()
+    if not session_id:
+        return {}
+    options = {"session_id": session_id}
+    if model.startswith("anthropic/") and os.getenv("SMETRA_AI_CACHE_ENABLED", "1") == "1":
+        options["cache_control"] = {"type": "ephemeral"}
+    return options
 
 
 def _provider_timeout(maximum):
@@ -783,6 +801,7 @@ def query_model(messages, model=None, paid_model=False):
     payload = {
         "model": model,
         "messages": messages,
+        **_cache_options(model),
         **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": model_tools(messages) + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": _MODEL_TOOL_CHOICE.get()}),
         "max_tool_calls": 4,
         "max_tokens": 3500,
@@ -831,7 +850,7 @@ def query_model(messages, model=None, paid_model=False):
 
 def _stream_payload(model, messages, paid_model, tools_enabled=True, reasoning=True):
     payload = {"model": model, "messages": messages, "max_tokens": 3500, "stream": True,
-               "usage": {"include": True}, **sampling(model)}
+               "usage": {"include": True}, **sampling(model), **_cache_options(model)}
     if tools_enabled and model != "qwen/qwen-2.5-vl-7b-instruct:free":
         payload["tools"] = model_tools(messages) + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else [])
         payload["tool_choice"] = _MODEL_TOOL_CHOICE.get()
@@ -1838,6 +1857,10 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         messages.append({"role": "tool", "tool_call_id": call_id,
                          "content": packed(result)[:48_000 if args.get("full_document") else 6000]})
     model, paid_model = assistant_model(service, has_image=bool(image_url))
+    cache_session_id = hashlib.sha256(
+        (str(service.wid) + ":" + str(service.user["id"]) + ":" +
+         str(conversation_id or "general")).encode("utf-8")
+    ).hexdigest()
     actions, designs, questions, answer, remembered = [], [], [], "", False
     from backend import assistant_app_tools as app_tools
 
@@ -1859,6 +1882,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         selection = _MODEL_CONTEXT.set((model, paid_model, on_source))
         tool_choice = _MODEL_TOOL_CHOICE.set("none" if turn == 9 else "auto")
         time_limit = _MODEL_DEADLINE.set(deadline)
+        cache_session = _MODEL_SESSION.set(cache_session_id)
         try:
             # Provider may emit provisional natural-language text *before* tool
             # calls. Do not stream it: a later tool round would overwrite the
@@ -1875,6 +1899,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             _MODEL_CONTEXT.reset(selection)
             _MODEL_TOOL_CHOICE.reset(tool_choice)
             _MODEL_DEADLINE.reset(time_limit)
+            _MODEL_SESSION.reset(cache_session)
         usage=response.pop('_usage',None)
         ai_tokens.note_usage(usage, {"messages": messages, "tools": model_tools(messages)},
                              json.dumps(response, ensure_ascii=False, default=str))

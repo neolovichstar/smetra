@@ -92,6 +92,23 @@ class ContextWindowTests(unittest.TestCase):
         self.assertLess(estimate_tokens(older), 1200)
         self.assertGreater(stats["estimated_tokens_not_sent"], 0)
 
+    def test_openrouter_prompt_cache_is_session_scoped_and_can_be_disabled(self):
+        from unittest.mock import patch
+        from backend.assistant import _MODEL_SESSION, _cache_options
+
+        self.assertEqual(_cache_options("anthropic/claude-haiku-5.5"), {})
+        token = _MODEL_SESSION.set("b" * 64)
+        try:
+            values = _cache_options("anthropic/claude-haiku-5.5")
+            self.assertEqual(values["session_id"], "b" * 64)
+            self.assertEqual(values["cache_control"], {"type": "ephemeral"})
+            self.assertNotIn("cache_control", _cache_options("google/gemini-2.5-flash"))
+            with patch.dict("os.environ", {"SMETRA_AI_CACHE_ENABLED": "0"}):
+                self.assertNotIn("cache_control", _cache_options("anthropic/claude-haiku-5.5"))
+        finally:
+            _MODEL_SESSION.reset(token)
+        self.assertEqual(_cache_options("anthropic/claude-haiku-5.5"), {})
+
     def test_iterative_tool_context_compaction_keeps_protected_results(self):
         from unittest.mock import patch
 
