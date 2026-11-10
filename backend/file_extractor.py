@@ -111,7 +111,7 @@ def validate_pdf(content):
     inspect(reader.trailer)
 
 
-def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000):
+def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000, start_page=1, include_total=False):
     if not 0 < len(content) <= max_content_bytes:
         raise ValueError("size")
     pages = []
@@ -131,10 +131,11 @@ def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000):
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(content), strict=True)
-    if reader.is_encrypted or len(reader.pages) > max_pdf_pages:
+    total_pages = len(reader.pages)
+    if reader.is_encrypted or total_pages > max_pdf_pages or not 1 <= start_page <= total_pages:
         raise ValueError("pdf")
-    truncated = len(reader.pages) > 12
-    for number, page in enumerate(reader.pages[:12], 1):
+    truncated = total_pages > 12 or start_page > 1
+    for number, page in enumerate(reader.pages[start_page-1:start_page+11], start_page):
         if (
             page.get_contents() is not None
             and len(page.get_contents().get_data()) > 8_000_000
@@ -143,13 +144,13 @@ def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000):
         text = page.extract_text() or ""
         truncated |= len(text) > 10_000
         pages.append((number, " ".join(text[:10_000].split())))
-    return pages, truncated
+    return (pages, truncated, total_pages) if include_total else (pages, truncated)
 
 
 def main():
     # Only the explicit cloud PDF mode may use a larger transient input.
     # Standard uploads keep their existing strict 5 MB parser limit.
-    cloud_pdf = len(sys.argv) > 1 and sys.argv[1] == "cloud:application/pdf"
+    cloud_pdf = len(sys.argv) > 1 and sys.argv[1].startswith("cloud:application/pdf")
     try:
         import resource
 
@@ -182,10 +183,18 @@ def main():
         sys.stdout.buffer.write(b'{"valid":true}')
         return
     if cloud_pdf:
-        pages, truncated = extract(content, "application/pdf",
-                                   max_pdf_pages=300, max_content_bytes=100_000_000)
+        parts = sys.argv[1].split(":")
+        if len(parts) not in (2, 3) or parts[:2] != ["cloud", "application/pdf"]:
+            raise ValueError("cloud mode")
+        start_page = int(parts[2]) if len(parts) == 3 else 1
+        if not 1 <= start_page <= 300:
+            raise ValueError("page bounds")
+        pages, truncated, total = extract(
+            content, "application/pdf", max_pdf_pages=300,
+            max_content_bytes=100_000_000, start_page=start_page, include_total=True)
         sys.stdout.buffer.write(json.dumps(
-            {"pages": pages, "truncated": truncated},
+            {"pages": pages, "truncated": truncated, "total_pages": total,
+             "next_page": start_page + len(pages) if start_page + len(pages) <= total else None},
             ensure_ascii=False).encode("utf-8"))
         return
     capture = sys.argv[1].startswith('capture:')
