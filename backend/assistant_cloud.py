@@ -4,7 +4,6 @@ Only workspace managers can access files in active linked folders. Documents
 are fetched from the provider into bounded process memory for one tool call,
 parsed in a credential-free subprocess, and discarded immediately afterwards.
 """
-import re
 import subprocess
 
 from backend.business import DomainError, string, integer
