@@ -42,7 +42,7 @@ async function setup(enabled=true,voice=false,remaining=3){
  await test('provider tool markup and cloud capabilities are hidden from responses and copy buffers',async({w})=>{
    const token='live.'+'Z'.repeat(124)+'==';
    const xml='<tool_call><function=read_cloud_file><parameter=id>'+token+'</parameter></function></tool_call>';
-   assert.doesNotMatch(w.safeAssistantDisplayText(xml),/tool_call|read_cloud_file|live\\./i);
+   assert.doesNotMatch(w.safeAssistantDisplayText(xml),/tool_call|read_cloud_file|live\./i);
    assert.match(w.safeAssistantDisplayText('Файл '+token),/временная ссылка скрыта/);
    assert.equal(w.safeAssistantDisplayText('Готово.'),'Готово.');
  });
@@ -50,7 +50,7 @@ async function setup(enabled=true,voice=false,remaining=3){
    const token='live.'+'Y'.repeat(120);
    w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){
      const payload={answer:'Могу подключить Google Диск.',client_actions:[{action:'connect_cloud_drive',provider:'google_drive',label:'Подключить Google Диск'}],actions:[],quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}};
-     controller.enqueue(new TextEncoder().encode('event: done\\ndata: '+JSON.stringify(payload)+'\\n\\n'));controller.close();
+     controller.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify(payload)+'\n\n'));controller.close();
    }})});
    const field=doc.querySelector('#assistant-input');field.value='Подключи Google Диск';field.dispatchEvent(new w.Event('input'));
    doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
