@@ -213,7 +213,7 @@ def analyze_page(service, file_id, page_number=1):
         raise DomainError(422, "Некорректный результат рендеринга PDF")
     try:
         jpeg = base64.b64decode(item[1], validate=True)
-        if not 0 < len(jpeg) <= 1_350_000 or not jpeg.startswith(b"\\xff\\xd8"):
+        if not 0 < len(jpeg) <= 1_350_000 or not jpeg.startswith(bytes((0xFF, 0xD8))):
             raise ValueError("jpeg")
         total = int(picture["total_pages"])
         if not page <= total <= 300:
