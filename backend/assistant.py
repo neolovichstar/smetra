@@ -741,6 +741,10 @@ def _validated_reply(value):
         if recovered is not None:
             calls = recovered
             content = ""
+    elif "<tool_call" in content or "<function=" in content:
+        # Providers can send the same tool action twice, as structured and
+        # textual output. Execute only the structured call, show no markup.
+        content = ""
     # Other answers can still quote a cloud reference in prose: mask it
     # before any SSE delta, database commit, or history replay.
     content = _LIVE_REF_TEXT.sub("[защищённая ссылка на файл]", content)
@@ -1767,10 +1771,11 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         calls = response.get("tool_calls") or []
         if not calls:
             if on_delta and not actions and not questions:
-                # These deltas belong to the committed answer, not an early
-                # thought that may be replaced after a tool call.
-                for fragment in final_round_deltas:
-                    on_delta(fragment)
+                # Transport deltas are untrusted and may contain textual
+                # function calls or a private cloud reference. Emit ONLY the
+                # validated, redacted final text, never raw fragments.
+                if response["content"]:
+                    on_delta(response["content"])
             break
         if turn == 4:
             raise DomainError(502, "Ассистент не смог завершить проверку. Уточните запрос и повторите.")
