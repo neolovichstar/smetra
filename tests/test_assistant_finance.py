@@ -249,7 +249,10 @@ class AssistantFinanceTests(unittest.TestCase):
         self.assertIn("event: done", text)
         self.assertNotIn("cost_price", text)
         self.assertNotIn("internal_cost", text)
-        self.assertNotIn("19763", text)
+        # IDs are random UUIDs and can contain "19763" by coincidence.
+        # Assert on private monetary fields, not arbitrary substrings.
+        self.assertNotIn('"cost_price":19763', text)
+        self.assertNotIn('"amount_kopecks":19763', text)
         frame = next(frame for frame in text.split("\n\n") if frame.startswith("event: done\n"))
         result = json.loads(frame.split("data: ", 1)[1])
         self.assertEqual(len(result["actions"]), 1, result)
