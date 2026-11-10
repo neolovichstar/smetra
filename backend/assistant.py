@@ -585,8 +585,8 @@ def _recover_textual_tool_markup(content):
     import re
 
     marker = re.search(
-        r"<\\s*(?:tool_call\\b|function\\s*=|parameter\\s*=)"
-        r"|live\\.[A-Za-z0-9_-]{24,}={0,2}",
+        r"<\s*(?:tool_call\b|function\s*=|parameter\s*=)"
+        r"|live\.[A-Za-z0-9_-]{24,}={0,2}",
         content, re.IGNORECASE,
     )
     if not marker:
@@ -594,8 +594,8 @@ def _recover_textual_tool_markup(content):
     # Only a complete, standalone, explicitly allowlisted read-only function
     # is eligible for recovery. Never interpret text as a mutating action.
     match = re.fullmatch(
-        r"\\s*<tool_call>\\s*<function=(read_cloud_file|analyze_cloud_pdf_page|list_cloud_files)>"
-        r"(.*?)</function>\\s*</tool_call>\\s*",
+        r"\s*<tool_call>\s*<function=(read_cloud_file|analyze_cloud_pdf_page|list_cloud_files)>"
+        r"(.*?)</function>\s*</tool_call>\s*",
         content, re.DOTALL,
     )
     if match and _MODEL_TOOL_CHOICE.get() != "none":
@@ -607,11 +607,11 @@ def _recover_textual_tool_markup(content):
         }[name]
         params = {}
         items = list(re.finditer(
-            r"<parameter=([a-z_]+)>\\s*(.*?)\\s*</parameter>",
+            r"<parameter=([a-z_]+)>\s*(.*?)\s*</parameter>",
             body, re.DOTALL,
         ))
         if items and not re.sub(
-            r"<parameter=([a-z_]+)>\\s*(.*?)\\s*</parameter>",
+            r"<parameter=([a-z_]+)>\s*(.*?)\s*</parameter>",
             "", body, flags=re.DOTALL,
         ).strip():
             for item in items:
@@ -622,7 +622,7 @@ def _recover_textual_tool_markup(content):
                 params[key] = value
             if (params and ("id" not in allowed or (
                 "id" in params and
-                re.fullmatch(r"(?:live\\.[A-Za-z0-9_=-]{30,2395}|[A-Za-z0-9_-]{1,80})", params["id"])
+                re.fullmatch(r"(?:live\.[A-Za-z0-9_=-]{30,2395}|[A-Za-z0-9_-]{1,80})", params["id"])
             ))):
                 if "page_start" in params or "page" in params:
                     field = "page_start" if "page_start" in params else "page"
@@ -644,11 +644,11 @@ def _recover_textual_tool_markup(content):
                     }]
     # If malformed or tools are unavailable, show a neutral error rather than
     # provider instructions, a fake completed action, or a cloud access token.
-    if re.search(r"<\\s*(?:tool_call\\b|function\\s*=|parameter\\s*=)", content, re.IGNORECASE):
+    if re.search(r"<\s*(?:tool_call\b|function\s*=|parameter\s*=)", content, re.IGNORECASE):
         return "Не удалось завершить чтение документа. Повторите запрос на нужные страницы.", []
     # A model could also copy a live reference in ordinary prose.
     return re.sub(
-        r"live\\.[A-Za-z0-9_-]{24,}={0,2}",
+        r"live\.[A-Za-z0-9_-]{24,}={0,2}",
         "[временная ссылка на файл скрыта]",
         content,
     ), []
