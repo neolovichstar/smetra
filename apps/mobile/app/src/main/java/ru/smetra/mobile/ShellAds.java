@@ -116,8 +116,13 @@ final class ShellAds {
                 }
                 @Override public void shown() { }
                 @Override public void closed() {
-                    if (terminal.compareAndSet(false, true))
-                        finish(result, null, "not_completed", "Чтобы получить бонус, досмотрите видео до конца");
+                    // Some SDK versions deliver the reward callback just after
+                    // the dismissed callback. Do not deny an earned bonus due
+                    // to callback ordering; the server still credits once.
+                    MAIN.postDelayed(() -> {
+                        if (terminal.compareAndSet(false, true))
+                            finish(result, null, "not_completed", "Чтобы получить бонус, досмотрите видео до конца");
+                    }, 800);
                 }
                 @Override public void rewarded() {
                     if (terminal.compareAndSet(false, true)) claim(attempt, result);
