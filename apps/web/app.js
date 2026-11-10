@@ -18,7 +18,16 @@ const rubFormatter=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB
 const dateFormatter=new Intl.DateTimeFormat('ru-RU',{dateStyle:'medium'});
 const rub = (kopecks) => rubFormatter.format(kopecks / 100);
 const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
-let user = null, quotes = [], tab = location.hash.slice(1) || (new URLSearchParams(location.search).get('cloud') === 'connected' ? 'premium' : 'assistant'), registering = false, toastTimer, renderRevision=0, authRevision=0;
+// OAuth callbacks must not resurrect legacy pages hidden from navigation.
+const cloudConnectedOnReturn = new URLSearchParams(location.search).get('cloud') === 'connected';
+let user = null, quotes = [], tab = location.hash.slice(1) || 'assistant', registering = false, toastTimer, renderRevision=0, authRevision=0;
+if(cloudConnectedOnReturn){
+  tab='assistant';
+  const returnUrl=new URL(location.href);
+  returnUrl.searchParams.delete('cloud');
+  history.replaceState({},'',returnUrl.pathname+returnUrl.search+'#assistant');
+  try{sessionStorage.setItem('smetra.cloudJustConnected','1')}catch{}
+}
 try{sessionStorage.removeItem('mobile_token');if(new URLSearchParams(location.search).has('partner_sso'))sessionStorage.setItem('smetra.partnerSso','1');const ref=new URLSearchParams(location.search).get('ref');if(ref&&ref.length<=80)sessionStorage.setItem('smetra.referral',ref)}catch{}
 const apiRequests=new Map();
 const apiResponseCache=new Map();
@@ -367,6 +376,7 @@ async function showApp(){
     if(user!==owner||authRevision!==attempt)return;
     $('#auth').classList.add('hidden');
     setAppState('authorized');
+    try{if(sessionStorage.getItem('smetra.cloudJustConnected')==='1'){sessionStorage.removeItem('smetra.cloudJustConnected');notify('Облачный диск подключён')}}catch{}
     window.SmetraCommunication?.startPresence?.();
     void SmetraReleaseUnread.refresh(true);
     window.SmetraWarmFeatures?.();
