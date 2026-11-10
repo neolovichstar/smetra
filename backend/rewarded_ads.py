@@ -8,7 +8,13 @@ from backend import ai_tokens, assistant
 
 
 def route(service, method, data):
-    unit = os.getenv("YANDEX_REWARDED_AD_UNIT_ID", "").strip()
+    # Preserve existing Android and Yandex clients. Only new VK-capable
+    # native builds opt in to a VK slot. Client input never defines the slot.
+    vk_requested = service.h.headers.get("X-Smetra-Ad-SDK", "") == "vk-v1"
+    vk_unit = os.getenv("VK_REWARDED_SLOT_ID", "").strip()
+    vk_available = vk_requested and vk_unit.isascii() and vk_unit.isdecimal() and 0 < int(vk_unit) <= 2_147_483_647
+    provider = "vk" if vk_available else "yandex"
+    unit = vk_unit if vk_available else os.getenv("YANDEX_REWARDED_AD_UNIT_ID", "").strip()
     user_id = service.user["id"]
     today = business_date().isoformat()
     current = assistant.quota(service)
@@ -19,7 +25,8 @@ def route(service, method, data):
         ).fetchone()
         eligible = bool(unit and current["plan"] == "free" and current["remaining"] < ai_tokens.MIN_START_TOKENS and not claimed)
         return 200, {"enabled": bool(unit), "available": eligible, "claimed_today": bool(claimed),
-                     "amount": ai_tokens.AD_REWARD_TOKENS, "unit": "tokens", "ad_unit_id": unit if eligible else "",
+                     "amount": ai_tokens.AD_REWARD_TOKENS, "unit": "tokens",
+                     "provider": provider if eligible else "", "ad_unit_id": unit if eligible else "",
                      "quota": assistant.public_quota(service)}
     if method != "POST":
         raise DomainError(405, "Требуется POST")
@@ -39,7 +46,7 @@ def route(service, method, data):
                 "INSERT INTO assistant_ad_attempts(id,user_id,nonce_hash,status,created_at,expires_at) VALUES(?,?,?,'issued',?,?)",
                 (attempt_id, user_id, hashlib.sha256(nonce.encode()).hexdigest(), now, now + 600),
             )
-            return 200, {"attempt_id": attempt_id, "nonce": nonce, "ad_unit_id": unit, "expires_at": now + 600}
+            return 200, {"attempt_id": attempt_id, "nonce": nonce, "provider": provider, "ad_unit_id": unit, "expires_at": now + 600}
         attempt = service.con.execute("SELECT * FROM assistant_ad_attempts WHERE id=? AND user_id=?",
                                       (str(data.get("attempt_id", ""))[:80], user_id)).fetchone()
         nonce = str(data.get("nonce", ""))[:200]

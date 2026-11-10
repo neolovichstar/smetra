@@ -1,6 +1,8 @@
 package ru.smetra.mobile;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import java.util.concurrent.atomic.AtomicBoolean;
 import android.os.Handler;
 import android.os.Looper;
 import com.yandex.mobile.ads.common.AdError;
@@ -30,6 +32,8 @@ final class ShellAds {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static boolean initialized;
     private static boolean running;
+    private static VkRewardedAds activeVk;
+    private static boolean vkConsentGrantedThisSession;
 
     private ShellAds() {}
 
@@ -43,11 +47,90 @@ final class ShellAds {
                 if (!attempt.ok()) { finish(result, null, "not_available", attempt.message("Видео сейчас недоступно")); return; }
                 String unit = attempt.body.optString("ad_unit_id", "");
                 if (unit.isEmpty()) { finish(result, null, "not_available", "Видео сейчас недоступно"); return; }
-                MAIN.post(() -> load(activity, unit, attempt.body, result));
+                String provider = attempt.body.optString("provider", "yandex");
+                if ("vk".equals(provider)) {
+                    MAIN.post(() -> askVkConsentAndLoad(activity, unit, attempt.body, result));
+                } else if ("yandex".equals(provider)) {
+                    MAIN.post(() -> load(activity, unit, attempt.body, result));
+                } else {
+                    finish(result, null, "not_available", "Неизвестный рекламный провайдер");
+                }
             } catch (Exception error) {
                 finish(result, null, "network", "Нет соединения. Попробуйте позже.");
             }
         });
+    }
+
+    private static void askVkConsentAndLoad(Activity activity, String unit, JSONObject attempt, Result result) {
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            finish(result, null, "cancelled", "Экран закрыт"); return;
+        }
+        if (vkConsentGrantedThisSession) {
+            loadVk(activity, unit, attempt, result);
+            return;
+        }
+        // VK ads can use device identifiers; do not imply watching a rewarded
+        // ad itself proves privacy consent. User may decline without penalty.
+        new AlertDialog.Builder(activity)
+            .setTitle("VK Реклама")
+            .setMessage("Можно добровольно посмотреть рекламное видео и получить 3 дополнительных запроса. Для показа VK может обрабатывать технические данные устройства. Сметы, файлы и сообщения не передаются в рекламную сеть. Продолжить?")
+            .setPositiveButton("Продолжить", (dialog,which) -> {
+                vkConsentGrantedThisSession = true;
+                loadVk(activity, unit, attempt, result);
+            })
+            .setNegativeButton("Не сейчас", (dialog,which) ->
+                finish(result, null, "cancelled", "Просмотр отменён"))
+            .setOnCancelListener(dialog ->
+                finish(result, null, "cancelled", "Просмотр отменён"))
+            .show();
+    }
+
+    private static void loadVk(Activity activity, String unit, JSONObject attempt, Result result) {
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            finish(result, null, "cancelled", "Экран закрыт"); return;
+        }
+        final int slot;
+        try {
+            slot = Integer.parseInt(unit);
+            if (slot <= 0) throw new NumberFormatException("slot");
+        } catch (NumberFormatException error) {
+            finish(result, null, "not_available", "Неверный рекламный блок VK"); return;
+        }
+        try {
+            // Conservative age-restriction setting until explicit age settings
+            // are available; opt-in consent applies only to this process.
+            com.my.target.common.MyTargetPrivacy.setUserConsent(vkConsentGrantedThisSession);
+            com.my.target.common.MyTargetPrivacy.setUserAgeRestricted(true);
+            final VkRewardedAds vk = new VkRewardedAds();
+            activeVk = vk;
+            final AtomicBoolean terminal = new AtomicBoolean();
+            vk.load(activity, slot, new VkRewardedAds.Listener() {
+                @Override public void loaded() {
+                    if (terminal.get() || activeVk != vk) return;
+                    if (!vk.show() && terminal.compareAndSet(false, true))
+                        finish(result, null, "show_failed", "Не удалось показать видео VK");
+                }
+                @Override public void unavailable() {
+                    if (terminal.compareAndSet(false, true))
+                        finish(result, null, "load_failed", "VK-реклама сейчас недоступна. Попробуйте позже.");
+                }
+                @Override public void shown() { }
+                @Override public void closed() {
+                    // Some SDK versions deliver the reward callback just after
+                    // the dismissed callback. Do not deny an earned bonus due
+                    // to callback ordering; the server still credits once.
+                    MAIN.postDelayed(() -> {
+                        if (terminal.compareAndSet(false, true))
+                            finish(result, null, "not_completed", "Чтобы получить бонус, досмотрите видео до конца");
+                    }, 800);
+                }
+                @Override public void rewarded() {
+                    if (terminal.compareAndSet(false, true)) claim(attempt, result);
+                }
+            });
+        } catch (RuntimeException error) {
+            finish(result, null, "load_failed", "Не удалось запустить VK-рекламу");
+        }
     }
 
     private static void load(Activity activity, String unit, JSONObject attempt, Result result) {
@@ -113,6 +196,10 @@ final class ShellAds {
     }
 
     private static void finish(Result result, JSONObject value, String code, String message) {
-        MAIN.post(() -> { running = false; result.done(value, code, message); });
+        MAIN.post(() -> {
+            if (activeVk != null) { activeVk.destroy(); activeVk = null; }
+            running = false;
+            result.done(value, code, message);
+        });
     }
 }

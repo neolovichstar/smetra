@@ -55,6 +55,63 @@ class AssistantAdRewardTests(unittest.TestCase):
             self.assertEqual(status, 200, result)
             self.assertEqual(result["quota"]["wallet"], ai_tokens.AD_REWARD_TOKENS - 10000)
 
+    def test_vk_rewarded_slot_is_opt_in_and_legacy_yandex_is_unchanged(self):
+        import json
+        import urllib.request
+
+        token, user_id = self.account("vk-reward-owner")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {
+            "VK_REWARDED_SLOT_ID": "2106762",
+            "YANDEX_REWARDED_AD_UNIT_ID": "legacy-yandex-unit"
+        }):
+            _, legacy = self.call("/assistant/ad-reward", token=token)
+            self.assertEqual(legacy["provider"], "yandex")
+            self.assertEqual(legacy["ad_unit_id"], "legacy-yandex-unit")
+
+            def vk_call(method="GET", payload=None):
+                req = urllib.request.Request(
+                    self.base + "/api/assistant/ad-reward",
+                    json.dumps(payload).encode() if payload is not None else None,
+                    {
+                        "Authorization": "Bearer " + token,
+                        "Content-Type": "application/json",
+                        "X-Smetra-Ad-SDK": "vk-v1",
+                    },
+                    method=method,
+                )
+                with urllib.request.urlopen(req) as response:
+                    return json.load(response)
+
+            offer = vk_call()
+            self.assertEqual(offer["provider"], "vk")
+            self.assertEqual(offer["ad_unit_id"], "2106762")
+            attempt = vk_call("POST", {"operation": "start"})
+            self.assertEqual(attempt["provider"], "vk")
+            self.assertEqual(attempt["ad_unit_id"], "2106762")
+
+    def test_vk_slot_configuration_is_bounded(self):
+        import json
+        import urllib.request
+
+        token, user_id = self.account("vk-reward-invalid")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {
+            "VK_REWARDED_SLOT_ID": "not-a-slot",
+            "YANDEX_REWARDED_AD_UNIT_ID": "legacy-yandex-unit",
+        }):
+            req = urllib.request.Request(
+                self.base + "/api/assistant/ad-reward",
+                headers={
+                    "Authorization": "Bearer " + token,
+                    "X-Smetra-Ad-SDK": "vk-v1",
+                },
+            )
+            with urllib.request.urlopen(req) as response:
+                value = json.load(response)
+            self.assertEqual(value["provider"], "yandex")
+            self.assertEqual(value["ad_unit_id"], "legacy-yandex-unit")
+
     def test_rewarding_requires_real_config_and_quota_exhaustion(self):
         token, user_id = self.account("rewarded-ad-config")
         with patch.dict(os.environ, {}, clear=False):

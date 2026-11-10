@@ -96,6 +96,7 @@ final class ShellSession {
             connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("X-Smetra-Client", "android-shell/" + BuildConfig.VERSION_CODE);
+            if ("/api/assistant/ad-reward".equals(path)) connection.setRequestProperty("X-Smetra-Ad-SDK", "vk-v1");
             if (authenticated) {
                 String session = token();
                 if (session == null) return new Response(401, new JSONObject().put("error", "Войдите в аккаунт"), java.util.Collections.emptyMap());

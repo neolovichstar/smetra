@@ -70,6 +70,8 @@ gradle.taskGraph.whenReady { graph ->
 dependencies {
     implementation 'com.my.tracker:mytracker-sdk:3.6.0'
     implementation 'com.yandex.android:mobileads:8.6.0'
+    // VK Advertising Network: only opt-in rewarded placement; legacy Yandex stays available.
+    implementation 'com.my.target:mytarget-sdk:5.51.2'
     implementation 'ru.rustore.sdk:pushclient:7.5.0'
     // Hybrid shell: origin-restricted web messaging, Custom Tabs sign-in, FileProvider.
     implementation 'androidx.webkit:webkit:1.12.1'
