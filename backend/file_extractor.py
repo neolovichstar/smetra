@@ -46,6 +46,50 @@ def render_scans(content):
         document.close()
 
 
+def render_cloud_page(content, page_number):
+    """Bounded visual preview for one page of a large, private cloud PDF."""
+    if not 0 < len(content) <= 100_000_000 or not 1 <= page_number <= 300:
+        raise ValueError("size/page")
+    validate_pdf(content)
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(content)
+    try:
+        total = len(document)
+        if not 1 <= total <= 300 or page_number > total:
+            raise ValueError("page outside PDF")
+        page = document[page_number - 1]
+        try:
+            width, height = page.get_size()
+            if not all(math.isfinite(value) and 1 <= value <= 10000 for value in (width, height)):
+                raise ValueError("dimensions")
+            # A bounded pixel area avoids decompression bombs and huge RGB buffers.
+            scale = min(1.8, 1700 / max(width, height))
+            bitmap = page.render(scale=scale)
+            try:
+                picture = bitmap.to_pil().convert("RGB")
+                try:
+                    if picture.width * picture.height > 5_000_000:
+                        raise ValueError("render size")
+                    out = io.BytesIO()
+                    picture.save(out, format="JPEG", quality=78, optimize=True)
+                    encoded = out.getvalue()
+                    if len(encoded) > 1_350_000:
+                        raise ValueError("render bytes")
+                    return {
+                        "pages": [[page_number, base64.b64encode(encoded).decode("ascii")]],
+                        "total_pages": total, "truncated": total > 1,
+                    }
+                finally:
+                    picture.close()
+            finally:
+                bitmap.close()
+        finally:
+            page.close()
+    finally:
+        document.close()
+
+
 def validate_pdf(content):
     from pypdf import PdfReader
     from pypdf.generic import DictionaryObject, ArrayObject, IndirectObject
@@ -150,7 +194,7 @@ def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000, st
 def main():
     # Only the explicit cloud PDF mode may use a larger transient input.
     # Standard uploads keep their existing strict 5 MB parser limit.
-    cloud_pdf = len(sys.argv) > 1 and sys.argv[1].startswith("cloud:application/pdf")
+    cloud_pdf = len(sys.argv) > 1 and sys.argv[1].startswith(("cloud:application/pdf", "cloud-render-pdf:"))
     try:
         import resource
 
@@ -175,6 +219,14 @@ def main():
         if not 0 < len(content) <= 5_000_000:
             raise ValueError('size')
         sys.stdout.buffer.write(json.dumps(render_scans(content)).encode())
+        return
+    if sys.argv[1].startswith("cloud-render-pdf:"):
+        parts = sys.argv[1].split(":")
+        if len(parts) != 2 or not parts[1].isascii() or not parts[1].isdecimal():
+            raise ValueError("render mode")
+        requested_page = int(parts[1])
+        result = render_cloud_page(content, requested_page)
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
         return
     if sys.argv[1] == "validate-pdf":
         if not 0 < len(content) <= 5_000_000:
