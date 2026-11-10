@@ -120,16 +120,80 @@ def read_file(service, file_id, query="", page_start=1):
     )
     try:
         from backend.file_processing import isolated_extract
-        extracted = isolated_extract(content, "cloud:application/pdf:" + str(start) if mime == "application/pdf" else mime)
-        if not isinstance(extracted, dict) or not isinstance(extracted.get("pages"), list):
-            raise ValueError("invalid extractor result")
-        pages = extracted["pages"]
-        if len(pages) > 12:
-            raise ValueError("too many pages")
-    except (ValueError, TypeError, OSError, KeyError, subprocess.TimeoutExpired, MemoryError):
-        raise DomainError(422, "Не удалось безопасно прочитать облачный документ. Попробуйте текстовый PDF") from None
+
+        text_failure = None
+        extracted = None
+        try:
+            extracted = isolated_extract(
+                content,
+                "cloud:application/pdf:" + str(start) if mime == "application/pdf" else mime,
+            )
+            if not isinstance(extracted, dict) or not isinstance(extracted.get("pages"), list):
+                raise ValueError("invalid extractor result")
+            pages = extracted["pages"]
+            if len(pages) > 12:
+                raise ValueError("too many pages")
+        except (ValueError, TypeError, OSError, KeyError, subprocess.TimeoutExpired, MemoryError) as error:
+            # A parser failure is NOT evidence that this document is a scan.
+            text_failure = "timeout" if isinstance(error, subprocess.TimeoutExpired) else "text_parser_failed"
+
+        if mime == "application/pdf" and (
+            text_failure or not any(
+                isinstance(item, (list, tuple)) and len(item) == 2
+                and isinstance(item[1], str) and item[1].strip()
+                for item in (extracted or {}).get("pages", [])
+            )
+        ):
+            # The user already asked to read the PDF. Try visual reading of
+            # the requested page automatically instead of asking them to pick
+            # a technical fallback. Reuse the transient download: 55 MB plans
+            # must not be transferred a second time for the same tool call.
+            try:
+                visual = analyze_page(service, fid, page_number=start, _raw=content)
+            except DomainError as error:
+                return {
+                    "id": row["id"], "name": row["name"],
+                    "provider": connection["provider"], "folder": row["folder_name"],
+                    "excerpts": [], "pages_scanned": 0,
+                    "page_start": start, "total_pages": None,
+                    "truncated": True, "requires_visual": True,
+                    "text_status": text_failure or "no_text_on_checked_pages",
+                    "visual_status": "failed", "visual_error": error.message,
+                    "source_stored": False,
+                    "note": (
+                        "Файл найден, но текст и визуальная страница не прочитаны. "
+                        "Не утверждай, что PDF — скан или что данных в нём нет. "
+                        "Не создавай смету с выдуманными размерами. "
+                        "Сообщи конкретную ошибку визуального анализа."
+                    ),
+                }
+            return {
+                "id": row["id"], "name": row["name"],
+                "provider": connection["provider"], "folder": row["folder_name"],
+                "excerpts": [{
+                    "page": visual["page"],
+                    "text": _SECRET.sub("[секрет скрыт]", visual["analysis"][:3500]),
+                }],
+                "pages_scanned": 1, "page_start": start,
+                "total_pages": visual["total_pages"],
+                "next_page": start + 1 if start < visual["total_pages"] else None,
+                "truncated": start < visual["total_pages"],
+                "requires_ocr": False,
+                "read_mode": "visual", "source_stored": False,
+                "note": (
+                    "Страница прочитана визуально после отсутствия текстового "
+                    "слоя или сбоя текстового извлечения. Это не доказательство, "
+                    "что весь PDF — скан. Ссылайся только на реально "
+                    "проанализированную страницу. Не выдумывай размеры и цены; "
+                    "для следующей страницы используй analyze_cloud_pdf_page."
+                ),
+            }
+
+        if text_failure:
+            raise DomainError(422, "Не удалось безопасно извлечь текст облачного документа") from None
     finally:
-        # The source bytes never go to PostgreSQL, Redis or the user's file vault.
+        # Original bytes are never committed to Smetra databases, object storage
+        # or the conversation history; they stay in transient process memory.
         del content
 
     excerpts, remaining, matched = [], MAX_TOOL_TEXT, 0
@@ -172,7 +236,7 @@ def read_file(service, file_id, query="", page_start=1):
     }
 
 
-def analyze_page(service, file_id, page_number=1):
+def analyze_page(service, file_id, page_number=1, *, _raw=None):
     """Use a vision model on one cloud PDF page without storing source bytes."""
     import base64
     import json
@@ -198,7 +262,13 @@ def analyze_page(service, file_id, page_number=1):
     declared = int(row["size"])
     if not 0 < declared <= MAX_CLOUD_PDF_BYTES:
         raise DomainError(413, "PDF превышает безопасный лимит визуального анализа")
-    raw = cloud_drives._download(service.con, connection, dict(row), max_bytes=MAX_CLOUD_PDF_BYTES)
+    if _raw is not None and (
+        not isinstance(_raw, bytes) or not 0 < len(_raw) <= MAX_CLOUD_PDF_BYTES
+    ):
+        raise DomainError(413, "Недопустимый размер PDF для визуального анализа")
+    raw = (_raw if _raw is not None else cloud_drives._download(
+        service.con, connection, dict(row), max_bytes=MAX_CLOUD_PDF_BYTES
+    ))
     try:
         picture = isolated_extract(raw, "cloud-render-pdf:" + str(page))
     except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired, MemoryError):
@@ -255,7 +325,7 @@ def analyze_page(service, file_id, page_number=1):
         }, method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=28) as response:
+        with urllib.request.urlopen(request, timeout=24) as response:
             body = response.read(140_001)
         if len(body) > 140_000:
             raise ValueError("response limit")
