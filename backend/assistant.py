@@ -1490,6 +1490,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         "Тебе доступны все разделы Сметры: клиенты, задачи, лиды, заказы, финансы, строительные объекты, закупки и дефекты, документы, файлы, расценки. "
         "Для учёта материалов на объекте используй get_construction_object, get_procurement_plan и create_construction_purchase / update_construction_purchase. "
         "Облачные диски: проверь cloud_drive_status; подключение (вход в Яндекс Диск или Google Диск) пользователь проходит сам — предложи кнопку suggest_app_action connect_cloud_drive. "
+        "Чтобы найти документ в подключённых папках, вызови list_cloud_files, затем read_cloud_file по id. Не утверждай, что прочитал файл, пока инструмент не вернул текст. PDF может содержать только первые 12 прочитанных страниц; обозначай неполноту, отсутствие OCR и не подменяй измерения догадками. "
         "Если пользователь прямо просит открыть страницу, раздел Сметры, смету или калькулятор — обязательно вызови suggest_app_action с проверенным доступным действием. Клиент откроет разрешённый раздел после завершения ответа, а в истории сохранится кнопка для повторного перехода. Не утверждай, что страница открыта, если не вызывал инструмент; не придумывай ссылки и возможности. Если пользователь не просил немедленный переход, предложи кнопку suggest_app_action. Для отправки документов, оплаты и других изменяющих данные операций сохраняется отдельное подтверждение пользователя. "
         "Тариф и остаток токенов узнавай через usage_limits. Ручная правка смет никогда не тратит токены — так и объясняй."
     )
@@ -1575,7 +1576,13 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         tool_choice = _MODEL_TOOL_CHOICE.set("none" if turn == 3 else "auto")
         time_limit = _MODEL_DEADLINE.set(deadline)
         try:
-            response = query_model_stream(messages, on_delta) if on_delta else query_model(messages)
+            # Provider may emit provisional natural-language text *before* tool
+            # calls. Do not stream it: a later tool round would overwrite the
+            # visible answer with different content. Buffer each round and
+            # publish only the final verified reply.
+            final_round_deltas = []
+            response = (query_model_stream(messages, final_round_deltas.append)
+                        if on_delta else query_model(messages))
             try:
                 response = _validated_reply(response)
             except (ValueError, TypeError, RecursionError):
@@ -1593,6 +1600,11 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         answer = str(response.get("content") or "")[:12000]
         calls = response.get("tool_calls") or []
         if not calls:
+            if on_delta and not actions and not questions:
+                # These deltas belong to the committed answer, not an early
+                # thought that may be replaced after a tool call.
+                for fragment in final_round_deltas:
+                    on_delta(fragment)
             break
         if turn == 3:
             raise DomainError(502, "Ассистент не смог завершить проверку. Уточните запрос и повторите.")
@@ -1619,6 +1631,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                         "create_quotes": "Составляю смету…",
                         "material_calculator": "Считаю материалы…",
                         "cloud_drive_status": "Проверяю облачные диски…",
+                        "list_cloud_files": "Ищу файлы на подключённых дисках…",
+                        "read_cloud_file": "Читаю облачный документ без сохранения оригинала…",
                         "usage_limits": "Проверяю тариф и лимиты…",
                         "suggest_app_action": "Готовлю действие…",
                         "get_procurement_plan": "Проверяю закупки материалов…",
