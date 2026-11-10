@@ -91,13 +91,16 @@ class ProfileMemoryTests(unittest.TestCase):
                 'backend.assistant.query_model', side_effect=[injected, ungrounded, {'content': 'Готово'}]):
             self.assertEqual(self.call('/assistant/chat', 'POST', {'text': prompt}, owner)[0], 200)
         self.assertEqual(self.call('/assistant/memory', token=owner)[1]['items'], [])
-        self.call('/assistant/memory', 'POST', {'title': 'Город', 'content': 'Казань'}, owner)
+        # A separate account isolates the second threat-model scenario from
+        # the finite free-tier token wallet consumed by the first conversation.
+        forget_owner, _ = self.account('memory-injection-forget')
+        self.call('/assistant/memory', 'POST', {'title': 'Город', 'content': 'Казань'}, forget_owner)
         wipe = {'tool_calls': [{'id': 'f', 'type': 'function', 'function': {
             'name': 'forget_memory', 'arguments': '{"title":"а"}'}}]}
         with patch.dict(os.environ, OPENROUTER_API_KEY='test-only'), patch(
                 'backend.assistant.query_model', side_effect=[wipe, {'content': 'Готово'}]):
-            self.assertEqual(self.call('/assistant/chat', 'POST', {'text': prompt}, owner)[0], 200)
-        self.assertEqual(len(self.call('/assistant/memory', token=owner)[1]['items']), 1)
+            self.assertEqual(self.call('/assistant/chat', 'POST', {'text': prompt}, forget_owner)[0], 200)
+        self.assertEqual(len(self.call('/assistant/memory', token=forget_owner)[1]['items']), 1)
 
     def test_search_then_remember_confirms_saved_fact_within_tool_budget(self):
         import json
