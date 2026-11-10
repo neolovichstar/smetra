@@ -10,10 +10,10 @@ function safeAssistantDisplayText(value){
   const raw=String(value??'');
   // Backstop for historical answers and a provider that sends raw tool syntax
   // during a partial SSE frame. Never render or copy temporary cloud refs.
-  if(/<\\s*(?:tool_call\\b|function\\s*=|parameter\\s*=)/i.test(raw)){
+  if(/<\s*(?:tool_call\b|function\s*=|parameter\s*=)/i.test(raw)){
     return 'Не удалось отобразить ответ из-за ошибки формата вызова инструмента. Повторите запрос.';
   }
-  return raw.replace(/live\\.[A-Za-z0-9_-]{24,}={0,2}/g,'[временная ссылка скрыта]');
+  return raw.replace(/live\.[A-Za-z0-9_-]{24,}={0,2}/g,'[временная ссылка скрыта]');
 }
 function assistantEditValue(field,value,currency='RUB'){
   if(value===null||value===undefined||value==='')return '—';
