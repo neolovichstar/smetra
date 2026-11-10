@@ -559,9 +559,14 @@ def model_tools(messages):
     # Cloud-document estimates need a small stable toolbox, not hundreds of
     # unrelated finance, CRM, order and team schemas on every provider round.
     cloud_quote = bool(
-        re.search(r"(?i)(?:гугл|google|яндекс|yandex|drive|диск)", context)
-        and re.search(r"(?i)(?:pdf|пдф|документ|файл)", context)
-        and re.search(r"(?i)смет\w*", context)
+        (re.search(r"(?i)(?:гугл|google|яндекс|yandex|drive|диск)", context)
+         and re.search(r"(?i)(?:pdf|пдф|документ|файл)", context)
+         and re.search(r"(?i)смет\w*", context))
+        or any(
+            isinstance(call, dict) and
+            str(call.get("id", "")).startswith("server_cloud_estimate_")
+            for message in messages for call in message.get("tool_calls", [])
+        )
     )
     if cloud_quote:
         allowed = {
@@ -1824,7 +1829,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 and result.get("excerpts") for name, _, result in cloud_preflight)
     )
     for index, (name, args, result) in enumerate(cloud_preflight):
-        call_id = "server_cloud_" + str(index + 1)
+        call_id = ("server_cloud_estimate_" if requested_cloud_quote else
+                   "server_cloud_") + str(index + 1)
         messages.append({"role": "assistant", "content": None, "tool_calls": [{
             "id": call_id, "type": "function",
             "function": {"name": name, "arguments": packed(args)},

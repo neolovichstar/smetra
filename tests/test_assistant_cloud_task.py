@@ -46,13 +46,21 @@ class CurrentCloudRequestTests(unittest.TestCase):
             raise AssertionError(name)
         def provider(messages):
             model_messages.append(messages)
-            return {"content": "Изучил страницу 1 PDF. Подготовлю смету только по подтверждённым данным."}
+            if len(model_messages) == 1:
+                return {"content": "Изучил страницу 1 PDF. Подготовлю смету только по подтверждённым данным."}
+            return {"content": "", "tool_calls": [{
+                "id": "call_quote_draft", "type": "function",
+                "function": {"name": "create_quotes",
+                             "arguments": '{"title":"Дом на набережной","items":[]}'},
+            }]}
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-only"), patch(
             "backend.assistant_app_tools.read", side_effect=reader
         ), patch("backend.assistant.query_model", side_effect=provider), patch(
-            "backend.assistant_recall.automatic_history_context",
-            side_effect=AssertionError("Never replace a current PDF task with old chat recall"),
-        ):
+            "backend.assistant.prepare",
+            return_value={"id": "prepared-quote", "tool": "create_quotes",
+                          "summary": "Создать смету по дому", "arguments": {}},
+        ), patch("backend.assistant_recall.automatic_history_context",
+                 side_effect=AssertionError("Never replace a current PDF task with old chat recall")):
             status, result = self.call("/assistant/chat", "POST", {"text": phrase}, token)
         self.assertEqual(status, 200, result)
         self.assertEqual([name for name, _ in calls], ["list_cloud_files", "read_cloud_file"])
@@ -60,7 +68,11 @@ class CurrentCloudRequestTests(unittest.TestCase):
         self.assertEqual(model_messages[0][-1]["role"], "tool")
         self.assertIn("Площадь 120 м2", model_messages[0][-1]["content"])
         self.assertEqual(model_messages[0][-2]["tool_calls"][0]["function"]["name"], "read_cloud_file")
-        self.assertIn("Изучил", result["answer"])
+        self.assertIn("Подготовил изменения", result["answer"])
+        self.assertTrue(result["actions"])
+        self.assertEqual(result["actions"][0]["tool"], "create_quotes")
+        self.assertEqual(len(model_messages), 2)
+        self.assertIn("СЕЙЧАС вызови create_quotes", model_messages[1][-1]["content"])
 
     def test_cloud_estimate_uses_compact_tool_catalog_not_whole_product(self):
         from backend.assistant import model_tools, tools
@@ -74,6 +86,23 @@ class CurrentCloudRequestTests(unittest.TestCase):
         self.assertIn("material_calculator", slim)
         self.assertNotIn("delete_quotes", slim)
         self.assertLess(len(slim), len(tools()) // 2)
+
+    def test_cloud_estimate_tools_remain_slim_across_long_tool_rounds(self):
+        from backend.assistant import model_tools
+
+        messages = [{"role": "user", "content":
+                     "Найди PDF в Google Диске и сделай смету"}]
+        messages.append({"role": "assistant", "tool_calls": [{
+            "id": "server_cloud_estimate_1", "type": "function",
+            "function": {"name": "list_cloud_files", "arguments": "{}"},
+        }]})
+        messages.extend({"role": "tool", "tool_call_id": f"test-{i}",
+                         "content": "Промежуточные данные"}
+                        for i in range(20))
+        names = {item["function"]["name"] for item in model_tools(messages)}
+        self.assertIn("create_quotes", names)
+        self.assertIn("read_cloud_file", names)
+        self.assertNotIn("delete_quotes", names)
 
     def test_does_not_select_ambiguous_pdf_or_other_provider(self):
         def fake(service, name, args):
