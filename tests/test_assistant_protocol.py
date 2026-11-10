@@ -147,6 +147,45 @@ class StreamingShapeTests(unittest.TestCase):
         self.assertEqual(result["tool_calls"][0]["id"], "call-1")
         self.assertEqual(result["tool_calls"][0]["function"], {"name": "overview", "arguments": "{}"})
 
+    def test_textual_cloud_tool_call_is_executed_as_structured_read(self):
+        from backend.assistant import _validated_reply
+        import json
+
+        ref = "live.g" + "A" * 240
+        message = (
+            " <tool_call> <function=read_cloud_file> "
+            "<parameter=id>" + ref + "</parameter> "
+            "<parameter=page_start>37</parameter> </function> </tool_call>"
+        )
+        parsed = _validated_reply({"content": message})
+        self.assertEqual(parsed["content"], "")
+        self.assertEqual(len(parsed["tool_calls"]), 1)
+        tool = parsed["tool_calls"][0]["function"]
+        self.assertEqual(tool["name"], "read_cloud_file")
+        self.assertEqual(json.loads(tool["arguments"]), {"id": ref, "page_start": 37})
+
+    def test_textual_tool_call_rejects_writes_malformed_and_overlong_args(self):
+        from backend.assistant import _validated_reply
+
+        for value in (
+            "<tool_call><function=create_quotes><parameter=title>X</parameter></function></tool_call>",
+            "<tool_call><function=read_cloud_file><parameter=id>live." + "A" * 3000 + "</parameter></function></tool_call>",
+            "<tool_call><function=read_cloud_file><parameter=id>fileA</parameter><parameter=page_start>0</parameter></function></tool_call>",
+            "<tool_call><function=read_cloud_file><parameter=id>fileA</parameter><parameter=page_start>301</parameter></function></tool_call>",
+            "Ответ: <tool_call><function=read_cloud_file><parameter=id>fileA</parameter></function></tool_call>",
+        ):
+            with self.subTest(value=value[:45]), self.assertRaises(ValueError):
+                _validated_reply({"content": value})
+
+    def test_cloud_reference_is_redacted_in_final_text(self):
+        from backend.assistant import _validated_reply
+
+        ref = "live.g" + "A" * 180
+        parsed = _validated_reply({"content": "Файл: " + ref + ". Обработка продолжается."})
+        self.assertNotIn(ref, parsed["content"])
+        self.assertIn("[защищённая ссылка на файл]", parsed["content"])
+
+
     def test_budget_expiry_does_not_open_another_provider_request(self):
         from backend import assistant
 
