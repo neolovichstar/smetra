@@ -242,5 +242,97 @@ class LiveCloudSearchTests(unittest.TestCase):
         self.assertEqual(len(rendered["pages"]), 1)
 
 
+    def test_cloud_pdf_text_parser_failure_auto_uses_visual_without_refetch(self):
+        from backend import business
+
+        content = b"%PDF-private-file-bytes"
+        visual = {
+            "page": 1, "total_pages": 8,
+            "analysis": "Комната 19 м², отделка стен по плану",
+        }
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch("backend.cloud_drives._google_api", side_effect=self.google_api), patch(
+            "backend.cloud_drives._download", return_value=content
+        ) as download, patch(
+            "backend.file_processing.isolated_extract", side_effect=ValueError("extractor")
+        ) as parser, patch(
+            "backend.assistant_cloud.analyze_page", return_value=visual
+        ) as vision:
+            listed = assistant_cloud.list_files(self.service, "дом на набережной")
+            result = assistant_cloud.read_file(self.service, listed["files"][0]["id"])
+        self.assertEqual(result["read_mode"], "visual")
+        self.assertEqual(result["excerpts"][0]["page"], 1)
+        self.assertIn("19 м²", result["excerpts"][0]["text"])
+        self.assertEqual(result["next_page"], 2)
+        self.assertFalse(result["source_stored"])
+        self.assertEqual(download.call_count, 1)
+        self.assertEqual(parser.call_count, 1)
+        self.assertEqual(vision.call_args.kwargs["_raw"], content)
+        self.assertEqual(vision.call_args.kwargs["page_number"], 1)
+
+    def test_empty_text_pdf_auto_uses_visual_instead_of_asking_user(self):
+        content = b"%PDF-fake-scan"
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch("backend.cloud_drives._google_api", side_effect=self.google_api), patch(
+            "backend.cloud_drives._download", return_value=content
+        ), patch(
+            "backend.file_processing.isolated_extract",
+            return_value={"pages": [[1, ""], [2, "   "]],
+                          "truncated": True, "total_pages": 7, "next_page": 3},
+        ), patch(
+            "backend.assistant_cloud.analyze_page",
+            return_value={"page": 1, "total_pages": 7, "analysis": "Обозначена площадь 64 м²"}
+        ) as vision:
+            linked = assistant_cloud.list_files(self.service, "дом на набережной")
+            result = assistant_cloud.read_file(self.service, linked["files"][0]["id"])
+        self.assertEqual(result["read_mode"], "visual")
+        self.assertEqual(result["pages_scanned"], 1)
+        self.assertIn("64 м²", result["excerpts"][0]["text"])
+        self.assertEqual(vision.call_count, 1)
+
+    def test_when_both_parsers_fail_dont_claim_that_pdf_is_scan(self):
+        from backend import business
+
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch("backend.cloud_drives._google_api", side_effect=self.google_api), patch(
+            "backend.cloud_drives._download", return_value=b"%PDF-private"
+        ), patch(
+            "backend.file_processing.isolated_extract", side_effect=ValueError("extractor")
+        ), patch(
+            "backend.assistant_cloud.analyze_page",
+            side_effect=business.DomainError(503, "Визуальная модель не настроена")
+        ):
+            linked = assistant_cloud.list_files(self.service, "дом на набережной")
+            result = assistant_cloud.read_file(self.service, linked["files"][0]["id"])
+        self.assertEqual(result["visual_status"], "failed")
+        self.assertTrue(result["requires_visual"])
+        self.assertEqual(result["visual_error"], "Визуальная модель не настроена")
+        self.assertIn("НЕ", result["note"])
+        self.assertEqual(result["excerpts"], [])
+
+    def test_large_cloud_pdf_still_renders_and_extracts_without_recursive_validator(self):
+        import io
+        from pypdf import PdfWriter
+        from backend.file_processing import isolated_extract
+
+        writer = PdfWriter()
+        for _ in range(3):
+            writer.add_blank_page(width=595, height=842)
+        stream = io.BytesIO()
+        writer.write(stream)
+        pdf = stream.getvalue()
+        text = isolated_extract(pdf, "cloud:application/pdf:2")
+        self.assertEqual(text["total_pages"], 3)
+        self.assertEqual(text["pages"][0][0], 2)
+        self.assertEqual(text["next_page"], None)
+        self.assertEqual(len(text["pages"]), 2)
+        visual = isolated_extract(pdf, "cloud-render-pdf:1")
+        self.assertEqual(visual["pages"][0][0], 1)
+
+
+
 if __name__ == "__main__":
     unittest.main()
