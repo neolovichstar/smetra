@@ -60,12 +60,28 @@ class CloudReadTests(unittest.TestCase):
         self.assertEqual(result["excerpts"][0]["page"], 1)
         self.assertTrue(result["truncated"])
         self.assertEqual(result["pages_scanned"], 2)
-        self.assertIn("cloud:application/pdf", extractor.call_args.args)
+        self.assertIn("cloud:application/pdf:1", extractor.call_args.args)
         self.assertEqual(download.call_args.kwargs["max_bytes"], 100_000_000)
         # None of the upload tables or file vault are even present in the test DB.
         self.assertIsNone(self.con.execute(
             "SELECT name FROM sqlite_master WHERE name='file_payloads'"
         ).fetchone())
+
+    def test_can_request_later_page_windows(self):
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch(
+            "backend.cloud_drives._download", return_value=b"%PDF-data"
+        ), patch(
+            "backend.file_processing.isolated_extract",
+            return_value={"pages": [[13, "Страница 13, ведомость работ"]],
+                          "truncated": True, "total_pages": 14, "next_page": 14}
+        ) as extractor:
+            result = assistant_cloud.read_file(self.service, "f", page_start=13)
+        self.assertEqual(result["page_start"], 13)
+        self.assertEqual(result["total_pages"], 14)
+        self.assertEqual(result["next_page"], 14)
+        self.assertIn("cloud:application/pdf:13", extractor.call_args.args)
 
     def test_refuses_unlinked_or_cross_workspace_file(self):
         with patch("backend.cloud_drives._premium_access"), patch("backend.cloud_drives._download") as download:
