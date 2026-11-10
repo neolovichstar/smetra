@@ -69,6 +69,99 @@ def render_scans(content, selection=None):
         document.close()
 
 
+def cloud_pdf_preflight(content):
+    """Fast bounded preflight for externally stored large PDFs.
+
+    The regular small-file validator recursively inspects all PDF objects and
+    actions. For image-heavy 50-100 MB plans that traversal can exceed request
+    resources before even opening the first page. Cloud reads instead use
+    PDFium in an isolated, memory/CPU-limited process: no scripts, launch
+    actions, form submissions, attachments or external links are executed.
+    """
+    if not 0 < len(content) <= 100_000_000 or b"%PDF-" not in content[:1024]:
+        raise ValueError("cloud pdf header/size")
+
+
+def extract_cloud_pdf(content, start_page=1):
+    """Extract at most 12 consecutive pages via PDFium, never whole-file OCR."""
+    cloud_pdf_preflight(content)
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(content)
+    try:
+        total = len(document)
+        if not 1 <= total <= 300 or not 1 <= start_page <= total:
+            raise ValueError("cloud pdf pages")
+        pages = []
+        truncated = total > 12 or start_page > 1
+        end = min(total, start_page + 11)
+        for number in range(start_page, end + 1):
+            page = document[number - 1]
+            try:
+                textpage = page.get_textpage()
+                try:
+                    count = min(textpage.count_chars(), 12000)
+                    raw_text = textpage.get_text_range(0, count)
+                    truncated |= textpage.count_chars() > 10000
+                    normalized = " ".join(raw_text[:10000].split())
+                    pages.append([number, normalized])
+                finally:
+                    textpage.close()
+            finally:
+                page.close()
+        next_page = end + 1 if end < total else None
+        return {
+            "pages": pages, "truncated": truncated,
+            "total_pages": total, "next_page": next_page,
+        }
+    finally:
+        document.close()
+
+
+def render_cloud_page(content, page_number):
+    """Bounded visual preview for one page of a large, private cloud PDF."""
+    if not 1 <= page_number <= 300:
+        raise ValueError("page number")
+    cloud_pdf_preflight(content)
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(content)
+    try:
+        total = len(document)
+        if not 1 <= total <= 300 or page_number > total:
+            raise ValueError("page outside PDF")
+        page = document[page_number - 1]
+        try:
+            width, height = page.get_size()
+            if not all(math.isfinite(value) and 1 <= value <= 10000 for value in (width, height)):
+                raise ValueError("dimensions")
+            # A bounded pixel area avoids decompression bombs and huge RGB buffers.
+            scale = min(1.8, 1700 / max(width, height))
+            bitmap = page.render(scale=scale)
+            try:
+                picture = bitmap.to_pil().convert("RGB")
+                try:
+                    if picture.width * picture.height > 5_000_000:
+                        raise ValueError("render size")
+                    out = io.BytesIO()
+                    picture.save(out, format="JPEG", quality=78, optimize=True)
+                    encoded = out.getvalue()
+                    if len(encoded) > 1_350_000:
+                        raise ValueError("render bytes")
+                    return {
+                        "pages": [[page_number, base64.b64encode(encoded).decode("ascii")]],
+                        "total_pages": total, "truncated": total > 1,
+                    }
+                finally:
+                    picture.close()
+            finally:
+                bitmap.close()
+        finally:
+            page.close()
+    finally:
+        document.close()
+
+
 def validate_pdf(content):
     from pypdf import PdfReader
     from pypdf.generic import DictionaryObject, ArrayObject, IndirectObject
@@ -134,8 +227,8 @@ def validate_pdf(content):
     inspect(reader.trailer)
 
 
-def extract(content, mime, *, max_pdf_pages=100):
-    if not 0 < len(content) <= 5_000_000:
+def extract(content, mime, *, max_pdf_pages=100, max_content_bytes=5_000_000, start_page=1, include_total=False):
+    if not 0 < len(content) <= max_content_bytes:
         raise ValueError("size")
     pages = []
     from backend.office_documents import VIEWABLE, preview, text_sections
@@ -154,7 +247,8 @@ def extract(content, mime, *, max_pdf_pages=100):
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(content), strict=True)
-    if reader.is_encrypted or len(reader.pages) > max_pdf_pages:
+    total_pages = len(reader.pages)
+    if reader.is_encrypted or total_pages > max_pdf_pages or not 1 <= start_page <= total_pages:
         raise ValueError("pdf")
     truncated = False
     remaining = MAX_INDEX_CHARS
@@ -173,18 +267,22 @@ def extract(content, mime, *, max_pdf_pages=100):
         truncated |= len(text) > length
         pages.append((number, text[:length]))
         remaining -= len(pages[-1][1])
-    return pages, truncated
+    return (pages, truncated, total_pages) if include_total else (pages, truncated)
 
 
 def main():
+    # Only the explicit cloud PDF mode may use a larger transient input.
+    # Standard uploads keep their existing strict 5 MB parser limit.
+    cloud_pdf = len(sys.argv) > 1 and sys.argv[1].startswith(("cloud:application/pdf", "cloud-render-pdf:"))
     try:
         import resource
 
-        resource.setrlimit(resource.RLIMIT_AS, (384 * 1024 * 1024, 384 * 1024 * 1024))
-        resource.setrlimit(resource.RLIMIT_CPU, (15, 15))
+        memory = (768 if cloud_pdf else 384) * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+        resource.setrlimit(resource.RLIMIT_CPU, (25 if cloud_pdf else 15, 25 if cloud_pdf else 15))
     except ImportError:
         pass  # Windows QA: parent still enforces input/output/time bounds.
-    content = sys.stdin.buffer.read(5_000_001)
+    content = sys.stdin.buffer.read(100_000_001 if cloud_pdf else 5_000_001)
     if sys.argv[1].startswith(("validate-office:", "preview:")):
         from backend.office_documents import CSV, archive, preview
 
@@ -204,11 +302,29 @@ def main():
             raise ValueError('selection')
         sys.stdout.buffer.write(json.dumps(render_scans(content, selection)).encode())
         return
+    if sys.argv[1].startswith("cloud-render-pdf:"):
+        parts = sys.argv[1].split(":")
+        if len(parts) != 2 or not parts[1].isascii() or not parts[1].isdecimal():
+            raise ValueError("render mode")
+        requested_page = int(parts[1])
+        result = render_cloud_page(content, requested_page)
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+        return
     if sys.argv[1] == "validate-pdf":
         if not 0 < len(content) <= 5_000_000:
             raise ValueError("size")
         validate_pdf(content)
         sys.stdout.buffer.write(b'{"valid":true}')
+        return
+    if cloud_pdf:
+        parts = sys.argv[1].split(":")
+        if len(parts) not in (2, 3) or parts[:2] != ["cloud", "application/pdf"]:
+            raise ValueError("cloud mode")
+        start_page = int(parts[2]) if len(parts) == 3 else 1
+        if not 1 <= start_page <= 300:
+            raise ValueError("page bounds")
+        result = extract_cloud_pdf(content, start_page)
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
         return
     capture = sys.argv[1].startswith('capture:')
     mime = sys.argv[1].removeprefix('capture:')
