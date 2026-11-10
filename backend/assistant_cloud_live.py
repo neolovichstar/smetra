@@ -15,7 +15,7 @@ from backend import cloud_drives
 
 _TOKEN_LIFETIME = 1800
 _MAX_PROVIDER_CALLS = 3
-_MAX_RESULTS = 20
+_MAX_RESULTS = 6
 _MAX_NAME_LEN = 250
 _WORDS = re.compile(r"[^\W_]+", re.UNICODE)
 _STOP = frozenset({
@@ -156,8 +156,7 @@ def _seal(service, connection, item):
     data = {
         "v": 1, "w": service.wid, "u": service.user["id"],
         "c": connection["id"], "p": connection["provider"],
-        "f": item["provider_file_id"], "n": item["name"],
-        "m": item["mime"], "pm": item["provider_mime"], "s": item["size"],
+        "f": item["provider_file_id"],
     }
     token = cloud_drives._fernet().encrypt(json.dumps(
         data, separators=(",", ":"), ensure_ascii=False,
@@ -180,7 +179,7 @@ def search(service, query=""):
                 items, capped = _google_search(service.con, connection, terms)
             else:
                 items, capped = _yandex_search(service.con, connection, terms)
-            limited = limited or capped
+            limited = limited or capped or len(items) > _MAX_RESULTS
             items.sort(key=lambda item: _rank(item["name"], phrase, terms), reverse=True)
             for item in items[:_MAX_RESULTS]:
                 files.append({
