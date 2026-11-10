@@ -46,11 +46,60 @@ def render_scans(content):
         document.close()
 
 
+def cloud_pdf_preflight(content):
+    """Fast bounded preflight for externally stored large PDFs.
+
+    The regular small-file validator recursively inspects all PDF objects and
+    actions. For image-heavy 50-100 MB plans that traversal can exceed request
+    resources before even opening the first page. Cloud reads instead use
+    PDFium in an isolated, memory/CPU-limited process: no scripts, launch
+    actions, form submissions, attachments or external links are executed.
+    """
+    if not 0 < len(content) <= 100_000_000 or b"%PDF-" not in content[:1024]:
+        raise ValueError("cloud pdf header/size")
+
+
+def extract_cloud_pdf(content, start_page=1):
+    """Extract at most 12 consecutive pages via PDFium, never whole-file OCR."""
+    cloud_pdf_preflight(content)
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument(content)
+    try:
+        total = len(document)
+        if not 1 <= total <= 300 or not 1 <= start_page <= total:
+            raise ValueError("cloud pdf pages")
+        pages = []
+        truncated = total > 12 or start_page > 1
+        end = min(total, start_page + 11)
+        for number in range(start_page, end + 1):
+            page = document[number - 1]
+            try:
+                textpage = page.get_textpage()
+                try:
+                    count = min(textpage.count_chars(), 12000)
+                    raw_text = textpage.get_text_range(0, count)
+                    truncated |= textpage.count_chars() > 10000
+                    normalized = " ".join(raw_text[:10000].split())
+                    pages.append([number, normalized])
+                finally:
+                    textpage.close()
+            finally:
+                page.close()
+        next_page = end + 1 if end < total else None
+        return {
+            "pages": pages, "truncated": truncated,
+            "total_pages": total, "next_page": next_page,
+        }
+    finally:
+        document.close()
+
+
 def render_cloud_page(content, page_number):
     """Bounded visual preview for one page of a large, private cloud PDF."""
-    if not 0 < len(content) <= 100_000_000 or not 1 <= page_number <= 300:
-        raise ValueError("size/page")
-    validate_pdf(content)
+    if not 1 <= page_number <= 300:
+        raise ValueError("page number")
+    cloud_pdf_preflight(content)
     import pypdfium2 as pdfium
 
     document = pdfium.PdfDocument(content)
@@ -241,13 +290,8 @@ def main():
         start_page = int(parts[2]) if len(parts) == 3 else 1
         if not 1 <= start_page <= 300:
             raise ValueError("page bounds")
-        pages, truncated, total = extract(
-            content, "application/pdf", max_pdf_pages=300,
-            max_content_bytes=100_000_000, start_page=start_page, include_total=True)
-        sys.stdout.buffer.write(json.dumps(
-            {"pages": pages, "truncated": truncated, "total_pages": total,
-             "next_page": start_page + len(pages) if start_page + len(pages) <= total else None},
-            ensure_ascii=False).encode("utf-8"))
+        result = extract_cloud_pdf(content, start_page)
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
         return
     capture = sys.argv[1].startswith('capture:')
     mime = sys.argv[1].removeprefix('capture:')
