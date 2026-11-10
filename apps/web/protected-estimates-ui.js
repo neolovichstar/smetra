@@ -33,7 +33,7 @@ window.SmetraProtectedEstimates=(()=>{
   async function open(value){generation++;quote=value;owner=user;workspace=Workspace.currentWorkspaceId();
     if(!quote.published_version||quote.approval_state==='draft'){
       frame('Защитить смету',`<p class="protected-manager-intro">Сначала зафиксируйте проверенную версию. Заказчик получит именно её, даже если позже вы продолжите редактирование.</p><button class="btn primary" type="button" id="protected-publish-first">Опубликовать и настроить доступ</button>`);
-      const mine=generation;dialog.querySelector('#protected-publish-first').onclick=async event=>{event.currentTarget.disabled=true;try{if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;const result=await api('/quotes/'+quote.id+'/publish',{method:'POST',body:JSON.stringify({revision:quote.revision,review_confirmed:true})});if(active(mine)){quote=result.quote;await listing()}}catch(reason){if(active(mine))error(reason)}finally{const button=dialog?.querySelector('#protected-publish-first');if(button)button.disabled=false}};
+      const mine=generation;dialog.querySelector('#protected-publish-first').onclick=async event=>{event.currentTarget.disabled=true;try{if(window.SmetraEstimateSafety&&!(await window.SmetraEstimateSafety.confirmReview()))return;const result=await window.SmetraWorkflow.publish(quote,{revision:quote.revision,review_confirmed:true},api);if(!result)return;if(active(mine)){quote=result.quote;await listing()}}catch(reason){if(active(mine))error(reason)}finally{const button=dialog?.querySelector('#protected-publish-first');if(button)button.disabled=false}};
       return;
     }
     await listing();

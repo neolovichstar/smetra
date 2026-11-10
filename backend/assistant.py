@@ -5,6 +5,7 @@ import logging
 from contextvars import ContextVar
 import base64
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -73,6 +74,7 @@ CONSTRUCTION_WRITES = {
     # Site diary, change orders (extra works) and the act of completed works.
     "create_construction_log": ("object_id", "work_date", "work_description", "zone_id", "quantity_id", "completed_quantity", "unit", "worker_count", "workers", "comment"),
     "create_construction_change": ("object_id", "title", "description", "deadline_days", "items"),
+    "protect_construction_change": ("object_id", "change_id"),
     "create_construction_act": ("object_id",),
 }
 
@@ -493,11 +495,13 @@ def tools():
             "create_construction_defect": ("object_id", "description"),
             "create_construction_log": ("object_id", "work_date", "work_description"),
             "create_construction_change": ("object_id", "title", "items"),
+            "protect_construction_change": ("object_id", "change_id"),
             "create_construction_act": ("object_id",),
         }[action]
         if action == "create_construction_change":
             from backend.estimate_drafts import ITEM_SCHEMA
             simple = {key: ITEM_SCHEMA["properties"][key] for key in ("name", "quantity", "unit", "unit_price", "description")}
+            simple["cost_price"] = {"type": "integer", "minimum": 0, "maximum": 10000000000, "description": "Закупочная себестоимость в копейках, только из данных пользователя"}
             properties["items"] = {"type": "array", "minItems": 1, "maxItems": 100, "items": {
                 "type": "object", "properties": simple, "required": ["name", "quantity", "unit", "unit_price"], "additionalProperties": False}}
             properties["deadline_days"] = {"type": "integer", "description": "На сколько дней сдвигается срок"}
@@ -521,7 +525,40 @@ def tools():
     result.extend(app_tools(function))
     from backend.protected_estimate_tools import tools as protected_tools
     result.extend(protected_tools(function))
+    from backend.estimate_assembly_tools import tools as assembly_tools
+    result.extend(assembly_tools(function))
+    from backend.estimate_workflow_tools import tools as workflow_tools
+    result.extend(workflow_tools(function))
     return result
+
+
+def model_tools(messages):
+    """Keep optional commercial schemas out of unrelated paid model context.
+
+    This is discovery, never authorization: prepare/apply still validate every
+    tool against the complete catalog and the current workspace permissions.
+    A discovery call enables the corresponding family on the next round.
+    """
+    parts = []
+    for message in messages[-12:]:
+        if message.get("role") == "user":
+            content = message.get("content", "")
+            if isinstance(content, str):
+                parts.append(content)
+            elif isinstance(content, list):
+                parts.extend(part.get("text", "") for part in content if isinstance(part, dict))
+        for call in message.get("tool_calls", []):
+            parts.append(call.get("function", {}).get("name", ""))
+    context = " ".join(parts).casefold()
+    assembly = bool(re.search(r"сборк|технологическ|параметр|норм.{0,20}расход|assembl", context))
+    workflow = bool(re.search(r"прибыл|марж|скидк|прогноз|остат.{0,20}затрат|оставш.{0,20}расход|вариант|альтернатив|себестоимост|расценк.{0,20}факт|заверш.{0,20}заказ|forecast|discount|margin|alternative|actual_rate|actual_cost|economics", context))
+    supplement = bool(re.search(r"допработ|дополнительн.{0,20}работ|protect_construction_change", context))
+    from backend import estimate_assembly_tools as assemblies, estimate_workflow_tools as commercial
+    return [tool for tool in tools() if (
+        (assembly or tool["function"]["name"] not in (*assemblies.READ_TOOLS, *assemblies.WRITE_TOOLS) or tool["function"]["name"] == "list_estimate_assemblies")
+        and (workflow or tool["function"]["name"] not in (*commercial.READ_TOOLS, *commercial.WRITE_TOOLS) or tool["function"]["name"] == "get_estimate_economics")
+        and (supplement or tool["function"]["name"] != "protect_construction_change")
+    )]
 
 
 # Claude Haiku 5.5 (through OpenRouter) answers on every plan: it reads images,
@@ -632,7 +669,7 @@ def query_model(messages, model=None, paid_model=False):
     payload = {
         "model": model,
         "messages": messages,
-        **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": _MODEL_TOOL_CHOICE.get()}),
+        **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": model_tools(messages) + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": _MODEL_TOOL_CHOICE.get()}),
         "max_tool_calls": 4,
         "max_tokens": 3500,
         "usage": {"include": True},
@@ -682,7 +719,7 @@ def _stream_payload(model, messages, paid_model, tools_enabled=True, reasoning=T
     payload = {"model": model, "messages": messages, "max_tokens": 3500, "stream": True,
                "usage": {"include": True}, **sampling(model)}
     if tools_enabled and model != "qwen/qwen-2.5-vl-7b-instruct:free":
-        payload["tools"] = tools() + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else [])
+        payload["tools"] = model_tools(messages) + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else [])
         payload["tool_choice"] = _MODEL_TOOL_CHOICE.get()
         payload["max_tool_calls"] = 4
     if reasoning:
@@ -1018,6 +1055,13 @@ def prepare(service, name, args):
         "suggest_app_action",
         "list_protected_estimates",
         "get_protected_estimate_access",
+        "list_estimate_assemblies",
+        "preview_estimate_assembly",
+        "get_order_forecast",
+        "preview_estimate_discount",
+        "get_estimate_economics",
+        "get_actual_rates",
+        "list_estimate_alternatives",
     }
     if name not in allowed:
         raise DomainError(400, "Неизвестное действие")
@@ -1029,7 +1073,15 @@ def prepare(service, name, args):
         # Stored quote-item costs are retained privately for deterministic edits.
         args = {key: value for key, value in args.items() if key not in ("cost_price", "internal_cost")}
     from backend.protected_estimate_tools import WRITE_TOOLS as protected_writes
-    if name in protected_writes:
+    from backend.estimate_assembly_tools import WRITE_TOOLS as assembly_writes
+    from backend.estimate_workflow_tools import WRITE_TOOLS as workflow_writes
+    if name in workflow_writes:
+        from backend.estimate_workflow_tools import prepare as prepare_workflow
+        args, summary = prepare_workflow(service, name, args)
+    elif name in assembly_writes:
+        from backend.estimate_assembly_tools import prepare as prepare_assembly
+        args, summary = prepare_assembly(service, name, args)
+    elif name in protected_writes:
         from backend.protected_estimate_tools import prepare as prepare_protected
         args, summary = prepare_protected(service, name, args)
     elif name == "save_calculation_rule":
@@ -1106,6 +1158,26 @@ def prepare(service, name, args):
                 {"field": "deadline_days", "before": None, "after": values["deadline_days"]},
             ]}
             summary = "Допработы · " + values["title"][:90]
+        elif name == "protect_construction_change":
+            service.write_access(True)
+            change = service.get("construction_changes", string(args.get("change_id", ""), "Допработы", 80, True))
+            if change["object_id"] != args.get("object_id"):
+                raise DomainError(404, "Допработы не найдены")
+            from backend.quote_integrity import fingerprint
+            args["source_sha256"] = fingerprint(dict(change))
+            from backend.construction_changes import protected_preview
+            reviewed = protected_preview(service, change)
+            args["low_margin_confirmed"] = reviewed["below_minimum"]
+            args["_preview"] = {"kind": "fields", "rows": [
+                {"field": "Допработы", "before": None, "after": change["title"]},
+                {"field": "Сумма, коп.", "before": None, "after": change["amount_kopecks"]},
+                {"field": "Дополнительные дни", "before": None, "after": change["deadline_days"]},
+                {"field": "Действие", "before": None, "after": "Опубликовать проверенную версию. Отправка получателю настраивается отдельно."},
+            ]}
+            summary = "Защищённое согласование допработ · " + change["title"][:80]
+            if reviewed["below_minimum"]:
+                args["_preview"]["rows"].append({"field": "Низкая маржа", "before": reviewed["minimum_margin_pct"] + "% минимум",
+                    "after": reviewed["margin_pct"] + "% фактически. Подтверждая публикацию, разрешаю маржу ниже минимума."})
         elif name == "create_construction_act":
             obj = service.get("construction_objects", args["object_id"])
             summary = "Акт выполненных работ по фактическим объёмам · " + obj["name"][:80]
@@ -1146,6 +1218,14 @@ def prepare(service, name, args):
             + ": "
             + record["title"]
         )
+        if name == "publish_quote" and service.finance_visible():
+            from backend.estimate_workflow import economics, margin_policy
+            quote = service.quote_view(record)
+            result = economics(quote["items"], quote["amount_kopecks"], quote["internal_cost"], margin_policy(service))
+            if result["below_minimum"]:
+                args["low_margin_confirmed"] = True
+                args["_preview"] = {"kind": "fields", "rows": [{"field": "Подтверждение низкой маржи", "before": result["minimum_margin_pct"] + "% минимум",
+                    "after": result["margin_pct"] + "% фактически. Нажимая «Применить», подтверждаю публикацию ниже минимума."}]}
     elif name == "create_quotes":
         # A new estimate from scratch: strict validation, sections and a
         # server-computed preview the editor can show before confirmation.
@@ -1281,7 +1361,9 @@ def _confirm(service, action_id):
         args = json.loads(row["arguments"])
         name = row["tool"]
         from backend.protected_estimate_tools import WRITE_TOOLS as protected_writes
-        if name in protected_writes:
+        from backend.estimate_assembly_tools import WRITE_TOOLS as assembly_writes
+        from backend.estimate_workflow_tools import WRITE_TOOLS as workflow_writes
+        if name in (*protected_writes, *assembly_writes, *workflow_writes):
             service.write_access(True)
         if not service.finance_visible() and (
             name == "create_expenses" or any(key in args for key in ("cost_price", "internal_cost"))
@@ -1304,7 +1386,11 @@ def _confirm(service, action_id):
             # normalization. Keep those actions confirmable after upgrading.
             args["client"] = "Клиент не указан"
         resource_undo = None
-        if name in protected_writes:
+        if name in workflow_writes:
+            kind, parts, method = "estimate-workflow", [], "POST"
+        elif name in assembly_writes:
+            kind, parts, method = "assemblies", [], "POST"
+        elif name in protected_writes:
             kind, parts, method = "protected-links", [], "POST"
         elif name == "save_calculation_rule":
             # The subscription and managerial write permission are rechecked at
@@ -1348,10 +1434,17 @@ def _confirm(service, action_id):
                 "create_construction_defect": ["objects", object_id, "defects"],
                 "create_construction_log": ["objects", object_id, "logs"],
                 "create_construction_change": ["objects", object_id, "changes"],
+                "protect_construction_change": ["objects", object_id, "changes", args.get("change_id"), "protect"],
                 "create_construction_act": ["objects", object_id, "act"],
             }
             if name == "create_construction_act":
                 # Confirming this proposal in the chat is the review the act requires.
+                args["review_confirmed"] = True
+            if name == "protect_construction_change":
+                from backend.quote_integrity import fingerprint
+                current = service.get("construction_changes", args.pop("change_id"))
+                if fingerprint(dict(current)) != args.pop("source_sha256"):
+                    raise DomainError(409, "Допработы изменились. Обновите предложение ассистента")
                 args["review_confirmed"] = True
             kind, parts = "construction", paths[name]
             method = "PATCH" if name == "update_construction_purchase" else "POST"
@@ -1383,7 +1476,13 @@ def _confirm(service, action_id):
             if "Idempotency-Key" in service.h.headers:
                 del service.h.headers["Idempotency-Key"]
             service.h.headers["Idempotency-Key"] = action_id
-        if name in protected_writes:
+        if name in workflow_writes:
+            from backend.estimate_workflow_tools import apply as apply_workflow
+            status, result = apply_workflow(service, name, args)
+        elif name in assembly_writes:
+            from backend.estimate_assembly_tools import apply as apply_assembly
+            status, result = apply_assembly(service, name, args)
+        elif name in protected_writes:
             from backend.protected_estimate_tools import apply as apply_protected
             status, result = apply_protected(service, name, args)
         elif name in ("rename_file", "move_file", "create_document"):
@@ -1542,7 +1641,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     personal_context = assistant_context(service)
     previous, compacted, context_stats = build_chat_context(
         service, conversation_id, prompt, system, personal_context, rules, "",
-        tool_schemas=tools(),
+        tool_schemas=model_tools([{"role": "user", "content": prompt}]),
     )
     # Old conversations are searched separately, scoped to the same user and
     # workspace. Keep automatic recall small and always honour memory opt-out.
@@ -1591,7 +1690,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
         # request-local excerpts, keeping latest tool replies and call IDs.
         from backend.context_window import enforce_round_budget
 
-        enforce_round_budget(messages, tools())
+        enforce_round_budget(messages, model_tools(messages))
         if on_status and remembered_status is None:
             on_status("Анализирую запрос…")
         selection = _MODEL_CONTEXT.set((model, paid_model, on_source))
@@ -1608,7 +1707,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
             _MODEL_TOOL_CHOICE.reset(tool_choice)
             _MODEL_DEADLINE.reset(time_limit)
         usage=response.pop('_usage',None)
-        ai_tokens.note_usage(usage, {"messages": messages, "tools": tools()},
+        ai_tokens.note_usage(usage, {"messages": messages, "tools": model_tools(messages)},
                              json.dumps(response, ensure_ascii=False, default=str))
         known=isinstance(usage,dict) and type(usage.get('prompt_tokens')) is int and type(usage.get('completion_tokens')) is int
         service.con.execute('INSERT INTO ai_usage(id,workspace_id,user_id,action,model,status,input_tokens,output_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -1721,6 +1820,12 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 elif name in ("list_protected_estimates", "get_protected_estimate_access"):
                     from backend.protected_estimate_tools import read as read_protected
                     result = read_protected(service, name, args)
+                elif name in ("list_estimate_assemblies", "preview_estimate_assembly"):
+                    from backend.estimate_assembly_tools import read as read_assembly
+                    result = read_assembly(service, name, args)
+                elif name in ("get_order_forecast", "preview_estimate_discount", "get_estimate_economics", "get_actual_rates", "list_estimate_alternatives"):
+                    from backend.estimate_workflow_tools import read as read_workflow
+                    result = read_workflow(service, name, args)
                 elif name in app_tools.READ_TOOLS:
                     result = app_tools.read(service, name, args)
                 elif name in app_tools.CLIENT_TOOLS:

@@ -1,0 +1,68 @@
+/* No provider calls: real local UI/API for commercial decisions and own rates. */
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const {chromium}=require(process.env.SMETRA_PLAYWRIGHT_MODULE||'playwright');
+const fixture=JSON.parse(fs.readFileSync('data/protected-estimates-fixture.json','utf8'));
+assert.equal(new URL(fixture.base).hostname,'127.0.0.1');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.SMETRA_CHROME_PATH,args:['--no-sandbox']}),errors=[];
+ try{
+  const context=await browser.newContext({viewport:{width:1440,height:1000}});
+  await context.addCookies([{name:'session',value:fixture.owner.token,url:fixture.base,httpOnly:true,sameSite:'Lax'}]);
+  const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(fixture.base+'/app#quotes');await page.locator('[data-work="quote"]').first().waitFor();
+  const api=(path,body,method='GET')=>page.evaluate(async({path,body,method})=>{const response=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(!response.ok)throw Error(response.status+': '+result.error);return result},{path,body,method});
+  const quote=(await api('/quotes',{title:'Проверка скидки и вариантов',client:'Тестовый заказчик',items:[{name:'Работы',quantity:'1',unit:'м²',unit_price:12000000,cost_price:10000000}]},'POST')).quote;
+  await page.evaluate(id=>window.Workspace.openQuote(id),quote.id);
+  await page.getByRole('button',{name:'Проверить скидку',exact:true}).click();
+  let dialog=page.locator('#workspace-dialog');
+  await dialog.locator('summary').click();await dialog.locator('[name=minimum_margin_pct]').fill('10');
+  await Promise.all([page.waitForResponse(r=>r.url().includes('/margin-policy')&&r.request().method()==='PATCH'),dialog.getByRole('button',{name:'Сохранить минимум',exact:true}).click()]);
+  await dialog.getByRole('button',{name:'Рассчитать',exact:true}).click();await dialog.locator('[data-workflow-apply]').waitFor();
+  assert.equal((await api('/quotes/'+quote.id)).quote.amount_kopecks,12000000,'preview is read-only');
+  await dialog.locator('[data-low-margin]').check();await dialog.locator('[data-workflow-apply]').click();await dialog.waitFor({state:'hidden'});
+  let current=(await api('/quotes/'+quote.id)).quote;assert.equal(current.amount_kopecks,10800000);assert.equal(current.internal_cost,10000000);
+  await page.getByRole('button',{name:'Варианты предложения',exact:true}).click();
+  await dialog.locator('[name=discount_0]').fill('5');await dialog.locator('[name=discount_1]').fill('10');
+  await dialog.getByRole('button',{name:'Рассчитать',exact:true}).click();await dialog.locator('[data-workflow-apply]').waitFor();await dialog.locator('[data-workflow-apply]').click();await dialog.waitFor({state:'hidden'});
+  const variants=(await api('/estimate-workflow/alternatives/'+quote.id)).quotes;assert.equal(variants.length,3);assert(variants.every(q=>q.protection_enabled));
+  const project=(await api('/projects',{name:'Прогноз по факту',amount_kopecks:12000000,internal_cost:10000000},'POST')).item;
+  await page.evaluate(id=>window.Workspace.openEntity('projects',id),project.id);
+  await page.getByRole('button',{name:'Прогноз до завершения',exact:true}).click();
+  await dialog.locator('[name=remaining_cost]').fill('50000');await dialog.locator('[name=committed_cost]').fill('30000');
+  await dialog.getByRole('button',{name:'Проверить прогноз',exact:true}).click();await dialog.locator('[data-workflow-apply]').waitFor();
+  await dialog.locator('[data-workflow-apply]').click();await dialog.waitFor({state:'hidden'});
+  const forecast=await api('/estimate-workflow/forecast/'+project.id);assert.equal(forecast.finance.estimate_at_completion,5000000);assert.equal(forecast.finance.forecast_profit,7000000);
+  await page.evaluate(id=>window.Workspace.openActualRates(id),fixture.workflow.object_id);
+  let material=dialog.locator('.workflow-rate').filter({hasText:'Плиточный клей'});
+  await material.getByRole('button',{name:'Подтвердить перенос в каталог',exact:true}).click();
+  await page.getByRole('button',{name:'Подтвердить расценку',exact:true}).click();
+  await page.waitForResponse(r=>r.url().includes('/estimate-workflow/rates/')&&r.request().method()==='GET');
+  let work=dialog.locator('.workflow-rate').filter({hasText:'Укладка плитки'});
+  await work.locator('summary').click();await work.locator('input[type=number]').fill('1000');await work.locator('textarea').fill('Оплата бригады за выполненные 10 м² по внутреннему учёту');
+  await work.getByRole('button',{name:'Проверить и сохранить факт',exact:true}).click();
+  await page.getByRole('button',{name:'Сохранить факт',exact:true}).click();
+  await page.waitForResponse(r=>r.url().includes('/estimate-workflow/rates/')&&r.request().method()==='GET');
+  const rates=(await api('/estimate-workflow/rates/'+fixture.workflow.object_id)).items;
+  assert.equal(rates.find(row=>row.kind==='material').cost_price,16000);
+  assert.equal(rates.find(row=>row.kind==='work').cost_price,10000);
+  const learned=(await api('/catalog')).items.find(item=>item.name==='Плиточный клей');assert.equal(learned.price,0);assert.equal(learned.cost_price,16000);
+  for(const theme of ['dark','light'])for(const width of [320,390,768,1440]){await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'workflow width '+width)}
+  await dialog.locator('[data-cancel]').click();await dialog.waitFor({state:'hidden'});
+  const change=(await api('/construction/objects/'+fixture.workflow.open_object_id+'/changes',{title:'Дополнительная розетка',deadline_days:3,items:[{name:'Установка розетки',quantity:'1',unit_price:100000,cost_price:40000}]},'POST')).change;
+  await page.evaluate(async id=>{await window.SmetraLoadFeature('construction');await window.SmetraConstruction.openObject(id)},fixture.workflow.open_object_id);
+  await page.locator('[data-change-protect="'+change.id+'"]').click();
+  await page.getByRole('button',{name:'Проверено — опубликовать',exact:true}).click();
+  const manager=page.locator('.protected-manager');await manager.getByRole('button',{name:'Создать защищённую ссылку',exact:true}).click();
+  await manager.locator('[name=recipient_name]').fill('Подтверждённый получатель');await manager.locator('[name=recipient_email]').fill(fixture.recipient.email);
+  await manager.getByRole('button',{name:'Создать защищённую ссылку',exact:true}).click();
+  await manager.getByRole('heading',{name:'Ссылка готова',exact:true}).waitFor();
+  const url=await manager.getByRole('textbox',{name:'Защищённая ссылка для заказчика',exact:true}).inputValue();
+  const recipient=await browser.newContext({viewport:{width:390,height:844}});await recipient.addCookies([{name:'session',value:fixture.recipient.token,url:fixture.base,httpOnly:true,sameSite:'Lax'}]);
+  const customer=await recipient.newPage();customer.on('pageerror',error=>errors.push(error.message));await customer.goto(url);
+  await customer.getByRole('button',{name:'Принять предложение',exact:true}).click();const confirmation=customer.locator('#protected-decision-dialog');await confirmation.locator('input[type=checkbox]').check();await confirmation.getByRole('button',{name:'Подтвердить решение',exact:true}).click();
+  await customer.locator('.protected-status').filter({hasText:'Принята'}).waitFor();
+  const amended=(await api('/projects/'+fixture.workflow.open_project_id)).item;assert.equal(amended.amount_kopecks,1100000);assert.equal(amended.due_date,'2026-12-04');assert.equal(amended.stages.length,1);
+  assert.deepEqual(errors,[]);
+  console.log('PASS: discount/low margin, alternatives, forecast, factual rates, protected supplements/verified acceptance/budget/deadline, 320/390/768/1440px and dark/light');
+ }finally{await browser.close()}
+})().catch(error=>{console.error(error);process.exitCode=1});

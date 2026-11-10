@@ -85,12 +85,16 @@ def workspace_plan_row(con: Any, workspace_id: str, now: int) -> Any:
     if PLAN_TIER.get(str(value["plan"]), "starter") == "starter" and value["legacy_until"] > now:
         import uuid
         personal = str(uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + value["owner_id"]))
-        bound = con.execute(
-            "SELECT 1 FROM billing_intents b JOIN payments p ON p.id=b.payment_id "
-            "WHERE b.user_id=? AND b.workspace_id IS NOT NULL AND p.status='succeeded' "
-            "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') LIMIT 1",
-            (value["owner_id"],),
-        ).fetchone()
+        if getattr(con, "runtime", False):
+            # The scoped runtime must never receive access to raw payments.
+            bound = con.execute("SELECT smetra.runtime_workspace_has_bound_payment(?)", (workspace_id,)).fetchone()[0]
+        else:
+            bound = con.execute(
+                "SELECT 1 FROM billing_intents b JOIN payments p ON p.id=b.payment_id "
+                "WHERE b.user_id=? AND b.workspace_id IS NOT NULL AND p.status='succeeded' "
+                "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') LIMIT 1",
+                (value["owner_id"],),
+            ).fetchone()
         if workspace_id == personal and not bound:
             value.update(plan="pro", subscription_status="active", entitlement_until=value["legacy_until"])
     return value

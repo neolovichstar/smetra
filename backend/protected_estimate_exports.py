@@ -64,6 +64,8 @@ def pdf(document):
              p(f"{document['number']} · версия {document['version']} · {date}", small)]
     if document.get("recipient"):
         story.append(p("Для: " + document["recipient"]))
+    if document.get("alternative_label"):
+        story.append(p("Вариант: " + document["alternative_label"]))
     headers, rows = _columns(document)
     if rows:
         formatted = [[p(value if not isinstance(value, Decimal) else f"{value:,.2f}".replace(",", " "), small)
@@ -81,6 +83,10 @@ def pdf(document):
     story.extend([Spacer(1, 20), p("Итого: " + total, heading)])
     if document.get("due_date"):
         story.append(p("Срок: " + document["due_date"]))
+    from backend.estimate_assemblies import SCOPE_LABELS
+    for key, label in SCOPE_LABELS.items():
+        if entries := document.get("scope", {}).get(key):
+            story.extend([p(label), *[p("• " + entry) for entry in entries]])
     story.extend([p(document.get("terms", "")), p(document.get("notice", ""), small), p(document["decision_notice"], small)])
 
     def page(canvas, pdfdoc):
@@ -114,12 +120,18 @@ def xlsx(document):
     sheet.title = "Предложение"
     headers, rows = _columns(document)
     values = [[document["contractor"]], [document["title"]],
-              [document["number"], "Версия", document["version"]],
+              [document["number"], "Версия", document["version"], document.get("alternative_label", "")],
               [document.get("watermark", "")], [], headers, *rows, [],
               ["Итого", Decimal(document["amount_kopecks"]) / 100, document["currency"]],
               [document.get("terms", "")], [document.get("notice", "")], [document["decision_notice"]]]
     for row in values:
         sheet.append(row)
+    from backend.estimate_assemblies import SCOPE_LABELS
+    for key, label in SCOPE_LABELS.items():
+        if entries := document.get("scope", {}).get(key):
+            sheet.append([label])
+            for entry in entries:
+                sheet.append([entry])
     # User-controlled text is always an XLSX string, even if it starts with '='.
     for row in sheet:
         for cell in row:

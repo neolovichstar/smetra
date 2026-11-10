@@ -177,6 +177,8 @@ def detail(service, obj):
             (obj["project_id"], service.wid),
         ).fetchone()
     approved_changes = sum(item["amount_kopecks"] for item in changes if item["status"] == "approved")
+    if base_quote and not obj["quote_id"]:
+        base_quote = {"amount_kopecks": base_quote["amount_kopecks"] - sum(item["amount_kopecks"] for item in changes if item.get("budget_applied_at"))}
     latest_price_batch = service.con.execute(
         "SELECT id,created_at,undone_at FROM construction_price_batches "
         "WHERE object_id=? AND workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 1",
@@ -187,6 +189,8 @@ def detail(service, obj):
         "quantities": quantities, "defects": defects, "daily_logs": logs,
         "purchases": purchases, "procurement": procurement,
         "changes": changes,
+        "finance_visible": service.finance_visible(),
+        "rates_available": bool(obj["project_id"] and service.role in ("owner", "admin", "manager") and service.con.execute("SELECT 1 FROM projects WHERE id=? AND workspace_id=? AND status='completed'", (obj["project_id"], service.wid)).fetchone()),
         "latest_price_batch": dict(latest_price_batch) if latest_price_batch else None,
         "scope": {"base_quote_kopecks": base_quote["amount_kopecks"] if base_quote else None,
                   "approved_changes_kopecks": approved_changes,

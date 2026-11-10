@@ -108,6 +108,7 @@ def pdf(document):
         Spacer(1, 22),
         p(f"{document['name']} № {document['number']}", heading),
         p(data["title"], label),
+        p("Вариант: " + data["alternative_label"]) if data.get("alternative_label") else Spacer(1, 1),
         p("Клиент: " + data["client"]),
         p(data.get("company_details", "")),
         Spacer(1, 12),
@@ -187,6 +188,10 @@ def pdf(document):
         ]
     else:
         story += [p(data.get("terms", ""))]
+    from backend.estimate_assemblies import SCOPE_LABELS
+    for key, title in SCOPE_LABELS.items():
+        if entries := data.get("scope", {}).get(key):
+            story += [p(title, label), *[p("• " + entry) for entry in entries]]
     if data.get("ai_generated") is True or str(data.get("ai_generated", 0)) == "1":
         story += [
             Spacer(1, 12),
@@ -307,7 +312,7 @@ def prepare_document(service, data):
     snapshot.pop("profit", None)
     snapshot.pop("custom_fields", None)
     for item in snapshot.get("items", []):
-        for key in ("cost_price", "internal_cost", "markup"):
+        for key in ("cost_price", "internal_cost", "markup", "assembly"):
             item.pop(key, None)
     number = con.execute(
         "SELECT coalesce(max(number),0)+1 FROM documents WHERE workspace_id=?",

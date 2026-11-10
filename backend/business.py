@@ -36,6 +36,12 @@ FINANCE_KEYS = frozenset((
     "overrun", "overruns", "orders_with_costs", "orders_without_costs", "expenses",
     "planned_cost_kopecks", "cost_kopecks", "actual_cost_kopecks",
     "procurement_budget",
+    "cost_forecast", "remaining_cost", "committed_cost", "uncommitted_cost", "estimate_at_completion", "forecast_basis", "forecast_updated_at", "forecast_stale",
+    "actual_cost_data", "actual_rate_source",
+    "budget_only_orders",
+    "cost_complete",
+    "calculation_json",
+    "assembly",
 ))
 FINANCE_ROLES = ("owner", "admin", "manager")
 
@@ -60,7 +66,10 @@ def without_finance(value):
     if isinstance(value, dict):
         if finance_detail(value):
             return {}
-        return {k: without_finance(v) for k, v in value.items() if k not in FINANCE_KEYS}
+        result = {k: without_finance(v) for k, v in value.items() if k not in FINANCE_KEYS}
+        if value.get("assembly") and value.get("line_id"):
+            result["quantity_locked"] = True
+        return result
     if isinstance(value, list):
         return [without_finance(v) for v in value if not finance_event(v) and not finance_detail(v)]
     return value
@@ -224,6 +233,9 @@ def calculate(items, *, allow_zero_total=False):
         )
         if "kind" in item:
             row["kind"] = choice(item["kind"], ("work", "service", "material", "equipment", "other"), "Тип позиции")
+        if "assembly" in item:
+            from backend.estimate_assemblies import source
+            row["assembly"] = source(item["assembly"], quantity)
         # Product presentation metadata is allow-listed; it never participates in quote math.
         metadata_strings = {
             'product_source_id': 100, 'product_title': 300, 'product_brand': 160,
@@ -268,6 +280,13 @@ def calculate(items, *, allow_zero_total=False):
         if included:
             total += subtotal
             cost += cost_total
+    sources = {}
+    for row in result:
+        if source := row.get("assembly"):
+            group = {key: value for key, value in source.items() if key != "expression"}
+            if source["instance_id"] in sources and sources[source["instance_id"]] != group:
+                raise DomainError(409, "Параметры связанных позиций различаются. Пересчитайте сборку целиком")
+            sources[source["instance_id"]] = group
     integer(total, "Итоговая стоимость", 0 if allow_zero_total else 1)
     integer(cost, "Общая себестоимость")
     return result, total, cost
@@ -494,6 +513,10 @@ def migrate(con):
         "files": {"index_status": "TEXT NOT NULL DEFAULT 'legacy'", "index_hash": "TEXT NOT NULL DEFAULT ''", "index_error": "TEXT NOT NULL DEFAULT ''", "index_truncated": "INTEGER NOT NULL DEFAULT 0", "index_pages": "INTEGER NOT NULL DEFAULT 0", "index_method": "TEXT NOT NULL DEFAULT 'text'"},
         "assistant_jobs": {"kind": "TEXT NOT NULL DEFAULT 'chat'", "file_id": "TEXT REFERENCES files(id) ON DELETE CASCADE", "source_sha256": "TEXT NOT NULL DEFAULT ''"},
         "ai_usage": {"draft_claimed_at": "INTEGER"},
+        "construction_changes": {"protected_quote_id": "TEXT REFERENCES quotes(id)", "internal_cost": "INTEGER NOT NULL DEFAULT 0", "budget_applied_at": "INTEGER", "calculation_json": "TEXT NOT NULL DEFAULT '[]'"},
+        "projects": {"cost_forecast": "TEXT NOT NULL DEFAULT '{}'"},
+        "construction_quantities": {"actual_cost_data": "TEXT NOT NULL DEFAULT '{}'"},
+        "catalog_items": {"actual_rate_source": "TEXT NOT NULL DEFAULT ''"},
     }.items():
         present = {row["name"] for row in con.execute("PRAGMA table_info("+table+")")}
         for name, definition in additions.items():
@@ -507,6 +530,9 @@ def migrate(con):
         "published_version": "INTEGER NOT NULL DEFAULT 0",
         "approval_state": "TEXT NOT NULL DEFAULT 'draft'",
         "terms": "TEXT NOT NULL DEFAULT ''",
+        "scope": "TEXT NOT NULL DEFAULT '{}'",
+        "alternative_root_id": "TEXT REFERENCES quotes(id)",
+        "alternative_label": "TEXT NOT NULL DEFAULT ''",
         "due_date": "TEXT NOT NULL DEFAULT ''",
         "expires_at": "INTEGER",
         "internal_cost": "INTEGER NOT NULL DEFAULT 0",
@@ -521,10 +547,14 @@ def migrate(con):
         "protection_enabled": "INTEGER NOT NULL DEFAULT 0 CHECK(protection_enabled IN (0,1))",
     }
     existing = {r["name"] for r in con.execute("PRAGMA table_info(quotes)")}
+    template_columns = {r["name"] for r in con.execute("PRAGMA table_info(estimate_templates)")}
+    if "template_kind" not in template_columns:
+        con.execute("ALTER TABLE estimate_templates ADD COLUMN template_kind TEXT NOT NULL DEFAULT 'quote'")
     with transaction(con):
         for key, definition in columns.items():
             if key not in existing:
                 con.execute(f"ALTER TABLE quotes ADD COLUMN {key} {definition}")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_quote_alternative_selection ON quotes(workspace_id,alternative_root_id) WHERE alternative_root_id IS NOT NULL AND approval_state='approved'")
         for user in con.execute(
             "SELECT * FROM users WHERE deleted_at IS NULL"
         ).fetchall():
@@ -849,10 +879,10 @@ class Service:
             # line identifiers. It is NOT a bearer token or an auth credential.
             from backend.quote_integrity import fingerprint
             version_sha256 = fingerprint(result)
-            for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "ai_generated", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by"):
+            for key in ("id", "client_id", "internal_cost", "custom_fields", "revision", "created_at", "updated_at", "itemized", "ai_generated", "view_count", "first_viewed_at", "sent_at", "approved_at", "approved_by", "cost_complete", "alternative_root_id"):
                 result.pop(key, None)
             for item in result.get("items", []):
-                for key in ("cost_price", "internal_cost", "markup", "line_id"):
+                for key in ("cost_price", "internal_cost", "markup", "line_id", "assembly"):
                     item.pop(key, None)
             result["snapshot_sha256"] = version_sha256
         else:
@@ -882,6 +912,9 @@ class Service:
             )
             result = {k: row[k] for k in keys}
             result["custom_fields"] = json.loads(row["custom_fields"])
+            result["scope"] = json.loads(row["scope"])
+            result["alternative_root_id"] = row["alternative_root_id"]
+            result["alternative_label"] = row["alternative_label"]
             result["items"] = (
                 prefetched_items
                 if prefetched_items is not None
@@ -896,7 +929,8 @@ class Service:
             protected = bool(row["protection_enabled"]) if "protection_enabled" in row.keys() else False
             result["protection_enabled"] = protected
             result["public_url"] = None if protected else self.origin + "/?quote=" + row["public_token"]
-            result["profit"] = row["amount_kopecks"] - row["internal_cost"]
+            result["cost_complete"] = bool(result["items"]) and all(item.get("cost_price", 0) > 0 for item in result["items"] if item.get("included", True))
+            result["profit"] = row["amount_kopecks"] - row["internal_cost"] if result["cost_complete"] else None
         state = row["approval_state"]
         if (
             row["expires_at"]
@@ -913,6 +947,8 @@ class Service:
 
     def quote_data(self, data, old=None):
         result = {}
+        from backend.estimate_assemblies import scope
+        result["scope"] = packed(scope(data.get("scope", json.loads(old["scope"]) if old else {})))
         previously_ai_generated = bool(old["ai_generated"]) if old is not None and "ai_generated" in old.keys() else False
         requested_ai_generated = data.get("ai_generated") is True or (
             type(data.get("ai_generated")) is int and data.get("ai_generated") == 1
@@ -967,8 +1003,10 @@ class Service:
                 items = carry_identities(previous_items, items, data["items"])
             if not visible:
                 stored = {item.get("line_id"): item.get("cost_price", 0) for item in previous_items}
+                sources = {item.get("line_id"): item["assembly"] for item in previous_items if item.get("assembly")}
                 items, total, cost = calculate([
-                    {**item, "cost_price": stored.get(item["line_id"], 0)} for item in items
+                    {**item, "cost_price": stored.get(item["line_id"], 0),
+                     **({"assembly": sources[item["line_id"]]} if item["line_id"] in sources else {})} for item in items
                 ], allow_zero_total=allow_zero)
             result.update(amount_kopecks=total, internal_cost=cost, itemized=1)
         elif old and old["itemized"]:
@@ -1147,6 +1185,8 @@ class Service:
         if row["approval_state"] in ("sent", "viewed"):
             raise DomainError(409, "Эта версия уже отправлена")
         snapshot = self.quote_view(row)
+        from backend.estimate_workflow import publication_guard
+        publication_guard(self, snapshot, data)
         if row["amount_kopecks"] <= 0 or (row["itemized"] and any(
             item.get("unit_price", 0) <= 0 for item in snapshot.get("items", [])
         )):
@@ -1633,6 +1673,8 @@ class Service:
             }
         if method == "DELETE":
             self.write_access(True)
+            if row["alternative_root_id"] or self.con.execute("SELECT 1 FROM construction_changes WHERE protected_quote_id=? AND workspace_id=?", (row["id"], self.wid)).fetchone():
+                raise DomainError(409, "Сохраните варианты и согласованные допработы для истории. Доступ можно отозвать")
             if self.con.execute(
                 "SELECT 1 FROM projects WHERE quote_id=?", (row["id"],)
             ).fetchone():
@@ -1651,11 +1693,13 @@ class Service:
             name = string(data.get("name", row["title"]), "Название", 120, True)
             tid = identity()
             self.con.execute(
-                "INSERT INTO estimate_templates VALUES(?,?,?,?,?)",
+                "INSERT INTO estimate_templates(id,workspace_id,name,snapshot,created_at) VALUES(?,?,?,?,?)",
                 (tid, self.wid, name, packed(self.quote_view(row)), stamp()),
             )
             return 201, {"id": tid}
         if method == "POST" and action == "project":
+            if self.con.execute("SELECT 1 FROM construction_changes WHERE protected_quote_id=? AND workspace_id=?", (row["id"], self.wid)).fetchone():
+                raise DomainError(409, "Допработы относятся к существующему заказу")
             if row["approval_state"] != "approved":
                 raise DomainError(409, "Сначала согласуйте смету")
             previous = self.con.execute(
@@ -1715,6 +1759,10 @@ class Service:
             )
             self.emit("quote", row["id"], "Статус изменён", status)
         elif method == "PATCH" and action in ("", "autosave"):
+            from backend.estimate_workflow import alternative_guard
+            alternative_guard(self.con, row)
+            if self.con.execute("SELECT 1 FROM construction_changes WHERE protected_quote_id=? AND workspace_id=?", (row["id"], self.wid)).fetchone():
+                raise DomainError(409, "Опубликованные допработы неизменяемы. Создайте новую версию в объекте")
             if not action:
                 self.check_revision(row, data)
             if row["approval_state"] == "approved":
@@ -1797,7 +1845,7 @@ class Service:
                     from backend import order_finance
 
                     result["finance"] = order_finance.summarize(
-                        result["amount_kopecks"], result["internal_cost"], result["paid"], result["actual_cost"]
+                        result["amount_kopecks"], result["internal_cost"], result["paid"], result["actual_cost"], json.loads(result["cost_forecast"])
                     )
                 if kind == "clients":
                     result["quotes"] = [
@@ -2037,6 +2085,8 @@ class Service:
                 data.get("favorite", old["favorite"] if old else 0), "Избранное", 0, 1
             )
         values["updated_at"] = stamp()
+        if kind == "catalog" and old and any(values.get(key) != old[key] for key in ("cost_price", "unit", "item_type")):
+            values["actual_rate_source"] = ""
         rid = old["id"] if old else identity()
         if old:
             values["revision"] = old["revision"] + 1
@@ -2641,6 +2691,12 @@ class Service:
         return (result[0], without_finance(result[1]), *result[2:])
 
     def routed(self, method, kind, parts, query, data):
+        if kind == "estimate-workflow":
+            from backend.estimate_workflow import route
+            return route(self, method, parts, data)
+        if kind == "assemblies":
+            from backend.estimate_assemblies import route
+            return route(self, method, parts, data)
         if kind == "protected-links":
             from backend.protected_estimates import owner_route
             return owner_route(self, method, parts, query, data)
@@ -2848,18 +2904,22 @@ class Service:
             if method == "GET":
                 if parts:
                     row=self.get('estimate_templates',parts[0])
+                    if row['template_kind'] != 'quote':
+                        raise DomainError(404, 'Шаблон сметы не найден')
                     return 200, {'snapshot':json.loads(row['snapshot']),'name':row['name']}
                 return 200, {
                     "items": [
                         dict(r)
                         for r in self.con.execute(
-                            "SELECT id,name,created_at FROM estimate_templates WHERE workspace_id=? ORDER BY created_at DESC LIMIT 50",
+                            "SELECT id,name,created_at FROM estimate_templates WHERE workspace_id=? AND template_kind='quote' ORDER BY created_at DESC LIMIT 50",
                             (self.wid,),
                         )
                     ]
                 }
             if method == "POST" and parts:
                 row = self.get("estimate_templates", parts[0])
+                if row["template_kind"] != "quote":
+                    raise DomainError(404, "Шаблон сметы не найден")
                 snapshot = json.loads(row["snapshot"])
                 trusted_ai_generated = bool(snapshot.get("ai_generated"))
                 snapshot.update(data)
@@ -2910,6 +2970,8 @@ ROUTES = set(ENTITIES) | {
     "usage",
     "quotes",
     "protected-links",
+    "assemblies",
+    "estimate-workflow",
     "public",
     "overview",
     "receipts",

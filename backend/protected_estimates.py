@@ -312,6 +312,9 @@ def document_view(snapshot, row, view, published_at):
     """Build a new document; never redact a copy of the original snapshot."""
     policy = json.loads(row["settings"])
     output = {key: snapshot.get(key, "") for key in ("title", "currency", "amount_kopecks", "terms", "due_date")}
+    from backend.estimate_assemblies import scope
+    output["scope"] = scope(snapshot.get("scope", {}))
+    output["alternative_label"] = string(snapshot.get("alternative_label", ""), "Вариант", 80)
     current_version = row["current_quote_version"] if "current_quote_version" in row.keys() else row["quote_version"]
     current_state = row["current_quote_state"] if "current_quote_state" in row.keys() else row["proposal_state"]
     current_offer = current_version == row["quote_version"] and current_state != "draft"
@@ -471,6 +474,7 @@ def _respond(service, row, view, data):
         raise DomainError(409, "Решение уже записано. Новые условия согласуйте с исполнителем")
     if type(data.get("permissions_revision")) is not int or data["permissions_revision"] != row["revision"]:
         raise DomainError(409, "Права доступа изменились. Обновите предложение перед ответом")
+    quote = service.con.execute("SELECT * FROM quotes WHERE id=? AND workspace_id=?", (row["quote_id"], row["workspace_id"])).fetchone()
     updated = service.con.execute(
         "UPDATE quotes SET approval_state=?,status=?,approved_at=?,approved_by=?,updated_at=?,revision=revision+1 "
         "WHERE id=? AND workspace_id=? AND published_version=? AND approval_state IN ('sent','viewed','changes_requested')",
@@ -480,6 +484,10 @@ def _respond(service, row, view, data):
     )
     if updated.rowcount != 1:
         raise DomainError(409, "Исполнитель изменил предложение или решение уже принято. Запросите актуальную версию")
+    from backend.estimate_workflow import alternative_decision
+    alternative_decision(service, quote, action)
+    from backend.construction_changes import protected_decision
+    protected_decision(service, quote, action, user, comment)
     service.con.execute(
         "INSERT INTO protected_quote_decisions(link_id,workspace_id,view_id,user_id,action,comment,quote_version,snapshot_sha256,created_at) "
         "VALUES(?,?,?,?,?,?,?,?,?)",

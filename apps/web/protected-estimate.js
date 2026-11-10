@@ -45,11 +45,12 @@
     const pending=['sent','viewed'].includes(doc.status)&&doc.decisions_available;
     host.innerHTML=`<div class="protected-toolbar"><span class="protected-status">${e(states[doc.status]||doc.status)}</span><span>Доступ до ${e(dates(doc.expires_at))}</span><div class="protected-export-actions">${doc.permissions.allow_pdf?'<button class="btn small" type="button" data-export="pdf">Скачать PDF</button>':''}${doc.permissions.allow_excel?'<button class="btn small" type="button" data-export="xlsx">Скачать Excel</button>':''}</div></div>
       <article class="protected-document" aria-label="Коммерческое предложение">
-        <header class="protected-document-heading"><div class="protected-document-meta"><span>${e(doc.contractor)}</span><span>${e(doc.number)} · версия ${e(doc.version)}</span></div><p class="protected-date">${e(dates(doc.created_at))}</p><h1>${e(doc.title)}</h1>${doc.recipient?`<p class="protected-recipient">Подготовлено для ${e(doc.recipient)}</p>`:''}</header>
+        <header class="protected-document-heading"><div class="protected-document-meta"><span>${e(doc.contractor)}</span><span>${e(doc.number)} · версия ${e(doc.version)}</span></div><p class="protected-date">${e(dates(doc.created_at))}</p><h1>${e(doc.title)}</h1>${doc.alternative_label?`<p>${e(doc.alternative_label)} · Принимается один вариант предложения</p>`:''}${doc.recipient?`<p class="protected-recipient">Подготовлено для ${e(doc.recipient)}</p>`:''}</header>
         ${rows?`<div class="protected-table-scroll" tabindex="0" aria-label="Состав предложения">${rows}</div>`:''}
         <section class="protected-total"><span>Итоговая стоимость</span><strong>${e(money(doc.amount_kopecks,doc.currency))}</strong></section>
         ${doc.due_date?`<p class="protected-due">Срок: ${e(doc.due_date)}</p>`:''}
         ${doc.terms?`<section class="protected-terms"><h2>Условия предложения</h2><p>${e(doc.terms)}</p></section>`:''}
+        ${Object.entries({included:"Включено в стоимость",excluded:"Не включено в стоимость",customer:"Обеспечивает заказчик",clarifications:"Требует уточнения"}).filter(([key])=>doc.scope?.[key]?.length).map(([key,label])=>`<section class="protected-terms"><h2>${label}</h2><ul>${doc.scope[key].map(text=>`<li>${e(text)}</li>`).join('')}</ul></section>`).join('')}
         ${doc.notice?`<p class="protected-document-notice">${e(doc.notice)}</p>`:''}
         <div class="protected-document-foot"><span>Сметра · защищённое предложение</span><span>Просмотр ${e(doc.view_id.slice(0,8))}</span></div>
         ${doc.watermark?`<div class="protected-watermarks" aria-hidden="true">${Array.from({length:10},()=>`<span>${e(doc.watermark)}</span>`).join('')}</div>`:''}

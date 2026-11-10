@@ -8,7 +8,7 @@ ITEM_FIELDS = (
     "name", "description", "category", "quantity", "unit", "unit_price",
     "cost_price", "coefficient", "markup", "discount", "tax", "optional", "included",
 )
-QUOTE_FIELDS = ("title", "client", "description", "terms", "due_date", "expires_at", "custom_fields")
+QUOTE_FIELDS = ("title", "client", "description", "terms", "scope", "due_date", "expires_at", "custom_fields")
 DECIMALS = {"quantity", "coefficient", "markup", "discount", "tax"}
 DEFAULTS = {"quantity": "1", "coefficient": "1", "markup": "0", "discount": "0", "tax": "0",
             "unit_price": 0, "cost_price": 0, "optional": False, "included": True}
@@ -88,8 +88,13 @@ def compare(before, after):
             changes.append({"kind": "removed", "before": row, "after": None, "fields": [], "moved": False,
                             "before_position": index + 1, "after_position": None,
                             "delta_kopecks": -(row.get("subtotal", 0) if row.get("included", True) else 0) if same_currency else None})
+    def comparable(snapshot, field):
+        if field == "scope":
+            return {key: value for key, value in snapshot.get(field, {}).items() if value}
+        return snapshot.get(field)
+
     fields = [{"field": field, "before": before.get(field), "after": after.get(field)}
-              for field in QUOTE_FIELDS if before.get(field) != after.get(field)]
+              for field in QUOTE_FIELDS if comparable(before, field) != comparable(after, field)]
     if not same_currency:
         fields.append({"field": "currency", "before": before.get("currency", "RUB"), "after": after.get("currency", "RUB")})
     totals = {"before": before.get("amount_kopecks", 0), "after": after.get("amount_kopecks", 0),

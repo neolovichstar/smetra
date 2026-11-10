@@ -302,3 +302,32 @@ dialog.smetra-appearance-dialog[open]{display:flex;flex-direction:column}
 .protected-history pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
 .protected-manager :focus-visible{outline:2px solid var(--text-2);outline-offset:3px}
 @media(max-width:640px){.protected-manager-head{padding:18px}.protected-manager-body{padding:20px 18px}.protected-manager .protected-grid,.protected-manager .protected-options{grid-template-columns:1fr}.protected-link-line{flex-wrap:wrap;gap:6px}.protected-manager .protected-actions .btn{flex:1 1 auto;min-height:44px}}
+.assembly-panel{margin-block:16px}
+.assembly-actions{display:flex;gap:8px;flex-wrap:wrap;margin-block:12px}
+.assembly-instance{display:flex;gap:10px;align-items:center;padding-block:12px;border-top:1px solid var(--line);flex-wrap:wrap}
+.assembly-instance>div{flex:1 1 200px;min-width:0}
+.assembly-instance small,.assembly-preview td small{display:block;color:var(--text-3);overflow-wrap:anywhere}
+.assembly-formulas{display:grid;gap:12px;margin-block:16px}
+.assembly-formulas label{display:grid;grid-template-columns:1fr 140px;gap:6px;align-items:center}
+.assembly-formulas input{grid-column:1 / -1;font-family:monospace}
+.assembly-preview{margin-block:16px;padding-block:12px;border-top:1px solid var(--line)}
+.assembly-preview-scroll{overflow-x:auto;margin-block:12px}
+.assembly-preview table{width:100%;border-collapse:collapse;font-size:13px}
+.assembly-preview th,.assembly-preview td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line)}
+.assembly-preview td:nth-child(n+2){font-variant-numeric:tabular-nums;white-space:nowrap}
+.assembly-scope{margin-block:16px}
+.assembly-scope .form-grid{margin-top:12px}
+.assembly-document-scope{margin-block:18px;font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+.assembly-document-scope h3{font-size:14px;margin-bottom:6px}
+.assembly-document-scope ul{padding-left:20px;margin:0}
+@media(max-width:480px){.assembly-actions>.btn{width:100%;white-space:normal}.assembly-formulas label{grid-template-columns:1fr}.assembly-formulas input{grid-column:1}.assembly-instance>.btn{flex:1 1 auto}}
+.workflow-preview{padding-block:16px;margin-block:16px;border-top:1px solid var(--line)}
+.workflow-form label{display:grid;gap:6px;margin-block:12px}
+.workflow-form .check-label{display:flex;align-items:flex-start}
+.workflow-form .check-label input{flex:none;width:auto;margin-top:4px}
+.workflow-options-table{max-width:100%;overflow-x:auto}
+.workflow-options-table table{width:100%;border-collapse:collapse}
+.workflow-options-table th,.workflow-options-table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left}
+.workflow-options-table input[type=checkbox]{width:18px;height:18px}
+.workflow-rate{padding:16px 0;border-bottom:1px solid var(--line)}
+.workflow-rate p{font-size:13px;color:var(--text-2);margin-block:8px;overflow-wrap:anywhere}

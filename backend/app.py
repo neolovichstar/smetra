@@ -58,7 +58,7 @@ _LOCK = threading.RLock()
 _SQLITE_WAL_LOCK = threading.Lock()
 _SQLITE_WAL_FILES = set()
 RATE = {}
-REQUIRED_CLOUD_SCHEMA_VERSION = 72
+REQUIRED_CLOUD_SCHEMA_VERSION = 73
 PLANS = {code: (price, days) for code, (_, price, days) in PURCHASES.items()}
 
 

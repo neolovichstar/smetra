@@ -15,10 +15,10 @@ def percent(part, whole):
     return (part * 200 + whole) // (whole * 2)
 
 
-def summarize(amount, planned_cost, paid, actual_cost):
+def summarize(amount, planned_cost, paid, actual_cost, forecast=None):
     amount, planned_cost, paid, actual_cost = (int(value or 0) for value in (amount, planned_cost, paid, actual_cost))
     overrun = max(0, actual_cost - planned_cost) if planned_cost > 0 else 0
-    return dict(
+    result = dict(
         revenue=amount,
         planned_cost=planned_cost,
         actual_cost=actual_cost,
@@ -34,12 +34,27 @@ def summarize(amount, planned_cost, paid, actual_cost):
         overrun=overrun,
         paid_pct=percent(paid, amount),
     )
+    result["forecast_basis"] = "budget" if planned_cost or actual_cost else "unknown"
+    if forecast and type(forecast.get("remaining_cost")) is int:
+        remaining = forecast["remaining_cost"]
+        committed = forecast.get("committed_cost", 0)
+        result.update(remaining_cost=remaining, committed_cost=committed, uncommitted_cost=remaining - committed,
+                      estimate_at_completion=actual_cost + remaining, forecast_profit=amount - actual_cost - remaining,
+                      forecast_basis="remaining", forecast_updated_at=forecast.get("updated_at"))
+        # An expense entered after a manual forecast may already belong to its
+        # commitments. Never silently count it twice or guess its allocation.
+        result["forecast_stale"] = (forecast.get("actual_cost_at_update", actual_cost) != actual_cost
+                                    or forecast.get("revenue_at_update", amount) != amount
+                                    or forecast.get("planned_cost_at_update", planned_cost) != planned_cost)
+        if result["forecast_stale"]:
+            result.update(forecast_profit=None, estimate_at_completion=None)
+    return result
 
 
 def project_rows(con, workspace_id):
     """Active orders with their payment and expense totals, one query."""
     return con.execute(
-        "SELECT p.id,p.name,p.currency,p.status,p.due_date,p.amount_kopecks,p.internal_cost,"
+        "SELECT p.id,p.name,p.currency,p.status,p.due_date,p.amount_kopecks,p.internal_cost,p.cost_forecast,"
         "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x WHERE x.project_id=p.id AND x.workspace_id=p.workspace_id),0) AS paid,"
         "coalesce((SELECT sum(x.amount_kopecks) FROM expenses x WHERE x.project_id=p.id AND x.workspace_id=p.workspace_id),0) AS actual_cost "
         "FROM projects p WHERE p.workspace_id=? AND p.status NOT IN (?,?)",
@@ -49,18 +64,20 @@ def project_rows(con, workspace_id):
 
 def workspace_money(con, workspace_id, currency):
     """What the owner earns across active orders in one currency."""
-    receivable = forecast = known = unknown = 0
+    receivable = forecast = known = unknown = budget_only = 0
     overruns = []
     for row in project_rows(con, workspace_id):
         if row["currency"] != currency:
             continue
-        result = summarize(row["amount_kopecks"], row["internal_cost"], row["paid"], row["actual_cost"])
+        import json
+        result = summarize(row["amount_kopecks"], row["internal_cost"], row["paid"], row["actual_cost"], json.loads(row["cost_forecast"]))
         receivable += result["receivable"]
         if result["forecast_profit"] is None:
             unknown += 1
         else:
             forecast += result["forecast_profit"]
             known += 1
+            budget_only += result["forecast_basis"] != "remaining"
         if result["overrun"]:
             overruns.append(dict(id=row["id"], name=row["name"], currency=row["currency"], overrun=result["overrun"], budget_used_pct=result["budget_used_pct"]))
     overruns.sort(key=lambda item: -item["overrun"])
@@ -70,6 +87,7 @@ def workspace_money(con, workspace_id, currency):
         forecast_profit=forecast if known else None,
         orders_with_costs=known,
         orders_without_costs=unknown,
+        budget_only_orders=budget_only,
         overruns=overruns,
     )
 
@@ -77,15 +95,16 @@ def workspace_money(con, workspace_id, currency):
 def order_report(con, workspace_id):
     """Every order except cancelled ones, newest first, with its money figures."""
     rows = con.execute(
-        "SELECT p.id,p.name,p.currency,p.status,p.due_date,p.amount_kopecks,p.internal_cost,"
+        "SELECT p.id,p.name,p.currency,p.status,p.due_date,p.amount_kopecks,p.internal_cost,p.cost_forecast,"
         "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x WHERE x.project_id=p.id AND x.workspace_id=p.workspace_id),0) AS paid,"
         "coalesce((SELECT sum(x.amount_kopecks) FROM expenses x WHERE x.project_id=p.id AND x.workspace_id=p.workspace_id),0) AS actual_cost "
         "FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' ORDER BY p.updated_at DESC,p.id LIMIT 500",
         (workspace_id,),
     ).fetchall()
+    import json
     return [
         dict(id=row["id"], name=row["name"], currency=row["currency"], status=row["status"], due_date=row["due_date"],
-             **summarize(row["amount_kopecks"], row["internal_cost"], row["paid"], row["actual_cost"]))
+             **summarize(row["amount_kopecks"], row["internal_cost"], row["paid"], row["actual_cost"], json.loads(row["cost_forecast"])))
         for row in rows
     ]
 
