@@ -104,7 +104,9 @@ class CloudReadTests(unittest.TestCase):
 
     def test_pdf_limit_rejects_before_network(self):
         self.con.execute("UPDATE cloud_files SET size=100000001 WHERE id='f'")
-        with patch("backend.cloud_drives._premium_access"), patch("backend.cloud_drives._download") as download:
+        with patch("backend.cloud_drives._premium_access"), patch(
+            "backend.cloud_drives._worker_access"
+        ), patch("backend.cloud_drives._download") as download:
             with self.assertRaises(business.DomainError) as error:
                 assistant_cloud.read_file(self.service, "f")
             self.assertEqual(error.exception.status, 413)
