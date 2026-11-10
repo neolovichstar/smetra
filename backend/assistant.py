@@ -1755,9 +1755,13 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
     )
     # Old conversations are searched separately, scoped to the same user and
     # workspace. Keep automatic recall small and always honour memory opt-out.
-    recalled = automatic_history_context(
-        service, prompt, set(context_stats["recent_message_ids"]),
-    )
+    # Current explicit cloud tasks must not turn into a recap of old chats.
+    # Cross-conversation recall is for ambiguous follow-ups, not file lookup.
+    from backend.assistant_cloud_task import request_info as cloud_request_info
+    recalled = ("" if cloud_request_info(prompt) is not None else
+                automatic_history_context(
+                    service, prompt, set(context_stats["recent_message_ids"]),
+                ))
     # Files stay private to the workspace; only the explicitly selected image
     # is delivered to a compatible vision model for this request.
     if context and context["entity"] == "files" and not image_url:

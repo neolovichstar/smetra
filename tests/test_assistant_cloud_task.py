@@ -49,7 +49,10 @@ class CurrentCloudRequestTests(unittest.TestCase):
             return {"content": "Изучил страницу 1 PDF. Подготовлю смету только по подтверждённым данным."}
         with patch.dict(os.environ, OPENROUTER_API_KEY="fixture-only"), patch(
             "backend.assistant_app_tools.read", side_effect=reader
-        ), patch("backend.assistant.query_model", side_effect=provider):
+        ), patch("backend.assistant.query_model", side_effect=provider), patch(
+            "backend.assistant_recall.automatic_history_context",
+            side_effect=AssertionError("Never replace a current PDF task with old chat recall"),
+        ):
             status, result = self.call("/assistant/chat", "POST", {"text": phrase}, token)
         self.assertEqual(status, 200, result)
         self.assertEqual([name for name, _ in calls], ["list_cloud_files", "read_cloud_file"])
