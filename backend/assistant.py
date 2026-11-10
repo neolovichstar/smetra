@@ -991,6 +991,8 @@ def prepare(service, name, args):
         "get_record",
         "overview",
         "read_file",
+        "list_cloud_files",
+        "read_cloud_file",
         "analyze_design_image",
         "read_markdown",
         "list_files",
