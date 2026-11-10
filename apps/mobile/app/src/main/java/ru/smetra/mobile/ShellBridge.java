@@ -73,6 +73,9 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
         switch (r.op) {
             case "app.capabilities": reply.postMessage(BridgeProtocol.ok(r.id, capabilities())); return;
             case "app.openStore": ShellUpdates.openStore(activity); ok(reply, r.id, null); return;
+            case "app.review.qualify":
+                if (ShellSession.token() != null) ShellReviews.qualify(activity, r.args.optString("key", ""));
+                ok(reply, r.id, null); return;
             case "app.openExternal": {
                 Uri url = Uri.parse(r.args.optString("url", ""));
                 if (!"https".equals(url.getScheme())) { error(reply, r.id, "bad_request", "Можно открыть только https-ссылку"); return; }
@@ -100,6 +103,14 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
             }); return;
             case "ads.rewarded.show":
                 ShellAds.show(activity, (value, code, text) -> {
+                    if (closed) return;
+                    if (value != null) reply.postMessage(BridgeProtocol.ok(r.id, value));
+                    else reply.postMessage(BridgeProtocol.error(r.id, code, text));
+                });
+                return;
+            case "ads.rewarded.recover":
+                ShellAds.recover(activity, (value, code, text) -> {
+                    if (closed) return;
                     if (value != null) reply.postMessage(BridgeProtocol.ok(r.id, value));
                     else reply.postMessage(BridgeProtocol.error(r.id, code, text));
                 });
@@ -128,6 +139,8 @@ final class ShellBridge implements WebViewCompat.WebMessageListener {
                 .put("share", true)
                 .put("push", PushManager.isConfigured())
                 .put("ads", true)
+                .put("rewardRecovery", true)
+                .put("review", true)
                 .put("ar", ShellSupport.arStatus(activity).optString("status"))
                 .put("barcodeImage", true)
                 .put("textImageLatin", true)

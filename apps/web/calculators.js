@@ -152,8 +152,8 @@
     ).join('');
   }
 
-  function render() {
-    view('<section id="smetra-calculators" class="smcalc">' +
+  function render(options={}) {
+    (options.view||view)('<section id="smetra-calculators" class="smcalc">' +
       '<header class="smcalc-header"><div><span class="smcalc-kicker">ИНСТРУМЕНТЫ / БЕСПЛАТНО</span>' +
       '<h1>Калькуляторы</h1></div></header>' +
       '<nav class="smcalc-tabs" aria-label="Вид расчёта">' +
@@ -253,6 +253,7 @@
       const button=$('#smcalc-draft');
       button.disabled=true;
       try{
+        if(options.onDraft){await options.onDraft(next);return;}
         if(typeof window.Workspace?.editor!=='function')throw Error('Редактор сметы недоступен. Обновите страницу.');
         // Keep the global navigation and editor's route guard in sync.
         // replaceState avoids a hashchange rerender while the editor is opening.

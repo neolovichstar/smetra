@@ -88,6 +88,15 @@ final class ShellSession {
 
     /** Blocking JSON call to the Smetra API; run off the main thread. */
     static Response call(String method, String path, JSONObject payload, boolean authenticated) throws Exception {
+        return callWithSession(method, path, payload, authenticated ? token() : null, authenticated);
+    }
+
+    /** Bind a long-running native action to the account which started it. */
+    static Response callWithSession(String method, String path, JSONObject payload, String session) throws Exception {
+        return callWithSession(method, path, payload, session, true);
+    }
+
+    private static Response callWithSession(String method, String path, JSONObject payload, String session, boolean authenticated) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
             connection.setRequestMethod(method);
@@ -97,7 +106,6 @@ final class ShellSession {
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("X-Smetra-Client", "android-shell/" + BuildConfig.VERSION_CODE);
             if (authenticated) {
-                String session = token();
                 if (session == null) return new Response(401, new JSONObject().put("error", "Войдите в аккаунт"), java.util.Collections.emptyMap());
                 connection.setRequestProperty("Authorization", "Bearer " + session);
             }

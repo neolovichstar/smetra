@@ -573,6 +573,7 @@ public final class ShellActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        ShellAds.release(this);
         if (network != null) {
             ConnectivityManager manager = getSystemService(ConnectivityManager.class);
             try { if (manager != null) manager.unregisterNetworkCallback(network); } catch (RuntimeException ignored) { }

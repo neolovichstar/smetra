@@ -6,6 +6,7 @@ import ru.rustore.sdk.pushclient.common.logger.DefaultLogger;
 public final class SmetraApp extends Application {
     @Override public void onCreate() {
         super.onCreate();
+        ShellReviews.installed(this);
         Analytics.init(this);
         if (!BuildConfig.RUSTORE_PUSH_PROJECT_ID.isEmpty()) {
             try {

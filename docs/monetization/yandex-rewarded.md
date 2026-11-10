@@ -1,4 +1,6 @@
-# Rewarded ads in Smetra (Yandex)
+# Архив: Yandex Rewarded Ads
+
+**Для Android 2.2.0 (46) и новее эта инструкция не применяется.** Yandex Mobile Ads заменён прямым VK Ad SDK. Актуальное подключение и ограничения: [VK Rewarded Ads](./vk-rewarded.md). Старую переменную `YANDEX_REWARDED_AD_UNIT_ID` сервер больше не использует. Ниже сохранено описание прежней интеграции для истории.
 
 The Android app uses Yandex Mobile Ads SDK 8.6.0 and initializes the SDK only after the user taps the rewarded-ad offer. Rewarded ads are requested only when the free assistant quota reaches zero; a completed reward grants three additional assistant requests and expires after 24 hours. The backend allows one grant per account per Moscow calendar day and never accepts a client-supplied ad-unit ID.
 

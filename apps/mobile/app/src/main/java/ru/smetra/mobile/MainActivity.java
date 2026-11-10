@@ -11,16 +11,6 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.yandex.mobile.ads.common.AdError;
-import com.yandex.mobile.ads.common.AdRequest;
-import com.yandex.mobile.ads.common.AdRequestError;
-import com.yandex.mobile.ads.common.ImpressionData;
-import com.yandex.mobile.ads.common.YandexAds;
-import com.yandex.mobile.ads.rewarded.Reward;
-import com.yandex.mobile.ads.rewarded.RewardedAd;
-import com.yandex.mobile.ads.rewarded.RewardedAdEventListener;
-import com.yandex.mobile.ads.rewarded.RewardedAdLoadListener;
-import com.yandex.mobile.ads.rewarded.RewardedAdLoader;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -62,13 +52,9 @@ public class MainActivity extends Activity {
     private LinearLayout assistantRewardPanel;
     private Button assistantRewardButton,assistantQuotaSendButton;
     private TextView assistantRewardHint,assistantQuotaLabel;
-    private RewardedAdLoader assistantRewardedAdLoader;
-    private RewardedAd assistantRewardedAd;
     private String assistantRewardAdUnitId="";
-    private JSONObject assistantRewardAttempt=null;
-    private boolean assistantRewardStarting=false;
     private boolean assistantRewardChecking=false,assistantRewardLoading=false,assistantRewardClaiming=false,assistantRewardLoadFailed=false;
-    private boolean assistantRewardSdkInitialized=false,assistantRewardSdkInitializing=false,assistantRewardShowWhenLoaded=false,assistantRewardEventHandled=false;
+    private boolean assistantRewardShowWhenLoaded=false;
     private android.net.Uri assistantAttachmentUri;
     private String assistantAttachmentThread="",assistantAttachmentAccount="";
     private JSONObject assistantUploadedAttachment;
@@ -117,7 +103,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openLink(intent);}
     private boolean openLink(Intent intent){if(intent==null)return false;if("ru.smetra.mobile.OPEN_NOTIFICATIONS".equals(intent.getAction())){if(token==null)login(false);else notificationsCenter();return true;}if(Intent.ACTION_SEND.equals(intent.getAction())){Analytics.event("capture_shared_in",Analytics.params("source","android_share"),false);CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);pendingCaptureText=shared==null?"":shared.toString().substring(0,Math.min(shared.length(),8000));pendingCaptureFile=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(pendingCaptureText.isBlank()&&pendingCaptureFile==null){message("Не удалось прочитать переданный запрос");return false;}if(token==null)login(false);else capture();return true;}android.net.Uri link=intent.getData();if(link!=null&&"smetra".equals(link.getScheme())&&"auth".equals(link.getHost())){String ticket=link.getQueryParameter("ticket"),verifier=ShellAuth.takeVerifier(this);if(ticket!=null&&verifier!=null){page("Вход","login",false);loading(content);try{call("/auth/native/exchange","POST",new JSONObject().put("ticket",ticket).put("verifier",verifier),result->{token=result.optString("token");try{vault.save(token);getPreferences(MODE_PRIVATE).edit().remove("oauth_verifier").apply();me=result.optJSONObject("user");Analytics.login(me);afterLogin();}catch(Exception error){token=null;login(false);message("Не удалось сохранить сессию");}});}catch(Exception error){login(false);message("Повторите вход");}return true;}}if(link!=null&&"smetra".equals(link.getScheme())&&"quote".equals(link.getHost())&&link.getQueryParameter("token")!=null){publicQuote(link.getQueryParameter("token"));return true;}return false;}
     private void afterLogin(){PushManager.syncIfEnabled(this,token);if((pendingCaptureText!=null&&!pendingCaptureText.isBlank())||pendingCaptureFile!=null)capture();else home();}
-    @Override public void onDestroy(){clearAssistantRewardUi();assistantRewardedAdLoader=null;cancelAssistantStream();if(quoteDraftEditor!=null)quoteDraftEditor.close();assistantWorker.shutdownNow();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
+    @Override public void onDestroy(){clearAssistantRewardUi();cancelAssistantStream();if(quoteDraftEditor!=null)quoteDraftEditor.close();assistantWorker.shutdownNow();worker.shutdownNow();apiWorker.shutdownNow();super.onDestroy();}
     private void cancelAssistantStream(){
         assistantStreaming=false;
         HttpURLConnection connection=assistantConnection;
@@ -497,7 +483,7 @@ public class MainActivity extends Activity {
         assistantRewardPanel=ui.card(dock);assistantRewardPanel.setTag("assistant-reward-panel");assistantRewardPanel.setVisibility(View.GONE);assistantRewardPanel.setPadding(dp(14),dp(10),dp(14),dp(10));
         assistantRewardPanel.addView(ui.label("Ещё 3 запроса к ассистенту",14,INK,true));
         assistantRewardHint=ui.label("Посмотрите короткое видео — получите дополнительный лимит бесплатно.",11,MUTED,false);ui.space(assistantRewardPanel,4);assistantRewardPanel.addView(assistantRewardHint);
-        ui.space(assistantRewardPanel,8);assistantRewardButton=addButton(assistantRewardPanel,"Посмотреть видео · +3 запроса",true,v->showAssistantRewardedAd());assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);
+        ui.space(assistantRewardPanel,8);assistantRewardButton=addButton(assistantRewardPanel,"Посмотреть видео · +45 000 токенов",true,v->showAssistantRewardedAd());assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);
         LinearLayout composer=ui.column();composer.setPadding(dp(6),dp(4),dp(6),dp(6));composer.setBackground(ui.shape(SURFACE,22,LINE));dock.addView(composer,ui.match());
         EditText prompt=new EditText(this);prompt.setTextSize(16);prompt.setTypeface(ui.regular);prompt.setTextColor(INK);prompt.setHintTextColor(MUTED);prompt.setBackgroundColor(android.graphics.Color.TRANSPARENT);prompt.setPadding(dp(12),dp(12),dp(12),dp(8));prompt.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);prompt.setGravity(Gravity.TOP|Gravity.START);prompt.setMinHeight(dp(56));prompt.setMaxLines(5);prompt.setHint("Сообщение Сметре…");prompt.setContentDescription("Ваше сообщение");prompt.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3000)});composer.addView(prompt,ui.match());
         prompt.setOnFocusChangeListener((v,focused)->composer.setBackground(ui.shape(SURFACE,22,focused?0xff55769c:LINE)));
@@ -697,150 +683,34 @@ public class MainActivity extends Activity {
                 return;
             }
             assistantRewardPanel.setVisibility(View.VISIBLE);
-            if(assistantRewardButton!=null){assistantRewardButton.setText(assistantRewardLoadFailed?"Повторить загрузку видео":"Посмотреть видео · +3 запроса");assistantRewardButton.setEnabled(!assistantRewardLoading&&!assistantRewardSdkInitializing&&!assistantRewardClaiming);assistantRewardButton.setAlpha(assistantRewardButton.isEnabled()?1f:.55f);}
+            if(assistantRewardButton!=null){assistantRewardButton.setText(assistantRewardLoadFailed?"Повторить загрузку видео":"Посмотреть видео · +45 000 токенов");assistantRewardButton.setEnabled(!assistantRewardLoading&&!assistantRewardClaiming);assistantRewardButton.setAlpha(assistantRewardButton.isEnabled()?1f:.55f);}
             if(assistantRewardHint!=null)assistantRewardHint.setText(assistantRewardLoadFailed?"Реклама сейчас недоступна. Нажмите, чтобы повторить загрузку.":assistantRewardLoading?"Подготавливаем видео…":"Бесплатно · не чаще одного раза в сутки");
         });
     }
     private void hideAssistantRewardOffer(){
         if(assistantRewardPanel!=null)assistantRewardPanel.setVisibility(View.GONE);
     }
-    private void loadAssistantRewardedAd(int version){
-        if(assistantRewardAdUnitId.isEmpty()||assistantRewardLoading||assistantRewardedAd!=null||assistantRewardPanel==null)return;
-        assistantRewardLoading=true;assistantRewardLoadFailed=false;
-        if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
-        if(assistantRewardHint!=null)assistantRewardHint.setText("Подготавливаем рекламное видео…");
-        try{
-            if(assistantRewardedAdLoader==null)assistantRewardedAdLoader=new RewardedAdLoader(this);
-            assistantRewardedAdLoader.loadAd(new AdRequest.Builder(assistantRewardAdUnitId).build(),new RewardedAdLoadListener(){
-                @Override public void onAdLoaded(RewardedAd ad){
-                    assistantRewardLoading=false;
-                    if(version!=pageVersion||isFinishing()||assistantRewardPanel==null){ad.setAdEventListener(null);return;}
-                    assistantRewardedAd=ad;assistantRewardEventHandled=false;
-                    if(assistantRewardShowWhenLoaded){assistantRewardShowWhenLoaded=false;showAssistantRewardedAd();return;}
-                    if(assistantRewardButton!=null){assistantRewardButton.setText("Посмотреть видео · +3 запроса");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
-                    if(assistantRewardHint!=null)assistantRewardHint.setText("Бесплатно · не чаще одного раза в сутки");
-                }
-                @Override public void onAdFailedToLoad(AdRequestError error){
-                    assistantRewardLoading=false;assistantRewardLoadFailed=true;assistantRewardShowWhenLoaded=false;
-                    if(version!=pageVersion||assistantRewardPanel==null)return;
-                    if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить загрузку видео");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
-                    if(assistantRewardHint!=null)assistantRewardHint.setText("Реклама сейчас недоступна. Попробуйте ещё раз позже.");
-                }
-            });
-        }catch(RuntimeException error){
-            assistantRewardLoading=false;assistantRewardLoadFailed=true;
-            if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить загрузку видео");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
-            if(assistantRewardHint!=null)assistantRewardHint.setText("Не удалось загрузить рекламу. Попробуйте позже.");
-        }
-    }
     private void showAssistantRewardedAd(){
-        if(assistantRewardAttempt==null){
-            if(assistantRewardStarting)return;
-            assistantRewardStarting=true;
-            final int attemptVersion=pageVersion;
-            try{
-                JSONObject request=new JSONObject();request.put("operation","start");
-                call("/assistant/ad-reward","POST",request,result->{
-                    assistantRewardStarting=false;
-                    if(attemptVersion!=pageVersion)return;
-                    assistantRewardAttempt=result;
-                    assistantRewardAdUnitId=result.optString("ad_unit_id");
-                    showAssistantRewardedAd();
-                });
-                if(assistantRewardPanel!=null)assistantRewardPanel.postDelayed(()->assistantRewardStarting=false,12000);
-            }catch(Exception error){assistantRewardStarting=false;}
-            return;
-        }
-        if(assistantRewardClaiming||assistantRewardPanel==null||assistantRewardPanel.getVisibility()!=View.VISIBLE)return;
-        if(assistantRewardedAd==null){
-            if(assistantRewardLoading||assistantRewardSdkInitializing)return;
-            assistantRewardLoadFailed=false;assistantRewardShowWhenLoaded=true;
-            if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
-            if(assistantRewardHint!=null)assistantRewardHint.setText("Подготавливаем рекламное видео…");
-            final int version=pageVersion;
-            if(assistantRewardSdkInitialized){
-                loadAssistantRewardedAd(version);
-            }else{
-                assistantRewardSdkInitializing=true;
-                try{
-                    // Initialize only after the user explicitly taps the rewarded-ad offer.
-                    YandexAds.initialize(this,()->runOnUiThread(()->{
-                        assistantRewardSdkInitializing=false;
-                        assistantRewardSdkInitialized=true;
-                        if(version!=pageVersion||assistantRewardPanel==null){assistantRewardShowWhenLoaded=false;return;}
-                        loadAssistantRewardedAd(version);
-                    }));
-                }catch(RuntimeException error){
-                    assistantRewardSdkInitializing=false;assistantRewardShowWhenLoaded=false;assistantRewardLoadFailed=true;
-                    if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить загрузку видео");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
-                    if(assistantRewardHint!=null)assistantRewardHint.setText("Не удалось запустить рекламу. Попробуйте позже.");
-                }
-            }
-            return;
-        }
-        final int version=pageVersion;
-        final RewardedAd ad=assistantRewardedAd;
-        assistantRewardEventHandled=false;
-        if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
-        if(assistantRewardHint!=null)assistantRewardHint.setText("Смотрим видео…");
-        ad.setAdEventListener(new RewardedAdEventListener(){
-            @Override public void onAdShown(){ }
-            @Override public void onAdFailedToShow(AdError error){
-                if(assistantRewardedAd==ad){ad.setAdEventListener(null);assistantRewardedAd=null;}
-                if(version!=pageVersion||assistantRewardPanel==null)return;
-                assistantRewardLoadFailed=true;
-                if(assistantRewardButton!=null){assistantRewardButton.setText("Повторить загрузку видео");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
-                if(assistantRewardHint!=null)assistantRewardHint.setText("Не удалось запустить видео. Попробуйте ещё раз.");
-            }
-            @Override public void onAdDismissed(){
-                if(assistantRewardedAd==ad){ad.setAdEventListener(null);assistantRewardedAd=null;}
-                if(version!=pageVersion||assistantRewardPanel==null)return;
-                if(!assistantRewardClaiming){
-                    assistantRewardLoadFailed=false;
-                    if(assistantRewardButton!=null){assistantRewardButton.setText("Посмотреть видео · +3 запроса");assistantRewardButton.setEnabled(true);assistantRewardButton.setAlpha(1f);}
-                    if(assistantRewardHint!=null)assistantRewardHint.setText("Для получения бонуса нужно досмотреть видео до конца.");
-                }
-            }
-            @Override public void onAdClicked(){ }
-            @Override public void onAdImpression(ImpressionData data){ }
-            @Override public void onRewarded(Reward reward){
-                if(version==pageVersion&&!assistantRewardEventHandled){assistantRewardEventHandled=true;claimAssistantAdReward();}
-            }
-        });
-        ad.show(this);
-    }
-    private void claimAssistantAdReward(){
-        if(assistantRewardClaiming)return;
+        if(assistantRewardClaiming || assistantRewardPanel==null)return;
         assistantRewardClaiming=true;
-        if(assistantRewardButton!=null){assistantRewardButton.setEnabled(false);assistantRewardButton.setAlpha(.55f);}
-        if(assistantRewardHint!=null)assistantRewardHint.setText("Начисляем дополнительные запросы…");
-        try{
-            call("/assistant/ad-reward","POST",assistantRewardAttempt,result->{
-                assistantRewardAttempt=null;
-                assistantRewardClaiming=false;assistantRewardLoadFailed=false;assistantRewardAdUnitId="";
-                if(assistantQuotaLabel!=null&&assistantQuotaSendButton!=null)applyAssistantQuota(result.optJSONObject("quota"),assistantQuotaLabel,assistantQuotaSendButton);
-                message("Готово — начислены 3 дополнительных запроса к ассистенту.");
-            });
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
-                if(assistantRewardClaiming&&assistantRewardPanel!=null){
-                    assistantRewardClaiming=false;
-                    if(assistantRewardHint!=null)assistantRewardHint.setText("Если запросы не появились, обновите лимит и проверьте соединение.");
-                    refreshAssistantRewardOffer();
-                }
-            },15000);
-        }catch(Exception error){
+        final int version=pageVersion;
+        if(assistantRewardButton!=null)assistantRewardButton.setEnabled(false);
+        if(assistantRewardHint!=null)assistantRewardHint.setText("Подготавливаем рекламное видео…");
+        ShellAds.show(this, () -> token, (result,code,error)->{
             assistantRewardClaiming=false;
-            message("Не удалось получить бонус. Проверьте соединение.");
-            refreshAssistantRewardOffer();
-        }
+            if(isFinishing()||isDestroyed()||version!=pageVersion)return;
+            if(assistantRewardButton!=null)assistantRewardButton.setEnabled(true);
+            if(code!=null){if(assistantRewardHint!=null)assistantRewardHint.setText(error);return;}
+            if(assistantQuotaLabel!=null&&assistantQuotaSendButton!=null)applyAssistantQuota(result.optJSONObject("quota"),assistantQuotaLabel,assistantQuotaSendButton);
+            message("Начислено "+result.optLong("granted")+" токенов");
+        });
     }
     private void destroyAssistantRewardedAd(){
-        if(assistantRewardedAd!=null){assistantRewardedAd.setAdEventListener(null);assistantRewardedAd=null;}
+        ShellAds.release(this);
         assistantRewardLoading=false;assistantRewardShowWhenLoaded=false;
     }
     private void clearAssistantRewardUi(){
         destroyAssistantRewardedAd();
-        assistantRewardAttempt=null;assistantRewardStarting=false;
         assistantRewardPanel=null;assistantRewardButton=null;assistantRewardHint=null;
         assistantQuotaLabel=null;assistantQuotaSendButton=null;
         assistantRewardChecking=false;assistantRewardClaiming=false;assistantRewardLoadFailed=false;assistantRewardAdUnitId="";

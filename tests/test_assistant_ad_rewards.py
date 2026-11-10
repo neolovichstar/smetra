@@ -1,6 +1,7 @@
 import os
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 from backend import ai_tokens
@@ -26,14 +27,14 @@ class AssistantAdRewardTests(unittest.TestCase):
     def test_reward_claim_is_atomic_daily_and_adds_wallet_tokens(self):
         token, user_id = self.account("rewarded-ad-owner")
         self.exhaust_free_quota(user_id)
-        with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
             status, offer = self.call("/assistant/ad-reward", token=token)
             self.assertEqual(status, 200, offer)
             self.assertTrue(offer["available"])
             self.assertEqual((offer["amount"], offer["unit"]), (ai_tokens.AD_REWARD_TOKENS, "tokens"))
-            self.assertEqual(offer["ad_unit_id"], "test-reward-placement")
+            self.assertEqual(offer["ad_unit_id"], "123456789")
 
-            status, attempt = self.call("/assistant/ad-reward", "POST", {"operation": "start"}, token)
+            status, attempt = self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"}, token)
             self.assertEqual(status, 200, attempt)
             status, claimed = self.call("/assistant/ad-reward", "POST", attempt, token)
             self.assertEqual(status, 200, claimed)
@@ -58,27 +59,27 @@ class AssistantAdRewardTests(unittest.TestCase):
     def test_rewarding_requires_real_config_and_quota_exhaustion(self):
         token, user_id = self.account("rewarded-ad-config")
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("YANDEX_REWARDED_AD_UNIT_ID", None)
+            os.environ.pop("VK_REWARDED_SLOT_ID", None)
             status, offer = self.call("/assistant/ad-reward", token=token)
             self.assertEqual(status, 200, offer)
             self.assertFalse(offer["enabled"])
             self.assertEqual(self.call("/assistant/ad-reward", "POST", {}, token)[0], 503)
 
-        with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
             # With monthly tokens remaining the offer stays hidden.
             self.assertFalse(self.call("/assistant/ad-reward", token=token)[1]["available"])
 
         self.exhaust_free_quota(user_id)
-        with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
             self.assertTrue(self.call("/assistant/ad-reward", token=token)[1]["available"])
 
     def test_claim_rejects_forgery_expiry_and_other_account(self):
         token, user_id = self.account("ad-attempt-owner")
         other, _ = self.account("ad-attempt-other")
         self.exhaust_free_quota(user_id)
-        with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
             self.assertEqual(self.call("/assistant/ad-reward", "POST", {}, token)[0], 400)
-            status, attempt = self.call("/assistant/ad-reward", "POST", {"operation": "start"}, token)
+            status, attempt = self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"}, token)
             self.assertEqual(status, 200, attempt)
             self.assertEqual(self.call("/assistant/ad-reward", "POST", attempt, other)[0], 400)
             wrong = dict(attempt, nonce="forged")
@@ -114,8 +115,68 @@ class AssistantAdRewardTests(unittest.TestCase):
                 (int(time.time()) + 86400, user_id),
             )
         self.exhaust_free_quota(user_id)
-        with patch.dict(os.environ, {"YANDEX_REWARDED_AD_UNIT_ID": "test-reward-placement"}):
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
             self.assertEqual(self.call("/assistant/ad-reward", "POST", {}, token)[0], 403)
+
+    def test_production_never_offers_demo_rewarded_units(self):
+        token, user_id = self.account("ad-demo-production")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {"VERCEL_ENV": "production", "VK_REWARDED_SLOT_ID": "demo-rewarded-yandex"}):
+            from backend.rewarded_ads import configured_unit
+            self.assertEqual(configured_unit(), "")
+        with patch("backend.rewarded_ads.configured_unit", return_value=""):
+            self.assertFalse(self.call("/assistant/ad-reward", token=token)[1]["enabled"])
+            self.assertEqual(self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"}, token)[0], 503)
+
+    def test_issued_reward_can_recover_when_placement_is_disabled(self):
+        token, user_id = self.account("ad-recover-disabled")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
+            status, attempt = self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"}, token)
+            self.assertEqual(status, 200, attempt)
+            self.assertGreaterEqual(attempt["expires_at"] - int(time.time()), 86390)
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": ""}):
+            self.assertFalse(self.call("/assistant/ad-reward", token=token)[1]["enabled"])
+            status, claim = self.call("/assistant/ad-reward", "POST", attempt, token)
+            self.assertEqual(status, 200, claim)
+            self.assertEqual(claim["granted"], ai_tokens.AD_REWARD_TOKENS)
+            with self.mod.db() as con:
+                con.execute("UPDATE assistant_ad_attempts SET expires_at=0 WHERE id=?", (attempt["attempt_id"],))
+            status, replay = self.call("/assistant/ad-reward", "POST", attempt, token)
+            self.assertEqual(status, 200, replay)
+            self.assertTrue(replay["replayed"])
+            self.assertEqual(replay["quota"]["wallet"], ai_tokens.AD_REWARD_TOKENS)
+
+    def test_guest_cannot_access_account_apis_or_create_ad_attempts(self):
+        for path in ("/assistant/ad-reward", "/assistant", "/quotes", "/files", "/workspace"):
+            with self.subTest(path=path):
+                self.assertEqual(self.call(path)[0], 401)
+        self.assertEqual(self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"})[0], 401)
+        self.assertEqual(self.call("/quotes", "POST", {"title": "Guest", "items": []})[0], 401)
+
+    def test_vk_slot_validation_and_old_app_requires_update(self):
+        from backend.rewarded_ads import configured_unit
+        for value in ("", "0", "-1", "2147483648", "demo-rewarded-yandex", "R-M-123", "1.0", "１２３"):
+            with self.subTest(value=value), patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": value}):
+                self.assertEqual(configured_unit(), "")
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "", "YANDEX_REWARDED_AD_UNIT_ID": "R-M-123"}):
+            self.assertEqual(configured_unit(), "")
+        token, user_id = self.account("ad-old-app")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
+            self.assertEqual(self.call("/assistant/ad-reward", "POST", {"operation": "start"}, token)[0], 426)
+
+    def test_concurrent_claims_credit_exactly_once(self):
+        token, user_id = self.account("ad-concurrent")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {"VK_REWARDED_SLOT_ID": "123456789"}):
+            attempts = [self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"}, token)[1] for _ in range(2)]
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                results = list(pool.map(lambda attempt: self.call("/assistant/ad-reward", "POST", attempt, token), attempts * 2))
+            self.assertEqual(sorted(status for status, _ in results), [200, 200, 409, 409])
+            self.assertEqual(self.call("/assistant/ad-reward", token=token)[1]["quota"]["wallet"], ai_tokens.AD_REWARD_TOKENS)
+            with self.mod.db() as con:
+                self.assertEqual(con.execute("SELECT COUNT(*) FROM assistant_ad_reward_credits WHERE user_id=?", (user_id,)).fetchone()[0], 1)
 
 
 if __name__ == "__main__":

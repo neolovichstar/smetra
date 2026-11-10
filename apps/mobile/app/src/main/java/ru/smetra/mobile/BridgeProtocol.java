@@ -20,11 +20,11 @@ final class BridgeProtocol {
     /** Base64 file payloads are capped well below WebView message limits. */
     static final int MAX_MESSAGE_CHARS = 14 * 1024 * 1024;
     static final Set<String> OPERATIONS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-        "app.hello", "app.capabilities", "app.openStore", "app.openExternal", "app.setTheme",
+        "app.hello", "app.capabilities", "app.openStore", "app.openExternal", "app.setTheme", "app.review.qualify",
         "auth.start",
         "request.cancel",
         "speech.recognize",
-        "ads.rewarded.show",
+        "ads.rewarded.show", "ads.rewarded.recover",
         "push.status", "push.enable", "push.disable",
         "file.save", "file.share", "file.open",
         "ar.status", "ar.measure",

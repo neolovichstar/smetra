@@ -73,6 +73,13 @@ def main():
         con.execute('INSERT INTO assistant_messages(id,workspace_id,user_id,conversation_id,role,content,created_at) VALUES(?,?,?,?,?,?,?)',
                     (identity(), workspace, fixture.owner_id, thread_id, 'user', 'Проверь смету по дизайн-проекту', stamp()))
     data['assistant_thread_id'] = thread_id
+    if os.getenv('SMETRA_NATIVE_REWARDED_TEST') == '1':
+        from backend import ai_tokens
+        os.environ['VK_REWARDED_SLOT_ID'] = os.environ.get('SMETRA_NATIVE_REWARDED_SLOT_ID', '')
+        with fixture.mod.db() as con:
+            con.execute("UPDATE users SET plan='free',entitlement_until=0 WHERE id=?", (fixture.owner_id,))
+            con.execute("INSERT INTO rate_limits(key,count,started) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET count=excluded.count",
+                        (ai_tokens.month_key(fixture.owner_id), 10**9, stamp()))
     (ROOT / "data/protected-estimates-fixture.json").write_text(json.dumps(data), encoding="utf-8")
     print("PROTECTED_ESTIMATES_FIXTURE_READY " + fixture.base, flush=True)
     try:

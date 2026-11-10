@@ -2,13 +2,25 @@
 import hashlib
 import hmac
 import os
+import re
 import secrets
 from backend.business import DomainError, business_date, identity, stamp, transaction
 from backend import ai_tokens, assistant
 
+# Earned native claims can be retried after a restart or temporary offline period.
+# This does not change the fixed account/day grant limit or claim trust model.
+ATTEMPT_TTL = 86400
+
+
+def configured_unit():
+    # VK slot IDs are positive Java integers. Legacy Yandex configuration must
+    # not accidentally enable another network or a release demo placement.
+    unit = os.getenv("VK_REWARDED_SLOT_ID", "").strip()
+    return unit if re.fullmatch(r"[1-9][0-9]{0,9}", unit) and int(unit) <= 2147483647 else ""
+
 
 def route(service, method, data):
-    unit = os.getenv("YANDEX_REWARDED_AD_UNIT_ID", "").strip()
+    unit = configured_unit()
     user_id = service.user["id"]
     today = business_date().isoformat()
     current = assistant.quota(service)
@@ -18,17 +30,19 @@ def route(service, method, data):
             (user_id, today),
         ).fetchone()
         eligible = bool(unit and current["plan"] == "free" and current["remaining"] < ai_tokens.MIN_START_TOKENS and not claimed)
-        return 200, {"enabled": bool(unit), "available": eligible, "claimed_today": bool(claimed),
+        return 200, {"enabled": bool(unit), "available": eligible, "claimed_today": bool(claimed), "provider": "vk",
                      "amount": ai_tokens.AD_REWARD_TOKENS, "unit": "tokens", "ad_unit_id": unit if eligible else "",
                      "quota": assistant.public_quota(service)}
     if method != "POST":
         raise DomainError(405, "Требуется POST")
-    if not unit:
+    if not unit and not data.get("attempt_id"):
         raise DomainError(503, "Рекламный блок ещё не подключён")
     if current["plan"] != "free":
         raise DomainError(403, "Реклама отключена на платном тарифе")
     with transaction(service.con, lock_scopes=(f"user:{user_id}",)):
         if data.get("operation") == "start":
+            if data.get("provider") != "vk":
+                raise DomainError(426, "Обновите приложение, чтобы смотреть видео с вознаграждением")
             if assistant.quota(service)["remaining"] >= ai_tokens.MIN_START_TOKENS:
                 raise DomainError(409, "Сначала израсходуйте доступные запросы")
             if service.con.execute("SELECT id FROM assistant_ad_reward_credits WHERE user_id=? AND reward_date=?", (user_id, today)).fetchone():
@@ -37,9 +51,9 @@ def route(service, method, data):
             attempt_id, nonce, now = identity(), secrets.token_urlsafe(32), stamp()
             service.con.execute(
                 "INSERT INTO assistant_ad_attempts(id,user_id,nonce_hash,status,created_at,expires_at) VALUES(?,?,?,'issued',?,?)",
-                (attempt_id, user_id, hashlib.sha256(nonce.encode()).hexdigest(), now, now + 600),
+                (attempt_id, user_id, hashlib.sha256(nonce.encode()).hexdigest(), now, now + ATTEMPT_TTL),
             )
-            return 200, {"attempt_id": attempt_id, "nonce": nonce, "ad_unit_id": unit, "expires_at": now + 600}
+            return 200, {"attempt_id": attempt_id, "nonce": nonce, "ad_unit_id": unit, "provider": "vk", "expires_at": now + ATTEMPT_TTL}
         attempt = service.con.execute("SELECT * FROM assistant_ad_attempts WHERE id=? AND user_id=?",
                                       (str(data.get("attempt_id", ""))[:80], user_id)).fetchone()
         nonce = str(data.get("nonce", ""))[:200]

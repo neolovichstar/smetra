@@ -64,6 +64,9 @@ async function api(path, options = {}) {
         if(apiResponseCache.size>=100){const oldest=apiResponseCache.keys().next().value;if(oldest!==undefined)apiResponseCache.delete(oldest)}
         apiResponseCache.set(key,{value:cloneApiValue(result),expiresAt:Date.now()+API_CACHE_TTL});
       }
+      if(owner&&user===owner&&['POST','PATCH','PUT'].includes(method)&&/^\/quotes(?:\/[A-Za-z0-9_-]+)?$/.test(path)&&result.quote?.id&&window.SmetraShell?.has('review')){
+        void window.SmetraShell.call('app.review.qualify',{key:String(result.quote.id)+':'+String(result.quote.revision||1)}).catch(()=>{});
+      }
       return result;
     }catch(error){
       if(error.name==='AbortError')throw Error('Сервер отвечает слишком долго. Повторите попытку.');
@@ -322,6 +325,7 @@ function showBootError(message){
   if(button)button.hidden=false;
 }
 function showAuth(){
+  window.SmetraGuest?.leave();
   window.SmetraPublicProfile?.reset();
   SmetraReleaseUnread.reset();
   window.SmetraFieldFlows?.stop?.();
@@ -367,6 +371,10 @@ async function showApp(){
     if(user!==owner||authRevision!==attempt)return;
     $('#auth').classList.add('hidden');
     setAppState('authorized');
+    void window.SmetraShell?.ready?.then(()=>{
+      if(user!==owner||!window.SmetraShell.has('rewardRecovery'))return;
+      return window.SmetraShell.call('ads.rewarded.recover',{},{timeout:30000}).then(result=>{if(user===owner&&result.granted)notify('Награда за просмотр начислена: '+Number(result.granted).toLocaleString('ru-RU')+' токенов')});
+    }).catch(()=>{});
     window.SmetraCommunication?.startPresence?.();
     void SmetraReleaseUnread.refresh(true);
     window.SmetraWarmFeatures?.();
@@ -398,6 +406,7 @@ window.SmetraCompleteAuth=async profile=>{
   if(!profile?.id)throw Error('Не удалось подтвердить профиль.');
   ++authRevision;
   user=profile;clearApiCache();
+  window.SmetraGuest?.leave();
   sessionStorage.removeItem('workspace_id');
   window.Workspace?.reset();
   const hash=/^#[a-z-]+$/.test(location.hash)?location.hash:'#assistant';
@@ -731,7 +740,17 @@ if($('#auth')){
   $('#nav-backdrop').onclick=closeNavigation;
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('nav-open')){closeNavigation();$('#nav-toggle').focus()}});
   $('#logout').onclick=async()=>{window.SmetraFieldFlows?.stop?.();const button=$('#logout');if(button.disabled)return;button.disabled=true;const attempt=++authRevision;try{await api('/auth/logout',{method:'POST'})}catch{}finally{button.disabled=false}if(attempt!==authRevision)return;sessionStorage.removeItem('mobile_token');sessionStorage.removeItem('workspace_id');window.Workspace?.reset();user=null;showAuth()};
+  function openGuest(){
+    if(user||!window.SmetraGuest)return;
+    showAuth();
+    window.SmetraGuest.enter({onAuth:()=>{showAuth();setAuthMode('register');syncEmailActions()}});
+  }
+  const guestButton=document.createElement('button');
+  guestButton.type='button';guestButton.id='auth-guest';guestButton.className='btn full-width';
+  guestButton.textContent='Попробовать без регистрации';guestButton.onclick=openGuest;
+  $('#auth-status').before(guestButton);
   const params=new URLSearchParams(location.search);
+  guestButton.hidden=params.has('reset');
   if(/^[a-f0-9-]{36}$/.test(params.get('share')||'')){
     try{sessionStorage.setItem('smetra.pendingShare',params.get('share'))}catch{}
   }
@@ -759,7 +778,12 @@ if($('#auth')){
       try{result=await api('/me')}
       catch(error){
         if(bootRevision!==authRevision)return;
-        if(error.status===401||error.status===403){user=null;showAuth();return}
+        if(error.status===401||error.status===403){
+          user=null;showAuth();
+          const explicit=['register','login','reset','verify','share','payment','partner_sso'].some(key=>params.has(key))||Boolean(pendingShare);
+          if(error.status===401&&!explicit&&window.SmetraShell?.available)openGuest();
+          return;
+        }
         showBootError('Соединение не удалось. Повторите попытку.');
         return;
       }

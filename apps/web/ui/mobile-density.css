@@ -1,0 +1,77 @@
+/* Phone density: keep data/actions, reveal secondary explanations on demand. */
+.profile-workspace{font-size:12px;color:var(--text-3)}
+.profile-help{margin-top:16px;font-size:12px;color:var(--text-3)}
+.guest-help{margin-top:20px;font-size:13px;color:var(--text-3)}
+.guest-help summary{cursor:pointer;padding:12px 0;min-height:44px;box-sizing:border-box}
+.guest-signin{margin:28px 0 8px}.guest-signin p{font-size:12px;margin:8px 0}
+@media(max-width:640px){
+  #content .topline{margin-bottom:14px;gap:10px}
+  #content .topline h1{font-size:24px;line-height:1.2}
+  .account-hub .hub-identity,.profile-overline{display:none}
+  .account-hub .hub-tabs{padding-bottom:8px}
+  .account-hub .hub-tab{min-height:44px}
+  .profile-overview{padding-top:0}
+  .profile-hero{padding-bottom:12px;margin-bottom:14px;gap:10px;flex-wrap:nowrap}
+  .profile-hero-person{min-width:0;gap:10px;align-items:center}
+  .profile-hero-person>div{min-width:0}
+  .profile-hero h1{font-size:21px;line-height:1.2;margin:0;overflow-wrap:anywhere}
+  .profile-hero-person p{margin:4px 0 0;font-size:12px}
+  .profile-hero-person p:empty{display:none}
+  .profile-hero-avatar{width:40px;height:40px;flex:none}
+  .profile-hero>.btn{margin-left:auto;min-height:44px;flex:none}
+  .profile-work-heading{margin-bottom:10px;gap:8px;align-items:baseline}
+  .profile-work-heading h2,.profile-section-title h2{font-size:15px}
+  .profile-workspace{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+  .profile-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .profile-stat{padding:12px;min-height:72px;gap:6px;border-radius:12px}
+  .profile-stat strong{font-size:23px;line-height:1.15}
+  .profile-stat>span:last-child{font-size:12px;line-height:1.25}
+  .profile-stat-icon{width:16px;height:16px;right:10px;top:10px}
+  .profile-stat-icon svg{width:16px;height:16px}
+  .profile-finance{margin:20px 0 14px}
+  .profile-money-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .profile-money-metric{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;padding:10px 0 12px;min-width:0}
+  .profile-money-metric>span{font-size:11px;line-height:1.3;min-height:28px}
+  .profile-money-metric strong{font-size:clamp(15px,4vw,19px);line-height:1.2;overflow-wrap:anywhere}
+  .profile-money-metric small{display:none}
+  .profile-switch button{min-height:44px;padding:6px 9px;font-size:11px}
+  .profile-card{padding:14px;border-radius:12px}
+  .profile-bottom-grid{gap:10px;margin:12px 0}
+  .profile-plan-name{font-size:21px;margin:12px 0 6px}
+  .profile-card .profile-section-title{margin-bottom:10px}
+  .profile-recent-row{min-height:54px;padding:8px 0;gap:10px;flex-direction:row;align-items:center}
+  .profile-recent-row>span{gap:4px}
+  .profile-recent-row strong{font-size:12px}
+  .profile-recent-row small{font-size:11px}
+  .profile-recent-row b{font-size:12px}
+  .profile-chart h3{display:none}
+  .profile-privacy-note{margin:8px 0 0}
+  .profile-help>summary{min-height:44px;display:flex;align-items:center}
+  .settings-content-page .hub-head>p,.settings-content-page .hub-row>div>small:not(:has(a)),.usage-summary-grid>div>small{display:none}
+  #hub-panel-account .hub-row:first-child small{display:block}
+  .settings-content-page .hub-head{margin-bottom:12px}
+  .settings-content-page .hub-card{padding:14px}
+  .settings-content-page .hub-row{padding:12px 0;gap:10px}
+  .settings-content-page .profile-form section{padding:14px 0}
+  .settings-content-page .profile-form textarea{min-height:86px}
+  .usage-summary-grid{gap:8px;margin:14px 0}
+  .usage-summary-grid>div{padding:14px;gap:4px}
+  .usage-summary-grid strong{font-size:23px;grid-row:1/2}
+  .usage-plan{gap:10px}
+  .usage-meter{margin-top:14px}
+  #smetra-calculators .smcalc-kicker,#smetra-calculators .smcalc-title>span,#smetra-calculators .smcalc-result .smcalc-title>p{display:none}
+  #smetra-calculators .smcalc-header{margin-bottom:12px}
+  #smetra-calculators .smcalc-title{margin-bottom:12px}
+  .guest-page{padding-top:12px}
+  .guest-header{padding-bottom:18px}
+  .guest-page h1{font-size:28px;margin:12px 0}
+  .guest-page p{font-size:13px;line-height:1.5}
+  .guest-page .guest-actions{gap:10px;margin:20px 0}
+  .guest-page footer{margin-top:26px;font-size:11px}
+  .guest-page .guest-signin p{font-size:12px}
+}
+@media(max-width:359px){
+  .profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-hero{flex-wrap:wrap}
+  .profile-hero>.btn{margin-left:auto}
+}
