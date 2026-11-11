@@ -130,8 +130,11 @@ def prepare(service, prompt, on_status=None):
     if not visual_intent or reading.get("read_mode") == "visual":
         return results
     missing = reading.get("missing_text_pages") or []
+    sparse = reading.get("sparse_text_pages") or []
     excerpts = reading.get("excerpts") or []
     target = next((page for page in missing if type(page) is int and page >= 1), None)
+    if target is None and (reading.get("total_pages") or 0) > 1:
+        target = next((page for page in sparse if type(page) is int and page >= 1), None)
     if target is None:
         for item in excerpts:
             if (isinstance(item, dict) and type(item.get("page")) is int
