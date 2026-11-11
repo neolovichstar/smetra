@@ -123,12 +123,20 @@ def tools(function):
             "analyze_cloud_pdf_page",
             "Визуально прочитать чертёж или сканированную страницу PDF с Google Диска "
             "или Яндекс.Диска по защищённому id (из list_cloud_files). "
-            "Это полезно, когда в PDF нет текстового слоя: ИИ увидит одну страницу "
-            "и опишет только действительно видимые размеры, помещения, материалы. "
-            "Можно выбрать page 1..300; исходник и изображение не записываются "
-            "в БД Сметры. Изображение страницы временно передаётся ИИ-провайдеру. "
-            "Сначала пробуй read_cloud_file для текста; помни, что смета требует проверки человеком.",
-            {"id": text, "page": {"type": "integer", "minimum": 1, "maximum": 300}}, ("id",),
+            "Используй даже для PDF с текстовым слоем, если на листе есть планы, "
+            "мелкие размеры, графические ведомости, таблицы или разрезы. "
+            "page 1..300 — одна страница за раз. Для мелких надписей после "
+            "общего обзора вызови повторно с region: x,y,width,height в долях "
+            "страницы от левого верхнего угла (0..1, ширина/высота >=0.15). "
+            "focus — что именно нужно прочитать. Не выдавай неразборчивые "
+            "числа за точные. Изображение отправляется внешней vision-модели, "
+            "но оригинал в хранилище Сметры не записывается.",
+            {"id": text, "page": {"type": "integer", "minimum": 1, "maximum": 300},
+             "region": {"type": "object", "properties": {
+                 "x": {"type": "number"}, "y": {"type": "number"},
+                 "width": {"type": "number"}, "height": {"type": "number"}},
+                 "required": ["x", "y", "width", "height"], "additionalProperties": False},
+             "focus": {"type": "string", "maxLength": 240}}, ("id",),
         ),
         function(
             "usage_limits",
@@ -249,7 +257,8 @@ def read(service, name, args):
                          args.get("full_document", False))
     if name == "analyze_cloud_pdf_page":
         from backend.assistant_cloud import analyze_page
-        return analyze_page(service, args.get("id", ""), args.get("page", 1))
+        return analyze_page(service, args.get("id", ""), args.get("page", 1),
+                            region=args.get("region"), focus=args.get("focus", ""))
     if name == "cloud_drive_status":
         from backend import cloud_drives
         try:
