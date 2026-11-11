@@ -98,6 +98,8 @@ def extract_cloud_pdf(content, start_page=1, full_document=False):
     cloud_pdf_preflight(content)
     import pypdfium2 as pdfium
 
+    if type(start_page) is not int or type(full_document) is not bool:
+        raise ValueError("cloud pdf arguments")
     document = pdfium.PdfDocument(content)
     try:
         total = len(document)
@@ -114,9 +116,12 @@ def extract_cloud_pdf(content, start_page=1, full_document=False):
                 textpage = page.get_textpage()
                 try:
                     cap = 6000 if full_document else 12000
-                    count = min(textpage.count_chars(), cap)
+                    character_count = textpage.count_chars()
+                    if character_count < 0:
+                        raise ValueError("invalid PDF text length")
+                    count = min(character_count, cap)
                     raw_text = textpage.get_text_range(0, count)
-                    truncated |= textpage.count_chars() > cap
+                    truncated |= character_count > cap
                     # Keep row breaks: flattening the entire page destroys tables and
                     # makes numbers appear beside the wrong line descriptions.
                     normalized = "\n".join(" ".join(line.split())
