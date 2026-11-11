@@ -8,7 +8,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from backend.business import DomainError
+from backend.business import DomainError, string
 from backend.office_documents import VIEWABLE, READABLE
 from backend.audio_transcription import MIMES as AUDIO_MIMES
 from backend.document_text import PARSER_VERSION, MAX_INDEX_CHARS, MAX_SOURCES, normalize_text
@@ -21,9 +21,7 @@ _SECRET = re.compile(
 
 
 def list_files(service, query=""):
-    phrase = query.strip().casefold()
-    if len(phrase) > 100:
-        raise DomainError(400, "Поисковая фраза слишком длинная")
+    phrase = string(query, "Поисковая фраза", 100).casefold()
     # Bounded metadata only; the model must request file content explicitly.
     rows = service.con.execute(
         "SELECT id,name,mime,size FROM files WHERE workspace_id=? AND archived=0 "
@@ -117,8 +115,8 @@ def _source(row, number, text):
 
 
 def search_content(service, query):
-    phrase = query.strip().casefold()
-    if not 2 <= len(phrase) <= 100:
+    phrase = string(query, "Поиск в файлах", 100, True).casefold()
+    if len(phrase) < 2:
         raise DomainError(400, "Для поиска в файлах укажите от 2 до 100 символов")
     cursor = service.con.execute(
         "SELECT c.file_id,c.page,c.text,f.name,f.mime FROM file_text_chunks c "
@@ -210,9 +208,7 @@ def read_file(service, file_id, query="", *, page=None, cursor=""):
     partial = (bool(row['index_truncated']) if indexed and not legacy else
                page_count > len(pages) or row['mime'] == 'application/pdf' and any(not text.strip() for _, text in pages))
 
-    phrase = query.strip().casefold()
-    if len(phrase) > 100:
-        raise DomainError(400, "Поисковая фраза слишком длинная")
+    phrase = string(query, "Поисковая фраза", 100).casefold()
     if page is not None and (type(page) is not int or not 1 <= page <= MAX_SOURCES):
         raise DomainError(400, 'Укажите номер страницы или листа от 1 до 100')
     if not isinstance(cursor, str) or len(cursor) > 1024:
