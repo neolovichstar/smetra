@@ -173,7 +173,8 @@ def route(service, method, parts, data):
     file_processing.ensure_ready(service, context, allow_visual=True)
     request_hash = hashlib.sha256(packed([prompt, context, thread_id] + ([attachments] if attachments else [])).encode()).hexdigest()
     stored_context = {'context': context, 'attachments': attachments} if attachments else context
-    service.h.throttle('assistant:' + service.user['id'], 12, 60)
+    # Retries of the SAME idempotency key must not consume a fresh
+    # request allowance. Guard only genuinely new jobs, after lookup.
     with transaction(
         service.con,
         lock_scopes=(f"workspace:{service.wid}", f"user:{service.user['id']}"),
@@ -183,6 +184,7 @@ def route(service, method, parts, data):
             if existing['request_hash'] != request_hash:
                 raise DomainError(409, 'Этот ключ уже используется для другой задачи')
             return 200, {'job': public(existing), 'quota': assistant.public_quota(service)}
+        service.h.throttle('assistant:' + service.user['id'], 12, 60)
         count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='chat' AND status IN ('queued','running','retry')", args).fetchone()['n']
         if count >= 2:
             raise DomainError(429, 'Дождитесь завершения текущих фоновых задач')
