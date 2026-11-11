@@ -110,7 +110,10 @@ def extract_cloud_pdf(content, start_page=1, full_document=False):
                     count = min(textpage.count_chars(), cap)
                     raw_text = textpage.get_text_range(0, count)
                     truncated |= textpage.count_chars() > cap
-                    normalized = " ".join(raw_text[:cap].split())
+                    # Keep row breaks: flattening the entire page destroys tables and
+                    # makes numbers appear beside the wrong line descriptions.
+                    normalized = "\\n".join(" ".join(line.split())
+                        for line in raw_text[:cap].splitlines() if line.strip())
                     pages.append([number, normalized])
                 finally:
                     textpage.close()
@@ -125,10 +128,22 @@ def extract_cloud_pdf(content, start_page=1, full_document=False):
         document.close()
 
 
-def render_cloud_page(content, page_number):
-    """Bounded visual preview for one page of a large, private cloud PDF."""
-    if not 1 <= page_number <= 300:
+def render_cloud_page(content, page_number, region=None):
+    """Render a bounded high-resolution cloud PDF page, optionally cropped.
+
+    Coordinates are normalized [x, y, width, height] from the top-left.
+    Cropping the source before rasterizing makes dimension lines legible
+    without exposing the whole private document at excessive resolution.
+    """
+    if type(page_number) is not int or not 1 <= page_number <= 300:
         raise ValueError("page number")
+    if region is not None and (not isinstance(region, list) or len(region) != 4
+            or any(type(value) not in (int, float) or not math.isfinite(value) for value in region)
+            or not (0 <= region[0] < 1 and 0 <= region[1] < 1
+                    and .15 <= region[2] <= 1 and .15 <= region[3] <= 1
+                    and region[0] + region[2] <= 1.000001
+                    and region[1] + region[3] <= 1.000001)):
+        raise ValueError("region")
     cloud_pdf_preflight(content)
     import pypdfium2 as pdfium
 
@@ -142,22 +157,38 @@ def render_cloud_page(content, page_number):
             width, height = page.get_size()
             if not all(math.isfinite(value) and 1 <= value <= 10000 for value in (width, height)):
                 raise ValueError("dimensions")
-            # A bounded pixel area avoids decompression bombs and huge RGB buffers.
-            scale = min(1.8, 1700 / max(width, height))
-            bitmap = page.render(scale=scale)
+            if region is None:
+                crop = (0, 0, 0, 0)
+                view_width, view_height = width, height
+                target = 2300
+            else:
+                x, y, w, h = region
+                crop = (x * width, (1 - y - h) * height,
+                        (1 - x - w) * width, y * height)
+                view_width, view_height = width * w, height * h
+                target = 2600
+            # Hard pixel cap includes source pages with unusual aspect ratios.
+            scale = min(target / max(view_width, view_height),
+                        (6_000_000 / (view_width * view_height)) ** .5)
+            bitmap = page.render(scale=scale, crop=tuple(max(0, value) for value in crop))
             try:
                 picture = bitmap.to_pil().convert("RGB")
                 try:
-                    if picture.width * picture.height > 5_000_000:
+                    if picture.width * picture.height > 6_200_000:
                         raise ValueError("render size")
-                    out = io.BytesIO()
-                    picture.save(out, format="JPEG", quality=78, optimize=True)
-                    encoded = out.getvalue()
-                    if len(encoded) > 1_350_000:
+                    for quality in (86, 77, 67):
+                        out = io.BytesIO()
+                        picture.save(out, format="JPEG", quality=quality, optimize=True)
+                        encoded = out.getvalue()
+                        if len(encoded) <= 1_500_000:
+                            break
+                    if len(encoded) > 1_500_000:
                         raise ValueError("render bytes")
                     return {
                         "pages": [[page_number, base64.b64encode(encoded).decode("ascii")]],
-                        "total_pages": total, "truncated": total > 1,
+                        "total_pages": total,
+                        "truncated": total > 1 or region is not None,
+                        "region": region,
                     }
                 finally:
                     picture.close()
@@ -310,11 +341,15 @@ def main():
         sys.stdout.buffer.write(json.dumps(render_scans(content, selection)).encode())
         return
     if sys.argv[1].startswith("cloud-render-pdf:"):
-        parts = sys.argv[1].split(":")
-        if len(parts) != 2 or not parts[1].isascii() or not parts[1].isdecimal():
-            raise ValueError("render mode")
-        requested_page = int(parts[1])
-        result = render_cloud_page(content, requested_page)
+        value = sys.argv[1].split(":", 1)[1]
+        if value.isascii() and value.isdecimal():
+            requested_page, region = int(value), None
+        else:
+            selection = json.loads(value)
+            if (not isinstance(selection, dict) or set(selection) != {"page", "region"}):
+                raise ValueError("render mode")
+            requested_page, region = selection["page"], selection["region"]
+        result = render_cloud_page(content, requested_page, region)
         sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
         return
     if sys.argv[1] == "validate-pdf":
