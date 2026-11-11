@@ -15,7 +15,7 @@ const {JSDOM} = require(process.env.SMETRA_JSDOM_MODULE || 'jsdom');
   assert.match(html,/data-tab="billing"/,'Billing remains reachable without AI credits');
   assert.match(html,/data-tab="settings"/,'Account controls remain reachable');
   assert.match(html,/data-tab="support"/,'Support remains reachable');
-  assert.match(html,/assistant\.css\?v=20261110-documents1/,'Updated CSS must bypass old cache');
+  assert.match(html,/assistant\.css\?v=20261110-timer1/,'Assistant CSS uses the latest cache-busted asset');
   assert.match(app,/location\.hash\.slice\(1\) \|\| 'assistant'/,'Assistant is the default start page');
   assert.match(app,/cloudConnectedOnReturn/,'OAuth callback is handled explicitly');
   assert.match(app,/returnUrl\.searchParams\.delete\('cloud'\)/,'OAuth callback query flag is removed');
