@@ -82,7 +82,7 @@ class CloudPDFVisualTests(unittest.TestCase):
 
     def test_cloud_crop_is_rendered_and_only_selected_page_is_claimed(self):
         crop = {"x": .2, "y": .3, "width": .4, "height": .5}
-        encoded = base64.b64encode(b"\\xff\\xd8\\xff" + b"x" * 20).decode()
+        encoded = base64.b64encode(bytes((0xFF, 0xD8, 0xFF)) + b"x" * 20).decode()
         rendered = {"pages": [[7, encoded]], "total_pages": 49,
                     "region": [.2, .3, .4, .5], "truncated": True}
         report = {"choices": [{"message": {"content": "Размеры: часть цифр не читается."},
