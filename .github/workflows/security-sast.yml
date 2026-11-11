@@ -1,0 +1,19 @@
+name: Security SAST
+on: [push, pull_request]
+permissions:
+  contents: read
+
+jobs:
+  python-static-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned SAST scanner
+        run: python -m pip install bandit==1.9.4
+      - name: Fail on high severity, medium/high confidence Python findings
+        run: python -m bandit -r backend api -lll -ii

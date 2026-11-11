@@ -183,6 +183,9 @@ def route(service, method, parts, data):
             if existing['request_hash'] != request_hash:
                 raise DomainError(409, 'Этот ключ уже используется для другой задачи')
             return 200, {'job': public(existing), 'quota': assistant.public_quota(service)}
+        # Idempotent reconnects are free; only a new cost-bearing job consumes a slot.
+        from backend.security_limits import enforce_ai_spend
+        enforce_ai_spend(service)
         count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='chat' AND status IN ('queued','running','retry')", args).fetchone()['n']
         if count >= 2:
             raise DomainError(429, 'Дождитесь завершения текущих фоновых задач')

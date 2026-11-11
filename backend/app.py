@@ -306,6 +306,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         path = urllib.parse.urlsplit(self.path).path
         path = re.sub(r"/p/[^/]+", "/p/[redacted]", path)
+        # Route IDs, one-time credentials and share tokens must not leak to logs.
+        # Keep the route prefix for operational diagnostics.
+        path = re.sub(r"/[A-Za-z0-9_-]{24,}(?=/|$)", "/[redacted]", path)
         print(
             json.dumps(
                 {
@@ -1809,7 +1812,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with urllib.request.urlopen(request, timeout=12) as response:
                 return json.load(response)
         except (urllib.error.URLError, TimeoutError) as err:
-            print(json.dumps({"payment_api_error": str(err)}), flush=True)
+            # Provider exceptions may contain URLs or user-identifying query data.
+            print(json.dumps({"payment_api_error": type(err).__name__}), flush=True)
             raise ApiError(502, "Платёжный сервис временно недоступен")
 
     def provider_payment(self, payment_id):

@@ -136,7 +136,9 @@ def _draft(service, data):
             503,
             "AI не подключён. Администратор должен указать OPENROUTER_API_KEY",
         )
-    service.h.throttle("ai:" + service.user["id"], 5, 60)
+    from backend.security_limits import enforce_ai_spend
+    enforce_ai_spend(service)
+    service.h.throttle("ai:" + service.user["id"], 3, 60)
     file_value = data.get("file")
     prompt = string(data.get("text", ""), "Описание работы", 8000, file_value is None)
     extracted, image_url = capture_file(file_value) if file_value is not None else ("", "")
