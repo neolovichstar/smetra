@@ -230,7 +230,14 @@ def process(service, job, complete, progress, validate):
         ) from None
     progress("Сохраняю текст для поиска…")
     missing = [number for number, text in pages if not text.strip()]
-    needs_ocr = row['mime'] not in VIEWABLE and (not any(text.strip() for _, text in pages) or row['mime'] == 'application/pdf' and bool(missing))
+    # OCR is supported only for the first two pages. A later image-only
+    # page must remain a readable but explicitly partial index rather than
+    # becoming stuck in needs_ocr with no usable OCR action.
+    needs_ocr = row['mime'] not in VIEWABLE and (
+        not any(text.strip() for _, text in pages)
+        or row['mime'] == 'application/pdf'
+        and any(page <= 2 for page in missing)
+    )
     partial = bool(extracted['truncated']) or row['mime'] == 'application/pdf' and bool(missing)
     with transaction(service.con):
         # Repeat session/role checks after parsing, and fence both source and lease.
