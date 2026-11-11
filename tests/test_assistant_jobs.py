@@ -95,6 +95,26 @@ class AssistantJobTests(unittest.TestCase):
         self.assertEqual(self.call('/assistant/jobs','POST',{'text':'Другой запрос'},owner,key='one')[0],409)
         self.call('/assistant/jobs/'+results[0]['id'],'DELETE',token=owner)
 
+    def test_idempotent_chat_retry_does_not_use_new_rate_limit_credit(self):
+        from backend.app import Handler
+
+        owner, _ = self.account('job-duplicate-throttle')
+        recorded = []
+        original = Handler.throttle
+
+        def observe(handler, key, limit=15, window=60):
+            if key.startswith('assistant:'):
+                recorded.append(key)
+            return original(handler, key, limit, window)
+
+        with patch.object(Handler, 'throttle', observe):
+            first = self.enqueue(owner, key='same-message-retry')
+            for _ in range(3):
+                again = self.enqueue(owner, key='same-message-retry')
+                self.assertEqual(first['id'], again['id'])
+        self.assertEqual(len(recorded), 1)
+        self.call('/assistant/jobs/' + first['id'], 'DELETE', token=owner)
+
     def test_completion_survives_screen_exit_and_is_not_run_twice(self):
         owner, _ = self.account('job-complete')
         thread = self.call('/assistant/conversations','POST',{'title':'Проверка'},owner)[1]['conversation']
