@@ -4,6 +4,17 @@ from backend.postgres import Connection, Row, schema_name, translate
 
 
 class PostgresQueryTests(unittest.TestCase):
+    def test_sql_translation_cache_reuses_identical_queries(self):
+        from backend.postgres import translate
+
+        translate.cache_clear()
+        sql = "SELECT id FROM quotes WHERE user_id=?"
+        first = translate(sql, "smetra", True)
+        second = translate(sql, "smetra", True)
+        self.assertEqual(first, second)
+        self.assertEqual(translate.cache_info().hits, 1)
+        self.assertEqual(translate.cache_info().maxsize, 4096)
+
     def test_alias_and_literal_are_not_table_names(self):
         sql = "SELECT count(*) AS projects,'quotes ? 50%' AS label FROM projects WHERE id=?"
         self.assertEqual(

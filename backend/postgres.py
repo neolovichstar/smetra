@@ -11,6 +11,7 @@ import sqlite3
 import threading
 import urllib.parse
 from decimal import Decimal
+from functools import lru_cache
 
 import psycopg
 
@@ -110,6 +111,7 @@ def schema_name():
     return name
 
 
+@lru_cache(maxsize=4096)
 def translate(sql, schema, parameters=False):
     """Translate our small SQL subset without touching quoted values."""
     ignore = sql.lstrip().upper().startswith("INSERT OR IGNORE")
