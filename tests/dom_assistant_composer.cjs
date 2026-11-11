@@ -228,7 +228,7 @@ async function setup(enabled=true,voice=false,remaining=3){
    assert.equal(activity.classList.contains('is-complete'),false);
    const result={answer:'Смета готова',actions:[],assistant_message_id:'reply-timed-test',duration_seconds:77,
      quota:{remaining:2,limit:3,plan:'free',resets_at:2000000000}};
-   stream.enqueue(new TextEncoder().encode('event: done\\ndata: '+JSON.stringify(result)+'\\n\\n'));
+   stream.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify(result)+'\n\n'));
    stream.close();await tick();await tick();
    assert.equal(doc.querySelector('.assistant-activity-time')?.textContent,'1:17');
    assert.equal(doc.querySelector('.assistant-activity.is-complete .assistant-activity-label')?.textContent,'Готово');
