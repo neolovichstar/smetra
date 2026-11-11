@@ -97,7 +97,7 @@ class CloudPDFVisualTests(unittest.TestCase):
         self.assertEqual(extracted["total_pages"], 2)
         self.assertIn("Room A", extracted["pages"][0][1])
         self.assertIn("Room B", extracted["pages"][0][1])
-        self.assertIn("\\n", extracted["pages"][0][1])
+        self.assertIn("\n", extracted["pages"][0][1])
         crop = [0, 0, .5, .5]
         preview = render_cloud_page(pdf, 1, crop)
         self.assertEqual(preview["total_pages"], 2)
