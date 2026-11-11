@@ -70,6 +70,29 @@ class PriceEnrichmentTests(unittest.TestCase):
 
 
 class CloudPDFVisualTests(unittest.TestCase):
+    def test_cloud_estimate_preflight_visually_checks_sparse_plan_sheet(self):
+        from backend.assistant_cloud_task import prepare
+
+        actions = []
+        def reader(_service, name, args):
+            actions.append((name, args))
+            if name == "list_cloud_files":
+                return {"files": [{"id": "file", "name": "План дома.pdf",
+                                    "mime": "application/pdf", "provider": "google_drive"}]}
+            if name == "read_cloud_file":
+                return {"excerpts": [{"page": 1, "text": "Титульный лист"}],
+                        "total_pages": 3, "sparse_text_pages": [2],
+                        "missing_text_pages": []}
+            if name == "analyze_cloud_pdf_page":
+                return {"page": 2, "total_pages": 3, "analysis": "Видна кухня", "source_stored": False}
+            raise AssertionError(name)
+        with patch("backend.assistant_app_tools.read", side_effect=reader):
+            results = prepare(object(), "в гугл диске найди pdf «План дома.pdf» и сделай смету")
+        self.assertEqual([name for name, _, _ in results],
+                         ["list_cloud_files", "read_cloud_file", "analyze_cloud_pdf_page"])
+        self.assertEqual(actions[2][1]["page"], 2)
+        self.assertIn("кухня", results[2][2]["analysis"])
+
     def test_region_geometry_rejected_before_any_provider_call(self):
         for crop in ({"x": .9, "y": 0, "width": .3, "height": 1},
                      {"x": 0, "y": 0, "width": .1, "height": .5},
