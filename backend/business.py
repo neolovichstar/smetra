@@ -1824,7 +1824,9 @@ class Service:
     def action_center(self):
         """Small, workspace-scoped list of work that needs a human decision."""
         today = business_date().isoformat()
-        month = today[:7] + "-01"
+        month_start = business_date().replace(day=1)
+        month = month_start.isoformat()
+        next_month = (month_start + dt.timedelta(days=32)).replace(day=1).isoformat()
         items = []
         settings = json.loads(self.con.execute(
             "SELECT settings FROM workspaces WHERE id=?", (self.wid,)
@@ -1919,8 +1921,8 @@ class Service:
             for row in self.con.execute(
                 "SELECT p.currency,sum(x.amount_kopecks) AS amount FROM project_payments x "
                 "JOIN projects p ON p.id=x.project_id WHERE x.workspace_id=? AND p.workspace_id=? "
-                "AND x.payment_date>=? GROUP BY p.currency",
-                (self.wid, self.wid, month),
+                "AND x.payment_date>=? AND x.payment_date<? GROUP BY p.currency",
+                (self.wid, self.wid, month, next_month),
             )
         }
         return dict(
