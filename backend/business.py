@@ -460,6 +460,9 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_designer_studio.sql").read_text(encoding="utf-8")
+    )
 
 
 ENTITIES = {
@@ -2256,6 +2259,10 @@ class Service:
             from backend.construction import route
 
             return route(self, method, parts, query, data)
+        if kind == "designer":
+            from backend.designer import route as designer_route
+
+            return designer_route(self, method, parts, query, data)
         if kind in ("documents", "transfer"):
             try:
                 from backend import documents
@@ -2455,6 +2462,7 @@ ROUTES = set(ENTITIES) | {
     "files",
     "export",
     "construction",
+    "designer",
     "ai",
     "capabilities",
 }
