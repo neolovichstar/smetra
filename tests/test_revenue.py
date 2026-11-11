@@ -121,6 +121,13 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(revenue.dashboard(self.con)['revenue_30d'],0)
         self.assertEqual(revenue.dashboard(self.con)['mrr_kopecks'],0)
 
+    def test_pro_plus_yearly_payment_is_divided_by_twelve_in_mrr(self):
+        self.purchase(self.user, key="plus-year-mrr-checkout", plan="pro_plus_year")
+        report = revenue.dashboard(self.con)
+        self.assertEqual(report["mrr_kopecks"], round(1490000 / 12))
+        self.assertEqual(report["arr_kopecks"], 1490000)
+        self.assertEqual(report["revenue_30d"], 1490000)
+
     def test_activation_referral_rewards_are_once_only_and_capped(self):
         code=revenue.referral(self.con,self.user)['code']
         friend=self.account('friend')
