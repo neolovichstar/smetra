@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend import assistant, business, revenue
+from backend import assistant, business, revenue, community, attachments
 from backend.app import Handler
 import test_flows as flow_fixtures
 
@@ -86,6 +86,197 @@ class RevenueTests(unittest.TestCase):
         tester=self.account('test-bonus')
         test_payment,_=self.purchase(tester,key='test_bonus_checkout',test=True,plan='pro_year')
         self.assertIsNone(self.con.execute('SELECT id FROM assistant_bonus_grants WHERE payment_id=?',(test_payment['id'],)).fetchone(),'test checkouts do not mint purchase bonuses')
+
+    def test_four_tier_catalog_has_monthly_and_annual_checkout_products(self):
+        offer = revenue.pricing(self.con, self.user)
+        catalog = {item["id"]: item for item in offer["catalog"]}
+        self.assertEqual(set(catalog), {"pro_solo", "pro_plus", "team_company", "business_partner"})
+        expected = {
+            "pro_month": 49000,
+            "pro_year": 490000,
+            "pro_plus_month": 69000,
+            "pro_plus_year": 690000,
+            "team_month": 399000,
+            "team_year": 3990000,
+            "business_month": 999000,
+            "business_year": 9990000,
+        }
+        self.assertEqual({key: value["amount_kopecks"] for key, value in offer["plans"].items()}, expected)
+        for item in catalog.values():
+            self.assertIn(item["plan"], offer["plans"])
+            self.assertIn(item["annual_plan"], offer["plans"])
+            self.assertLess(offer["plans"][item["annual_plan"]]["amount_kopecks"],
+                            offer["plans"][item["plan"]]["amount_kopecks"] * 12)
+        self.assertEqual(catalog["team_company"]["seat_limit"], 5)
+        self.assertEqual(catalog["business_partner"]["seat_limit"], 15)
+        self.assertEqual(offer["limits"]["pro_quotes"], 10000)
+
+    def test_confirmed_paid_product_sets_workspace_tier_and_test_flag(self):
+        cases = [
+            ("solo-live", "pro_month", "pro_solo", 1, False),
+            ("plus-live", "pro_plus_month", "pro_plus", 1, False),
+            ("team-live", "team_month", "team", 5, False),
+            ("business-live", "business_year", "business", 15, False),
+            ("team-test", "team_month", "team", 5, True),
+        ]
+        for uid, plan, expected_tier, expected_seats, test_mode in cases:
+            user = self.account(uid)
+            local, _ = self.purchase(user, key="checkout_"+uid, plan=plan, test=test_mode)
+            workspace = self.con.execute(
+                "SELECT * FROM workspaces WHERE owner_id=?", (uid,)
+            ).fetchone()
+            self.assertIsNotNone(workspace)
+            self.assertEqual(workspace["plan"], expected_tier)
+            self.assertEqual(workspace["seat_limit"], expected_seats)
+            subscription = self.con.execute(
+                "SELECT product_code,is_test,status,current_period_end FROM billing_subscriptions "
+                "WHERE provider_subscription_id=?", (local["provider_id"],)
+            ).fetchone()
+            self.assertIsNotNone(subscription)
+            self.assertEqual(subscription["product_code"], revenue.PRODUCT_CODE[plan])
+            self.assertEqual(bool(subscription["is_test"]), test_mode)
+            self.assertEqual(subscription["status"], "active")
+            self.assertGreater(subscription["current_period_end"], revenue.now())
+
+    def test_higher_tier_does_not_inherit_lower_tier_expiry_and_rolls_back(self):
+        user = self.account("tier-period-change")
+        self.purchase(user, key="solo_annual_tier_change", plan="pro_year")
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE owner_id=?", (user["id"],)
+        ).fetchone()
+        solo = self.con.execute(
+            "SELECT current_period_end FROM billing_subscriptions WHERE workspace_id=? "
+            "AND product_code='pro_solo_year' AND status='active'",
+            (workspace["id"],),
+        ).fetchone()
+        self.assertIsNotNone(solo)
+
+        team_payment, _ = self.purchase(user, key="team_monthly_tier_change", plan="team_month")
+        team = self.con.execute(
+            "SELECT * FROM billing_subscriptions WHERE provider_subscription_id=?",
+            (team_payment["provider_id"],),
+        ).fetchone()
+        self.assertIsNotNone(team)
+        self.assertLess(team["current_period_end"], solo["current_period_end"])
+        self.assertAlmostEqual(
+            team["current_period_end"] - revenue.now(), 31 * 86400, delta=10,
+            msg="TEAM starts now; the longer Solo annual expiry must not be added to it",
+        )
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE id=?", (workspace["id"],)
+        ).fetchone()
+        self.assertEqual(workspace["plan"], "team")
+        self.assertEqual(workspace["seat_limit"], 5)
+        self.assertEqual(workspace["entitlement_until"], team["current_period_end"])
+
+        self.con.execute(
+            "UPDATE billing_subscriptions SET current_period_end=? WHERE id=?",
+            (revenue.now() - 1, team["id"]),
+        )
+        refreshed = community._refresh_workspace_entitlement(self.con, workspace["id"])
+        self.assertEqual(refreshed["plan"], "pro_solo")
+        self.assertEqual(refreshed["seat_limit"], 1)
+        self.assertEqual(refreshed["entitlement_until"], solo["current_period_end"])
+
+    def test_refunded_higher_tier_reverts_to_remaining_lower_tier(self):
+        user = self.account("tier-refund")
+        self.purchase(user, key="solo_annual_before_refund", plan="pro_year")
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE owner_id=?", (user["id"],)
+        ).fetchone()
+        solo = self.con.execute(
+            "SELECT current_period_end FROM billing_subscriptions WHERE workspace_id=? "
+            "AND product_code='pro_solo_year' AND status='active'",
+            (workspace["id"],),
+        ).fetchone()
+        team_payment, team_remote = self.purchase(
+            user, key="team_refund_checkout", plan="team_month"
+        )
+
+        handler = object.__new__(Handler)
+        handler.apply_refund(self.con, {
+            "id": "refund-team-refund-checkout",
+            "payment_id": team_remote["id"],
+            "status": "succeeded",
+            "amount": team_remote["amount"],
+        })
+
+        refunded = self.con.execute(
+            "SELECT status FROM billing_subscriptions WHERE last_payment_id=?",
+            (team_payment["id"],),
+        ).fetchone()
+        self.assertEqual(refunded["status"], "canceled")
+        workspace = self.con.execute(
+            "SELECT * FROM workspaces WHERE id=?", (workspace["id"],)
+        ).fetchone()
+        self.assertEqual(workspace["plan"], "pro_solo")
+        self.assertEqual(workspace["seat_limit"], 1)
+        self.assertEqual(workspace["entitlement_until"], solo["current_period_end"])
+        account = self.con.execute(
+            "SELECT plan,entitlement_until FROM users WHERE id=?", (user["id"],)
+        ).fetchone()
+        self.assertEqual(account["plan"], "pro")
+        self.assertEqual(account["entitlement_until"], solo["current_period_end"])
+
+    def test_file_storage_quota_tracks_active_subscription_tier(self):
+        user = self.account("storage-owner")
+        workspace_id = business.ensure_workspace(self.con, {"id": user["id"], "name": user["name"]})
+        service = SimpleNamespace(con=self.con, wid=workspace_id, user=user)
+
+        limit, plan = attachments.storage_limit(service)
+        self.assertEqual((limit, plan), (100_000_000, "free"))
+
+        for key, product, expected_plan, expected_limit in (
+            ("storage-solo", "pro_month", "pro_solo", 500 * 1024 * 1024),
+            ("storage-plus", "pro_plus_month", "pro_plus", 5 * 1024 * 1024 * 1024),
+            ("storage-team", "team_month", "team", 15 * 1024 * 1024 * 1024),
+            ("storage-business", "business_month", "business", 100 * 1024 * 1024 * 1024),
+        ):
+            self.purchase(user, key=key+"_checkout", plan=product)
+            limit, plan = attachments.storage_limit(service)
+            self.assertEqual((limit, plan), (expected_limit, expected_plan))
+            with self.assertRaises(business.DomainError) as raised:
+                attachments.check_storage_budget(service, limit, 0, 1)
+            self.assertEqual(raised.exception.status, 413)
+
+    def test_business_migration_upgrades_legacy_subscription_table(self):
+        legacy_con = sqlite3.connect(":memory:", isolation_level=None)
+        legacy_con.row_factory = sqlite3.Row
+        legacy_con.execute("PRAGMA foreign_keys=ON")
+        legacy_con.executescript((Path(__file__).parents[1] / "backend/schema.sql").read_text())
+        legacy_con.execute(
+            "CREATE TABLE billing_subscriptions("
+            "id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace_id TEXT NOT NULL,"
+            "product_code TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',"
+            "is_test INTEGER NOT NULL DEFAULT 0,current_period_end INTEGER NOT NULL DEFAULT 0)"
+        )
+        legacy_expiry = revenue.now() + 86400 * 20
+        legacy_con.execute(
+            "INSERT INTO users(id,email,password_hash,name,role,plan,entitlement_until,created_at,email_verified_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            ("legacy-paid", "legacy-paid@test.invalid", "unused", "Legacy", "user",
+             "pro", legacy_expiry - 10, revenue.now(), revenue.now()),
+        )
+        try:
+            business.migrate(legacy_con)
+            columns = {row["name"] for row in legacy_con.execute("PRAGMA table_info(billing_subscriptions)")}
+            self.assertIn("provider_subscription_id", columns)
+            self.assertIn("auto_renew", columns)
+            self.assertIn("current_period_start", columns)
+            workspace = legacy_con.execute(
+                "SELECT * FROM workspaces WHERE owner_id='legacy-paid'"
+            ).fetchone()
+            subscription = legacy_con.execute(
+                "SELECT * FROM billing_subscriptions WHERE provider='legacy' AND workspace_id=?",
+                (workspace["id"],),
+            ).fetchone()
+            self.assertIsNotNone(subscription)
+            self.assertEqual(subscription["product_code"], "pro_solo_month")
+            self.assertEqual(subscription["current_period_end"], legacy_expiry - 10)
+            self.assertEqual(workspace["plan"], "pro_solo")
+            self.assertEqual(workspace["seat_limit"], 1)
+        finally:
+            legacy_con.close()
 
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}

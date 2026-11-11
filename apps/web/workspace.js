@@ -125,7 +125,19 @@ window.Workspace = (() => {
     if(!active())return true;
     view(`<section class="workspace-section section-${e(section)}">${html}</section>`);bind(section);
     if(section==='files')bindFileCenter(fileCenterData);
-    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){await window.SmetraLoadFeature('growth');if(!active())return true;window.SmetraGrowth.onboarding(document.querySelector('.workspace-home')||document.querySelector('#content'));}
+    if(section==='dashboard'&&user.quote_count===0&&roleCanWrite()&&window.SmetraLoadFeature){
+      // The dashboard is already interactive; never let an optional onboarding
+      // chunk hold Workspace.render() open and allow the parent loading timer
+      // to replace the rendered page while that chunk downloads.
+      Promise.resolve()
+        .then(()=>window.SmetraLoadFeature('growth'))
+        .then(()=>{
+          if(!active()||!window.SmetraGrowth)return;
+          const host=document.querySelector('.workspace-home')||document.querySelector('#content');
+          if(host)window.SmetraGrowth.onboarding(host);
+        })
+        .catch(()=>{});
+    }
     if(section==='team')await customFieldSettings();
     return true;
   }

@@ -460,6 +460,85 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    # Keep SQLite workspace shape aligned with the cloud entitlement columns.
+    workspace_columns = {row["name"] for row in con.execute("PRAGMA table_info(workspaces)")}
+    for column, definition in {
+        "plan": "TEXT NOT NULL DEFAULT 'free'",
+        "subscription_status": "TEXT NOT NULL DEFAULT 'inactive'",
+        "entitlement_until": "INTEGER NOT NULL DEFAULT 0",
+        "seat_limit": "INTEGER NOT NULL DEFAULT 1",
+    }.items():
+        if column not in workspace_columns:
+            con.execute(f"ALTER TABLE workspaces ADD COLUMN {column} {definition}")
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_subscription_access.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    # Older development/test databases may already have the lightweight
+    # subscription table created by the chat module. Extend it in-place.
+    subscription_columns = {
+        row["name"] for row in con.execute("PRAGMA table_info(billing_subscriptions)")
+    }
+    for column, definition in {
+        "provider": "TEXT NOT NULL DEFAULT 'legacy'",
+        "provider_subscription_id": "TEXT NOT NULL DEFAULT ''",
+        "provider_payment_method_id": "TEXT NOT NULL DEFAULT ''",
+        "amount_kopecks": "INTEGER NOT NULL DEFAULT 0",
+        "currency": "TEXT NOT NULL DEFAULT 'RUB'",
+        "auto_renew": "INTEGER NOT NULL DEFAULT 0",
+        "renewal_consent_at": "INTEGER",
+        "renewal_consent_version": "TEXT",
+        "current_period_start": "INTEGER NOT NULL DEFAULT 0",
+        "next_charge_at": "INTEGER",
+        "cancel_at_period_end": "INTEGER NOT NULL DEFAULT 0",
+        "canceled_at": "INTEGER",
+        "last_payment_id": "TEXT",
+        "created_at": "INTEGER NOT NULL DEFAULT 0",
+        "updated_at": "INTEGER NOT NULL DEFAULT 0",
+    }.items():
+        if column not in subscription_columns:
+            con.execute(f"ALTER TABLE billing_subscriptions ADD COLUMN {column} {definition}")
+    con.execute(
+        "UPDATE billing_subscriptions SET provider_subscription_id='legacy-row:'||id "
+        "WHERE COALESCE(provider_subscription_id,'')=''"
+    )
+    con.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_subscriptions_provider_id "
+        "ON billing_subscriptions(provider_subscription_id)"
+    )
+    moment = stamp()
+    legacy_rows = con.execute(
+        "SELECT u.id AS user_id,u.entitlement_until,w.id AS workspace_id "
+        "FROM users u JOIN workspaces w ON w.owner_id=u.id "
+        "WHERE u.deleted_at IS NULL AND u.plan='pro' AND COALESCE(u.entitlement_until,0)>? "
+        "AND NOT EXISTS (SELECT 1 FROM billing_subscriptions s WHERE s.workspace_id=w.id "
+        "AND s.status IN ('active','succeeded') AND s.current_period_end>?)",
+        (moment, moment),
+    ).fetchall()
+    for legacy in legacy_rows:
+        provider_id = "legacy:" + legacy["workspace_id"]
+        con.execute(
+            "INSERT INTO billing_subscriptions("
+            "id,user_id,workspace_id,product_code,provider,provider_subscription_id,"
+            "provider_payment_method_id,amount_kopecks,currency,status,is_test,auto_renew,"
+            "renewal_consent_at,renewal_consent_version,current_period_start,current_period_end,"
+            "next_charge_at,cancel_at_period_end,canceled_at,last_payment_id,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,'active',0,0,NULL,NULL,?,?,NULL,0,NULL,NULL,?,?) "
+            "ON CONFLICT(provider_subscription_id) DO UPDATE SET status='active',"
+            "current_period_start=excluded.current_period_start,"
+            "current_period_end=excluded.current_period_end,updated_at=excluded.updated_at",
+            (
+                "legacy-" + legacy["workspace_id"], legacy["user_id"], legacy["workspace_id"],
+                "pro_solo_month", "legacy", provider_id, "", 0, "RUB", moment,
+                legacy["entitlement_until"], moment, moment,
+            ),
+        )
+        con.execute(
+            "UPDATE workspaces SET plan='pro_solo',subscription_status='active',"
+            "entitlement_until=?,seat_limit=1 WHERE id=?",
+            (legacy["entitlement_until"], legacy["workspace_id"]),
+        )
 
 
 ENTITIES = {
@@ -2036,6 +2115,33 @@ class Service:
                     and (role == "admin" or existing and existing["role"] == "admin")
                 ):
                     raise DomainError(403, "Эта роль доступна только владельцу")
+                if not existing:
+                    # Reconcile subscription expiry before allocating another seat.
+                    from backend.community import _refresh_workspace_entitlement
+
+                    _refresh_workspace_entitlement(self.con, self.wid)
+                    workspace_access = self.con.execute(
+                        "SELECT plan,subscription_status,entitlement_until,seat_limit "
+                        "FROM workspaces WHERE id=?", (self.wid,)
+                    ).fetchone()
+                    seat_limit = max(1, int(workspace_access["seat_limit"] or 1))
+                    occupied = int(self.con.execute(
+                        "SELECT COUNT(*) FROM workspace_members WHERE workspace_id=?",
+                        (self.wid,),
+                    ).fetchone()[0] or 0)
+                    plan = str(workspace_access["plan"] or "").lower()
+                    subscription_active = (
+                        workspace_access["subscription_status"] in ("active", "succeeded")
+                        and int(workspace_access["entitlement_until"] or 0) > stamp()
+                    )
+                    # Preserve legacy shared-workspace and viewer flows on existing
+                    # free/individual accounts. Strict named-seat limits belong to
+                    # active collaborative TEAM/BUSINESS products.
+                    if subscription_active and plan in ("team", "business") and occupied >= seat_limit:
+                        raise DomainError(
+                            402,
+                            f"Лимит мест тарифа {plan.upper()} — {seat_limit}, включая владельца.",
+                        )
                 self.con.execute(
                     "INSERT INTO workspace_members VALUES(?,?,?) ON CONFLICT(workspace_id,user_id) DO UPDATE SET role=excluded.role",
                     (self.wid, member["id"], role),
