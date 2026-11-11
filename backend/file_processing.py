@@ -230,7 +230,7 @@ def process(service, job, complete, progress, validate):
         ) from None
     progress("Сохраняю текст для поиска…")
     missing = [number for number, text in pages if not text.strip()]
-    needs_ocr = row['mime'] not in VIEWABLE and (not any(text.strip() for _, text in pages) or row['mime'] == 'application/pdf' and any(number <= 2 for number in missing))
+    needs_ocr = row['mime'] not in VIEWABLE and (not any(text.strip() for _, text in pages) or row['mime'] == 'application/pdf' and bool(missing))
     partial = bool(extracted['truncated']) or row['mime'] == 'application/pdf' and bool(missing)
     with transaction(service.con):
         # Repeat session/role checks after parsing, and fence both source and lease.
