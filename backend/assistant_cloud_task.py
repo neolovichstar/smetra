@@ -119,4 +119,41 @@ def prepare(service, prompt, on_status=None):
         reading = {"name": chosen.get("name"), "error": "Не удалось разобрать PDF",
                    "verified": False}
     results.append(("read_cloud_file", args, reading))
+    # Construction drawings often have a text layer consisting only of titles,
+    # while the plan, dimensions and schedule are actually drawn as graphics.
+    # One sampled vision read is justified when the user explicitly asks to
+    # analyse a cloud PDF for an estimate. Never mark other pages as verified.
+    visual_intent = bool(re.search(
+        r"смет|план|черт[её]ж|обмер|ведомост|визуал|разобра|проанализ",
+        prompt, re.I,
+    ))
+    if not visual_intent or reading.get("read_mode") == "visual":
+        return results
+    missing = reading.get("missing_text_pages") or []
+    excerpts = reading.get("excerpts") or []
+    target = next((page for page in missing if type(page) is int and page >= 1), None)
+    if target is None:
+        for item in excerpts:
+            if (isinstance(item, dict) and type(item.get("page")) is int
+                    and re.search(r"план\w*|обмер\w*|разв[её]рт|черт[её]ж",
+                                  str(item.get("text", "")), re.I)):
+                target = item["page"]
+                break
+    if target is None:
+        return results
+    if on_status:
+        on_status("Визуально проверяю ключевой лист PDF…")
+    visual_args = {"id": chosen["id"], "page": target,
+                   "focus": "Размеры, таблицы, материалы и строительные объёмы"}
+    try:
+        visual = assistant_app_tools.read(service, "analyze_cloud_pdf_page", visual_args)
+        if not isinstance(visual, dict):
+            raise ValueError("invalid visual result")
+    except DomainError as error:
+        visual = {"page": target, "verified": False,
+                  "error": error.message, "status": error.status}
+    except (ValueError, TypeError, KeyError):
+        visual = {"page": target, "verified": False,
+                  "error": "Не удалось проверить лист визуально"}
+    results.append(("analyze_cloud_pdf_page", visual_args, visual))
     return results
