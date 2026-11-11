@@ -203,7 +203,7 @@ def read_file(service, file_id, query="", page_start=1, full_document=False):
         del content
 
     excerpts, remaining, matched = [], MAX_FULL_TEXT if full_document else MAX_TOOL_TEXT, 0
-    text_pages, missing_text_pages = [], []
+    text_pages, missing_text_pages, sparse_text_pages = [], [], []
     per_page = max(180, min(850, MAX_FULL_TEXT // max(1, len(pages)))) if full_document else 1250
     for item in pages:
         if not isinstance(item, (list, tuple)) or len(item) != 2 or not isinstance(item[0], int) or not isinstance(item[1], str):
@@ -218,6 +218,10 @@ def read_file(service, file_id, query="", page_start=1, full_document=False):
                 missing_text_pages.append(page)
             continue
         text_pages.append(page)
+        # A title block alone does not mean the rasterized floor plan,
+        # dimension chains or schedule on the same page were actually read.
+        if mime == "application/pdf" and len(normalized) < 100:
+            sparse_text_pages.append(page)
         if phrase:
             index = normalized.casefold().find(phrase.casefold())
             if index < 0:
@@ -241,9 +245,11 @@ def read_file(service, file_id, query="", page_start=1, full_document=False):
         "full_document_requested": full_document,
         "text_pages_read": text_pages if mime == "application/pdf" else None,
         "missing_text_pages": missing_text_pages if mime == "application/pdf" else None,
+        "sparse_text_pages": sparse_text_pages if mime == "application/pdf" else None,
         "text_coverage_complete": bool(full_document and not missing_text_pages and
                                        len(text_pages) == extracted.get("total_pages")),
-        "requires_visual": bool(mime == "application/pdf" and missing_text_pages),
+        "requires_visual": bool(mime == "application/pdf" and
+                                (missing_text_pages or sparse_text_pages)),
         "truncated": truncated,
         "requires_ocr": mime == "application/pdf" and not any(item[1].strip() for item in pages),
         "query_matches": matched if phrase else None,
@@ -254,6 +260,8 @@ def read_file(service, file_id, query="", page_start=1, full_document=False):
             "Если next_page указан, запроси следующую группу через page_start. "
             "Отсутствующие страницы текущего чтения перечислены в missing_text_pages. "
             "На них текстовый слой отсутствует и визуальное содержимое не проверено. "
+            "sparse_text_pages — листы, где найдено слишком мало текста, "
+            "чтобы считать графическую часть прочитанной. "
             "Для чертежей, ведомостей с мелкими подписями и сканов используй "
             "analyze_cloud_pdf_page, при необходимости с region и focus. "
             "Можно готовить черновик сметы по проверенным "
