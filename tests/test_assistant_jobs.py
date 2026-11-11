@@ -96,7 +96,8 @@ class AssistantJobTests(unittest.TestCase):
         self.call('/assistant/jobs/'+results[0]['id'],'DELETE',token=owner)
 
     def test_idempotent_chat_retry_does_not_use_new_rate_limit_credit(self):
-        from backend.app import Handler
+        # BusinessFlows loads app.py into an isolated HTTP server module.
+        Handler = self.mod.Handler
 
         owner, _ = self.account('job-duplicate-throttle')
         recorded = []
@@ -231,7 +232,9 @@ class AssistantJobTests(unittest.TestCase):
 
             self.due(job)
             with self.mod.db() as con:
-                claimed = claim(con)
+                # Other tests may have queued work; claim exactly this job.
+                claimed = claim(con, job['id'])
+                self.assertIsNotNone(claimed)
                 self.assertEqual(claimed['attempts'],2)
             return {'content':'Устаревшая попытка'}
 
