@@ -1,11 +1,11 @@
 """File preparation uses the durable worker without spending model quota."""
 
 import hashlib
-import json
 import os
 import subprocess
 import sys
 
+from backend.validation import load_json
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 from backend.office_documents import READABLE, VIEWABLE
 
@@ -162,7 +162,7 @@ def isolated_extract(raw, mime):
     )
     if result.returncode or len(result.stdout) > (4_100_000 if mime == 'render-pdf' else 800_000):
         raise ValueError("extractor")
-    return json.loads(result.stdout)
+    return load_json(result.stdout)
 
 
 def process(service, job, complete, progress, validate):

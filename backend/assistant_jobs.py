@@ -45,15 +45,7 @@ def refund(con, row):
         con.execute('UPDATE rate_limits SET count=count-1 WHERE key=? AND count>0', (row['quota_key'],))
         grant_id = row['bonus_grant_id'] if 'bonus_grant_id' in row.keys() else None
         if grant_id:
-            restored = con.execute(
-                'UPDATE assistant_bonus_grants SET remaining=remaining+1 WHERE id=? AND remaining<amount AND expires_at>? RETURNING id',
-                (grant_id, stamp()),
-            ).fetchone()
-            if restored:
-                con.execute(
-                    'UPDATE assistant_bonus_usage SET count=count-1,updated_at=? WHERE quota_key=? AND count>0',
-                    (stamp(), row['quota_key']),
-                )
+            assistant.restore_bonus(con, grant_id, row['quota_key'])
 
 
 def route(service, method, parts, data):
@@ -242,10 +234,16 @@ def run_one(handler, con, origin):
                 raise DomainError(409, 'Задача отменена или передана другой попытке')
 
         def validate():
-            session = con.execute('SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? AND u.blocked=0 AND u.deleted_at IS NULL', (job['session_hash'],job['user_id'],stamp())).fetchone()
-            membership = con.execute('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',(job['workspace_id'],job['user_id'])).fetchone()
-            if not session or not membership or membership['role'] not in ('owner','admin','manager','member'):
+            member = con.execute(
+                "SELECT m.role FROM sessions s JOIN users u ON u.id=s.user_id "
+                "JOIN workspace_members m ON m.user_id=u.id AND m.workspace_id=? "
+                "WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? "
+                "AND u.blocked=0 AND u.deleted_at IS NULL",
+                (job['workspace_id'], job['session_hash'], job['user_id'], stamp()),
+            ).fetchone()
+            if not member or member['role'] not in ('owner','admin','manager','member'):
                 raise DomainError(403,'Доступ изменился. Войдите и подготовьте документ заново.')
+            service.role = member['role']
 
         if job['kind']=='file_index':
             file_processing.process(service,job,complete,progress,validate)
@@ -257,7 +255,7 @@ def run_one(handler, con, origin):
             process(service,job,complete,progress,validate)
         else:
             file_processing.ensure_ready(service,context)
-            assistant.answer_chat(service, job['prompt'], context=context, conversation_id=job['conversation_id'], on_status=progress, on_commit=complete)
+            assistant.answer_chat(service, job['prompt'], context=context, conversation_id=job['conversation_id'], on_status=progress, on_commit=complete, on_validate=validate)
         if service.runtime_connection:
             service.runtime_connection.finish(True)
             service.runtime_connection = None

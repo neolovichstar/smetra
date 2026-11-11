@@ -460,6 +460,11 @@ def migrate(con):
             encoding="utf-8"
         )
     )
+    con.executescript(
+        (Path(__file__).parent / "migrations" / "026_chat_read_indexes.sql").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 ENTITIES = {
@@ -563,6 +568,22 @@ class Service:
         setter = getattr(self.con, "set_transaction_lock_scopes", None)
         if callable(setter) and self.user and self.wid:
             setter((f"workspace:{self.wid}", f"user:{self.user['id']}"))
+
+    def revalidate_access(self):
+        """Refresh the authenticated actor and membership at a work boundary."""
+        token_hash = getattr(self.h, "session_token_hash", "")
+        row = self.global_con.execute(
+            "SELECT u.*,m.role AS workspace_role FROM sessions s "
+            "JOIN users u ON u.id=s.user_id "
+            "JOIN workspace_members m ON m.user_id=u.id AND m.workspace_id=? "
+            "WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? "
+            "AND u.blocked=0 AND u.deleted_at IS NULL",
+            (self.wid, token_hash, self.user["id"], stamp()),
+        ).fetchone()
+        if not row:
+            raise DomainError(403, "Доступ изменился. Войдите в аккаунт повторно")
+        self.user, self.role = row, row["workspace_role"]
+        self.write_access()
 
     def get(self, table, record_id):
         if not isinstance(record_id, str) or not 1 <= len(record_id) <= 100:
@@ -983,12 +1004,12 @@ class Service:
                     "SELECT * FROM documents WHERE id=? AND quote_id=? AND workspace_id=?",
                     (file_id, row["id"], self.wid),
                 ).fetchone()
-                if not document:
-                    raise DomainError(404, "Документ не найден")
                 try:
-                    from backend.documents import Download, pdf
+                    from backend.documents import Download, pdf, public_document
                 except ModuleNotFoundError:
-                    from documents import Download, pdf
+                    from documents import Download, pdf, public_document
+                if not document or not public_document(document, row["published_version"]):
+                    raise DomainError(404, "Документ не найден")
                 return 200, Download(
                     pdf(document), "application/pdf", "smetra-document.pdf"
                 )
@@ -1041,12 +1062,15 @@ class Service:
                         (row["id"],),
                     )
                 ]
+                from backend.documents import public_document
+
                 result["documents"] = [
-                    dict(d)
+                    {key: d[key] for key in ("id", "name", "number")}
                     for d in self.con.execute(
-                        "SELECT id,name,number FROM documents WHERE quote_id=? ORDER BY created_at DESC LIMIT 50",
-                        (row["id"],),
+                        "SELECT id,name,number,snapshot FROM documents WHERE quote_id=? AND workspace_id=? ORDER BY created_at DESC LIMIT 50",
+                        (row["id"], self.wid),
                     )
+                    if public_document(d, row["published_version"])
                 ]
                 result["versions"] = [
                     dict(
@@ -1826,9 +1850,17 @@ class Service:
         today = business_date().isoformat()
         month = today[:7] + "-01"
         items = []
-        settings = json.loads(self.con.execute(
-            "SELECT settings FROM workspaces WHERE id=?", (self.wid,)
-        ).fetchone()[0])
+        counts = self.con.execute(
+            "SELECT (SELECT settings FROM workspaces WHERE id=?) AS settings,"
+            "(SELECT count(*) FROM projects WHERE workspace_id=? "
+            "AND status NOT IN ('completed','cancelled')) AS active_projects,"
+            "(SELECT count(*) FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' "
+            "AND p.amount_kopecks>coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
+            "WHERE x.project_id=p.id AND x.workspace_id=?),0)) AS waiting_payments,"
+            "(SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?) AS approved_this_month",
+            (self.wid, self.wid, self.wid, self.wid, self.wid, business_month_start()),
+        ).fetchone()
+        settings = json.loads(counts["settings"])
         pipeline = settings.get("pipeline", DEFAULT_PIPELINE)
         first_stage = pipeline[0] if isinstance(pipeline, list) and pipeline else DEFAULT_PIPELINE[0]
 
@@ -1846,34 +1878,38 @@ class Service:
                 )
             )
 
-        for row in self.con.execute(
+        def cards(sql, parameters):
+            # Later priority groups cannot affect the bounded eight-card result.
+            return () if len(items) >= 8 else self.con.execute(sql, parameters)
+
+        for row in cards(
             "SELECT id,name FROM leads WHERE workspace_id=? AND status=? "
             "ORDER BY created_at DESC LIMIT 5",
             (self.wid, first_stage),
         ):
             add("lead", row, "Новая заявка", "Открыть заявку", row["name"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT q.id,q.title,q.currency FROM quotes q LEFT JOIN projects p ON p.quote_id=q.id "
             "WHERE q.workspace_id=? AND q.approval_state='approved' AND p.id IS NULL "
             "ORDER BY q.approved_at DESC LIMIT 5",
             (self.wid,),
         ):
             add("quote", row, "Смета согласована", "Создать проект", row["title"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,title,currency FROM quotes WHERE workspace_id=? AND approval_state='changes_requested' "
             "ORDER BY updated_at DESC LIMIT 5",
             (self.wid,),
         ):
             add("quote", row, "Клиент запросил изменения", "Открыть смету", row["title"])
-        for row in self.con.execute("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
+        for row in cards("SELECT id,title,currency,client FROM quotes WHERE workspace_id=? AND approval_state IN ('sent','viewed') AND sent_at<=? ORDER BY sent_at LIMIT 5",(self.wid,stamp()-2*86400)):
             add('quote',row,'Смета ждёт согласования','Открыть смету',row['client']+' · '+row['title'])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,name,due_date FROM tasks WHERE workspace_id=? AND status!='done' "
             "AND due_date!='' AND due_date<=? ORDER BY due_date LIMIT 5",
             (self.wid, today),
         ):
             add("task", row, "Срок задачи сегодня" if row["due_date"] == today else "Задача просрочена", "Открыть задачу", row["name"], row["due_date"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT p.id,p.name,p.currency,p.due_date,p.amount_kopecks-"
             "coalesce((SELECT sum(x.amount_kopecks) FROM project_payments x "
             "WHERE x.project_id=p.id AND x.workspace_id=?),0) AS remaining "
@@ -1885,14 +1921,14 @@ class Service:
             (self.wid, self.wid, today, self.wid),
         ):
             add("project", row, "Ожидается оплата", "Открыть проект", row["name"], row["due_date"], row["remaining"])
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,name,due_date,currency FROM projects WHERE workspace_id=? "
             "AND status NOT IN ('completed','cancelled') AND due_date=? "
             "ORDER BY updated_at DESC LIMIT 5",
             (self.wid, today),
         ):
             add("project", row, "Срок проекта сегодня", "Открыть проект", row["name"], today)
-        for row in self.con.execute(
+        for row in cards(
             "SELECT id,title,currency,view_count FROM quotes WHERE workspace_id=? "
             "AND approval_state='viewed' AND view_count>=2 "
             "ORDER BY first_viewed_at DESC LIMIT 5",
@@ -1900,20 +1936,6 @@ class Service:
         ):
             add("quote", row, "Клиент вернулся к смете", "Открыть смету", row["title"])
 
-        active = self.con.execute(
-            "SELECT count(*) FROM projects WHERE workspace_id=? AND status NOT IN ('completed','cancelled')",
-            (self.wid,),
-        ).fetchone()[0]
-        waiting = self.con.execute(
-            "SELECT count(*) FROM projects p WHERE p.workspace_id=? AND p.status!='cancelled' "
-            "AND p.amount_kopecks>coalesce((SELECT sum(x.amount_kopecks) "
-            "FROM project_payments x WHERE x.project_id=p.id AND x.workspace_id=?),0)",
-            (self.wid, self.wid),
-        ).fetchone()[0]
-        approved = self.con.execute(
-            "SELECT count(*) FROM quotes WHERE workspace_id=? AND approved_at>=?",
-            (self.wid, business_month_start()),
-        ).fetchone()[0]
         received = {
             row["currency"]: row["amount"]
             for row in self.con.execute(
@@ -1926,9 +1948,9 @@ class Service:
         return dict(
             items=items[:8],
             summary=dict(
-                active_projects=active,
-                waiting_payments=waiting,
-                approved_this_month=approved,
+                active_projects=counts["active_projects"],
+                waiting_payments=counts["waiting_payments"],
+                approved_this_month=counts["approved_this_month"],
                 received_this_month=received,
             ),
         )
@@ -2190,7 +2212,7 @@ class Service:
         ):
             self.h.throttle("download:" + self.user["id"], 60, 60)
         if method != "GET":
-            self.write_access()
+            self.revalidate_access()
             if kind == "assistant":
                 from backend.assistant import route
 
@@ -2206,6 +2228,7 @@ class Service:
                 self.con,
                 lock_scopes=(f"workspace:{self.wid}", f"user:{self.user['id']}"),
             ):
+                self.revalidate_access()
                 return self.route(method, kind, rest, query, data)
         return self.route(method, kind, rest, query, data)
 

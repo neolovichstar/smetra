@@ -24,9 +24,16 @@ _CIRCUIT_UNTIL = 0.0
 
 def credentials():
     """Prefer the explicitly configured Upstash database over legacy Vercel integration values."""
-    url = os.getenv("UPSTASH_REDIS_REST_URL") or os.getenv("REDIS_KV_REST_API_URL")
-    token = os.getenv("UPSTASH_REDIS_REST_TOKEN") or os.getenv("REDIS_KV_REST_API_TOKEN")
-    return url, token
+    for url_name, token_name in (
+        ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"),
+        ("REDIS_KV_REST_API_URL", "REDIS_KV_REST_API_TOKEN"),
+    ):
+        url, token = os.getenv(url_name), os.getenv(token_name)
+        if url or token:
+            if not url or not token:
+                raise RedisUnavailable("Incomplete Redis credentials")
+            return url, token
+    return None, None
 
 
 def enabled():
@@ -188,6 +195,8 @@ def acquire_lock(purpose, *parts, ttl=120):
         raise ValueError("Invalid lock TTL")
     client = provider()
     if client is None:
+        if environment() == "production":
+            raise RedisUnavailable("Production coordination requires Redis")
         return Lease(None, "", "")
     name = key("lock-" + purpose, *parts)
     token = secrets.token_urlsafe(24)

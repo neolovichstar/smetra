@@ -87,6 +87,51 @@ class RevenueTests(unittest.TestCase):
         test_payment,_=self.purchase(tester,key='test_bonus_checkout',test=True,plan='pro_year')
         self.assertIsNone(self.con.execute('SELECT id FROM assistant_bonus_grants WHERE payment_id=?',(test_payment['id'],)).fetchone(),'test checkouts do not mint purchase bonuses')
 
+    def test_late_sync_failure_or_queued_cancel_cannot_restore_refunded_purchase_gifts(self):
+        from backend.assistant_jobs import refund
+
+        for mode in ("sync", "queued"):
+            with self.subTest(mode=mode):
+                buyer = self.account("late-refund-" + mode)
+                local, remote = self.purchase(buyer, key="refunded-" + mode)
+                self.purchase(buyer, key="retained-" + mode)
+                service = SimpleNamespace(
+                    con=self.con,
+                    user=self.con.execute("SELECT * FROM users WHERE id=?", (buyer["id"],)).fetchone(),
+                )
+                quota_key = assistant.quota(service)["key"]
+                self.con.execute("INSERT INTO rate_limits(key,count,started) VALUES(?,100,?)", (quota_key, revenue.now()))
+                reservation = assistant.reserve(service)
+                if mode == "queued":
+                    wid = business.ensure_workspace(self.con, service.user)
+                    self.con.execute(
+                        "INSERT INTO assistant_jobs(id,workspace_id,user_id,session_hash,request_key,request_hash,"
+                        "prompt,quota_key,bonus_grant_id,next_attempt_at,created_at,updated_at) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (mode, wid, buyer["id"], "unused", mode, mode, "Fixture", quota_key,
+                         reservation["bonus_grant_id"], 0, revenue.now(), revenue.now()),
+                    )
+                handler = object.__new__(Handler)
+                handler.apply_refund(self.con, {
+                    "id": "late-refund-" + mode, "payment_id": remote["id"],
+                    "status": "succeeded", "amount": remote["amount"],
+                })
+                if mode == "sync":
+                    assistant.release(service, reservation)
+                else:
+                    job = self.con.execute("SELECT * FROM assistant_jobs WHERE id=?", (mode,)).fetchone()
+                    with business.transaction(self.con):
+                        refund(self.con, job)
+                        refund(self.con, job)
+                grant = self.con.execute(
+                    "SELECT remaining FROM assistant_bonus_grants WHERE id=?",
+                    (reservation["bonus_grant_id"],),
+                ).fetchone()
+                self.assertEqual(grant["remaining"], 0)
+                self.assertEqual(self.con.execute(
+                    "SELECT count FROM assistant_bonus_usage WHERE quota_key=?", (quota_key,),
+                ).fetchone()[0], 0)
+
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}
         with patch.dict(os.environ,config):

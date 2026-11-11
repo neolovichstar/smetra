@@ -30,6 +30,7 @@ TABLES = TABLES | frozenset("assistant_conversations workspace_knowledge file_te
 TABLES = TABLES | frozenset("user_profiles assistant_memory".split())
 TABLES = TABLES | frozenset("growth_events pricing_assignments billing_intents referral_links referral_rewards".split())
 TABLES = TABLES | frozenset("file_versions".split())
+TABLES = TABLES | frozenset("assistant_bonus_grants assistant_bonus_usage".split())
 TABLES = TABLES | frozenset("construction_price_batches".split())
 TABLES = TABLES | frozenset("quote_creation_requests".split())
 TABLES = TABLES | frozenset(["assistant_jobs"])
@@ -66,7 +67,7 @@ def _connection_pool(database_url, local_test):
                 min_size=0,
                 max_size=max_size,
                 timeout=5,
-                max_idle=5,
+                max_idle=60,
                 max_lifetime=300,
                 kwargs={
                     "sslmode": "disable" if local_test else "require",

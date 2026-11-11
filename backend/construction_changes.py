@@ -128,8 +128,9 @@ def public(service, method, path, query):
     data = service.h.body() if method == "POST" else {}
     token = string(data.get("token", query.get("token", [""])[0]), "Ссылка", 100, True)
     candidate = service.con.execute(
-        "SELECT id,workspace_id FROM construction_changes "
-        "WHERE public_token=? AND status!='draft'",
+        "SELECT c.id,c.workspace_id FROM construction_changes c "
+        "JOIN workspaces w ON w.id=c.workspace_id JOIN users u ON u.id=w.owner_id "
+        "WHERE c.public_token=? AND c.status!='draft' AND u.blocked=0 AND u.deleted_at IS NULL",
         (token,),
     ).fetchone()
     if not candidate:
@@ -141,7 +142,9 @@ def public(service, method, path, query):
     )
     with transaction(service.con, lock_scopes=(lock_scope,)):
         row = service.con.execute(
-            "SELECT * FROM construction_changes WHERE public_token=? AND status!='draft'", (token,),
+            "SELECT c.* FROM construction_changes c "
+            "JOIN workspaces w ON w.id=c.workspace_id JOIN users u ON u.id=w.owner_id "
+            "WHERE c.public_token=? AND c.status!='draft' AND u.blocked=0 AND u.deleted_at IS NULL", (token,),
         ).fetchone()
         if not row:
             raise DomainError(404, "Допработы не найдены")

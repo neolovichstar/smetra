@@ -3,12 +3,12 @@
 import base64
 import datetime as dt
 import hashlib
-import json
 import os
 import subprocess
 import urllib.error
 import urllib.request
 
+from backend.validation import load_json, read_json_response
 from backend.business import DomainError, identity, packed, stamp, string, transaction
 from backend import file_processing
 
@@ -72,13 +72,14 @@ def request_page(image):
     request = urllib.request.Request('https://openrouter.ai/api/v1/chat/completions', packed(payload).encode(), {'Authorization': 'Bearer ' + os.environ['OPENROUTER_API_KEY'], 'Content-Type': 'application/json', 'HTTP-Referer': os.getenv('PUBLIC_ORIGIN', ''), 'X-OpenRouter-Title': 'Smetra'}, method='POST')
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            raw = response.read(50001)
-        if len(raw) > 50000:
-            raise ValueError('response size')
-        answer = json.loads(raw)['choices'][0]['message']['content'].strip()
+            result = read_json_response(response, 50000)
+        choice = result["choices"][0]
+        if choice.get("finish_reason") not in (None, "stop") or choice["message"].get("refusal"):
+            raise ValueError("Incomplete OCR response")
+        answer = result['choices'][0]['message']['content'].strip()
         if answer.startswith('```'):
             answer = answer.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-        result = json.loads(answer)
+        result = load_json(answer)
         text = result.get('text')
         if not isinstance(text, str) or len(text) > 6000:
             raise ValueError('text')
