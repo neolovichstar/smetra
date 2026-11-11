@@ -128,6 +128,24 @@ class AssistantAdRewardTests(unittest.TestCase):
             self.assertFalse(self.call("/assistant/ad-reward", token=token)[1]["enabled"])
             self.assertEqual(self.call("/assistant/ad-reward", "POST", {"operation": "start", "provider": "vk"}, token)[0], 503)
 
+    def test_unapproved_slot_rejects_forged_attempt_id_on_start(self):
+        # Previously a caller-supplied attempt_id bypassed the moderation
+        # gate and returned a nonce for a never-approved advertisement.
+        token, user_id = self.account("ad-unapproved-forged-attempt")
+        self.exhaust_free_quota(user_id)
+        with patch.dict(os.environ, {"VK_REWARDED_APPROVED": "0",
+                                     "VK_REWARDED_SLOT_ID": "2106762"}):
+            for fake in ("fabricated", "another-attempt"):
+                code, _ = self.call("/assistant/ad-reward", "POST", {
+                    "operation": "start", "provider": "vk", "attempt_id": fake,
+                }, token)
+                self.assertEqual(code, 503)
+            with self.mod.db() as con:
+                self.assertEqual(con.execute(
+                    "SELECT COUNT(*) FROM assistant_ad_attempts WHERE user_id=?",
+                    (user_id,),
+                ).fetchone()[0], 0)
+
     def test_issued_reward_can_recover_when_placement_is_disabled(self):
         token, user_id = self.account("ad-recover-disabled")
         self.exhaust_free_quota(user_id)
