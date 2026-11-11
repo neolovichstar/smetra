@@ -12,7 +12,7 @@ function setup(){
   // The dedicated review-flow suite stubs the independent human-review dialog.
   w.SmetraEstimateSafety.confirmReview=async()=>true;
  const notices=[],opened=[];w.notify=text=>notices.push(text);w.Workspace={openQuote:async id=>{opened.push(id);w.view('Quote')}};
- w.api=async()=>result();load(fs.readFileSync('apps/web/quote-review.js','utf8'));
+ w.api=async()=>result();load(fs.readFileSync('apps/web/estimate-workflow.js','utf8'));load(fs.readFileSync('apps/web/quote-review.js','utf8'));
  return {dom,w,doc,notices,opened,close:()=>dom.window.close()};
 }
 (async()=>{
