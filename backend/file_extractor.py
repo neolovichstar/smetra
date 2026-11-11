@@ -112,7 +112,7 @@ def extract_cloud_pdf(content, start_page=1, full_document=False):
                     truncated |= textpage.count_chars() > cap
                     # Keep row breaks: flattening the entire page destroys tables and
                     # makes numbers appear beside the wrong line descriptions.
-                    normalized = "\\n".join(" ".join(line.split())
+                    normalized = "\n".join(" ".join(line.split())
                         for line in raw_text[:cap].splitlines() if line.strip())
                     pages.append([number, normalized])
                 finally:
