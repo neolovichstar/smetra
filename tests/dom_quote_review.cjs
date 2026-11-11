@@ -40,7 +40,8 @@ function setup(){
  });
  await test('failed publication keeps comment and reloads comparison before retry',async({w,doc})=>{
   let reads=0;w.api=async(path,options)=>{if(options?.method==='POST')throw Error('Conflict');reads++;return result({revision:reads+6})};await w.SmetraQuoteReview.open(original,versions,{publish:true});const form=doc.querySelector('#review-publish');form.querySelector('textarea').value='Keep this';await form.onsubmit({preventDefault(){}});
-  assert.equal(reads,2);assert.equal(form.querySelector('textarea').value,'Keep this');assert.equal(form.querySelector('button').disabled,false);assert.ok(doc.querySelector('#review-publish-status').textContent.includes('Conflict'));
+  // Initial compare, margin/economics preflight, then fresh compare after conflict.
+  assert.equal(reads,3);assert.equal(form.querySelector('textarea').value,'Keep this');assert.equal(form.querySelector('button').disabled,false);assert.ok(doc.querySelector('#review-publish-status').textContent.includes('Conflict'));
  });
  await test('currency change never invents a conversion difference',async({w,doc})=>{
   w.api=async()=>result({totals:{before:10000,after:20000,before_currency:'RUB',after_currency:'USD',delta_kopecks:null},items:[]});await w.SmetraQuoteReview.open(original,versions);assert.ok(doc.querySelector('.review-total').textContent.includes('Разные валюты'));
