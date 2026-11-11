@@ -47,6 +47,65 @@ def _key(row):
     return (row["category"].casefold(), row["name"].casefold(), row["unit"].casefold())
 
 
+
+def _catalog_key(name, unit):
+    """Only exact normalized work/material names and units are price-compatible."""
+    return (" ".join(name.casefold().replace("ё", "е").split()),
+            " ".join(unit.casefold().split()))
+
+
+def enrich_catalog_prices(service, args):
+    """Fill *unknown* RUB prices from unambiguous workspace-owned catalogue rows.
+
+    Never override a user/model-supplied price, apply rates from another
+    workspace, mix units or silently guess that two different items are alike.
+    A catalogue price is a stored rate, not proof of a current market quote.
+    """
+    items = args.get("items")
+    if (args.get("currency") or "RUB") != "RUB" or not isinstance(items, list):
+        return args
+    missing = [item for item in items if isinstance(item, dict)
+               and item.get("price_status", "unknown") == "unknown"
+               and item.get("unit_price", 0) == 0
+               and isinstance(item.get("name"), str)
+               and isinstance(item.get("unit"), str)]
+    if not missing:
+        return args
+
+    rows = service.con.execute(
+        "SELECT name,unit,price FROM catalog_items "
+        "WHERE workspace_id=? AND price>0 LIMIT 5000", (service.wid,)
+    ).fetchall()
+    prices = {}
+    for row in rows:
+        key = _catalog_key(row["name"], row["unit"])
+        value = row["price"]
+        if key not in prices:
+            prices[key] = value
+        elif prices[key] != value:
+            prices[key] = None  # conflicting saved rates require human review
+
+    filled = []
+    for item in items:
+        if item not in missing:
+            filled.append(item)
+            continue
+        price = prices.get(_catalog_key(item["name"], item["unit"]))
+        if type(price) is not int or price <= 0:
+            filled.append(item)
+            continue
+        note = "Расценка из вашего каталога Сметры; проверьте актуальность."
+        description = item.get("description") or ""
+        if not isinstance(description, str):
+            filled.append(item)  # let the regular validator report bad input
+            continue
+        filled.append({
+            **item, "unit_price": price, "price_status": "confirmed",
+            "description": (description + " " + note).strip()[:1000],
+        })
+    return {**args, "items": filled}
+
+
 def normalize(args):
     """Validate a create_quotes call and return (arguments for /quotes, preview)."""
     items = args.get("items")
