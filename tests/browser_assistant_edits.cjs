@@ -37,7 +37,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await evaluate("document.querySelector('.assistant-saved button').click()");
  await until("document.querySelector('.assistant-saved').textContent.includes('Изменение отменено')");
  assert.equal(await evaluate(`api('/quotes/${before.id}').then(r=>r.quote.amount_kopecks)`),6400000);
- await evaluate(`window.SmetraAssistantContext({entity:'quotes',id:'${before.id}',label:'Айдентика и упаковка',workspace_id:window.Workspace.currentWorkspaceId()});window.SmetraAssistant()`);
+ await evaluate(`(async()=>{window.SmetraAssistantContext({entity:'quotes',id:'${before.id}',label:'Айдентика и упаковка',workspace_id:window.Workspace.currentWorkspaceId()});await window.SmetraAssistant()})()`);
  await until("JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')?.id==="+JSON.stringify(before.id));
  await until("!!document.querySelector('#assistant-form')?.onsubmit");
  await evaluate("document.querySelector('#assistant-input').value='Проверь смету';document.querySelector('#assistant-input').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#assistant-form').requestSubmit()");
