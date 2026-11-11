@@ -80,6 +80,33 @@ class CloudPDFVisualTests(unittest.TestCase):
         self.assertEqual(_validated_region(
             {"x": .25, "y": .25, "width": .5, "height": .5}), [.25, .25, .5, .5])
 
+    def test_real_pdf_cropped_render_is_bounded_and_extract_retains_rows(self):
+        from PIL import Image
+        from reportlab.pdfgen import canvas
+        from backend.file_extractor import extract_cloud_pdf, render_cloud_page
+
+        output = io.BytesIO()
+        document = canvas.Canvas(output, pagesize=(600, 800))
+        document.drawString(40, 720, "Room A: 12.5 m2")
+        document.drawString(40, 700, "Room B: 18 m2")
+        document.showPage()
+        document.drawString(40, 700, "Second page")
+        document.save()
+        pdf = output.getvalue()
+        extracted = extract_cloud_pdf(pdf, full_document=True)
+        self.assertEqual(extracted["total_pages"], 2)
+        self.assertIn("Room A", extracted["pages"][0][1])
+        self.assertIn("Room B", extracted["pages"][0][1])
+        self.assertIn("\\n", extracted["pages"][0][1])
+        crop = [0, 0, .5, .5]
+        preview = render_cloud_page(pdf, 1, crop)
+        self.assertEqual(preview["total_pages"], 2)
+        self.assertEqual(preview["region"], crop)
+        decoded = base64.b64decode(preview["pages"][0][1])
+        self.assertLessEqual(len(decoded), 1_500_000)
+        with Image.open(io.BytesIO(decoded)) as image:
+            self.assertLessEqual(image.width * image.height, 6_200_000)
+
     def test_cloud_crop_is_rendered_and_only_selected_page_is_claimed(self):
         crop = {"x": .2, "y": .3, "width": .4, "height": .5}
         encoded = base64.b64encode(bytes((0xFF, 0xD8, 0xFF)) + b"x" * 20).decode()
