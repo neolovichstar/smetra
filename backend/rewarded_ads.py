@@ -40,7 +40,11 @@ def route(service, method, data):
                      "quota": assistant.public_quota(service)}
     if method != "POST":
         raise DomainError(405, "Требуется POST")
-    if not unit and not data.get("attempt_id"):
+    # An attempt_id supplied by the caller must never bypass moderation
+    # when creating a NEW reward attempt. Existing issued attempts remain
+    # redeemable if the ad placement is later disabled.
+    starting = data.get("operation") == "start"
+    if not unit and (starting or not data.get("attempt_id")):
         raise DomainError(503, "Рекламный блок ещё не подключён")
     if current["plan"] != "free":
         raise DomainError(403, "Реклама отключена на платном тарифе")
