@@ -1338,14 +1338,19 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     const setActivity=value=>{activityLabel.textContent=String(value||'Думаю…').slice(0,100)};
     const elapsedSinceStart=performance.now();
     const updateClock=()=>{activityTime.textContent=responseTime((performance.now()-elapsedSinceStart)/1000)};
-    let clockRunning=true;
+    let clockRunning=true,verifiedDuration=null;
     const clockInterval=setInterval(()=>{
       if(!activity.isConnected){clearInterval(clockInterval);clockRunning=false;return}
       if(clockRunning)updateClock();
     },1000);
     const finishClock=(label='Готово',seconds=null)=>{
       clockRunning=false;clearInterval(clockInterval);
-      if(seconds!==null&&Number.isFinite(Number(seconds)))activityTime.textContent=responseTime(seconds);
+      // A late background refresh may dispatch a generic "finished" event
+      // after the SSE completion supplied the server's verified duration.
+      // Never replace that exact time with a near-zero local elapsed clock.
+      if(seconds!==null&&Number.isFinite(Number(seconds)))
+        verifiedDuration=Math.max(0,Number(seconds));
+      if(verifiedDuration!==null)activityTime.textContent=responseTime(verifiedDuration);
       else updateClock();
       activity.classList.add('is-complete');setActivity(label);
       activityTime.setAttribute('aria-label','Время ответа');
