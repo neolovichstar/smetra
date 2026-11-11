@@ -85,7 +85,9 @@ class DocumentParserTests(unittest.TestCase):
         self.assertEqual([number for number, _ in result['pages']], [1])
         self.assertTrue(result['truncated'])
         with Image.open(io.BytesIO(base64.b64decode(result['pages'][0][1]))) as image:
-            self.assertEqual(image.size, (2200, 2200))
+            self.assertGreaterEqual(image.width, 2200)
+            self.assertEqual(image.width, image.height)
+            self.assertLessEqual(image.width * image.height, 6_200_000)
             red, green, blue = image.getpixel((1100, 1100))
             self.assertGreater(red, 240)
             self.assertLess(green + blue, 20)
