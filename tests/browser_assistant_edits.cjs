@@ -59,6 +59,10 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  await until(`document.querySelector('#assistant-thread-select option[value="${second}"]')`);
  await evaluate(`document.querySelector('#assistant-history-toggle').click();document.querySelector('[data-conversation="${second}"]').click()`);
  await until("document.querySelector('#assistant-thread-select')?.value==="+JSON.stringify(second));
+ // History selection is asynchronous: await the new view before clicking
+ // New dialog, otherwise the old control belongs to an invalidated render.
+ await evaluate('window.SmetraAssistant()');
+ await until("document.querySelector('#assistant-thread-select')?.value==="+JSON.stringify(second)+"&&!document.querySelector('#assistant-new-thread')?.disabled");
  await evaluate("document.querySelector('#assistant-new-thread').click()");
  await until("document.querySelector('#assistant-thread-select')?.value===''&&!sessionStorage.getItem('smetra.assistant.context')");
  const fileThread=await evaluate(`(async()=>{const file=(await api('/files',{method:'POST',body:JSON.stringify({assistant_upload:true,name:'brief.txt',content:btoa('file context')})})).file;const id=(await api('/assistant/conversations',{method:'POST',body:JSON.stringify({title:'Бриф проекта',context_entity:'files',context_id:file.id})})).conversation.id;await api('/assistant/chat',{method:'POST',body:JSON.stringify({text:'Проверь выбранный бриф',conversation_id:id})});return id})()`);
