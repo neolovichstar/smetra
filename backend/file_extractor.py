@@ -41,19 +41,26 @@ def render_scans(content, selection=None):
                     raise ValueError('dimensions')
                 if region is None:
                     crop = (0, 0, 0, 0)
-                    scale = 2000 / max(width, height)
+                    scale = min(2400 / max(width, height),
+                                (6_000_000 / (width * height)) ** .5)
                 else:
                     x, y, view_width, view_height = region
                     crop = (x * width, (1 - y - view_height) * height,
                             (1 - x - view_width) * width, y * height)
-                    scale = 2200 / max(width * view_width, height * view_height)
+                    crop_width, crop_height = width * view_width, height * view_height
+                    scale = min(2700 / max(crop_width, crop_height),
+                                (6_000_000 / (crop_width * crop_height)) ** .5)
                 bitmap = page.render(scale=scale, crop=tuple(max(0, value) for value in crop))
                 try:
                     image = bitmap.to_pil().convert('RGB')
                     try:
                         output = io.BytesIO()
-                        image.save(output, format='JPEG', quality=82, optimize=True)
-                        raw = output.getvalue()
+                        for quality in (86, 76, 66):
+                            output = io.BytesIO()
+                            image.save(output, format='JPEG', quality=quality, optimize=True)
+                            raw = output.getvalue()
+                            if len(raw) <= 1_500_000:
+                                break
                         if len(raw) > 1_500_000:
                             raise ValueError('image size')
                         pages.append([number, base64.b64encode(raw).decode()])
