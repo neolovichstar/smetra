@@ -48,10 +48,10 @@ def _key(row):
 
 
 
-def _catalog_key(name, unit):
+def _catalog_key(name, unit, kind):
     """Only exact normalized work/material names and units are price-compatible."""
     return (" ".join(name.casefold().replace("ё", "е").split()),
-            " ".join(unit.casefold().split()))
+            " ".join(unit.casefold().split()), kind)
 
 
 def enrich_catalog_prices(service, args):
@@ -73,12 +73,12 @@ def enrich_catalog_prices(service, args):
         return args
 
     rows = service.con.execute(
-        "SELECT name,unit,price FROM catalog_items "
+        "SELECT name,unit,item_type,price FROM catalog_items "
         "WHERE workspace_id=? AND price>0 LIMIT 5000", (service.wid,)
     ).fetchall()
     prices = {}
     for row in rows:
-        key = _catalog_key(row["name"], row["unit"])
+        key = _catalog_key(row["name"], row["unit"], row["item_type"])
         value = row["price"]
         if key not in prices:
             prices[key] = value
@@ -90,7 +90,7 @@ def enrich_catalog_prices(service, args):
         if item not in missing:
             filled.append(item)
             continue
-        price = prices.get(_catalog_key(item["name"], item["unit"]))
+        price = prices.get(_catalog_key(item["name"], item["unit"], item.get("kind", "work")))
         if type(price) is not int or price <= 0:
             filled.append(item)
             continue
