@@ -93,7 +93,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  assert.equal(await evaluate("api('/assistant').then(result=>result.quota.used)"),quotaBeforeIndex);
  await send('Page.navigate',{url:'http://localhost:'+(process.env.SMETRA_TEST_PORT||'8084')+'/app#assistant'});
  await until("document.querySelector('.assistant-file-status')?.textContent.includes('Текст готов')");
- assert.equal(await evaluate("document.querySelector('.assistant-attachment-document .assistant-attachment-name')?.textContent"),'Файл: large-web.txt');
+ assert.equal(await evaluate("document.querySelector('.assistant-attachment-document .assistant-attachment-name')?.textContent"),'large-web.txt');
  shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync('data/assistant-web-jobs.png',Buffer.from(shot.data,'base64'));
  assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
  assert.deepEqual(errors,[]);clearTimeout(watchdog);console.log('PASS: 390px preview, apply/undo, contexts, retries after reload, free background indexing of 2.1MB file, preserved draft during preparation; no overflow or JS errors');ws.close();
