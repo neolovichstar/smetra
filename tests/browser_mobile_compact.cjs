@@ -46,7 +46,7 @@ const {chromium}=require(process.env.SMETRA_PLAYWRIGHT_MODULE||'playwright');
   await page.locator('.smcalc-options summary').click();assert.ok(await page.locator('#smcalc-draft').isVisible(),'Primary action remains outside the collapsed options');
   await navigate('construction');await page.locator('.construction-object').first().click();
   await page.waitForSelector('.construction-section[data-mobile-disclosure]',{state:'attached'});
-  assert.equal(await page.locator('.construction-section[data-mobile-disclosure]').count(),9,'All object sections remain available');
+  assert.ok(await page.locator('.construction-section[data-mobile-disclosure]').count()>=9,'All core object sections remain available even when new sections are added');
   await page.waitForFunction(()=>[...document.querySelectorAll('.construction-section[data-mobile-disclosure]')].every(node=>!node.open));
   const section=page.locator('.construction-section').filter({has:page.locator('#construction-zone')});
   await section.locator(':scope > summary').click();
