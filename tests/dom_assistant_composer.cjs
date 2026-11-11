@@ -231,6 +231,9 @@ async function setup(enabled=true,voice=false,remaining=3){
    stream.enqueue(new TextEncoder().encode('event: done\ndata: '+JSON.stringify(result)+'\n\n'));
    stream.close();await tick();await tick();
    assert.equal(doc.querySelector('.assistant-activity-time')?.textContent,'1:17');
+   // A delayed background polling event cannot reset an exact server duration.
+   doc.querySelector('.assistant-activity')?.dispatchEvent(new w.Event('smetra:assistant-finished'));
+   assert.equal(doc.querySelector('.assistant-activity-time')?.textContent,'1:17');
    assert.equal(doc.querySelector('.assistant-activity.is-complete .assistant-activity-label')?.textContent,'Готово');
    assert.equal(JSON.parse(w.sessionStorage.getItem('smetra.assistant.reply-timings:qa'))['reply-timed-test'],77);
  });
