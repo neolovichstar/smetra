@@ -133,6 +133,32 @@ class RevenueTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,59900)
 
+    def test_legacy_checkout_key_cannot_be_replayed_for_another_company(self):
+        owner = self.account("legacy-workspace-checkout")
+        personal = business.ensure_workspace(self.con, owner)
+        intent = revenue.prepare_intent(
+            self.con, owner, "old-personal-checkout-key", "pro_month",
+            "pricing_page", False, workspace_id=personal,
+        )
+        self.con.execute(
+            "UPDATE billing_intents SET workspace_id=NULL WHERE id=?", (intent["id"],)
+        )
+        company = "new-company-cannot-replay-old-key"
+        self.con.execute(
+            "INSERT INTO workspaces(id,owner_id,name,created_at) VALUES(?,?,?,?)",
+            (company, owner["id"], "Новая компания", revenue.now()),
+        )
+        with self.assertRaises(ValueError):
+            revenue.prepare_intent(
+                self.con, owner, "old-personal-checkout-key", "pro_month",
+                "pricing_page", False, workspace_id=company,
+            )
+        accepted = revenue.prepare_intent(
+            self.con, owner, "old-personal-checkout-key", "pro_month",
+            "pricing_page", False, workspace_id=personal,
+        )
+        self.assertEqual(accepted["id"], intent["id"])
+
     def test_pro_plus_annual_subscription_is_monthly_normalized_in_mrr(self):
         """An annual 14 900 RUB payment must not appear as 14 900 RUB per month."""
         owner = self.account('pro-plus-annual-mrr')

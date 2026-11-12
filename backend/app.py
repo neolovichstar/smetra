@@ -1938,8 +1938,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     terms = con.execute(
                         "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
                     ).fetchone()
-                    if not terms or bool(terms["is_test"]) != bool(remote.get("test")):
-                        raise ApiError(409, "Режим оплаты не совпадает с сохранённым заказом")
+                    if (not terms or bool(terms["is_test"]) != bool(remote.get("test"))
+                            or terms["user_id"] != local["user_id"]
+                            or terms["plan"] != local["plan"]
+                            or terms["amount_kopecks"] != local["amount_kopecks"]):
+                        raise ApiError(409, "Данные оплаты не совпадают с сохранённым заказом")
                     live_payment = not bool(terms["is_test"])
                     pack = token_packs.millions_of(local["plan"])
                     was_active = False

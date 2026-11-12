@@ -102,6 +102,39 @@ class SecurityDeliveryApiTests(unittest.TestCase):
                 with app.db() as con:
                     self.assertEqual(con.execute("SELECT status FROM payments WHERE id=?", (payment["id"],)).fetchone()[0], "pending")
 
+    def test_unlinked_or_corrupted_checkout_cannot_activate_a_subscription(self):
+        for case in ("missing", "wrong_owner", "wrong_plan", "wrong_amount"):
+            with self.subTest(case=case):
+                payment = self.payment()
+                with app.db() as con:
+                    if case == "missing":
+                        con.execute(
+                            "DELETE FROM billing_intents WHERE payment_id=?", (payment["id"],)
+                        )
+                    elif case == "wrong_owner":
+                        con.execute(
+                            "UPDATE billing_intents SET user_id=? WHERE payment_id=?",
+                            (self.bob_id, payment["id"]),
+                        )
+                    elif case == "wrong_plan":
+                        con.execute(
+                            "UPDATE billing_intents SET plan='team_year' WHERE payment_id=?",
+                            (payment["id"],),
+                        )
+                    else:
+                        con.execute(
+                            "UPDATE billing_intents SET amount_kopecks=1 WHERE payment_id=?",
+                            (payment["id"],),
+                        )
+                with patch.object(
+                    app.Handler, "provider_payment", return_value=self.remote(payment)
+                ):
+                    self.assertEqual(self.callback(payment)[0], 409)
+                with app.db() as con:
+                    self.assertEqual(con.execute(
+                        "SELECT status FROM payments WHERE id=?", (payment["id"],)
+                    ).fetchone()[0], "pending")
+
     def test_callback_replay_does_not_extend_subscription_twice(self):
         payment = self.payment()
         with patch.object(app.Handler, "provider_payment", return_value=self.remote(payment)) as provider:

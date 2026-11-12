@@ -124,8 +124,16 @@ def prepare_intent(con, user, key, plan, origin, is_test, expected_amount=None, 
         raise ValueError("Only the owner may subscribe a workspace")
     previous = con.execute('SELECT * FROM billing_intents WHERE user_id=? AND request_key=?', (user['id'], key)).fetchone()
     if previous:
-        if (previous['workspace_id'] or workspace_id) != workspace_id or previous['plan'] != plan or previous['is_test'] != int(is_test) or (expected_amount is not None and previous['amount_kopecks'] != expected_amount):
-            raise ValueError('Checkout key belongs to another plan or shop mode')
+        # A legacy unbound checkout belongs only to its original personal
+        # workspace. It must not be replayed under a second company ID.
+        original_workspace = previous['workspace_id'] or str(
+            uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + user["id"])
+        )
+        if (original_workspace != workspace_id or previous['plan'] != plan
+                or previous['is_test'] != int(is_test)
+                or (expected_amount is not None
+                    and previous['amount_kopecks'] != expected_amount)):
+            raise ValueError('Checkout key belongs to another workspace, plan or shop mode')
         return previous
     from backend.entitlements import PLAN_TIER
     current_tier = PLAN_TIER.get(workspace["plan"], "starter")
