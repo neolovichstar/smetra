@@ -199,7 +199,6 @@ class VaultChangelogTests(unittest.TestCase):
 
     def test_owner_export_cannot_read_coworker_personal_vault_or_history(self):
         """Owners may export shared files and their own private files, not a teammate's."""
-        from backend import business
         owner, _ = self.account("export-owner")
         colleague, colleague_id = self.account("export-colleague")
         wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
