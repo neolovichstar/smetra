@@ -150,10 +150,16 @@ class AssistantAdRewardTests(unittest.TestCase):
     def test_production_refuses_client_only_reward_claims_even_if_approved(self):
         """No token issuance can depend on a forged client video callback."""
         import hashlib
+        from types import SimpleNamespace
 
-        token, user_id = self.account("reward-unsafe-production")
+        from backend.business import DomainError
+        from backend.rewarded_ads import configured_unit, route as reward_route
+
+        _, user_id = self.account("reward-unsafe-production")
         self.exhaust_free_quota(user_id)
         now = int(time.time())
+        # Keep the local SQLite connection open before temporarily simulating
+        # Vercel: the HTTP harness correctly forbids SQLite in production.
         with self.mod.db() as con:
             con.execute(
                 "INSERT INTO assistant_ad_attempts("
@@ -162,28 +168,23 @@ class AssistantAdRewardTests(unittest.TestCase):
                 ("old-unverified-ad-attempt", user_id,
                  hashlib.sha256(b"forged-view").hexdigest(), now, now + 600),
             )
-        with patch.dict(os.environ, {
-            "VERCEL_ENV": "production", "VK_REWARDED_APPROVED": "1",
-            "VK_REWARDED_SLOT_ID": "2106762",
-        }):
-            from backend.rewarded_ads import configured_unit
-
-            self.assertEqual(configured_unit(), "")
-            status, info = self.call("/assistant/ad-reward", token=token)
-            self.assertEqual(status, 200, info)
-            self.assertFalse(info["enabled"])
-            self.assertEqual(
-                self.call("/assistant/ad-reward", "POST", {
-                    "operation": "start", "provider": "vk",
-                }, token)[0], 503,
-            )
-            self.assertEqual(
-                self.call("/assistant/ad-reward", "POST", {
-                    "attempt_id": "old-unverified-ad-attempt",
-                    "nonce": "forged-view",
-                }, token)[0], 503,
-            )
-        with self.mod.db() as con:
+            user = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            service = SimpleNamespace(con=con, user=user, wid=None)
+            with patch.dict(os.environ, {
+                "VERCEL_ENV": "production", "VK_REWARDED_APPROVED": "1",
+                "VK_REWARDED_SLOT_ID": "2106762",
+            }):
+                self.assertEqual(configured_unit(), "")
+                status, info = reward_route(service, "GET", {})
+                self.assertEqual(status, 200, info)
+                self.assertFalse(info["enabled"])
+                for request in (
+                    {"operation": "start", "provider": "vk"},
+                    {"attempt_id": "old-unverified-ad-attempt", "nonce": "forged-view"},
+                ):
+                    with self.subTest(request=request), self.assertRaises(DomainError) as denied:
+                        reward_route(service, "POST", request)
+                    self.assertEqual(denied.exception.status, 503)
             self.assertEqual(ai_tokens.wallet_balance(con, user_id), 0)
             self.assertEqual(con.execute(
                 "SELECT status FROM assistant_ad_attempts WHERE id=?",
