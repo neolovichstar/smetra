@@ -11,6 +11,24 @@ class PostgresQueryTests(unittest.TestCase):
             "SELECT count(*) AS projects,'quotes ? 50%%' AS label FROM smetra.projects WHERE id=%s",
         )
 
+    def test_activity_feed_uses_postgres_portable_stable_sorting(self):
+        from unittest.mock import Mock
+        from backend.business import Service
+
+        con = Mock()
+        con.execute.return_value = []
+        service = Service(None, con, "https://smetra.online")
+        service.user = {"id": "user-1"}
+        service.wid = "company-1"
+        status, response = service.route("GET", "activity", [], {"offset": ["0"]}, {})
+        self.assertEqual(status, 200)
+        self.assertEqual(response["items"], [])
+        sql, parameters = con.execute.call_args.args
+        self.assertEqual(parameters, ("company-1", 0))
+        self.assertNotIn("rowid", sql.lower())
+        self.assertIn("ORDER BY created_at DESC,id DESC", sql)
+        self.assertIn("FROM smetra.activity", translate(sql, "smetra", True))
+
     def test_admin_subscription_count_uses_portable_timestamp_parameter(self):
         sql = "SELECT count(*) FROM users WHERE entitlement_until > ? AND deleted_at IS NULL"
         self.assertEqual(

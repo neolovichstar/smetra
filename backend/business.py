@@ -2831,7 +2831,7 @@ class Service:
                 "items": [
                     dict(r)
                     for r in self.con.execute(
-                        "SELECT * FROM activity WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50 OFFSET ?",
+                        "SELECT * FROM activity WHERE workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?",
                         (self.wid, self.page(query)),
                     )
                 ]
