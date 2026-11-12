@@ -106,6 +106,16 @@ class RevenueTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             revenue.prepare_intent(self.con,self.user,'matching_price_key','pro_month','pricing_page',False,59900)
 
+    def test_pro_plus_annual_subscription_is_monthly_normalized_in_mrr(self):
+        """An annual 14 900 RUB payment must not appear as 14 900 RUB per month."""
+        owner = self.account('pro-plus-annual-mrr')
+        self.purchase(owner, key='pro_plus_annual_mrr_checkout', plan='pro_plus_year')
+        report = revenue.dashboard(self.con)
+        self.assertEqual(report['revenue_all'], 1_490_000)
+        self.assertEqual(report['paid_users'], 1)
+        self.assertEqual(report['mrr_kopecks'], round(1_490_000 / 12))
+        self.assertEqual(report['arr_kopecks'], 1_490_000)
+
     def test_test_payments_manual_access_and_refunds_are_not_revenue(self):
         local,_=self.purchase(self.user)
         self.purchase(self.account('tester'),key='test_checkout_1234',test=True)
