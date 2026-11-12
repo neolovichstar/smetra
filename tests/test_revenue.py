@@ -31,8 +31,8 @@ class RevenueTests(unittest.TestCase):
         self.con.execute('INSERT INTO users(id,email,password_hash,name,created_at,email_verified_at) VALUES(?,?,?,?,?,?)',(uid,uid+'@test.invalid','unused','Test',created or revenue.now(),revenue.now()))
         return self.con.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
 
-    def purchase(self,user,key='checkout_key_123456',test=False,plan='pro_month'):
-        intent=revenue.prepare_intent(self.con,user,key,plan,'ai_limit',test)
+    def purchase(self,user,key='checkout_key_123456',test=False,plan='pro_month',workspace_id=None):
+        intent=revenue.prepare_intent(self.con,user,key,plan,'ai_limit',test,workspace_id=workspace_id)
         remote={'id':'provider-'+key,'amount':{'value':f"{intent['amount_kopecks']/100:.2f}",'currency':'RUB'},'metadata':{'user_id':user['id'],'plan':plan},'test':test,'recipient':{'account_id':'test-shop'},'confirmation':{'confirmation_url':'https://example.test/pay'},'status':'succeeded','paid':True}
         local,created=revenue.persist_checkout(self.con,user,key,plan,intent,remote)
         self.assertTrue(created)
@@ -115,6 +115,36 @@ class RevenueTests(unittest.TestCase):
         self.assertEqual(report['paid_users'], 1)
         self.assertEqual(report['mrr_kopecks'], round(1_490_000 / 12))
         self.assertEqual(report['arr_kopecks'], 1_490_000)
+
+    def test_mrr_counts_each_active_workspace_and_ignores_expired_one(self):
+        """Separate paid companies owned by one account must both contribute."""
+        owner = self.account('multi-workspace-mrr')
+        personal_id = business.ensure_workspace(self.con, owner)
+        company_id = 'second-paid-workspace'
+        self.con.execute(
+            'INSERT INTO workspaces(id,owner_id,name,created_at) VALUES(?,?,?,?)',
+            (company_id, owner['id'], 'Компания', revenue.now()),
+        )
+        self.con.execute(
+            "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,'owner')",
+            (company_id, owner['id']),
+        )
+        self.purchase(owner, key='company_one_month', plan='pro_month', workspace_id=personal_id)
+        self.purchase(owner, key='company_two_year', plan='pro_plus_year', workspace_id=company_id)
+
+        report = revenue.dashboard(self.con)
+        self.assertEqual(report['paid_users'], 1)
+        self.assertEqual(report['revenue_all'], 79000 + 1490000)
+        self.assertEqual(report['mrr_kopecks'], round(79000 + 1490000 / 12))
+        self.assertEqual(report['arr_kopecks'], round((79000 + 1490000 / 12) * 12))
+
+        # A paid company that has expired must not count merely because its
+        # owner's other workspace keeps the account entitlement active.
+        self.con.execute(
+            "UPDATE workspaces SET entitlement_until=0,subscription_status='inactive' WHERE id=?",
+            (personal_id,),
+        )
+        self.assertEqual(revenue.dashboard(self.con)['mrr_kopecks'], round(1490000 / 12))
 
     def test_test_payments_manual_access_and_refunds_are_not_revenue(self):
         local,_=self.purchase(self.user)
