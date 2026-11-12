@@ -19,6 +19,7 @@ class PostgresQueryTests(unittest.TestCase):
         con.execute.return_value = []
         service = Service(None, con, "https://smetra.online")
         service.user = {"id": "user-1"}
+        service.role = "owner"  # The activity query itself needs no workspace settings lookup.
         service.wid = "company-1"
         status, response = service.route("GET", "activity", [], {"offset": ["0"]}, {})
         self.assertEqual(status, 200)
