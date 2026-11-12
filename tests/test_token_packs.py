@@ -121,6 +121,53 @@ class TokenPackPaymentTests(unittest.TestCase):
                 self.assertEqual(error.exception.status, 409)
                 provider.assert_not_called()
 
+    def test_test_token_pack_cannot_credit_live_wallet(self):
+        """Even a provider-succeeded sandbox purchase has zero spendable tokens."""
+        amount = token_packs.price(1)
+        plan = token_packs.code(1)
+        workspace = business.ensure_workspace(self.con, self.user)
+        self.con.execute(
+            "INSERT INTO billing_intents("
+            "id,user_id,request_key,plan,amount_kopecks,duration_days,variant,"
+            "source,is_test,created_at,bonus_ai_messages,workspace_id) "
+            "VALUES('sandbox-intent','buyer','sandbox-key',?,?,1,'tokens',"
+            "'pricing_page',1,?,0,?)",
+            (plan, amount, business.stamp(), workspace),
+        )
+        self.con.execute(
+            "INSERT INTO payments("
+            "id,user_id,provider_id,plan,amount_kopecks,status,"
+            "idempotency_key,confirmation_url,created_at) "
+            "VALUES('sandbox-pay','buyer','sandbox-provider',?,?,'pending',"
+            "'sandbox-key','https://pay.test',?)",
+            (plan, amount, business.stamp()),
+        )
+        self.con.execute(
+            "UPDATE billing_intents SET payment_id='sandbox-pay' WHERE id='sandbox-intent'"
+        )
+        receipt = {
+            "id": "sandbox-provider", "status": "succeeded", "paid": True,
+            "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
+            "metadata": {"user_id": "buyer", "plan": plan},
+            "recipient": {"account_id": "test-shop"}, "test": True,
+        }
+        handler = object.__new__(Handler)
+        with patch.dict(os.environ, {
+            "YOOKASSA_MODE": "test", "YOOKASSA_MERCHANT_TYPE": "self_employed",
+            "YOOKASSA_SHOP_ID": "test-shop", "YOOKASSA_SECRET_KEY": "fixture",
+        }), patch("backend.mytracker.track_custom_event") as tracker:
+            payment = self.con.execute("SELECT * FROM payments WHERE id='sandbox-pay'").fetchone()
+            handler.apply_payment(self.con, payment, receipt)
+            handler.apply_payment(self.con, payment, receipt)
+            tracker.assert_not_called()
+        self.assertEqual(ai_tokens.wallet_balance(self.con, "buyer"), 0)
+        self.assertEqual(self.con.execute(
+            "SELECT status FROM payments WHERE id='sandbox-pay'"
+        ).fetchone()["status"], "succeeded")
+        self.assertEqual(self.con.execute(
+            "SELECT count(*) FROM ai_token_ledger WHERE user_id='buyer'"
+        ).fetchone()[0], 0)
+
     def test_confirmed_payment_credits_once_and_keeps_subscription(self):
         self.pay(3)
         self.assertEqual(ai_tokens.wallet_balance(self.con, "buyer"), 3 * token_packs.MILLION)

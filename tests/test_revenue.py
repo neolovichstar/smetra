@@ -81,6 +81,33 @@ class RevenueTests(unittest.TestCase):
         test_payment,_=self.purchase(tester,key='test_bonus_checkout',test=True,plan='pro_year')
         self.assertIsNone(self.con.execute('SELECT id FROM assistant_bonus_grants WHERE payment_id=?',(test_payment['id'],)).fetchone(),'test checkouts do not mint purchase bonuses')
 
+    def test_test_subscription_never_grants_real_entitlement_or_credit(self):
+        """A YooKassa test receipt cannot buy a workspace plan for free."""
+        tester = self.account('sandbox-only-customer')
+        local, _ = self.purchase(
+            tester, key='sandbox_company_subscription', test=True, plan='team_year'
+        )
+        workspace_id = business.ensure_workspace(self.con, tester)
+        user = self.con.execute(
+            "SELECT plan,entitlement_until FROM users WHERE id=?", (tester["id"],)
+        ).fetchone()
+        space = self.con.execute(
+            "SELECT plan,subscription_status,entitlement_until FROM workspaces WHERE id=?",
+            (workspace_id,),
+        ).fetchone()
+        self.assertEqual(user["plan"], "free")
+        self.assertEqual(user["entitlement_until"], 0)
+        self.assertEqual(space["plan"], "free")
+        self.assertEqual(space["entitlement_until"], 0)
+        self.assertIsNone(self.con.execute(
+            "SELECT id FROM assistant_bonus_grants WHERE payment_id=?", (local["id"],)
+        ).fetchone())
+        # Rebuilding from historical receipts may not reapply sandbox grants.
+        revenue.rebuild_workspace_entitlement(self.con, tester["id"], workspace_id)
+        self.assertEqual(self.con.execute(
+            "SELECT plan FROM workspaces WHERE id=?", (workspace_id,)
+        ).fetchone()["plan"], "free")
+
     def test_price_assignment_and_retry_preserve_original_terms(self):
         config={'PRICING_EXPERIMENT_ID':'launch-test','PRICING_VARIANTS_JSON':'{"a":{"month":29900,"year":239000},"b":{"month":49900,"year":399000}}'}
         with patch.dict(os.environ,config):

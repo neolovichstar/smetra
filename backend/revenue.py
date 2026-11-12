@@ -339,7 +339,7 @@ def rebuild_workspace_entitlement(con, user_id, workspace_id=None):
         "SELECT p.plan,p.activated_at,b.duration_days FROM payments p "
         "JOIN billing_intents b ON b.payment_id=p.id "
         "WHERE p.user_id=? AND (b.workspace_id=? OR (b.workspace_id IS NULL AND ?=?)) "
-        "AND p.status='succeeded' AND p.activated_at IS NOT NULL "
+        "AND b.is_test=0 AND p.status='succeeded' AND p.activated_at IS NOT NULL "
         "AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded') "
         "ORDER BY p.activated_at,p.created_at,p.id", (user_id, workspace_id, workspace_id, default_workspace_id)
     ).fetchall()

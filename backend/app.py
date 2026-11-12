@@ -1933,38 +1933,52 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "UPDATE payments SET status=?, activated_at=CASE WHEN ?='succeeded' THEN ? ELSE activated_at END WHERE id=?",
                         (status, status, now(), local["id"]),
                     )
+                    # Provider-confirmed test payments are audit records only.
+                    # They must never mint real subscription days or assistant tokens.
+                    terms = con.execute(
+                        "SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)
+                    ).fetchone()
+                    if not terms or bool(terms["is_test"]) != bool(remote.get("test")):
+                        raise ApiError(409, "Режим оплаты не совпадает с сохранённым заказом")
+                    live_payment = not bool(terms["is_test"])
                     pack = token_packs.millions_of(local["plan"])
-                    if status == "succeeded" and pack:
-                        # A token pack never changes the subscription; it only fills the wallet.
+                    was_active = False
+                    if status == "succeeded" and pack and live_payment:
+                        # A real, provider-verified token pack never changes subscription state.
                         from backend import ai_tokens
-                        ai_tokens.credit(con, local["user_id"], pack * token_packs.MILLION, "purchase",
-                                         f"{pack} млн", "payment:" + local["id"])
-                        terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?', (local['id'],)).fetchone()
-                        if terms and not terms['is_test']:
-                            revenue.record(con, local['user_id'], 'payment_success', terms['source'], terms['variant'], 'payment:' + local['id'] + ':succeeded')
-                    elif status == "succeeded":
-                        terms = con.execute('SELECT * FROM billing_intents WHERE payment_id=?',(local['id'],)).fetchone()
-                        prior_user = con.execute('SELECT entitlement_until FROM users WHERE id=?',(local['user_id'],)).fetchone()
-                        grant_days = terms['duration_days'] if terms else PLANS[local["plan"]][1]
-                        entitlement_until = max(int(prior_user['entitlement_until'] or 0), now()) + grant_days * 86400
+                        ai_tokens.credit(
+                            con, local["user_id"], pack * token_packs.MILLION,
+                            "purchase", f"{pack} млн", "payment:" + local["id"],
+                        )
+                        revenue.record(
+                            con, local["user_id"], "payment_success", terms["source"],
+                            terms["variant"], "payment:" + local["id"] + ":succeeded",
+                        )
+                    elif status == "succeeded" and live_payment:
+                        prior_user = con.execute(
+                            "SELECT entitlement_until FROM users WHERE id=?", (local["user_id"],)
+                        ).fetchone()
+                        was_active = int(prior_user["entitlement_until"] or 0) > now()
+                        grant_days = terms["duration_days"]
+                        entitlement_until = max(int(prior_user["entitlement_until"] or 0), now()) + grant_days * 86400
                         con.execute(
                             "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
                             (entitlement_until, "pro", local["user_id"]),
                         )
-                        # Gift credits are issued only for a provider-confirmed live payment.
-                        # The amount and expiry are fixed in the original payment intent.
-                        bonus = int(terms['bonus_ai_messages'] or 0) if terms else 0
-                        if terms and not terms['is_test'] and bonus > 0:
+                        bonus = int(terms["bonus_ai_messages"] or 0)
+                        if bonus > 0:
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
-                                (uid(), local['user_id'], local['id'], bonus, bonus, entitlement_until, now()),
+                                (uid(), local["user_id"], local["id"], bonus, bonus, entitlement_until, now()),
                             )
-                        revenue.rebuild_workspace_entitlement(con, local["user_id"], terms["workspace_id"] if terms else None)
+                        revenue.rebuild_workspace_entitlement(
+                            con, local["user_id"], terms["workspace_id"]
+                        )
                         from backend.partner_platform import record_subscription_payment
                         record_subscription_payment(con, local)
                         newly_succeeded = True
-                    if status in ('succeeded','canceled') and not pack:
-                        revenue.payment_event(con,local,status,status=='succeeded' and prior_user['entitlement_until']>now())
+                    if status in ("succeeded", "canceled") and not pack:
+                        revenue.payment_event(con, local, status, was_active)
                     event(con, local["user_id"], "payment_" + status)
                     audit(con, None, "payment." + status, local["id"])
                 con.execute("COMMIT")
