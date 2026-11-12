@@ -79,7 +79,7 @@ class PublicSearchCacheTests(TestCase):
             {"url": "https://supplier.example.org/product?id=101#details", "title": "Дубликат"},
             {"url": "https://supplier.example.org/product?token=secret", "title": "Частная ссылка"},
             {"url": "https://supplier.example.org/product#access_token=secret", "title": "Токен в fragment"},
-            {"url": "https://supplier.example.org/product?id=303\\nother", "title": "Управляющий символ"},
+            {"url": "https://supplier.example.org/product?id=303" + chr(10) + "other", "title": "Управляющий символ"},
         ]}
         result = internet_search._normalize(payload, "OpenRouter", "цена кирпича")
         self.assertEqual([row["url"] for row in result["results"]], [
