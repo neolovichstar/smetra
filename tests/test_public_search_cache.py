@@ -72,6 +72,117 @@ class PublicSearchCacheTests(TestCase):
         self.assertTrue(key_production.startswith("smetra:production:publicsearch:"))
         self.assertNotIn("цена бетона", key_production)
 
+    def test_openrouter_annotations_are_used_instead_of_model_hallucinated_urls(self):
+        service = SimpleNamespace(
+            user={"id": "acc"}, h=SimpleNamespace(throttle=Mock())
+        )
+        responses = {
+            "choices": [{
+                "message": {
+                    "content": "Самая дешёвая цена https://not-a-source.invalid",
+                    "annotations": [
+                        {"type": "url_citation", "url_citation": {
+                            "url": "https://supplier.example.org/plaster",
+                            "title": "Прайс производителя",
+                            "content": "Штукатурка, цена в рублях за мешок",
+                        }},
+                        {"type": "url_citation", "url_citation": {
+                            "url": "http://127.0.0.1/private",
+                            "title": "Недопустимый URL",
+                        }},
+                    ],
+                },
+            }],
+        }
+        with patch.dict(os.environ, {
+            "SMETRA_SEARCH_BACKEND": "openrouter",
+            "OPENROUTER_API_KEY": "fixture-not-a-real-api-key",
+            "REDIS_ENV": "test",
+        }), patch("backend.redis_infra.provider", return_value=None), patch(
+            "backend.internet_search._fetch_json", return_value=responses
+        ) as fetcher:
+            result = internet_search.public_search(service, "цена штукатурки")
+
+        self.assertEqual(result["source"], "OpenRouter")
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["url"], "https://supplier.example.org/plaster")
+        self.assertNotIn("not-a-source", repr(result))
+        self.assertIn("searched_at", result)
+        request = fetcher.call_args.args[0]
+        submitted = json.loads(request.data)
+        self.assertEqual(submitted["tools"][0]["type"], "openrouter:web_search")
+        self.assertEqual(submitted["tools"][0]["parameters"]["max_uses"], 1)
+        self.assertEqual(submitted["tools"][0]["parameters"]["engine"], "parallel")
+        self.assertEqual(submitted["max_tool_calls"], 1)
+        self.assertIn("smetra-search:openrouter:global", [
+            c.args[0] for c in service.h.throttle.call_args_list
+        ])
+
+    def test_search_requires_real_citations_and_never_caches_hallucinations(self):
+        cache = _Cache()
+        account = SimpleNamespace(user={"id": "acc"}, h=SimpleNamespace(throttle=Mock()))
+        with patch.dict(os.environ, {
+            "SMETRA_SEARCH_BACKEND": "openrouter",
+            "OPENROUTER_API_KEY": "fixture-not-a-real-api-key",
+            "REDIS_ENV": "test",
+        }), patch("backend.redis_infra.provider", return_value=cache), patch(
+            "backend.internet_search._fetch_json",
+            return_value={"choices": [{"message": {"content": "https://fake.example"}}]},
+        ):
+            with self.assertRaises(DomainError) as error:
+                internet_search.public_search(account, "цена кирпича")
+        self.assertEqual(error.exception.status, 502)
+        self.assertEqual(cache.items, {})
+
+    def test_auto_uses_connected_openrouter_with_no_optional_search_keys(self):
+        account = SimpleNamespace(user={"id": "acc"}, h=SimpleNamespace(throttle=Mock()))
+        result = {"results": [{"title": "Прайс", "url": "https://example.org/price", "content": "Открытые цены"}]}
+        with patch.dict(os.environ, {
+            "SMETRA_SEARCH_BACKEND": "auto",
+            "SMETRA_SEARXNG_URL": "",
+            "TAVILY_API_KEY": "",
+            "OPENROUTER_API_KEY": "fixture-not-a-real-api-key",
+            "REDIS_ENV": "test",
+        }), patch("backend.redis_infra.provider", return_value=None), patch(
+            "backend.internet_search._openrouter_search",
+            return_value=(result, "OpenRouter")
+        ) as openrouter:
+            out = internet_search.public_search(account, "цена утеплителя")
+        openrouter.assert_called_once_with(account, "цена утеплителя")
+        self.assertEqual(out["source"], "OpenRouter")
+
+    def test_price_tool_keeps_search_evidence_unconfirmed(self):
+        account = SimpleNamespace(user={"id": "acc"}, h=SimpleNamespace(throttle=Mock()))
+        fake = {"query": "q", "source": "OpenRouter",
+                "results": [{"title": "Прайс", "url": "https://example.org/price", "excerpt": "От 500 руб"}]}
+        with patch("backend.internet_search.public_search", return_value=fake) as search:
+            outcome = internet_search.market_price_sources(
+                account, "Штукатурка", "мешок", "Москва", "material"
+            )
+        self.assertEqual(outcome["price_status"], "needs_review")
+        self.assertEqual(outcome["currency"], "RUB")
+        self.assertIn("Москва", search.call_args.args[1])
+        with self.assertRaises(DomainError):
+            internet_search.market_price_sources(account, "Кирпич", kind="invalid")
+
+    def test_openrouter_http_402_reports_unavailable_without_leaking_credentials(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+
+        account = SimpleNamespace(user={"id": "acc"}, h=SimpleNamespace(throttle=Mock()))
+        with patch.dict(os.environ, {
+            "SMETRA_SEARCH_BACKEND": "openrouter",
+            "OPENROUTER_API_KEY": "fixture-not-a-real-api-key",
+            "REDIS_ENV": "test",
+        }), patch("backend.redis_infra.provider", return_value=None), patch(
+            "backend.internet_search._fetch_json",
+            side_effect=HTTPError("https://openrouter.ai/api/v1/chat/completions", 402, "no credit", {}, BytesIO()),
+        ):
+            with self.assertRaises(DomainError) as error:
+                internet_search.public_search(account, "цена краски")
+        self.assertEqual(error.exception.status, 503)
+        self.assertNotIn("fixture-not-a-real-api-key", str(error.exception))
+
 
 if __name__ == "__main__":
     import unittest

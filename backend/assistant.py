@@ -180,9 +180,18 @@ def tools():
         ),
         function(
             "search_internet",
-            "Поиск публичной актуальной информации через поисковый шлюз Сметры. Запрещено включать личные данные, файлы, адреса и контакты клиентов, историю чата или токены. Указывай ссылки на внешние источники, не представляй цены проверенными.",
+            "Искать публичную информацию в интернете через шлюз Сметры и возвращать реальные URL источников с выдержками. Для конкретных расценок используй search_market_prices. Никогда не включай в запрос личные данные, адреса, файлы, контакты клиента или токены. Не считай выдачу доказательством цены.",
             {"query": {"type": "string", "maxLength": 160}},
             ("query",),
+        ),
+        function(
+            "search_market_prices",
+            "Найти публичные источники рыночных расценок на работу или материал, учитывая название, единицу и указанный пользователем регион. Результат с URL и датой поиска нужно проверить: нельзя автоматически присваивать price_status=confirmed. Используй перед созданием сметы с актуальными ценами, если нет точной цены пользователя или каталога; не ищи сотни позиций по отдельности.",
+            {"item": {"type": "string", "maxLength": 80},
+             "unit": {"type": "string", "maxLength": 20},
+             "region": {"type": "string", "maxLength": 50},
+             "kind": {"type": "string", "enum": ["work", "material"]}},
+            ("item",),
         ),
         function(
             "batch_quote_changes",
@@ -455,7 +464,8 @@ def tools():
                     "title — объект и вид работ; items — позиции по разделам (category), каждая работа или материал (kind) "
                     "с понятной единицей, количеством и ценой в копейках. Для типовых позиций без точного прайса "
                     "предлагай осмысленную предварительную цену с price_status=estimate, но не выдавай её за проверенную рыночную стоимость. "
-                    "price_status=confirmed используй только для цены пользователя, каталога или проверенного источника. "
+                    "Если пользователь просит актуальные рыночные цены, сначала вызови search_market_prices для характерных позиций, сверяй единицы и регион. Выдержки поиска сами по себе НЕ подтверждают цену; помечай их price_status=estimate и добавляй ссылку в описание как неподтверждённый ориентир. "
+                    "price_status=confirmed используй только для цены пользователя, каталога или действительно проверенного первичного источника. "
                     "price_status=unknown и unit_price=0 — если ориентир обосновать нельзя. "
                     "Сервер попробует подставить точное совпадение из каталога. Одинаковые позиции в разделе объединяй. "
                     "assumptions — все допущения о размерах, объёмах и классе материалов, которых не было в запросе. "
@@ -577,7 +587,7 @@ def model_tools(messages):
             "cloud_drive_status", "list_cloud_files", "read_cloud_file",
             "analyze_cloud_pdf_page", "create_quotes", "list_records",
             "get_record", "material_calculator", "calculate_construction",
-            "calculate_formula", "search_internet", "search_workspace_storage",
+            "calculate_formula", "search_internet", "search_market_prices", "search_workspace_storage",
             "read_file", "suggest_app_action", "report_progress",
         }
         return [tool for tool in tools() if tool["function"]["name"] in allowed]
@@ -1039,6 +1049,11 @@ def read_tool(service, name, args):
     if name == "search_internet":
         from backend.internet_search import public_search
         return public_search(service, args.get("query", ""))
+    if name == "search_market_prices":
+        from backend.internet_search import market_price_sources
+        return market_price_sources(service, args.get("item", ""),
+                                    args.get("unit", ""), args.get("region", ""),
+                                    args.get("kind", "material"))
     if name == "search_workspace_storage":
         from backend.assistant_recall import search_workspace_storage
         return search_workspace_storage(
@@ -1189,6 +1204,7 @@ def prepare(service, name, args):
         "list_documents",
         "search_workspace_storage",
         "search_internet",
+        "search_market_prices",
         "ask_user",
         "inspect_storage_image",
         "search_chat_history",
@@ -1970,6 +1986,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                         "read_file": "Читаю файл…", "analyze_design_image": "Анализирую планировку и дизайн-проект…", "read_markdown": "Читаю документ…", "list_files": "Ищу файлы…",
                         "search_workspace_storage": "Ищу в хранилище…",
                         "search_internet": "Ищу открытые источники…",
+                        "search_market_prices": "Ищу рыночные цены и источники…",
                         "inspect_storage_image": "Изучаю изображение…",
                         "search_chat_history": "Вспоминаю прошлые разговоры…",
                         "list_chat_conversations": "Нахожу прошлые диалоги…",
@@ -2062,7 +2079,7 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                     result, storage_image_url = inspect_storage_image(service, args.get("id"))
                     pending_image = (result["name"], storage_image_url)
                     inspected_image = True
-                elif name in ("list_records", "get_record", "overview", "read_file", "analyze_design_image", "read_markdown", "list_files", "search_knowledge", "search_file_content", "find_partner_offers", "list_construction_objects", "get_construction_object", "get_procurement_plan", "calculate_construction", "get_file_metadata", "get_document", "list_documents", "search_workspace_storage", "search_internet", "search_chat_history", "list_chat_conversations", "read_chat_history"):
+                elif name in ("list_records", "get_record", "overview", "read_file", "analyze_design_image", "read_markdown", "list_files", "search_knowledge", "search_file_content", "find_partner_offers", "list_construction_objects", "get_construction_object", "get_procurement_plan", "calculate_construction", "get_file_metadata", "get_document", "list_documents", "search_workspace_storage", "search_internet", "search_market_prices", "search_chat_history", "list_chat_conversations", "read_chat_history"):
                     result = execute_read(service, name, args)
                 elif name in ("list_protected_estimates", "get_protected_estimate_access"):
                     from backend.protected_estimate_tools import read as read_protected
