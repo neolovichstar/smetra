@@ -241,6 +241,12 @@ def charge(service, tokens, reason="assistant", ref=None):
             "INSERT INTO ai_token_ledger(id,user_id,bucket,delta,reason,note,ref,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (identity(), user_id, "monthly", -from_month, reason, "", ref, None, now),
         )
+    wallet_spent = 0
     if over:
+        # A provider can report more tokens than the user's remaining quota.
+        # The wallet is clamped at zero; report the REAL deduction, not the
+        # uncollectible excess as though it had been charged to the customer.
+        before = wallet_balance(con, user_id)
         _wallet_add(con, user_id, -over, reason, "", None, None)
-    return tokens
+        wallet_spent = max(0, before - wallet_balance(con, user_id))
+    return from_month + wallet_spent

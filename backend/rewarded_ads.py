@@ -13,6 +13,11 @@ ATTEMPT_TTL = 86400
 
 
 def configured_unit():
+    # This SDK integration has no provider-signed receipt or server callback.
+    # A public client can forge a "completed" view and mint paid LLM tokens.
+    # Production must not advertise rewards until verified SSV is implemented.
+    if os.getenv("VERCEL_ENV") == "production":
+        return ""
     # Fail closed until moderation has explicitly approved the placement.
     # Production defaults off even if a slot ID is already configured.
     approved = os.getenv("VK_REWARDED_APPROVED", "0" if os.getenv("VERCEL_ENV") == "production" else "1")
@@ -40,6 +45,10 @@ def route(service, method, data):
                      "quota": assistant.public_quota(service)}
     if method != "POST":
         raise DomainError(405, "Требуется POST")
+    if os.getenv("VERCEL_ENV") == "production":
+        # Even a preexisting nonce is client-controlled and is not proof of a
+        # completed paid ad. Do not redeem it while reward SSV is absent.
+        raise DomainError(503, "Начисление за рекламу ожидает проверки рекламной сетью")
     if not unit and not data.get("attempt_id"):
         raise DomainError(503, "Рекламный блок ещё не подключён")
     if current["plan"] != "free":

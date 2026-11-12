@@ -174,6 +174,22 @@ class TokenPackPaymentTests(unittest.TestCase):
         user = self.con.execute("SELECT plan,entitlement_until FROM users WHERE id='buyer'").fetchone()
         self.assertEqual((user["plan"], user["entitlement_until"] or 0), ("free", 0))
 
+    def test_meter_returns_only_tokens_actually_deducted_at_wallet_floor(self):
+        service = SimpleNamespace(con=self.con, user=self.user)
+        self.con.execute(
+            "INSERT INTO rate_limits(key,count,started) VALUES(?,?,?)",
+            (ai_tokens.month_key("buyer"), 10**9, business.stamp()),
+        )
+        ai_tokens.credit(self.con, "buyer", 100, "test_credit")
+        self.assertEqual(ai_tokens.charge(service, 400, "assistant"), 100)
+        self.assertEqual(ai_tokens.wallet_balance(self.con, "buyer"), 0)
+        self.assertEqual(ai_tokens.charge(service, 500, "assistant"), 0)
+        deductions = self.con.execute(
+            "SELECT coalesce(sum(delta),0) FROM ai_token_ledger "
+            "WHERE user_id='buyer' AND reason='assistant'"
+        ).fetchone()[0]
+        self.assertEqual(deductions, -100)
+
     def test_refund_takes_back_unspent_tokens_only(self):
         handler, remote, amount = self.pay(1)
         service = SimpleNamespace(con=self.con, user=self.user)

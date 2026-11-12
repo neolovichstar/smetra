@@ -147,6 +147,49 @@ class AssistantAdRewardTests(unittest.TestCase):
             self.assertTrue(replay["replayed"])
             self.assertEqual(replay["quota"]["wallet"], ai_tokens.AD_REWARD_TOKENS)
 
+    def test_production_refuses_client_only_reward_claims_even_if_approved(self):
+        """No token issuance can depend on a forged client video callback."""
+        import hashlib
+
+        token, user_id = self.account("reward-unsafe-production")
+        self.exhaust_free_quota(user_id)
+        now = int(time.time())
+        with self.mod.db() as con:
+            con.execute(
+                "INSERT INTO assistant_ad_attempts("
+                "id,user_id,nonce_hash,status,created_at,expires_at) "
+                "VALUES(?,?,?,'issued',?,?)",
+                ("old-unverified-ad-attempt", user_id,
+                 hashlib.sha256(b"forged-view").hexdigest(), now, now + 600),
+            )
+        with patch.dict(os.environ, {
+            "VERCEL_ENV": "production", "VK_REWARDED_APPROVED": "1",
+            "VK_REWARDED_SLOT_ID": "2106762",
+        }):
+            from backend.rewarded_ads import configured_unit
+
+            self.assertEqual(configured_unit(), "")
+            status, info = self.call("/assistant/ad-reward", token=token)
+            self.assertEqual(status, 200, info)
+            self.assertFalse(info["enabled"])
+            self.assertEqual(
+                self.call("/assistant/ad-reward", "POST", {
+                    "operation": "start", "provider": "vk",
+                }, token)[0], 503,
+            )
+            self.assertEqual(
+                self.call("/assistant/ad-reward", "POST", {
+                    "attempt_id": "old-unverified-ad-attempt",
+                    "nonce": "forged-view",
+                }, token)[0], 503,
+            )
+        with self.mod.db() as con:
+            self.assertEqual(ai_tokens.wallet_balance(con, user_id), 0)
+            self.assertEqual(con.execute(
+                "SELECT status FROM assistant_ad_attempts WHERE id=?",
+                ("old-unverified-ad-attempt",)
+            ).fetchone()["status"], "issued")
+
     def test_pending_vk_moderation_hides_ad_despite_configured_slot(self):
         from backend.rewarded_ads import configured_unit
 
