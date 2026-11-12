@@ -61,6 +61,12 @@ def _public_hostname(host):
 def _safe_link(url):
     if not isinstance(url, str) or not 8 <= len(url) <= 1500:
         return None
+    # Search citations may be reused across accounts. Never cache or expose
+    # bearer-capability URLs, including signed query strings and fragments.
+    if any(ord(char) < 32 or ord(char) == 127 for char in url):
+        return None
+    if _SIGNED_URL.search(url.replace("#", "?", 1)):
+        return None
     try:
         parsed = urllib.parse.urlsplit(url)
         if (parsed.scheme not in ("https", "http") or not _public_hostname(parsed.hostname)
@@ -227,7 +233,9 @@ def _normalize(payload, provider, query):
         # Duplicate URL removal without string-concatenation or user-supplied
         # provider host override. Avoid giving one domain every search result.
         parsed = urllib.parse.urlsplit(uri)
-        dedupe = parsed.scheme + "://" + parsed.netloc + parsed.path.rstrip("/")
+        # Product pages often share a path and differ only by a SKU in the
+        # query string. Dropping the query hides legitimate competing prices.
+        dedupe = (parsed.scheme.lower(), parsed.netloc.lower(), parsed.path.rstrip("/"), parsed.query)
         if dedupe in visited:
             continue
         visited.add(dedupe)

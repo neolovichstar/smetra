@@ -72,6 +72,23 @@ class PublicSearchCacheTests(TestCase):
         self.assertTrue(key_production.startswith("smetra:production:publicsearch:"))
         self.assertNotIn("цена бетона", key_production)
 
+    def test_distinct_product_skus_survive_deduplication_and_private_links_do_not(self):
+        payload = {"results": [
+            {"url": "https://supplier.example.org/product?id=101", "title": "Кирпич 101"},
+            {"url": "https://supplier.example.org/product?id=202", "title": "Кирпич 202"},
+            {"url": "https://supplier.example.org/product?id=101#details", "title": "Дубликат"},
+            {"url": "https://supplier.example.org/product?token=secret", "title": "Частная ссылка"},
+            {"url": "https://supplier.example.org/product#access_token=secret", "title": "Токен в fragment"},
+            {"url": "https://supplier.example.org/product?id=303\\nother", "title": "Управляющий символ"},
+        ]}
+        result = internet_search._normalize(payload, "OpenRouter", "цена кирпича")
+        self.assertEqual([row["url"] for row in result["results"]], [
+            "https://supplier.example.org/product?id=101",
+            "https://supplier.example.org/product?id=202",
+        ])
+        self.assertIsNone(internet_search._safe_link("https://supplier.example.org/file?X-Amz-Signature=abc"))
+        self.assertIsNone(internet_search._safe_link("https://supplier.example.org/file#token=abc"))
+
     def test_openrouter_annotations_are_used_instead_of_model_hallucinated_urls(self):
         service = SimpleNamespace(
             user={"id": "acc"}, h=SimpleNamespace(throttle=Mock())
