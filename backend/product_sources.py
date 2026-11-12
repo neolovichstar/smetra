@@ -174,25 +174,39 @@ def _walk_products(value):
 
 
 def _price_to_kopecks(value):
+    """Reject ambiguous supplier formats rather than misstate thousand-fold prices.
+
+    A single "1.200"/"1,200" may mean 1200 or 1.2; no confirmed amount
+    should come from that ambiguity.
+    """
     if isinstance(value, bool) or value is None:
         return None
-    raw = str(value).strip()
-    raw = re.sub(r"[^0-9,\.\- ]", "", raw).replace(" ", "")
-    if not raw or raw.count("-") > 1:
-        return None
-    if "," in raw and "." in raw:
-        if raw.rfind(",") > raw.rfind("."):
-            raw = raw.replace(".", "").replace(",", ".")
+    raw = str(value).strip().replace("\u00a0", " ").replace("\u202f", " ")
+    if isinstance(value, (int, float, Decimal)):
+        number = raw
+    else:
+        raw = re.sub(r"\s*(?:₽|RUB|руб(?:\.|ля|лей|ль|ли|лях)?)\s*$", "", raw, flags=re.I).strip()
+        raw = re.sub(r" +", " ", raw)
+        if re.fullmatch(r"\d+(?:[.,]\d{1,2})?", raw):
+            number = raw.replace(",", ".")
+        elif re.fullmatch(r"\d{1,3}(?: \d{3})+(?:[.,]\d{1,2})?", raw):
+            number = raw.replace(" ", "").replace(",", ".")
+        elif re.fullmatch(r"\d{1,3}(?:\.\d{3})+,[0-9]{1,2}", raw):
+            number = raw.replace(".", "").replace(",", ".")
+        elif re.fullmatch(r"\d{1,3}(?:,\d{3})+\.[0-9]{1,2}", raw):
+            number = raw.replace(",", "")
+        elif re.fullmatch(r"\d{1,3}(?:\.\d{3}){2,}", raw):
+            number = raw.replace(".", "")
+        elif re.fullmatch(r"\d{1,3}(?:,\d{3}){2,}", raw):
+            number = raw.replace(",", "")
         else:
-            raw = raw.replace(",", "")
-    elif "," in raw:
-        raw = raw.replace(",", ".")
+            return None
     try:
-        amount = Decimal(raw)
+        amount = Decimal(number)
         if not amount.is_finite() or amount < 0 or amount > Decimal("1000000000"):
             return None
         return int((amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    except (InvalidOperation, ValueError):
+    except (InvalidOperation, ValueError, OverflowError):
         return None
 
 

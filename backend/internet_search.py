@@ -30,6 +30,14 @@ _TOKEN = re.compile(
     r"|\b(?:sk-or-v1-|ghp_|github_pat_|tvly-))[^\s,;]{6,}"
 )
 _AUTH_URL = re.compile(r"(?i)https?://[^/\s]+@")
+# Reject phone numbers and signed URLs before any external provider request.
+_PHONE = re.compile(
+    r"(?<![\w\d])(?:\+(?:\d[\s()\-]*){9,14}\d|[78][\s()\-]*(?:\d[\s()\-]*){10})(?!\d)"
+)
+_SIGNED_URL = re.compile(
+    r"(?i)[?&](?:access_token|token|signature|x-amz-signature|api[_-]?key|"
+    r"sig|auth|expires)\s*="
+)
 _PRIVATE = re.compile(
     r"(?i)\b(?:мой|мои|наш|наша|клиент|переписка|договор|чек|паспорт|"
     r"телефон|почта|вложение|workspace|user_id|api_key|токен)\b"
@@ -271,7 +279,8 @@ def public_search(service, query):
     query = string(query, "Поиск в интернете", 160, True).strip()
     if len(query) < 3:
         raise DomainError(400, "Нужно минимум три символа")
-    if _EMAIL.search(query) or _TOKEN.search(query) or _AUTH_URL.search(query) or _PRIVATE.search(query):
+    if any(pattern.search(query) for pattern in
+           (_EMAIL, _TOKEN, _AUTH_URL, _PHONE, _SIGNED_URL, _PRIVATE)):
         raise DomainError(400, "Искать частные данные в интернете нельзя. Используйте внутреннее хранилище.")
     preference = os.getenv("SMETRA_SEARCH_BACKEND", "auto").strip().lower()
     if preference not in ("auto", "searxng", "tavily", "openrouter"):

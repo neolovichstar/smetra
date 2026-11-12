@@ -809,13 +809,15 @@ def provider_selection(model, paid_model=False, on_source=None):
     return model, paid_model, on_source
 
 
+# Searches must pass the server gateway's privacy checks, Redis cache and
+# spending limits; never expose unmetered provider-native web tools per round.
 def query_model(messages, model=None, paid_model=False):
     model, paid_model, _ = provider_selection(model, paid_model)
     payload = {
         "model": model,
         "messages": messages,
         **_cache_options(model),
-        **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": model_tools(messages) + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else []), "tool_choice": _MODEL_TOOL_CHOICE.get()}),
+        **({} if model == "qwen/qwen-2.5-vl-7b-instruct:free" else {"tools": model_tools(messages), "tool_choice": _MODEL_TOOL_CHOICE.get()}),
         "max_tool_calls": 4,
         "max_tokens": 3500,
         "usage": {"include": True},
@@ -865,7 +867,7 @@ def _stream_payload(model, messages, paid_model, tools_enabled=True, reasoning=T
     payload = {"model": model, "messages": messages, "max_tokens": 3500, "stream": True,
                "usage": {"include": True}, **sampling(model), **_cache_options(model)}
     if tools_enabled and model != "qwen/qwen-2.5-vl-7b-instruct:free":
-        payload["tools"] = model_tools(messages) + ([{"type": "openrouter:web_search", "parameters": {"max_results": 3, "max_uses": 2}}] if paid_model else [])
+        payload["tools"] = model_tools(messages)
         payload["tool_choice"] = _MODEL_TOOL_CHOICE.get()
         payload["max_tool_calls"] = 4
     if reasoning:
@@ -1038,6 +1040,24 @@ def visible_result(service, result):
 
         return without_finance(result)
     return result
+
+
+def _emit_public_sources(on_source, result):
+    """Publish verified gateway links to the SSE source panel, not model prose."""
+    if not callable(on_source) or not isinstance(result, dict):
+        return
+    from backend.internet_search import _safe_link
+    from urllib.parse import urlsplit
+
+    seen = set()
+    for entry in result.get("results", [])[:6]:
+        if not isinstance(entry, dict):
+            continue
+        url = entry.get("url")
+        if not _safe_link(url) or url in seen:
+            continue
+        seen.add(url)
+        on_source({"url": url, "domain": urlsplit(url).hostname[:120]})
 
 
 def execute_read(service, name, args):
@@ -2081,6 +2101,8 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                     inspected_image = True
                 elif name in ("list_records", "get_record", "overview", "read_file", "analyze_design_image", "read_markdown", "list_files", "search_knowledge", "search_file_content", "find_partner_offers", "list_construction_objects", "get_construction_object", "get_procurement_plan", "calculate_construction", "get_file_metadata", "get_document", "list_documents", "search_workspace_storage", "search_internet", "search_market_prices", "search_chat_history", "list_chat_conversations", "read_chat_history"):
                     result = execute_read(service, name, args)
+                    if name in ("search_internet", "search_market_prices"):
+                        _emit_public_sources(on_source, result)
                 elif name in ("list_protected_estimates", "get_protected_estimate_access"):
                     from backend.protected_estimate_tools import read as read_protected
                     result = read_protected(service, name, args)
