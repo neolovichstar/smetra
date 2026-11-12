@@ -89,6 +89,35 @@ class PublicSearchCacheTests(TestCase):
         self.assertIsNone(internet_search._safe_link("https://supplier.example.org/file?X-Amz-Signature=abc"))
         self.assertIsNone(internet_search._safe_link("https://supplier.example.org/file#token=abc"))
 
+    def test_signed_cloud_urls_and_encoded_credentials_never_become_public_sources(self):
+        for url in (
+            "https://supplier.example.org/p?%74oken=abc",
+            "https://supplier.example.org/p?%2574oken=abc",
+            "https://supplier.example.org/p?X-Goog-Signature=abc",
+            "https://supplier.example.org/p?X-Amz-Credential=abc",
+            "https://supplier.example.org/p#section?access_token=abc",
+            "https://supplier.example.org/p?AWSAccessKeyId=abc",
+        ):
+            with self.subTest(url=url):
+                self.assertIsNone(internet_search._safe_link(url))
+        self.assertEqual(
+            internet_search._safe_link("https://supplier.example.org/p?id=42#dimensions"),
+            "https://supplier.example.org/p?id=42#dimensions",
+        )
+
+    def test_encoded_private_url_does_not_reach_search_provider(self):
+        account = SimpleNamespace(user={"id": "acc"}, h=SimpleNamespace(throttle=Mock()))
+        with patch.dict(os.environ, {
+            "SMETRA_SEARCH_BACKEND": "openrouter",
+            "OPENROUTER_API_KEY": "fixture-not-a-real-api-key",
+        }), patch("backend.internet_search._openrouter_search") as gateway:
+            with self.assertRaises(DomainError) as error:
+                internet_search.public_search(
+                    account, "проверь https://supplier.example.org/p?%74oken=secret"
+                )
+        self.assertEqual(error.exception.status, 400)
+        gateway.assert_not_called()
+
     def test_openrouter_annotations_are_used_instead_of_model_hallucinated_urls(self):
         service = SimpleNamespace(
             user={"id": "acc"}, h=SimpleNamespace(throttle=Mock())

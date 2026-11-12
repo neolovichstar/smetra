@@ -35,9 +35,27 @@ _PHONE = re.compile(
     r"(?<![\w\d])(?:\+(?:\d[\s()\-]*){9,14}\d|[78][\s()\-]*(?:\d[\s()\-]*){10})(?!\d)"
 )
 _SIGNED_URL = re.compile(
-    r"(?i)[?&](?:access_token|token|signature|x-amz-signature|api[_-]?key|"
-    r"sig|auth|expires)\s*="
+    r"(?i)[?&](?:access_token|token|signature|x-(?:amz|goog)-(?:signature|credential|security-token)|"
+    r"api[_-]?key|googleaccessid|awsaccesskeyid|sig|auth|expires)\s*="
 )
+# Public search results are cached across accounts. Signed provider links are
+# private bearer capabilities, including percent-encoded parameter names.
+_SECRET_URL_KEYS = frozenset((
+    "access-token", "token", "signature", "api-key", "apikey", "sig",
+    "auth", "expires", "authorization", "googleaccessid", "awsaccesskeyid",
+    "policy", "key-pair-id",
+))
+
+
+def _has_secret_url_parameters(parsed):
+    for part in (parsed.query, parsed.fragment.replace("?", "&")):
+        for name, _ in urllib.parse.parse_qsl(part, keep_blank_values=True):
+            key = name.casefold().replace("_", "-")
+            # parse_qsl already unquotes once; check a second escaped layer.
+            key = urllib.parse.unquote(key).casefold().replace("_", "-")
+            if key in _SECRET_URL_KEYS or key.startswith(("x-amz-", "x-goog-")):
+                return True
+    return False
 _PRIVATE = re.compile(
     r"(?i)\b(?:мой|мои|наш|наша|клиент|переписка|договор|чек|паспорт|"
     r"телефон|почта|вложение|workspace|user_id|api_key|токен)\b"
@@ -65,12 +83,11 @@ def _safe_link(url):
     # bearer-capability URLs, including signed query strings and fragments.
     if any(ord(char) < 32 or ord(char) == 127 for char in url):
         return None
-    if _SIGNED_URL.search(url.replace("#", "?", 1)):
-        return None
     try:
         parsed = urllib.parse.urlsplit(url)
         if (parsed.scheme not in ("https", "http") or not _public_hostname(parsed.hostname)
-                or parsed.username or parsed.password or parsed.port not in (None, 80, 443)):
+                or parsed.username or parsed.password or parsed.port not in (None, 80, 443)
+                or _has_secret_url_parameters(parsed)):
             return None
     except ValueError:
         return None
@@ -287,8 +304,10 @@ def public_search(service, query):
     query = string(query, "Поиск в интернете", 160, True).strip()
     if len(query) < 3:
         raise DomainError(400, "Нужно минимум три символа")
-    if any(pattern.search(query) for pattern in
-           (_EMAIL, _TOKEN, _AUTH_URL, _PHONE, _SIGNED_URL, _PRIVATE)):
+    if (any(pattern.search(query) for pattern in
+            (_EMAIL, _TOKEN, _AUTH_URL, _PHONE, _SIGNED_URL, _PRIVATE))
+            or any(not _safe_link(link) for link in
+                   re.findall(r'https?://[^\\s<>"\\\']+', query))):
         raise DomainError(400, "Искать частные данные в интернете нельзя. Используйте внутреннее хранилище.")
     preference = os.getenv("SMETRA_SEARCH_BACKEND", "auto").strip().lower()
     if preference not in ("auto", "searxng", "tavily", "openrouter"):
