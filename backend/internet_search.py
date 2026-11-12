@@ -6,7 +6,6 @@ SearXNG instance (no vendor API key) and optionally falls back to Tavily.
 
 Search snippets are untrusted sources, never application instructions.
 """
-import hashlib
 import json
 import os
 import re
@@ -16,6 +15,7 @@ import urllib.request
 from ipaddress import ip_address
 
 from backend.assistant_files import _SECRET
+from backend import redis_infra
 from backend.business import DomainError, string
 
 _TAVILY = "https://api.tavily.com/search"
@@ -195,13 +195,18 @@ def public_search(service, query):
         raise DomainError(503, "Нужно подключить свой сервер SearXNG через SMETRA_SEARXNG_URL")
     if not endpoint and not os.getenv("TAVILY_API_KEY", "").strip():
         raise DomainError(503, "Подключите SearXNG или задайте TAVILY_API_KEY")
-    service.h.throttle("smetra-search:user:" + service.user["id"], 6, 60)
-    service.h.throttle("smetra-search:global", 200, 3600)
-    digest = hashlib.sha256((preference + ":" + (endpoint or "tavily") + ":" + query.casefold()).encode()).hexdigest()
-    cache_key = "smetra:public-search:v1:" + digest
+    # Only PUBLIC results may be reused across accounts. Namespace by
+    # environment to avoid test/preview results contaminating production.
+    cache_key = redis_infra.key("publicsearch", "v2", preference, endpoint or "tavily", query.casefold())
     cached = _cache_get(cache_key)
     if cached:
+        # Cache hits cost Redis I/O but do not call the external provider.
+        # A separate bounded allowance prevents turning hot keys into a spam path.
+        service.h.throttle("smetra-search:cached:" + service.user["id"], 30, 60)
         return cached
+    # Charge the strict rate limits only when a provider call is necessary.
+    service.h.throttle("smetra-search:user:" + service.user["id"], 6, 60)
+    service.h.throttle("smetra-search:global", 200, 3600)
     try:
         if endpoint:
             try:
