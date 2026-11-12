@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from backend import internet_search, redis_infra
+from backend import internet_search
 from backend.business import DomainError
 
 
