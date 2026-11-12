@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend import ai_tokens, business, token_packs
-from backend.app import Handler
+from backend.app import Handler, ApiError
 from backend.business import DomainError
 
 
@@ -72,6 +72,54 @@ class TokenPackPaymentTests(unittest.TestCase):
             handler.apply_payment(self.con, local, remote)
             handler.apply_payment(self.con, local, remote)
         return handler, remote, amount
+
+    def test_token_checkout_rejects_test_intent_or_payment_after_live_switch(self):
+        """Test-mode idempotency keys must never create or replay live payments."""
+        from backend import token_packs
+
+        amount = token_packs.price(1)
+        plan = token_packs.code(1)
+        workspace_id = business.ensure_workspace(self.con, self.user)
+        handler = object.__new__(Handler)
+        handler.body = lambda: {"millions": 1}
+        handler.throttle = lambda *_args: None
+        handler.send_json = lambda code, data: (code, data)
+        config = {
+            "YOOKASSA_MODE": "live", "YOOKASSA_MERCHANT_TYPE": "self_employed",
+            "YOOKASSA_SHOP_ID": "test-shop", "YOOKASSA_SECRET_KEY": "fixture-only",
+        }
+        for index, with_payment in enumerate((False, True)):
+            key = f"test-pack-to-live-{index:02d}-idempotent"
+            handler.headers = {"Idempotency-Key": key}
+            intent_id = f"old-test-intent-{index}"
+            self.con.execute(
+                "INSERT INTO billing_intents("
+                "id,user_id,request_key,plan,amount_kopecks,duration_days,variant,source,"
+                "is_test,created_at,bonus_ai_messages,workspace_id"
+                ") VALUES(?,?,?,?,?,1,'tokens','pricing_page',1,?,0,?)",
+                (intent_id, self.user["id"], key, plan, amount, business.stamp(), workspace_id),
+            )
+            if with_payment:
+                payment_id = f"old-test-payment-{index}"
+                self.con.execute(
+                    "INSERT INTO payments("
+                    "id,user_id,provider_id,plan,amount_kopecks,status,idempotency_key,"
+                    "confirmation_url,created_at"
+                    ") VALUES(?,?,?,?,?,'pending',?,?,?)",
+                    (payment_id, self.user["id"], payment_id, plan, amount,
+                     key, "https://example.test/pay", business.stamp()),
+                )
+                self.con.execute(
+                    "UPDATE billing_intents SET payment_id=? WHERE id=?",
+                    (payment_id, intent_id),
+                )
+            with self.subTest(with_payment=with_payment), patch.dict(os.environ, config), patch.object(
+                handler, "provider_call"
+            ) as provider:
+                with self.assertRaises(ApiError) as error:
+                    handler.token_checkout(self.con, self.user)
+                self.assertEqual(error.exception.status, 409)
+                provider.assert_not_called()
 
     def test_confirmed_payment_credits_once_and_keeps_subscription(self):
         self.pay(3)

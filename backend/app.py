@@ -1864,6 +1864,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if previous:
             if previous["plan"] != plan or previous["amount_kopecks"] != amount:
                 raise ApiError(409, "Ключ уже использован для другой покупки")
+            captured = con.execute(
+                "SELECT is_test FROM billing_intents WHERE payment_id=?", (previous["id"],)
+            ).fetchone()
+            if not captured or captured["is_test"] != int(mode == "test"):
+                raise ApiError(409, "Режим магазина изменился. Начните новую оплату.")
             refunded = con.execute("SELECT 1 FROM refunds WHERE payment_id=? AND status='succeeded'", (previous["id"],)).fetchone()
             return self.send_json(200, {"url": previous["confirmation_url"], "status": "refunded" if refunded else previous["status"], "payment_id": previous["id"]})
         workspace_id = business.ensure_workspace(con, user)
@@ -1873,8 +1878,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             (uid(), user["id"], key, plan, amount, 1, "tokens", revenue.source(data.get("source")), int(mode == "test"), now(), 0, workspace_id),
         )
         intent = con.execute("SELECT * FROM billing_intents WHERE user_id=? AND request_key=?", (user["id"], key)).fetchone()
-        if intent["plan"] != plan or intent["amount_kopecks"] != amount:
-            raise ApiError(409, "Ключ уже использован для другой покупки")
+        if (intent["plan"] != plan or intent["amount_kopecks"] != amount
+                or intent["is_test"] != int(mode == "test")):
+            raise ApiError(409, "Ключ уже использован в другом режиме магазина или для другой покупки")
         request = {
             "amount": {"value": f"{amount / 100:.2f}", "currency": "RUB"},
             "capture": True,
