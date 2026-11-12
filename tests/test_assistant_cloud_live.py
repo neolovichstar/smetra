@@ -95,6 +95,45 @@ class LiveCloudSearchTests(unittest.TestCase):
             "SELECT name FROM sqlite_master WHERE name='file_payloads'"
         ).fetchone())
 
+    def test_exhaustive_google_pagination_does_not_claim_incomplete_search(self):
+        calls = []
+
+        def api(_con, _connection, path, params=None):
+            self.assertEqual(path, "/files")
+            calls.append(params.get("pageToken", ""))
+            if not params.get("pageToken"):
+                return {"files": [PDF_FILE], "nextPageToken": "page-two"}
+            return {"files": [{**PDF_FILE, "id": "Google_ABC-43"}]}
+
+        with patch("backend.cloud_drives._google_api", side_effect=api):
+            found, limited = assistant_cloud_live._google_search(
+                self.con, {"id": "google"}, ["дом"]
+            )
+        self.assertEqual(len(found), 2)
+        self.assertFalse(limited)
+        self.assertEqual(calls, ["", "page-two"])
+
+    def test_exhaustive_yandex_pagination_does_not_claim_incomplete_search(self):
+        def api(_con, _connection, path, params=None):
+            self.assertEqual(path, "/resources/files")
+            if params["offset"] == 0:
+                return {"items": [
+                    {"name": f"other-{n}.pdf", "path": f"disk:/other-{n}.pdf",
+                     "mime_type": "application/pdf", "size": 10}
+                    for n in range(100)
+                ]}
+            return {"items": [
+                {"name": "Дом.pdf", "path": "disk:/Дом.pdf",
+                 "mime_type": "application/pdf", "size": 10}
+            ]}
+
+        with patch("backend.cloud_drives._yandex_api", side_effect=api):
+            found, limited = assistant_cloud_live._yandex_search(
+                self.con, {"id": "google"}, ["дом"]
+            )
+        self.assertEqual(len(found), 1)
+        self.assertFalse(limited)
+
     def test_other_user_cannot_reuse_encrypted_reference(self):
         with patch("backend.cloud_drives._worker_access"), patch(
             "backend.cloud_drives._google_api", side_effect=self.google_api

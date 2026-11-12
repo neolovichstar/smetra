@@ -68,7 +68,7 @@ def _google_search(con, connection, terms):
     token = ""
     results = []
     limited = False
-    for _ in range(_MAX_PROVIDER_CALLS):
+    for page_index in range(_MAX_PROVIDER_CALLS):
         params = {
             "q": q, "pageSize": 100,
             "fields": "nextPageToken,files(id,name,mimeType,size,trashed)",
@@ -113,7 +113,9 @@ def _google_search(con, connection, terms):
             break
         seen_pages.add(next_token)
         token = next_token
-        limited = True
+        # A nextPageToken is normal during pagination. Results are incomplete
+        # only if another page remains after exhausting our provider-call cap.
+        limited = page_index == _MAX_PROVIDER_CALLS - 1
     return results, limited
 
 
@@ -148,7 +150,8 @@ def _yandex_search(con, connection, terms):
                 })
         if len(entries) < 100:
             break
-        limited = True
+        # A full page is not evidence that the *whole search* was truncated.
+        limited = index == _MAX_PROVIDER_CALLS - 1
     return results, limited
 
 
