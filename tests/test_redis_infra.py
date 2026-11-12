@@ -80,6 +80,43 @@ class RedisInfraTests(unittest.TestCase):
         with patch("backend.redis_infra.rate_limit", side_effect=redis_infra.RedisUnavailable()), patch.dict(os.environ, {"DATABASE_URL": ""}):
             target.throttle("ordinary:" + uuid.uuid4().hex, 10, 60)
 
+    def test_ai_redis_outage_uses_atomic_postgres_limit_when_available(self):
+        from unittest.mock import ANY, sentinel
+
+        handler = Handler.__new__(Handler)
+        handler._request_db = sentinel.connection
+        key = "ai:spend:account-1"
+        with patch.dict(os.environ, {"DATABASE_URL": "postgres://local-test.invalid/db"}), patch(
+            "backend.redis_infra.rate_limit", side_effect=redis_infra.RedisUnavailable()
+        ), patch("backend.postgres.throttle", return_value=True) as fallback:
+            handler.throttle(key, 6, 60)
+            fallback.assert_called_once_with(key, 6, 60, ANY, connection=sentinel.connection)
+
+        with patch.dict(os.environ, {"DATABASE_URL": "postgres://local-test.invalid/db"}), patch(
+            "backend.redis_infra.rate_limit", side_effect=redis_infra.RedisUnavailable()
+        ), patch("backend.postgres.throttle", return_value=False):
+            with self.assertRaises(ApiError) as limited:
+                handler.throttle(key, 6, 60)
+            self.assertEqual(limited.exception.status, 429)
+            self.assertEqual(handler.retry_after, 60)
+
+        with patch.dict(os.environ, {"DATABASE_URL": "postgres://local-test.invalid/db"}), patch(
+            "backend.redis_infra.rate_limit", side_effect=redis_infra.RedisUnavailable()
+        ), patch("backend.postgres.throttle", side_effect=RuntimeError("database unavailable")):
+            with self.assertRaises(ApiError) as unavailable:
+                handler.throttle(key, 6, 60)
+            self.assertEqual(unavailable.exception.status, 503)
+            self.assertNotIn("database unavailable", str(unavailable.exception))
+
+    def test_ai_redis_outage_without_postgres_fails_closed(self):
+        handler = Handler.__new__(Handler)
+        with patch.dict(os.environ, {"DATABASE_URL": ""}), patch(
+            "backend.redis_infra.rate_limit", side_effect=redis_infra.RedisUnavailable()
+        ):
+            with self.assertRaises(ApiError) as blocked:
+                handler.throttle("ai:spend:account-1", 6, 60)
+            self.assertEqual(blocked.exception.status, 503)
+
     def test_provider_requires_ttl_for_ephemeral_writes(self):
         fake = redis_infra.RedisProvider(FakeClient())
         with self.assertRaises(ValueError):

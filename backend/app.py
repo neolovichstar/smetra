@@ -449,10 +449,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             result = rate_limit(key, limit, window)
         except RedisUnavailable:
-            # Cost-bearing AI requests must not bypass their fast guard during an outage.
-            if key.startswith(("assistant:", "ai:", "support-ai:")):
+            # Keep AI online if PostgreSQL can enforce the same atomic shared
+            # limit. Without a distributed fallback, paid requests fail closed.
+            if key.startswith(("assistant:", "ai:", "support-ai:")) and not os.getenv("DATABASE_URL"):
                 raise ApiError(503, "Ассистент временно недоступен") from None
-            result = None  # PostgreSQL remains the distributed fallback.
+            result = None
         if result is not None:
             if not result.allowed:
                 self.retry_after = max(1, result.retry_after)
@@ -463,10 +464,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 from backend.postgres import throttle
             except ModuleNotFoundError:
                 from postgres import throttle
-            if not throttle(
-                key, limit, window, now(),
-                connection=getattr(self, "_request_db", None),
-            ):
+            try:
+                allowed = throttle(
+                    key, limit, window, now(),
+                    connection=getattr(self, "_request_db", None),
+                )
+            except Exception:
+                # A second outage must never turn cost-bearing calls into
+                # unbounded, process-local rate limits.
+                if key.startswith(("assistant:", "ai:", "support-ai:")):
+                    raise ApiError(503, "Ассистент временно недоступен") from None
+                raise
+            if not allowed:
                 self.retry_after = window
                 raise ApiError(429, "Слишком много запросов. Попробуйте позже")
             return

@@ -25,10 +25,11 @@ class AiCostBoundaryTests(unittest.TestCase):
         self.assertIn("enforce_ai_spend(service)", inspect.getsource(assistant.route))
         self.assertIn("enforce_ai_spend(service)", inspect.getsource(ai._draft))
         self.assertIn("enforce_ai_spend(service)", inspect.getsource(assistant_jobs.route))
-        self.assertLess(
-            inspect.getsource(assistant_jobs.route).index("if existing:"),
-            inspect.getsource(assistant_jobs.route).index("enforce_ai_spend(service)"),
-        )
+        route = inspect.getsource(assistant_jobs.route)
+        self.assertLess(route.index("if existing:"), route.index("service.h.throttle('assistant:'"))
+        self.assertLess(route.index("if count >= 2:"), route.index("enforce_ai_spend(service)"))
+        self.assertLess(route.index("if count >= 50:"), route.index("enforce_ai_spend(service)"))
+        self.assertLess(route.index("enforce_ai_spend(service)"), route.index("reservation = assistant.reserve_in_transaction"))
 
     def test_http_access_log_redacts_long_path_segments(self):
         request = Handler.__new__(Handler)

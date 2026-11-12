@@ -173,7 +173,6 @@ def route(service, method, parts, data):
     file_processing.ensure_ready(service, context, allow_visual=True)
     request_hash = hashlib.sha256(packed([prompt, context, thread_id] + ([attachments] if attachments else [])).encode()).hexdigest()
     stored_context = {'context': context, 'attachments': attachments} if attachments else context
-    service.h.throttle('assistant:' + service.user['id'], 12, 60)
     with transaction(
         service.con,
         lock_scopes=(f"workspace:{service.wid}", f"user:{service.user['id']}"),
@@ -183,9 +182,9 @@ def route(service, method, parts, data):
             if existing['request_hash'] != request_hash:
                 raise DomainError(409, 'Этот ключ уже используется для другой задачи')
             return 200, {'job': public(existing), 'quota': assistant.public_quota(service)}
-        # Idempotent reconnects are free; only a new cost-bearing job consumes a slot.
-        from backend.security_limits import enforce_ai_spend
-        enforce_ai_spend(service)
+        # Network retries of an accepted request are free, even when users
+        # refresh often or reconnect to a long-running job.
+        service.h.throttle('assistant:' + service.user['id'], 12, 60)
         count = service.con.execute("SELECT count(*) AS n FROM assistant_jobs WHERE workspace_id=? AND user_id=? AND kind='chat' AND status IN ('queued','running','retry')", args).fetchone()['n']
         if count >= 2:
             raise DomainError(429, 'Дождитесь завершения текущих фоновых задач')
@@ -238,6 +237,10 @@ def route(service, method, parts, data):
                 (thread_id, *args, "Новый диалог", (context or {}).get('entity', ''),
                  (context or {}).get('id', ''), 0, stamp(), stamp()),
             )
+        # Reject busy accounts and full dialog history before using the
+        # shared paid-model bucket. DB writes above roll back if it is denied.
+        from backend.security_limits import enforce_ai_spend
+        enforce_ai_spend(service)
         reservation = assistant.reserve_in_transaction(service)
         quota_key = reservation['key'] if isinstance(reservation, dict) else reservation
         bonus_grant_id = reservation.get('bonus_grant_id') if isinstance(reservation, dict) else None
