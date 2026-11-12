@@ -37,13 +37,33 @@ SCOPES = {
     "workspace_members": ("SELECT workspace_id,user_id,role FROM workspace_members WHERE workspace_id=? ORDER BY user_id",),
     "quote_items": ("SELECT qi.* FROM quote_items qi JOIN quotes q ON q.id=qi.quote_id WHERE q.workspace_id=? ORDER BY q.id,qi.position,qi.id",),
     "quote_versions": ("SELECT qv.* FROM quote_versions qv JOIN quotes q ON q.id=qv.quote_id WHERE q.workspace_id=? ORDER BY q.id,qv.version",),
-    "file_text_chunks": ("SELECT * FROM file_text_chunks WHERE workspace_id=? ORDER BY file_id,page",),
-    "construction_log_photos": ("SELECT * FROM construction_log_photos WHERE workspace_id=? ORDER BY log_id,file_id",),
+    "file_text_chunks": (
+        "SELECT c.* FROM file_text_chunks c JOIN files f "
+        "ON f.id=c.file_id AND f.workspace_id=c.workspace_id "
+        "WHERE c.workspace_id=? AND (f.vault_scope='workspace' OR f.owner_user_id=?) "
+        "ORDER BY c.file_id,c.page", "user",
+    ),
+    "construction_log_photos": (
+        "SELECT p.* FROM construction_log_photos p JOIN files f "
+        "ON f.id=p.file_id AND f.workspace_id=p.workspace_id "
+        "WHERE p.workspace_id=? AND (f.vault_scope='workspace' OR f.owner_user_id=?) "
+        "ORDER BY p.log_id,p.file_id", "user",
+    ),
     "notification_reads": ("SELECT nr.* FROM notification_reads nr JOIN notifications n ON n.id=nr.notification_id WHERE n.workspace_id=? AND nr.user_id=? ORDER BY nr.notification_id", "user"),
     "assistant_conversations": ("SELECT * FROM assistant_conversations WHERE workspace_id=? AND user_id=? ORDER BY created_at,id", "user"),
     "assistant_messages": ("SELECT * FROM assistant_messages WHERE workspace_id=? AND user_id=? ORDER BY created_at,id", "user"),
     "assistant_memory": ("SELECT * FROM assistant_memory WHERE workspace_id=? AND user_id=? ORDER BY created_at,id", "user"),
     "user_profiles": ("SELECT * FROM user_profiles WHERE user_id=?", "profile"),
+    "files": (
+        "SELECT * FROM files WHERE workspace_id=? "
+        "AND (vault_scope='workspace' OR owner_user_id=?) ORDER BY id", "user",
+    ),
+    "file_versions": (
+        "SELECT v.* FROM file_versions v JOIN files f "
+        "ON f.id=v.file_id AND f.workspace_id=v.workspace_id "
+        "WHERE v.workspace_id=? AND (f.vault_scope='workspace' OR f.owner_user_id=?) "
+        "ORDER BY v.id", "user",
+    ),
 }
 
 SECRET_KEYS = re.compile(r"(?:^|_)(?:token|secret|password|verifier|challenge|session|storage_name|idempotency_key)(?:$|_)|(?:public_.*(?:url|link)|share_?url)$", re.I)
@@ -131,12 +151,17 @@ def route(service, method, parts, query):
         for table in TABLES:
             tables.append({"name": table, "count": _count(service, table)})
         file_rows = service.con.execute(
-            "SELECT id,name,mime,size,sha256,quote_id,project_id,client_id,public,created_at FROM files WHERE workspace_id=? ORDER BY id",
-            (service.wid,),
+            "SELECT id,name,mime,size,sha256,quote_id,project_id,client_id,public,created_at "
+            "FROM files WHERE workspace_id=? "
+            "AND (vault_scope='workspace' OR owner_user_id=?) ORDER BY id",
+            (service.wid, service.user["id"]),
         ).fetchall()
         versions = service.con.execute(
-            "SELECT id,file_id,revision,sha256,size,content,created_at FROM file_versions WHERE workspace_id=? ORDER BY id",
-            (service.wid,),
+            "SELECT v.id,v.file_id,v.revision,v.sha256,v.size,v.content,v.created_at "
+            "FROM file_versions v JOIN files f ON f.id=v.file_id AND f.workspace_id=v.workspace_id "
+            "WHERE v.workspace_id=? AND (f.vault_scope='workspace' OR f.owner_user_id=?) "
+            "ORDER BY v.id",
+            (service.wid, service.user["id"]),
         ).fetchall()
         return 200, {
             "format": "smetra-workspace-export",
@@ -163,19 +188,21 @@ def route(service, method, parts, query):
             raise DomainError(400, "Некорректная страница экспорта") from None
         return 200, {"items": [_row(table, row) for row in _query(service, table, offset, limit)]}
     if parts[0] == "files" and len(parts) == 2:
-        row = service.con.execute(
-            "SELECT * FROM files WHERE id=? AND workspace_id=?", (parts[1], service.wid)
-        ).fetchone()
-        if not row:
-            raise DomainError(404, "Файл не найден")
+        # Workspace ownership does not grant access to coworkers' personal
+        # vaults. Reuse the same authorization gate as ordinary downloads.
+        row = service.get("files", parts[1])
         item = download_attachment(row, service.con)
         if hashlib.sha256(item.data).hexdigest() != row["sha256"] or len(item.data) != row["size"]:
             raise DomainError(409, "Файл изменился или повреждён. Повторите экспорт")
         return 200, Download(item.data, item.mime, "smetra-" + row["id"] + ".bin")
     if parts[0] == "versions" and len(parts) == 2:
         row = service.con.execute(
-            "SELECT id,file_id,revision,sha256,size,content FROM file_versions WHERE id=? AND workspace_id=?",
-            (parts[1], service.wid),
+            "SELECT v.id,v.file_id,v.revision,v.sha256,v.size,v.content "
+            "FROM file_versions v JOIN files f "
+            "ON f.id=v.file_id AND f.workspace_id=v.workspace_id "
+            "WHERE v.id=? AND v.workspace_id=? "
+            "AND (f.vault_scope='workspace' OR f.owner_user_id=?)",
+            (parts[1], service.wid, service.user["id"]),
         ).fetchone()
         if not row:
             raise DomainError(404, "Версия файла не найдена")

@@ -197,6 +197,74 @@ class VaultChangelogTests(unittest.TestCase):
                 require_file(fake,row)
             self.assertEqual(denied.exception.status,404)
 
+    def test_owner_export_cannot_read_coworker_personal_vault_or_history(self):
+        """Owners may export shared files and their own private files, not a teammate's."""
+        from backend import business
+        owner, _ = self.account("export-owner")
+        colleague, colleague_id = self.account("export-colleague")
+        wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute(
+                "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,?)",
+                (wid, colleague_id, "member"),
+            )
+        original = b"secret construction material prices"
+        created_code, created = self.call(
+            "/files", "POST", {
+                "assistant_upload": True,
+                "name": "colleague-private.md",
+                "content": base64.b64encode(original).decode(),
+            }, colleague, workspace=wid,
+        )
+        self.assertEqual(created_code, 201, created)
+        private_id = created["file"]["id"]
+        saved_code, _ = self.call(
+            "/files/" + private_id, "PATCH", {
+                "sha256": created["file"]["sha256"],
+                "content": base64.b64encode(b"secret revised prices").decode(),
+            }, colleague, workspace=wid,
+        )
+        self.assertEqual(saved_code, 200)
+        with self.mod.db() as con:
+            private_version = con.execute(
+                "SELECT id FROM file_versions WHERE file_id=?", (private_id,)
+            ).fetchone()["id"]
+
+        own_code, own = self.upload(owner, "owner-visible.png")
+        self.assertEqual(own_code, 201, own)
+        own_id = own["file"]["id"]
+        manifest_code, manifest = self.call("/export", token=owner, workspace=wid)
+        self.assertEqual(manifest_code, 200, manifest)
+        exported_ids = {f["id"] for f in manifest["files"]}
+        self.assertIn(own_id, exported_ids)
+        self.assertNotIn(private_id, exported_ids)
+        self.assertNotIn(private_version, {
+            f["id"] for f in manifest["file_versions"]
+        })
+
+        for table in ("files", "file_versions", "file_text_chunks"):
+            status, exported = self.call(
+                "/export/data/" + table, token=owner, workspace=wid
+            )
+            self.assertEqual(status, 200, table)
+            self.assertNotIn(private_id, {
+                row.get("file_id", row.get("id")) for row in exported["items"]
+            })
+            if table == "file_versions":
+                self.assertNotIn(private_version, {row["id"] for row in exported["items"]})
+        self.assertEqual(
+            self.call("/export/files/" + private_id, token=owner, workspace=wid)[0],
+            404,
+        )
+        self.assertEqual(
+            self.call("/export/versions/" + private_version, token=owner, workspace=wid)[0],
+            404,
+        )
+        self.assertEqual(
+            self.call("/export/files/" + own_id, token=owner, workspace=wid, raw=True)[0],
+            200,
+        )
+
     def test_private_quota_follows_account_across_workspaces(self):
         owner,owner_id=self.account("private-cap-owner")
         teammate,teammate_id=self.account("private-cap-team")
