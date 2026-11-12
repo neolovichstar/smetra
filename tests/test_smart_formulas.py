@@ -23,6 +23,25 @@ class FormulaTests(unittest.TestCase):
                                    {"wall": "120", "rate": "0.18", "coats": "2",
                                     "waste": "10"})["result"], "47.52")
 
+    def test_boolean_guards_short_circuit_unsafe_divisions(self):
+        # A zero denominator is valid in a branch which cannot execute.
+        self.assertEqual(
+            calculate("100 if base == 0 or 10/base > 1 else 0", {"base": 0})["result"],
+            "100",
+        )
+        self.assertEqual(
+            calculate("42 if base != 0 and 10/base > 1 else 0", {"base": 0})["result"],
+            "0",
+        )
+        # The non-zero path must still evaluate the guarded expression.
+        self.assertEqual(
+            calculate("42 if base != 0 and 10/base > 1 else 0", {"base": 2})["result"],
+            "42",
+        )
+        # An unguarded division by zero must remain an error.
+        with self.assertRaises(DomainError):
+            calculate("10/base", {"base": 0})
+
     def test_formula_never_runs_arbitrary_python(self):
         dangerous = (
             "__import__('os').system('whoami')",

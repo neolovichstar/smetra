@@ -114,8 +114,18 @@ def _evaluate(node, values, depth=0):
             left = right
         return True
     if isinstance(node, ast.BoolOp):
-        answers = [_evaluate(value, values, depth + 1) for value in node.values]
-        return all(answers) if isinstance(node.op, ast.And) else any(answers)
+        # A guarded expression must not evaluate a dangerous right-hand side
+        # after the left-hand side already determines the boolean result.
+        # Preserve the existing boolean return contract for conditional rules.
+        if isinstance(node.op, ast.And):
+            for part in node.values:
+                if not _evaluate(part, values, depth + 1):
+                    return False
+            return True
+        for part in node.values:
+            if _evaluate(part, values, depth + 1):
+                return True
+        return False
     if isinstance(node, ast.IfExp):
         condition = _evaluate(node.test, values, depth + 1)
         return _evaluate(node.body if condition else node.orelse, values, depth + 1)
