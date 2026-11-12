@@ -1958,22 +1958,44 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         prior_user = con.execute(
                             "SELECT entitlement_until FROM users WHERE id=?", (local["user_id"],)
                         ).fetchone()
-                        was_active = int(prior_user["entitlement_until"] or 0) > now()
-                        grant_days = terms["duration_days"]
-                        entitlement_until = max(int(prior_user["entitlement_until"] or 0), now()) + grant_days * 86400
+                        # Subscription periods belong to the paid workspace.
+                        # Buying a second company cannot extend the first one's
+                        # subscription or add an unrelated term to the account.
+                        purchased_workspace = terms["workspace_id"] or str(
+                            uuid.uuid5(uuid.NAMESPACE_URL, "smetra-workspace:" + local["user_id"])
+                        )
+                        prior_workspace = con.execute(
+                            "SELECT entitlement_until FROM workspaces WHERE id=? AND owner_id=?",
+                            (purchased_workspace, local["user_id"]),
+                        ).fetchone()
+                        was_active = bool(
+                            prior_workspace and int(prior_workspace["entitlement_until"] or 0) > now()
+                        )
+                        revenue.rebuild_workspace_entitlement(
+                            con, local["user_id"], purchased_workspace
+                        )
+                        current_workspace = con.execute(
+                            "SELECT entitlement_until FROM workspaces WHERE id=? AND owner_id=?",
+                            (purchased_workspace, local["user_id"]),
+                        ).fetchone()
+                        workspace_until = int(current_workspace["entitlement_until"] or 0)
+                        # Preserve existing manual legacy access, if any, but do
+                        # not append this company term to that account-wide date.
+                        entitlement_until = max(
+                            int(prior_user["entitlement_until"] or 0),
+                            revenue.active_owned_workspace_until(con, local["user_id"]),
+                        )
                         con.execute(
                             "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                            (entitlement_until, "pro", local["user_id"]),
+                            (entitlement_until, "pro" if entitlement_until > now() else "free",
+                             local["user_id"]),
                         )
                         bonus = int(terms["bonus_ai_messages"] or 0)
                         if bonus > 0:
                             con.execute(
                                 "INSERT INTO assistant_bonus_grants(id,user_id,payment_id,amount,remaining,expires_at,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(payment_id) DO NOTHING",
-                                (uid(), local["user_id"], local["id"], bonus, bonus, entitlement_until, now()),
+                                (uid(), local["user_id"], local["id"], bonus, bonus, workspace_until, now()),
                             )
-                        revenue.rebuild_workspace_entitlement(
-                            con, local["user_id"], terms["workspace_id"]
-                        )
                         from backend.partner_platform import record_subscription_payment
                         record_subscription_payment(con, local)
                         newly_succeeded = True
@@ -2052,28 +2074,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     event(con, payment["user_id"], "payment_refunded")
                     audit(con, None, "payment.refunded", payment["id"])
                 elif not existing:
-                    # Rebuild remaining paid time without the refunded grant.
-                    grants = con.execute(
-                        """SELECT p.plan,p.activated_at,b.duration_days FROM payments p LEFT JOIN billing_intents b ON b.payment_id=p.id
-                        WHERE p.user_id=? AND p.status='succeeded' AND p.activated_at IS NOT NULL
-                        AND p.plan NOT LIKE 'tokens_%'
-                        AND NOT EXISTS(SELECT 1 FROM refunds r WHERE r.payment_id=p.id AND r.status='succeeded')
-                        ORDER BY p.activated_at,p.created_at,p.id""",
-                        (payment["user_id"],),
-                    ).fetchall()
-                    until, plan = 0, "free"
-                    for grant in grants:
-                        until = (
-                            max(until, grant["activated_at"])
-                            + (grant['duration_days'] or PLANS[grant["plan"]][1]) * 86400
-                        )
-                        plan = "pro"
+                    # Refund only this workspace's grant. Other paid
+                    # companies keep their independent expiry and access.
+                    refunded_terms = con.execute(
+                        "SELECT workspace_id FROM billing_intents WHERE payment_id=?",
+                        (payment["id"],),
+                    ).fetchone()
+                    revenue.rebuild_workspace_entitlement(
+                        con, payment["user_id"],
+                        refunded_terms["workspace_id"] if refunded_terms else None,
+                    )
+                    remaining_until = revenue.active_owned_workspace_until(
+                        con, payment["user_id"]
+                    )
                     con.execute(
                         "UPDATE users SET entitlement_until=?,plan=? WHERE id=?",
-                        (until, plan if until > now() else "free", payment["user_id"]),
+                        (remaining_until, "pro" if remaining_until > now() else "free",
+                         payment["user_id"]),
                     )
-                    refunded_terms = con.execute("SELECT workspace_id FROM billing_intents WHERE payment_id=?", (payment["id"],)).fetchone()
-                    revenue.rebuild_workspace_entitlement(con, payment["user_id"], refunded_terms["workspace_id"] if refunded_terms else None)
                     # Any unused gift credits attached to a fully refunded purchase are revoked.
                     con.execute("UPDATE assistant_bonus_grants SET remaining=0 WHERE payment_id=?", (payment['id'],))
                     from backend import ai_tokens

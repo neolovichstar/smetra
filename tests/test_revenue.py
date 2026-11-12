@@ -173,6 +173,65 @@ class RevenueTests(unittest.TestCase):
         )
         self.assertEqual(revenue.dashboard(self.con)['mrr_kopecks'], round(1490000 / 12))
 
+    def test_workspace_subscriptions_do_not_stack_account_time_and_refunds_are_scoped(self):
+        owner = self.account("multi-workspace-refund")
+        personal = business.ensure_workspace(self.con, owner)
+        company = "other-company-for-refund"
+        self.con.execute(
+            "INSERT INTO workspaces(id,owner_id,name,created_at) VALUES(?,?,?,?)",
+            (company, owner["id"], "Компания", revenue.now()),
+        )
+        self.con.execute(
+            "INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,'owner')",
+            (company, owner["id"]),
+        )
+        first, first_remote = self.purchase(
+            owner, key="refund-personal-month", plan="pro_month", workspace_id=personal
+        )
+        second, _ = self.purchase(
+            owner, key="refund-company-year", plan="pro_plus_year", workspace_id=company
+        )
+        ends = {
+            row["id"]: row["entitlement_until"]
+            for row in self.con.execute(
+                "SELECT id,entitlement_until FROM workspaces WHERE id IN (?,?)",
+                (personal, company),
+            )
+        }
+        current = self.con.execute(
+            "SELECT entitlement_until FROM users WHERE id=?", (owner["id"],)
+        ).fetchone()["entitlement_until"]
+        self.assertEqual(current, max(ends.values()))
+        self.assertGreater(ends[company], ends[personal])
+
+        handler = object.__new__(Handler)
+        handler.apply_refund(self.con, {
+            "id": "refund-only-personal-workspace",
+            "payment_id": first_remote["id"],
+            "status": "succeeded",
+            "amount": first_remote["amount"],
+        })
+        personal_plan = self.con.execute(
+            "SELECT plan FROM workspaces WHERE id=?", (personal,)
+        ).fetchone()["plan"]
+        company_plan = self.con.execute(
+            "SELECT plan FROM workspaces WHERE id=?", (company,)
+        ).fetchone()["plan"]
+        self.assertEqual(personal_plan, "free")
+        self.assertEqual(company_plan, "pro_plus_year")
+        self.assertEqual(self.con.execute(
+            "SELECT entitlement_until FROM users WHERE id=?", (owner["id"],)
+        ).fetchone()["entitlement_until"], ends[company])
+        self.assertEqual(revenue.dashboard(self.con)["mrr_kopecks"], round(1490000 / 12))
+        # Receiving the same refund twice cannot change the other subscription.
+        handler.apply_refund(self.con, {
+            "id": "refund-only-personal-workspace",
+            "payment_id": first_remote["id"],
+            "status": "succeeded",
+            "amount": first_remote["amount"],
+        })
+        self.assertEqual(revenue.active_owned_workspace_until(self.con, owner["id"]), ends[company])
+
     def test_test_payments_manual_access_and_refunds_are_not_revenue(self):
         local,_=self.purchase(self.user)
         self.purchase(self.account('tester'),key='test_checkout_1234',test=True)

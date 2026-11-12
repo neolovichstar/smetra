@@ -322,6 +322,17 @@ def dashboard(con):
             'costs_configured':all(os.getenv(key) is not None for key in ('PAYMENT_FEE_BPS','INFRA_MONTHLY_KOPECKS','STORAGE_MONTHLY_KOPECKS','AI_INPUT_KOPECKS_PER_MILLION','AI_OUTPUT_KOPECKS_PER_MILLION')) and (not unknown_ai or integer_env('AI_INPUT_KOPECKS_PER_MILLION',0)==integer_env('AI_OUTPUT_KOPECKS_PER_MILLION',0)==0)}}
 
 
+def active_owned_workspace_until(con, user_id):
+    """Max active term across independently subscribed workspaces of an owner."""
+    row = con.execute(
+        "SELECT coalesce(max(entitlement_until),0) FROM workspaces "
+        "WHERE owner_id=? AND subscription_status IN ('active','paid','trialing') "
+        "AND entitlement_until>?",
+        (user_id, now()),
+    ).fetchone()
+    return int(row[0] or 0)
+
+
 def rebuild_workspace_entitlement(con, user_id, workspace_id=None):
     """Recompute from verified, non-refunded grants inside the payment transaction."""
     from backend.business import ensure_workspace
