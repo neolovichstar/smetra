@@ -307,7 +307,7 @@ def public_search(service, query):
     if (any(pattern.search(query) for pattern in
             (_EMAIL, _TOKEN, _AUTH_URL, _PHONE, _SIGNED_URL, _PRIVATE))
             or any(not _safe_link(link) for link in
-                   re.findall(r'https?://[^\\s<>"\\\']+', query))):
+                   re.findall(r"""https?://[^\s<>"']+""", query))):
         raise DomainError(400, "Искать частные данные в интернете нельзя. Используйте внутреннее хранилище.")
     preference = os.getenv("SMETRA_SEARCH_BACKEND", "auto").strip().lower()
     if preference not in ("auto", "searxng", "tavily", "openrouter"):
