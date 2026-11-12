@@ -274,7 +274,7 @@ class FlowTests(unittest.TestCase):
     def test_checkout_idempotency_and_verified_entitlement(self):
         os.environ["YOOKASSA_SHOP_ID"] = "test_shop"
         os.environ["YOOKASSA_SECRET_KEY"] = "test_key"
-        os.environ["YOOKASSA_MODE"] = "test"
+        os.environ["YOOKASSA_MODE"] = "live"
         os.environ["YOOKASSA_TEST_EMAIL"] = "billing@sample.test"
         os.environ["YOOKASSA_MERCHANT_TYPE"] = "self_employed"
         original = self.mod.Handler.provider_call
@@ -284,7 +284,7 @@ class FlowTests(unittest.TestCase):
                 self.assertNotIn("receipt", payload)
                 return {
                     "id": "provider-test-1",
-                    "test": True,
+                    "test": False,
                     "recipient": {"account_id": "test_shop"},
                     "amount": payload["amount"],
                     "metadata": payload["metadata"],
@@ -301,7 +301,7 @@ class FlowTests(unittest.TestCase):
                 }
             return {
                 "id": "provider-test-1",
-                "test": True,
+                "test": False,
                 "recipient": {"account_id": "test_shop"},
                 "status": "succeeded",
                 "paid": True,

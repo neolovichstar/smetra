@@ -9,7 +9,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend import app, cloud_drives, community
+from backend import app, business, cloud_drives, community
 from backend.redis_infra import RedisUnavailable
 from tests import test_communication_api as fixtures
 
@@ -38,6 +38,18 @@ class SecurityDeliveryApiTests(unittest.TestCase):
                 (ident, self.alice_id, "provider-" + ident, "pro_month", 49000, status,
                  "checkout-" + ident, "https://example.test/pay", app.now(),
                  app.now() if status == "succeeded" else None),
+            )
+            # A provider notification is never sufficient on its own. The
+            # payment must link to an immutable, server-created checkout intent.
+            user = con.execute("SELECT * FROM users WHERE id=?", (self.alice_id,)).fetchone()
+            workspace_id = business.ensure_workspace(con, user)
+            con.execute(
+                "INSERT INTO billing_intents("
+                "id,user_id,request_key,plan,amount_kopecks,duration_days,"
+                "variant,source,is_test,created_at,bonus_ai_messages,workspace_id,payment_id"
+                ") VALUES(?,?,?,?,?,31,'baseline','pricing_page',0,?,0,?,?)",
+                ("intent-" + ident, self.alice_id, "checkout-" + ident, "pro_month",
+                 49000, app.now(), workspace_id, ident),
             )
             return dict(con.execute("SELECT * FROM payments WHERE id=?", (ident,)).fetchone())
 
