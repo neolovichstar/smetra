@@ -7,7 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from backend.app import ORIGIN, audit, now, uid, yookassa_mode
+from backend.app import ORIGIN, audit, now, uid, billing_mode
 from backend.business import DomainError as ApiError
 
 # PostgreSQL stores all application tables in a private schema. Registering the
@@ -454,7 +454,7 @@ def _support_user_context(con, user):
             "api_request_reached_backend": True,
             "support_ai_provider_configured": bool(os.getenv("OPENROUTER_API_KEY", "").strip()),
             "support_ai_model": os.getenv("SUPPORT_AI_MODEL") or os.getenv("OPENROUTER_MODEL") or "openrouter/free",
-            "checkout_mode": yookassa_mode(user),
+            "checkout_mode": billing_mode(user),
             "push_provider_configured": bool(
                 os.getenv("RUSTORE_PUSH_PROJECT_ID", "").strip()
                 and os.getenv("RUSTORE_PUSH_SERVICE_TOKEN", "").strip()

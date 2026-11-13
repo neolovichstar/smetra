@@ -22,6 +22,7 @@ from pathlib import Path
 from email.message import EmailMessage
 from backend.plan_catalog import PURCHASES
 from backend.service_errors import DatabaseBusyError
+from backend import platega
 
 try:
     from backend import business, mytracker, revenue, token_packs
@@ -74,6 +75,16 @@ def yookassa_mode(user=None):
         if not tester or user["email"].lower() != tester:
             return "off"
     return mode
+
+
+def billing_mode(user=None):
+    """One active checkout provider; legacy YooKassa settlements remain readable."""
+    provider = os.getenv("PAYMENT_PROVIDER", "yookassa").strip().lower()
+    if provider == "platega":
+        return platega.mode()
+    if provider == "yookassa":
+        return yookassa_mode(user)
+    return "off"
 
 
 @contextmanager
@@ -571,7 +582,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         from backend.cloud_drives import authenticate_cron
                         authenticate_cron(self)
                     # /api/cron/push verifies its own dedicated server secret.
-                if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
+                if root == "webhooks" and path not in ("/api/webhooks/yookassa", "/api/webhooks/platega", "/api/webhooks/google-drive"):
                     raise ApiError(404, "Не найдено")
                 if root == "webhooks" and method != "POST":
                     raise ApiError(405, "Webhook принимает только POST")
@@ -596,7 +607,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not (path.startswith("/api/partners/console/") or
                         path.startswith("/api/partners/v1/console/")):
                     raise ApiError(404, "Не найдено")
-            if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/google-drive"):
+            if method != "GET" and path not in ("/api/webhooks/yookassa", "/api/webhooks/platega", "/api/webhooks/google-drive"):
                 self.require_origin()
             if method == "GET" and path == "/api/auth/providers":
                 from backend.identity import route as identity_route
@@ -1397,6 +1408,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 raise ApiError(400, "Неизвестное событие")
             return self.send_json(200, {"ok": True})
+        if path == "/api/webhooks/platega" and method == "POST":
+            if platega.mode() == "off":
+                raise ApiError(503, "Прием платежей пока не настроен")
+            # Platega signs callbacks with these shop credentials, not a body signature.
+            if (not hmac.compare_digest(self.headers.get("X-Secret", ""), os.environ["PLATEGA_API_KEY"])
+                    or not hmac.compare_digest(self.headers.get("X-MerchantId", ""), os.environ["PLATEGA_MERCHANT_ID"])):
+                raise ApiError(403, "Некорректное уведомление")
+            self.throttle("platega-webhook:" + self.client_address[0], 120, 60)
+            data = self.body()
+            try:
+                provider_id = platega.PREFIX + platega.transaction_id(data.get("id"))
+            except ValueError:
+                raise ApiError(400, "Некорректное уведомление") from None
+            if data.get("status") not in ("CONFIRMED", "CANCELED", "CHARGEBACKED", "PARTIALLY_REFUNDED", "DISPUTED"):
+                raise ApiError(400, "Неизвестное событие")
+            payment = con.execute("SELECT * FROM payments WHERE provider_id=?", (provider_id,)).fetchone()
+            if not payment:
+                raise ApiError(404, "Платеж не найден")
+            # Do not grant anything based on callback data, even with a valid header.
+            # Always fetch the current payment from the authenticated provider API.
+            self.process_platega_payment(con, payment)
+            return self.send_json(200, {"ok": True})
         user = self.auth(con, path.startswith("/api/admin/"))
         if path == "/api/me" and method == "GET":
             from backend.partner_platform import capture
@@ -1551,7 +1584,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "plans": {k: v['amount_kopecks'] for k, v in offer['plans'].items()},
                     "pricing": offer,
                     "tokens": token_packs.offer(),
-                    "checkout_mode": yookassa_mode(user),
+                    "checkout_mode": billing_mode(user),
                     "email_verified": user["email_verified_at"] is not None,
                 },
             )
@@ -1574,7 +1607,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     raise ApiError(400, "Некорректное рабочее пространство")
                 if not con.execute("SELECT id FROM workspaces WHERE id=? AND owner_id=?", (selected_workspace, user["id"])).fetchone():
                     raise ApiError(403, "Тарифом управляет владелец пространства")
-            mode = yookassa_mode(user)
+            mode = billing_mode(user)
             if mode == "off":
                 raise ApiError(503, "Оплата пока недоступна")
             previous = con.execute(
@@ -1617,11 +1650,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # and must be at most 64 characters. Keep retries deterministic.
             provider_key = hashlib.sha256(("checkout:v1:"+user["id"]+":"+key).encode()).hexdigest()
             try:
-                result = self.provider_call("/payments", "POST", request, provider_key)
+                if os.getenv("PAYMENT_PROVIDER", "yookassa").lower() == "platega":
+                    raw = self.platega_call("/v2/transaction/process", "POST", platega.create_request(
+                        user, intent, request["description"], request["confirmation"]["return_url"]
+                    ))
+                    result = platega.creation_to_legacy(raw, user, intent)
+                else:
+                    result = self.provider_call("/payments", "POST", request, provider_key)
             except ApiError:
                 revenue.record(con,user['id'],'checkout_failed',intent['source'],intent['variant'],'checkout-failed:'+intent['id'])
                 raise
-            self.verify_yookassa_shop(result)
+            except ValueError:
+                raise ApiError(502, "Платёжный сервис вернул некорректный ответ") from None
+            if not isinstance(result, dict) or not isinstance(result.get("id"), str):
+                raise ApiError(502, "Платёжный сервис вернул неполный ответ")
+            if not result["id"].startswith(platega.PREFIX):
+                self.verify_yookassa_shop(result)
             if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
                 raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
             if not result.get("id") or not result.get("confirmation", {}).get(
@@ -1641,10 +1685,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "SELECT * FROM payments WHERE user_id=? AND status='pending' ORDER BY created_at DESC LIMIT 3",
                 (user["id"],),
             ).fetchall()
-            if rows and yookassa_mode() == "off":
-                raise ApiError(503, "Сверка с платёжным сервисом временно недоступна")
             for row in rows:
-                self.apply_payment(con, row, self.provider_payment(row["provider_id"]))
+                if row["provider_id"].startswith(platega.PREFIX):
+                    if platega.mode() == "off":
+                        raise ApiError(503, "Сверка с платёжным сервисом временно недоступна")
+                    self.process_platega_payment(con, row)
+                else:
+                    if yookassa_mode() == "off":
+                        raise ApiError(503, "Сверка с платёжным сервисом временно недоступна")
+                    self.apply_payment(con, row, self.provider_payment(row["provider_id"]))
             current = con.execute(
                 "SELECT * FROM users WHERE id=?", (user["id"],)
             ).fetchone()
@@ -1825,7 +1874,77 @@ class Handler(http.server.BaseHTTPRequestHandler):
             print(json.dumps({"payment_api_error": type(err).__name__}), flush=True)
             raise ApiError(502, "Платёжный сервис временно недоступен")
 
+    def platega_call(self, path, method="GET", payload=None):
+        if platega.mode() == "off":
+            raise ApiError(503, "Platega пока не настроена")
+        if path != "/v2/transaction/process" and not re.fullmatch(r"/transaction/[0-9a-f-]{36}", path):
+            raise ApiError(400, "Некорректный адрес платежа")
+        request = urllib.request.Request(
+            "https://app.platega.io" + path,
+            data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+            headers={"Content-Type": "application/json",
+                     "X-MerchantId": os.environ["PLATEGA_MERCHANT_ID"],
+                     "X-Secret": os.environ["PLATEGA_API_KEY"]},
+            method=method,
+        )
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                # Do not follow redirects with merchant credentials attached.
+                return None
+        try:
+            with urllib.request.build_opener(NoRedirect()).open(request, timeout=12) as response:
+                body = response.read(131073)
+                if len(body) > 131072:
+                    raise ValueError("oversized provider response")
+                return json.loads(body)
+        except (urllib.error.URLError, TimeoutError, ValueError) as err:
+            # Never log request headers, credentials, callback payloads or buyer data.
+            print(json.dumps({"platega_api_error": type(err).__name__}), flush=True)
+            raise ApiError(502, "Платёжный сервис временно недоступен") from None
+
+    def process_platega_payment(self, con, local):
+        raw = self.provider_payment(local["provider_id"])
+        intent = con.execute("SELECT * FROM billing_intents WHERE payment_id=?", (local["id"],)).fetchone()
+        if not intent or intent["is_test"]:
+            raise ApiError(409, "Не найден подтверждённый заказ")
+        try:
+            normalized = platega.verified_to_legacy(raw, local, intent)
+        except ValueError:
+            raise ApiError(409, "Данные платежа не совпали") from None
+        if raw["status"] in ("PENDING", "CONFIRMED", "CANCELED"):
+            return self.apply_payment(con, local, normalized)
+        if raw["status"] in ("CHARGEBACKED", "PARTIALLY_REFUNDED"):
+            if local["status"] == "pending":
+                # No entitlement has been granted. Treat a completed chargeback
+                # as canceled; partially refunded pending payments need review.
+                if raw["status"] == "CHARGEBACKED":
+                    normalized["status"] = "canceled"
+                    return self.apply_payment(con, local, normalized)
+                return audit(con, None, "payment.partial_refund_review", local["id"])
+            if raw["status"] == "CHARGEBACKED":
+                refund_id = "platega:chargeback:" + raw["id"]
+            else:
+                try:
+                    full_refund = platega.kopecks(raw.get("refundedAmount")) == int(local["amount_kopecks"])
+                except ValueError:
+                    full_refund = False
+                if not full_refund:
+                    return audit(con, None, "payment.partial_refund_review", local["id"])
+                refund_id = "platega:refund:" + str(raw.get("refundId") or raw["id"])
+            return self.apply_refund(con, {
+                "id": refund_id, "payment_id": local["provider_id"], "status": "succeeded",
+                "amount": {"value": f"{local['amount_kopecks'] / 100:.2f}", "currency": "RUB"},
+            })
+        if raw["status"] == "DISPUTED":
+            return audit(con, None, "payment.disputed_review", local["id"])
+
     def provider_payment(self, payment_id):
+        if payment_id.startswith(platega.PREFIX):
+            try:
+                normalized_id = platega.transaction_id(payment_id[len(platega.PREFIX):])
+            except ValueError:
+                raise ApiError(400, "Некорректный платеж") from None
+            return self.platega_call("/transaction/" + normalized_id)
         return self.provider_call(
             "/payments/" + urllib.parse.quote(payment_id, safe="")
         )
@@ -1856,7 +1975,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         expected = data.get("expected_amount_kopecks")
         if expected is not None and expected != amount:
             raise ApiError(409, "Цена токенов изменилась. Обновите страницу.")
-        mode = yookassa_mode(user)
+        mode = billing_mode(user)
         if mode == "off":
             raise ApiError(503, "Оплата пока недоступна")
         self.throttle("token-checkout:" + user["id"], 10, 600)
@@ -1889,8 +2008,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "metadata": {"user_id": user["id"], "plan": plan, "customer_email": user["email"]},
         }
         provider_key = hashlib.sha256(("tokens:v1:" + user["id"] + ":" + key).encode()).hexdigest()
-        result = self.provider_call("/payments", "POST", request, provider_key)
-        self.verify_yookassa_shop(result)
+        if os.getenv("PAYMENT_PROVIDER", "yookassa").lower() == "platega":
+            raw = self.platega_call("/v2/transaction/process", "POST", platega.create_request(
+                user, intent, request["description"], request["confirmation"]["return_url"]
+            ))
+            try:
+                result = platega.creation_to_legacy(raw, user, intent)
+            except ValueError:
+                raise ApiError(502, "Платёжный сервис вернул некорректный ответ") from None
+        else:
+            result = self.provider_call("/payments", "POST", request, provider_key)
+            self.verify_yookassa_shop(result)
         if result.get("amount") != request["amount"] or result.get("metadata") != request["metadata"]:
             raise ApiError(502, "Платёжный сервис вернул данные другого запроса")
         if not result.get("id") or not result.get("confirmation", {}).get("confirmation_url", "").startswith("https://"):
@@ -1902,7 +2030,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self.send_json(201 if created else 200, {"url": saved["confirmation_url"], "status": saved["status"], "payment_id": saved["id"]})
 
     def apply_payment(self, con, local, remote):
-        self.verify_yookassa_shop(remote)
+        if not local["provider_id"].startswith(platega.PREFIX):
+            self.verify_yookassa_shop(remote)
         if not isinstance(remote.get("amount"), dict) or not isinstance(remote.get("metadata"), dict):
             raise ApiError(409, "Некорректные данные платежа")
         if (
@@ -2017,7 +2146,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             mytracker.track_custom_event(
                 local["user_id"],
                 "pro_subscription_started",
-                {"source": "yookassa", "plan": local["plan"]},
+                {"source": "platega" if local["provider_id"].startswith(platega.PREFIX) else "yookassa", "plan": local["plan"]},
             )
 
     def apply_refund(self, con, remote):
