@@ -3,7 +3,9 @@
    scene shows first; WebGL loads after the page and fades in over it. The room
    renders only when the user turns it: no animation loop at rest. */
 const root = document.querySelector('[data-room3d]');
-const posterMode = new URLSearchParams(location.search).has('room-poster');
+const params = new URLSearchParams(location.search);
+const posterMode = params.has('room-poster');
+const compact = matchMedia('(max-width: 640px)');
 
 const start = () => import('./vendor/three-0.170.0.module.min.js').then(THREE => Promise.all([
   import('./vendor/three-rounded-box-0.170.0.js'),
@@ -301,7 +303,7 @@ function build(THREE, RoundedBoxGeometry, RoomEnvironment) {
   if (posterMode) window.roomPoster = () => { render(); return canvas.toDataURL('image/png'); };
 }
 
-if (root) {
+if (root && !params.has('quote') && !params.has('intake') && (posterMode || !compact.matches)) {
   // Load WebGL after the page is interactive, so the hero text and poster paint first.
   const later = window.requestIdleCallback || (fn => setTimeout(fn, 200));
   const go = () => later(() => start().catch(() => {}), { timeout: 1500 });

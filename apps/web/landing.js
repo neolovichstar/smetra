@@ -27,6 +27,7 @@
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const motion = !reduced && 'IntersectionObserver' in window;
+  const compact = matchMedia('(max-width: 640px)');
   const params = new URLSearchParams(location.search);
 
   // Client-facing quote and intake pages reuse the workspace renderer.
@@ -98,7 +99,7 @@
 
     // The 3D room drifts a little slower than the page while the hero is in view.
     const visual = document.querySelector('.hero-room');
-    if (visual && motion) {
+    if (visual && motion && !compact.matches) {
       let parallax = 0;
       const drift = () => { parallax = 0; const y = Math.min(scrollY, innerHeight); visual.style.translate = `0 ${(y * 0.06).toFixed(1)}px`; };
       addEventListener('scroll', () => { if (!parallax && scrollY < innerHeight * 1.2) parallax = requestAnimationFrame(drift); }, { passive: true });
@@ -160,7 +161,7 @@
     const stage = flow.querySelector('[role=tabpanel]');
     const duration = 6000;
     flow.style.setProperty('--flow-duration', duration + 'ms');
-    let current = 0, timer = null, autoplay = motion;
+    let current = 0, timer = null, autoplay = motion && !compact.matches;
     const show = (index, focus = false) => {
       current = (index + tabs.length) % tabs.length;
       tabs.forEach((tab, n) => {
@@ -214,7 +215,7 @@
     const steps = [...chat.querySelectorAll('[data-chat-step]')];
     const text = chat.querySelector('[data-stream]');
     const finish = () => { steps.forEach(step => step.classList.add('is-shown')); chat.classList.remove('is-typing'); text.textContent = text.dataset.stream; };
-    if (!motion) finish();
+    if (!motion || compact.matches) finish();
     else onVisible(chat, () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
       (async () => {
@@ -233,20 +234,28 @@
   if (plansHost) {
     const features = () => window.SmetraPlanFeatures || {};
     const audience = { starter: 'Чтобы попробовать', pro_solo: 'Для мастера', pro_plus: 'Для учёта денег и закупок', team: 'Для команды до 5 человек' };
+    const summary = {
+      starter: '3 сметы и ссылка для клиента',
+      pro_solo: 'Безлимит смет, PDF и Excel без отметки',
+      pro_plus: 'Расходы и цены материалов',
+      team: 'Общие объекты, до 5 участников',
+    };
     let plans = [], period = 'month';
     const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const render = () => {
       plansHost.innerHTML = plans.map(plan => {
+        const name = escape(plan.name.split(' / ')[0]);
         const free = !plan.month;
         const price = free ? 0 : period === 'year' && plan.year ? plan.year : plan.month;
         const unit = free ? '' : period === 'year' && plan.year ? '/ год' : '/ месяц';
         const saving = !free && period === 'year' && plan.year ? plan.month * 12 - plan.year : 0;
         return `<article class="plan${plan.code === 'pro_solo' ? ' is-featured' : ''}">
           <span class="plan-audience">${escape(audience[plan.code] || '')}</span>
-          <h3>${escape(plan.name)}</h3>
+          <h3>${name}</h3>
           <div class="plan-price"><strong>${money(price / 100)}</strong><span>${unit}</span>${saving > 0 ? `<small>Выгода ${money(saving / 100)} в год</small>` : ''}</div>
+          <p class="plan-summary">${escape(summary[plan.code] || '')}</p>
           <ul>${(features()[plan.code] || []).map(item => `<li>${escape(item)}</li>`).join('')}</ul>
-          <a class="btn ${plan.code === 'pro_solo' ? 'primary' : ''}" href="${free ? '/app?register=1' : '/app?register=1#billing'}">${free ? 'Начать бесплатно' : 'Купить ' + escape(plan.name)}</a>
+          <a class="btn ${plan.code === 'pro_solo' ? 'primary' : ''}" href="${free ? '/app?register=1' : '/app?register=1#billing'}">${free ? 'Начать бесплатно' : 'Купить ' + name}</a>
         </article>`;
       }).join('');
     };
