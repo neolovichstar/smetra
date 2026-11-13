@@ -64,7 +64,7 @@ async function ready(){await new Promise((resolve,reject)=>{let text='';child.st
  }
  await visit('notifications');click('[data-work=read-notifications]');await until(()=>!doc.querySelector('.unread'),'Read notifications');
  console.log('PASS: client, catalog, project, task and lead edits and notification acknowledgement');
- await visit('quotes');click('[data-work=quote-new]');await until(()=>w.location.hash==='#assistant'&&/составит смету/.test(doc.querySelector('#assistant-input')?.placeholder||''),'New estimate opens the assistant');
+ await visit('quotes');click('[data-work=quote-new]');await until(()=>w.location.hash==='#assistant'&&doc.querySelector('.assistant-greeting h1')?.textContent==='Новая смета','New estimate opens the assistant');
  assert.equal(doc.querySelector('#estimate-editor'),null,'there is no blank manual estimate form');
  // The assistant creates the estimate; the full manual editor then works on the existing one.
  const seeded=(await w.api('/quotes',{method:'POST',body:JSON.stringify({title:'Черновик ИИ',client:'Клиент',items:[{name:'Работа',quantity:'1',unit_price:100}]})})).quote;

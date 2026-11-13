@@ -21,6 +21,19 @@ const date = (seconds) => dateFormatter.format(new Date(seconds * 1000));
 // OAuth callbacks must not resurrect legacy pages hidden from navigation.
 const cloudConnectedOnReturn = new URLSearchParams(location.search).get('cloud') === 'connected';
 let user = null, quotes = [], tab = location.hash.slice(1) || 'assistant', registering = false, toastTimer, renderRevision=0, authRevision=0;
+const estimateEntryKey='smetra.estimate.entry';
+const enteredForEstimate=new URLSearchParams(location.search).get('estimate')==='1';
+let estimateEntry=enteredForEstimate?Date.now():0,estimateIntent=null;
+try{
+  if(enteredForEstimate)sessionStorage.setItem(estimateEntryKey,String(estimateEntry));
+  else estimateEntry=Number(sessionStorage.getItem(estimateEntryKey)||0);
+}catch{}
+window.SmetraTakeEstimateIntent=()=>{
+  if(estimateIntent?.owner!==user)return null;
+  const intent=estimateIntent;estimateIntent=null;
+  try{sessionStorage.removeItem('smetra.assistant.conversation');sessionStorage.removeItem('smetra.assistant.context')}catch{}
+  return intent;
+};
 if(cloudConnectedOnReturn){
   tab='assistant';
   const returnUrl=new URL(location.href);
@@ -334,6 +347,7 @@ function showBootError(message){
   if(button)button.hidden=false;
 }
 function showAuth(){
+  estimateIntent=null;
   window.SmetraGuest?.leave();
   window.SmetraPublicProfile?.reset();
   SmetraReleaseUnread.reset();
@@ -376,6 +390,17 @@ async function showApp(){
       .then(()=>sessionStorage.removeItem('smetra.referral')).catch(()=>{});
   }
   try{
+    if(estimateEntry){
+      const fresh=Date.now()-estimateEntry<30*60*1000;
+      estimateEntry=0;
+      try{sessionStorage.removeItem(estimateEntryKey)}catch{}
+      if(fresh&&tab==='assistant')estimateIntent={owner,text:''};
+      const url=new URL(location.href);
+      if(url.searchParams.has('estimate')){
+        url.searchParams.delete('estimate');
+        history.replaceState({},'',url.pathname+url.search+url.hash);
+      }
+    }
     await render();
     if(user!==owner||authRevision!==attempt)return;
     $('#auth').classList.add('hidden');
@@ -668,10 +693,9 @@ window.SmetraNavigateTo=async(section)=>{
   closeNavigation();
   await renderNavigation();
 };
-// New estimates are made by the assistant: the user describes the task and
-// reviews the draft in the editor beside the chat. There is no blank form.
 function openEstimateAssistant(text=''){
-  try{sessionStorage.setItem('smetra.assistant.intent',JSON.stringify({kind:'new-quote',text:String(text||'').slice(0,3000),at:Date.now()}))}catch{}
+  if(!user)return;
+  estimateIntent={owner:user,text:String(text||'').slice(0,3000)};
   closeNavigation();tab='assistant';location.hash='assistant';return render();
 }
 window.SmetraNewEstimate=openEstimateAssistant;

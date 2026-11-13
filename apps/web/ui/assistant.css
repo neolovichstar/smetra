@@ -418,6 +418,12 @@
 .smetra-quote-preview-tune,.smetra-quote-open-editor{min-height:30px;padding:0 10px;border:1px solid var(--line-strong);border-radius:var(--r-2);font-size:var(--fs-13);color:var(--text-2)}
 .smetra-quote-preview-tune:hover,.smetra-quote-open-editor:hover{background:var(--surface-3);color:var(--text)}
 .smetra-quote-preview-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding-top:var(--s-3);border-top:1px solid var(--line)}
+.smetra-draft-footer{padding:var(--s-3) var(--s-5);background:var(--surface-1)}
+.smetra-draft-footer[hidden]{display:none}
+@media (max-width:800px){
+  .smetra-draft-footer{padding-inline:var(--s-4)}
+  .smetra-draft-footer .btn{width:100%;min-height:44px}
+}
 .smetra-quote-open-editor{background:var(--action);color:var(--action-text);border-color:transparent;font-weight:600;min-height:34px;padding:0 14px}
 .smetra-quote-open-editor:hover{background:var(--action-hover);color:var(--action-text)}
 .smetra-visual-empty{color:var(--text-3);font-size:var(--fs-14);padding:var(--s-5) 0}
