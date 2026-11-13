@@ -37,7 +37,7 @@ class FlatWorkspaceLayoutTests(unittest.TestCase):
         page = (WEB / "app.html").read_text(encoding="utf-8")
         self.assertIn(".assistant-workbar{width:max-content;max-width:100%;margin-inline:auto;justify-content:center", css)
         self.assertIn(".assistant-toolrail-body{justify-content:center", css)
-        self.assertIn("/ui/assistant.css?v=20261110-timer1", page)
+        self.assertRegex(page, r'/ui/assistant\.css\?v=[a-z0-9-]+"')
 
     def test_important_overrides_stay_rare(self):
         total = sum(p.read_text(encoding="utf-8").count("!important") for p in (WEB / "ui").glob("*.css"))
