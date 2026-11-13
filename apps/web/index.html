@@ -6,17 +6,17 @@
 <meta name="theme-color" content="#0a0a0b">
 <meta name="mailru-domain" content="UQnzfKGMGVOWLYk5" />
 <title>сметра. Сметы для ремонта и строительства</title>
-<meta name="description" content="сметра. Сервис строительных смет с ИИ-ассистентом. Подготовьте смету, согласуйте её с клиентом и учитывайте оплаты. Работает в браузере и на Android. Google Drive подключается отдельно с вашего разрешения.">
+<meta name="description" content="Сметы для ремонта и строительства. Соберите черновик с ИИ и отправьте клиенту на согласование. Сметра работает в браузере и на Android.">
 <link rel="icon" href="/favicon.ico">
 <link rel="preload" href="/assets/fonts/onest-variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/ui/tokens.css?v=20261026-r21">
 <link rel="stylesheet" href="/ui/base.css?v=20261026-r21">
 <link rel="stylesheet" href="/ui/components.css?v=20261030-quote1">
-<link rel="stylesheet" href="/ui/site.css?v=20261026-r21">
+<link rel="stylesheet" href="/ui/site.css?v=20261113-mobile1">
 <script src="/ui/plans.js?v=20261028-quota3" defer></script>
 <script src="/visit-tracker.js?v=20261109-traffic1" defer></script>
-<script src="/landing.js?v=20261109-buy1" defer></script>
-<script type="module" src="/room3d.js?v=20261026-r21"></script>
+<script src="/landing.js?v=20261113-mobile1" defer></script>
+<script type="module" src="/room3d.js?v=20261113-mobile1"></script>
 </head>
 <body class="site-page landing-page dark">
 <a class="skip-link" href="#landing">К содержимому</a>
@@ -40,14 +40,15 @@
 <main id="landing" class="landing">
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
-      <p class="hero-kicker reveal">Для мастеров, бригад и строительных компаний</p>
-      <h1 id="hero-title" class="reveal">Смета, которую клиент понимает.</h1>
-      <p class="hero-lead reveal">Опишите работы ассистенту. Проверьте смету и отправьте клиенту ссылку на согласование. Этапы работ и оплаты можно вести здесь же.</p>
+      <h1 id="hero-title" class="reveal">Сметы для ремонта и строительства</h1>
+      <p class="hero-lead reveal">Соберите смету с ИИ и отправьте клиенту на согласование.</p>
       <div class="hero-actions reveal">
-        <a class="btn large primary" href="/app?register=1">Создать смету бесплатно</a>
-        <a class="btn large ghost" href="#how">Как это работает</a>
+        <a class="btn large primary" href="/app?register=1">Создать смету</a>
       </div>
-      <p class="hero-note reveal">3 сметы при регистрации · без банковской карты · сайт и Android-приложение</p>
+      <div class="hero-meta reveal">
+        <p class="hero-note">3 сметы бесплатно, без карты</p>
+        <a href="#how">Посмотреть пример</a>
+      </div>
     </div>
 
     <div class="hero-visual hero-room reveal" data-room3d>
@@ -58,23 +59,21 @@
 
   <section id="how" class="section how" aria-labelledby="how-title">
     <header class="section-head reveal">
-      <p class="section-kicker">Как это работает</p>
-      <h2 id="how-title">От заявки к выполненному заказу</h2>
-      <p>Сохраните заявку, подготовьте смету и согласуйте её с клиентом. По согласованной смете можно создать заказ, вести этапы и записывать оплаты.</p>
+      <h2 id="how-title">Как это работает</h2>
     </header>
     <div class="flow reveal" data-flow>
       <div class="flow-steps" role="tablist" aria-label="Этапы работы">
-        <button type="button" role="tab" id="flow-tab-0" aria-controls="flow-panel" aria-selected="true" data-step="0"><span class="flow-num">1</span><span class="flow-name">Запрос клиента</span><span class="flow-bar"></span></button>
-        <button type="button" role="tab" id="flow-tab-1" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="1"><span class="flow-num">2</span><span class="flow-name">Смета</span><span class="flow-bar"></span></button>
-        <button type="button" role="tab" id="flow-tab-2" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="2"><span class="flow-num">3</span><span class="flow-name">Согласование</span><span class="flow-bar"></span></button>
-        <button type="button" role="tab" id="flow-tab-3" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="3"><span class="flow-num">4</span><span class="flow-name">Работа</span><span class="flow-bar"></span></button>
-        <button type="button" role="tab" id="flow-tab-4" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="4"><span class="flow-num">5</span><span class="flow-name">Оплата</span><span class="flow-bar"></span></button>
+        <button type="button" role="tab" id="flow-tab-0" aria-controls="flow-panel" aria-selected="true" data-step="0"><span class="flow-num" aria-hidden="true">1</span><span class="flow-name">Заявка</span><span class="flow-bar"></span></button>
+        <button type="button" role="tab" id="flow-tab-1" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="1"><span class="flow-num" aria-hidden="true">2</span><span class="flow-name">Смета</span><span class="flow-bar"></span></button>
+        <button type="button" role="tab" id="flow-tab-2" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="2"><span class="flow-num" aria-hidden="true">3</span><span class="flow-name">Ссылка</span><span class="flow-bar"></span></button>
+        <button type="button" role="tab" id="flow-tab-3" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="3"><span class="flow-num" aria-hidden="true">4</span><span class="flow-name">Работы</span><span class="flow-bar"></span></button>
+        <button type="button" role="tab" id="flow-tab-4" aria-controls="flow-panel" aria-selected="false" tabindex="-1" data-step="4"><span class="flow-num" aria-hidden="true">5</span><span class="flow-name">Оплата</span><span class="flow-bar"></span></button>
       </div>
       <div class="flow-stage" id="flow-panel" role="tabpanel" aria-labelledby="flow-tab-0" aria-live="polite">
         <article class="flow-panel is-active" data-panel="0">
           <div class="flow-copy">
-            <h3>Заявка приходит по вашей ссылке</h3>
-            <p>Отправьте клиенту ссылку на форму. Он укажет задачу, бюджет и срок, приложит фото или план. Заявка появится в лидах и в карточке клиента.</p>
+            <h3>Получите заявку</h3>
+            <p>Клиент заполняет форму по вашей ссылке. Заявка появляется в кабинете.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Новая заявка</small><span class="fc-pill">Лиды · Новый</span></div>
@@ -84,8 +83,8 @@
         </article>
         <article class="flow-panel" data-panel="1" hidden>
           <div class="flow-copy">
-            <h3>Смета из расценок или по описанию</h3>
-            <p>Попросите ассистента собрать черновик по описанию и вашим расценкам. Проверьте объёмы и цены. Сметра пересчитает итог с учётом скидок, наценок и налогов.</p>
+            <h3>Соберите смету</h3>
+            <p>ИИ предлагает позиции. Вы проверяете цены и объёмы, Сметра считает итог.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Смета · 4 позиции</small><span class="fc-pill">Черновик</span></div>
@@ -95,8 +94,8 @@
         </article>
         <article class="flow-panel" data-panel="2" hidden>
           <div class="flow-copy">
-            <h3>Клиент открывает ссылку и решает</h3>
-            <p>Клиент видит позиции, условия и итог без регистрации. Он может согласовать смету, попросить изменения или задать вопрос. Вы видите, когда он открыл ссылку.</p>
+            <h3>Отправьте ссылку</h3>
+            <p>Клиент открывает смету без регистрации и согласует её или просит правки.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Предложение · версия 2</small><span class="fc-pill fc-pill-success">Согласовано</span></div>
@@ -107,8 +106,8 @@
         </article>
         <article class="flow-panel" data-panel="3" hidden>
           <div class="flow-copy">
-            <h3>Согласованная смета становится заказом</h3>
-            <p>Разбейте работу на этапы со сроками и стоимостью, ведите задачи и календарь. Для объектов есть помещения, замеры и ведомость объёмов.</p>
+            <h3>Ведите заказ</h3>
+            <p>Создайте заказ из сметы. Разбейте работы на этапы и назначьте сроки.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Заказ</small><span class="fc-pill">В работе</span></div>
@@ -118,8 +117,8 @@
         </article>
         <article class="flow-panel" data-panel="4" hidden>
           <div class="flow-copy">
-            <h3>Поступления и остаток по заказу</h3>
-            <p>Записывайте оплаты и расходы. Сметра покажет поступления, остаток к оплате и разницу между доходами и расходами заказа.</p>
+            <h3>Записывайте оплаты</h3>
+            <p>Сметра покажет, сколько уже получили и сколько клиент ещё должен.</p>
           </div>
           <div class="flow-card">
             <div class="fc-head"><small>Оплаты по заказу</small><span class="fc-pill">2 из 3</span></div>
@@ -128,26 +127,20 @@
           </div>
         </article>
       </div>
-      <p class="flow-note">Пример работы со сметой. Имена, даты и суммы вымышлены.</p>
+      <p class="flow-note">Пример с вымышленными данными.</p>
     </div>
   </section>
 
   <section id="assistant" class="section assistant" aria-labelledby="assistant-title">
     <div class="assistant-copy reveal">
-      <p class="section-kicker">ИИ-ассистент</p>
-      <h2 id="assistant-title">Черновик сметы по вашему описанию</h2>
-      <p>Опишите работы и укажите замеры. Можно приложить фото или план. Ассистент предложит позиции, а недостающие данные попросит уточнить.</p>
-      <ul class="check-list">
-        <li>Сметра считает итог по ценам и объёмам в смете. Их нужно проверить перед отправкой клиенту.</li>
-        <li>Правки ассистента видны до сохранения. Вы проверяете их и нажимаете "Применить".</li>
-        <li>Если для правки доступна отмена, рядом появится кнопка "Отменить".</li>
-      </ul>
+      <h2 id="assistant-title">ИИ соберёт черновик сметы</h2>
+      <p>Опишите работы или приложите план. Проверьте предложенные позиции перед сохранением.</p>
       <a class="btn primary" href="/app?register=1#assistant">Попробовать ассистента</a>
     </div>
     <div class="chat-demo reveal" data-chat-demo role="img" aria-label="Пример диалога: ассистент предлагает изменить цену в смете, итог пересчитан сервером, изменение ждёт подтверждения">
       <div class="chat-window" aria-hidden="true">
-        <div class="chat-msg chat-user" data-chat-step="1">Площадь пола 8,5 м². Добавь гидроизоляцию по 750 ₽/м² и подними цену укладки до 1 900 ₽/м²</div>
-        <div class="chat-msg chat-bot" data-chat-step="2"><span class="chat-typing"><i></i><i></i><i></i></span><span class="chat-text" data-stream="Подготовил две правки. Площадь и цены взял из вашего сообщения. Проверьте изменения и нажмите &quot;Применить&quot;."></span></div>
+        <div class="chat-msg chat-user" data-chat-step="1">Добавь 8,5 м² гидроизоляции по 750 ₽/м². Укладка теперь по 1 900 ₽/м².</div>
+        <div class="chat-msg chat-bot" data-chat-step="2"><span class="chat-typing"><i></i><i></i><i></i></span><span class="chat-text" data-stream="Подготовил две правки. Проверьте новый итог."></span></div>
         <div class="chat-proposal" data-chat-step="3">
           <span class="chat-proposal-state">Требует подтверждения</span>
           <strong>Изменить смету · 2 строки</strong>
@@ -162,60 +155,42 @@
 
   <section id="features" class="section features" aria-labelledby="features-title">
     <header class="section-head reveal">
-      <p class="section-kicker">Возможности</p>
       <h2 id="features-title">Сметы и учёт работ</h2>
     </header>
     <div class="feature-groups">
       <article class="feature-group reveal">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8.5L19 7.5V21H6z"/><path d="M14 3v5h5M9 12.5h7M9 16.5h5"/></svg></span>
         <h3>Посчитать</h3>
-        <ul>
-          <li>Позиции с количеством, ценой, скидкой, наценкой и налогом</li>
-          <li>Собственные расценки с историей цен и импортом из Excel</li>
-          <li>Объекты и замеры: помещения, формулы объёмов, ведомость</li>
-          <li>Массовая правка строк с предпросмотром и отменой</li>
-          <li>Черновик сметы по описанию, фото или PDF</li>
-        </ul>
+        <p>Замеры помещений, свои расценки из Excel и расчёт со скидками и налогами.</p>
       </article>
       <article class="feature-group reveal">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
         <h3>Договориться</h3>
-        <ul>
-          <li>Клиентская ссылка без регистрации и пароля</li>
-          <li>Версии сметы и сравнение «что изменилось»</li>
-          <li>Согласование, запрос изменений и комментарии клиента</li>
-          <li>PDF: смета, предложение, счёт, акт, договор-шаблон</li>
-          <li>Форма заявки для новых клиентов</li>
-        </ul>
+        <p>Версии сметы, комментарии клиента, счета и акты в PDF.</p>
       </article>
       <article class="feature-group reveal">
         <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h12v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><path d="M16 14.5h.01"/></svg></span>
         <h3>Довести до оплаты</h3>
-        <ul>
-          <li>Заказы с этапами, сроками и стоимостью</li>
-          <li>Поступления, расходы и остаток по каждому заказу</li>
-          <li>Задачи, календарь сроков и уведомления</li>
-          <li>Команда с ролями и общая база клиентов</li>
-          <li>Один аккаунт на сайте и в Android-приложении</li>
-        </ul>
+        <p>Этапы работ, сроки, расходы и остаток к оплате.</p>
       </article>
     </div>
   </section>
 
   <section id="pricing" class="section pricing" aria-labelledby="pricing-title">
     <header class="section-head reveal">
-      <p class="section-kicker">Тарифы</p>
-      <h2 id="pricing-title">Выберите тариф под свои задачи</h2>
-      <p>Разовая оплата за 31 или 366 дней через ЮKassa. Автопродления и автоматических списаний нет.</p>
+      <h2 id="pricing-title">Тарифы</h2>
+      <p>Оплата через ЮKassa, без автопродления.</p>
     </header>
     <div class="pricing-period reveal" role="group" aria-label="Период оплаты">
       <button type="button" class="btn" data-period="month" aria-pressed="true">Месяц</button>
-      <button type="button" class="btn" data-period="year" aria-pressed="false">Год · 2 месяца в подарок</button>
+      <button type="button" class="btn" data-period="year" aria-pressed="false">Год</button>
     </div>
     <div class="plans reveal" id="plans" aria-live="polite">
       <p class="plans-loading">Загружаем актуальные цены…</p>
     </div>
-    <div class="compare reveal">
+    <details class="compare reveal">
+      <summary>Сравнить тарифы</summary>
+      <div class="compare-scroll" tabindex="0" role="region" aria-label="Таблица сравнения тарифов">
       <table class="compare-table">
         <caption>Сравнение тарифов</caption>
         <thead><tr><th scope="col">Возможность</th><th scope="col">Старт</th><th scope="col">PRO Solo</th><th scope="col">PRO Плюс</th><th scope="col">TEAM</th></tr></thead>
@@ -231,21 +206,21 @@
           <tr><th scope="row">Закрытые чаты объектов</th><td>—</td><td>—</td><td>—</td><td>Да</td></tr>
         </tbody>
       </table>
-    </div>
+      </div>
+    </details>
   </section>
 
   <section id="faq" class="section faq" aria-labelledby="faq-title">
     <header class="section-head reveal">
-      <p class="section-kicker">Вопросы</p>
-      <h2 id="faq-title">Коротко о главном</h2>
+      <h2 id="faq-title">Частые вопросы</h2>
     </header>
     <div class="faq-list reveal">
-      <details><summary>Нужно ли клиенту регистрироваться?</summary><p>Нет. Клиент открывает смету по ссылке, видит позиции, условия и итог, может согласовать, попросить изменения или задать вопрос.</p></details>
-      <details><summary>Как считается итог сметы?</summary><p>Ассистент предлагает позиции, а Сметра рассчитывает стоимость по указанным ценам и объёмам с учётом скидок и налогов. Проверьте исходные данные перед отправкой клиенту. Правки ассистента сохраняются после вашего подтверждения.</p></details>
-      <details><summary>Что будет после трёх бесплатных смет?</summary><p>Созданные сметы можно редактировать без расхода лимита. Для новых смет после стартового лимита понадобится PRO Solo или выше. Для части ранее зарегистрированных пользователей сохранён лимит 10 смет. Остаток доступен в кабинете.</p></details>
-      <details><summary>Как оплачивается тариф?</summary><p>Разовым платежом на сайте через ЮKassa за 31 или 366 дней. Автоматического продления и списаний нет. Данные карты Сметра не получает.</p></details>
-      <details><summary>Можно ли работать с телефона?</summary><p>Да. Сайт работает на телефоне. В Android-приложении тот же аккаунт, сметы и клиенты.</p></details>
-      <details><summary>Можно ли перенести свои расценки и выгрузить данные?</summary><p>Расценки импортируются из таблицы Excel или CSV. Все данные пространства можно скачать одним ZIP-архивом в настройках.</p></details>
+      <details><summary>Нужно ли клиенту регистрироваться?</summary><p>Клиент открывает ссылку, согласует смету или просит правки без регистрации.</p></details>
+      <details><summary>Как считается итог?</summary><p>Сметра считает итог по ценам и объёмам с учётом скидок и налогов. Перед отправкой проверьте данные.</p></details>
+      <details><summary>Что после трёх бесплатных смет?</summary><p>Созданные сметы можно редактировать. Для новых после исчерпания лимита нужен PRO Solo или выше. Остаток виден в кабинете.</p></details>
+      <details><summary>Как оплачивается тариф?</summary><p>Одним платежом через ЮKassa за 31 или 366 дней. Сметра не получает данные карты.</p></details>
+      <details><summary>Есть приложение для телефона?</summary><p>Да, для Android. В приложении и браузере один аккаунт, сметы и клиенты.</p></details>
+      <details><summary>Можно перенести свои расценки?</summary><p>Импортируйте их из Excel или CSV. Данные пространства можно скачать в настройках.</p></details>
       <details><summary>Зачем Сметре доступ к Google Drive?</summary><p>Чтобы найти прайс-листы, счета и сметы в выбранных вами папках. Вы отдельно разрешаете доступ на чтение. Вход через Google такого доступа не даёт. Сметра не меняет и не удаляет файлы на Google Диске. Для распознавания документов может использоваться сторонний ИИ-провайдер. Подробности есть в <a href="/privacy#google-drive">политике конфиденциальности</a>.</p></details>
     </div>
   </section>
@@ -253,8 +228,7 @@
   <section class="section cta" aria-labelledby="cta-title">
     <div class="cta-inner reveal">
       <h2 id="cta-title">Создайте первую смету</h2>
-      <p>3 сметы бесплатно при регистрации. Созданные сметы можно редактировать без расхода лимита. Банковская карта не нужна.</p>
-      <div class="hero-actions"><a class="btn large primary" href="/app?register=1">Создать смету бесплатно</a><a class="btn large ghost" href="/app">У меня есть аккаунт</a></div>
+      <div class="hero-actions"><a class="btn large primary" href="/app?register=1">Начать бесплатно</a><a class="btn large ghost" href="/app">Войти</a></div>
     </div>
   </section>
 </main>
@@ -263,7 +237,7 @@
 
 <footer class="site-footer">
   <div class="site-footer-inner">
-    <div class="site-footer-brand"><a href="/" class="brand">сметра<span class="brand-mark">.</span></a><p>Сметы, согласование и оплата в одном рабочем пространстве.</p></div>
+    <div class="site-footer-brand"><a href="/" class="brand">сметра<span class="brand-mark">.</span></a></div>
     <nav class="site-footer-links" aria-label="Документы и контакты">
       <div><strong>Документы</strong><a href="/legal">Все документы</a><a href="/privacy">Конфиденциальность</a><a href="/terms">Публичная оферта</a><a href="/refund">Отказ от услуг и возврат</a><a href="/disclaimer">Ограничения ИИ</a></div>
       <div><strong>Связь</strong><a href="mailto:support@smetra.online">Поддержка</a><a href="mailto:sales@smetra.online">Для компаний</a><a href="/contacts">Контакты и реквизиты</a></div>

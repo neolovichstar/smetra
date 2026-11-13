@@ -5,7 +5,7 @@ const web=path.join(__dirname,'../apps/web');
 const html=fs.readFileSync(path.join(web,'index.html'),'utf8');
 const landing=fs.readFileSync(path.join(web,'landing.js'),'utf8');
 assert.match(html,/class="site-page landing-page dark"/);
-assert.match(html,/<h1 id="hero-title"[\s\S]*?Смета, которую клиент понимает/);
+assert.match(html,/<h1 id="hero-title"[^>]*>Сметы для ремонта и строительства<\/h1>/);
 assert.match(html,/data-flow/,'Interactive workflow must be present');
 assert.match(html,/id="plans"/);
 assert.match(html,/id="public-quote"/,'Public quote route must remain available');
