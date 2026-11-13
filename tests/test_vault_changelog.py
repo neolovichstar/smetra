@@ -78,6 +78,19 @@ class VaultChangelogTests(unittest.TestCase):
         self.assertNotIn("data:image/",str(stored))
         self.assertIn("Что здесь?",str(stored))
 
+    def test_sanitized_image_must_fit_the_upload_limit(self):
+        owner, _ = self.account("vault-image-limit")
+        output = io.BytesIO()
+        Image.new("1", (256, 256), 1).save(output, format="PNG")
+        raw = output.getvalue()
+        with patch("backend.attachments.maximum_upload", return_value=len(raw)):
+            status, result = self.call("/files", "POST", {
+                "assistant_upload": True, "name": "small.png",
+                "content": base64.b64encode(raw).decode("ascii"),
+            }, owner)
+        self.assertEqual(status, 413, result)
+        self.assertEqual(self.call("/files?scope=personal", token=owner)[1]["items"], [])
+
     def test_changelog_admin_publish_unique_views_and_reaction_switch(self):
         author,author_id=self.account("news-admin")
         reader,reader_id=self.account("news-reader")
@@ -263,6 +276,48 @@ class VaultChangelogTests(unittest.TestCase):
             self.call("/export/files/" + own_id, token=owner, workspace=wid, raw=True)[0],
             200,
         )
+
+    def test_activity_and_export_keep_personal_file_history_private(self):
+        owner, _ = self.account("file-activity-owner")
+        colleague, colleague_id = self.account("file-activity-colleague")
+        wid = self.call("/workspace", token=owner)[1]["workspace"]["id"]
+        with self.mod.db() as con:
+            con.execute("INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,'member')",
+                        (wid, colleague_id))
+        status, client = self.call("/clients", "POST", {"name": "Общий клиент"}, owner)
+        self.assertEqual(status, 201, client)
+        client_id = client["item"]["id"]
+        names = ["личные-расчёты.txt", "временный-личный.txt"]
+        file_ids = []
+        for name in names:
+            status, created = self.call("/files", "POST", {
+                "assistant_upload": True, "name": name, "content": "YQ==",
+            }, colleague, workspace=wid)
+            self.assertEqual(status, 201, created)
+            file_ids.append(created["file"]["id"])
+        moved, deleted = file_ids
+        # Simulate historical records created before events carried their visibility.
+        with self.mod.db() as con:
+            con.execute("UPDATE activity SET entity_type='file' WHERE entity_id IN (?,?)", (moved, deleted))
+        status, details = self.call(f"/files/{moved}/metadata", token=colleague, workspace=wid)
+        self.assertEqual(status, 200, details)
+        status, shared = self.call(f"/files/{moved}/metadata", "PATCH", {
+            "name": "согласованный.txt", "target": "clients", "target_id": client_id,
+            "metadata_etag": details["file"]["metadata_etag"],
+        }, colleague, workspace=wid)
+        self.assertEqual(status, 200, shared)
+        self.assertEqual(self.call(f"/files/{deleted}", "DELETE", token=colleague, workspace=wid)[0], 200)
+
+        for path in ("/activity", "/overview", "/dashboard", "/export/data/activity"):
+            with self.subTest(path=path):
+                status, response = self.call(path, token=owner, workspace=wid)
+                self.assertEqual(status, 200, response)
+                for private in (*names, deleted):
+                    self.assertNotIn(private, str(response))
+                self.assertIn("согласованный.txt", str(response))
+        _, personal_feed = self.call("/activity", token=colleague, workspace=wid)
+        for name in names:
+            self.assertIn(name, str(personal_feed))
 
     def test_private_quota_follows_account_across_workspaces(self):
         owner,owner_id=self.account("private-cap-owner")

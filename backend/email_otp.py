@@ -14,6 +14,8 @@ import ssl
 from email.message import EmailMessage
 from html import escape
 
+from backend.business import transaction
+
 logger = logging.getLogger("smetra.email")
 
 TTL_SECONDS = 600
@@ -129,29 +131,17 @@ def start(handler, con, app):
         raise app.ApiError(400, "Для регистрации примите условия сервиса")
     ip = handler.client_address[0]
     handler.throttle("email-start-ip:" + ip, 6, 600)
-    handler.throttle("email-start-address:" + hashlib.sha256(email.encode()).hexdigest(),
-                     4, 3600)
+    mailbox_key = hashlib.sha256(email.encode()).hexdigest()
+    handler.throttle("email-start-address:" + mailbox_key, 4, 3600)
     existing = con.execute(
         "SELECT id FROM users WHERE email=? AND deleted_at IS NULL", (email,)
     ).fetchone()
     # Existing email owners may sign in through the registration tab.
     real_intent = "login" if existing else intent
     identifier = app.uid()
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    moment = app.now()
-    # Keep earlier still-valid codes until SMTP actually accepts the new
-    # message. A transient mail outage must not lock someone out.
-    con.execute(
-        "INSERT INTO email_login_challenges "
-        "(id,email,code_hash,intent,name,legal_version,attempts,expires_at,created_at,consumed_at) "
-        "VALUES(?,?,?,?,?,?,0,?,?,NULL)",
-        (identifier,email,_digest(identifier,code),real_intent,
-         name if real_intent == "register" else "",
-         app.REGISTRATION_CONSENT_VERSION if real_intent == "register" else "",
-         moment + TTL_SECONDS,moment)
-    )
-    # Unknown login addresses receive a generic response; never reveal user enumeration.
     should_send = bool(existing) or intent == "register"
+    # Keep the same challenge shape for unknown login addresses without a valid six-digit code.
+    code = f"{secrets.randbelow(1_000_000):06d}" if should_send else secrets.token_urlsafe(32)
     if should_send:
         try:
             deliver(email,code,real_intent)
@@ -181,32 +171,34 @@ def start(handler, con, app):
                 category, smtp_code if isinstance(smtp_code, int) else "-",
                 getattr(handler, "request_id", "-"),
             )
-            con.execute("DELETE FROM email_login_challenges WHERE id=?", (identifier,))
             if category == "authentication":
                 raise app.ApiError(
                     503, "Почтовый сервер отклонил авторизацию отправителя. Попробуйте позже"
                 ) from None
             raise app.ApiError(503, "Не удалось отправить письмо. Попробуйте позже") from None
-        # The new code was delivered; only now invalidate previous challenges.
-        # Exclude the new ID so the same database update works across SQLite
-        # and PostgreSQL (which commits individual statements in autocommit).
+    # Publish a delivered code and retire earlier codes in one transaction.
+    # Holding the lock only here keeps SMTP outside the database transaction.
+    with transaction(con, lock_scopes=("email-otp:" + mailbox_key,)):
+        moment = app.now()
+        if should_send:
+            con.execute(
+                "UPDATE email_login_challenges SET consumed_at=? "
+                "WHERE email=? AND consumed_at IS NULL AND expires_at>?",
+                (moment, email, moment),
+            )
         con.execute(
-            "UPDATE email_login_challenges SET consumed_at=? "
-            "WHERE email=? AND id<>? AND consumed_at IS NULL",
-            (app.now(), email, identifier),
+            "INSERT INTO email_login_challenges "
+            "(id,email,code_hash,intent,name,legal_version,attempts,expires_at,created_at,consumed_at) "
+            "VALUES(?,?,?,?,?,?,0,?,?,NULL)",
+            (identifier, email, _digest(identifier, code), real_intent,
+             name if real_intent == "register" else "",
+             app.REGISTRATION_CONSENT_VERSION if real_intent == "register" else "",
+             moment + TTL_SECONDS, moment),
         )
     return handler.send_json(200, {
         "ok": True, "challenge_id": identifier, "expires_in": TTL_SECONDS,
         "retry_after": 60, "message": "Если адрес доступен для этого действия, письмо отправлено",
     })
-
-
-def _commit(con):
-    raw = getattr(con, "raw", None)
-    if raw is not None:
-        raw.commit()
-    elif getattr(con, "in_transaction", False):
-        con.commit()
 
 
 def confirm(handler, con, app):
@@ -220,30 +212,33 @@ def confirm(handler, con, app):
     if not re.fullmatch(r"[0-9a-f-]{36}\Z", identifier) or not _CODE_RE.fullmatch(code):
         raise app.ApiError(400, "Проверьте шестизначный код")
     handler.throttle("email-confirm-ip:" + handler.client_address[0], 40, 900)
-    # Durable per-code limit (separate store): survives the request rollback below.
     handler.throttle("email-confirm-code:" + identifier, MAX_ATTEMPTS, TTL_SECONDS)
-    row = con.execute("SELECT * FROM email_login_challenges WHERE id=?", (identifier,)).fetchone()
-    if not row or row["consumed_at"] is not None or row["expires_at"] <= app.now() or row["attempts"] >= MAX_ATTEMPTS:
+    challenge = con.execute("SELECT email FROM email_login_challenges WHERE id=?", (identifier,)).fetchone()
+    if not challenge:
         raise app.ApiError(400, "Код истёк или уже использован")
-    # Conditional atomic update protects against competing guesses.
-    attempts = con.execute(
-        "UPDATE email_login_challenges SET attempts=attempts+1 WHERE id=? "
-        "AND consumed_at IS NULL AND expires_at>? AND attempts<?",
-        (identifier,app.now(),MAX_ATTEMPTS)
-    )
-    if attempts.rowcount != 1:
-        raise app.ApiError(400, "Код истёк или уже использован")
-    if not hmac.compare_digest(_digest(identifier,code), row["code_hash"]):
-        # The request transaction rolls back on errors; keep the failed attempt.
-        _commit(con)
+    mailbox_key = hashlib.sha256(challenge["email"].encode()).hexdigest()
+    with transaction(con, lock_scopes=("email-otp:" + mailbox_key,)):
+        moment = app.now()
+        row = con.execute(
+            "SELECT * FROM email_login_challenges WHERE id=? AND consumed_at IS NULL "
+            "AND expires_at>? AND attempts<?",
+            (identifier, moment, MAX_ATTEMPTS),
+        ).fetchone()
+        if not row:
+            raise app.ApiError(400, "Код истёк или уже использован")
+        valid = hmac.compare_digest(_digest(identifier, code), row["code_hash"])
+        con.execute(
+            "UPDATE email_login_challenges SET attempts=attempts+1,consumed_at=? WHERE id=?",
+            (moment if valid else None, identifier),
+        )
+        if valid:
+            payload, cookie = handler.create_login(con, _verify_account(con, app, row))
+    if not valid:
         raise app.ApiError(400, "Неверный код. Проверьте цифры")
-    consumed = con.execute(
-        "UPDATE email_login_challenges SET consumed_at=? WHERE id=? "
-        "AND consumed_at IS NULL AND expires_at>? AND attempts<=?",
-        (app.now(),identifier,app.now(),MAX_ATTEMPTS)
-    )
-    if consumed.rowcount != 1:
-        raise app.ApiError(409, "Код уже использован")
+    return handler.send_json(200, payload, cookie)
+
+
+def _verify_account(con, app, row):
     user = con.execute("SELECT * FROM users WHERE email=? AND deleted_at IS NULL",
                        (row["email"],)).fetchone()
     if user:
@@ -274,4 +269,4 @@ def confirm(handler, con, app):
         )
         app.event(con,user_id,"signup_completed")
         app.revenue.record(con,user_id,"signup_completed",key="signup:"+user_id)
-    return handler.login_response(con,user_id)
+    return user_id

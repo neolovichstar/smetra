@@ -25,9 +25,9 @@ class PostgresQueryTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(response["items"], [])
         sql, parameters = con.execute.call_args.args
-        self.assertEqual(parameters, ("company-1", 0))
+        self.assertEqual(parameters, ("company-1", "user-1", 0))
         self.assertNotIn("rowid", sql.lower())
-        self.assertIn("ORDER BY created_at DESC,id DESC", sql)
+        self.assertIn("ORDER BY a.created_at DESC,a.id DESC", sql)
         self.assertIn("FROM smetra.activity", translate(sql, "smetra", True))
 
     def test_admin_subscription_count_uses_portable_timestamp_parameter(self):

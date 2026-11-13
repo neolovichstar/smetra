@@ -14,6 +14,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from backend.vault import VISIBLE_FILE_ACTIVITY, activity_view
+
 try:
     from backend.estimate_completeness import recommend as recommend_quote_costs
 except ModuleNotFoundError:
@@ -1667,10 +1669,11 @@ class Service:
             return 200, {
                 "quote": self.quote_view(row),
                 "activity": [
-                    dict(r)
+                    activity_view(r)
                     for r in self.con.execute(
-                        "SELECT * FROM activity WHERE workspace_id=? AND entity_id=? ORDER BY created_at DESC LIMIT 100",
-                        (self.wid, row["id"]),
+                        "SELECT a.* FROM activity a WHERE a.workspace_id=? AND a.entity_id=? "
+                        f"AND {VISIBLE_FILE_ACTIVITY} ORDER BY a.created_at DESC LIMIT 100",
+                        (self.wid, row["id"], self.user["id"]),
                     )
                 ],
             }
@@ -1885,15 +1888,15 @@ class Service:
                         )
                     ]
                     result["timeline"] = [
-                        dict(r)
+                        activity_view(r)
                         for r in self.con.execute(
-                            "SELECT action,detail,created_at,entity_type,entity_id FROM activity "
-                            "WHERE workspace_id=? AND (entity_id=? OR "
+                            "SELECT a.action,a.detail,a.created_at,a.entity_type,a.entity_id FROM activity a "
+                            "WHERE a.workspace_id=? AND (a.entity_id=? OR "
                             "entity_id IN (SELECT id FROM quotes WHERE client_id=? AND workspace_id=?) OR "
                             "entity_id IN (SELECT id FROM projects WHERE client_id=? AND workspace_id=?) OR "
                             "entity_id IN (SELECT id FROM leads WHERE client_id=? AND workspace_id=?)) "
-                            "ORDER BY created_at DESC LIMIT 30",
-                            (self.wid, parts[0], parts[0], self.wid, parts[0], self.wid, parts[0], self.wid),
+                            f"AND {VISIBLE_FILE_ACTIVITY} ORDER BY a.created_at DESC LIMIT 30",
+                            (self.wid, parts[0], parts[0], self.wid, parts[0], self.wid, parts[0], self.wid, self.user["id"]),
                         )
                     ]
                 if kind == "leads":
@@ -2392,10 +2395,12 @@ class Service:
             quotes=quotes,
             deadlines=deadlines,
             activity=[
-                dict(r)
+                activity_view(r)
                 for r in self.con.execute(
-                    "SELECT a.*,u.name AS actor FROM activity a LEFT JOIN users u ON u.id=a.actor_id WHERE a.workspace_id=? ORDER BY a.created_at DESC,a.rowid DESC LIMIT ?",
-                    (self.wid, limit),
+                    "SELECT a.*,u.name AS actor FROM activity a LEFT JOIN users u ON u.id=a.actor_id "
+                    f"WHERE a.workspace_id=? AND {VISIBLE_FILE_ACTIVITY} "
+                    "ORDER BY a.created_at DESC,a.id DESC LIMIT ?",
+                    (self.wid, self.user["id"], limit),
                 )
             ],
         )
@@ -2829,10 +2834,11 @@ class Service:
         if kind == "activity" and method == "GET":
             return 200, {
                 "items": [
-                    dict(r)
+                    activity_view(r)
                     for r in self.con.execute(
-                        "SELECT * FROM activity WHERE workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?",
-                        (self.wid, self.page(query)),
+                        f"SELECT a.* FROM activity a WHERE a.workspace_id=? AND {VISIBLE_FILE_ACTIVITY} "
+                        "ORDER BY a.created_at DESC,a.id DESC LIMIT 50 OFFSET ?",
+                        (self.wid, self.user["id"], self.page(query)),
                     )
                 ]
             }

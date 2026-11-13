@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 
 from backend.business import DomainError, packed, string
+from backend.vault import emit_file_activity
 
 REFERENCES = {"quotes": "quote_id", "clients": "client_id", "projects": "project_id",
               "construction": "construction_id"}
@@ -90,7 +91,7 @@ def update(service, row, values, expected):
     ).fetchone()
     if not changed:
         raise DomainError(409, "Файл изменился. Обновите данные перед изменением")
-    service.emit("file", row["id"], "Данные файла изменены", changed["name"])
+    emit_file_activity(service, changed, "Данные файла изменены", changed["name"])
     return 200, {"file": public_metadata(changed)}
 
 
