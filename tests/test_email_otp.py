@@ -1,5 +1,7 @@
 """Real HTTP tests of email OTP; never call external SMTP."""
+from concurrent.futures import ThreadPoolExecutor
 import os
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -115,6 +117,56 @@ class EmailOTPTests(unittest.TestCase):
             self.assertEqual(self.call("/auth/email/confirm","POST",{
                 "challenge_id":second["challenge_id"],"code":"222222",
             })[0],200)
+
+    def test_overlapping_resends_leave_one_delivered_code_active(self):
+        email = "otp-parallel-resend@local.test"
+        payload = {
+            "email": email, "intent": "register", "name": "Монтажник",
+            "legal_acceptance": True, "legal_version": "2026-10-19-registration-v1",
+        }
+        first_sending, release_first = threading.Event(), threading.Event()
+
+        def deliver(address, code, intent):
+            if code == "111111":
+                first_sending.set()
+                if not release_first.wait(5):
+                    raise TimeoutError("test delivery synchronization")
+
+        with patch.dict(os.environ, CONFIG), \
+                patch("backend.email_otp.secrets.randbelow", side_effect=(111111, 222222)), \
+                patch("backend.email_otp.deliver", side_effect=deliver), \
+                ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(self.call, "/auth/email/start", "POST", payload)
+            try:
+                self.assertTrue(first_sending.wait(5))
+                status, second = pool.submit(self.call, "/auth/email/start", "POST", payload).result(5)
+                self.assertEqual(status, 200, second)
+            finally:
+                release_first.set()
+            status, last = first.result(5)
+            self.assertEqual(status, 200, last)
+            self.assertEqual(self.call("/auth/email/confirm", "POST", {
+                "challenge_id": second["challenge_id"], "code": "222222",
+            })[0], 400)
+            self.assertEqual(self.call("/auth/email/confirm", "POST", {
+                "challenge_id": last["challenge_id"], "code": "111111",
+            })[0], 200)
+
+    def test_session_failure_rolls_back_registration_and_leaves_code_usable(self):
+        email = "otp-session-retry@local.test"
+        with patch.dict(os.environ, CONFIG), patch("backend.email_otp.deliver"), \
+                patch("backend.email_otp.secrets.randbelow", return_value=143625):
+            status, started = self.call("/auth/email/start", "POST", {
+                "email": email, "intent": "register", "name": "Монтажник",
+                "legal_acceptance": True, "legal_version": "2026-10-19-registration-v1",
+            })
+            self.assertEqual(status, 200, started)
+            payload = {"challenge_id": started["challenge_id"], "code": "143625"}
+            with patch.object(self.mod.Handler, "create_login", side_effect=RuntimeError("fixture session failure")):
+                self.assertEqual(self.call("/auth/email/confirm", "POST", payload)[0], 500)
+            with self.mod.db() as con:
+                self.assertIsNone(con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone())
+            self.assertEqual(self.call("/auth/email/confirm", "POST", payload)[0], 200)
 
     def test_wrong_code_burns_limited_attempts(self):
         with patch.dict(os.environ,CONFIG),patch(

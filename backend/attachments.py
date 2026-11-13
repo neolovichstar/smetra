@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from backend.office_documents import DOCX, XLSX, CSV
 from backend.audio_transcription import AUDIO, MIMES, validate_audio
+from backend.vault import emit_file_activity
 
 try:
     from backend.business import DomainError, identity, integer, stamp, string
@@ -123,7 +124,7 @@ def _route(service, method, parts, query, data):
         archived = integer(data.get("archived"), "Архив", 0, 1)
         service.con.execute("UPDATE files SET archived=? WHERE id=? AND workspace_id=?",
             (archived, row["id"], service.wid))
-        service.emit("file",row["id"],"Файл архивирован" if archived else "Файл восстановлен",row["name"])
+        emit_file_activity(service, row, "Файл архивирован" if archived else "Файл восстановлен", row["name"])
         return 200, {"ok":True, "archived":archived}
     if len(parts) == 2 and parts[1] == "preview":
         from backend.file_preview import route as preview_route
@@ -227,7 +228,7 @@ def _route(service, method, parts, query, data):
 
         service.con.execute("DELETE FROM file_text_chunks WHERE file_id=? AND workspace_id=?", (row["id"], service.wid))
         index_file(service, {**dict(row), "sha256": digest}, raw)
-        service.emit("file", row["id"], "Markdown-документ изменён", row["name"])
+        emit_file_activity(service, row, "Markdown-документ изменён", row["name"])
         return 200, {"file": {"id": row["id"], "name": row["name"], "size": len(raw), "sha256": digest}}
     if method == "GET":
         if parts:
@@ -305,7 +306,7 @@ def _route(service, method, parts, query, data):
             "DELETE FROM files WHERE id=? AND workspace_id=?", (row["id"], service.wid)
         )
         # Physical orphan cleanup is a separate maintenance operation after DB commits.
-        service.emit("file", row["id"], "Вложение удалено")
+        emit_file_activity(service, row, "Вложение удалено")
         return 200, {"ok": True}
     if method != "POST":
         raise DomainError(405, "Метод не поддерживается")
@@ -370,6 +371,8 @@ def _route(service, method, parts, query, data):
             raise DomainError(
                 400, "Изображение повреждено или слишком большое"
             ) from None
+        if len(raw) > maximum:
+            raise DomainError(413, "Изображение после обработки превышает допустимый размер. Уменьшите его и загрузите снова")
     elif extension in (".docx", ".xlsx", ".csv"):
         mime = {".docx": DOCX, ".xlsx": XLSX, ".csv": CSV}[extension]
         from backend.file_processing import isolated_extract
@@ -452,7 +455,7 @@ def _route(service, method, parts, query, data):
         from backend.assistant_files import index_file
 
         index_file(service, values, raw)
-        service.emit("file", fid, "Файл прикреплён", name)
+        emit_file_activity(service, values, "Файл прикреплён", name)
     else:
         root = directory()
         root.mkdir(parents=True, exist_ok=True)
@@ -463,7 +466,7 @@ def _route(service, method, parts, query, data):
             from backend.assistant_files import index_file
 
             index_file(service, values, raw)
-            service.emit("file", fid, "Файл прикреплён", name)
+            emit_file_activity(service, values, "Файл прикреплён", name)
         except Exception:
             path.unlink(missing_ok=True)
             raise

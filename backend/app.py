@@ -1291,6 +1291,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/reset/request" and method == "POST":
             self.throttle("reset:" + self.client_address[0], 5, 3600)
             email = str(self.body().get("email", "")).strip().lower()
+            if not 1 <= len(email) <= 254:
+                return self.send_json(200, {"ok": True})
+            self.throttle("reset-account:" + hashlib.sha256(email.encode()).hexdigest(), 3, 3600)
             account = con.execute(
                 "SELECT id FROM users WHERE email=? AND deleted_at IS NULL", (email,)
             ).fetchone()
@@ -1777,6 +1780,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def login_response(self, con, user_id):
+        payload, cookie = self.create_login(con, user_id)
+        return self.send_json(200, payload, cookie)
+
+    def create_login(self, con, user_id):
         token = secrets.token_urlsafe(32)
         con.execute(
             "INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)",
@@ -1797,7 +1804,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             and self.headers.get("Sec-Fetch-Site") != "same-origin"
         ):
             payload["token"] = token
-        return self.send_json(200, payload, self.cookie(token, 30 * 86400))
+        return payload, self.cookie(token, 30 * 86400)
 
     def provider_call(self, path, method="GET", payload=None, key=None):
         credentials = base64.b64encode(

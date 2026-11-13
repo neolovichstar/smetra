@@ -8,6 +8,8 @@ import hashlib
 import re
 import zlib
 
+from backend.vault import VISIBLE_FILE_ACTIVITY, activity_view
+
 try:
     from backend.business import DomainError
     from backend.attachments import download as download_attachment
@@ -34,6 +36,7 @@ TABLES = (
 )
 
 SCOPES = {
+    "activity": (f"SELECT a.* FROM activity a WHERE a.workspace_id=? AND {VISIBLE_FILE_ACTIVITY} ORDER BY a.id", "user"),
     "workspace_members": ("SELECT workspace_id,user_id,role FROM workspace_members WHERE workspace_id=? ORDER BY user_id",),
     "quote_items": ("SELECT qi.* FROM quote_items qi JOIN quotes q ON q.id=qi.quote_id WHERE q.workspace_id=? ORDER BY q.id,qi.position,qi.id",),
     "quote_versions": ("SELECT qv.* FROM quote_versions qv JOIN quotes q ON q.id=qv.quote_id WHERE q.workspace_id=? ORDER BY q.id,qv.version",),
@@ -116,7 +119,7 @@ def _clean(value):
 
 
 def _row(table, row):
-    value = dict(row)
+    value = activity_view(row) if table == "activity" else dict(row)
     # File payloads and history are separate authenticated downloads. Never put
     # server paths or compressed binary blobs into the JSON data stream.
     value.pop("storage_name", None)

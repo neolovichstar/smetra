@@ -281,6 +281,19 @@ class SecurityDeliveryApiTests(unittest.TestCase):
             self.assertTrue(app.verify_password("new secure password one", row[0]))
             self.assertEqual(con.execute("SELECT count(*) FROM email_tokens WHERE user_id=? AND purpose='reset' AND consumed_at IS NULL", (user_id,)).fetchone()[0], 0)
 
+    def test_reset_limits_delivery_for_the_normalized_mailbox(self):
+        email = app.uid() + "@example.test"
+        _, user_id = self.register("Reset delivery", email, "user")
+        with patch.dict(os.environ, SMTP_HOST="smtp.fixture.invalid"), patch.object(app, "mail") as send:
+            for address in (email, email.upper(), " " + email + " "):
+                self.assertEqual(self.request("/api/auth/reset/request", "POST", {"email": address})[0], 200)
+            self.assertEqual(self.request("/api/auth/reset/request", "POST", {"email": email})[0], 429)
+        self.assertEqual(send.call_count, 3)
+        with app.db() as con:
+            self.assertEqual(con.execute(
+                "SELECT count(*) FROM email_tokens WHERE user_id=? AND purpose='reset'", (user_id,),
+            ).fetchone()[0], 3)
+
     def test_two_concurrent_reset_links_have_only_one_winner(self):
         _, user_id = self.register("Concurrent reset", app.uid() + "@example.test", "user")
         with app.db() as con:

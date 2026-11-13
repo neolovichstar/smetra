@@ -6,6 +6,23 @@ The RLS migration provides a second independent gate on PostgreSQL.
 import uuid
 
 
+# Older events did not record visibility when the action occurred. Keep those
+# events visible to their authors, including after a file is shared or deleted.
+VISIBLE_FILE_ACTIVITY = "(a.entity_type NOT IN ('file','personal_file') OR a.actor_id=?)"
+
+
+def emit_file_activity(service, row, action, detail=""):
+    kind = "personal_file" if private_file(service, row) else "workspace_file"
+    service.emit(kind, row["id"], action, detail)
+
+
+def activity_view(row):
+    event = dict(row)
+    if event["entity_type"] in ("personal_file", "workspace_file"):
+        event["entity_type"] = "file"
+    return event
+
+
 def private_file(service, row):
     return row["vault_scope"] == "personal"
 
