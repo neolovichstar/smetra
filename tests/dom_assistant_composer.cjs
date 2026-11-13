@@ -562,5 +562,47 @@ async function setup(enabled=true,voice=false,remaining=3){
   const text=doc.querySelector('#assistant-actions').textContent;assert.match(text,/Только свой чат/);assert.doesNotMatch(text,/Чужой диалог|Старый черновик/);
  });
 
+ await test('new estimate starts a fresh conversation without attaching the previous record',async({w,doc,requests})=>{
+  const original=w.api;
+  w.api=(path,options={})=>path==='/assistant/conversations'&&!options.method
+   ?Promise.resolve({items:[{id:'old-thread',title:'Старый диалог',context_entity:'quotes',context_id:'old-quote'}]})
+   :original(path,options);
+  w.sessionStorage.setItem('smetra.assistant.conversation','old-thread');
+  w.sessionStorage.setItem('smetra.assistant.context',JSON.stringify({entity:'quotes',id:'old-quote',workspace_id:'qa-workspace'}));
+  w.SmetraTakeEstimateIntent=()=>({text:''});
+  await w.SmetraAssistant();await tick();
+  assert.equal(doc.querySelector('.assistant-greeting h1').textContent,'Новая смета');
+  assert.equal(doc.querySelector('#assistant-messages').children.length,0);
+  type(w,doc,'Смета на покраску');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(JSON.parse(requests[0].body).context,null);
+  assert.equal('conversation_id' in JSON.parse(requests[0].body),false);
+ });
+
+ await test('estimate preview loads lazily and saves once from the mobile panel',async({w,doc})=>{
+  const original=w.api,loading=deferred();let loads=0,confirms=0;
+  w.SmetraLoadFeature=async name=>{
+   assert.equal(name,'quoteVisuals');loads++;await loading.promise;
+   w.load(fs.readFileSync('apps/web/quote-visual-core.js','utf8'));
+  };
+  w.api=(path,options={})=>{
+   if(path==='/assistant/confirm'){confirms++;return Promise.resolve({result:{quote:{id:'quote-1',title:'Ванная',approval_state:'draft'}}})}
+   return original(path,options);
+  };
+  const action={id:'draft-1',tool:'create_quotes',summary:'Ванная',arguments:{items:[{name:'Плитка',quantity:'2',unit:'м²',unit_price:75000}]},preview:{kind:'quote_draft',title:'Ванная',total:150000,sections:[]}};
+  const frames='event: proposal\ndata: '+JSON.stringify(action)+'\n\nevent: done\ndata: '+JSON.stringify({actions:[action],answer:'Черновик готов',quota:{remaining:2,limit:3,plan:'free'}})+'\n\n';
+  w.fetch=async()=>({ok:true,body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode(frames));controller.close()}})});
+  type(w,doc,'Смета на плитку');doc.querySelector('#assistant-form').requestSubmit();await tick();await tick();
+  assert.equal(loads,1);
+  assert.ok(doc.querySelector('[data-confirm]'),'Inline save remains usable during module load');
+  loading.resolve();await tick();await tick();
+  const panel=doc.querySelector('#smetra-quote-preview');
+  assert.equal(panel.hidden,false);
+  const save=panel.querySelector('.smetra-quote-preview-actions .primary');
+  assert.equal(save.disabled,false);save.click();save.click();await tick();await tick();
+  assert.equal(confirms,1);
+  assert.match(panel.textContent,/Черновик · сохранено/);
+  assert.equal(doc.querySelector('.assistant-saved-open-quote').textContent,'Открыть смету');
+ });
+
  assert.deepEqual(failures,[]);
 })().catch(error=>{console.error(error);process.exit(1)});

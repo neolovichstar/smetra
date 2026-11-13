@@ -75,9 +75,10 @@ function assistantQuoteDraftPreview(host, args){
   wrapper.append(note);host.append(wrapper);
 }
 
-function mountAssistantGreeting({host,input,messages,active,isIdle}){
-  const phrases=['Что нового?','Что сегодня в планах?','С чего начнём?','Над чем поработаем?'];
+function mountAssistantGreeting({host,input,messages,active,isIdle,estimateMode}){
+  const phrases=estimateMode?['Новая смета']:['Что нового?','Что сегодня в планах?','С чего начнём?','Над чем поработаем?'];
   const label=host.querySelector('h1');let index=0,disposed=false,fade;
+  label.textContent=phrases[0];
   const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   const update=()=>{if(disposed)return;host.hidden=Boolean(messages.querySelector('.assistant-message'));host.classList.toggle('is-quiet',Boolean(input.value.trim())||!isIdle());};
   const rotate=()=>{
@@ -86,7 +87,7 @@ function mountAssistantGreeting({host,input,messages,active,isIdle}){
     if(reduced){label.textContent=phrases[index=(index+1)%phrases.length];return;}
     host.classList.add('is-changing');fade=setTimeout(()=>{if(!disposed&&active()){label.textContent=phrases[index=(index+1)%phrases.length];host.classList.remove('is-changing');}},180);
   };
-  const timer=setInterval(rotate,10000);
+  const timer=phrases.length>1?setInterval(rotate,10000):null;
   function destroy(){disposed=true;clearInterval(timer);clearTimeout(fade);document.removeEventListener('smetra:auth-reset',destroy);}
   document.addEventListener('smetra:auth-reset',destroy,{once:true});
   update();return {update,destroy};
@@ -102,10 +103,11 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const active=()=>parentActive()&&mine===assistantRenderRevision&&owner===user&&tab==='assistant'&&workspaceId===sessionStorage.getItem('workspace_id');
   const [data,threadIndex]=await Promise.all([api('/assistant'),api('/assistant/conversations')]);
   if(!active())return;
+  const estimateIntent=window.SmetraTakeEstimateIntent?.();
   const maxUpload=Math.min(5000000,data.file_upload_max_bytes||3000000),maxUploadLabel=Math.floor(maxUpload/1000000)+' МБ';
   const requestWorkspace=data.workspace_id||workspaceId||window.Workspace?.currentWorkspaceId?.()||'';
   const scopeHeaders=requestWorkspace?{'X-Workspace-Id':requestWorkspace}:{};
-  let activeConversation=sessionStorage.getItem('smetra.assistant.conversation')||'';
+  let activeConversation=estimateIntent?'':sessionStorage.getItem('smetra.assistant.conversation')||'';
   if(activeConversation&&!threadIndex.items.some(item=>item.id===activeConversation))activeConversation='';
   const thread=activeConversation?await api('/assistant/conversations/'+encodeURIComponent(activeConversation)):data;
   if(!active())return;
@@ -191,16 +193,19 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   // Existing estimate engine and the chat share one revision-safe quote source.
   const openQuoteEditor=async id=>{
     try{
-      const {quote}=await api('/quotes/'+encodeURIComponent(id));
+      const {quote}=await api('/quotes/'+encodeURIComponent(id),{headers:{...scopeHeaders}});
+      if(!active())return;
       tab='quotes';location.hash='quotes';
       await window.render();
-      if(tab==='quotes')await window.Workspace.editor(quote);
-    }catch(error){notify(error.message)}
+      if(owner===user&&tab==='quotes'&&requestWorkspace===(window.Workspace.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||requestWorkspace))await window.Workspace.editor(quote);
+    }catch(error){if(owner===user)notify(error.message)}
   };
   const mountQuotePreview=()=>window.SmetraQuoteVisuals?.mountAssistant({
     host:assistantStudioRoot,
     getUserId:()=>user?.id,
-    fetchQuote:id=>api('/quotes/'+encodeURIComponent(id)),
+    getWorkspaceId:()=>requestWorkspace,
+    onConfirmDraft:id=>proposalButtons.get(id)?.click(),
+    fetchQuote:id=>api('/quotes/'+encodeURIComponent(id),{headers:{...scopeHeaders}}),
     listQuotes:async()=>(await api('/quotes'))?.quotes||[],
     onToggle:open=>{const button=document.querySelector('#assistant-quotes');if(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('is-active',open)}},
     onOpenEditor:openQuoteEditor,
@@ -218,6 +223,22 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       })().finally(()=>{quotePreviewLoading=null});
     }
     return quotePreviewLoading;
+  };
+  const withQuotePreview=callback=>ensureQuotePreview().then(preview=>{
+    if(preview&&active()&&assistantStudioRoot.isConnected)return callback(preview);
+  }).catch(()=>{});
+  const proposalButtons=new Map();
+  let previewProposalId='';
+  const showQuoteProposal=action=>{
+    if(!action?.tool?.includes('quote')||previewProposalId===action.id)return;
+    if(action.tool==='create_quotes'&&action.preview?.kind!=='quote_draft')return;
+    if(action.tool!=='create_quotes'&&typeof action.arguments?.id!=='string')return;
+    previewProposalId=action.id;
+    void withQuotePreview(async preview=>{
+      if(previewProposalId!==action.id)return;
+      await preview.propose(action);
+      if(proposalButtons.has(action.id))preview.draftState?.(action.id,{ready:true});
+    });
   };
   const syncAssistantConversationState=()=>{
     idleGreeting?.update();
@@ -533,20 +554,27 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   document.querySelector('#assistant-knowledge').onclick=event=>threadAction(event.currentTarget,async()=>{const panel=document.querySelector('#assistant-knowledge-panel'),button=document.querySelector('#assistant-knowledge');if(!window.SmetraKnowledgePanel){await window.SmetraLoadFeature?.('knowledge');}if(!active()||!window.SmetraKnowledgePanel)throw Error('Не удалось загрузить панель памяти');await window.SmetraKnowledgePanel(panel);if(!active())return;closeHistoryPanel();panel.classList.remove('hidden');panel.showModal();button.setAttribute('aria-expanded','true')});
   let context=null,fileBlocking=false,filePollTimer=null,filePollSeq=0;
-  try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
-  const currentWorkspace=window.Workspace?.currentWorkspaceId?.()||sessionStorage.getItem('workspace_id')||'';
+  let missingQuoteId='';
+  if(!estimateIntent)try{context=JSON.parse(sessionStorage.getItem('smetra.assistant.context')||'null')}catch{}
+  const currentWorkspace=requestWorkspace;
   if(context&&(!['clients','quotes','projects','files','documents'].includes(context.entity)||typeof context.id!=='string'||currentWorkspace&&context.workspace_id!==currentWorkspace))context=null;
   if(activeConversation){
     context=selectedThread.context_entity?{entity:selectedThread.context_entity,id:selectedThread.context_id,workspace_id:currentWorkspace}:null;
-    if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch{context.label='Запись недоступна — уберите контекст'}}
+    if(context){try{const record=await api('/'+context.entity+'/'+encodeURIComponent(context.id)+(context.entity==='files'?'/metadata':''));const item=record.quote||record.item||record.file;context.label=item?.title||item?.name||context.id}catch(error){
+      if(error.status===404&&context.entity==='quotes'){missingQuoteId=context.id;context=null}
+      else context.label='Запись недоступна — уберите контекст';
+    }}
   }
   if(!active())return;
   const fileStatus=document.createElement('div');fileStatus.className='assistant-file-status';fileStatus.hidden=true;fileStatus.setAttribute('role','status');composer.insertBefore(fileStatus,document.querySelector('#assistant-form'));
   const renderContext=()=>{
-    if(context?.entity==='quotes'&&context.id)quotePreview?.load(context.id).catch(()=>{});
     if(!context)sessionStorage.removeItem('smetra.assistant.context');
   };
   renderContext();
+  if(context?.entity==='quotes'&&context.id&&!window.matchMedia?.('(max-width: 1280px)')?.matches){
+    const quoteId=context.id;
+    void withQuotePreview(preview=>{if(!previewProposalId&&context?.id===quoteId)return preview.load(quoteId)});
+  }
   const draftUser=user.id;
   const draftSlot=()=>`smetra.assistant.draft:${draftUser}:${currentWorkspace}:${activeConversation|| (context?context.entity+':'+context.id:'global')}`;
   const saveDraft=()=>{try{if(input.value)sessionStorage.setItem(draftSlot(),input.value.slice(0,3000));else sessionStorage.removeItem(draftSlot())}catch{}};
@@ -881,14 +909,29 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   const addAction=action=>{
     if(!active()||!actions.isConnected||!action || !action.id || renderedProposalIds.has(action.id))return;
     renderedProposalIds.add(action.id);
-    if(action?.tool&&/quote/.test(action.tool))quotePreview?.propose(action).catch(()=>{});
+    showQuoteProposal(action);
     const item=document.createElement('section');item.className='assistant-proposal';item.dataset.proposalState='pending';
     const markdownEdit=action.tool==='replace_markdown_text';
     const quoteDraft=action.tool==='create_quotes'&&Array.isArray(action.arguments?.items)&&action.arguments.items.length>0;
     const detail=quoteDraft?'':action.preview?assistantEditPreview(action.preview):markdownEdit?`<div class="assistant-text-diff"><span>Было</span><pre>${escapeHtml(action.arguments.old_text)}</pre><span>Станет</span><pre>${escapeHtml(action.arguments.new_text)}</pre></div><p class="muted">После применения предыдущий текст останется в истории документа.</p>`:proposalFields(action.arguments);
-    item.innerHTML=`<span class="assistant-proposal-state">Требует подтверждения · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
+    item.innerHTML=`<span class="assistant-proposal-state">Требует подтверждения · ещё не сохранено</span><h3>${escapeHtml(action.summary)}</h3><div class="proposal-fields">${detail}</div><div class="row"><button class="btn primary" data-confirm>${quoteDraft?'Сохранить смету':markdownEdit?'Применить правку':'Применить'}</button><button class="btn ghost" data-dismiss>Не сейчас</button></div>`;
     actions.append(item);
-    if(quoteDraft)assistantQuoteDraftPreview(item.querySelector('.proposal-fields'),action.arguments);
+    if(quoteDraft){
+      assistantQuoteDraftPreview(item.querySelector('.proposal-fields'),action.arguments);
+      if(action.preview?.kind==='quote_draft'){
+        const review=document.createElement('button');review.type='button';review.className='btn ghost';review.textContent='Посмотреть расчёт';
+        review.onclick=async()=>{
+          review.disabled=true;
+          try{
+            const preview=await ensureQuotePreview();
+            if(active()&&item.isConnected&&preview){await preview.propose(action);preview.draftState?.(action.id,{ready:true})}
+          }
+          catch{if(active())notify('Не удалось открыть расчёт. Повторите попытку.')}
+          finally{if(item.isConnected)review.disabled=false}
+        };
+        item.querySelector('.row').append(review);
+      }
+    }
     if(action.tool==='create_document'){
       const preview=document.createElement('button');preview.type='button';preview.className='btn ghost';preview.textContent='Предпросмотр PDF';item.querySelector('.row').prepend(preview);
       preview.onclick=async()=>{preview.disabled=true;try{await Workspace.download('/assistant/actions/'+encodeURIComponent(action.id)+'/preview.pdf','smetra-preview.pdf')}catch(error){notify(error.message)}finally{preview.disabled=false}};
@@ -897,6 +940,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
       const confirm=item.querySelector('[data-confirm]');
       if(!active()||!item.isConnected||confirm.disabled)return;
       const buttons=item.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);
+      quotePreview?.draftState?.(action.id,{saving:true});
       try{
         if(action.tool?.startsWith('delete_')){
           const accepted=window.SmetraDialog?.confirm
@@ -908,42 +952,46 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(!active()||!item.isConnected)return;
         const result=await api('/assistant/confirm',{method:'POST',headers:{...scopeHeaders},body:JSON.stringify({id:action.id})});
         if(!active()||!item.isConnected)return;
-        item.dataset.proposalState='applied';quotePreview?.clearProposal?.(action.id);
+        item.dataset.proposalState='applied';proposalButtons.delete(action.id);quotePreview?.clearProposal?.(action.id);
+        if(previewProposalId===action.id)previewProposalId='';
         renderSavedAction(item,action,result.undoable,result.result?.document?.id,result.result?.quote?.id);
         window.SmetraProtectedEstimates?.actionResult(item,result.result);
         const createdQuote=action.tool==='create_quotes'?result.result?.quote:null;
-        if(createdQuote?.id)await focusQuote(createdQuote);
+        if(createdQuote?.id)focusQuote(createdQuote);
         else quotePreview?.refresh().catch(()=>{});
-        notify(result.result?.quote?.id?'Смета создана. Откройте черновик для проверки.':'Изменения сохранены');
+        if(!createdQuote)notify('Изменения сохранены');
       }catch(error){
         if(!active()||!item.isConnected)return;
         const state=item.querySelector('.assistant-proposal-state');
         if(state){state.textContent='Не удалось сохранить: '+error.message;state.classList.add('is-error');state.setAttribute('role','alert')}
+        quotePreview?.draftState?.(action.id,{error:error.message});
         notify(error.message);
       }finally{if(active()&&item.isConnected&&item.dataset.proposalState==='pending')buttons.forEach(button=>button.disabled=false)}
     };
+    if(quoteDraft){
+      proposalButtons.set(action.id,item.querySelector('[data-confirm]'));
+      quotePreview?.draftState?.(action.id,{ready:true});
+    }
     item.querySelector('[data-dismiss]').onclick=async()=>{
       const dismiss=item.querySelector('[data-dismiss]');
       if(dismiss.disabled||!active()||!item.isConnected)return;
       dismiss.disabled=true;
       try{
-        await api('/assistant/dismiss',{method:'POST',body:JSON.stringify({id:action.id})});
+        await api('/assistant/dismiss',{method:'POST',headers:{...scopeHeaders},body:JSON.stringify({id:action.id})});
         if(!active()||!item.isConnected)return;
-        item.dataset.proposalState='dismissed';quotePreview?.clearProposal?.(action.id);
+        item.dataset.proposalState='dismissed';proposalButtons.delete(action.id);quotePreview?.clearProposal?.(action.id);
+        if(previewProposalId===action.id)previewProposalId='';
         item.remove();
       }catch(error){dismiss.disabled=false;notify(error.message)}
     };
   };
   // A newly created estimate becomes the open estimate: the editor shows it and
   // follow-up requests («замени ламинат…») edit this estimate.
-  const focusQuote=async quote=>{
-    context={entity:'quotes',id:quote.id,label:quote.title||'Смета'};
-    try{
-      if(activeConversation)await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'quotes',context_id:quote.id})});
-      sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context));
-    }catch{}
-    if(!active())return;
-    saveDraft();renderContext();
+  const focusQuote=quote=>{
+    context={entity:'quotes',id:quote.id,label:quote.title||'Смета',workspace_id:currentWorkspace};
+    try{sessionStorage.setItem('smetra.assistant.context',JSON.stringify(context))}catch{}
+    saveDraft();
+    void withQuotePreview(preview=>preview.showQuote?.(quote));
   };
   // Buttons the assistant offered (validated by the server); nothing runs until the user clicks.
   const clientActionRun={
@@ -956,6 +1004,7 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     open_billing:async()=>window.SmetraNavigateTo('billing'),
     open_quote:async item=>{
       await window.SmetraNavigateTo('quotes');
+      if(owner!==user||tab!=='quotes')return;
       if(typeof window.Workspace?.openQuote!=='function')throw Error('Просмотр сметы недоступен');
       await window.Workspace.openQuote(item.quote_id);
     },
@@ -1096,11 +1145,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
   };
   const renderSavedAction=(item,action,undoable,documentId,quoteId)=>{
     item.replaceChildren();item.classList.add('is-saved');const title=document.createElement('p');title.className='assistant-saved-title';
-    title.textContent=(quoteId?'Черновик создан · ':'Сохранено · ')+action.summary;item.append(title);
+    title.textContent=quoteId?'Смета сохранена':'Сохранено · '+action.summary;item.append(title);
     if(quoteId){
       const open=document.createElement('button');open.type='button';open.className='btn small primary assistant-saved-open-quote';
       open.textContent='Открыть смету';open.setAttribute('aria-label','Открыть созданную смету');
-      open.onclick=()=>openQuoteEditor(quoteId);item.append(open);
+      open.onclick=async()=>{
+        open.disabled=true;
+        try{await openQuoteEditor(quoteId)}finally{if(open.isConnected)open.disabled=false}
+      };
+      item.append(open);
       const hint=document.createElement('small');hint.className='assistant-saved-hint';
       hint.textContent='Сохранено в разделе «Сметы». Клиенту ещё не отправлено.';
       item.append(hint);
@@ -1264,7 +1317,10 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     }
   });
   if(activeConversation)data.actions.filter(action=>action.conversation_id===activeConversation).forEach(addAction);
-  (data.recent_actions||[]).filter(action=>activeConversation&&action.undo_until&&action.conversation_id===activeConversation).forEach(action=>{const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id)});
+  (data.recent_actions||[]).filter(action=>activeConversation&&action.conversation_id===activeConversation&&(action.undo_until||action.quote_id&&action.quote_id!==missingQuoteId)).forEach(action=>{
+    const item=document.createElement('section');item.className='assistant-proposal assistant-saved';actions.append(item);
+    renderSavedAction(item,action,!!action.undo_until,action.document_id,action.quote_id);
+  });
   if(!data.available)status.textContent='Ассистент пока не подключён.';
   else if(quota.remaining<(quota.unit==='tokens'?1500:1))status.textContent='Токены закончились: обычные и фоновые ответы расходуют общий баланс. Черновик можно редактировать.';
   const resize=()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,180)+'px'};
@@ -1295,17 +1351,15 @@ window.SmetraAssistant=async function(parentActive=()=>true){
     // The sent request owns a context snapshot. It no longer belongs to the next draft.
     try{await api(threadPath,{method:'PATCH',body:JSON.stringify({context_entity:'',context_id:''})})}catch{}
   };
-  idleGreeting=mountAssistantGreeting({host:composer.querySelector('.assistant-greeting'),input,messages,active,isIdle:()=>!pendingPhotos.length&&!attachingCount&&!working&&!threadBusy&&!voiceListening&&!voiceStarting});
+  idleGreeting=mountAssistantGreeting({host:composer.querySelector('.assistant-greeting'),input,messages,active,estimateMode:!!estimateIntent,isIdle:()=>!pendingPhotos.length&&!attachingCount&&!working&&!threadBusy&&!voiceListening&&!voiceStarting});
   input.addEventListener('input',()=>{resize();saveDraft();renderQuota(quota);syncSendButton()});resize();syncSendButton();
-  // «Новая смета» opens here: the editor waits on the right, the task goes in the chat.
-  let estimateIntent=null;
-  try{estimateIntent=JSON.parse(sessionStorage.getItem('smetra.assistant.intent')||'null');sessionStorage.removeItem('smetra.assistant.intent')}catch{}
-  if(estimateIntent?.kind==='new-quote'&&Date.now()-Number(estimateIntent.at||0)<60000){
-    if(context?.entity==='quotes'){context=null;sessionStorage.removeItem('smetra.assistant.context');renderContext()}
-    input.placeholder='Опишите объект и работы — ассистент составит смету';
-    quotePreview?.startNew?.();
+  if(estimateIntent){
+    input.placeholder='Опишите объект, работы и объёмы';
     // The submit handler is attached below; send after this synchronous setup finishes.
-    if(estimateIntent.text){input.value=estimateIntent.text;resize();saveDraft();syncSendButton();setTimeout(()=>{if(active()&&!send.disabled&&input.value===estimateIntent.text)document.querySelector('#assistant-form').requestSubmit()},0)}
+    if(estimateIntent.text){
+      input.value=estimateIntent.text;resize();saveDraft();syncSendButton();
+      setTimeout(()=>{if(active()&&!send.disabled&&input.value===estimateIntent.text)assistantForm.requestSubmit()},0);
+    }
     else input.focus();
   }
   input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){event.preventDefault();document.querySelector('#assistant-form').requestSubmit()}});
@@ -1408,9 +1462,9 @@ window.SmetraAssistant=async function(parentActive=()=>true){
         if(kind==='delta'&&typeof payload.text==='string'){generated+=payload.text;schedule();if(!hasModelProgress){setActivity('Формирую ответ…');status.textContent='Формирую ответ…'}}
         if(kind==='status'&&typeof payload.text==='string'&&payload.text.trim()){hasModelProgress=true;setActivity(payload.text.trim());status.textContent=payload.text.trim()}
         if(kind==='web_source'){showSource(payload);if(!hasModelProgress)setActivity('Проверяю источники…')}
-        if(kind==='quote_design'){quotePreview?.design(payload).catch(()=>{});if(!hasModelProgress)setActivity('Конструирую смету…')}
+        if(kind==='quote_design'){void withQuotePreview(preview=>preview.design(payload));if(!hasModelProgress)setActivity('Конструирую смету…')}
         // A validated estimate proposal arrives as soon as the server checked it, before the answer ends.
-        if(kind==='proposal'&&payload&&typeof payload.id==='string'){quotePreview?.propose(payload).catch(()=>{});if(!hasModelProgress)setActivity('Составляю смету…')}
+        if(kind==='proposal'&&payload&&typeof payload.id==='string'){showQuoteProposal(payload);if(!hasModelProgress)setActivity('Составляю смету…')}
         if(kind==='status'&&typeof payload.text==='string')quotePreview?.progress?.(payload.text.trim());
         if(kind==='done'){if(activeConversation&&typeof payload.conversation_title==='string'){
           const title=payload.conversation_title.trim();

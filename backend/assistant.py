@@ -1558,7 +1558,7 @@ def _confirm(service, action_id):
             raise DomainError(
                 409, "Предложение устарело. Попросите ассистента обновить его."
             )
-        args.pop("_conversation_id", None)
+        conversation_id = args.pop("_conversation_id", None)
         undo_fields = args.pop("_undo_fields", None)
         args.pop("_preview", None)
         if name == "create_quotes" and not str(args.get("client") or "").strip():
@@ -1681,8 +1681,15 @@ def _confirm(service, action_id):
             finally:
                 service.assistant_quote_creation = None
             if status < 400 and isinstance(result.get("quote"), dict):
-                service.con.execute("UPDATE quotes SET ai_generated=1 WHERE id=? AND workspace_id=?", (result["quote"]["id"], service.wid))
+                quote_id = result["quote"]["id"]
+                service.con.execute("UPDATE quotes SET ai_generated=1 WHERE id=? AND workspace_id=?", (quote_id, service.wid))
                 result["quote"]["ai_generated"] = 1
+                if conversation_id:
+                    service.con.execute(
+                        "UPDATE assistant_conversations SET context_entity='quotes',context_id=?,updated_at=? "
+                        "WHERE id=? AND workspace_id=? AND user_id=?",
+                        (quote_id, stamp(), conversation_id, service.wid, service.user["id"]),
+                    )
         else:
             status, result = service.route(method, kind, parts, {}, args)
         if resource_undo and resource_undo.get("mode") == "markdown":
@@ -2146,7 +2153,12 @@ def answer_chat(service, prompt, on_delta=None, context=None, conversation_id=No
                 {"type": "image_url", "image_url": {"url": storage_image_url}},
             ]})
         if actions:
-            answer = "Подготовил изменения. Проверьте детали и нажмите «Применить»."
+            answer = (
+                "Черновик готов. Проверьте объёмы и цены перед сохранением."
+                if all(action["tool"] == "create_quotes" and (action.get("preview") or {}).get("kind") == "quote_draft"
+                       for action in actions)
+                else "Подготовил изменения. Проверьте детали и нажмите «Применить»."
+            )
             break
         if questions:
             answer = questions[0]["question"]

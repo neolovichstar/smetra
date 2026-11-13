@@ -260,6 +260,14 @@ def main():
         # this isolated fixture never contacts a model provider.
         def stream_fixture(messages, on_delta):
             prompt = next((message['content'] for message in reversed(messages) if message['role'] == 'user'), '')
+            if prompt == 'Составь тестовую смету на укладку плитки':
+                return {'content': None, 'tool_calls': [{'id': 'fixture-create-quote', 'type': 'function',
+                        'function': {'name': 'create_quotes', 'arguments': json.dumps({
+                            'title': 'Укладка плитки в ванной', 'client': 'Тестовый клиент',
+                            'items': [{'name': 'Укладка плитки', 'quantity': '2', 'unit': 'м²',
+                                       'unit_price': 75000, 'category': 'Отделка', 'kind': 'work',
+                                       'price_status': 'confirmed'}],
+                        })}}]}
             if prompt == 'Увеличь цену на 10%':
                 return {"content": None, "tool_calls": [{"id": "fixture-owned-bulk", "type": "function",
                         "function": {"name": seed_tool, "arguments": json.dumps(seed_args)}}]}

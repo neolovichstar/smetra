@@ -94,7 +94,7 @@
     container.append(wrap);
   };
 
-  function mountAssistant({host,fetchQuote,onOpenEditor,getUserId,listQuotes,onToggle}){
+  function mountAssistant({host,fetchQuote,onOpenEditor,getUserId,getWorkspaceId,listQuotes,onToggle,onConfirmDraft}){
     if(!host||typeof fetchQuote!=='function')throw Error('Quote preview requires an authorized quote fetcher');
     const panel=el('aside','smetra-quote-preview');
     panel.id='smetra-quote-preview';
@@ -120,6 +120,7 @@
     const grip=el('div','smetra-quote-preview-grip');grip.setAttribute('role','separator');grip.setAttribute('aria-orientation','vertical');
     grip.setAttribute('aria-label','Ширина редактора сметы');grip.tabIndex=0;panel.append(grip);
     const content=el('div','smetra-quote-preview-content');panel.append(content);
+    const draftFooter=el('div','smetra-quote-preview-actions smetra-draft-footer');draftFooter.hidden=true;panel.append(draftFooter);
     const hostRoot=host.closest('.assistant-studio');
     host.append(panel);
     const WIDTH_KEY='smetra.preview.width';
@@ -139,7 +140,7 @@
     // New-estimate mode: an empty editor waits for the assistant; draft holds a
     // server-validated create_quotes proposal (sections and totals computed by the server).
     let mode=null,draft=null,progressText='',statusLine=null;
-    const storageSpace=()=>sessionStorage.getItem('workspace_id')||'';
+    const storageSpace=()=>sessionStorage.getItem('workspace_id')||getWorkspaceId?.()||'';
     const storageUser=()=>typeof getUserId==='function'?String(getUserId()||''):'';
     let layout=null,currentContext=null,documentNode=null,appearanceDialog=null,appearancePreview=null,appearanceOwner=null,appearanceGuard=null;
     const appearanceActive=()=>appearanceOwner&&visible&&!loading&&host.isConnected&&current===appearanceOwner.quote&&storageSpace()===appearanceOwner.space&&storageUser()===appearanceOwner.user;
@@ -199,6 +200,7 @@
     const render=()=>{
       if(!visible)return;
       content.replaceChildren();
+      draftFooter.hidden=true;draftFooter.replaceChildren();
       back.hidden=!current||typeof listQuotes!=='function';
       statusLine=null;
       if(draft){renderDraft();return}
@@ -238,11 +240,18 @@
       kicker.hidden=true;
       content.append(status());
     };
+    let draftButton=null,draftMessage=null,draftReady=false,draftSaving=false,draftError='';
+    const paintDraftState=()=>{
+      if(!draftButton||!draftMessage)return;
+      draftButton.disabled=!draftReady||draftSaving;
+      draftButton.textContent=draftSaving?'Сохраняю…':'Сохранить смету';
+      draftMessage.textContent=draftError||(draftSaving?'Сохраняю черновик…':draftReady?'Проверьте объёмы и цены перед сохранением.':'Завершаю расчёт…');
+    };
     const renderDraft=()=>{
       const p=draft.preview||{},currency=p.currency||'RUB',counts=p.counts||{};
       heading.textContent=p.title||'Новая смета';kicker.textContent='Черновик ИИ';kicker.hidden=false;
       const title=el('div','smetra-quote-preview-title');
-      title.append(el('h3','',p.title||'Смета'),el('span','smetra-quote-preview-state','Ждёт подтверждения в чате'));
+      title.append(el('h3','',p.title||'Смета'),el('span','smetra-quote-preview-state','Черновик · не сохранён'));
       content.append(title,status());
       content.append(el('p','smetra-draft-meta',[`${counts.lines||0} поз.`,`работы ${counts.works||0}`,`материалы ${counts.materials||0}`,p.region?'регион: '+p.region:''].filter(Boolean).join(' · ')));
       if(counts.estimated||counts.unknown){
@@ -274,7 +283,19 @@
       }
       const total=el('div','smetra-draft-total');total.append(el('span','','Итого · рассчитано сервером'),el('strong','',money(p.total,currency)));
       content.append(total);
-      content.append(el('p','smetra-visual-footnote','Смета сохранится после «Применить» в чате. Потом её можно править вручную — без токенов.'));
+      if(onConfirmDraft){
+        const actionId=draft.id;
+        draftButton=el('button','btn primary','Сохранить смету');draftButton.type='button';
+        draftButton.onclick=()=>onConfirmDraft(actionId);
+        draftMessage=el('p','smetra-visual-footnote');paintDraftState();
+        draftMessage.setAttribute('role','status');draftFooter.append(draftButton,draftMessage);draftFooter.hidden=false;
+      }else content.append(el('p','smetra-visual-footnote','Подтвердите сохранение сметы в чате.'));
+    };
+    const draftState=(id,{ready=false,saving=false,error=''})=>{
+      if(draft?.id!==id)return;
+      if(ready)draftReady=true;
+      draftSaving=saving;draftError=error;
+      paintDraftState();
     };
     // Without a selected quote the panel lists recent ones; the server keeps
     // totals, so the list only shows what the quote endpoint returned.
@@ -284,7 +305,7 @@
       content.replaceChildren(el('p','smetra-visual-empty','Загружаю сметы…'));
       try{
         const items=(await listQuotes())||[];
-        if(request!==pickSeq||loading||!host.isConnected||current)return;
+        if(request!==pickSeq||loading||!host.isConnected||current||draft||mode)return;
         content.replaceChildren();
         if(!items.length){content.append(el('p','smetra-visual-empty','Смет пока нет.'));return}
         const list=el('div','smetra-quote-picker');list.setAttribute('role','list');
@@ -347,7 +368,7 @@
       if(!id)return;
       closeAppearance(false);
       const requestUser=storageUser(),requestSpace=storageSpace();
-      const request=++seq;loading=true;setOpen(true);
+      const request=++seq;loading=true;current=null;pending=null;draft=null;mode=null;setOpen(true);
       content.replaceChildren(el('p','smetra-visual-empty','Загружаю смету…'));
       try{
         const response=await fetchQuote(id);
@@ -358,7 +379,13 @@
         currentContext={user:requestUser,space:requestSpace};
         pending=null;draft=null;mode=null;progressText='';layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),id)||null;render();
       }catch(error){
-        if(request===seq){loading=false;content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'))}
+        if(request===seq){
+          loading=false;
+          content.replaceChildren(el('p','smetra-visual-empty',error?.message||'Не удалось загрузить смету'));
+          if(typeof listQuotes==='function'){
+            const showList=el('button','btn small','К списку смет');showList.type='button';showList.onclick=render;content.append(showList);
+          }
+        }
       }
     };
     const clearProposal=(actionId)=>{
@@ -367,7 +394,7 @@
         if(visible)render();
       }
       if(draft && (!actionId||draft.id===actionId)){
-        draft=null;
+        draft=null;draftReady=false;mode=null;progressText='';
         if(visible)render();
       }
     };
@@ -378,8 +405,8 @@
       if(action.tool==='create_quotes'){
         if(action.preview?.kind!=='quote_draft')return;
         // The same proposal arrives twice (live event, then the final answer): keep one.
-        if(draft?.id===action.id)return;
-        closeAppearance(false);++seq;loading=false;current=null;pending=null;draft=action;mode='new';setOpen(true);render();return;
+        if(draft?.id===action.id){if(!visible)setOpen(true);return}
+        closeAppearance(false);++seq;loading=false;current=null;pending=null;draft=action;draftReady=false;draftSaving=false;draftError='';mode='new';setOpen(true);return;
       }
       const id=action.arguments.id;
       if(typeof id!=='string'||!id)return;
@@ -402,9 +429,16 @@
       if(!current)return;
       const id=current.id;await load(id);
     };
+    const showQuote=quote=>{
+      if(!quote?.id)return;
+      closeAppearance(false);++seq;loading=false;current=quote;pending=null;draft=null;draftReady=false;mode=null;progressText='';
+      currentContext={user:storageUser(),space:storageSpace()};
+      layout=window.SmetraQuoteLayout?.load(storageSpace(),storageUser(),quote.id)||null;
+      setOpen(true);
+    };
     const startNew=()=>{closeAppearance(false);++seq;loading=false;current=null;pending=null;draft=null;mode='new';progressText='';setOpen(true);render()};
     const progress=text=>{progressText=String(text||'').slice(0,120);if(visible&&(draft||mode==='new'))paintStatus()};
-    return {load,propose,design,refresh,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
+    return {load,propose,design,refresh,showQuote,draftState,startNew,progress,close:()=>setOpen(false),open:()=>setOpen(true),toggle:()=>setOpen(!visible),get visible(){return visible},
       clearProposal,
       destroy:()=>{closeAppearance(false);if(closeTimer!==null)clearTimeout(closeTimer);seq++;pickSeq++;themeObserver.disconnect();hostRoot?.classList.remove('has-quote-preview','is-preview-wide','is-resizing');hostRoot?.style.removeProperty('--preview-saved-w');panel.remove()},
       get currentId(){return current?.id||''}};

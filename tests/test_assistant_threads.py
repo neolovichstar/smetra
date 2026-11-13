@@ -1,5 +1,6 @@
 import concurrent.futures
 import base64
+import json
 import os
 import unittest
 from unittest.mock import patch
@@ -58,6 +59,40 @@ class AssistantThreadTests(unittest.TestCase):
         status, _, provider = self.ask(owner, thread)
         self.assertEqual(status, 200)
         self.assertNotIn(client['id'], provider.call_args.args[0][0]['content'])
+
+    def test_saving_a_draft_links_its_own_conversation_and_replays_once(self):
+        owner, _ = self.account('thread-estimate-save')
+        thread, other = self.create(owner), self.create(owner)
+        tool = {'id': 'create-estimate', 'type': 'function', 'function': {
+            'name': 'create_quotes', 'arguments': json.dumps({
+                'title': 'Ремонт ванной', 'client': 'Клиент',
+                'items': [{'name': 'Укладка плитки', 'quantity': '2', 'unit': 'м²', 'unit_price': 75000,
+                           'category': 'Отделка', 'kind': 'work', 'price_status': 'confirmed'}],
+            }),
+        }}
+        with patch.dict(os.environ, OPENROUTER_API_KEY='test-not-real'), patch(
+            'backend.assistant.query_model', return_value={'content': None, 'tool_calls': [tool]},
+        ):
+            status, draft = self.call('/assistant/chat', 'POST', {
+                'text': 'Составь смету на укладку плитки', 'conversation_id': thread['id'],
+            }, owner)
+        self.assertEqual(status, 200, draft)
+        self.assertEqual(len(draft['actions']), 1, draft)
+        action_id = draft['actions'][0]['id']
+        self.assertEqual(self.call('/quotes', token=owner)[1]['quotes'], [])
+        status, saved = self.call('/assistant/confirm', 'POST', {'id': action_id}, owner)
+        self.assertEqual(status, 200, saved)
+        quote = saved['result']['quote']
+        self.assertEqual(quote['amount_kopecks'], 150000)
+        for entry, expected in ((thread, quote['id']), (other, '')):
+            status, result = self.call('/assistant/conversations/' + entry['id'], token=owner)
+            self.assertEqual(status, 200, result)
+            self.assertEqual(result['conversation']['context_id'], expected)
+        self.assertEqual(self.call('/assistant/confirm', 'POST', {'id': action_id}, owner)[1], saved)
+        self.assertEqual(len(self.call('/quotes', token=owner)[1]['quotes']), 1)
+        status, _, provider = self.ask(owner, thread)
+        self.assertEqual(status, 200)
+        self.assertIn(quote['id'], provider.call_args.args[0][0]['content'])
 
     def test_foreign_and_malformed_context_rejected_before_provider(self):
         owner, _ = self.account('thread-owner')

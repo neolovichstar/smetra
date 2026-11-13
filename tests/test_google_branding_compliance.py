@@ -24,7 +24,7 @@ class GoogleBrandingComplianceTests(unittest.TestCase):
     def test_public_homepage_explains_app_and_links_privacy(self):
         html = (SITE / "index.html").read_text(encoding="utf-8")
         self.assertIn("сметра.", html)
-        self.assertIn("строительных смет", html)
+        self.assertIn("Сметы для ремонта и строительства", html)
         self.assertIn("Google Drive", html)
         links = Links()
         links.feed(html)
